@@ -2,6 +2,7 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { assignHeatmaps } from './heatmap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -88,6 +89,61 @@ app.post('/api/scores', async (req, res) => {
     console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
     res.json({ scores });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/explain', async (req, res) => {
+  const { moves, humanFirst = true } = req.body;
+  if (typeof moves !== 'string') {
+    return res.status(400).json({ error: 'moves must be a string' });
+  }
+
+  const binaryPath = join(__dirname, 'c4solver');
+  const bookPath = join(__dirname, '7x6.book');
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(binaryPath, ['-x', '-b', bookPath], { cwd: __dirname });
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', d => { stdout += d.toString(); });
+      child.stderr.on('data', d => { stderr += d.toString(); });
+
+      child.on('exit', code => {
+        if (code !== 0 && stdout === '') {
+          reject(new Error(`solver exited ${code}: ${stderr.trim()}`));
+        } else {
+          resolve(stdout.trim());
+        }
+      });
+
+      child.on('error', reject);
+      child.stdin.write(moves + '\n');
+      child.stdin.end();
+    });
+
+    // Output: "{moves} {42 ints for current} {42 ints for opponent}"
+    const parts = result.split(/\s+/);
+    const nums = parts.slice(1).map(Number); // 84 numbers
+
+    const ROWS = 6, COLS = 7;
+
+    // Solver rejects positions where the game is already won (winning move stops play() early).
+    // Return empty heatmaps in that case — nothing meaningful to show.
+    if (nums.length !== 84) {
+      const empty = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      return res.json({ human: empty, ai: empty });
+    }
+
+    const current  = Array.from({ length: ROWS }, (_, r) => nums.slice(r * COLS, r * COLS + COLS));
+    const opponent = Array.from({ length: ROWS }, (_, r) => nums.slice(42 + r * COLS, 42 + r * COLS + COLS));
+
+    const { human, ai } = assignHeatmaps(current, opponent, moves.length, humanFirst);
+    res.json({ human, ai });
+  } catch (err) {
+    console.error('[explain]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

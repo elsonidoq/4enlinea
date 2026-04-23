@@ -350,6 +350,82 @@ class Position {
   static constexpr position_t column_mask(int col) {
     return ((UINT64_C(1) << HEIGHT) - 1) << col * (HEIGHT + 1);
   }
+
+  // ── Heatmap / explain helpers ─────────────────────────────────────────────
+
+  position_t getCurrentPosition() const { return current_position; }
+  position_t getMask()            const { return mask; }
+
+  // Bitmask of empty cells where current player can win immediately.
+  position_t getWinningMovesMask() const {
+    return winning_position() & possible();
+  }
+
+  // Bitmask of empty cells where the opponent can win immediately.
+  position_t getOpponentWinningMovesMask() const {
+    return opponent_winning_position() & possible();
+  }
+
+  /**
+   * Given a player's stone bitboard (including a newly placed stone),
+   * find the 4 cells that form a winning 4-in-a-row.
+   * Returns (row, col) pairs with row 0 = bottom, or empty if none found.
+   */
+  static std::vector<std::pair<int,int> > findWinningCells(position_t pos) {
+    // Vertical (step = 1)
+    for (int col = 0; col < WIDTH; col++) {
+      for (int row = 0; row <= HEIGHT - 4; row++) {
+        bool ok = true;
+        for (int k = 0; k < 4 && ok; k++)
+          if (!(pos & (position_t(1) << (col*(HEIGHT+1) + row + k)))) ok = false;
+        if (ok) {
+          std::vector<std::pair<int,int> > cells;
+          for (int k = 0; k < 4; k++) cells.push_back(std::make_pair(row+k, col));
+          return cells;
+        }
+      }
+    }
+    // Horizontal (step = HEIGHT+1)
+    for (int col = 0; col <= WIDTH - 4; col++) {
+      for (int row = 0; row < HEIGHT; row++) {
+        bool ok = true;
+        for (int k = 0; k < 4 && ok; k++)
+          if (!(pos & (position_t(1) << ((col+k)*(HEIGHT+1) + row)))) ok = false;
+        if (ok) {
+          std::vector<std::pair<int,int> > cells;
+          for (int k = 0; k < 4; k++) cells.push_back(std::make_pair(row, col+k));
+          return cells;
+        }
+      }
+    }
+    // Diagonal / (col+1, row+1)
+    for (int col = 0; col <= WIDTH - 4; col++) {
+      for (int row = 0; row <= HEIGHT - 4; row++) {
+        bool ok = true;
+        for (int k = 0; k < 4 && ok; k++)
+          if (!(pos & (position_t(1) << ((col+k)*(HEIGHT+1) + row+k)))) ok = false;
+        if (ok) {
+          std::vector<std::pair<int,int> > cells;
+          for (int k = 0; k < 4; k++) cells.push_back(std::make_pair(row+k, col+k));
+          return cells;
+        }
+      }
+    }
+    // Diagonal \ (col+1, row-1)
+    for (int col = 0; col <= WIDTH - 4; col++) {
+      for (int row = HEIGHT - 1; row >= 3; row--) {
+        bool ok = true;
+        for (int k = 0; k < 4 && ok; k++)
+          if (!(pos & (position_t(1) << ((col+k)*(HEIGHT+1) + row-k)))) ok = false;
+        if (ok) {
+          std::vector<std::pair<int,int> > cells;
+          for (int k = 0; k < 4; k++) cells.push_back(std::make_pair(row-k, col+k));
+          return cells;
+        }
+      }
+    }
+    return std::vector<std::pair<int,int> >();
+  }
 };
 
 } // namespace Connect4

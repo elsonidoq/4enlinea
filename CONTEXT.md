@@ -84,6 +84,72 @@ Estado: stack `undoStack`. Cada entrada captura el estado completo justo antes d
 
 ---
 
+## Heatmap / Explicaciones
+
+Cuando `showExplanations` y `hintsEnabled` están ON, al hacer hover sobre una columna sugerida se muestra un overlay borroso de calor sobre el tablero.
+
+### Flujo completo
+
+1. **Frontend** (`App.jsx`): `handleBoardMouseEnter(col)` construye el string de candidato:
+   ```js
+   const candidateMoves = movesToString([...moveHistory, { player: HUMAN, col }]);
+   ```
+   `movesToString` ignora el campo `player`; solo concatena `col + 1` (1-indexed). Hace `POST /api/explain` con ese string.
+
+2. **Servidor** (`server/index.js`): Lanza un proceso one-shot `c4solver -x -b 7x6.book`, escribe el string de movidas a stdin, lee una línea de stdout con 85 tokens: `{moves} {42 ints heatCurrent} {42 ints heatOpponent}`. Los 42 ints son row-major con row 0 = fila visual inferior (C++ row 0 = fondo).
+
+3. **Mapeo de paridad** en el servidor:
+   ```js
+   const humanIsCurrentInPosition = moves.length % 2 === 1;
+   const human = humanIsCurrentInPosition ? opponent : current;
+   const ai    = humanIsCurrentInPosition ? current  : opponent;
+   ```
+   Asume que el humano siempre mueve primero. Si la IA abre la partida, este mapeo queda invertido.
+
+4. **C++ `-x` mode** (`main.cpp`): Llama `solver.explain(P, heatCurrent, heatOpponent)`.
+
+5. **`Solver::explain`** (`Solver.cpp`): Resetea la tabla de transposición (usada como visited-set), zeroes los grids, llama `explainSearch(P, heatCurrent, heatOpponent)`.
+
+6. **`explainSearch`** (recursivo):
+   - Si el libro de apertura contiene P: retorna (sin datos).
+   - Si `canWinNext()`: registra las 4 celdas ganadoras en `heatP0` (jugador actual), retorna.
+   - Si `possibleNonLosingMoves() == 0`: el oponente gana; registra sus celdas ganadoras en `heatP1`, retorna.
+   - Sino: itera movidas no perdedoras, recursa con arrays swapeados: `explainSearch(P2, heatP1, heatP0)`.
+   - Límite de nodos: 500 000.
+
+7. **`findWinningCells`** (`Position.hpp`): dado el bitboard del jugador tras colocar una pieza, devuelve las 4 celdas `(row, col)` del 4-en-línea.
+
+8. **Frontend render**: Para cada celda `(r, c)`, `cppRow = ROWS - 1 - r`. `humanHeat = explainData.human[cppRow][c] / maxHuman` → overlay rojo. `aiHeat = explainData.ai[cppRow][c] / maxAi` → overlay amarillo.
+
+### Bug corregido (2026-04-23)
+
+El heatmap mostraba las celdas de la **amenaza forzante** en vez de la **línea ganadora real**.
+
+**Causa raíz**: el branch `possibleNonLosingMoves() == 0` de `explainSearch` llamaba a `getOpponentWinningMovesMask()` y registraba esas celdas directamente. Pero esas son las celdas que *fuerzan* al oponente (las amenazas inmediatas que lo dejan sin movida segura), no el 4-en-línea con el que el humano gana después de la respuesta forzada.
+
+**Ejemplo** (`moves = "444444777777166662661322222535111133335"`, hover Col5):
+- Amenaza forzante: diagonal en (row=3,col=4) — la IA bloquea aquí.
+- Línea ganadora real: horizontal en row=4, cols 2-5 (cppCoords) — el humano juega ahí después.
+- El código anterior mostraba la diagonal; el corregido muestra la horizontal.
+
+**Fix** (`Solver.cpp::explainSearch`): cuando `possibleNonLosingMoves() == 0`, en lugar de registrar las celdas de la amenaza forzante, se recursa sobre todas las movidas jugables del perdedor para que el branch `canWinNext()` del oponente registre la línea real:
+```cpp
+if (possible == 0) {
+    for (int col = 0; col < Position::WIDTH; col++) {
+        if (P.canPlay(col)) {
+            Position P2(P);
+            P2.playCol(col);
+            explainSearch(P2, heatP1, heatP0);
+        }
+    }
+    return;
+}
+```
+
+**Test**: `solver-src/test_explain.cpp` — ejecutar con `make test` en `solver-src/`.
+
+---
+
 ## Stack técnico
 
 - React con hooks (`useState`, `useEffect`, `useCallback`, `useRef`).

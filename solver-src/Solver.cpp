@@ -139,6 +139,79 @@ std::vector<int> Solver::analyze(const Position &P, bool weak) {
   return scores;
 }
 
+void Solver::explainSearch(const Position &P,
+                            int heatP0[Position::HEIGHT][Position::WIDTH],
+                            int heatP1[Position::HEIGHT][Position::WIDTH]) {
+  // Hard node limit to keep the explain request fast (<1 s).
+  if (nodeCount > 500000) return;
+  nodeCount++;
+
+  // Use the transposition table as a visited set.
+  // Value 200 is well outside the normal score encoding range (~1-74).
+  const Position::position_t key = P.key();
+  if (transTable.get(key)) return; // already visited
+  transTable.put(key, 200);
+
+  // Opening book positions: no tree traversal available
+  if (book.get(P)) return;
+
+  // Current player can win immediately
+  if (P.canWinNext()) {
+    Position::position_t win_moves = P.getWinningMovesMask();
+    for (Position::position_t m = win_moves; m; m &= m - 1) {
+      Position::position_t move = m & (-m); // isolate lowest set bit
+      std::vector<std::pair<int,int> > cells =
+          Position::findWinningCells(P.getCurrentPosition() | move);
+      for (size_t i = 0; i < cells.size(); i++)
+        heatP0[cells[i].first][cells[i].second]++;
+    }
+    return;
+  }
+
+  // No non-losing moves: opponent wins no matter what the current player does.
+  // Recurse through all playable moves so the opponent's canWinNext() branch
+  // records the *actual* winning cells (not the forcing threat that gets blocked).
+  Position::position_t possible = P.possibleNonLosingMoves();
+  if (possible == 0) {
+    for (int col = 0; col < Position::WIDTH; col++) {
+      if (P.canPlay(col)) {
+        Position P2(P);
+        P2.playCol(col);
+        explainSearch(P2, heatP1, heatP0);
+      }
+    }
+    return;
+  }
+
+  // Near-draw: no more moves to explore
+  if (P.nbMoves() >= Position::WIDTH * Position::HEIGHT - 2) return;
+
+  // Recurse over all non-losing moves (same ordering as negamax)
+  MoveSorter moves;
+  for (int i = Position::WIDTH; i--;)
+    if (Position::position_t move = possible & Position::column_mask(columnOrder[i]))
+      moves.add(move, P.moveScore(move));
+
+  while (Position::position_t next = moves.getNext()) {
+    Position P2(P);
+    P2.play(next);
+    // After play(), it is the opponent's turn → swap heat arrays
+    explainSearch(P2, heatP1, heatP0);
+  }
+}
+
+void Solver::explain(const Position &P,
+                      int heatCurrent[Position::HEIGHT][Position::WIDTH],
+                      int heatOpponent[Position::HEIGHT][Position::WIDTH]) {
+  transTable.reset(); // repurpose as visited-set for explain
+  for (int r = 0; r < Position::HEIGHT; r++)
+    for (int c = 0; c < Position::WIDTH; c++) {
+      heatCurrent[r][c]  = 0;
+      heatOpponent[r][c] = 0;
+    }
+  explainSearch(P, heatCurrent, heatOpponent);
+}
+
 // Constructor
 Solver::Solver() : nodeCount{0} {
   for(int i = 0; i < Position::WIDTH; i++) // initialize the column exploration order, starting with center columns

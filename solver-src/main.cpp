@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
   Solver solver;
   bool weak = false;
   bool analyze = false;
+  bool explain = false;
 
   std::string opening_book = "7x6.book";
   for(int i = 1; i < argc; i++) {
@@ -46,6 +47,9 @@ int main(int argc, char** argv) {
       }
       else if(argv[i][1] == 'a') { // paramater -a: make an analysis of all possible moves
         analyze = true;
+      }
+      else if(argv[i][1] == 'x') { // parameter -x: explain mode (heatmap of winning patterns)
+        explain = true;
       }
     }
   }
@@ -59,7 +63,19 @@ int main(int argc, char** argv) {
       std::cerr << "Line " << l << ": Invalid move " << (P.nbMoves() + 1) << " \"" << line << "\"" << std::endl;
     } else {
       std::cout << line;
-      if(analyze) {
+      if(explain) {
+        int heatCurrent[Position::HEIGHT][Position::WIDTH];
+        int heatOpponent[Position::HEIGHT][Position::WIDTH];
+        solver.explain(P, heatCurrent, heatOpponent);
+        // Output row-major: row 0 = bottom visual row
+        for(int r = 0; r < Position::HEIGHT; r++)
+          for(int c = 0; c < Position::WIDTH; c++)
+            std::cout << " " << heatCurrent[r][c];
+        for(int r = 0; r < Position::HEIGHT; r++)
+          for(int c = 0; c < Position::WIDTH; c++)
+            std::cout << " " << heatOpponent[r][c];
+      }
+      else if(analyze) {
         std::vector<int> scores = solver.analyze(P, weak);
         for(int i = 0; i < Position::WIDTH; i++) std::cout << " " << scores[i];
       }

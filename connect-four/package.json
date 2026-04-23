@@ -9,7 +9,8 @@
     "vite": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test server/test_explain_parity.js"
   },
   "dependencies": {
     "concurrently": "^9.2.1",

@@ -248,10 +248,15 @@ export default function ConnectFour() {
   // Each entry: { moveHistory, currentAnalysis, pastAnalyses, soloColor }
   const [undoStack, setUndoStack] = useState([]);
 
+  // Redo stack: full state snapshots saved when undoing
+  // Each entry: { moveHistory, currentAnalysis, pastAnalyses, soloColor, winner, winCells, gameOver, turn }
+  const [redoStack, setRedoStack] = useState([]);
+
   const [feedbackEnabled, setFeedbackEnabled] = useState(false);
   const [hintsEnabled, setHintsEnabled] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [soloColor, setSoloColor] = useState(HUMAN);
+  const [humanGoesFirst, setHumanGoesFirst] = useState(true);
   const [currentAnalysis, setCurrentAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [pastAnalyses, setPastAnalyses] = useState([]);
@@ -259,16 +264,18 @@ export default function ConnectFour() {
   // Solver scores: array of 7 numbers (one per column), from current player's POV
   const [solverScores, setSolverScores] = useState(null);
 
+  // Heatmap / explain
+  const [showExplanations, setShowExplanations] = useState(false);
+  const [heatmapMineOnly, setHeatmapMineOnly] = useState(false);
+  const [explainData, setExplainData] = useState(null); // { human: number[][], ai: number[][] }
+  const [explainCol, setExplainCol] = useState(null);
+  const explainTimerRef = useRef(null);
+  const explainAbortRef = useRef(null);
+
   const analysisBoxRef = useRef(null);
   const isWinCell = (r, c) => winCells.some(([wr, wc]) => wr === r && wc === c);
 
-  // Fetch solver scores after every move (never set to null — avoid flicker)
-  useEffect(() => {
-    if (gameOver) return;
-    fetchScores(moveHistory).then(setSolverScores);
-  }, [moveHistory]);
-
-  // Derived hints from solver scores
+  // Derived hints from solver scores (must be before handlers that use them)
   const hintPlayer = !aiEnabled ? soloColor : HUMAN;
   const suggestedCols = hintsEnabled && turn === HUMAN && !gameOver && solverScores
     ? (() => {
@@ -278,6 +285,65 @@ export default function ConnectFour() {
     : [];
 
   const colScores = hintsEnabled && turn === HUMAN && !gameOver ? solverScores : null;
+
+  const handleBoardMouseEnter = useCallback((col) => {
+    setHoverCol(col);
+    if (!showExplanations || !hintsEnabled || gameOver) return;
+    clearTimeout(explainTimerRef.current);
+    if (explainAbortRef.current) explainAbortRef.current.abort();
+
+    explainTimerRef.current = setTimeout(async () => {
+      const ac = new AbortController();
+      explainAbortRef.current = ac;
+      // Build move string after the candidate move is played
+      const candidateMoves = movesToString([...moveHistory, { player: HUMAN, col }]);
+      try {
+        const r = await fetch('/api/explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moves: candidateMoves, humanFirst: humanGoesFirst }),
+          signal: ac.signal,
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        setExplainData(data);
+        setExplainCol(col);
+      } catch (e) {
+        if (e.name !== 'AbortError') console.error('[explain]', e);
+      }
+    }, 200);
+  }, [showExplanations, hintsEnabled, gameOver, moveHistory, humanGoesFirst]);
+
+  const handleBoardMouseLeave = useCallback(() => {
+    setHoverCol(null);
+    clearTimeout(explainTimerRef.current);
+    if (explainAbortRef.current) explainAbortRef.current.abort();
+    setExplainData(null);
+    setExplainCol(null);
+  }, []);
+
+  // Fetch solver scores after every move (never set to null — avoid flicker)
+  useEffect(() => {
+    if (gameOver) return;
+    fetchScores(moveHistory).then(setSolverScores);
+  }, [moveHistory]);
+
+  // Re-fetch explain data when moveHistory changes and the mouse is still hovering
+  useEffect(() => {
+    if (!showExplanations || !hintsEnabled || gameOver || hoverCol === null) return;
+    const candidateMoves = movesToString([...moveHistory, { player: HUMAN, col: hoverCol }]);
+    const ac = new AbortController();
+    fetch('/api/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moves: candidateMoves, humanFirst: humanGoesFirst }),
+      signal: ac.signal,
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) { setExplainData(data); setExplainCol(hoverCol); } })
+      .catch(() => {});
+    return () => ac.abort();
+  }, [moveHistory]);
 
   const handleColumnClick = useCallback(async (col) => {
     if (turn !== HUMAN || gameOver || analyzing) return;
@@ -292,6 +358,7 @@ export default function ConnectFour() {
     const newHumanMoveCount = activePlayer === HUMAN ? humanMoveCount + 1 : humanMoveCount;
 
     setUndoStack(prev => [...prev, { moveHistory, currentAnalysis, pastAnalyses, soloColor }]);
+    setRedoStack([]);
     setMoveHistory(newHistory);
     setWinCells([]);
     setWinner(null);
@@ -357,11 +424,13 @@ export default function ConnectFour() {
     return () => clearTimeout(t);
   }, [turn, gameOver, aiEnabled, moveHistory]);
 
-  const canUndo = turn === HUMAN && !analyzing && !gameOver && undoStack.length > 0;
+  const canUndo = !analyzing && undoStack.length > 0 && (turn === HUMAN || gameOver);
+  const canRedo = !analyzing && redoStack.length > 0 && (turn === HUMAN || gameOver);
 
   const handleUndo = useCallback(() => {
     if (!canUndo) return;
     const snapshot = undoStack[undoStack.length - 1];
+    setRedoStack(prev => [...prev, { moveHistory, currentAnalysis, pastAnalyses, soloColor, winner, winCells, gameOver, turn }]);
     setUndoStack(prev => prev.slice(0, -1));
     setMoveHistory(snapshot.moveHistory);
     setCurrentAnalysis(snapshot.currentAnalysis);
@@ -372,9 +441,26 @@ export default function ConnectFour() {
     setWinCells([]);
     setGameOver(false);
     setAnalyzing(false);
-  }, [canUndo, undoStack]);
+  }, [canUndo, undoStack, moveHistory, currentAnalysis, pastAnalyses, soloColor, winner, winCells, gameOver, turn]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    const snapshot = redoStack[redoStack.length - 1];
+    setUndoStack(prev => [...prev, { moveHistory, currentAnalysis, pastAnalyses, soloColor }]);
+    setRedoStack(prev => prev.slice(0, -1));
+    setMoveHistory(snapshot.moveHistory);
+    setCurrentAnalysis(snapshot.currentAnalysis);
+    setPastAnalyses(snapshot.pastAnalyses);
+    if (snapshot.soloColor !== undefined) setSoloColor(snapshot.soloColor);
+    setTurn(snapshot.turn);
+    setWinner(snapshot.winner);
+    setWinCells(snapshot.winCells);
+    setGameOver(snapshot.gameOver);
+    setAnalyzing(false);
+  }, [canRedo, redoStack, moveHistory, currentAnalysis, pastAnalyses, soloColor]);
 
   const reset = (aiGoesFirst = false) => {
+    setHumanGoesFirst(!aiGoesFirst);
     setTurn(aiGoesFirst ? AI : HUMAN);
     setWinner(null);
     setWinCells([]);
@@ -382,6 +468,7 @@ export default function ConnectFour() {
     setHoverCol(null);
     setMoveHistory([]);
     setUndoStack([]);
+    setRedoStack([]);
     setCurrentAnalysis(null);
     setAnalyzing(false);
     setPastAnalyses([]);
@@ -429,6 +516,28 @@ export default function ConnectFour() {
               }}>
               {hintsEnabled ? "💡 Sugerencias ON" : "💡 Sugerencias OFF"}
             </button>
+            <button
+              onClick={() => setShowExplanations(v => !v)}
+              disabled={!hintsEnabled}
+              style={{
+                padding:"6px 12px", borderRadius:8, cursor: hintsEnabled ? "pointer" : "not-allowed", fontFamily:"inherit", fontSize:12, transition:"all 0.15s",
+                background: showExplanations && hintsEnabled ? "#1a0e2e" : "#1a1a1a",
+                color: showExplanations && hintsEnabled ? "#c07af5" : "#444",
+                border:`1px solid ${showExplanations && hintsEnabled ? "#3a1a5a" : "#2a2a2a"}`,
+              }}>
+              {showExplanations ? "🔥 Explicaciones ON" : "🔥 Explicaciones OFF"}
+            </button>
+            <button
+              onClick={() => setHeatmapMineOnly(v => !v)}
+              disabled={!showExplanations || !hintsEnabled}
+              style={{
+                padding:"6px 12px", borderRadius:8, cursor: showExplanations && hintsEnabled ? "pointer" : "not-allowed", fontFamily:"inherit", fontSize:12, transition:"all 0.15s",
+                background: heatmapMineOnly && showExplanations && hintsEnabled ? "#1a1a0a" : "#1a1a1a",
+                color: heatmapMineOnly && showExplanations && hintsEnabled ? "#e05050" : "#444",
+                border:`1px solid ${heatmapMineOnly && showExplanations && hintsEnabled ? "#4a1a1a" : "#2a2a2a"}`,
+              }}>
+              {heatmapMineOnly ? "🔴 Solo yo" : "🔴 Solo yo"}
+            </button>
           </div>
 
           {/* Row 2: IA toggle + undo */}
@@ -452,6 +561,15 @@ export default function ConnectFour() {
                 color: canUndo ? "#f5c842" : "#333",
                 border:`1px solid ${canUndo ? "#4a4010" : "#222"}`,
               }}>↩ Deshacer</button>
+            <button
+              onClick={handleRedo} disabled={!canRedo}
+              style={{
+                padding:"6px 12px", borderRadius:8, fontFamily:"inherit", fontSize:12, transition:"all 0.15s",
+                cursor: canRedo ? "pointer" : "not-allowed",
+                background: canRedo ? "#0a1e1e" : "#151515",
+                color: canRedo ? "#42c8f5" : "#333",
+                border:`1px solid ${canRedo ? "#104040" : "#222"}`,
+              }}>↪ Rehacer</button>
           </div>
 
           {/* Row 3: nueva + ia abre */}
@@ -480,42 +598,80 @@ export default function ConnectFour() {
                 </div>
               ))}
             </div>
-            <div style={{ background:"#1a3a8f", borderRadius:12, padding:7, boxShadow:"0 8px 40px rgba(0,0,0,0.6)", display:"inline-block" }}>
-              {board.map((row, r) => (
-                <div key={r} style={{ display:"flex" }}>
-                  {row.map((cell, c) => (
-                    <div key={c}
-                      onClick={() => handleColumnClick(c)}
-                      onMouseEnter={() => setHoverCol(c)}
-                      onMouseLeave={() => setHoverCol(null)}
-                      style={{
-                        width:54, height:54, display:"flex", alignItems:"center", justifyContent:"center",
-                        cursor: turn===HUMAN && !gameOver && !analyzing ? "pointer" : "default",
-                        background: hoverCol===c && turn===HUMAN && !gameOver && !analyzing ? "rgba(255,255,255,0.05)" : "transparent",
-                        borderRadius:4, position:"relative"
-                      }}>
-                      <div style={{
-                        width:42, height:42, borderRadius:"50%",
-                        background: cell===HUMAN?"#e05050":cell===AI?"#f5c842":"#0a1f5c",
-                        boxShadow: isWinCell(r,c)
-                          ? `0 0 0 3px white, 0 0 20px ${cell===HUMAN?"#e05050":"#f5c842"}`
-                          : cell ? "inset 0 -3px 6px rgba(0,0,0,0.3)" : "inset 0 3px 8px rgba(0,0,0,0.5)",
-                        transform: isWinCell(r,c) ? "scale(1.1)" : "scale(1)",
-                        transition:"all 0.15s"
-                      }} />
-                      {/* Hint dot: show on the landing row of each suggested column */}
-                      {cell === EMPTY && suggestedCols.includes(c) && getAvailableRow(board, c) === r && (
-                        <div style={{
-                          position:"absolute", width:14, height:14, borderRadius:"50%",
-                          background:"rgba(90,180,245,0.55)",
-                          boxShadow:"0 0 8px rgba(90,180,245,0.8)",
-                          pointerEvents:"none"
-                        }} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
+            <div
+              style={{ background:"#1a3a8f", borderRadius:12, padding:7, boxShadow:"0 8px 40px rgba(0,0,0,0.6)", display:"inline-block" }}
+              onMouseLeave={handleBoardMouseLeave}
+            >
+              {(() => {
+                // Pre-compute heatmap max values once per render
+                const maxHuman = explainData ? Math.max(1, ...explainData.human.flat()) : 1;
+                const maxAi = explainData ? Math.max(1, ...explainData.ai.flat()) : 1;
+                return board.map((row, r) => (
+                  <div key={r} style={{ display:"flex" }}>
+                    {row.map((cell, c) => {
+                      // C++ row 0 = bottom; React row 0 = top
+                      const cppRow = ROWS - 1 - r;
+                      const humanHeat = explainData ? explainData.human[cppRow][c] / maxHuman : 0;
+                      const aiHeat = explainData ? explainData.ai[cppRow][c] / maxAi : 0;
+                      return (
+                        <div key={c}
+                          onClick={() => handleColumnClick(c)}
+                          onMouseEnter={() => handleBoardMouseEnter(c)}
+                          style={{
+                            width:54, height:54, display:"flex", alignItems:"center", justifyContent:"center",
+                            cursor: turn===HUMAN && !gameOver && !analyzing ? "pointer" : "default",
+                            background: hoverCol===c && turn===HUMAN && !gameOver && !analyzing ? "rgba(255,255,255,0.05)" : "transparent",
+                            borderRadius:4, position:"relative"
+                          }}>
+                          <div style={{
+                            width:42, height:42, borderRadius:"50%",
+                            background: cell===HUMAN?"#e05050":cell===AI?"#f5c842":"#0a1f5c",
+                            boxShadow: isWinCell(r,c)
+                              ? `0 0 0 3px white, 0 0 20px ${cell===HUMAN?"#e05050":"#f5c842"}`
+                              : cell ? "inset 0 -3px 6px rgba(0,0,0,0.3)" : "inset 0 3px 8px rgba(0,0,0,0.5)",
+                            transform: isWinCell(r,c) ? "scale(1.1)" : "scale(1)",
+                            transition:"all 0.15s"
+                          }} />
+                          {/* Hint dot: show on the landing row of each suggested column */}
+                          {cell === EMPTY && suggestedCols.includes(c) && getAvailableRow(board, c) === r && (
+                            <div style={{
+                              position:"absolute", width:14, height:14, borderRadius:"50%",
+                              background:"rgba(90,180,245,0.55)",
+                              boxShadow:"0 0 8px rgba(90,180,245,0.8)",
+                              pointerEvents:"none"
+                            }} />
+                          )}
+                          {/* Heatmap blurred pieces */}
+                          {explainData && humanHeat > 0 && (() => {
+                            const size = Math.round(10 + 32 * humanHeat);
+                            const alpha = (0.4 + 0.5 * humanHeat).toFixed(2);
+                            return (
+                              <div style={{
+                                position:"absolute", width:size, height:size, borderRadius:"50%",
+                                background:`rgba(224,80,80,${alpha})`,
+                                filter:"blur(6px)",
+                                pointerEvents:"none"
+                              }} />
+                            );
+                          })()}
+                          {explainData && aiHeat > 0 && !heatmapMineOnly && (() => {
+                            const size = Math.round(10 + 32 * aiHeat);
+                            const alpha = (0.4 + 0.5 * aiHeat).toFixed(2);
+                            return (
+                              <div style={{
+                                position:"absolute", width:size, height:size, borderRadius:"50%",
+                                background:`rgba(245,200,66,${alpha})`,
+                                filter:"blur(6px)",
+                                pointerEvents:"none"
+                              }} />
+                            );
+                          })()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ));
+              })()}
             </div>
             <div style={{ display:"flex", marginTop:3 }}>
               {Array(COLS).fill(0).map((_,c) => (
@@ -600,7 +756,10 @@ export default function ConnectFour() {
                 <span style={{ fontSize:11, color:"#555" }}>IA</span>
               </div>
               {undoStack.length > 0 && (
-                <span style={{ fontSize:11, color:"#444" }}>{undoStack.length} jugada{undoStack.length>1?"s":""} deshacible{undoStack.length>1?"s":""}</span>
+                <span style={{ fontSize:11, color:"#444" }}>{undoStack.length} ↩</span>
+              )}
+              {redoStack.length > 0 && (
+                <span style={{ fontSize:11, color:"#444" }}>{redoStack.length} ↪</span>
               )}
             </div>
           </div>

@@ -15,7 +15,11 @@ generator: generator.o
 	
 -include .depend
 
+test: $(OBJS) test_explain.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o test_explain test_explain.o $(OBJS) $(LDLIBS)
+	./test_explain
+
 clean:
-	rm -f *.o .depend c4solver generator
+	rm -f *.o .depend c4solver generator test_explain
 
 

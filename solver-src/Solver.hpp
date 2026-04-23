@@ -68,6 +68,24 @@ class Solver {
     transTable.reset();
   }
 
+  /**
+   * Explain: traverse the game tree from P (with visited-set deduplication),
+   * collecting winning 4-cell patterns into per-player frequency grids.
+   * heatP0[row][col] counts winning lines for the "current player" at P.
+   * heatP1[row][col] counts winning lines for their opponent.
+   */
+  void explainSearch(const Position &P,
+                     int heatP0[Position::HEIGHT][Position::WIDTH],
+                     int heatP1[Position::HEIGHT][Position::WIDTH]);
+
+  /**
+   * Public entry point for the explain feature.
+   * Resets the transposition table, zeroes the grids, then runs explainSearch.
+   */
+  void explain(const Position &P,
+               int heatCurrent[Position::HEIGHT][Position::WIDTH],
+               int heatOpponent[Position::HEIGHT][Position::WIDTH]);
+
   void loadBook(std::string book_file) {
     book.load(book_file);
   }
