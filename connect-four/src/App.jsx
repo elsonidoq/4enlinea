@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 const ROWS = 6;
 const COLS = 7;
@@ -44,79 +44,6 @@ function checkWinner(board, player) {
     for (let c = 0; c <= COLS - 4; c++)
       if ([0,1,2,3].every(i => board[r-i][c+i] === player)) return [[r,c],[r-1,c+1],[r-2,c+2],[r-3,c+3]];
   return null;
-}
-
-function scoreWindow(w, player) {
-  const opp = player === AI ? HUMAN : AI;
-  const p = w.filter(c => c === player).length;
-  const e = w.filter(c => c === EMPTY).length;
-  const o = w.filter(c => c === opp).length;
-  if (p === 4) return 100;
-  if (p === 3 && e === 1) return 7;
-  if (p === 2 && e === 2) return 0.5;
-  if (o === 3 && e === 1) return -4;
-  return 0;
-}
-
-function scoreBoard(board, player) {
-  let score = 0;
-  const mid = Math.floor(COLS / 2);
-  score += board.map(r => r[mid]).filter(c => c === player).length * 3;
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c <= COLS - 4; c++)
-      score += scoreWindow([board[r][c],board[r][c+1],board[r][c+2],board[r][c+3]], player);
-  for (let c = 0; c < COLS; c++)
-    for (let r = 0; r <= ROWS - 4; r++)
-      score += scoreWindow([board[r][c],board[r+1][c],board[r+2][c],board[r+3][c]], player);
-  for (let r = 0; r <= ROWS - 4; r++)
-    for (let c = 0; c <= COLS - 4; c++)
-      score += scoreWindow([board[r][c],board[r+1][c+1],board[r+2][c+2],board[r+3][c+3]], player);
-  for (let r = 3; r < ROWS; r++)
-    for (let c = 0; c <= COLS - 4; c++)
-      score += scoreWindow([board[r][c],board[r-1][c+1],board[r-2][c+2],board[r-3][c+3]], player);
-  return score;
-}
-
-// Unified minimax — rootPlayer is who we're optimizing for (score is always from their POV)
-function minimax(board, depth, alpha, beta, currentPlayer, rootPlayer) {
-  const opp = currentPlayer === AI ? HUMAN : AI;
-  if (checkWinner(board, rootPlayer)) return { score: 1000000 + depth };
-  if (checkWinner(board, opp === rootPlayer ? currentPlayer : opp)) return { score: -1000000 - depth };
-  if (isBoardFull(board) || depth === 0) return { score: scoreBoard(board, rootPlayer) };
-
-  const cols = [3,2,4,1,5,0,6];
-  const maximizing = currentPlayer === rootPlayer;
-  let best = maximizing ? -Infinity : Infinity;
-  let bestCol = cols.find(c => getAvailableRow(board, c) !== -1);
-
-  for (const col of cols) {
-    if (getAvailableRow(board, col) === -1) continue;
-    const res = minimax(dropPiece(board, col, currentPlayer), depth-1, alpha, beta, opp, rootPlayer);
-    if (maximizing) {
-      if (res.score > best) { best = res.score; bestCol = col; }
-      alpha = Math.max(alpha, best);
-    } else {
-      if (res.score < best) { best = res.score; bestCol = col; }
-      beta = Math.min(beta, best);
-    }
-    if (alpha >= beta) break;
-  }
-
-  return { score: best, col: bestCol };
-}
-
-// Root-level AI move with random tie-breaking among equally-scored columns
-function aiMove(board, depth) {
-  const cols = [3,2,4,1,5,0,6];
-  let best = -Infinity;
-  let bestCols = [];
-  for (const col of cols) {
-    if (getAvailableRow(board, col) === -1) continue;
-    const res = minimax(dropPiece(board, col, AI), depth, -Infinity, Infinity, HUMAN, AI);
-    if (res.score > best) { best = res.score; bestCols = [col]; }
-    else if (res.score === best) { bestCols.push(col); }
-  }
-  return bestCols[Math.floor(Math.random() * bestCols.length)];
 }
 
 // ── Analysis helpers ─────────────────────────────────────────────────────────
@@ -183,47 +110,31 @@ function getActiveThreats(board) {
   return results.length ? results.join("\n") : "Sin amenazas inmediatas de 3 en línea.";
 }
 
-// Returns all columns that tie for the best human move (for hints)
-function allBestHumanMoves(board, depth = 7, player = HUMAN) {
-  const opp = player === HUMAN ? AI : HUMAN;
-  const cols = [0,1,2,3,4,5,6];
-  const available = cols.filter(c => getAvailableRow(board, c) !== -1);
-  if (available.length === 0) return [];
-
-  // Immediate win — absolute priority
-  const winCols = available.filter(c => checkWinner(dropPiece(board, c, player), player));
-  if (winCols.length > 0) return winCols;
-
-  // Must block if opponent can win immediately
-  const blockCols = available.filter(c => checkWinner(dropPiece(board, c, opp), opp));
-  if (blockCols.length > 0) return blockCols;
-
-  // Score each column: drop player piece, then opponent responds
-  const scored = available.map(col => {
-    const nb = dropPiece(board, col, player);
-    const res = minimax(nb, depth, -Infinity, Infinity, opp, player);
-    return { col, score: res.score };
-  });
-
-  const best = Math.max(...scored.map(s => s.score));
-  return scored.filter(s => s.score === best).map(s => s.col);
+// Converts move history to the solver's 1-indexed column string
+function movesToString(moveHistory) {
+  return moveHistory.map(m => m.col + 1).join('');
 }
 
-// Best single human move for the analysis prompt
-function bestHumanMove(board) {
-  const available = [0,1,2,3,4,5,6].filter(c => getAvailableRow(board, c) !== -1);
-
-  for (const col of available)
-    if (checkWinner(dropPiece(board, col, HUMAN), HUMAN)) return col;
-  for (const col of available)
-    if (checkWinner(dropPiece(board, col, AI), AI)) return col;
-
-  let bestCol = available[0], bestScore = -Infinity;
-  for (const col of available) {
-    const res = minimax(dropPiece(board, col, HUMAN), 7, -Infinity, Infinity, AI, HUMAN);
-    if (res.score > bestScore) { bestScore = res.score; bestCol = col; }
+async function fetchScores(moveHistory) {
+  const moves = movesToString(moveHistory);
+  console.log(`[fetchScores] calling /api/scores moves="${moves}"`);
+  try {
+    const res = await fetch('/api/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moves }),
+    });
+    if (!res.ok) {
+      console.error(`[fetchScores] HTTP error ${res.status}`);
+      return null;
+    }
+    const { scores } = await res.json();
+    console.log(`[fetchScores] got scores:`, scores);
+    return scores;
+  } catch (err) {
+    console.error(`[fetchScores] fetch failed:`, err);
+    return null;
   }
-  return bestCol;
 }
 
 async function analyzeHumanMove({ boardBefore, boardAfter, col, humanMoveNumber, moveHistory, humanWon, optimalCol }) {
@@ -248,7 +159,6 @@ async function analyzeHumanMove({ boardBefore, boardAfter, col, humanMoveNumber,
   const missedBlock = aiWinCol !== null && col !== aiWinCol;
   const playedOptimal = optimalCol === col;
 
-  // Describe what the optimal board would look like
   const optimalBoard = dropPiece(boardBefore, optimalCol, HUMAN);
   const optimalRow = (() => {
     for (let r = 0; r < ROWS; r++)
@@ -316,79 +226,72 @@ Escribí 2-3 oraciones en español rioplatense directo, hablando al jugador. Us�
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ConnectFour() {
-  const [board, setBoard] = useState(createBoard());
   const [turn, setTurn] = useState(HUMAN);
   const [winner, setWinner] = useState(null);
   const [winCells, setWinCells] = useState([]);
   const [gameOver, setGameOver] = useState(false);
   const [hoverCol, setHoverCol] = useState(null);
-  const [difficulty, setDifficulty] = useState(5);
 
-  // Full move history: [{player, col}]
+  // Full move history: [{player, col}] — source of truth for the board
   const [moveHistory, setMoveHistory] = useState([]);
-  // Count of human moves only (for labeling analysis)
-  const [humanMoveCount, setHumanMoveCount] = useState(0);
 
-  // Board snapshots stack for undo: each entry is the full state before a human move
-  // Each entry: { board, moveHistory, humanMoveCount, currentAnalysis }
+  // Board derived from moveHistory
+  const board = useMemo(
+    () => moveHistory.reduce((b, { player, col }) => dropPiece(b, col, player), createBoard()),
+    [moveHistory]
+  );
+
+  // Human move count derived from moveHistory
+  const humanMoveCount = moveHistory.filter(m => m.player === HUMAN).length;
+
+  // Undo stack: snapshots before each human move
+  // Each entry: { moveHistory, currentAnalysis, pastAnalyses, soloColor }
   const [undoStack, setUndoStack] = useState([]);
 
   const [feedbackEnabled, setFeedbackEnabled] = useState(false);
   const [hintsEnabled, setHintsEnabled] = useState(false);
-  const [hintsDepth, setHintsDepth] = useState(5);
   const [aiEnabled, setAiEnabled] = useState(true);
-  const [soloColor, setSoloColor] = useState(HUMAN); // tracks whose "turn" visually in solo mode
+  const [soloColor, setSoloColor] = useState(HUMAN);
   const [currentAnalysis, setCurrentAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [pastAnalyses, setPastAnalyses] = useState([]);
 
+  // Solver scores: array of 7 numbers (one per column), from current player's POV
+  const [solverScores, setSolverScores] = useState(null);
+
   const analysisBoxRef = useRef(null);
   const isWinCell = (r, c) => winCells.some(([wr, wc]) => wr === r && wc === c);
 
-  // Active player for hints: soloColor in solo mode, HUMAN otherwise
-  const hintPlayer = !aiEnabled ? soloColor : HUMAN;
+  // Fetch solver scores after every move (never set to null — avoid flicker)
+  useEffect(() => {
+    if (gameOver) return;
+    fetchScores(moveHistory).then(setSolverScores);
+  }, [moveHistory]);
 
-  // Suggested cols: only computed when hints are on and it's human's turn
-  const suggestedCols = hintsEnabled && turn === HUMAN && !gameOver
-    ? allBestHumanMoves(board, hintsDepth, hintPlayer)
+  // Derived hints from solver scores
+  const hintPlayer = !aiEnabled ? soloColor : HUMAN;
+  const suggestedCols = hintsEnabled && turn === HUMAN && !gameOver && solverScores
+    ? (() => {
+        const max = Math.max(...solverScores);
+        return solverScores.map((s, c) => ({ s, c })).filter(x => x.s === max).map(x => x.c);
+      })()
     : [];
 
-  const colScores = hintsEnabled && turn === HUMAN && !gameOver
-    ? Array(COLS).fill(0).map((_, c) => {
-        if (getAvailableRow(board, c) === -1) return null;
-        const opp = hintPlayer === HUMAN ? AI : HUMAN;
-        const nb = dropPiece(board, c, hintPlayer);
-        return minimax(nb, hintsDepth, -Infinity, Infinity, opp, hintPlayer).score;
-      })
-    : null;
+  const colScores = hintsEnabled && turn === HUMAN && !gameOver ? solverScores : null;
 
   const handleColumnClick = useCallback(async (col) => {
     if (turn !== HUMAN || gameOver || analyzing) return;
     if (getAvailableRow(board, col) === -1) return;
 
-    // In solo mode, the active piece color alternates each click
     const activePlayer = !aiEnabled ? soloColor : HUMAN;
 
     const boardBefore = board.map(r => [...r]);
     const newBoard = dropPiece(board, col, activePlayer);
     const newHistory = [...moveHistory, { player: activePlayer, col }];
     const activeWon = !!checkWinner(newBoard, activePlayer);
-
-    // Only increment humanMoveCount for actual human (red) moves
     const newHumanMoveCount = activePlayer === HUMAN ? humanMoveCount + 1 : humanMoveCount;
 
-    // Save undo snapshot — in solo mode each move is individually undoable
-    setUndoStack(prev => [...prev, {
-      board: boardBefore,
-      moveHistory,
-      humanMoveCount,
-      currentAnalysis,
-      pastAnalyses,
-      soloColor,
-    }]);
-
-    setBoard(newBoard);
-    setHumanMoveCount(newHumanMoveCount);
+    setUndoStack(prev => [...prev, { moveHistory, currentAnalysis, pastAnalyses, soloColor }]);
     setMoveHistory(newHistory);
     setWinCells([]);
     setWinner(null);
@@ -402,20 +305,21 @@ export default function ConnectFour() {
       setWinner("draw");
       setGameOver(true);
     } else if (!aiEnabled) {
-      // Solo mode: alternate color, stay on HUMAN turn
       setSoloColor(c => c === HUMAN ? AI : HUMAN);
     } else {
       setTurn(AI);
     }
 
-    // Analysis only for human (red) moves with feedback enabled
     if (currentAnalysis) setPastAnalyses(prev => [currentAnalysis, ...prev].slice(0, 12));
     setCurrentAnalysis(null);
 
     if (!feedbackEnabled || activePlayer !== HUMAN) return;
 
     setAnalyzing(true);
-    const optimalCol = bestHumanMove(boardBefore);
+    // Get optimal col from solver scores before this move
+    const scoresBefore = await fetchScores(moveHistory); // moveHistory = state before this move
+    const maxScore = Math.max(...scoresBefore);
+    const optimalCol = scoresBefore.indexOf(maxScore);
 
     analyzeHumanMove({
       boardBefore,
@@ -432,21 +336,26 @@ export default function ConnectFour() {
     });
   }, [board, turn, gameOver, analyzing, moveHistory, humanMoveCount, currentAnalysis, pastAnalyses, feedbackEnabled, aiEnabled, soloColor]);
 
-  // AI turn
+  // AI turn — fetch scores from solver, pick best column
   useEffect(() => {
     if (!aiEnabled || turn !== AI || gameOver) return;
-    const t = setTimeout(() => {
-      const col = aiMove(board, difficulty);
-      const nb = dropPiece(board, col, AI);
+    const currentHistory = moveHistory;
+    const currentBoard = board;
+    const t = setTimeout(async () => {
+      const scores = await fetchScores(currentHistory);
+      const max = Math.max(...scores);
+      const bestCols = scores.map((s, i) => ({ s, i })).filter(x => x.s === max).map(x => x.i);
+      const col = bestCols[Math.floor(Math.random() * bestCols.length)];
+
+      const nb = dropPiece(currentBoard, col, AI);
       const win = checkWinner(nb, AI);
-      setBoard(nb);
       setMoveHistory(prev => [...prev, { player: AI, col }]);
       if (win) { setWinCells(win); setWinner(AI); setGameOver(true); }
       else if (isBoardFull(nb)) { setWinner("draw"); setGameOver(true); }
       else setTurn(HUMAN);
-    }, 500);
+    }, 300);
     return () => clearTimeout(t);
-  }, [turn, board, gameOver, difficulty]);
+  }, [turn, gameOver, aiEnabled, moveHistory]);
 
   const canUndo = turn === HUMAN && !analyzing && !gameOver && undoStack.length > 0;
 
@@ -454,9 +363,7 @@ export default function ConnectFour() {
     if (!canUndo) return;
     const snapshot = undoStack[undoStack.length - 1];
     setUndoStack(prev => prev.slice(0, -1));
-    setBoard(snapshot.board);
     setMoveHistory(snapshot.moveHistory);
-    setHumanMoveCount(snapshot.humanMoveCount);
     setCurrentAnalysis(snapshot.currentAnalysis);
     setPastAnalyses(snapshot.pastAnalyses);
     if (snapshot.soloColor !== undefined) setSoloColor(snapshot.soloColor);
@@ -468,14 +375,12 @@ export default function ConnectFour() {
   }, [canUndo, undoStack]);
 
   const reset = (aiGoesFirst = false) => {
-    setBoard(createBoard());
     setTurn(aiGoesFirst ? AI : HUMAN);
     setWinner(null);
     setWinCells([]);
     setGameOver(false);
     setHoverCol(null);
     setMoveHistory([]);
-    setHumanMoveCount(0);
     setUndoStack([]);
     setCurrentAnalysis(null);
     setAnalyzing(false);
@@ -483,7 +388,7 @@ export default function ConnectFour() {
     setSoloColor(HUMAN);
   };
 
-  // ── Game ──
+  // ── Render ──
   const activeColor = !aiEnabled ? soloColor : (turn === HUMAN ? HUMAN : AI);
   const statusMsg = gameOver
     ? winner === HUMAN ? "🏆 ¡Ganaron las rojas!"
@@ -524,14 +429,9 @@ export default function ConnectFour() {
               }}>
               {hintsEnabled ? "💡 Sugerencias ON" : "💡 Sugerencias OFF"}
             </button>
-            <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, opacity: hintsEnabled ? 1 : 0.3 }}>
-              <button onClick={() => setHintsDepth(d => Math.max(1, d-1))} style={{ padding:"3px 7px", borderRadius:6, fontFamily:"inherit", fontSize:12, cursor:"pointer", background:"#0e1a2e", color:"#5ab4f5", border:"1px solid #1a4a7a" }}>−</button>
-              <span style={{ minWidth:16, textAlign:"center", color:"#5ab4f5" }}>{hintsDepth}</span>
-              <button onClick={() => setHintsDepth(d => Math.min(12, d+1))} style={{ padding:"3px 7px", borderRadius:6, fontFamily:"inherit", fontSize:12, cursor:"pointer", background:"#0e1a2e", color:"#5ab4f5", border:"1px solid #1a4a7a" }}>+</button>
-            </div>
           </div>
 
-          {/* Row 2: difficulty + deshacer */}
+          {/* Row 2: IA toggle + undo */}
           <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
             <button
               onClick={() => { setAiEnabled(v => !v); setSoloColor(HUMAN); }}
@@ -543,14 +443,6 @@ export default function ConnectFour() {
               }}>
               {aiEnabled ? "🤖 IA ON" : "🤖 IA OFF"}
             </button>
-            {[{l:"Fácil",v:3},{l:"Difícil",v:5}].map(d => (
-              <button key={d.v} onClick={() => setDifficulty(d.v)} style={{
-                padding:"6px 12px", borderRadius:8, fontFamily:"inherit", fontSize:12, cursor:"pointer", transition:"all 0.15s",
-                border:`1px solid ${difficulty===d.v?"#f5c842":"#2a2a2a"}`,
-                background: difficulty===d.v?"#2a2200":"#1a1a1a",
-                color: difficulty===d.v?"#f5c842":"#555",
-              }}>{d.l}</button>
-            ))}
             <button
               onClick={handleUndo} disabled={!canUndo}
               style={{
