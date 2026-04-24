@@ -97,6 +97,41 @@ Deliberately excluded from MVP: online multiplayer, ELO ladders, AR
 board scanner, neural-network visualizer, Socratic hint mode. All are
 strong Phase 2 candidates; none are necessary for the core hypothesis.
 
+## 4b. Free vs. Paid Tier
+
+The conversion trigger must be a feature the user *experiences losing*
+when their session ends — not a convenience like sync. The blunder log
+is that feature: it requires identity across sessions, personalizes to
+*your* weakness history, and becomes more valuable the longer you use
+it. A user who has logged 20 blunders has a personal curriculum
+competitors cannot replicate for them.
+
+| | Free | Paid ($4.99/mo · $39/yr) |
+|---|---|---|
+| Tactics puzzles | 50 puzzles, fixed rotation | Full 200+ library, all pattern categories |
+| Post-puzzle X-AI annotation | Generic (pattern name + one-line) | Personalized ("tercera vez que te comés una diagonal ↗") |
+| Post-game X-AI annotation | — | Full per-move review on imported games |
+| Blunder log | — | Auto-capture + spaced repetition across sessions |
+| Game import (Papergames / Ludoteka) | — | Unlimited |
+| Cross-device sync | — | Included |
+
+**Why this split works:**
+
+- *Free tier is genuinely useful.* 50 puzzles with solver-grounded
+  annotations is already better than every competitor. Users arrive
+  sceptical and leave convinced the core product works.
+- *The paywall is encountered naturally.* After the first real-game
+  loss a free user wants to review it. Import is gated. After solving
+  their 50th puzzle they want to do more and know which patterns to
+  drill. Both paths hit the paywall at the moment of highest
+  motivation.
+- *Paid value compounds.* Generic X-AI annotations are stateless and
+  cheap to generate once. Personalized annotations require knowing the
+  user's blunder history — that data only exists for paid users.
+  The longer someone pays, the more the product knows them, and the
+  more useful the personalization becomes. This creates switching cost
+  without artificial lock-in.
+
 ## 5. Target Audience & User Persona
 
 - **Primary User:** The Serious Amateur. Plays Connect 4 weekly on
@@ -163,11 +198,14 @@ segment per the "narrow early wedge" principle.
   - Puzzle library: precomputed JSON, shipped with the PWA. Generated
     offline via a solver-driven pipeline that scans random self-play
     games and classifies tactical positions.
-  - Persistence: IndexedDB local-first (free tier). Postgres +
-    Supabase Auth for paid tier — cross-device sync, blunder-log
-    history, subscription state.
-  - Payments: Stripe ($4.99/mo, $39/yr pro tier — inside the $5-$10
-    specialized-analysis band from market benchmarks).
+  - Persistence: IndexedDB local-first (free tier — no account
+    required, no data leaves the device). Postgres + Supabase Auth
+    for paid tier — blunder-log history, personalized annotation
+    context, cross-device sync, subscription state.
+  - Payments: Stripe ($4.99/mo, $39/yr — inside the $5-$10
+    specialized-analysis band from market benchmarks). Paywall
+    encountered at two natural moments: game import and exhausting
+    the 50-puzzle free rotation.
 - **Data Strategy:**
   - **Ground truth for move quality:** solver. Perfect.
   - **Ground truth for pattern tags:** rule-based static analyzer
