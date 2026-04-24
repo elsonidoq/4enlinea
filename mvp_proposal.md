@@ -93,6 +93,28 @@ gap.
   acquisition hook — meets users where they already are, without
   building multiplayer ourselves.
 
+- **Feature 5 — Progress Visibility & Micro-Feedback.**
+  Three lightweight mechanisms that make improvement tangible:
+  1. *Session snapshot.* After every session a one-screen summary
+     shows puzzles solved, blunders reviewed, and the week-over-week
+     accuracy delta for the patterns practiced. Gives the micro-
+     feedback loop that brings users back the next day.
+  2. *Pattern accuracy trend.* Per-pattern solve rate tracked across
+     sessions and displayed on the dashboard (e.g. "Fork detection:
+     40% → 75% this month"). Users need a visible signal that
+     practice is working at the pattern level, not just in aggregate.
+  3. *Pattern graduation.* When a blunder category reaches a
+     consistent-solve threshold in SR, the user sees a "Pattern
+     mastered" moment. This is the concrete feeling of improvement
+     that closes the loop between drilling and skill gain.
+  All three are pure event-log aggregation — no LLM, no extra
+  server calls. Pattern accuracy trend and graduation are paid-tier
+  (requires cross-session history); session snapshot is free-tier.
+  *Benefit:* prevents the critical churn scenario where a user
+  completes 10 puzzles, loses their next Papergames game, and
+  concludes the product doesn't work — even if their pattern
+  recognition improved.
+
 Deliberately excluded from MVP: online multiplayer, ELO ladders, AR
 board scanner, neural-network visualizer, Socratic hint mode. All are
 strong Phase 2 candidates; none are necessary for the core hypothesis.
@@ -113,6 +135,9 @@ competitors cannot replicate for them.
 | Post-game X-AI annotation | — | Full per-move review on imported games |
 | Blunder log | — | Auto-capture + spaced repetition across sessions |
 | Game import (Papergames / Ludoteka) | — | Unlimited |
+| Session snapshot | ✓ (in-session accuracy only) | ✓ (includes week-over-week delta) |
+| Pattern accuracy trends | — | ✓ per-pattern solve rate over time |
+| Pattern graduation | — | ✓ "Pattern mastered" milestone |
 | Cross-device sync | — | Included |
 
 **Why this split works:**

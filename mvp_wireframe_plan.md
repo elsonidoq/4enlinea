@@ -15,8 +15,9 @@ enough to walk through the full flow end to end.
 |---|---|---|
 | 1 | Landing | Acquire visitor, deliver first puzzle, capture email |
 | 2 | Puzzle Viewer | Core training loop — solve, fail, retry, read explanation |
+| 2b | Session Snapshot | Post-session micro-feedback — accuracy, patterns, week delta |
 | 3 | Free Limit / Paywall | Convert free user after value is experienced |
-| 4 | Paid Dashboard | Blunder log + full puzzle library for paying users |
+| 4 | Paid Dashboard | Blunder log + full puzzle library + progress trends |
 | 5 | Import Review | Post-game analysis flow (paid) |
 
 ---
@@ -27,13 +28,17 @@ enough to walk through the full flow end to end.
 Landing
   └─ "Start training" / demo solve → Puzzle Viewer
         └─ Solve puzzles 1–50
-              └─ Puzzle 50 solved → Paywall
+              └─ "End session" / back (any time) → Session Snapshot
+                    └─ [Free] "Keep going" → Puzzle Viewer
+                    └─ [Free] "See full progress" → Paywall
+              └─ Puzzle 50 solved → Session Snapshot → Paywall
               └─ "Import game" click (any time) → Paywall
         └─ [Paid] → Paid Dashboard
               └─ "Blunder Log" tab → blunder cards
               └─ "Puzzle Library" tab → category grid
               └─ "Import game" → Import Review
                     └─ Review complete → back to Dashboard
+              └─ blunder solved → Session Snapshot → Dashboard
 ```
 
 Back navigation: every inner screen has a top-left "← back" link that
@@ -289,6 +294,89 @@ After solving puzzle 50, instead of "Next puzzle →", the button reads
 
 ---
 
+## Screen 2b — Session Snapshot
+
+### Purpose
+Give the user a concrete sense of progress immediately after a session
+ends. Free-tier shows in-session stats only; paid tier adds week-over-
+week pattern deltas and any newly graduated patterns.
+
+### Trigger contexts
+- User clicks "End session" or navigates away from Puzzle Viewer after
+  ≥ 1 puzzle solved.
+- User solves their last due blunder-log entry in a review session.
+- Always shown before the Paywall when puzzle limit is reached.
+
+### Layout — mobile (free tier)
+
+```
+┌─────────────────────────────────┐
+│ ← DecodeC4                      │
+├─────────────────────────────────┤
+│                                 │
+│  Session complete               │  ← heading
+│                                 │
+│  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │  8  │  │  6  │  │  2  │    │  ← stat tiles
+│  │puzzl│  │ 1st │  │hint │    │
+│  │ done│  │ try │  │used │    │
+│  └─────┘  └─────┘  └─────┘    │
+│                                 │
+│  Patterns practiced:            │
+│  Fork Setup · 4 ✓ 1 ✗          │  ← per-pattern accuracy, inline
+│  Mate-in-2  · 3 ✓ 1 ✗          │
+│                                 │
+│  [  Keep going  ]               │  ← back to Puzzle Viewer
+│  [  See full progress  ]        │  ← → Paywall (upsell hook)
+│                                 │
+└─────────────────────────────────┘
+```
+
+### Layout — mobile (paid tier, same session + week delta)
+
+```
+┌─────────────────────────────────┐
+│ ← Dashboard                     │
+├─────────────────────────────────┤
+│                                 │
+│  Session complete               │
+│                                 │
+│  ┌─────┐  ┌─────┐  ┌─────┐    │
+│  │  8  │  │  6  │  │  2  │    │
+│  │puzzl│  │ 1st │  │hint │    │
+│  │ done│  │ try │  │used │    │
+│  └─────┘  └─────┘  └─────┘    │
+│                                 │
+│  Your progress this week:       │
+│                                 │
+│  Fork Setup    40% → 75%  ↑    │  ← week-over-week delta
+│  Mate-in-2     60% → 60%  →    │
+│  Double threat 30% → 45%  ↑    │
+│                                 │
+│  ★ Pattern mastered             │  ← only shown if graduation event
+│    Fork Setup — no longer in    │    triggered this session
+│    your weak spots.             │
+│                                 │
+│  [  Back to Dashboard  ]        │
+│                                 │
+└─────────────────────────────────┘
+```
+
+### Layout — desktop
+
+Same content, single centered column max-width 480px. No sidebar.
+
+### Notes
+- Stat tiles use the same `.stat-tile` component across free and paid.
+- Week delta rows: ↑ green, → gray, ↓ red (dark-mode-safe hex values
+  consistent with palette).
+- "Pattern mastered" block is conditionally rendered; omit entirely if
+  no graduation this session.
+- "See full progress" CTA only shown in free tier and only if user has
+  been in ≥ 2 sessions (first session, the upsell is premature).
+
+---
+
 ## Screen 3 — Free Limit / Paywall
 
 ### Trigger contexts
@@ -398,13 +486,15 @@ and Puzzle Library (content access).
 │  ┌──────────┐  ┌──────────┐    │
 │  │ Mate-in-N│  │   Fork   │    │  ← 2-column category grid
 │  │  40 left │  │  Setup   │    │
-│  │          │  │  30 left │    │
-│  └──────────┘  └──────────┘    │
-│                                 │
+│  │  60% acc │  │  30 left │    │
+│  └──────────┘  │  75% acc │    │
+│                │  ★ Master│    │  ← graduation badge if threshold
+│                └──────────┘    │    met; card border changes
 │  ┌──────────┐  ┌──────────┐    │
 │  │ Double   │  │Zugzwang  │    │
 │  │ Threat   │  │  12 left │    │
-│  │  55 left │  │          │    │
+│  │  55 left │  │  50% acc │    │
+│  │  45% acc │  │          │    │
 │  └──────────┘  └──────────┘    │
 │                                 │
 │  ── Import & analyze ──         │
@@ -416,9 +506,14 @@ and Puzzle Library (content access).
 └─────────────────────────────────┘
 ```
 
+Category card states:
+- Default: `#ffffff` background, count + accuracy shown.
+- Mastered (≥ 80% accuracy, ≥ 10 attempts): `★ Mastered` label,
+  border becomes `#2d7a2d`. Card still clickable for more practice.
+
 ### Layout — desktop (≥ 700px)
 
-Three columns: sidebar (stats + import) | main content (tab area) | nothing on the right (keep it sparse for launch).
+Three columns: sidebar (stats + progress + import) | main content (tab area) | nothing on the right (keep it sparse for launch).
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -430,11 +525,14 @@ Three columns: sidebar (stats + import) | main content (tab area) | nothing on t
 │ Reviewed: 14        │                                │
 │ Mastered: 8         │ [blunder card]                 │
 │                     │ [blunder card]                 │
-│ Weakest pattern:    │ [blunder card]                 │
-│ Double-threat (×6)  │                                │
-│                     │ ── Upcoming ──                 │
-│ ── Import ──        │ Fork Setup · in 14 days        │
-│                     │ Mate-in-2 · in 21 days         │
+│ ── This month ──    │ [blunder card]                 │
+│                     │                                │
+│ Fork Setup  40→75%↑ │ ── Upcoming ──                 │
+│ Mate-in-2   60→60%→ │ Fork Setup · in 14 days        │
+│ Dbl threat  30→45%↑ │ Mate-in-2 · in 21 days         │
+│                     │                                │
+│ ── Import ──        │                                │
+│                     │                                │
 │ [Import a game]     │                                │
 └──────────────────────────────────────────────────────┘
 ```
@@ -517,6 +615,9 @@ CSS, reuse everywhere.
 | `.progress-bar` — filled rect | Puzzle Viewer desktop |
 | `.tab-bar` — two tabs, active underline | Dashboard |
 | `.feature-table` — free vs paid comparison | Paywall |
+| `.stat-tile` — large number + label | Session Snapshot |
+| `.pattern-delta-row` — name + before/after % + arrow | Session Snapshot (paid), Dashboard sidebar |
+| `.mastery-badge` — "★ Mastered" label + green border state | Puzzle Library cards |
 
 ---
 
@@ -558,6 +659,10 @@ so the wireframe doubles as a content review:
 | Paywall alt | "or $39 / year (save 35%)" |
 | Blunder queue banner | "5 positions ready for review" |
 | Import prompt | "Paste your game moves (from Papergames or Ludoteka):" |
+| Session snapshot heading | "Session complete" |
+| Session snapshot free upsell | "See full progress" |
+| Pattern mastered (snapshot) | "★ Pattern mastered — [Pattern] is no longer in your weak spots." |
+| Pattern accuracy delta | "[Pattern name]  40% → 75%  ↑" |
 
 ---
 
