@@ -15,10 +15,9 @@ enough to walk through the full flow end to end.
 |---|---|---|
 | 1 | Landing | Acquire visitor, deliver first puzzle, capture email |
 | 2 | Puzzle Viewer | Core training loop — solve, fail, retry, read explanation |
-| 2b | Session Snapshot | Post-session micro-feedback — accuracy, patterns, week delta |
+| 2b | Session Snapshot | Post-session micro-feedback — accuracy, patterns, session delta |
 | 3 | Free Limit / Paywall | Convert free user after value is experienced |
-| 4 | Paid Dashboard | Blunder log + full puzzle library + progress trends |
-| 5 | Import Review | Post-game analysis flow (paid) |
+| 4 | Paid Dashboard | Blunder log + full puzzle library for paying users |
 
 ---
 
@@ -32,13 +31,10 @@ Landing
                     └─ [Free] "Keep going" → Puzzle Viewer
                     └─ [Free] "See full progress" → Paywall
               └─ Puzzle 50 solved → Session Snapshot → Paywall
-              └─ "Import game" click (any time) → Paywall
         └─ [Paid] → Paid Dashboard
               └─ "Blunder Log" tab → blunder cards
               └─ "Puzzle Library" tab → category grid
-              └─ "Import game" → Import Review
-                    └─ Review complete → back to Dashboard
-              └─ blunder solved → Session Snapshot → Dashboard
+              └─ blunder reviewed → Session Snapshot → Dashboard
 ```
 
 Back navigation: every inner screen has a top-left "← back" link that
@@ -332,7 +328,7 @@ week pattern deltas and any newly graduated patterns.
 └─────────────────────────────────┘
 ```
 
-### Layout — mobile (paid tier, same session + week delta)
+### Layout — mobile (paid tier, same session + delta vs. last session)
 
 ```
 ┌─────────────────────────────────┐
@@ -347,15 +343,11 @@ week pattern deltas and any newly graduated patterns.
 │  │ done│  │ try │  │used │    │
 │  └─────┘  └─────┘  └─────┘    │
 │                                 │
-│  Your progress this week:       │
+│  vs. last session:              │
 │                                 │
-│  Fork Setup    40% → 75%  ↑    │  ← week-over-week delta
+│  Fork Setup    40% → 75%  ↑    │  ← accuracy delta vs. prior session
 │  Mate-in-2     60% → 60%  →    │
 │  Double threat 30% → 45%  ↑    │
-│                                 │
-│  ★ Pattern mastered             │  ← only shown if graduation event
-│    Fork Setup — no longer in    │    triggered this session
-│    your weak spots.             │
 │                                 │
 │  [  Back to Dashboard  ]        │
 │                                 │
@@ -368,10 +360,8 @@ Same content, single centered column max-width 480px. No sidebar.
 
 ### Notes
 - Stat tiles use the same `.stat-tile` component across free and paid.
-- Week delta rows: ↑ green, → gray, ↓ red (dark-mode-safe hex values
-  consistent with palette).
-- "Pattern mastered" block is conditionally rendered; omit entirely if
-  no graduation this session.
+- Delta rows: ↑ green, → gray, ↓ red (consistent with palette).
+- Delta section only renders if user has ≥ 2 sessions of data.
 - "See full progress" CTA only shown in free tier and only if user has
   been in ≥ 2 sessions (first session, the upsell is premature).
 
@@ -381,7 +371,7 @@ Same content, single centered column max-width 480px. No sidebar.
 
 ### Trigger contexts
 - User solves puzzle 50.
-- User clicks "Import game" from anywhere in the free tier.
+- Free user clicks "See full progress" from Session Snapshot (≥ 2 sessions).
 
 ### Layout — mobile
 
@@ -390,23 +380,28 @@ Same content, single centered column max-width 480px. No sidebar.
 │ ← DecodeC4                      │
 ├─────────────────────────────────┤
 │                                 │
-│  You've completed all           │  ← context-sensitive headline:
-│  50 free puzzles.               │    "Import is a Pro feature."
-│                                 │    if triggered by import
-│  You got 38/50 correct          │  ← only shown if puzzle-limit
-│  on the first try.              │    trigger, not import trigger
+│  You've completed all           │  ← headline (puzzle-limit trigger)
+│  50 free puzzles.               │
+│                                 │
+│  You got 38/50 correct          │
+│  on the first try.              │
 │                                 │
 │  Your weakest pattern:          │
 │  Double-threat defense          │  ← based on session data
 │  (missed 4 times)               │
 │                                 │
+│  Your blunder log is ready —    │  ← paywall hook
+│  but it resets when you close   │
+│  this tab. Go Pro to keep it.   │
+│                                 │
 ├─────────────────────────────────┤
 │         FREE          PRO       │
 │         ────          ───       │
-│  Puzzles  50        200+        │
+│  Puzzles     50     grows post- │
+│                       launch    │
 │  Explanat. Generic  Personalized│
 │  Blunder log  —      ✓         │
-│  Game import  —      ✓         │
+│  Session delta —     ✓         │
 │  Cross-device —      ✓         │
 ├─────────────────────────────────┤
 │                                 │
@@ -443,7 +438,7 @@ and Puzzle Library (content access).
 │  [Blunder Log]  [Puzzle Library]│  ← tabs
 ├─────────────────────────────────┤
 │                                 │
-│  5 positions ready for review   │  ← SR queue banner
+│  5 blunders to review           │  ← queue banner (no scheduling)
 │                                 │
 │  ┌─────────────────────────┐    │
 │  │ [board thumbnail 4×4]   │    │  ← blunder card 1
@@ -466,11 +461,6 @@ and Puzzle Library (content access).
 │  │              [Review →] │    │
 │  └─────────────────────────┘    │
 │                                 │
-│  ── Upcoming (not due yet) ──   │
-│  Fork Setup · in 14 days        │
-│  Mate-in-2 · in 21 days         │
-│                                 │
-│  [  Import a game  ]            │  ← secondary CTA
 └─────────────────────────────────┘
 ```
 
@@ -486,34 +476,20 @@ and Puzzle Library (content access).
 │  ┌──────────┐  ┌──────────┐    │
 │  │ Mate-in-N│  │   Fork   │    │  ← 2-column category grid
 │  │  40 left │  │  Setup   │    │
-│  │  60% acc │  │  30 left │    │
-│  └──────────┘  │  75% acc │    │
-│                │  ★ Master│    │  ← graduation badge if threshold
-│                └──────────┘    │    met; card border changes
+│  └──────────┘  │  30 left │    │
+│                └──────────┘    │
 │  ┌──────────┐  ┌──────────┐    │
 │  │ Double   │  │Zugzwang  │    │
 │  │ Threat   │  │  12 left │    │
-│  │  55 left │  │  50% acc │    │
-│  │  45% acc │  │          │    │
+│  │  55 left │  │          │    │
 │  └──────────┘  └──────────┘    │
 │                                 │
-│  ── Import & analyze ──         │
-│  Paste a game from Papergames   │
-│  or Ludoteka to auto-log your   │
-│  blunders.                      │
-│                                 │
-│  [  Import a game  ]            │
 └─────────────────────────────────┘
 ```
 
-Category card states:
-- Default: `#ffffff` background, count + accuracy shown.
-- Mastered (≥ 80% accuracy, ≥ 10 attempts): `★ Mastered` label,
-  border becomes `#2d7a2d`. Card still clickable for more practice.
-
 ### Layout — desktop (≥ 700px)
 
-Three columns: sidebar (stats + progress + import) | main content (tab area) | nothing on the right (keep it sparse for launch).
+Two columns: sidebar (stats) | main content (tab area).
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -521,78 +497,13 @@ Three columns: sidebar (stats + progress + import) | main content (tab area) | n
 ├──────────────────────────────────────────────────────┤
 │ ── Stats ──         │ [Blunder Log] [Puzzle Library] │
 │                     │                                │
-│ Total blunders: 22  │ 5 positions ready for review   │
+│ Total blunders: 22  │ 5 blunders to review           │
 │ Reviewed: 14        │                                │
-│ Mastered: 8         │ [blunder card]                 │
 │                     │ [blunder card]                 │
-│ ── This month ──    │ [blunder card]                 │
+│ Weakest pattern:    │ [blunder card]                 │
+│ Double-threat (×6)  │ [blunder card]                 │
 │                     │                                │
-│ Fork Setup  40→75%↑ │ ── Upcoming ──                 │
-│ Mate-in-2   60→60%→ │ Fork Setup · in 14 days        │
-│ Dbl threat  30→45%↑ │ Mate-in-2 · in 21 days         │
-│                     │                                │
-│ ── Import ──        │                                │
-│                     │                                │
-│ [Import a game]     │                                │
 └──────────────────────────────────────────────────────┘
-```
-
----
-
-## Screen 5 — Import Review
-
-### Purpose
-Show the post-game X-AI annotation flow after a user imports a game
-from Papergames or Ludoteka. Validates the import → analysis → blunder-
-log-population loop.
-
-### Layout — mobile
-
-```
-┌─────────────────────────────────┐
-│ ← Dashboard         Import      │
-├─────────────────────────────────┤
-│                                 │
-│  Paste your game moves          │  ← shown before import
-│  (from Papergames or Ludoteka): │
-│                                 │
-│  [  4 4 4 5 3 3 2 ...        ] │  ← text input, move string
-│                                 │
-│  [     Analyze game     ]       │
-│                                 │
-├─────────────────────────────────┤
-│  ── After analysis ──           │  ← below is the result state
-│                                 │
-│  Game vs. opponent · 32 moves   │
-│  Result: You lost               │
-│                                 │
-│  3 blunders found:              │
-│  Added to your blunder log.     │
-│                                 │
-│  ┌─────────────────────────┐   │
-│  │ Move 14 — Your turn     │   │  ← blunder 1
-│  │ [board thumbnail]       │   │
-│  │ ✗ You played col 3      │   │
-│  │ ✓ Best: col 5           │   │
-│  │                         │   │
-│  │ Fork Setup              │   │  ← pattern name
-│  │ Col 5 creates a fork    │   │  ← explanation
-│  │ that col 3 misses       │   │
-│  │ entirely.               │   │
-│  └─────────────────────────┘   │
-│                                 │
-│  ┌─────────────────────────┐   │
-│  │ Move 22 — Your turn     │   │  ← blunder 2
-│  │ [board thumbnail]       │   │
-│  │ ✗ You played col 2      │   │
-│  │ ✓ Best: col 4           │   │
-│  │                         │   │
-│  │ Double-threat defense   │   │
-│  │ ...                     │   │
-│  └─────────────────────────┘   │
-│                                 │
-│  [ Back to Dashboard ]          │
-└─────────────────────────────────┘
 ```
 
 ---
@@ -604,20 +515,19 @@ CSS, reuse everywhere.
 
 | Component | Used in |
 |---|---|
-| `.board` — 6×7 grid of circles | Landing, Puzzle Viewer, Import Review cards |
+| `.board` — 6×7 grid of circles | Landing, Puzzle Viewer |
 | `.board--thumbnail` — 4×4 smaller version | Blunder Log cards |
 | `.btn-primary` — dark fill, full width on mobile | All screens |
 | `.btn-secondary` — outline only | Paywall, Dashboard |
 | `.btn-ghost` — no border, just text | Back links |
 | `.explanation-panel` — revealed state | Landing, Puzzle Viewer |
-| `.blunder-card` — thumbnail + pattern + date + CTA | Dashboard, Import Review |
+| `.blunder-card` — thumbnail + pattern + date + CTA | Dashboard |
 | `.category-chip` — filter pill, active state | Puzzle Viewer |
 | `.progress-bar` — filled rect | Puzzle Viewer desktop |
 | `.tab-bar` — two tabs, active underline | Dashboard |
 | `.feature-table` — free vs paid comparison | Paywall |
 | `.stat-tile` — large number + label | Session Snapshot |
-| `.pattern-delta-row` — name + before/after % + arrow | Session Snapshot (paid), Dashboard sidebar |
-| `.mastery-badge` — "★ Mastered" label + green border state | Puzzle Library cards |
+| `.pattern-delta-row` — name + before/after % + arrow | Session Snapshot (paid) |
 
 ---
 
@@ -653,15 +563,13 @@ so the wireframe doubles as a content review:
 | Wrong move (1st) | "Not the best move here — try again." |
 | Wrong move (hint) | "Hint: look for a move that creates two threats at once." |
 | Correct | "✓ Correct" |
-| Paywall headline (puzzles) | "You've completed all 50 free puzzles." |
-| Paywall headline (import) | "Game import is a Pro feature." |
+| Paywall headline | "You've completed all 50 free puzzles." |
+| Paywall blunder hook | "Your blunder log is ready — but it resets when you close this tab. Go Pro to keep it." |
 | Paywall CTA | "Start Pro — $4.99 / month" |
 | Paywall alt | "or $39 / year (save 35%)" |
-| Blunder queue banner | "5 positions ready for review" |
-| Import prompt | "Paste your game moves (from Papergames or Ludoteka):" |
+| Blunder queue banner | "5 blunders to review" |
 | Session snapshot heading | "Session complete" |
 | Session snapshot free upsell | "See full progress" |
-| Pattern mastered (snapshot) | "★ Pattern mastered — [Pattern] is no longer in your weak spots." |
 | Pattern accuracy delta | "[Pattern name]  40% → 75%  ↑" |
 
 ---
