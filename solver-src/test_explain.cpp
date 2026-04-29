@@ -28,7 +28,6 @@ int main() {
   const std::string moves = "444444777777166662661322222535111133335";
 
   Solver solver;
-  solver.loadBook("7x6.book");
 
   Position P;
   unsigned int played = P.play(moves);

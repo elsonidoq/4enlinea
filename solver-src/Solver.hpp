@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <string>
+#include <unordered_set>
 #include "Position.hpp"
 #include "TranspositionTable.hpp"
 #include "OpeningBook.hpp"
@@ -49,6 +50,12 @@ class Solver {
    */
   int negamax(const Position &P, int alpha, int beta);
 
+  void explainSearch(const Position &P,
+                     int heatP0[Position::HEIGHT][Position::WIDTH],
+                     int heatP1[Position::HEIGHT][Position::WIDTH],
+                     std::unordered_set<Position::position_t>& visited,
+                     Solver& scorer);
+
  public:
   static const int INVALID_MOVE = -1000;
 
@@ -69,16 +76,6 @@ class Solver {
   }
 
   /**
-   * Explain: traverse the game tree from P (with visited-set deduplication),
-   * collecting winning 4-cell patterns into per-player frequency grids.
-   * heatP0[row][col] counts winning lines for the "current player" at P.
-   * heatP1[row][col] counts winning lines for their opponent.
-   */
-  void explainSearch(const Position &P,
-                     int heatP0[Position::HEIGHT][Position::WIDTH],
-                     int heatP1[Position::HEIGHT][Position::WIDTH]);
-
-  /**
    * Public entry point for the explain feature.
    * Resets the transposition table, zeroes the grids, then runs explainSearch.
    */
@@ -87,7 +84,7 @@ class Solver {
                int heatOpponent[Position::HEIGHT][Position::WIDTH]);
 
   void loadBook(std::string book_file) {
-    book.load(book_file);
+    if (!book_file.empty()) book.load(book_file);
   }
 
   Solver(); // Constructor

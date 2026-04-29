@@ -1,11 +1,13 @@
 CXX=g++
-CXXFLAGS=--std=c++11 -W -Wall -O3 -DNDEBUG
+CXXFLAGS=--std=c++17 -W -Wall -O3 -DNDEBUG
+SERVER_DIR=../connect-four/server
 
 SRCS=Solver.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
 c4solver:$(OBJS) main.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o c4solver main.o $(OBJS) $(LDLIBS)
+	cp c4solver $(SERVER_DIR)/c4solver
 
 generator: generator.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o generator generator.o $(LDLIBS)

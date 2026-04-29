@@ -100,11 +100,10 @@ app.post('/api/explain', async (req, res) => {
   }
 
   const binaryPath = join(__dirname, 'c4solver');
-  const bookPath = join(__dirname, '7x6.book');
 
   try {
     const result = await new Promise((resolve, reject) => {
-      const child = spawn(binaryPath, ['-x', '-b', bookPath], { cwd: __dirname });
+      const child = spawn(binaryPath, ['-x', '-nb'], { cwd: __dirname });
       let stdout = '';
       let stderr = '';
 

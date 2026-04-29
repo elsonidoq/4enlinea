@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
       else if(argv[i][1] == 'b') { // paramater -b: define an alternative opening book
         if(++i < argc) opening_book = std::string(argv[i]);
       }
+      else if(argv[i][1] == 'n' && argv[i][2] == 'b') opening_book = ""; // parameter -nb: skip opening book
       else if(argv[i][1] == 'a') { // paramater -a: make an analysis of all possible moves
         analyze = true;
       }
