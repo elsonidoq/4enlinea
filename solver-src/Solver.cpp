@@ -141,19 +141,15 @@ std::vector<int> Solver::analyze(const Position &P, bool weak) {
 
 void Solver::explainSearch(const Position &P,
                             int heatP0[Position::HEIGHT][Position::WIDTH],
-                            int heatP1[Position::HEIGHT][Position::WIDTH]) {
+                            int heatP1[Position::HEIGHT][Position::WIDTH],
+                            std::unordered_set<Position::position_t>& visited,
+                            Solver& scorer) {
   // Hard node limit to keep the explain request fast (<1 s).
   if (nodeCount > 500000) return;
   nodeCount++;
 
-  // Use the transposition table as a visited set.
-  // Value 200 is well outside the normal score encoding range (~1-74).
   const Position::position_t key = P.key();
-  if (transTable.get(key)) return; // already visited
-  transTable.put(key, 200);
-
-  // Opening book positions: no tree traversal available
-  if (book.get(P)) return;
+  if (!visited.insert(key).second) return; // already visited
 
   // Current player can win immediately
   if (P.canWinNext()) {
@@ -177,7 +173,7 @@ void Solver::explainSearch(const Position &P,
       if (P.canPlay(col)) {
         Position P2(P);
         P2.playCol(col);
-        explainSearch(P2, heatP1, heatP0);
+        explainSearch(P2, heatP1, heatP0, visited, scorer);
       }
     }
     return;
@@ -186,30 +182,42 @@ void Solver::explainSearch(const Position &P,
   // Near-draw: no more moves to explore
   if (P.nbMoves() >= Position::WIDTH * Position::HEIGHT - 2) return;
 
-  // Recurse over all non-losing moves (same ordering as negamax)
-  MoveSorter moves;
-  for (int i = Position::WIDTH; i--;)
-    if (Position::position_t move = possible & Position::column_mask(columnOrder[i]))
-      moves.add(move, P.moveScore(move));
+  // Weak-score each non-losing move (win/draw/loss) and only recurse into the best category.
+  struct Candidate { int score; Position::position_t move; };
+  std::vector<Candidate> candidates;
+  int bestScore = -(Position::WIDTH * Position::HEIGHT);
 
-  while (Position::position_t next = moves.getNext()) {
-    Position P2(P);
-    P2.play(next);
-    // After play(), it is the opponent's turn → swap heat arrays
-    explainSearch(P2, heatP1, heatP0);
+  for (int i = Position::WIDTH; i--;) {
+    if (Position::position_t move = possible & Position::column_mask(columnOrder[i])) {
+      Position P2(P);
+      P2.play(move);
+      int score = -scorer.solve(P2, /*weak=*/true);
+      if (score > bestScore) bestScore = score;
+      candidates.push_back({score, move});
+    }
+  }
+
+  for (const auto& c : candidates) {
+    if (c.score == bestScore) {
+      Position P2(P);
+      P2.play(c.move);
+      explainSearch(P2, heatP1, heatP0, visited, scorer);
+    }
   }
 }
 
 void Solver::explain(const Position &P,
                       int heatCurrent[Position::HEIGHT][Position::WIDTH],
                       int heatOpponent[Position::HEIGHT][Position::WIDTH]) {
-  transTable.reset(); // repurpose as visited-set for explain
+  Solver scorer;
+  std::unordered_set<Position::position_t> visited;
+  nodeCount = 0;
   for (int r = 0; r < Position::HEIGHT; r++)
     for (int c = 0; c < Position::WIDTH; c++) {
       heatCurrent[r][c]  = 0;
       heatOpponent[r][c] = 0;
     }
-  explainSearch(P, heatCurrent, heatOpponent);
+  explainSearch(P, heatCurrent, heatOpponent, visited, scorer);
 }
 
 // Constructor
