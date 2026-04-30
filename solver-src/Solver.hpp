@@ -53,8 +53,7 @@ class Solver {
   void explainSearch(const Position &P,
                      int heatP0[Position::HEIGHT][Position::WIDTH],
                      int heatP1[Position::HEIGHT][Position::WIDTH],
-                     std::unordered_set<Position::position_t>& visited,
-                     Solver& scorer);
+                     std::unordered_set<Position::position_t>& visited);
 
  public:
   static const int INVALID_MOVE = -1000;
@@ -77,7 +76,7 @@ class Solver {
 
   /**
    * Public entry point for the explain feature.
-   * Resets the transposition table, zeroes the grids, then runs explainSearch.
+   * Zeroes the grids, then runs explainSearch.
    */
   void explain(const Position &P,
                int heatCurrent[Position::HEIGHT][Position::WIDTH],

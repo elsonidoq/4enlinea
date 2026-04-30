@@ -103,7 +103,7 @@ app.post('/api/explain', async (req, res) => {
 
   try {
     const result = await new Promise((resolve, reject) => {
-      const child = spawn(binaryPath, ['-x', '-nb'], { cwd: __dirname });
+      const child = spawn(binaryPath, ['-x'], { cwd: __dirname });
       let stdout = '';
       let stderr = '';
 

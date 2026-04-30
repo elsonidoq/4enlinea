@@ -142,9 +142,8 @@ std::vector<int> Solver::analyze(const Position &P, bool weak) {
 void Solver::explainSearch(const Position &P,
                             int heatP0[Position::HEIGHT][Position::WIDTH],
                             int heatP1[Position::HEIGHT][Position::WIDTH],
-                            std::unordered_set<Position::position_t>& visited,
-                            Solver& scorer) {
-  // Hard node limit to keep the explain request fast (<1 s).
+                            std::unordered_set<Position::position_t>& visited) {
+  // Hard node limit to keep the explain request fast.
   if (nodeCount > 500000) return;
   nodeCount++;
 
@@ -173,7 +172,7 @@ void Solver::explainSearch(const Position &P,
       if (P.canPlay(col)) {
         Position P2(P);
         P2.playCol(col);
-        explainSearch(P2, heatP1, heatP0, visited, scorer);
+        explainSearch(P2, heatP1, heatP0, visited);
       }
     }
     return;
@@ -182,7 +181,10 @@ void Solver::explainSearch(const Position &P,
   // Near-draw: no more moves to explore
   if (P.nbMoves() >= Position::WIDTH * Position::HEIGHT - 2) return;
 
-  // Weak-score each non-losing move (win/draw/loss) and only recurse into the best category.
+  // Score each non-losing move using the opening book (O(1) per lookup) and
+  // recurse only into the best-scoring category. For positions beyond the book
+  // depth the book returns 0 (unknown); all such moves get a neutral score of 0
+  // so we fall back to exploring all non-losing moves — the old behaviour.
   struct Candidate { int score; Position::position_t move; };
   std::vector<Candidate> candidates;
   int bestScore = -(Position::WIDTH * Position::HEIGHT);
@@ -191,7 +193,10 @@ void Solver::explainSearch(const Position &P,
     if (Position::position_t move = possible & Position::column_mask(columnOrder[i])) {
       Position P2(P);
       P2.play(move);
-      int score = -scorer.solve(P2, /*weak=*/true);
+      int bval = book.get(P2); // 0 = not in book; >0 = encoded score
+      // Negate because the book stores the score for the player to move in P2,
+      // but we want the score from P's perspective.
+      int score = bval ? -(bval + Position::MIN_SCORE - 1) : 0;
       if (score > bestScore) bestScore = score;
       candidates.push_back({score, move});
     }
@@ -201,7 +206,7 @@ void Solver::explainSearch(const Position &P,
     if (c.score == bestScore) {
       Position P2(P);
       P2.play(c.move);
-      explainSearch(P2, heatP1, heatP0, visited, scorer);
+      explainSearch(P2, heatP1, heatP0, visited);
     }
   }
 }
@@ -209,7 +214,6 @@ void Solver::explainSearch(const Position &P,
 void Solver::explain(const Position &P,
                       int heatCurrent[Position::HEIGHT][Position::WIDTH],
                       int heatOpponent[Position::HEIGHT][Position::WIDTH]) {
-  Solver scorer;
   std::unordered_set<Position::position_t> visited;
   nodeCount = 0;
   for (int r = 0; r < Position::HEIGHT; r++)
@@ -217,7 +221,7 @@ void Solver::explain(const Position &P,
       heatCurrent[r][c]  = 0;
       heatOpponent[r][c] = 0;
     }
-  explainSearch(P, heatCurrent, heatOpponent, visited, scorer);
+  explainSearch(P, heatCurrent, heatOpponent, visited);
 }
 
 // Constructor
