@@ -1,0 +1,17 @@
+{
+  "name": "DecodeC4 — Connect Four Trainer",
+  "short_name": "DecodeC4",
+  "description": "Improve your Connect Four game with AI-powered pattern training",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#171923",
+  "background_color": "#171923",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

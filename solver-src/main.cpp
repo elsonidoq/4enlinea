@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
   bool weak = false;
   bool analyze = false;
   bool explain = false;
+  int maxDepth = 0; // 0 = unlimited (full search)
 
   std::string opening_book = "7x6.book";
   for(int i = 1; i < argc; i++) {
@@ -51,6 +52,9 @@ int main(int argc, char** argv) {
       }
       else if(argv[i][1] == 'x') { // parameter -x: explain mode (heatmap of winning patterns)
         explain = true;
+      }
+      else if(argv[i][1] == 'd') { // parameter -d N: depth-limited search (0 = unlimited)
+        if(++i < argc) maxDepth = std::stoi(argv[i]);
       }
     }
   }
@@ -77,11 +81,11 @@ int main(int argc, char** argv) {
             std::cout << " " << heatOpponent[r][c];
       }
       else if(analyze) {
-        std::vector<int> scores = solver.analyze(P, weak);
+        std::vector<int> scores = solver.analyze(P, weak, maxDepth);
         for(int i = 0; i < Position::WIDTH; i++) std::cout << " " << scores[i];
       }
       else {
-        int score = solver.solve(P, weak);
+        int score = solver.solve(P, weak, maxDepth);
         std::cout << " " << score;
       }
       std::cout << std::endl;

@@ -48,7 +48,8 @@ class Solver {
    * - if actual score of position >= beta then beta <= return value <= actual score
    * - if alpha <= actual score <= beta then return value = actual score
    */
-  int negamax(const Position &P, int alpha, int beta);
+  // maxDepth=0 means unlimited (full search); >0 cuts off at that ply depth.
+  int negamax(const Position &P, int alpha, int beta, int depth, int maxDepth);
 
   void explainSearch(const Position &P,
                      int heatP0[Position::HEIGHT][Position::WIDTH],
@@ -58,12 +59,12 @@ class Solver {
  public:
   static const int INVALID_MOVE = -1000;
 
-  // Returns the score of a position
-  int solve(const Position &P, bool weak = false);
+  // Returns the score of a position. maxDepth=0 means unlimited.
+  int solve(const Position &P, bool weak = false, int maxDepth = 0);
 
-  // Returns the score off all possible moves of a position as an array.
-  // Returns INVALID_MOVE for unplayable columns
-  std::vector<int> analyze(const Position &P, bool weak = false);
+  // Returns the score of all possible moves. maxDepth=0 means unlimited.
+  // Returns INVALID_MOVE for unplayable columns.
+  std::vector<int> analyze(const Position &P, bool weak = false, int maxDepth = 0);
 
   unsigned long long getNodeCount() const {
     return nodeCount;

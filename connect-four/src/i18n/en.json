@@ -1,0 +1,79 @@
+{
+  "nav": {
+    "sparring": "Sparring",
+    "puzzles": "Puzzles",
+    "coach": "My Coach"
+  },
+  "puzzle": {
+    "correctFirst": "Correct! Best move.",
+    "correctRetry": "Correct — you found it!",
+    "wrong": "Not the best move — try again.",
+    "tied": "Also works — ties with col {{col}} in the engine's analysis.",
+    "revealed": "Here's the best move:",
+    "seeWhy": "See why",
+    "sessionAccuracy": "Session accuracy",
+    "attempted": "attempted",
+    "correct": "correct",
+    "locked": "Upgrade to unlock",
+    "lockedDesc": "Fork Setup, Zugzwang, and Parity Control require a paid subscription.",
+    "noMoreAttempts": "Attempts used — showing the answer:"
+  },
+  "sparring": {
+    "yourTurn": "Your turn",
+    "aiThinking": "AI is thinking…",
+    "youWon": "You won! 🎉",
+    "aiWon": "AI won.",
+    "draw": "It's a draw.",
+    "newGame": "New game",
+    "difficulty": "Difficulty",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "perfect": "Perfect",
+    "commitFirst": "Commit-first",
+    "commitFirstHint": "Hides hints until you commit a move",
+    "hintsOn": "Hints on",
+    "commitMove": "Commit move",
+    "postMoveReveal": "Move analysis",
+    "yourMove": "Your move",
+    "bestMove": "Best move",
+    "patternLabel": "Pattern"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signUp": "Create free account",
+    "email": "Email address",
+    "sendLink": "Send magic link",
+    "checkEmail": "Check your email for the sign-in link.",
+    "deepRevealGate": "Create a free account to unlock 3 Deep Reveals per day.",
+    "signOut": "Sign out"
+  },
+  "paywall": {
+    "title": "Upgrade to Paid",
+    "monthly": "$4.99 / month",
+    "annual": "$39 / year",
+    "annualNote": "Save 35%",
+    "benefits": [
+      "All 6 pattern categories (Fork Setup, Zugzwang, Parity Control)",
+      "Unlimited Deep Reveals",
+      "Personal AI Coach with blunder tracking",
+      "Persistent stats + cross-device sync"
+    ],
+    "cta": "Upgrade now",
+    "quotaExhausted": "You've used all 3 Deep Reveals for today. Upgrade for unlimited access.",
+    "coachGate": "The Personal AI Coach is a paid feature."
+  },
+  "coach": {
+    "title": "Personal AI Coach",
+    "weaknessMap": "Weakness map",
+    "queueCount_one": "{{count}} position to review",
+    "queueCount_other": "{{count}} positions to review",
+    "startReview": "Start review",
+    "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
+    "missRate": "miss rate"
+  },
+  "error": {
+    "generic": "Something went wrong. Please refresh and try again.",
+    "solverUnavailable": "Solver temporarily unavailable. Hints disabled."
+  }
+}

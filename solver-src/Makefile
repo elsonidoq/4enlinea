@@ -21,7 +21,11 @@ test: $(OBJS) test_explain.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o test_explain test_explain.o $(OBJS) $(LDLIBS)
 	./test_explain
 
+test_depth: $(OBJS) test_depth.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o test_depth test_depth.o $(OBJS) $(LDLIBS)
+	./test_depth
+
 clean:
-	rm -f *.o .depend c4solver generator test_explain
+	rm -f *.o .depend c4solver generator test_explain test_depth
 
 

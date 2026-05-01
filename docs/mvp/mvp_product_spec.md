@@ -90,8 +90,9 @@ post-launch based on conversion data.
 
 **What the user does:** lands on a mid-game board with a prompt ("you are
 red — find the immediate win", "block the threat", "create a double threat
-in two moves"). Clicks a column. Gets immediate feedback and an explanation
-from the Explanation Engine.
+in two moves", "determine the forbidden columns, those where if you play,
+ you opponent will win on the next move"). Clicks a column. 
+Gets immediate feedback and an explanation from the Explanation Engine.
 
 **Content:** 50 hand-curated positions distributed across the 6 pattern
 categories above (~8 puzzles per category). Hand-curation is intentional —

@@ -36,11 +36,14 @@ namespace Connect4 {
  * - if actual score of position >= beta then beta <= return value <= actual score
  * - if alpha <= actual score <= beta then return value = actual score
  */
-int Solver::negamax(const Position &P, int alpha, int beta) {
+int Solver::negamax(const Position &P, int alpha, int beta, int depth, int maxDepth) {
   assert(alpha < beta);
   assert(!P.canWinNext());
 
   nodeCount++; // increment counter of explored nodes
+
+  // Depth cutoff: return heuristic (0 = draw estimate) when limit is reached.
+  if(maxDepth > 0 && depth >= maxDepth) return 0;
 
   Position::position_t possible = P.possibleNonLosingMoves();
   if(possible == 0)     // if no possible non losing move, opponent wins next move
@@ -78,7 +81,11 @@ int Solver::negamax(const Position &P, int alpha, int beta) {
     }
   }
 
-  if(int val = book.get(P)) return val + Position::MIN_SCORE - 1; // look for solutions stored in opening book
+  // Opening book only used in unlimited mode — depth-limited search must not
+  // use book shortcuts, otherwise the cutoff heuristic has no effect.
+  if(maxDepth == 0) {
+    if(int val = book.get(P)) return val + Position::MIN_SCORE - 1;
+  }
 
   MoveSorter moves;
   for(int i = Position::WIDTH; i--;)
@@ -88,9 +95,7 @@ int Solver::negamax(const Position &P, int alpha, int beta) {
   while(Position::position_t next = moves.getNext()) {
     Position P2(P);
     P2.play(next);  // It's opponent turn in P2 position after current player plays x column.
-    int score = -negamax(P2, -beta, -alpha); // explore opponent's score within [-beta;-alpha] windows:
-    // no need to have good precision for score better than beta (opponent's score worse than -beta)
-    // no need to check for score worse than alpha (opponent's score worse better than -alpha)
+    int score = -negamax(P2, -beta, -alpha, depth + 1, maxDepth);
 
     if(score >= beta) {
       transTable.put(key, score + Position::MAX_SCORE - 2 * Position::MIN_SCORE + 2); // save the lower bound of the position
@@ -104,7 +109,7 @@ int Solver::negamax(const Position &P, int alpha, int beta) {
   return alpha;
 }
 
-int Solver::solve(const Position &P, bool weak) {
+int Solver::solve(const Position &P, bool weak, int maxDepth) {
   if(P.canWinNext()) // check if win in one move as the Negamax function does not support this case.
     return (Position::WIDTH * Position::HEIGHT + 1 - P.nbMoves()) / 2;
   int min = -(Position::WIDTH * Position::HEIGHT - P.nbMoves()) / 2;
@@ -114,18 +119,21 @@ int Solver::solve(const Position &P, bool weak) {
     max = 1;
   }
 
+  // Depth-limited search: skip iterative deepening and do a single-window search.
+  if(maxDepth > 0) return negamax(P, min, max, 0, maxDepth);
+
   while(min < max) {                    // iteratively narrow the min-max exploration window
     int med = min + (max - min) / 2;
     if(med <= 0 && min / 2 < med) med = min / 2;
     else if(med >= 0 && max / 2 > med) med = max / 2;
-    int r = negamax(P, med, med + 1);   // use a null depth window to know if the actual score is greater or smaller than med
+    int r = negamax(P, med, med + 1, 0, 0);
     if(r <= med) max = r;
     else min = r;
   }
   return min;
 }
 
-std::vector<int> Solver::analyze(const Position &P, bool weak) {
+std::vector<int> Solver::analyze(const Position &P, bool weak, int maxDepth) {
   std::vector<int> scores(Position::WIDTH, Solver::INVALID_MOVE);
   for (int col = 0; col < Position::WIDTH; col++)
     if (P.canPlay(col)) {
@@ -133,7 +141,7 @@ std::vector<int> Solver::analyze(const Position &P, bool weak) {
       else {
         Position P2(P);
         P2.playCol(col);
-        scores[col] = -solve(P2, weak);
+        scores[col] = -solve(P2, weak, maxDepth);
       }
     }
   return scores;

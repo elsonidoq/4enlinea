@@ -4,19 +4,28 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server/index.js\" \"vite\"",
-    "server": "node server/index.js",
+    "dev": "concurrently \"node --env-file=server/.env server/index.js\" \"vite\"",
+    "server": "node --env-file=server/.env server/index.js",
     "vite": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test server/test_explain_parity.js"
+    "test": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/classifier/classifier.test.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "@sentry/node": "^10.51.0",
+    "@sentry/react": "^10.51.0",
+    "@supabase/supabase-js": "^2.105.1",
     "concurrently": "^9.2.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.4.1",
+    "i18next": "^26.0.8",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "react-i18next": "^17.0.6",
+    "react-router-dom": "^7.14.2",
+    "stripe": "^22.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

@@ -1,0 +1,62 @@
+[
+  {
+    "category": 1,
+    "move_string": "121212",
+    "goal_prompt": "Win the game in one move.",
+    "goal_predicate_type": "immediate_threat",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 1,
+    "is_active": true
+  },
+  {
+    "category": 2,
+    "move_string": "152634",
+    "goal_prompt": "Block your opponent's winning move.",
+    "goal_predicate_type": "forced_block",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 1,
+    "is_active": true
+  },
+  {
+    "category": 3,
+    "move_string": "41526354",
+    "goal_prompt": "Find the move that creates multiple threats.",
+    "goal_predicate_type": "double_threat",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 2,
+    "is_active": true
+  },
+  {
+    "category": 4,
+    "move_string": "",
+    "goal_prompt": "Play the move that sets up the most winning paths.",
+    "goal_predicate_type": "fork_setup",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 2,
+    "is_active": true
+  },
+  {
+    "category": 5,
+    "move_string": "",
+    "goal_prompt": "Choose the best move to maintain your advantage.",
+    "goal_predicate_type": "zugzwang",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 2,
+    "is_active": true
+  },
+  {
+    "category": 6,
+    "move_string": "",
+    "goal_prompt": "Play the move with the strongest strategic value.",
+    "goal_predicate_type": "parity_control",
+    "goal_predicate_params": {},
+    "cooperative_ai_moves": [],
+    "difficulty": 3,
+    "is_active": true
+  }
+]
