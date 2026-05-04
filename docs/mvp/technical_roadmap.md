@@ -113,9 +113,9 @@ Keep both endpoints as-is. The backend is the right shape; it just needs new end
 
 **Delivers:**
 - `POST /api/explain-move` server endpoint that accepts `{ moves: string, candidateCol: number, humanFirst: boolean }` and returns `{ oneLiner: string, deepReveal: DeepReveal | null }`.
-- **Pattern classifier** (`server/classifier.js`): rule-based module that takes board state + solver scores and returns a pattern tag. Implements detection for all 6 categories:
-  - Bitboard-only (cats 1–3): Immediate Threat, Forced Block, Double Threat — detectable without additional solver calls.
-  - Solver-guided (cats 4–6): Fork Setup (multi-move double threat established), Zugzwang (any move is disadvantageous by solver), Parity Control (Claimeven/Lowinverse/Highinverse via row dominance).
+- **Pattern classifier** (`server/classifier.js`): rule-based module that takes board state + solver scores and returns a pattern tag. Implements detection for all 7 categories:
+  - Bitboard-only (cats 1–4): Immediate Threat, Forbidden Columns, Forced Block, Double Threat — detectable without additional solver calls. Forbidden Columns detection simulates each legal move and checks for an opponent immediate win on the next ply.
+  - Solver-guided (cats 5–7): Fork Setup (multi-move double threat established), Zugzwang (any move is disadvantageous by solver), Parity Control (Claimeven/Lowinverse/Highinverse via row dominance).
 - **LLM integration**: Claude Sonnet called server-side with the pattern tag, solver scores, and board state. Prompt caching keyed by `sha256(moves + candidateCol)` — computed once per unique position/move, shared across all users.
 - Response cache stored in Supabase (`explanation_cache` table: `position_hash`, `one_liner`, `deep_reveal_json`, `created_at`). Cache hit skips the LLM call entirely.
 - Deep Reveal daily cap enforced server-side: free users get 3/day (reset midnight UTC), anonymous users get 0, paid users unlimited. Cap is never decremented by auto-reveals (one-liners on wrong answers are always free).
@@ -134,6 +134,7 @@ Keep both endpoints as-is. The backend is the right shape; it just needs new end
 - **50 hand-curated positions** (~8 per category) authored and validated. This is content work, not code — each position must be verified by the solver before committing to the table.
 - **Goal predicate evaluator** (`server/predicates.js`): implements per-category evaluation combining solver score + classifier output:
   - Immediate Threat: move scores as forced win.
+  - Forbidden Columns: user-submitted set of columns matches exactly the set of columns where playing grants opponent an immediate win. Both false positives and false negatives fail the predicate.
   - Forced Block: move eliminates opponent's immediate win (equal-score non-blocking move is rejected).
   - Double Threat: ≥ 2 distinct winning threats exist after the move.
   - Fork Setup: after the full multi-move sequence, a double threat is established.
@@ -144,7 +145,7 @@ Keep both endpoints as-is. The backend is the right shape; it just needs new end
   - Feedback: correct first attempt → green flash + one-liner (Deep Reveal on tap). Wrong → "not the best move, try again". After 2 failures → reveal correct move with Deep Reveal.
   - Tied move: "also works — ties with col X in the engine's analysis".
   - Session accuracy by category displayed at top.
-- **Category gating**: cats 1–3 free (anonymous + free + paid), cats 4–6 paid only. Free users see locked preview cards for cats 4–6 with upgrade prompt.
+- **Category gating**: cats 1–4 free (anonymous + free + paid), cats 5–7 paid only. Free users see locked preview cards for cats 5–7 with upgrade prompt.
 - Track events: `puzzle_attempted`, `puzzle_solved_correct`, `puzzle_solved_wrong`, `deep_reveal_viewed`.
 
 **Why fifth:** This is the primary retention driver and the first complete user value loop. It depends on the Explanation Engine (Epic 4) and Auth gating (Epic 3).
@@ -182,7 +183,7 @@ Keep both endpoints as-is. The backend is the right shape; it just needs new end
 - `POST /api/stripe/create-checkout` creates a Checkout session for the authenticated user.
 - `POST /api/stripe/webhook` handles `checkout.session.completed`, `customer.subscription.deleted`, `customer.subscription.updated` → updates `tier` in Supabase `users` table.
 - Customer portal link (`POST /api/stripe/portal`) for self-service subscription management.
-- Paywall modal wires up the Checkout link: triggers when a free user hits a cat 4–6 puzzle, exhausts their 3 Deep Reveals, or tries to access the AI Coach.
+- Paywall modal wires up the Checkout link: triggers when a free user hits a cat 5–7 puzzle, exhausts their 3 Deep Reveals, or tries to access the AI Coach.
 - Stripe customer ID stored on the user record.
 
 **Why seventh:** Stripe depends on auth being solid (Epic 3) and paywall triggers being wired (Epic 5, 6). Building it after those features means the paywall moments are already instrumented and the upgrade flow is complete in one shot.

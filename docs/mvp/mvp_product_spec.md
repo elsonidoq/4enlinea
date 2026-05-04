@@ -67,18 +67,22 @@ post-launch based on conversion data.
 
 1. **Immediate Threat** — a move wins the game outright, or the opponent's
    next move wins if not blocked.
-2. **Forced Block** — the opponent has an active immediate winning threat;
+2. **Forbidden Columns** — identify every column where playing immediately
+   hands the opponent a win on their very next turn. The answer is a set of
+   columns, not a single move; the puzzle is solved only when all forbidden
+   columns are correctly tagged and no safe column is mislabelled.
+3. **Forced Block** — the opponent has an active immediate winning threat;
    any other move loses. Defensive mirror of Immediate Threat.
-3. **Double Threat** — a single move creates two simultaneous winning
+4. **Double Threat** — a single move creates two simultaneous winning
    threats that cannot both be blocked in one response.
 
 **Paid (solver required — significance depends on board-wide analysis):**
 
-4. **Fork Setup** — a multi-move sequence that constructs a double threat;
+5. **Fork Setup** — a multi-move sequence that constructs a double threat;
    AI plays cooperatively to allow the pattern to be built.
-5. **Zugzwang** — a board state where any move by one player is
+6. **Zugzwang** — a board state where any move by one player is
    disadvantageous; the solver confirms forced endgame control.
-6. **Parity Control** — odd/even row dominance (encompasses Claimeven,
+7. **Parity Control** — odd/even row dominance (encompasses Claimeven,
    Lowinverse, Highinverse from Allis's rules); the player who controls
    parity controls the endgame.
 
@@ -99,14 +103,18 @@ categories above (~8 puzzles per category). Hand-curation is intentional —
 it ensures quality and forces understanding of what makes a good teaching
 position. Puzzle count scales post-validation.
 
-**Pattern tiering:** Free users access categories 1–3. Paid users access
-all 6. Free users see a locked preview card for categories 4–6 with a soft
+**Pattern tiering:** Free users access categories 1–4. Paid users access
+all 7. Free users see a locked preview card for categories 5–7 with a soft
 upgrade prompt.
 
 **Goal predicate:** Puzzles are not "find the highest solver score." Each
 puzzle has a goal predicate that defines what constitutes a correct
 solution:
 - Immediate Threat: the move scores as a forced win by the solver.
+- Forbidden Columns: the user's tagged set exactly matches every column
+  where playing immediately grants the opponent a win on the next turn.
+  Both false positives (tagging a safe column) and false negatives (missing
+  a forbidden column) count as wrong.
 - Forced Block: the move eliminates the opponent's immediate win; a non-
   blocking move is rejected even if it has the same solver score elsewhere.
 - Double Threat: after the move, ≥2 distinct winning threats exist for the
@@ -119,6 +127,12 @@ solution:
 
 Evaluation combines solver score + pattern classifier output, not score
 alone.
+
+**Forbidden Columns UI:** unlike all other puzzle types (single column
+click), this category uses a multi-select tagging interaction. The user
+taps any number of columns to mark them forbidden, then hits "Submit". A
+progress indicator shows how many columns are tagged. Correct columns turn
+green; incorrect tags and missed columns are revealed on submission.
 
 **Multi-move puzzles (Fork Setup, Parity Control):** the experience mirrors
 a real game — user plays, AI responds, user plays again. The AI plays
@@ -206,7 +220,7 @@ Three tiers, two gates: sign-in (unlocks Deep Reveals) and payment
 
 | Area | Anonymous | Signed-in (Free) | Paid ($4.99/mo · $39/yr) |
 |---|---|---|---|
-| Puzzle trainer | Categories 1–3 (free patterns) | Categories 1–3 | All 6 categories |
+| Puzzle trainer | Categories 1–4 (free patterns) | Categories 1–4 | All 7 categories |
 | Deep Reveals | None | 3 per day | Unlimited |
 | Explanation Engine | One-line summary | One-line summary | Full on tap |
 | Sparring | Full, all difficulty levels | Full + reveals | Full + unlimited reveals |
@@ -215,8 +229,9 @@ Three tiers, two gates: sign-in (unlocks Deep Reveals) and payment
 | Cross-device sync | — | — | Included |
 
 The first gate (sign-in) is hit when a user wants a Deep Reveal. The
-second gate (payment) is hit when they want to train advanced patterns or
-access their Personal AI Coach history across sessions.
+second gate (payment) is hit when they want to train advanced patterns
+(categories 5–7) or access their Personal AI Coach history across
+sessions.
 
 ---
 

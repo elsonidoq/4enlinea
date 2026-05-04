@@ -2,8 +2,8 @@ const INVALID_MOVE = -1000;
 
 export const DIFFICULTY_TEMPERATURES = {
   easy: 5.0,
-  medium: 3.5,
-  hard: 2.5,
+  medium: 3,
+  hard: 1.5,
   perfect: 0,
 };
 

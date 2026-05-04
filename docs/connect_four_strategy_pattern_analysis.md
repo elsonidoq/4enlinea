@@ -157,6 +157,18 @@ Neutralization involves creating a threat that takes precedence over an opponent
 
 Detection logic for undercutting checks all threats in a column. If ![][image33] and ![][image34] exist in column ![][image6] and ![][image35], then ![][image34] is flagged as "latent" or "useless".8
 
+### **Forbidden Columns (Immediate Loss Squares)**
+
+A column is *forbidden* for the current player if placing a disc there allows the opponent to win on the very next turn. This happens when the cell immediately above the player's disc would complete a four-in-a-row for the opponent.
+
+Forbidden columns arise from two sources: (a) the opponent already has three in a row with the fourth square as the next playable cell in that column, and (b) the player's disc lands on the row directly below such a threat, making it immediately accessible. Both cases are bitboard-detectable in O(1) per column by simulating the move and running the opponent's win-check mask.
+
+Strategic significance is high in the mid-game: a position may have several forbidden columns simultaneously, severely restricting the safe move set. A player who cannot identify forbidden columns will repeatedly hand the opponent free wins. Conversely, a player who recognizes them can force the opponent into a position where *all* legal moves are forbidden — a form of zugzwang.
+
+**Detection logic**: for each legal column *c*, compute the resulting board state after playing there, then evaluate the opponent's immediate-win bitboard mask. If any four-in-a-row is completed, *c* is forbidden. The full forbidden set is the union of all such columns. No solver call is required.
+
+**Teaching value**: forbidden-column recognition is the prerequisite for Forced Block (category 3). Forced Block assumes a single forbidden column exists and the player must find it; Forbidden Columns trains the more general skill of enumerating *all* of them, including positions where none exist (confirming every move is safe) or where multiple exist simultaneously.
+
 ### **Preventative Blocking**
 
 Preventative blocking is the act of stopping a "two-in-a-row" before it becomes a "three-in-a-row".11

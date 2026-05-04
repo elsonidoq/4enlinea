@@ -14,11 +14,12 @@ Six categories from foundational to advanced. The free/paid split is a single co
 | # | Category | Detection Method | Tier |
 |---|---|---|---|
 | 1 | Immediate Threat | Bitboard only | Free |
-| 2 | Forced Block | Bitboard only | Free |
-| 3 | Double Threat | Bitboard only | Free |
-| 4 | Fork Setup (multi-move) | Solver-guided | Paid |
-| 5 | Zugzwang | Solver required | Paid |
-| 6 | Parity Control (Claimeven, Lowinverse, Highinverse) | Solver required | Paid |
+| 2 | Forbidden Columns | Bitboard only | Free |
+| 3 | Forced Block | Bitboard only | Free |
+| 4 | Double Threat | Bitboard only | Free |
+| 5 | Fork Setup (multi-move) | Solver-guided | Paid |
+| 6 | Zugzwang | Solver required | Paid |
+| 7 | Parity Control (Claimeven, Lowinverse, Highinverse) | Solver required | Paid |
 
 ---
 
@@ -26,9 +27,9 @@ Six categories from foundational to advanced. The free/paid split is a single co
 
 Three tiers, two gates: sign-in (unlocks Deep Reveals) and payment (unlocks advanced patterns + Personal AI Coach).
 
-- **Anonymous:** basic puzzles (categories 1–3), sparring, one-line summaries only.
+- **Anonymous:** basic puzzles (categories 1–4), sparring, one-line summaries only.
 - **Signed-in (free):** same + 3 Deep Reveals per day.
-- **Paid:** all 6 pattern categories, unlimited Deep Reveals, Personal AI Coach, premium analytics, advanced training paths, cross-device sync.
+- **Paid:** all 7 pattern categories, unlimited Deep Reveals, Personal AI Coach, premium analytics, advanced training paths, cross-device sync.
 
 ---
 
@@ -45,6 +46,7 @@ Basic pattern lessons (immediate threat, block) are free. Advanced pattern lesso
 There are puzzle categories aligned with the concept micro-lessons. After completing (or skipping) the lesson for a category, the user is presented with a half-played board with prompts like "identify the double threat red has created", "you are red, avoid the double threat", or "you are red, create a double threat in two moves". After solving it, the user gets feedback on whether she was correct, and a Deep Reveal from the Explanation Engine.
 
 **Goal predicate:** each puzzle has an explicit goal predicate — not just "find the highest solver score." Example predicates:
+- Forbidden Columns: the user's tagged set exactly matches every column where playing immediately grants the opponent a win on the next turn. Both false positives and false negatives count as wrong.
 - Forced Block: the move eliminates the opponent's immediate win (a non-blocking move with equal score is rejected).
 - Double Threat: after the move, ≥2 distinct winning threats exist simultaneously.
 - Fork Setup: after a multi-move sequence, a double threat is established on the final board state.
@@ -54,7 +56,7 @@ Evaluation combines solver score + pattern classifier output.
 
 The user is provided with stats about how well she solves the puzzles, by category.
 
-**Pattern tiering:** categories 1–3 (bitboard-detectable) are free. Categories 4–6 (solver-required) are paid. Free users see locked preview cards for paid categories.
+**Pattern tiering:** categories 1–4 (bitboard-detectable) are free. Categories 5–7 (solver-required) are paid. Free users see locked preview cards for paid categories.
 
 ---
 
