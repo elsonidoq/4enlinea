@@ -23,16 +23,30 @@ function mulberry32(a) {
 }
 
 export function softmaxSample(legalCols, scores, T, rng) {
-  const maxScore = Math.max(...legalCols.map(c => scores[c]));
-  const weights = legalCols.map(c => Math.exp((scores[c] - maxScore) / T));
+  const weights = legalCols.map(c => Math.exp(scores[c] / T));
   const total = weights.reduce((a, b) => a + b, 0);
   const probs = weights.map(w => w / total);
+
+  if (probs.some(p => isNaN(p))) {
+    console.log({legalCols, scores, T, weights, total, probs});
+
+    throw new Error('Probabilities contain NaN');
+  }
+
   let r = rng(), cum = 0;
   for (let j = 0; j < legalCols.length; j++) {
     cum += probs[j];
-    if (r < cum) return legalCols[j];
+    if (r < cum) {
+      const result = legalCols[j];
+      // console.log({legalCols, scores, T, weights, total, probs, result});
+      return legalCols[j];
+    } 
   }
-  return legalCols[legalCols.length - 1];
+  const result = legalCols[legalCols.length - 1];
+
+  // console.log({legalCols, scores, T, weights, total, probs, result});
+
+  return result;
 }
 
 function immediateWinScore(moveCount) {
@@ -61,7 +75,7 @@ class GeneratorSolver {
         const trimmed = line.trim();
         if (!trimmed) continue;
         const parts = trimmed.split(/\s+/);
-        const scores = parts.slice(1).map(Number);
+        const scores = (parts.length === 8 ? parts.slice(1) : parts).map(Number);
         const entry = this.queue.shift();
         if (entry) entry.resolve(scores);
       }
@@ -133,9 +147,9 @@ function isGameOver(moveString) {
 }
 
 async function solverWeightedPosition(solver, targetLen, rng) {
-  const T1 = rng() * .05;
-  const T2 = rng() * .05;
-  console.log(T1);
+  const T1 = rng() * 2 + 0.1;
+  const T2 = rng() * 2 + 0.1;
+  console.log({T1, T2});
   const temps = [T1, T2];
   let moveString = '';
   const heights = Array(COLS).fill(0);
@@ -203,7 +217,6 @@ function isClean(category, scores, moveCount) {
  * Returns { candidates[], seed, durationMs }.
  */
 export async function generateCandidates(category, count, seed) {
-  1/0;
   const usedSeed = seed !== undefined ? seed : Math.floor(Math.random() * 2 ** 32);
   console.log('generateCandidates called', { category, count, seed: usedSeed });
   const rng = mulberry32(usedSeed);
@@ -219,7 +232,7 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const minMoves = 10;
+      const minMoves = 10; 
       const maxMoves = category <= 2 ? 16 : 24;
       const targetLen = minMoves + Math.floor(rng() * (maxMoves - minMoves + 1));
       const moveString = await solverWeightedPosition(solver, targetLen, rng);

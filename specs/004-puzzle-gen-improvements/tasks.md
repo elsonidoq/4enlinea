@@ -61,9 +61,9 @@
 
 **Independent Test**: Open the curation workspace with a candidate where `move_string.length % 2 === 1` (user is player 2) and confirm player-2 pieces render RED and the badge is visible. Repeat with an even-length candidate.
 
-- [ ] T010 [P] [US2] Update `buildBoard(moves, userPlayer)` signature and color logic in `connect-four/src/components/CurationWorkspace.jsx` (line 21): add `userPlayer` second parameter; change line 27 from `i % 2 === 0 ? 'red' : 'yellow'` to `(i % 2 === 0) === (userPlayer === 1) ? 'red' : 'yellow'`. Logic: player-1 pieces are at even indices; when `userPlayer === 2` the mapping inverts. See [plan.md Step 6](plan.md) and [research.md Decision 4](research.md).
+- [X] T010 [P] [US2] Update `buildBoard(moves, userPlayer)` signature and color logic in `connect-four/src/components/CurationWorkspace.jsx` (line 21): add `userPlayer` second parameter; change line 27 from `i % 2 === 0 ? 'red' : 'yellow'` to `(i % 2 === 0) === (userPlayer === 1) ? 'red' : 'yellow'`. Logic: player-1 pieces are at even indices; when `userPlayer === 2` the mapping inverts. See [plan.md Step 6](plan.md) and [research.md Decision 4](research.md).
 
-- [ ] T011 [US2] Update the single `buildBoard` call site and add the player badge in `connect-four/src/components/CurationWorkspace.jsx` (line 216): (1) derive `const userPlayer = candidate.move_string.length % 2 === 0 ? 1 : 2` before the board build; (2) pass it: `const board = buildBoard(candidate.move_string, userPlayer)`; (3) add badge JSX directly below the `metaRow` div: `<div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>`. Uses `var(--red)` — consistent with existing tokens (Constitution Principle IV). Depends on T010. See [plan.md Step 6](plan.md) and [spec.md FR-006, FR-007](spec.md).
+- [X] T011 [US2] Update the single `buildBoard` call site and add the player badge in `connect-four/src/components/CurationWorkspace.jsx` (line 216): (1) derive `const userPlayer = candidate.move_string.length % 2 === 0 ? 1 : 2` before the board build; (2) pass it: `const board = buildBoard(candidate.move_string, userPlayer)`; (3) add badge JSX directly below the `metaRow` div: `<div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>`. Uses `var(--red)` — consistent with existing tokens (Constitution Principle IV). Depends on T010. See [plan.md Step 6](plan.md) and [spec.md FR-006, FR-007](spec.md).
 
 **Checkpoint**: Both even and odd `moveCount` boards render current player as RED with the badge visible. Solver scores, predicate pass/fail, and `move_string` storage are unaffected.
 
@@ -73,7 +73,7 @@
 
 **Purpose**: Manual golden-path verification across both user stories.
 
-- [ ] T012 Manual verification per [plan.md Step 8](plan.md): (1) open a candidate with even `move_string.length` — confirm player-1 pieces are RED, badge shows; (2) open a candidate with odd `move_string.length` — confirm player-2 pieces are RED, badge shows; (3) click a column on each board type and verify solver scores and `predicate_pass` are identical to pre-change values (SC-006 — no predicate regression); (4) generate a 10-candidate batch for category 1 and confirm no board looks empty (all have visible pieces across multiple columns). See [spec.md SC-005, SC-006](spec.md).
+- [X] T012 Manual verification per [plan.md Step 8](plan.md): (1) open a candidate with even `move_string.length` — confirm player-1 pieces are RED, badge shows; (2) open a candidate with odd `move_string.length` — confirm player-2 pieces are RED, badge shows; (3) click a column on each board type and verify solver scores and `predicate_pass` are identical to pre-change values (SC-006 — no predicate regression); (4) generate a 10-candidate batch for category 1 and confirm no board looks empty (all have visible pieces across multiple columns). See [spec.md SC-005, SC-006](spec.md).
 
 ---
 

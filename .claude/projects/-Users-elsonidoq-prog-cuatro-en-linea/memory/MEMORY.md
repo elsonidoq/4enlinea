@@ -18,3 +18,4 @@
 - [Puzzle accuracy — first-attempt-only rule](project_accuracy_bug_fix.md) — stats recorded only on first attempt; fixed in PuzzlesPage.jsx 2026-05-01
 - [Puzzle Factory implementation](project_puzzle_factory.md) — ALL tasks T001–T024 done (including T023 golden path 2026-05-05); one fix: seed column bigint not integer
 - [Candidates table — FK dependency](project_candidates_fk.md) — false_positive_records has FK to candidates; delete it first before bulk-deleting candidates
+- [Puzzle gen improvements — spec 004 complete](project_puzzle_gen_improvements.md) — T001–T012 done; softmax generation, per-player temperatures, player-perspective color normalization in CurationWorkspace.jsx

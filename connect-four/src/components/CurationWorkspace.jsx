@@ -18,13 +18,13 @@ const GOAL_PROMPTS = {
   7: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
 };
 
-function buildBoard(moves) {
+function buildBoard(moves, userPlayer) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
     const col = parseInt(moves[i], 10) - 1;
     if (isNaN(col) || col < 0 || col >= COLS || heights[col] >= ROWS) continue;
-    board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
+    board[heights[col]][col] = (i % 2 === 0) === (userPlayer === 1) ? 'red' : 'yellow';
     heights[col]++;
   }
   return board;
@@ -213,7 +213,8 @@ export function CurationWorkspace({ category, onBack }) {
     );
   }
 
-  const board = buildBoard(candidate.move_string);
+  const userPlayer = candidate.move_string.length % 2 === 0 ? 1 : 2;
+  const board = buildBoard(candidate.move_string, userPlayer);
   const highlightCol = deriveHighlightCol(category, candidate.solver_scores, candidate.move_string);
   const displayScores = clickedScores ?? candidate.solver_scores;
   const moveCount = candidate.move_string.length;
@@ -260,6 +261,7 @@ export function CurationWorkspace({ category, onBack }) {
           <span style={catLabel}>Category {category}</span>
           <span style={moveStringDisplay}>{candidate.move_string || '(empty)'}</span>
         </div>
+        <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>
 
         {/* Scores */}
         <div style={scoresRow}>
