@@ -19,6 +19,18 @@ export function Piece({ color = 'empty', highlight = null, heatValue = 0 }) {
     shadow = '0 0 14px var(--green-g), 0 0 0 2px var(--green)';
   }
 
+  if (highlight === 'hint' && color === 'empty') {
+    bg = 'rgba(34,197,94,.18)';
+    border = '1.5px solid var(--green)';
+    shadow = '0 0 8px rgba(34,197,94,.35)';
+  }
+
+  if (highlight === 'selected' && color === 'empty') {
+    bg = 'rgba(245,184,32,.18)';
+    border = '1.5px solid var(--yellow)';
+    shadow = '0 0 8px rgba(245,184,32,.35)';
+  }
+
   if (heatValue > 0 && color === 'empty') {
     bg = `rgba(232, 57, 46, ${Math.min(heatValue, 0.85)})`;
     border = '1px solid rgba(232, 57, 46, .4)';

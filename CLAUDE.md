@@ -1,5 +1,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/003-puzzle-factory/plan.md
+specs/004-puzzle-gen-improvements/plan.md
 <!-- SPECKIT END -->

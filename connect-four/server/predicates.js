@@ -42,6 +42,7 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
     case 4: return evalCat4(candidateCol, scores, winScore);
     case 5: return evalCat5(candidateCol, scores);
     case 6: return evalCat6(candidateCol, scores, winScore);
+    case 7: return evalCat7(candidateCol, scores, puzzle.moveString);
     default: return { result: 'wrong' };
   }
 }
@@ -49,7 +50,7 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
 // Cat 1: Play the immediate winning move.
 function evalCat1(candidateCol, scores, winScore) {
   const winningCols = scores.reduce((acc, s, i) => {
-    if (s === winScore && s > 0) acc.push(i);
+    if (s >= winScore && s > 0) acc.push(i);  // Bug 1 fix: >= not ===
     return acc;
   }, []);
 
@@ -65,28 +66,20 @@ function evalCat1(candidateCol, scores, winScore) {
 
 // Cat 2: Block the opponent's immediate winning threat.
 function evalCat2(candidateCol, scores, winScore, moveCount) {
-  // The blocking square(s): the opponent's immediate win squares.
-  // After current player skips, the opponent would play at these squares to win.
-  // Since we're calling from current player's perspective, we look for the squares
-  // where NOT playing allows opponent an immediate win.
-  // The forced block is the square(s) with score >= 0 while all others are deeply negative.
   const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
   const blockingCols = scores.reduce((acc, s, i) => {
     if (s >= 0) acc.push(i);
     return acc;
   }, []);
 
-  if (blockingCols.length === 0) {
-    // All moves lose — pick the best (least bad)
-    const maxScore = Math.max(...scores);
-    const bestCols = scores.reduce((acc, s, i) => { if (s === maxScore) acc.push(i); return acc; }, []);
-    if (bestCols.includes(candidateCol)) {
-      return bestCols.length > 1
-        ? { result: 'tied', tiedWith: bestCols.filter(c => c !== candidateCol), correctCol: bestCols[0] }
-        : { result: 'correct', correctCol: candidateCol };
-    }
-    return { result: 'wrong', correctCol: bestCols[0] };
-  }
+  // Bug 2 fix: all non-blocking moves must equal opponentImmediateWin,
+  // otherwise there's no forced block (it might be zugzwang or a different category).
+  if (blockingCols.length === 0) return { result: 'wrong' };
+
+  const allOthersAreImmediateLoss = scores.every(
+    (s, i) => blockingCols.includes(i) || s === opponentImmediateWin
+  );
+  if (!allOthersAreImmediateLoss) return { result: 'wrong' };
 
   if (blockingCols.includes(candidateCol)) {
     const others = blockingCols.filter(c => c !== candidateCol);
@@ -104,13 +97,20 @@ function evalCat3(candidateCol, scores, winScore, moveString) {
   const player = currentPlayer(moveCount);
 
   function countThreats(b, h, p) {
+    // Bug 3 fix: skip threats where the opponent would win first by playing there.
+    const opp = 3 - p;
     let threats = 0;
     for (let col = 0; col < COLS; col++) {
       const row = h[col];
       if (row >= ROWS) continue;
       b[row][col] = p;
-      if (checkWin(b, row, col, p)) threats++;
+      const playerWins = checkWin(b, row, col, p);
       b[row][col] = 0;
+      if (!playerWins) continue;
+      b[row][col] = opp;
+      const oppWins = checkWin(b, row, col, opp);
+      b[row][col] = 0;
+      if (!oppWins) threats++;
     }
     return threats;
   }
@@ -155,12 +155,10 @@ function evalCat3(candidateCol, scores, winScore, moveString) {
 
 // Cat 4: Play the move that creates a multi-path fork (3+ winning columns).
 function evalCat4(candidateCol, scores, winScore) {
-  // Best positive score that is not an immediate win
-  const maxScore = Math.max(...scores.filter(s => s > 0 && s !== winScore));
-  if (maxScore <= 0) {
-    // All moves are draws or losses — no clear correct answer
-    return { result: 'wrong' };
-  }
+  // Bug 4 fix: exclude immediate wins with s >= winScore (not s !== winScore)
+  const maxScore = Math.max(...scores.filter(s => s > 0 && s < winScore));
+  if (!isFinite(maxScore) || maxScore <= 0) return { result: 'wrong' };
+
   const bestCols = scores.reduce((acc, s, i) => {
     if (s === maxScore) acc.push(i);
     return acc;
@@ -172,8 +170,7 @@ function evalCat4(candidateCol, scores, winScore) {
       ? { result: 'tied', tiedWith: others, correctCol: bestCols[0] }
       : { result: 'correct', correctCol: candidateCol };
   }
-  // If the candidate is still positive (though not best), treat as tied
-  if (scores[candidateCol] > 0 && scores[candidateCol] !== winScore) {
+  if (scores[candidateCol] > 0 && scores[candidateCol] < winScore) {
     return { result: 'tied', tiedWith: bestCols, correctCol: bestCols[0] };
   }
   return { result: 'wrong', correctCol: bestCols[0] };
@@ -181,6 +178,9 @@ function evalCat4(candidateCol, scores, winScore) {
 
 // Cat 5: Choose the best move in a zugzwang (all moves losing, pick least bad).
 function evalCat5(candidateCol, scores) {
+  // Bug 5 fix: zugzwang requires all scores to be non-positive
+  if (Math.max(...scores) > 0) return { result: 'wrong' };
+
   const maxScore = Math.max(...scores);
   const bestCols = scores.reduce((acc, s, i) => {
     if (s === maxScore) acc.push(i);
@@ -198,13 +198,14 @@ function evalCat5(candidateCol, scores) {
 
 // Cat 6: Choose the move that best controls parity (positive score ≥ average positive).
 function evalCat6(candidateCol, scores, winScore) {
-  const posScores = scores.filter(s => s > 0 && s !== winScore);
-  if (posScores.length === 0) return { result: 'wrong' };
+  const posScores = scores.filter(s => s > 0 && s < winScore);
+  // Bug 6 fix: need ≥2 positive moves for parity to be a meaningful choice
+  if (posScores.length < 2) return { result: 'wrong' };
 
   const avg = posScores.reduce((a, b) => a + b, 0) / posScores.length;
   const bestScore = Math.max(...posScores);
   const aboveAvgCols = scores.reduce((acc, s, i) => {
-    if (s > 0 && s !== winScore && s >= avg) acc.push(i);
+    if (s > 0 && s < winScore && s >= avg) acc.push(i);
     return acc;
   }, []);
 
@@ -216,6 +217,31 @@ function evalCat6(candidateCol, scores, winScore) {
   }
   // Below average but still positive — wrong
   return { result: 'wrong', correctCol: aboveAvgCols[0] };
+}
+
+// Cat 7: Identify columns that would hand the opponent an immediate win.
+// A column is forbidden if playing there leaves the opponent with an immediate winning reply.
+// A position passes (for generation) when forbiddenCols.length >= 1.
+// For user evaluation: playing a safe (non-forbidden) column is correct.
+function evalCat7(candidateCol, scores, moveString) {
+  const { heights } = parseBoard(moveString);
+  const moveCount = moveString.length;
+  // After playing c (move count becomes moveCount+1), if the opponent can win immediately
+  // their win score from that position = ceil((42 - (moveCount+1)) / 2).
+  // From the current player's perspective, this loss score = -ceil((41 - moveCount) / 2).
+  const opponentImmediateWinScore = -Math.ceil((41 - moveCount) / 2);
+
+  const forbiddenCols = scores.reduce((acc, s, i) => {
+    if (heights[i] < ROWS && s === opponentImmediateWinScore) acc.push(i);
+    return acc;
+  }, []);
+
+  if (forbiddenCols.length === 0) return { result: 'wrong', forbiddenCols: [] };
+
+  if (forbiddenCols.includes(candidateCol)) {
+    return { result: 'wrong', forbiddenCols };
+  }
+  return { result: 'correct', forbiddenCols };
 }
 
 // ── Board utilities ───────────────────────────────────────────────────────────

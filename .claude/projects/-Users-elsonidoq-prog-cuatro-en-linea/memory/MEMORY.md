@@ -1,0 +1,20 @@
+# Memory index
+
+- [Heatmap bug — FIXED](project_heatmap_bug.md) — was showing forcing-threat cells instead of actual winning line; fixed in Solver.cpp `possibleNonLosingMoves()==0` branch; test in test_explain.cpp
+- [Explain endpoint — best-moves filtering](project_explain_best_moves.md) — explainSearch uses book.get() O(1) directly (no scorer instance); explain now loads the book (`['-x']` not `-nb`); deep positions fall back to all non-losing moves; "4" went from 24min → 490ms
+- [Server parity bug — AI-first games](project_parity_bug_ai_first.md) — human/ai heatmaps are swapped when AI opens the game; not yet fixed
+- [User profile](user_profile.md) — strong C++/React/algorithms background, empirical debugger-first style, prefers concise responses
+- [Prefer empirical testing over theoretical analysis](feedback_empirical_first.md) — run code early, don't spend many rounds on mental analysis before testing
+- [MVP planning — DecodeC4](project_mvp_planning.md) — canonical MVP doc is `mvp_product_spec.md` (2026-04-28); wireframe BUILT (`mvp_wireframe.html`); papergames API blocked (no game history endpoint)
+- [MVP v2 scope decisions](project_mvp_v2_scope.md) — what was cut (import, 200+ puzzles, SR scheduler, pattern trends) and the metric gates for Phase 2
+- [End-game spec updates](project_end_game_spec.md) — what was added to `end_game_product_specifications.md` on 2026-04-28 (Explanation Engine, Blunder Log, micro-lessons, commit-first, post-game review)
+- [MVP implementation status](project_mvp_implementation.md) — all code tasks done as of 2026-04-30; what's built, what requires human action, key bugs fixed
+- [Classifier architecture and score convention](project_classifier_architecture.md) — c4solver score encoding, all 6 category detection rules, test fixture locations
+- [Server architecture and endpoint map](project_server_architecture.md) — Express structure, auth middleware, rate limits, full endpoint table, tier access rules
+- [Frontend architecture and component map](project_frontend_architecture.md) — routing, store layer, component hierarchy, i18n, PWA, build notes
+- [SpecKit workflow and feature directory](project_speckit_workflow.md) — where specs live, CLAUDE.md pointer, task ordering rationale
+- [AI difficulty — softmax sampling](project_depth_limited_search.md) — T={easy:5.0, medium:3.5, hard:2.5, perfect:0}; depth approach abandoned (all-zeros in early game); `src/lib/aiDifficulty.js`
+- [c4solver binary stale/crash fix](feedback_binary_rebuild.md) — exit 137 or wrong behavior: delete binary and `make` (Makefile copies to server/ automatically)
+- [Puzzle accuracy — first-attempt-only rule](project_accuracy_bug_fix.md) — stats recorded only on first attempt; fixed in PuzzlesPage.jsx 2026-05-01
+- [Puzzle Factory implementation](project_puzzle_factory.md) — ALL tasks T001–T024 done (including T023 golden path 2026-05-05); one fix: seed column bigint not integer
+- [Candidates table — FK dependency](project_candidates_fk.md) — false_positive_records has FK to candidates; delete it first before bulk-deleting candidates

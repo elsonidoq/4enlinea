@@ -21,6 +21,10 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
+  next();
+});
 
 // ── Rate limiting (T068) ───────────────────────────────────────────────────────
 
@@ -804,8 +808,285 @@ app.post('/api/stripe/portal', async (req, res) => {
 function requireLocalhost(req, res, next) {
   const ip = req.ip || req.socket?.remoteAddress || '';
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
+  console.warn('[requireLocalhost] blocked request from', ip, 'for', req.method, req.originalUrl);
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
 }
+
+// ── Category → predicate type mapping ────────────────────────────────────────
+const CATEGORY_PREDICATE = {
+  1: 'immediate_threat',
+  2: 'forced_block',
+  3: 'double_threat',
+  4: 'fork_setup',
+  5: 'zugzwang',
+  6: 'parity_control',
+  7: 'forbidden_columns',
+};
+
+// T005: POST /api/admin/generate
+app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { category, count = 30, seed } = req.body;
+  if (!Number.isInteger(category) || category < 1 || category > 7) {
+    return res.status(400).json({ error: 'category must be integer 1–7' });
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    return res.status(400).json({ error: 'count must be integer 1–100' });
+  }
+  if (seed !== undefined && !Number.isInteger(seed)) {
+    return res.status(400).json({ error: 'seed must be an integer' });
+  }
+
+  console.log('/api/admin/generate request', { category, count, seed });
+  const { generateCandidates } = await import('./candidate-generator.js');
+  const result = await generateCandidates(category, count, seed);
+
+  const runId = `${new Date().toISOString()}-cat${category}-seed${result.seed}`;
+
+  if (result.candidates.length > 0) {
+    const rows = result.candidates.map(c => ({
+      category: c.category,
+      move_string: c.move_string,
+      solver_scores: c.solver_scores,
+      classifier_tags: c.classifier_tags,
+      generation_run_id: runId,
+      seed: result.seed,
+      user_player: c.move_string.length % 2 === 0 ? 1 : 2,
+    }));
+    const { error } = await supabase.from('candidates').insert(rows);
+    if (error) return res.status(500).json({ error: error.message });
+  }
+
+  res.json({
+    generation_run_id: runId,
+    inserted: result.candidates.length,
+    seed: result.seed,
+    duration_ms: result.durationMs,
+  });
+});
+
+// T007: GET /api/admin/candidates/stats
+app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { data, error } = await supabase.from('candidates').select('category, status');
+  if (error) return res.status(500).json({ error: error.message });
+
+  const stats = {};
+  for (let cat = 1; cat <= 7; cat++) stats[cat] = { category: cat, pending: 0, approved: 0, rejected: 0 };
+  for (const row of (data || [])) {
+    if (stats[row.category]) stats[row.category][row.status]++;
+  }
+
+  res.json({ categories: Object.values(stats) });
+});
+
+// T008: GET /api/admin/candidates
+app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const category = parseInt(req.query.category, 10);
+  if (!category || category < 1 || category > 7) {
+    return res.status(400).json({ error: 'category must be integer 1–7' });
+  }
+  const status = req.query.status || 'pending';
+  if (!['pending', 'approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'status must be pending|approved|rejected' });
+  }
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+  const { data, error, count } = await supabase
+    .from('candidates')
+    .select('id, category, move_string, solver_scores, classifier_tags, status, created_at', { count: 'exact' })
+    .eq('category', category)
+    .eq('status', status)
+    .order('created_at', { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ candidates: data || [], total: count ?? 0 });
+});
+
+// T009: POST /api/admin/candidates/reject-batch
+app.post('/api/admin/candidates/reject-batch', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { category, reason = 'other' } = req.body;
+  if (!Number.isInteger(category) || category < 1 || category > 7) {
+    return res.status(400).json({ error: 'category must be integer 1–7' });
+  }
+
+  const { data, error } = await supabase
+    .from('candidates')
+    .update({ status: 'rejected', rejection_reason: reason, reviewed_at: new Date().toISOString() })
+    .eq('category', category)
+    .eq('status', 'pending')
+    .select('id');
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ rejected: data?.length ?? 0 });
+});
+
+// T012: GET /api/admin/scores
+app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
+  const movesErr = validateMoves(req.query.moves ?? '');
+  if (movesErr) return res.status(400).json({ error: movesErr });
+
+  const moves = req.query.moves ?? '';
+  if (moves.length === 0) return res.status(400).json({ error: 'moves must include at least one move' });
+
+  const category = parseInt(req.query.category, 10);
+  if (!category || category < 1 || category > 7) {
+    return res.status(400).json({ error: 'category must be integer 1–7' });
+  }
+
+  // moves is the board state AFTER the clicked column is appended.
+  // Extract last move to evaluate predicate for that column.
+  const candidateCol = parseInt(moves[moves.length - 1], 10) - 1;
+  const preClickMoves = moves.slice(0, -1);
+
+  let scores;
+  try {
+    scores = preClickMoves === '' ? EMPTY_BOARD_SCORES : await solver.query(preClickMoves);
+  } catch (err) {
+    return res.status(500).json({ error: 'Solver unavailable' });
+  }
+
+  const classResult = classify(preClickMoves, candidateCol, scores);
+  const puzzle = { category, moveString: preClickMoves };
+  const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
+  const predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
+
+  res.json({
+    scores,
+    classifier_tags: classResult?.tag ? [classResult.tag] : [],
+    predicate_pass: predicatePass,
+  });
+});
+
+// T013: POST /api/admin/candidates/:id/approve
+app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { id } = req.params;
+  const { goal_prompt, difficulty, cooperative_ai_moves = [] } = req.body;
+
+  if (!goal_prompt?.trim()) return res.status(400).json({ error: 'goal_prompt is required' });
+  if (![1, 2, 3].includes(Number(difficulty))) return res.status(400).json({ error: 'difficulty must be 1–3' });
+  if (!Array.isArray(cooperative_ai_moves)) {
+    return res.status(400).json({ error: 'cooperative_ai_moves must be an array' });
+  }
+
+  const { data: candidate, error: fetchErr } = await supabase
+    .from('candidates')
+    .select('id, category, move_string, status')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
+  if (candidate.status !== 'pending') return res.status(409).json({ error: 'candidate already reviewed' });
+
+  // Validate cooperative_ai_moves for multi-move categories
+  if ([4, 6].includes(candidate.category) && cooperative_ai_moves.length === 0) {
+    return res.status(400).json({ error: 'cooperative_ai_moves required for categories 4 and 6' });
+  }
+
+  const predicateType = CATEGORY_PREDICATE[candidate.category];
+
+  const { data: puzzle, error: insertErr } = await supabase
+    .from('puzzles')
+    .insert({
+      category: candidate.category,
+      move_string: candidate.move_string,
+      goal_prompt: goal_prompt.trim(),
+      goal_predicate_type: predicateType,
+      goal_predicate_params: {},
+      cooperative_ai_moves,
+      difficulty: Number(difficulty),
+      is_active: true,
+    })
+    .select('id')
+    .single();
+
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  const { error: updateErr } = await supabase
+    .from('candidates')
+    .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  res.status(201).json({ puzzle_id: puzzle.id, candidate_id: id });
+});
+
+// T014: POST /api/admin/candidates/:id/reject
+app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { id } = req.params;
+  const { reason, note = '' } = req.body;
+  const validReasons = ['not_educational', 'end_game', 'false_positive', 'other'];
+  if (!validReasons.includes(reason)) {
+    return res.status(400).json({ error: `reason must be one of: ${validReasons.join(', ')}` });
+  }
+
+  const { data: candidate, error: fetchErr } = await supabase
+    .from('candidates')
+    .select('id, category, move_string, solver_scores, status')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
+  if (candidate.status !== 'pending') return res.status(409).json({ error: 'candidate already reviewed' });
+
+  const { error: updateErr } = await supabase
+    .from('candidates')
+    .update({ status: 'rejected', rejection_reason: reason, reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  let falsePositiveId = undefined;
+  if (reason === 'false_positive') {
+    const { data: fp, error: fpErr } = await supabase
+      .from('false_positive_records')
+      .insert({
+        candidate_id: id,
+        category: candidate.category,
+        move_string: candidate.move_string,
+        solver_scores: candidate.solver_scores,
+        annotator_note: note,
+      })
+      .select('id')
+      .single();
+
+    if (!fpErr && fp) falsePositiveId = fp.id;
+  }
+
+  const resp = { candidate_id: id };
+  if (falsePositiveId) resp.false_positive_record_id = falsePositiveId;
+  res.json(resp);
+});
+
+// T015: GET /api/admin/false-positives
+app.get('/api/admin/false-positives', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  let query = supabase
+    .from('false_positive_records')
+    .select('id, candidate_id, category, move_string, solver_scores, annotator_note, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  const category = parseInt(req.query.category, 10);
+  if (category && category >= 1 && category <= 7) query = query.eq('category', category);
+
+  const { data, error, count } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ false_positives: data || [], total: count ?? 0 });
+});
 
 // POST /api/admin/seed-puzzles — insert placeholder_puzzles.json into DB (idempotent)
 app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {

@@ -193,9 +193,6 @@ Export all false-positive records, optionally filtered by category.
 Fetch solver scores for a board position (used by workspace column-click interaction). Reuses the existing solver infrastructure.
 
 **Query params**:
-- `moves`: string of column digits 1–7 (required)
-
-**Query params**:
 - `moves`: string of column digits 1–7 (required) — the board state AFTER the annotator's clicked column is appended
 - `category`: integer 1–7 (required) — used to evaluate the goal predicate server-side
 
