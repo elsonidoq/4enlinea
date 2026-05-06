@@ -19,3 +19,5 @@
 - [Puzzle Factory implementation](project_puzzle_factory.md) — ALL tasks T001–T024 done (including T023 golden path 2026-05-05); one fix: seed column bigint not integer
 - [Candidates table — FK dependency](project_candidates_fk.md) — false_positive_records has FK to candidates; delete it first before bulk-deleting candidates
 - [Puzzle gen improvements — spec 004 complete](project_puzzle_gen_improvements.md) — T001–T012 done; softmax generation, per-player temperatures, player-perspective color normalization in CurationWorkspace.jsx
+- [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
+- [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs for 10+ min; likely solver IPC deadlock or terminal-position edge case; classifier tests are fast (22/22, ~56ms)

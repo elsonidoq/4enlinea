@@ -28,7 +28,7 @@ function parseBoardState(moves) {
 }
 
 // Check if player has won with the last piece placed at (row, col).
-function checkWin(board, row, col, player) {
+export function checkWin(board, row, col, player) {
   const directions = [[0,1],[1,0],[1,1],[1,-1]];
   for (const [dr, dc] of directions) {
     let count = 1;
@@ -49,7 +49,7 @@ function checkWin(board, row, col, player) {
 
 // Count distinct winning threats for a player on the current board.
 // A threat is an empty cell that would complete a 4-in-a-row.
-function countWinningThreats(board, colHeights, player) {
+export function countWinningThreats(board, colHeights, player) {
   let threats = 0;
   for (let col = 0; col < COLS; col++) {
     const row = colHeights[col];
@@ -72,8 +72,18 @@ export function classify(moves, candidateCol, scores) {
 
   // ── Category 1: Immediate Threat ─────────────────────────────────────────
   // This move wins the game immediately.
-  if (score === winScore && score > 0) {
-    return { tag: 'immediate_threat', category: 1 };
+  // Use >= because for odd moveCount, winScore equals win-in-2 score; board check disambiguates.
+  if (score >= winScore && score > 0) {
+    const { board, colHeights } = parseBoardState(moves);
+    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
+    const row = colHeights[candidateCol];
+    if (row < ROWS) {
+      board[row][candidateCol] = currentPlayer;
+      if (checkWin(board, row, candidateCol, currentPlayer)) {
+        return { tag: 'immediate_threat', category: 1 };
+      }
+      board[row][candidateCol] = 0;
+    }
   }
 
   // ── Category 2: Forced Block ──────────────────────────────────────────────
@@ -148,6 +158,14 @@ export function classify(moves, candidateCol, scores) {
     }
   }
 
+  // ── Category 7: Forbidden Column ─────────────────────────────────────────
+  // Playing in a column that gives the opponent an immediate winning response.
+  // Only valid when the current player has no winning move (all scores <= 0).
+  const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
+  if (scores.some(s => s === opponentWinScore) && scores.every(s => s <= 0)) {
+    return { tag: 'forbidden_column', category: 7 };
+  }
+
   // ── Fallback ──────────────────────────────────────────────────────────────
   if (score > 0) return { tag: 'best_move', category: 0 };
   if (score === 0) return { tag: 'drawing_move', category: 0 };
@@ -155,7 +173,7 @@ export function classify(moves, candidateCol, scores) {
 }
 
 function isImmediateWin(score, winScore) {
-  return score === winScore;
+  return score >= winScore;
 }
 
 // Classify the best available move (ignoring candidateCol, find the strongest pattern).

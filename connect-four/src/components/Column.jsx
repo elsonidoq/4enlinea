@@ -16,12 +16,15 @@ export function Column({ col, cells, onClick, isHovered, canPlay, highlightedCel
       }}
     >
       {cells.map((color, row) => {
-        const highlight = highlightedCells.find(([r]) => r === row)?.[1] ?? null;
+        const found = highlightedCells.find(([r]) => r === row);
+        const highlight = found?.[1] ?? null;
+        const step = found?.[2] ?? null;
         return (
           <Piece
             key={row}
             color={color}
             highlight={highlight}
+            step={step}
           />
         );
       })}

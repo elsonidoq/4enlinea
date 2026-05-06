@@ -1,13 +1,6 @@
-import { spawn } from 'child_process';
-import { existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import { evaluatePredicate } from './predicates.js';
-import { classify } from './classifier.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BINARY_PATH = join(__dirname, 'c4solver');
-const BOOK_PATH = join(__dirname, '7x6.book');
+import { classify, checkWin, countWinningThreats } from './classifier.js';
+import { createSolverProcess } from './c4solver-wrapper.js';
 const ROWS = 6;
 const COLS = 7;
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
@@ -23,30 +16,18 @@ function mulberry32(a) {
 }
 
 export function softmaxSample(legalCols, scores, T, rng) {
-  const weights = legalCols.map(c => Math.exp(scores[c] / T));
+  const logits = legalCols.map(c => scores[c] / T);
+  const maxLogit = Math.max(...logits);
+  const weights = logits.map(l => Math.exp(l - maxLogit));
   const total = weights.reduce((a, b) => a + b, 0);
   const probs = weights.map(w => w / total);
-
-  if (probs.some(p => isNaN(p))) {
-    console.log({legalCols, scores, T, weights, total, probs});
-
-    throw new Error('Probabilities contain NaN');
-  }
 
   let r = rng(), cum = 0;
   for (let j = 0; j < legalCols.length; j++) {
     cum += probs[j];
-    if (r < cum) {
-      const result = legalCols[j];
-      // console.log({legalCols, scores, T, weights, total, probs, result});
-      return legalCols[j];
-    } 
+    if (r < cum) return legalCols[j];
   }
-  const result = legalCols[legalCols.length - 1];
-
-  // console.log({legalCols, scores, T, weights, total, probs, result});
-
-  return result;
+  return legalCols[legalCols.length - 1];
 }
 
 function immediateWinScore(moveCount) {
@@ -57,50 +38,6 @@ function getHeights(moveString) {
   const heights = Array(COLS).fill(0);
   for (const ch of moveString) heights[parseInt(ch, 10) - 1]++;
   return heights;
-}
-
-// Persistent solver process — book-accurate, fast via stdin/stdout.
-class GeneratorSolver {
-  constructor() {
-    if (!existsSync(BOOK_PATH)) throw new Error('Opening book not found: ' + BOOK_PATH);
-    this.process = spawn(BINARY_PATH, ['-a', '-b', BOOK_PATH], { cwd: __dirname });
-    this.queue = [];
-    this.buffer = '';
-
-    this.process.stdout.on('data', (data) => {
-      this.buffer += data.toString();
-      const lines = this.buffer.split('\n');
-      this.buffer = lines.pop();
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        const parts = trimmed.split(/\s+/);
-        const scores = (parts.length === 8 ? parts.slice(1) : parts).map(Number);
-        const entry = this.queue.shift();
-        if (entry) entry.resolve(scores);
-      }
-    });
-
-    this.process.stderr.on('data', () => {});
-
-    this.process.on('exit', () => {
-      for (const entry of this.queue) entry.reject(new Error('Solver exited'));
-    });
-  }
-
-  query(moves) {
-    this._pending = (this._pending || Promise.resolve()).then(() =>
-      new Promise((resolve, reject) => {
-        this.queue.push({ resolve, reject });
-        this.process.stdin.write(moves + '\n');
-      })
-    );
-    return this._pending;
-  }
-
-  destroy() {
-    try { this.process.kill(); } catch {}
-  }
 }
 
 // Build a 2D board array from a move string. board[row][col], row 0 = bottom.
@@ -146,15 +83,193 @@ function isGameOver(moveString) {
   return hasWon(board, 1) || hasWon(board, 2) || moveString.length === ROWS * COLS;
 }
 
+function copyBoard(board) {
+  return board.map(row => [...row]);
+}
+
+// T021: Cat 1/2/3 — single hint cell
+function computeCat123Highlight(moveString, correctCols) {
+  if (correctCols.length === 0) return [];
+  const heights = getHeights(moveString);
+  const col = correctCols[0];
+  return [{ col, row: heights[col], role: 'hint' }];
+}
+
+// T022: Cat 4 Fork Setup highlight (FR-015a)
+function computeCat4Highlight(moveString, correctCols) {
+  if (correctCols.length === 0) return [];
+  const C = correctCols[0];
+  const board0 = buildBoard(moveString);
+  if (!board0) return [];
+  const H0 = getHeights(moveString);
+  if (H0[C] >= ROWS) return [];
+  const currentPlayer = moveString.length % 2 === 0 ? 1 : 2;
+
+  const setupCell = { col: C, row: H0[C], role: 'hint' };
+  const B1 = copyBoard(board0);
+  const H1 = [...H0];
+  B1[H1[C]][C] = currentPlayer;
+  H1[C]++;
+
+  const forkCandidates = [];
+  for (let f = 0; f < COLS; f++) {
+    if (H1[f] >= ROWS) continue;
+    const B2f = copyBoard(B1);
+    const H2f = [...H1];
+    B2f[H2f[f]][f] = currentPlayer;
+    H2f[f]++;
+    const count = countWinningThreats(B2f, H2f, currentPlayer);
+    if (count >= 2) forkCandidates.push({ f, count });
+  }
+
+  if (forkCandidates.length === 0) return [setupCell];
+
+  forkCandidates.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    const da = Math.abs(a.f - 3), db = Math.abs(b.f - 3);
+    if (da !== db) return da - db;
+    return a.f - b.f;
+  });
+  const forkCol = forkCandidates[0].f;
+  const forkCell = { col: forkCol, row: H1[forkCol], role: 'hint' };
+
+  const B2 = copyBoard(B1);
+  const H2 = [...H1];
+  B2[H2[forkCol]][forkCol] = currentPlayer;
+  H2[forkCol]++;
+
+  const threatCells = [];
+  for (let t = 0; t < COLS; t++) {
+    if (H2[t] >= ROWS) continue;
+    B2[H2[t]][t] = currentPlayer;
+    if (checkWin(B2, H2[t], t, currentPlayer)) {
+      threatCells.push({ col: t, row: H2[t], role: 'threat' });
+    }
+    B2[H2[t]][t] = 0;
+  }
+
+  return [setupCell, forkCell, ...threatCells];
+}
+
+// T023: Cat 5 Zugzwang depth filter + PV trace (FR-015b/c)
+// Returns null if depth filter R > 6 (candidate should be discarded)
+async function computeCat5Highlight(solver, moveString, scores) {
+  const heights = getHeights(moveString);
+  const moveCount = moveString.length;
+  const legalScores = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] < ROWS) legalScores.push(scores[c]);
+  }
+  if (legalScores.length === 0) return null;
+  const maxScore = Math.max(...legalScores);
+  const R = (43 - 2 * Math.abs(maxScore)) - moveCount;
+  if (R > 6) return null;
+
+  const K = 6;
+  const cells = [];
+  let ms = moveString;
+
+  function argmaxLegal(sc, moveStr) {
+    const h = getHeights(moveStr);
+    let best = null;
+    for (let c = 0; c < COLS; c++) {
+      if (h[c] >= ROWS) continue;
+      if (best === null || sc[c] > sc[best]) { best = c; continue; }
+      if (sc[c] === sc[best]) {
+        const da = Math.abs(c - 3), db = Math.abs(best - 3);
+        if (da < db || (da === db && c < best)) best = c;
+      }
+    }
+    return best;
+  }
+
+  while (cells.length < K) {
+    let sc;
+    try { sc = await solver.query(ms); } catch { break; }
+    const loserCol = argmaxLegal(sc, ms);
+    if (loserCol === null) break;
+    cells.push({ col: loserCol, row: getHeights(ms)[loserCol], role: 'loser' });
+    ms += (loserCol + 1).toString();
+    if (isGameOver(ms)) break;
+    if (cells.length >= K) break;
+
+    let sc2;
+    try { sc2 = await solver.query(ms); } catch { break; }
+    const winnerCol = argmaxLegal(sc2, ms);
+    if (winnerCol === null) break;
+    cells.push({ col: winnerCol, row: getHeights(ms)[winnerCol], role: 'winner' });
+    ms += (winnerCol + 1).toString();
+    if (isGameOver(ms)) break;
+  }
+
+  return cells;
+}
+
+// T024: Cat 6 Parity Control highlight (FR-015d)
+function computeCat6Highlight(moveString) {
+  const board0 = buildBoard(moveString);
+  if (!board0) return [];
+  const heights = getHeights(moveString);
+  const currentPlayer = moveString.length % 2 === 0 ? 1 : 2;
+  const opponent = 3 - currentPlayer;
+
+  const liveThreats = [];
+  for (let c = 0; c < COLS; c++) {
+    for (let r = heights[c]; r < ROWS; r++) {
+      if ((r - heights[c]) % 2 !== 0) continue;
+      const board = copyBoard(board0);
+      board[r][c] = currentPlayer;
+      if (!checkWin(board, r, c, currentPlayer)) continue;
+      board[r][c] = 0; // restore before undercut check
+      if (r > heights[c]) {
+        board[r - 1][c] = opponent;
+        if (checkWin(board, r - 1, c, opponent)) continue;
+      }
+      liveThreats.push({ col: c, row: r });
+    }
+  }
+
+  if (liveThreats.length === 0) return [];
+
+  const cells = [];
+  for (const { col: c, row: r } of liveThreats) {
+    cells.push({ col: c, row: r, role: 'threat' });
+    if (r > heights[c]) cells.push({ col: c, row: r - 1, role: 'support' });
+  }
+  return cells;
+}
+
+// T025: Cat 7 — first forbidden column hint
+function computeCat7Highlight(moveString, scores) {
+  const heights = getHeights(moveString);
+  const moveCount = moveString.length;
+  const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] < ROWS && scores[c] === opponentWinScore) {
+      return [{ col: c, row: heights[c], role: 'hint' }];
+    }
+  }
+  return [];
+}
+
+async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
+  if (category >= 1 && category <= 3) return computeCat123Highlight(moveString, correctCols);
+  if (category === 4) return computeCat4Highlight(moveString, correctCols);
+  if (category === 5) return computeCat5Highlight(solver, moveString, scores);
+  if (category === 6) return computeCat6Highlight(moveString);
+  if (category === 7) return computeCat7Highlight(moveString, scores);
+  return [];
+}
+
 async function solverWeightedPosition(solver, targetLen, rng) {
   const T1 = rng() * 2 + 0.1;
   const T2 = rng() * 2 + 0.1;
-  console.log({T1, T2});
   const temps = [T1, T2];
   let moveString = '';
   const heights = Array(COLS).fill(0);
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   let player = 1;
+  const plies = [];
 
   for (let i = 0; i < targetLen; i++) {
     const legal = [];
@@ -164,15 +279,25 @@ async function solverWeightedPosition(solver, targetLen, rng) {
     if (legal.length === 0) return null;
 
     const scores = await solver.query(moveString);
-    const col = softmaxSample(legal, scores, temps[player - 1], rng);
+    const T = temps[player - 1];
+    const rawWeights = legal.map(c => Math.exp(scores[c] / T));
+    const total = rawWeights.reduce((a, b) => a + b, 0);
+    const probs = Array(COLS).fill(0);
+    legal.forEach((c, j) => { probs[c] = rawWeights[j] / total; });
+
+    const col = softmaxSample(legal, scores, T, rng);
+    plies.push({ ply: i, player, scores: [...scores], weights: probs, sampled_col: col });
 
     board[heights[col]][col] = player;
     heights[col]++;
     moveString += (col + 1).toString();
-    if (hasWon(board, player)) return null;
+    if (hasWon(board, player)) {
+      return { moveString, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'win', plies } };
+    }
     player = 3 - player;
   }
-  return moveString;
+  const termination = moveString.length === ROWS * COLS ? 'draw' : 'max_moves';
+  return { moveString, trace: { temperature_p1: T1, temperature_p2: T2, termination, plies } };
 }
 
 // Check whether the current position satisfies the category predicate.
@@ -222,22 +347,34 @@ export async function generateCandidates(category, count, seed) {
   const rng = mulberry32(usedSeed);
   const t0 = Date.now();
 
-  const solver = new GeneratorSolver();
+  const solver = createSolverProcess();
 
   const candidates = [];
   let attempts = 0;
   const MAX_ATTEMPTS = 400;
+  let lastLogTime = t0;
+  const LOG_INTERVAL_MS = 5000;
+
+  // Rejection counters for diagnosing category 5 (Zugzwang)
+  const stats = {
+    tooShort: 0,
+    predicateFail: 0,
+    notClean: 0,
+    depthFilter: 0,
+    accepted: 0,
+  };
 
   try {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const minMoves = 10; 
-      const maxMoves = category <= 2 ? 16 : 24;
-      const targetLen = minMoves + Math.floor(rng() * (maxMoves - minMoves + 1));
-      const moveString = await solverWeightedPosition(solver, targetLen, rng);
+      const minMoves = 14 + Math.floor(rng() * 21);
+      const maxMoves = Math.max(minMoves, category <= 2 ? 20 : 34);
+      const result = await solverWeightedPosition(solver, maxMoves, rng);
 
-      if (moveString === null) continue; // game ended during random playout
+      if (!result) continue; // board filled with no legal moves
+      const { moveString, trace } = result;
+      if (moveString.length < minMoves) { stats.tooShort++; continue; }
 
       let scores;
       try {
@@ -249,23 +386,58 @@ export async function generateCandidates(category, count, seed) {
 
       // Check predicate at this position
       const { passes, correctCols } = checkPredicate(category, moveString, scores);
-      if (passes && isClean(category, scores, moveString.length)) {
+      if (!passes) { stats.predicateFail++; }
+      else if (!isClean(category, scores, moveString.length)) { stats.notClean++; }
+      else {
         const tags = [];
         if (correctCols.length > 0) {
           const cls = classify(moveString, correctCols[0], scores);
           if (cls?.tag) tags.push(cls.tag);
         }
+        const highlight_cells = await computeHighlightCells(category, moveString, scores, correctCols, solver);
+        if (highlight_cells === null) {
+          stats.depthFilter++;
+          // Log details when cat 5 depth filter rejects a valid zugzwang
+          if (category === 5) {
+            const heights = Array(COLS).fill(0);
+            for (const ch of moveString) heights[parseInt(ch, 10) - 1]++;
+            const legalScores = scores.filter((_, c) => heights[c] < ROWS);
+            const maxS = Math.max(...legalScores);
+            const R = (43 - 2 * Math.abs(maxS)) - moveString.length;
+            console.log(`  [cat5 depth-filter] moves=${moveString.length} maxScore=${maxS} R=${R} scores=[${scores.join(',')}]`);
+          }
+          continue;
+        }
+        stats.accepted++;
         candidates.push({
           category,
           move_string: moveString,
           solver_scores: scores,
           classifier_tags: tags,
+          debug_trace: trace,
+          highlight_cells,
         });
+      }
+
+      const now = Date.now();
+      if (now - lastLogTime >= LOG_INTERVAL_MS) {
+        lastLogTime = now;
+        const elapsed = ((now - t0) / 1000).toFixed(1);
+        console.log(
+          `[generateCandidates cat=${category}] ${elapsed}s | attempt=${attempts}/${MAX_ATTEMPTS} found=${candidates.length}/${count}` +
+          ` | rejected: tooShort=${stats.tooShort} predicateFail=${stats.predicateFail} notClean=${stats.notClean} depthFilter=${stats.depthFilter}`
+        );
       }
     }
   } finally {
     solver.destroy();
   }
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(
+    `[generateCandidates cat=${category}] DONE ${elapsed}s | attempts=${attempts} found=${candidates.length}/${count}` +
+    ` | rejected: tooShort=${stats.tooShort} predicateFail=${stats.predicateFail} notClean=${stats.notClean} depthFilter=${stats.depthFilter}`
+  );
 
   return { candidates, seed: usedSeed, durationMs: Date.now() - t0 };
 }

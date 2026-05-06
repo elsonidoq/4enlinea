@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify } from './classifier.js';
 import { evaluatePredicate } from './predicates.js';
+import { createSolverProcess } from './c4solver-wrapper.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,76 +55,28 @@ function validateMoves(moves) {
 
 // ── Solver process ────────────────────────────────────────────────────────────
 
-class Connect4Solver {
-  constructor() {
-    const binaryPath = join(__dirname, 'c4solver');
-    console.log(`[solver] binary: ${binaryPath}`);
-    console.log(`[solver] cwd:    ${__dirname}`);
-
-    this.process = spawn(binaryPath, ['-a'], { cwd: __dirname });
-    this.queue = [];
-    this.buffer = '';
-
-    this.process.stdout.on('data', (data) => {
-      this.buffer += data.toString();
-      const lines = this.buffer.split('\n');
-      this.buffer = lines.pop();
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        console.log(`[solver stdout] ${trimmed}`);
-        const parts = trimmed.split(/\s+/);
-        const scores = parts.slice(1).map(Number);
-        const entry = this.queue.shift();
-        if (entry) entry.resolve(scores);
-      }
+function queryDepth(moves, depth) {
+  const binaryPath = join(__dirname, 'c4solver');
+  return new Promise((resolve, reject) => {
+    const child = spawn(binaryPath, ['-nb', '-d', String(depth), '-a'], { cwd: __dirname });
+    let stdout = '';
+    child.stdout.on('data', d => { stdout += d; });
+    child.stderr.on('data', () => {});
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code !== 0) return reject(new Error(`solver exited ${code}`));
+      const line = stdout.trim().split('\n').find(l => l.trim());
+      if (!line) return reject(new Error('no output from solver'));
+      const parts = line.trim().split(/\s+/);
+      const skip = moves.length > 0 ? 1 : 0;
+      resolve(parts.slice(skip).map(Number));
     });
-
-    this.process.stderr.on('data', (data) => {
-      console.log(`[solver stderr] ${data.toString().trim()}`);
-    });
-
-    this.process.on('exit', (code) => {
-      console.error(`[solver] exited with code ${code}`);
-      for (const entry of this.queue) entry.reject(new Error('Solver exited'));
-    });
-  }
-
-  query(moves) {
-    this.pending = (this.pending || Promise.resolve()).then(() =>
-      new Promise((resolve, reject) => {
-        this.queue.push({ resolve, reject });
-        console.log(`[solver] sending: "${moves}"`);
-        this.process.stdin.write(moves + '\n');
-      })
-    );
-    return this.pending;
-  }
-
-  queryDepth(moves, depth) {
-    const binaryPath = join(__dirname, 'c4solver');
-    return new Promise((resolve, reject) => {
-      const child = spawn(binaryPath, ['-nb', '-d', String(depth), '-a'], { cwd: __dirname });
-      let stdout = '';
-      child.stdout.on('data', d => { stdout += d; });
-      child.stderr.on('data', () => {});
-      child.on('error', reject);
-      child.on('close', code => {
-        if (code !== 0) return reject(new Error(`solver exited ${code}`));
-        const line = stdout.trim().split('\n').find(l => l.trim());
-        if (!line) return reject(new Error('no output from solver'));
-        const parts = line.trim().split(/\s+/);
-        const skip = moves.length > 0 ? 1 : 0;
-        resolve(parts.slice(skip).map(Number));
-      });
-      child.stdin.write(moves + '\n');
-      child.stdin.end();
-    });
-  }
+    child.stdin.write(moves + '\n');
+    child.stdin.end();
+  });
 }
 
-const solver = new Connect4Solver();
+const solver = createSolverProcess();
 
 // ── Supabase client ───────────────────────────────────────────────────────────
 
@@ -266,7 +219,7 @@ app.post('/api/scores', async (req, res) => {
   try {
     console.log(`[api] /api/scores moves="${moves}" depth=${depth ?? 'unlimited'}`);
     const t0 = Date.now();
-    const scores = depth ? await solver.queryDepth(moves, depth) : await solver.query(moves);
+    const scores = depth ? await queryDepth(moves, depth) : await solver.query(moves);
     console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
     res.json({ scores });
   } catch (err) {
@@ -853,6 +806,8 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       generation_run_id: runId,
       seed: result.seed,
       user_player: c.move_string.length % 2 === 0 ? 1 : 2,
+      debug_trace: c.debug_trace ?? null,
+      highlight_cells: c.highlight_cells ?? null,
     }));
     const { error } = await supabase.from('candidates').insert(rows);
     if (error) return res.status(500).json({ error: error.message });
@@ -899,7 +854,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
 
   const { data, error, count } = await supabase
     .from('candidates')
-    .select('id, category, move_string, solver_scores, classifier_tags, status, created_at', { count: 'exact' })
+    .select('id, category, move_string, solver_scores, classifier_tags, status, created_at, debug_trace, highlight_cells', { count: 'exact' })
     .eq('category', category)
     .eq('status', status)
     .order('created_at', { ascending: true })

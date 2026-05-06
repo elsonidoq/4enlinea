@@ -12,7 +12,7 @@ export function Board({ board = EMPTY_BOARD, onColumnClick, canPlay = false, hig
     const cells = Array.from({ length: ROWS }, (_, row) => board[row]?.[col] ?? 'empty');
     const colHighlights = highlightedCells
       .filter(([, c]) => c === col)
-      .map(([r, , type]) => [r, type]);
+      .map(([r, , type, step = null]) => [r, type, step]);
     return { cells, highlights: colHighlights };
   });
 

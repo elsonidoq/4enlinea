@@ -73,7 +73,7 @@ export function CandidateDashboard({ onSelectCategory }) {
   }
 
   async function handleRejectAll(cat) {
-    if (!confirm(`Reject all pending candidates for category ${cat}?`)) return;
+    if (!confirm(`Delete all pending candidates for category ${cat}? Un-reviewed (pending) candidates will be permanently deleted.`)) return;
     try {
       const res = await fetch(`${API}/api/admin/candidates/reject-batch`, {
         method: 'POST',
@@ -143,7 +143,7 @@ export function CandidateDashboard({ onSelectCategory }) {
                               Review ({row.pending})
                             </button>
                             <button style={rejectAllBtn} onClick={() => handleRejectAll(row.category)}>
-                              Reject All
+                              Delete all pending
                             </button>
                           </>
                         ) : (

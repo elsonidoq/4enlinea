@@ -48,6 +48,17 @@ describe('generateCandidates', () => {
     assert.ok(median >= 14, `median move_string length is ${median}, expected >= 14`);
   }, { timeout: 120_000 });
 
+  test('min-move enforcement: all move_strings have length >= 14 (T017)', async () => {
+    const result = await generateCandidates(1, 10, 77);
+    assert.ok(result.candidates.length >= 1, 'expected at least 1 candidate');
+    for (const c of result.candidates) {
+      assert.ok(
+        c.move_string.length >= 14,
+        `move_string "${c.move_string}" has length ${c.move_string.length}, expected >= 14`
+      );
+    }
+  }, { timeout: 120_000 });
+
   test('book fail-fast: GeneratorSolver throws when book is missing (FR-004)', async () => {
     // Import the module to get access to GeneratorSolver internals via a bad book path.
     // We test this by temporarily monkey-patching the BOOK_PATH check using a helper approach.

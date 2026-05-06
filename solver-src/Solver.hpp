@@ -56,6 +56,12 @@ class Solver {
                      int heatP1[Position::HEIGHT][Position::WIDTH],
                      std::unordered_set<Position::position_t>& visited);
 
+  void explainSearch(const Position &P,
+                     int heatP0[Position::HEIGHT][Position::WIDTH],
+                     int heatP1[Position::HEIGHT][Position::WIDTH],
+                     std::unordered_set<Position::position_t>& visited,
+                     Solver& scorer);
+
  public:
   static const int INVALID_MOVE = -1000;
 

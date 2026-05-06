@@ -8,6 +8,16 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 const ROWS = 6;
 const COLS = 7;
 
+const CATEGORY_NAMES = {
+  1: 'Immediate Win',
+  2: 'Forced Block',
+  3: 'Double Threat',
+  4: 'Fork Setup',
+  5: 'Zugzwang',
+  6: 'Parity Control',
+  7: 'Forbidden Columns',
+};
+
 const GOAL_PROMPTS = {
   1: 'Find the winning move.',
   2: "Block your opponent's threat.",
@@ -50,7 +60,7 @@ function deriveHighlightCol(category, scores, moveString) {
 
   switch (category) {
     case 1:
-      return legalCols.find(i => scores[i] === winScore && winScore > 0) ?? null;
+      return legalCols.find(i => scores[i] >= winScore && winScore > 0) ?? null;
     case 2: {
       const blocking = legalCols.filter(i => scores[i] >= 0);
       return blocking.length === 1 ? blocking[0] : null;
@@ -107,6 +117,9 @@ export function CurationWorkspace({ category, onBack }) {
   // Reject modal
   const [showReject, setShowReject] = useState(false);
 
+  // Debug trace panel
+  const [showTrace, setShowTrace] = useState(false);
+
   const candidate = candidates[idx] ?? null;
   const remaining = candidates.length - idx;
 
@@ -136,6 +149,7 @@ export function CurationWorkspace({ category, onBack }) {
     setClickedCol(null);
     setShowApprove(false);
     setShowReject(false);
+    setShowTrace(false);
     setGoalPrompt(GOAL_PROMPTS[category] ?? '');
     setDifficulty(2);
     setCooperativeAiMoves([]);
@@ -220,10 +234,17 @@ export function CurationWorkspace({ category, onBack }) {
   const moveCount = candidate.move_string.length;
   const winScore = immediateWinScore(moveCount);
 
-  // Build highlighted cells for pre-highlight and clicked col
-  const highlightedCells = [];
+  // Build highlighted cells — stored cells first, fall back to deriveHighlightCol
   const heights = getHeights(candidate.move_string);
-  if (highlightCol !== null && heights[highlightCol] < ROWS) {
+  const highlightedCells = [];
+  if (candidate.highlight_cells && candidate.highlight_cells.length > 0) {
+    let stepIdx = 0;
+    for (const { col, row, role } of candidate.highlight_cells) {
+      const isSequenceStep = role === 'loser' || role === 'winner';
+      const step = isSequenceStep ? ++stepIdx : null;
+      highlightedCells.push([row, col, role, step]);
+    }
+  } else if (highlightCol !== null && heights[highlightCol] < ROWS) {
     highlightedCells.push([heights[highlightCol], highlightCol, 'hint']);
   }
   if (clickedCol !== null && heights[clickedCol] < ROWS) {
@@ -258,7 +279,7 @@ export function CurationWorkspace({ category, onBack }) {
         />
 
         <div style={metaRow}>
-          <span style={catLabel}>Category {category}</span>
+          <span style={catLabel}>Cat {category} — {CATEGORY_NAMES[category] ?? 'Unknown'}</span>
           <span style={moveStringDisplay}>{candidate.move_string || '(empty)'}</span>
         </div>
         <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>
@@ -279,6 +300,18 @@ export function CurationWorkspace({ category, onBack }) {
           ))}
         </div>
         {scoresLoading && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
+
+        {/* Debug trace */}
+        <div style={debugSection}>
+          <button style={debugToggle} onClick={() => setShowTrace(v => !v)}>
+            {showTrace ? '▲ Hide trace' : '▼ Debug trace'}
+          </button>
+          {showTrace && (
+            candidate.debug_trace
+              ? <DebugTracePanel trace={candidate.debug_trace} />
+              : <div style={noTrace}>no trace available</div>
+          )}
+        </div>
 
         {/* Predicate checklist (shown after a click) */}
         {clickedPass !== null && (
@@ -332,8 +365,46 @@ export function CurationWorkspace({ category, onBack }) {
           <div style={actionRow}>
             <button onClick={() => setShowApprove(true)} style={approveBtn}>Approve (A)</button>
             <button onClick={() => setShowReject(true)} style={rejectBtn}>Reject (R)</button>
+            <button onClick={advanceToNext} style={skipBtn}>Skip</button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DebugTracePanel({ trace }) {
+  const { temperature_p1, temperature_p2, termination, plies } = trace;
+  return (
+    <div style={tracePanelWrap}>
+      <div style={traceMeta}>
+        T₁ = {temperature_p1.toFixed(3)} &nbsp; T₂ = {temperature_p2.toFixed(3)} &nbsp; stopped: <strong>{termination}</strong>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={traceTable}>
+          <thead>
+            <tr>
+              {['ply', 'pl', 'col', 'scores', 'weights'].map(h => (
+                <th key={h} style={traceTh}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {plies.map(p => (
+              <tr key={p.ply}>
+                <td style={traceTd}>{p.ply}</td>
+                <td style={traceTd}>{p.player}</td>
+                <td style={traceTd}>{p.sampled_col + 1}</td>
+                <td style={{ ...traceTd, fontFamily: 'monospace', fontSize: 9 }}>
+                  {p.scores.map((s, i) => `C${i+1}:${s}`).join(' ')}
+                </td>
+                <td style={{ ...traceTd, fontFamily: 'monospace', fontSize: 9 }}>
+                  {p.weights.map((w, i) => `C${i+1}:${w.toFixed(2)}`).join(' ')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -351,6 +422,7 @@ const scoreCell = { flex: 1, padding: '4px 2px', borderRadius: 6, border: '1px s
 const actionRow = { display: 'flex', gap: 8, marginTop: 8 };
 const approveBtn = { flex: 1, padding: '10px 12px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
 const rejectBtn = { flex: 1, padding: '10px 12px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
+const skipBtn = { padding: '10px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const approvePanel = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginTop: 8 };
 const panelTitle = { fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 10 };
 const fieldGroup = { marginBottom: 10 };
@@ -363,3 +435,11 @@ const backBtn = { padding: '7px 12px', borderRadius: 8, border: '1.5px solid var
 const linkBtn = { background: 'none', border: 'none', color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', padding: 0 };
 const errStyle = { color: 'var(--red)', fontSize: 12, marginBottom: 8 };
 const emptyState = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', flex: 1 };
+const debugSection = { borderTop: '1px solid var(--border-dim)', paddingTop: 6 };
+const debugToggle = { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit' };
+const noTrace = { fontSize: 11, color: 'var(--text-muted)', padding: '4px 0' };
+const tracePanelWrap = { marginTop: 6, fontSize: 11 };
+const traceMeta = { marginBottom: 4, color: 'var(--text-muted)' };
+const traceTable = { width: '100%', borderCollapse: 'collapse', fontSize: 10 };
+const traceTh = { textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid var(--border-dim)', color: 'var(--text-muted)', fontWeight: 700 };
+const traceTd = { padding: '2px 4px', borderBottom: '1px solid var(--border-dim)', verticalAlign: 'top' };
