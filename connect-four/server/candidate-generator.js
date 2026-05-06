@@ -16,7 +16,14 @@ function mulberry32(a) {
 }
 
 export function softmaxSample(legalCols, scores, T, rng) {
-  const logits = legalCols.map(c => scores[c] / T);
+  const raw = legalCols.map(c => scores[c]);
+  const minS = Math.min(...raw);
+  const maxS = Math.max(...raw);
+  const range = maxS - minS;
+  const normalized = range === 0
+    ? raw.map(() => 0)
+    : raw.map(s => (s - minS) / range * 2 - 1);
+  const logits = normalized.map(n => n / T);
   const maxLogit = Math.max(...logits);
   const weights = logits.map(l => Math.exp(l - maxLogit));
   const total = weights.reduce((a, b) => a + b, 0);
@@ -261,9 +268,11 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
   return [];
 }
 
-async function solverWeightedPosition(solver, targetLen, rng) {
-  const T1 = rng() * 2 + 0.1;
-  const T2 = rng() * 2 + 0.1;
+// Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
+// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
+async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
+  const T1 = rng() * 4 + 0.1;
+  const T2 = rng() * 4 + 0.1;
   const temps = [T1, T2];
   let moveString = '';
   const heights = Array(COLS).fill(0);
@@ -271,7 +280,7 @@ async function solverWeightedPosition(solver, targetLen, rng) {
   let player = 1;
   const plies = [];
 
-  for (let i = 0; i < targetLen; i++) {
+  for (let i = 0; i < maxMoves; i++) {
     const legal = [];
     for (let c = 0; c < COLS; c++) {
       if (heights[c] < ROWS) legal.push(c);
@@ -279,6 +288,11 @@ async function solverWeightedPosition(solver, targetLen, rng) {
     if (legal.length === 0) return null;
 
     const scores = await solver.query(moveString);
+
+    if (onPosition(moveString, scores)) {
+      return { moveString, scores, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'predicate_match', plies } };
+    }
+
     const T = temps[player - 1];
     const rawWeights = legal.map(c => Math.exp(scores[c] / T));
     const total = rawWeights.reduce((a, b) => a + b, 0);
@@ -291,13 +305,10 @@ async function solverWeightedPosition(solver, targetLen, rng) {
     board[heights[col]][col] = player;
     heights[col]++;
     moveString += (col + 1).toString();
-    if (hasWon(board, player)) {
-      return { moveString, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'win', plies } };
-    }
+    if (hasWon(board, player)) return null;
     player = 3 - player;
   }
-  const termination = moveString.length === ROWS * COLS ? 'draw' : 'max_moves';
-  return { moveString, trace: { temperature_p1: T1, temperature_p2: T2, termination, plies } };
+  return null;
 }
 
 // Check whether the current position satisfies the category predicate.
@@ -355,69 +366,60 @@ export async function generateCandidates(category, count, seed) {
   let lastLogTime = t0;
   const LOG_INTERVAL_MS = 5000;
 
-  // Rejection counters for diagnosing category 5 (Zugzwang)
-  const stats = {
-    tooShort: 0,
-    predicateFail: 0,
-    notClean: 0,
-    depthFilter: 0,
-    accepted: 0,
-  };
+  const stats = { noMatch: 0, depthFilter: 0, accepted: 0 };
 
   try {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const minMoves = 14 + Math.floor(rng() * 21);
-      const maxMoves = Math.max(minMoves, category <= 2 ? 20 : 34);
-      const result = await solverWeightedPosition(solver, maxMoves, rng);
+      const rawMinMoves = 7 + Math.floor(rng() * 21);
+      const maxMoves = category <= 2 ? 20 : Math.max(rawMinMoves, 34);
+      const minMoves = Math.min(rawMinMoves, maxMoves);
 
-      if (!result) continue; // board filled with no legal moves
-      const { moveString, trace } = result;
-      if (moveString.length < minMoves) { stats.tooShort++; continue; }
+      let matchedCorrectCols = null;
+      const onPosition = (ms, sc) => {
+        if (ms.length < minMoves) return false;
+        const { passes, correctCols } = checkPredicate(category, ms, sc);
+        if (!passes) return false;
+        if (!isClean(category, sc, ms.length)) return false;
+        matchedCorrectCols = correctCols;
+        return true;
+      };
 
-      let scores;
-      try {
-        scores = await solver.query(moveString);
-      } catch {
+      const result = await solverWeightedPosition(solver, maxMoves, rng, onPosition);
+      if (!result) { stats.noMatch++; continue; }
+
+      const { moveString, scores, trace } = result;
+      const correctCols = matchedCorrectCols;
+
+      const tags = [];
+      if (correctCols.length > 0) {
+        const cls = classify(moveString, correctCols[0], scores);
+        if (cls?.tag) tags.push(cls.tag);
+      }
+
+      const highlight_cells = await computeHighlightCells(category, moveString, scores, correctCols, solver);
+      if (highlight_cells === null) {
+        stats.depthFilter++;
+        if (category === 5) {
+          const heights = getHeights(moveString);
+          const legalScores = scores.filter((_, c) => heights[c] < ROWS);
+          const maxS = Math.max(...legalScores);
+          const R = (43 - 2 * Math.abs(maxS)) - moveString.length;
+          console.log(`  [cat5 depth-filter] moves=${moveString.length} maxScore=${maxS} R=${R} scores=[${scores.join(',')}]`);
+        }
         continue;
       }
-      if (!scores || scores.length !== COLS) continue;
 
-      // Check predicate at this position
-      const { passes, correctCols } = checkPredicate(category, moveString, scores);
-      if (!passes) { stats.predicateFail++; }
-      else if (!isClean(category, scores, moveString.length)) { stats.notClean++; }
-      else {
-        const tags = [];
-        if (correctCols.length > 0) {
-          const cls = classify(moveString, correctCols[0], scores);
-          if (cls?.tag) tags.push(cls.tag);
-        }
-        const highlight_cells = await computeHighlightCells(category, moveString, scores, correctCols, solver);
-        if (highlight_cells === null) {
-          stats.depthFilter++;
-          // Log details when cat 5 depth filter rejects a valid zugzwang
-          if (category === 5) {
-            const heights = Array(COLS).fill(0);
-            for (const ch of moveString) heights[parseInt(ch, 10) - 1]++;
-            const legalScores = scores.filter((_, c) => heights[c] < ROWS);
-            const maxS = Math.max(...legalScores);
-            const R = (43 - 2 * Math.abs(maxS)) - moveString.length;
-            console.log(`  [cat5 depth-filter] moves=${moveString.length} maxScore=${maxS} R=${R} scores=[${scores.join(',')}]`);
-          }
-          continue;
-        }
-        stats.accepted++;
-        candidates.push({
-          category,
-          move_string: moveString,
-          solver_scores: scores,
-          classifier_tags: tags,
-          debug_trace: trace,
-          highlight_cells,
-        });
-      }
+      stats.accepted++;
+      candidates.push({
+        category,
+        move_string: moveString,
+        solver_scores: scores,
+        classifier_tags: tags,
+        debug_trace: trace,
+        highlight_cells,
+      });
 
       const now = Date.now();
       if (now - lastLogTime >= LOG_INTERVAL_MS) {
@@ -425,7 +427,7 @@ export async function generateCandidates(category, count, seed) {
         const elapsed = ((now - t0) / 1000).toFixed(1);
         console.log(
           `[generateCandidates cat=${category}] ${elapsed}s | attempt=${attempts}/${MAX_ATTEMPTS} found=${candidates.length}/${count}` +
-          ` | rejected: tooShort=${stats.tooShort} predicateFail=${stats.predicateFail} notClean=${stats.notClean} depthFilter=${stats.depthFilter}`
+          ` | noMatch=${stats.noMatch} depthFilter=${stats.depthFilter}`
         );
       }
     }
@@ -436,7 +438,7 @@ export async function generateCandidates(category, count, seed) {
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(
     `[generateCandidates cat=${category}] DONE ${elapsed}s | attempts=${attempts} found=${candidates.length}/${count}` +
-    ` | rejected: tooShort=${stats.tooShort} predicateFail=${stats.predicateFail} notClean=${stats.notClean} depthFilter=${stats.depthFilter}`
+    ` | noMatch=${stats.noMatch} depthFilter=${stats.depthFilter}`
   );
 
   return { candidates, seed: usedSeed, durationMs: Date.now() - t0 };

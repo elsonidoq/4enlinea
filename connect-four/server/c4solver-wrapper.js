@@ -39,7 +39,15 @@ export function createSolverProcess() {
     query(moveString) {
       pending = pending.then(() =>
         new Promise((resolve, reject) => {
-          queue.push({ resolve, reject });
+          const startTime = Date.now();
+          queue.push({
+            resolve: (result) => {
+              const elapsed = Date.now() - startTime;
+              console.log(`[solver.query] moveString="${moveString}" took ${elapsed}ms`);
+              resolve(result);
+            },
+            reject,
+          });
           process.stdin.write(moveString + '\n');
         })
       );
