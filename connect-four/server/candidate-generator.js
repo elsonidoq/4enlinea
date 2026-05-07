@@ -195,53 +195,64 @@ function getForcedBlock(moveString, scores) {
 // Case A is the terminal: after any Yellow move Red wins immediately (sign-flip: oiw1 = -winScore2).
 // Case B recurses, building up forced moves until Case A is reached.
 async function traceZugzwang(ms, redCol, depth, solver) {
+  const indent = '  '.repeat(depth);
+  console.log(`${indent}[depth=${depth}] traceZugzwang ms="${ms}" redCol=${redCol+1}`);
+
   const ms1 = ms + (redCol + 1);
-  if (isGameOver(ms1)) return null;
+  if (isGameOver(ms1)) { console.log(`${indent}  → game over after redCol, return null`); return null; }
   let scores1;
-  try { scores1 = await solver.query(ms1); } catch { return null; }
+  try { scores1 = await solver.query(ms1); } catch { console.log(`${indent}  → solver error, return null`); return null; }
 
   const oiw1 = -Math.floor((41 - ms1.length) / 2);
   const heights1 = getHeights(ms1);
+  console.log(`${indent}  ms1="${ms1}" oiw1=${oiw1} scores1=[${scores1.join(', ')}]`);
 
-  // Classify each legal Yellow col
-  const betterCols = []; // score > oiw1
+  // Classify each legal opponent col.
+  // score >= oiw1: opponent has at least one immediate threat to deal with (possible forced block).
+  // score < oiw1: initiator already has multiple threats — no block is possible.
+  const betterCols = [];
   let allForced = true;
   let hasLegal = false;
   for (let c = 0; c < COLS; c++) {
     if (heights1[c] >= ROWS) continue;
     hasLegal = true;
-    if (scores1[c] > oiw1) { betterCols.push(c); allForced = false; }
-    // scores1[c] === oiw1: immediate loss for Yellow — counted toward "allForced"
+    if (scores1[c] >= oiw1) { betterCols.push(c); allForced = false; }
   }
+  console.log(`${indent}  allForced=${allForced} betterCols(1-indexed)=[${betterCols.map(x=>x+1).join(', ')}]`);
   if (!hasLegal) return null;
 
-  // Case A: all Yellow legal cols == oiw1 → double/multi-threat terminal
+  // Case A: all opponent cols score < oiw1 → multi-threat terminal, initiator wins after any reply.
+  // Find initiator's immediate winning threat directly on the board: the opponent is forced to
+  // play into that column, and the initiator wins by playing there next (one row higher).
   if (allForced) {
-    // After any Yellow move Red wins immediately (sign-flip: oiw1 = -immediateWinScore(ms2))
-    for (let c = 0; c < COLS; c++) {
-      if (heights1[c] >= ROWS) continue;
-      const ms2 = ms1 + (c + 1);
-      if (isGameOver(ms2)) continue;
-      let scores2;
-      try { scores2 = await solver.query(ms2); } catch { continue; }
-      const ws2 = immediateWinScore(ms2.length);
-      const heights2 = getHeights(ms2);
-      for (let wc = 0; wc < COLS; wc++) {
-        if (heights2[wc] < ROWS && ws2 > 0 && scores2[wc] >= ws2) {
-          return [redCol, c, wc]; // found: Red played redCol, Yellow played c, Red wins at wc
-        }
+    console.log(`${indent}  → Case A`);
+    const board1 = buildBoard(ms1);
+    const redPlayer = ms.length % 2 === 0 ? 1 : 2;
+    for (let wc = 0; wc < COLS; wc++) {
+      if (heights1[wc] >= ROWS) continue;
+      board1[heights1[wc]][wc] = redPlayer;
+      const wins = checkWin(board1, heights1[wc], wc, redPlayer);
+      board1[heights1[wc]][wc] = 0;
+      if (wins) {
+        console.log(`${indent}    Red threat at col ${wc+1}, opponent forced there, initiator wins`);
+        return [redCol, wc, wc];
       }
     }
+    console.log(`${indent}  → Case A: no direct threat found, return null`);
     return null;
   }
 
-  // Case B: exactly one Yellow col better than immediate loss → forced block, recurse
-  if (betterCols.length !== 1) return null;
+  // Case B: exactly one opponent col avoids immediate multi-threat → forced block, recurse.
+  if (betterCols.length !== 1) {
+    console.log(`${indent}  → Case B fail: ${betterCols.length} betterCols, return null`);
+    return null;
+  }
   const yellowCol = betterCols[0];
+  console.log(`${indent}  → Case B: forced block col ${yellowCol+1}`);
 
   const ms2 = ms1 + (yellowCol + 1);
-  if (isGameOver(ms2)) return null;
-  if (depth >= 4) return null;
+  if (isGameOver(ms2)) { console.log(`${indent}  → game over after forced block, return null`); return null; }
+  if (depth >= 4) { console.log(`${indent}  → max depth, return null`); return null; }
 
   const heights2 = getHeights(ms2);
   for (let c = 0; c < COLS; c++) {
@@ -249,17 +260,23 @@ async function traceZugzwang(ms, redCol, depth, solver) {
     const subTrace = await traceZugzwang(ms2, c, depth + 1, solver);
     if (subTrace !== null) return [redCol, yellowCol, ...subTrace];
   }
+  console.log(`${indent}  → no sub-trace found, return null`);
   return null;
 }
 
-// Cat 5 predicate: exactly one Red column initiates a valid zugzwang sequence.
+// Cat 5 predicate: exactly one column initiates a valid zugzwang sequence.
 export async function checkCat5Predicate(ms, solver) {
   const heights = getHeights(ms);
+  const redPlayer = ms.length % 2 === 0 ? 1 : 2;
   const correctCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] >= ROWS) continue;
     const trace = await traceZugzwang(ms, c, 1, solver);
-    if (trace !== null) correctCols.push(c);
+    if (trace === null) continue;
+    let msEnd = ms;
+    for (const col of trace) msEnd += (col + 1);
+    const boardEnd = buildBoard(msEnd);
+    if (boardEnd && hasWon(boardEnd, redPlayer)) correctCols.push(c);
   }
   return { passes: correctCols.length === 1, correctCols };
 }
@@ -291,8 +308,8 @@ export async function checkCat7Predicate(ms, solver) {
   };
 }
 
-// T023: Cat 5 Zugzwang highlight — trace forced sequence from Red's initiating move.
-async function computeCat5Highlight(solver, moveString, correctCols) {
+// T023: Cat 5 Zugzwang highlight — trace forced sequence from the initiating move.
+export async function computeCat5Highlight(solver, moveString, correctCols) {
   if (correctCols.length === 0) return [];
 
   const redCol = correctCols[0];

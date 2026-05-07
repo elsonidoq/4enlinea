@@ -22,6 +22,7 @@
 #include <string>
 #include <cstdint>
 #include <cassert>
+#include <iostream>
 
 namespace GameSolver {
 namespace Connect4 {
@@ -124,7 +125,22 @@ class Position {
   unsigned int play(const std::string &seq) {
     for(unsigned int i = 0; i < seq.size(); i++) {
       int col = seq[i] - '1';
-      if(col < 0 || col >= Position::WIDTH || !canPlay(col) || isWinningMove(col)) return i; // invalid move
+      if(col < 0) {
+        std::cerr << "Invalid move at position " << i << ": column index out of range (negative)" << std::endl;
+        return i;
+      }
+      if(col >= Position::WIDTH) {
+        std::cerr << "Invalid move at position " << i << ": column index " << (col + 1) << " out of range (>= WIDTH=" << Position::WIDTH << ")" << std::endl;
+        return i;
+      }
+      if(!canPlay(col)) {
+        std::cerr << "Invalid move at position " << i << ": column " << (col + 1) << " is full" << std::endl;
+        return i;
+      }
+      if(isWinningMove(col)) {
+        std::cerr << "Invalid move at position " << i << ": move in column " << (col + 1) << " would create a winning alignment" << std::endl;
+        return i;
+      }
       playCol(col);
     }
     return seq.size();
