@@ -43,7 +43,7 @@ export function createSolverProcess() {
           queue.push({
             resolve: (result) => {
               const elapsed = Date.now() - startTime;
-              console.log(`[solver.query] moveString="${moveString}" took ${elapsed}ms`);
+              // console.log(`[solver.query] moveString="${moveString}" took ${elapsed}ms`);
               resolve(result);
             },
             reject,

@@ -9,6 +9,7 @@ import { assignHeatmaps } from './heatmap.js';
 import { classify } from './classifier.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
+import { checkCat5Predicate, checkCat7Predicate } from './candidate-generator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -854,14 +855,39 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
 
   const { data, error, count } = await supabase
     .from('candidates')
-    .select('id, category, move_string, solver_scores, classifier_tags, status, created_at, debug_trace, highlight_cells', { count: 'exact' })
+    .select('id, category, move_string, solver_scores, classifier_tags, status, rejection_reason, created_at, debug_trace, highlight_cells', { count: 'exact' })
     .eq('category', category)
     .eq('status', status)
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1);
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ candidates: data || [], total: count ?? 0 });
+
+  res.set('Cache-Control', 'no-store');
+  let candidates = data || [];
+
+  if (status === 'rejected' && candidates.length > 0) {
+    const candidateIds = candidates.map(c => c.id);
+    const { data: fpRecords } = await supabase
+      .from('false_positive_records')
+      .select('candidate_id, annotator_note')
+      .in('candidate_id', candidateIds);
+    const fpMap = Object.fromEntries((fpRecords ?? []).map(r => [r.candidate_id, r.annotator_note]));
+    candidates = candidates.map(c => ({ ...c, annotator_note: fpMap[c.id] ?? null }));
+  }
+
+  if (status === 'approved' && candidates.length > 0) {
+    const moveStrings = candidates.map(c => c.move_string);
+    const { data: puzzles } = await supabase
+      .from('puzzles')
+      .select('move_string, goal_prompt, difficulty, cooperative_ai_moves')
+      .in('move_string', moveStrings)
+      .eq('is_active', true);
+    const puzzleMap = Object.fromEntries((puzzles ?? []).map(p => [p.move_string, p]));
+    candidates = candidates.map(c => ({ ...c, ...(puzzleMap[c.move_string] ?? {}) }));
+  }
+
+  res.json({ candidates, total: count ?? 0 });
 });
 
 // T009: POST /api/admin/candidates/reject-batch
@@ -910,9 +936,19 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   }
 
   const classResult = classify(preClickMoves, candidateCol, scores);
-  const puzzle = { category, moveString: preClickMoves };
-  const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
-  const predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
+
+  let predicatePass;
+  if (category === 5) {
+    const { correctCols } = await checkCat5Predicate(preClickMoves, solver);
+    predicatePass = correctCols.includes(candidateCol);
+  } else if (category === 7) {
+    const { correctCols } = await checkCat7Predicate(preClickMoves, solver);
+    predicatePass = correctCols.includes(candidateCol);
+  } else {
+    const puzzle = { category, moveString: preClickMoves };
+    const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
+    predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
+  }
 
   res.json({
     scores,
@@ -941,7 +977,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
     .single();
 
   if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
-  if (candidate.status !== 'pending') return res.status(409).json({ error: 'candidate already reviewed' });
+  if (candidate.status === 'approved') return res.status(409).json({ error: 'candidate already approved' });
 
   // Validate cooperative_ai_moves for multi-move categories
   if ([4, 6].includes(candidate.category) && cooperative_ai_moves.length === 0) {
@@ -995,7 +1031,9 @@ app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) 
     .single();
 
   if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
-  if (candidate.status !== 'pending') return res.status(409).json({ error: 'candidate already reviewed' });
+  if (candidate.status === 'approved') {
+    await supabase.from('puzzles').update({ is_active: false }).eq('move_string', candidate.move_string);
+  }
 
   const { error: updateErr } = await supabase
     .from('candidates')
@@ -1024,6 +1062,29 @@ app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) 
   const resp = { candidate_id: id };
   if (falsePositiveId) resp.false_positive_record_id = falsePositiveId;
   res.json(resp);
+});
+
+// DELETE /api/admin/candidates/:id — permanently delete a candidate; deactivates puzzle if approved
+app.delete('/api/admin/candidates/:id', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { id } = req.params;
+
+  const { data: candidate, error: fetchErr } = await supabase
+    .from('candidates')
+    .select('id, status, move_string')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
+
+  if (candidate.status === 'approved') {
+    await supabase.from('puzzles').update({ is_active: false }).eq('move_string', candidate.move_string);
+  }
+
+  const { error: deleteErr } = await supabase.from('candidates').delete().eq('id', id);
+  if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+  res.status(204).end();
 });
 
 // T015: GET /api/admin/false-positives

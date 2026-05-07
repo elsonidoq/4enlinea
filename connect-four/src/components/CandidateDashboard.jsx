@@ -139,7 +139,7 @@ export function CandidateDashboard({ onSelectCategory }) {
                         </button>
                         {row.pending > 0 ? (
                           <>
-                            <button style={reviewBtn} onClick={() => onSelectCategory(row.category)}>
+                            <button style={reviewBtn} onClick={() => onSelectCategory(row.category, 'pending')}>
                               Review ({row.pending})
                             </button>
                             <button style={rejectAllBtn} onClick={() => handleRejectAll(row.category)}>
@@ -148,6 +148,20 @@ export function CandidateDashboard({ onSelectCategory }) {
                           </>
                         ) : (
                           <button style={reviewBtnDisabled} disabled>Review</button>
+                        )}
+                        {row.approved > 0 ? (
+                          <button style={reviewApprovedBtn} onClick={() => onSelectCategory(row.category, 'approved')}>
+                            Approved ({row.approved})
+                          </button>
+                        ) : (
+                          <button style={reviewBtnDisabled} disabled>Approved</button>
+                        )}
+                        {row.rejected > 0 ? (
+                          <button style={reviewRejectedBtn} onClick={() => onSelectCategory(row.category, 'rejected')}>
+                            Rejected ({row.rejected})
+                          </button>
+                        ) : (
+                          <button style={reviewBtnDisabled} disabled>Rejected</button>
                         )}
                       </div>
                     </td>
@@ -218,6 +232,8 @@ const genBtn = { padding: '5px 10px', borderRadius: 6, border: 'none', backgroun
 const reviewBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const reviewBtnDisabled = { ...reviewBtn, opacity: 0.4, cursor: 'default' };
 const rejectAllBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(239,68,68,.3)', background: 'transparent', color: 'var(--red)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const reviewApprovedBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(34,197,94,.3)', background: 'transparent', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const reviewRejectedBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(239,68,68,.3)', background: 'transparent', color: 'var(--red)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const genForm = { display: 'flex', gap: 8, alignItems: 'center' };
 const numInput = { width: 120, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' };
 const confirmGenBtn = { padding: '7px 14px', borderRadius: 6, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };

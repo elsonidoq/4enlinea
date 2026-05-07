@@ -158,55 +158,167 @@ function computeCat4Highlight(moveString, correctCols) {
   return [setupCell, forkCell, ...threatCells];
 }
 
-// T023: Cat 5 Zugzwang depth filter + PV trace (FR-015b/c)
-// Returns null if depth filter R > 6 (candidate should be discarded)
-async function computeCat5Highlight(solver, moveString, scores) {
-  const heights = getHeights(moveString);
+// Returns the single forced-block column for the current player, or null if not strictly forced.
+// "Forced" means exactly one legal col has score > opponentImmediateWin (the blocking col,
+// which may still be a losing score — Yellow is losing but not immediately) and all others
+// equal opponentImmediateWin (Red wins immediately if Yellow plays there).
+// Note: the blocking col score must be NEGATIVE (< 0) for Red to be winning at ms2.
+// Using >= 0 was wrong: it required Yellow to be non-losing, making Red unable to win at ms2.
+function getForcedBlock(moveString, scores) {
   const moveCount = moveString.length;
-  const legalScores = [];
-  for (let c = 0; c < COLS; c++) {
-    if (heights[c] < ROWS) legalScores.push(scores[c]);
-  }
-  if (legalScores.length === 0) return null;
-  const maxScore = Math.max(...legalScores);
-  const R = (43 - 2 * Math.abs(maxScore)) - moveCount;
-  if (R > 6) return null;
+  const heights = getHeights(moveString);
+  const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
 
-  const K = 6;
+  const betterThanImmediateLoss = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] >= ROWS) continue;
+    if (scores[c] > opponentImmediateWin) {
+      betterThanImmediateLoss.push(c);
+    }
+    // scores[c] === opponentImmediateWin: immediate loss — skip
+    // scores[c] < opponentImmediateWin: impossible for legal cols, skip
+  }
+  if (betterThanImmediateLoss.length !== 1) return null;
+  return betterThanImmediateLoss[0];
+}
+
+// Recursively trace a zugzwang sequence starting with Red playing redCol on ms.
+// Returns an array [redCol, yellowCol, ..., finalWinnerCol] or null.
+// depth = number of Red plays so far (starts at 1, max 4).
+//
+// Two cases after Red plays redCol → ms1 (Yellow's turn):
+//   Case A (double/multi-threat terminal): ALL Yellow legal cols score == oiw1.
+//     Yellow plays any col → ms2 → Red wins immediately.  ← terminal
+//   Case B (single forced block): EXACTLY ONE Yellow col scores > oiw1, others == oiw1.
+//     Yellow must play that col → ms2 → recurse at ms2.
+//
+// Case A is the terminal: after any Yellow move Red wins immediately (sign-flip: oiw1 = -winScore2).
+// Case B recurses, building up forced moves until Case A is reached.
+async function traceZugzwang(ms, redCol, depth, solver) {
+  const ms1 = ms + (redCol + 1);
+  if (isGameOver(ms1)) return null;
+  let scores1;
+  try { scores1 = await solver.query(ms1); } catch { return null; }
+
+  const oiw1 = -Math.floor((41 - ms1.length) / 2);
+  const heights1 = getHeights(ms1);
+
+  // Classify each legal Yellow col
+  const betterCols = []; // score > oiw1
+  let allForced = true;
+  let hasLegal = false;
+  for (let c = 0; c < COLS; c++) {
+    if (heights1[c] >= ROWS) continue;
+    hasLegal = true;
+    if (scores1[c] > oiw1) { betterCols.push(c); allForced = false; }
+    // scores1[c] === oiw1: immediate loss for Yellow — counted toward "allForced"
+  }
+  if (!hasLegal) return null;
+
+  // Case A: all Yellow legal cols == oiw1 → double/multi-threat terminal
+  if (allForced) {
+    // After any Yellow move Red wins immediately (sign-flip: oiw1 = -immediateWinScore(ms2))
+    for (let c = 0; c < COLS; c++) {
+      if (heights1[c] >= ROWS) continue;
+      const ms2 = ms1 + (c + 1);
+      if (isGameOver(ms2)) continue;
+      let scores2;
+      try { scores2 = await solver.query(ms2); } catch { continue; }
+      const ws2 = immediateWinScore(ms2.length);
+      const heights2 = getHeights(ms2);
+      for (let wc = 0; wc < COLS; wc++) {
+        if (heights2[wc] < ROWS && ws2 > 0 && scores2[wc] >= ws2) {
+          return [redCol, c, wc]; // found: Red played redCol, Yellow played c, Red wins at wc
+        }
+      }
+    }
+    return null;
+  }
+
+  // Case B: exactly one Yellow col better than immediate loss → forced block, recurse
+  if (betterCols.length !== 1) return null;
+  const yellowCol = betterCols[0];
+
+  const ms2 = ms1 + (yellowCol + 1);
+  if (isGameOver(ms2)) return null;
+  if (depth >= 4) return null;
+
+  const heights2 = getHeights(ms2);
+  for (let c = 0; c < COLS; c++) {
+    if (heights2[c] >= ROWS) continue;
+    const subTrace = await traceZugzwang(ms2, c, depth + 1, solver);
+    if (subTrace !== null) return [redCol, yellowCol, ...subTrace];
+  }
+  return null;
+}
+
+// Cat 5 predicate: exactly one Red column initiates a valid zugzwang sequence.
+export async function checkCat5Predicate(ms, solver) {
+  const heights = getHeights(ms);
+  const correctCols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] >= ROWS) continue;
+    const trace = await traceZugzwang(ms, c, 1, solver);
+    if (trace !== null) correctCols.push(c);
+  }
+  return { passes: correctCols.length === 1, correctCols };
+}
+
+// Cat 7 predicate: at least one column is forbidden (opponent wins immediately after it).
+export async function checkCat7Predicate(ms, solver) {
+  const heights = getHeights(ms);
+  const legalCols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] < ROWS) legalCols.push(c);
+  }
+  if (legalCols.length === 0) return { passes: false, correctCols: [] };
+
+  const forbiddenCols = [];
+  for (const c of legalCols) {
+    const ms1 = ms + (c + 1);
+    let scores1;
+    try { scores1 = await solver.query(ms1); } catch { continue; }
+    const winScore = immediateWinScore(ms1.length);
+    if (winScore > 0 && Math.max(...scores1) >= winScore) {
+      forbiddenCols.push(c);
+    }
+  }
+
+  const safeCols = legalCols.filter(c => !forbiddenCols.includes(c));
+  return {
+    passes: forbiddenCols.length >= 1 && safeCols.length >= 1,
+    correctCols: safeCols,
+  };
+}
+
+// T023: Cat 5 Zugzwang highlight — trace forced sequence from Red's initiating move.
+async function computeCat5Highlight(solver, moveString, correctCols) {
+  if (correctCols.length === 0) return [];
+
+  const redCol = correctCols[0];
+  const trace = await traceZugzwang(moveString, redCol, 1, solver);
+  if (!trace) return [];
+
   const cells = [];
   let ms = moveString;
 
-  function argmaxLegal(sc, moveStr) {
-    const h = getHeights(moveStr);
-    let best = null;
-    for (let c = 0; c < COLS; c++) {
-      if (h[c] >= ROWS) continue;
-      if (best === null || sc[c] > sc[best]) { best = c; continue; }
-      if (sc[c] === sc[best]) {
-        const da = Math.abs(c - 3), db = Math.abs(best - 3);
-        if (da < db || (da === db && c < best)) best = c;
-      }
+  for (let i = 0; i < trace.length; i++) {
+    const col = trace[i];
+    const h = getHeights(ms);
+    if (h[col] >= ROWS) break;
+
+    const isLast = (i === trace.length - 1);
+    const isRedTurn = (i % 2 === 0);
+
+    if (isLast) {
+      cells.push({ col, row: h[col], role: 'winner' });
+    } else if (isRedTurn) {
+      cells.push({ col, row: h[col], role: 'hint' });
+    } else {
+      cells.push({ col, row: h[col], role: 'loser' });
     }
-    return best;
-  }
 
-  while (cells.length < K) {
-    let sc;
-    try { sc = await solver.query(ms); } catch { break; }
-    const loserCol = argmaxLegal(sc, ms);
-    if (loserCol === null) break;
-    cells.push({ col: loserCol, row: getHeights(ms)[loserCol], role: 'loser' });
-    ms += (loserCol + 1).toString();
-    if (isGameOver(ms)) break;
-    if (cells.length >= K) break;
-
-    let sc2;
-    try { sc2 = await solver.query(ms); } catch { break; }
-    const winnerCol = argmaxLegal(sc2, ms);
-    if (winnerCol === null) break;
-    cells.push({ col: winnerCol, row: getHeights(ms)[winnerCol], role: 'winner' });
-    ms += (winnerCol + 1).toString();
-    if (isGameOver(ms)) break;
+    ms += (col + 1);
   }
 
   return cells;
@@ -246,25 +358,20 @@ function computeCat6Highlight(moveString) {
   return cells;
 }
 
-// T025: Cat 7 — first forbidden column hint
-function computeCat7Highlight(moveString, scores) {
+// T025: Cat 7 — safe column hint (correctCols[0] is the safe col to play)
+function computeCat7Highlight(moveString, correctCols) {
+  if (correctCols.length === 0) return [];
   const heights = getHeights(moveString);
-  const moveCount = moveString.length;
-  const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
-  for (let c = 0; c < COLS; c++) {
-    if (heights[c] < ROWS && scores[c] === opponentWinScore) {
-      return [{ col: c, row: heights[c], role: 'hint' }];
-    }
-  }
-  return [];
+  const col = correctCols[0];
+  return [{ col, row: heights[col], role: 'hint' }];
 }
 
 async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
   if (category >= 1 && category <= 3) return computeCat123Highlight(moveString, correctCols);
   if (category === 4) return computeCat4Highlight(moveString, correctCols);
-  if (category === 5) return computeCat5Highlight(solver, moveString, scores);
+  if (category === 5) return computeCat5Highlight(solver, moveString, correctCols);
   if (category === 6) return computeCat6Highlight(moveString);
-  if (category === 7) return computeCat7Highlight(moveString, scores);
+  if (category === 7) return computeCat7Highlight(moveString, correctCols);
   return [];
 }
 
@@ -289,7 +396,7 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 
     const scores = await solver.query(moveString);
 
-    if (onPosition(moveString, scores)) {
+    if (await onPosition(moveString, scores)) {
       return { moveString, scores, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'predicate_match', plies } };
     }
 
@@ -313,7 +420,10 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols }.
-function checkPredicate(category, moveString, scores) {
+async function checkPredicate(category, moveString, scores, solver) {
+  if (category === 5) return checkCat5Predicate(moveString, solver);
+  if (category === 7) return checkCat7Predicate(moveString, solver);
+
   const puzzle = { category, moveString };
   const heights = getHeights(moveString);
   const legalCols = [];
@@ -322,18 +432,7 @@ function checkPredicate(category, moveString, scores) {
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  if (category === 7) {
-    // Cat 7: passes if ≥1 forbidden column AND ≥1 safe column
-    const result = evaluatePredicate(puzzle, legalCols[0], scores);
-    const forbidden = result.forbiddenCols ?? [];
-    const safeCols = legalCols.filter(c => !forbidden.includes(c));
-    return {
-      passes: forbidden.length >= 1 && safeCols.length >= 1,
-      correctCols: safeCols,
-    };
-  }
-
-  // Cats 1–6: exactly one legal column must return 'correct'
+  // Cats 1–4, 6: exactly one legal column must return 'correct'
   const correctCols = legalCols.filter(c => {
     const r = evaluatePredicate(puzzle, c, scores);
     return r.result === 'correct';
@@ -372,14 +471,14 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const rawMinMoves = 7 + Math.floor(rng() * 21);
+      const rawMinMoves = 14 + Math.floor(rng() * 21);
       const maxMoves = category <= 2 ? 20 : Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
       let matchedCorrectCols = null;
-      const onPosition = (ms, sc) => {
+      const onPosition = async (ms, sc) => {
         if (ms.length < minMoves) return false;
-        const { passes, correctCols } = checkPredicate(category, ms, sc);
+        const { passes, correctCols } = await checkPredicate(category, ms, sc, solver);
         if (!passes) return false;
         if (!isClean(category, sc, ms.length)) return false;
         matchedCorrectCols = correctCols;
@@ -401,13 +500,6 @@ export async function generateCandidates(category, count, seed) {
       const highlight_cells = await computeHighlightCells(category, moveString, scores, correctCols, solver);
       if (highlight_cells === null) {
         stats.depthFilter++;
-        if (category === 5) {
-          const heights = getHeights(moveString);
-          const legalScores = scores.filter((_, c) => heights[c] < ROWS);
-          const maxS = Math.max(...legalScores);
-          const R = (43 - 2 * Math.abs(maxS)) - moveString.length;
-          console.log(`  [cat5 depth-filter] moves=${moveString.length} maxScore=${maxS} R=${R} scores=[${scores.join(',')}]`);
-        }
         continue;
       }
 

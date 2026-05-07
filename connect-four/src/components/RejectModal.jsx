@@ -9,11 +9,19 @@ const REASONS = [
   { value: 'other', label: 'Other' },
 ];
 
-export function RejectModal({ candidateId, onConfirm, onClose }) {
-  const [reason, setReason] = useState('not_educational');
-  const [note, setNote] = useState('');
+export function RejectModal({ candidateId, initialReason, initialNote, onConfirm, onClose }) {
+  const [reason, setReason] = useState(initialReason || 'not_educational');
+  const [note, setNote] = useState(initialNote || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (initialReason) setReason(initialReason);
+  }, [initialReason]);
+
+  useEffect(() => {
+    setNote(initialNote || '');
+  }, [initialNote]);
 
   useEffect(() => {
     function onKey(e) {

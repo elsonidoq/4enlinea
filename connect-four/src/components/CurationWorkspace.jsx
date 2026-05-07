@@ -23,7 +23,7 @@ const GOAL_PROMPTS = {
   2: "Block your opponent's threat.",
   3: 'Find the move that creates two simultaneous threats.',
   4: 'Set up a fork — a sequence that leads to two unstoppable threats.',
-  5: 'Any move your opponent makes leads to their loss. Make your move.',
+  5: 'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
   6: 'Control the parity of this column to secure the win.',
   7: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
 };
@@ -79,21 +79,23 @@ function deriveHighlightCol(category, scores, moveString) {
       return nonWinPos.reduce((best, i) => scores[i] > scores[best] ? i : best);
     }
     case 5: {
+      // highlight_cells from DB is the authoritative source; this fallback just picks max score
       const maxScore = Math.max(...legalCols.map(i => scores[i]));
       return legalCols.find(i => scores[i] === maxScore) ?? null;
     }
     case 7: {
+      // hint is the SAFE column — find the first col that is NOT forbidden
       const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
-      const forbidden = legalCols.filter(i => scores[i] === opponentWinScore);
-      if (forbidden.length > 0 && forbidden.length < legalCols.length) return forbidden[0];
-      return null;
+      const forbidden = new Set(legalCols.filter(i => scores[i] === opponentWinScore));
+      const safe = legalCols.find(i => !forbidden.has(i));
+      return safe ?? null;
     }
     default:
       return null;
   }
 }
 
-export function CurationWorkspace({ category, onBack }) {
+export function CurationWorkspace({ category, status = 'pending', onBack }) {
   const [candidates, setCandidates] = useState([]);
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -121,14 +123,14 @@ export function CurationWorkspace({ category, onBack }) {
   const [showTrace, setShowTrace] = useState(false);
 
   const candidate = candidates[idx] ?? null;
-  const remaining = candidates.length - idx;
+
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API}/api/admin/candidates?category=${category}&status=pending&limit=100`);
+        const res = await fetch(`${API}/api/admin/candidates?category=${category}&status=${status}&limit=100`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Failed to load');
         setCandidates(data.candidates ?? []);
@@ -139,7 +141,7 @@ export function CurationWorkspace({ category, onBack }) {
       }
     }
     load();
-  }, [category]);
+  }, [category, status]);
 
   // Reset per-candidate state when moving to next
   useEffect(() => {
@@ -150,11 +152,11 @@ export function CurationWorkspace({ category, onBack }) {
     setShowApprove(false);
     setShowReject(false);
     setShowTrace(false);
-    setGoalPrompt(GOAL_PROMPTS[category] ?? '');
-    setDifficulty(2);
+    setGoalPrompt(candidate?.goal_prompt ?? GOAL_PROMPTS[category] ?? '');
+    setDifficulty(candidate?.difficulty ?? 2);
     setCooperativeAiMoves([]);
     setApproveError(null);
-  }, [idx, category]);
+  }, [candidate?.id, category]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -202,7 +204,7 @@ export function CurationWorkspace({ category, onBack }) {
         body: JSON.stringify({ goal_prompt: goalPrompt, difficulty, cooperative_ai_moves: cooperativeAiMoves }),
       });
       const data = await res.json();
-      if (res.status === 409) { setApproveError('Already reviewed'); return; }
+      if (res.status === 409) { setApproveError(data.error ?? 'Already reviewed'); return; }
       if (!res.ok) { setApproveError(data.error ?? 'Approve failed'); return; }
       advanceToNext();
     } catch (e) {
@@ -212,8 +214,26 @@ export function CurationWorkspace({ category, onBack }) {
     }
   }
 
+  function removeCandidate(id) {
+    setCandidates(prev => prev.filter(c => c.id !== id));
+  }
+
   function advanceToNext() {
-    setIdx(i => i + 1);
+    const id = candidate?.id;
+    if (id) removeCandidate(id);
+  }
+
+  async function handleDelete() {
+    if (!candidate) return;
+    if (!confirm('Permanently delete this candidate?')) return;
+    const id = candidate.id;
+    try {
+      const res = await fetch(`${API}/api/admin/candidates/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json(); alert(d.error ?? 'Delete failed'); return; }
+      removeCandidate(id);
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   if (loading) return <div style={emptyState}>Loading candidates…</div>;
@@ -240,9 +260,13 @@ export function CurationWorkspace({ category, onBack }) {
   if (candidate.highlight_cells && candidate.highlight_cells.length > 0) {
     let stepIdx = 0;
     for (const { col, row, role } of candidate.highlight_cells) {
-      const isSequenceStep = role === 'loser' || role === 'winner';
+      const isSequenceStep = role === 'hint' || role === 'loser' || role === 'winner';
       const step = isSequenceStep ? ++stepIdx : null;
-      highlightedCells.push([row, col, role, step]);
+      // Alternate red/yellow by step parity: odd = red (loser), even = yellow (winner)
+      const effectiveRole = isSequenceStep && step !== null
+        ? (step % 2 === 1 ? 'loser' : 'winner')
+        : role;
+      highlightedCells.push([row, col, effectiveRole, step]);
     }
   } else if (highlightCol !== null && heights[highlightCol] < ROWS) {
     highlightedCells.push([heights[highlightCol], highlightCol, 'hint']);
@@ -256,6 +280,8 @@ export function CurationWorkspace({ category, onBack }) {
       {showReject && (
         <RejectModal
           candidateId={candidate.id}
+          initialReason={candidate.rejection_reason}
+          initialNote={candidate.annotator_note}
           onConfirm={advanceToNext}
           onClose={() => setShowReject(false)}
         />
@@ -263,10 +289,16 @@ export function CurationWorkspace({ category, onBack }) {
 
       <div style={topBar}>
         <button style={backBtn} onClick={onBack}>← Dashboard</button>
-        <div style={progress}>
-          {remaining} remaining
-          {candidates.length === 0 && ' — '}
-          {remaining === 0 && <span style={{ color: 'var(--text-muted)' }}> — <button style={linkBtn} onClick={onBack}>generate more</button></span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {status !== 'pending' && (
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: status === 'approved' ? 'var(--green)' : 'var(--red)' }}>
+              {status === 'approved' ? 'Reviewing Approved' : 'Reviewing Rejected'}
+            </span>
+          )}
+          <div style={progress}>
+            {candidates.length - idx} remaining
+            {candidates.length - idx === 0 && <span style={{ color: 'var(--text-muted)' }}> — <button style={linkBtn} onClick={onBack}>back to dashboard</button></span>}
+          </div>
         </div>
       </div>
 
@@ -282,7 +314,19 @@ export function CurationWorkspace({ category, onBack }) {
           <span style={catLabel}>Cat {category} — {CATEGORY_NAMES[category] ?? 'Unknown'}</span>
           <span style={moveStringDisplay}>{candidate.move_string || '(empty)'}</span>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>
+          {candidate.rejection_reason && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Rejected: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{candidate.rejection_reason}</span>
+            </div>
+          )}
+          {candidate.goal_prompt && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Prompt: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{candidate.goal_prompt}</span>
+            </div>
+          )}
+        </div>
 
         {/* Scores */}
         <div style={scoresRow}>
@@ -366,6 +410,7 @@ export function CurationWorkspace({ category, onBack }) {
             <button onClick={() => setShowApprove(true)} style={approveBtn}>Approve (A)</button>
             <button onClick={() => setShowReject(true)} style={rejectBtn}>Reject (R)</button>
             <button onClick={advanceToNext} style={skipBtn}>Skip</button>
+            <button onClick={handleDelete} style={deleteBtn}>Delete</button>
           </div>
         )}
       </div>
@@ -423,6 +468,7 @@ const actionRow = { display: 'flex', gap: 8, marginTop: 8 };
 const approveBtn = { flex: 1, padding: '10px 12px', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
 const rejectBtn = { flex: 1, padding: '10px 12px', borderRadius: 8, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
 const skipBtn = { padding: '10px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const deleteBtn = { padding: '10px 12px', borderRadius: 8, border: '1.5px solid rgba(239,68,68,.3)', background: 'transparent', color: 'var(--red)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const approvePanel = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginTop: 8 };
 const panelTitle = { fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 10 };
 const fieldGroup = { marginBottom: 10 };
