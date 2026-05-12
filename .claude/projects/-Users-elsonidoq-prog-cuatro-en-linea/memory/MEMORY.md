@@ -21,3 +21,4 @@
 - [Puzzle gen improvements — spec 004 complete](project_puzzle_gen_improvements.md) — T001–T012 done; softmax generation, per-player temperatures, player-perspective color normalization in CurationWorkspace.jsx
 - [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
 - [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs for 10+ min; likely solver IPC deadlock or terminal-position edge case; classifier tests are fast (22/22, ~56ms)
+- [Puzzle taxonomy v2 — Allis rules expansion](project_puzzle_taxonomy_v2.md) — renames, 6 new categories (zugzwang-new removed as redundant), baseinverse generalised to any directly playable squares, baseclaim non-adjacent, baseclaim branch corrected, 3 classifier tags; open TODO on Lowinverse/Highinverse parity constraint for extra squares
