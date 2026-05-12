@@ -1,17 +1,25 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (unversioned) → 1.0.0
+Version change: 1.0.0 → 1.1.0
+Bump type: MINOR — new principle added (VI), materially expanded guidance in existing sections.
+
+Modified sections:
+  - Principle I: "Papergames review" softened to "future Papergames integration" (not a live surface)
+  - Principle V (Performance): numeric category references replaced with slug names
+  - Tier & Access Control table: numeric category references replaced with slugs; "All 6 pattern
+    categories" updated to "All 7 pattern categories" (forbidden_columns now a live category)
 Added sections:
-  - Core Principles (5 principles)
-  - Tier & Access Control Constraints
-  - Governance
-Modified principles: N/A (initial ratification)
+  - Principle VI: Implementation & Debugging Methodology
 Removed sections: N/A
+
 Templates requiring updates:
-  ✅ .specify/templates/plan-template.md — Constitution Check section is generic; gates are applied per-feature at plan time
-  ✅ .specify/templates/spec-template.md — no structural changes required; principles inform acceptance criteria
+  ✅ .specify/templates/plan-template.md — Constitution Check section is generic; no structural
+     changes required; Principle VI compliance can be noted at plan-time as needed
+  ✅ .specify/templates/spec-template.md — no structural changes required; Principle VI informs
+     the Assumptions section (load-bearing assumptions should be surfaced there)
   ✅ .specify/templates/tasks-template.md — no structural changes required
+
 Deferred TODOs: none
 -->
 
@@ -34,7 +42,8 @@ All user-facing explanations MUST include:
 - A full Deep Reveal available on demand (progressive disclosure).
 
 **Rationale**: Consistency of explanation is the product's core differentiator. Divergent
-explanations across Puzzles, Sparring, and Papergames review would destroy user trust.
+explanations across Puzzles, Sparring, and future Papergames integration would destroy user
+trust.
 
 ### II. Code Quality & Simplicity
 
@@ -91,9 +100,10 @@ Inconsistent terminology or visual language breaks the learning loop.
 - The Explanation Engine MUST return a complete response (solver score + pattern tags +
   LLM annotation) in under 2 seconds for any position reachable during normal gameplay.
 - Heatmap generation for the current board MUST complete in under 500 ms.
-- Puzzle goal predicate evaluation (bitboard-only, categories 1–3) MUST complete in under
-  100 ms.
-- Solver-required predicate evaluation (categories 4–6) MUST complete in under 3 seconds.
+- Puzzle goal predicate evaluation (bitboard-only: `immediate_threat`, `forced_block`,
+  `double_threat`) MUST complete in under 100 ms.
+- Solver-required predicate evaluation (`fork_setup`, `zugzwang`, `parity_control`,
+  `forbidden_columns`) MUST complete in under 3 seconds.
 - Any operation that cannot meet its latency budget MUST show a loading indicator within
   200 ms of initiation; silent hangs are prohibited.
 - Analytics writes to the `tracks` table MUST be fire-and-forget and MUST NOT block any
@@ -102,6 +112,42 @@ Inconsistent terminology or visual language breaks the learning loop.
 **Rationale**: The app is interactive and real-time. A slow explanation breaks the feedback
 loop that makes training effective.
 
+### VI. Implementation & Debugging Methodology
+
+These practices MUST govern how features are built and bugs are diagnosed. They exist because
+the most expensive incidents on this codebase were not caused by wrong code — they were caused
+by wrong process.
+
+**Reproduce before theorizing.** When investigating a bug, the first action is to obtain a
+concrete reproducing artifact: a moves string, a network request/response, a failing test
+invocation, or an exact API call. Analysis without a concrete reproduction is speculation.
+Reserve theoretical reasoning for explaining *why* after the empirical result is known —
+never to predict what the result will be.
+
+**Map data dependencies before writing.** Before implementing any feature that reads or writes
+across multiple tables or endpoints, explicitly list every field the UI needs and trace each
+to its source table. All required selects and joins MUST be identified before any code is
+written. Discovering a missing join mid-implementation is a process failure, not a surprise.
+
+**Validate signal validity before using it.** Before using a component's output to drive logic,
+verify with a concrete test case that the signal actually distinguishes the relevant cases.
+Known failure mode: solver scores are flat at zugzwang terminals — all opponent columns score
+identically, so scores cannot identify the forced block. Direct board threat detection is
+required in that case. Analogs exist for any component with edge-case output behavior.
+
+**Make load-bearing assumptions explicit.** Any assumption that affects correctness (e.g.,
+move-parity convention, cache behavior of an admin endpoint, which player opens the game)
+MUST be enforced by a runtime guard or documented in a code comment at the exact point where
+it is load-bearing. Assumptions that hold only on the happy path and fail silently on edge
+cases are bugs waiting to happen.
+
+**Rationale**: The heatmap parity bug (swap when AI opens), the curation re-review join miss
+(`annotator_note` discovered only after shipping), and the zugzwang forced-block misdiagnosis
+(flat solver scores cannot select a column) each stem from one of these failures — writing
+before mapping, using a signal without validating it, or leaving a critical assumption
+implicit. The heatmap bug investigation also spent 40+ rounds on theoretical analysis that
+two bash commands with a real moves string would have resolved immediately.
+
 ## Tier & Access Control Constraints
 
 These constraints apply across all features and MUST be enforced server-side; client-side
@@ -109,9 +155,9 @@ gating is presentational only.
 
 | Tier | Capabilities |
 |---|---|
-| Anonymous | Basic puzzles (categories 1–3), Sparring, one-line summaries only |
+| Anonymous | Basic puzzles (`immediate_threat`, `forced_block`, `double_threat`), Sparring, one-line summaries only |
 | Signed-in (free) | Same as anonymous + 3 Deep Reveals per day |
-| Paid | All 6 pattern categories, unlimited Deep Reveals, Personal AI Coach, Premium Analytics, Advanced Training Paths, cross-device sync |
+| Paid | All 7 pattern categories (including `fork_setup`, `zugzwang`, `parity_control`, `forbidden_columns`), unlimited Deep Reveals, Personal AI Coach, Premium Analytics, Advanced Training Paths, cross-device sync |
 
 - The free/paid split is a single configuration value. No feature may hard-code tier logic.
 - Deep Reveal quota (3/day for free users) is tracked server-side, keyed to the Supabase
@@ -135,4 +181,4 @@ Any practice that conflicts with a principle stated here MUST be updated to comp
 verify each principle before implementation begins, and again after Phase 1 design is
 complete.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-04-30
+**Version**: 1.1.0 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-05-12

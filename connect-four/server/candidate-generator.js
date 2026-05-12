@@ -1,6 +1,7 @@
 import { evaluatePredicate } from './predicates.js';
 import { classify, checkWin, countWinningThreats } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
+import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 const ROWS = 6;
 const COLS = 7;
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
@@ -94,16 +95,16 @@ function copyBoard(board) {
   return board.map(row => [...row]);
 }
 
-// T021: Cat 1/2/3 — single hint cell
-function computeCat123Highlight(moveString, correctCols) {
+// immediate_threat/forced_block/double_threat — single hint cell
+function computeLowCategoryHighlight(moveString, correctCols) {
   if (correctCols.length === 0) return [];
   const heights = getHeights(moveString);
   const col = correctCols[0];
   return [{ col, row: heights[col], role: 'hint' }];
 }
 
-// T022: Cat 4 Fork Setup highlight (FR-015a)
-function computeCat4Highlight(moveString, correctCols) {
+// fork_setup highlight
+function computeForkSetupHighlight(moveString, correctCols) {
   if (correctCols.length === 0) return [];
   const C = correctCols[0];
   const board0 = buildBoard(moveString);
@@ -264,8 +265,8 @@ async function traceZugzwang(ms, redCol, depth, solver) {
   return null;
 }
 
-// Cat 5 predicate: exactly one column initiates a valid zugzwang sequence.
-export async function checkCat5Predicate(ms, solver) {
+// zugzwang predicate: exactly one column initiates a valid zugzwang sequence.
+export async function checkZugzwangPredicate(ms, solver) {
   const heights = getHeights(ms);
   const redPlayer = ms.length % 2 === 0 ? 1 : 2;
   const correctCols = [];
@@ -281,25 +282,30 @@ export async function checkCat5Predicate(ms, solver) {
   return { passes: correctCols.length === 1, correctCols };
 }
 
-// Cat 7 predicate: at least one column is forbidden (opponent wins immediately after it).
-export async function checkCat7Predicate(ms, solver) {
+// Forbidden columns predicate: a column is forbidden if Red plays there (without winning),
+// and then Yellow plays in that same column one row above and wins.
+export function checkForbiddenColumnsPredicate(ms) {
+  const board = buildBoard(ms);
+  if (!board) return { passes: false, correctCols: [] };
   const heights = getHeights(ms);
+  const red = ms.length % 2 === 0 ? 1 : 2;
+  const yellow = 3 - red;
+
   const legalCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] < ROWS) legalCols.push(c);
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  const forbiddenCols = [];
-  for (const c of legalCols) {
-    const ms1 = ms + (c + 1);
-    let scores1;
-    try { scores1 = await solver.query(ms1); } catch { continue; }
-    const winScore = immediateWinScore(ms1.length);
-    if (winScore > 0 && Math.max(...scores1) >= winScore) {
-      forbiddenCols.push(c);
-    }
-  }
+  const forbiddenCols = legalCols.filter(c => {
+    const h = heights[c];
+    if (h + 1 >= ROWS) return false;
+    const b = copyBoard(board);
+    b[h][c] = red;
+    if (checkWin(b, h, c, red)) return false;
+    b[h + 1][c] = yellow;
+    return checkWin(b, h + 1, c, yellow);
+  });
 
   const safeCols = legalCols.filter(c => !forbiddenCols.includes(c));
   return {
@@ -308,8 +314,8 @@ export async function checkCat7Predicate(ms, solver) {
   };
 }
 
-// T023: Cat 5 Zugzwang highlight — trace forced sequence from the initiating move.
-export async function computeCat5Highlight(solver, moveString, correctCols) {
+// zugzwang highlight — trace forced sequence from the initiating move.
+export async function computeZugzwangHighlight(solver, moveString, correctCols) {
   if (correctCols.length === 0) return [];
 
   const redCol = correctCols[0];
@@ -341,8 +347,8 @@ export async function computeCat5Highlight(solver, moveString, correctCols) {
   return cells;
 }
 
-// T024: Cat 6 Parity Control highlight (FR-015d)
-function computeCat6Highlight(moveString) {
+// parity_control highlight
+function computeParityControlHighlight(moveString) {
   const board0 = buildBoard(moveString);
   if (!board0) return [];
   const heights = getHeights(moveString);
@@ -375,20 +381,23 @@ function computeCat6Highlight(moveString) {
   return cells;
 }
 
-// T025: Cat 7 — safe column hint (correctCols[0] is the safe col to play)
-function computeCat7Highlight(moveString, correctCols) {
-  if (correctCols.length === 0) return [];
+// Forbidden columns highlight — mark each forbidden column with role 'loser'.
+function computeForbiddenColumnsHighlight(moveString, correctCols) {
   const heights = getHeights(moveString);
-  const col = correctCols[0];
-  return [{ col, row: heights[col], role: 'hint' }];
+  const legalCols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] < ROWS) legalCols.push(c);
+  }
+  const forbiddenCols = legalCols.filter(c => !correctCols.includes(c));
+  return forbiddenCols.map(col => ({ col, row: heights[col], role: 'loser' }));
 }
 
 async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
-  if (category >= 1 && category <= 3) return computeCat123Highlight(moveString, correctCols);
-  if (category === 4) return computeCat4Highlight(moveString, correctCols);
-  if (category === 5) return computeCat5Highlight(solver, moveString, correctCols);
-  if (category === 6) return computeCat6Highlight(moveString);
-  if (category === 7) return computeCat7Highlight(moveString, correctCols);
+  if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
+  if (category === 'fork_setup') return computeForkSetupHighlight(moveString, correctCols);
+  if (category === 'zugzwang') return computeZugzwangHighlight(solver, moveString, correctCols);
+  if (category === 'parity_control') return computeParityControlHighlight(moveString);
+  if (category === 'forbidden_columns') return computeForbiddenColumnsHighlight(moveString, correctCols);
   return [];
 }
 
@@ -438,8 +447,8 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols }.
 async function checkPredicate(category, moveString, scores, solver) {
-  if (category === 5) return checkCat5Predicate(moveString, solver);
-  if (category === 7) return checkCat7Predicate(moveString, solver);
+  if (category === 'zugzwang') return checkZugzwangPredicate(moveString, solver);
+  if (category === 'forbidden_columns') return checkForbiddenColumnsPredicate(moveString);
 
   const puzzle = { category, moveString };
   const heights = getHeights(moveString);
@@ -449,7 +458,7 @@ async function checkPredicate(category, moveString, scores, solver) {
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  // Cats 1–4, 6: exactly one legal column must return 'correct'
+  // immediate_threat/forced_block/double_threat/fork_setup/parity_control: exactly one legal column must return 'correct'
   const correctCols = legalCols.filter(c => {
     const r = evaluatePredicate(puzzle, c, scores);
     return r.result === 'correct';
@@ -457,9 +466,9 @@ async function checkPredicate(category, moveString, scores, solver) {
   return { passes: correctCols.length === 1, correctCols };
 }
 
-// For cats 2–7: reject if any column would be an immediate win (distractor).
+// For non-immediate_threat categories: reject if any column would be an immediate win (distractor).
 function isClean(category, scores, moveCount) {
-  if (category === 1) return true;
+  if (category === 'immediate_threat') return true;
   const winScore = immediateWinScore(moveCount);
   return !scores.some(s => s >= winScore && winScore > 0);
 }
@@ -489,15 +498,15 @@ export async function generateCandidates(category, count, seed) {
       attempts++;
 
       const rawMinMoves = 14 + Math.floor(rng() * 21);
-      const maxMoves = category <= 2 ? 20 : Math.max(rawMinMoves, 34);
+      const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
       let matchedCorrectCols = null;
       const onPosition = async (ms, sc) => {
         if (ms.length < minMoves) return false;
+        if (!isClean(category, sc, ms.length)) return false;
         const { passes, correctCols } = await checkPredicate(category, ms, sc, solver);
         if (!passes) return false;
-        if (!isClean(category, sc, ms.length)) return false;
         matchedCorrectCols = correctCols;
         return true;
       };

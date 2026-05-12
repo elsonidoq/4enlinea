@@ -10,7 +10,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/classifier/classifier.test.js"
+    "test": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/predicates/forbidden_columns.test.js tests/classifier/classifier.test.js tests/integration/candidate-generator.test.js tests/integration/zugzwang.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

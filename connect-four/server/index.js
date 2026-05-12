@@ -9,7 +9,8 @@ import { assignHeatmaps } from './heatmap.js';
 import { classify } from './classifier.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
-import { checkCat5Predicate, checkCat7Predicate } from './candidate-generator.js';
+import { checkZugzwangPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
+import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -391,9 +392,6 @@ app.post('/api/explain-move', async (req, res) => {
 
 // ── Puzzle endpoints (T035-T037) ───────────────────────────────────────────────
 
-// Tier-gated categories: 1-3 free, 4-6 paid only
-const PAID_CATEGORIES = new Set([4, 5, 6]);
-
 function userCanAccessCategory(user, categoryId) {
   if (!PAID_CATEGORIES.has(categoryId)) return true;
   return user?.tier === 'paid';
@@ -401,12 +399,12 @@ function userCanAccessCategory(user, categoryId) {
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
 app.get('/api/puzzles', async (req, res) => {
-  const categoryId = req.query.category ? parseInt(req.query.category, 10) : null;
+  const categoryId = req.query.category || null;
 
   if (!supabase) {
-    const categories = [1,2,3,4,5,6].map(id => ({
-      id,
-      locked: !userCanAccessCategory(req.user, id),
+    const categories = CATEGORY_ORDER.map(slug => ({
+      id: slug,
+      locked: !userCanAccessCategory(req.user, slug),
       count: 0,
       puzzles: [],
     }));
@@ -431,11 +429,11 @@ app.get('/api/puzzles', async (req, res) => {
       byCategory[p.category].push(p);
     }
 
-    const categories = [1,2,3,4,5,6].map(id => ({
-      id,
-      locked: !userCanAccessCategory(req.user, id),
-      count: byCategory[id]?.length ?? 0,
-      puzzles: byCategory[id] ?? [],
+    const categories = CATEGORY_ORDER.map(slug => ({
+      id: slug,
+      locked: !userCanAccessCategory(req.user, slug),
+      count: byCategory[slug]?.length ?? 0,
+      puzzles: byCategory[slug] ?? [],
     }));
 
     res.json({ categories });
@@ -766,24 +764,13 @@ function requireLocalhost(req, res, next) {
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
 }
 
-// ── Category → predicate type mapping ────────────────────────────────────────
-const CATEGORY_PREDICATE = {
-  1: 'immediate_threat',
-  2: 'forced_block',
-  3: 'double_threat',
-  4: 'fork_setup',
-  5: 'zugzwang',
-  6: 'parity_control',
-  7: 'forbidden_columns',
-};
-
 // T005: POST /api/admin/generate
 app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { category, count = 30, seed } = req.body;
-  if (!Number.isInteger(category) || category < 1 || category > 7) {
-    return res.status(400).json({ error: 'category must be integer 1–7' });
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
   }
   if (!Number.isInteger(count) || count < 1 || count > 100) {
     return res.status(400).json({ error: 'count must be integer 1–100' });
@@ -830,7 +817,7 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   const stats = {};
-  for (let cat = 1; cat <= 7; cat++) stats[cat] = { category: cat, pending: 0, approved: 0, rejected: 0 };
+  for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0 };
   for (const row of (data || [])) {
     if (stats[row.category]) stats[row.category][row.status]++;
   }
@@ -842,9 +829,9 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
 app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
-  const category = parseInt(req.query.category, 10);
-  if (!category || category < 1 || category > 7) {
-    return res.status(400).json({ error: 'category must be integer 1–7' });
+  const category = req.query.category;
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
   }
   const status = req.query.status || 'pending';
   if (!['pending', 'approved', 'rejected'].includes(status)) {
@@ -895,8 +882,8 @@ app.post('/api/admin/candidates/reject-batch', requireLocalhost, async (req, res
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { category, reason = 'other' } = req.body;
-  if (!Number.isInteger(category) || category < 1 || category > 7) {
-    return res.status(400).json({ error: 'category must be integer 1–7' });
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
   }
 
   const { data, error } = await supabase
@@ -918,9 +905,9 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   const moves = req.query.moves ?? '';
   if (moves.length === 0) return res.status(400).json({ error: 'moves must include at least one move' });
 
-  const category = parseInt(req.query.category, 10);
-  if (!category || category < 1 || category > 7) {
-    return res.status(400).json({ error: 'category must be integer 1–7' });
+  const category = req.query.category;
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
   }
 
   // moves is the board state AFTER the clicked column is appended.
@@ -938,11 +925,11 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   const classResult = classify(preClickMoves, candidateCol, scores);
 
   let predicatePass;
-  if (category === 5) {
-    const { correctCols } = await checkCat5Predicate(preClickMoves, solver);
+  if (category === 'zugzwang') {
+    const { correctCols } = await checkZugzwangPredicate(preClickMoves, solver);
     predicatePass = correctCols.includes(candidateCol);
-  } else if (category === 7) {
-    const { correctCols } = await checkCat7Predicate(preClickMoves, solver);
+  } else if (category === 'forbidden_columns') {
+    const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else {
     const puzzle = { category, moveString: preClickMoves };
@@ -980,11 +967,11 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
   if (candidate.status === 'approved') return res.status(409).json({ error: 'candidate already approved' });
 
   // Validate cooperative_ai_moves for multi-move categories
-  if ([4, 6].includes(candidate.category) && cooperative_ai_moves.length === 0) {
-    return res.status(400).json({ error: 'cooperative_ai_moves required for categories 4 and 6' });
+  if (['fork_setup', 'parity_control'].includes(candidate.category) && cooperative_ai_moves.length === 0) {
+    return res.status(400).json({ error: 'cooperative_ai_moves required for fork_setup and parity_control' });
   }
 
-  const predicateType = CATEGORY_PREDICATE[candidate.category];
+  const predicateType = candidate.category;
 
   const { data: puzzle, error: insertErr } = await supabase
     .from('puzzles')
@@ -1096,8 +1083,8 @@ app.get('/api/admin/false-positives', requireLocalhost, async (req, res) => {
     .select('id, candidate_id, category, move_string, solver_scores, annotator_note, created_at', { count: 'exact' })
     .order('created_at', { ascending: false });
 
-  const category = parseInt(req.query.category, 10);
-  if (category && category >= 1 && category <= 7) query = query.eq('category', category);
+  const category = req.query.category;
+  if (category && VALID_CATEGORIES.has(category)) query = query.eq('category', category);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -1143,15 +1130,14 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
   if (!category || move_string === undefined || !goal_prompt || !predicate_type || !difficulty) {
     return res.status(400).json({ error: 'Missing required field: category, move_string, goal_prompt, predicate_type, difficulty' });
   }
-  if (![1,2,3,4,5,6].includes(Number(category))) {
-    return res.status(400).json({ error: 'Invalid category — must be 1–6' });
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
   }
   if (!MOVES_RE.test(move_string)) {
     return res.status(400).json({ error: 'Invalid move_string — columns 1–7, max 42 chars' });
   }
-  const validPredicates = ['immediate_threat','forced_block','double_threat','fork_setup','zugzwang','parity_control'];
-  if (!validPredicates.includes(predicate_type)) {
-    return res.status(400).json({ error: `Invalid predicate_type — must be one of: ${validPredicates.join(', ')}` });
+  if (!VALID_CATEGORIES.has(predicate_type)) {
+    return res.status(400).json({ error: `Invalid predicate_type — must be one of: ${[...VALID_CATEGORIES].join(', ')}` });
   }
   if (![1,2,3].includes(Number(difficulty))) {
     return res.status(400).json({ error: 'Invalid difficulty — must be 1–3' });
@@ -1162,7 +1148,7 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
   const { data, error } = await supabase
     .from('puzzles')
     .insert({
-      category: Number(category),
+      category,
       move_string,
       goal_prompt,
       goal_predicate_type: predicate_type,

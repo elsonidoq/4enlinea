@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('generateCandidates', () => {
   test('returns at least 1 candidate for category 1 with fixed seed', async () => {
-    const result = await generateCandidates(1, 5, 99);
+    const result = await generateCandidates('immediate_threat', 5, 99);
     assert.ok(result.candidates.length >= 1, `expected ≥1 candidate, got ${result.candidates.length}`);
     for (const c of result.candidates) {
       assert.equal(c.solver_scores.length, 7, 'solver_scores must have length 7');
@@ -18,8 +18,8 @@ describe('generateCandidates', () => {
   }, { timeout: 60_000 });
 
   test('same seed produces the same move_string values (reproducibility)', async () => {
-    const r1 = await generateCandidates(1, 5, 99);
-    const r2 = await generateCandidates(1, 5, 99);
+    const r1 = await generateCandidates('immediate_threat', 5, 99);
+    const r2 = await generateCandidates('immediate_threat', 5, 99);
     const min = Math.min(r1.candidates.length, r2.candidates.length);
     assert.ok(min >= 1, 'both runs must produce at least 1 candidate');
     for (let i = 0; i < min; i++) {
@@ -32,7 +32,7 @@ describe('generateCandidates', () => {
   }, { timeout: 120_000 });
 
   test('board density: all move_strings have length >= 10 and median >= 14 (SC-001, SC-002)', async () => {
-    const result = await generateCandidates(1, 10, 42);
+    const result = await generateCandidates('immediate_threat', 10, 42);
     assert.ok(result.candidates.length >= 1, 'expected at least 1 candidate');
     for (const c of result.candidates) {
       assert.ok(
@@ -49,7 +49,7 @@ describe('generateCandidates', () => {
   }, { timeout: 120_000 });
 
   test('min-move enforcement: all move_strings have length >= 14 (T017)', async () => {
-    const result = await generateCandidates(1, 10, 77);
+    const result = await generateCandidates('immediate_threat', 10, 77);
     assert.ok(result.candidates.length >= 1, 'expected at least 1 candidate');
     for (const c of result.candidates) {
       assert.ok(

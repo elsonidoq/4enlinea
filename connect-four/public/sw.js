@@ -20,8 +20,9 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Pass through all API requests — never cache them
+  // Pass through API requests and cross-origin requests (e.g. Supabase)
   if (event.request.url.includes('/api/')) return;
+  if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
