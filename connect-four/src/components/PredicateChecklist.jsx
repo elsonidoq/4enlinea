@@ -1,11 +1,11 @@
 const CATEGORY_CRITERIA = {
-  1: [{ key: 'win', label: 'Winning move exists', tags: ['immediate_threat'] }],
-  2: [{ key: 'block', label: "Opponent's threat is blocked", tags: ['forced_block'] }],
-  3: [{ key: 'double', label: 'Two simultaneous threats created', tags: ['double_threat'] }],
-  4: [{ key: 'fork', label: 'Fork setup sequence started', tags: ['fork_setup'] }],
-  5: [{ key: 'zug', label: 'Best move in zugzwang', tags: ['zugzwang'] }],
-  6: [{ key: 'parity', label: 'Parity control maintained', tags: ['parity_control'] }],
-  7: [{ key: 'forbidden', label: 'Forbidden columns identified', tags: ['forbidden_columns'] }],
+  immediate_threat:  [{ key: 'win', label: 'Winning move exists', tags: ['immediate_threat'] }],
+  forced_block:      [{ key: 'block', label: "Opponent's threat is blocked", tags: ['forced_block'] }],
+  double_threat:     [{ key: 'double', label: 'Two simultaneous threats created', tags: ['double_threat'] }],
+  fork_setup:        [{ key: 'fork', label: 'Fork setup sequence started', tags: ['fork_setup'] }],
+  zugzwang:          [{ key: 'zug', label: 'Best move in zugzwang', tags: ['zugzwang'] }],
+  parity_control:    [{ key: 'parity', label: 'Parity control maintained', tags: ['parity_control'] }],
+  forbidden_columns: [{ key: 'forbidden', label: 'Forbidden columns identified', tags: ['forbidden_columns'] }],
 };
 
 export function PredicateChecklist({ category, predicatePass, classifierTags = [] }) {

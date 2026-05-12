@@ -1,91 +1,91 @@
 [
   {
-    "description": "Cat 1: correct immediate win",
-    "puzzle": { "id": 1, "category": 1, "moveString": "112233", "goalPredicateType": "immediate_win" },
+    "description": "immediate_threat: correct immediate win",
+    "puzzle": { "id": 1, "category": "immediate_threat", "moveString": "112233", "goalPredicateType": "immediate_win" },
     "candidateCol": 3,
     "scores": [-2, -1, -1, 18, -2, -2, -3],
     "expectedResult": "correct"
   },
   {
-    "description": "Cat 1: wrong move (not the winning column)",
-    "puzzle": { "id": 1, "category": 1, "moveString": "112233", "goalPredicateType": "immediate_win" },
+    "description": "immediate_threat: wrong move (not the winning column)",
+    "puzzle": { "id": 1, "category": "immediate_threat", "moveString": "112233", "goalPredicateType": "immediate_win" },
     "candidateCol": 0,
     "scores": [-2, -1, -1, 18, -2, -2, -3],
     "expectedResult": "wrong"
   },
   {
-    "description": "Cat 1: tied (two immediate wins available)",
-    "puzzle": { "id": 2, "category": 1, "moveString": "445566", "goalPredicateType": "immediate_win" },
+    "description": "immediate_threat: tied (two immediate wins available)",
+    "puzzle": { "id": 2, "category": "immediate_threat", "moveString": "445566", "goalPredicateType": "immediate_win" },
     "candidateCol": 2,
     "scores": [17, 17, 18, 17, 17, 17, 18],
     "expectedResult": "tied"
   },
   {
-    "description": "Cat 2: correct forced block",
-    "puzzle": { "id": 3, "category": 2, "moveString": "11224", "goalPredicateType": "forced_block" },
+    "description": "forced_block: correct forced block",
+    "puzzle": { "id": 3, "category": "forced_block", "moveString": "11224", "goalPredicateType": "forced_block" },
     "candidateCol": 2,
     "scores": [-18, -18, 0, -18, -18, -18, -18],
     "expectedResult": "correct"
   },
   {
-    "description": "Cat 2: wrong (plays non-blocking column)",
-    "puzzle": { "id": 3, "category": 2, "moveString": "11224", "goalPredicateType": "forced_block" },
+    "description": "forced_block: wrong (plays non-blocking column)",
+    "puzzle": { "id": 3, "category": "forced_block", "moveString": "11224", "goalPredicateType": "forced_block" },
     "candidateCol": 0,
     "scores": [-18, -18, 0, -18, -18, -18, -18],
     "expectedResult": "wrong"
   },
   {
-    "description": "Cat 3: correct double threat (tied with col 6 which also creates double threat)",
-    "puzzle": { "id": 4, "category": 3, "moveString": "4455", "goalPredicateType": "double_threat" },
+    "description": "double_threat: correct double threat (tied with col 6 which also creates double threat)",
+    "puzzle": { "id": 4, "category": "double_threat", "moveString": "4455", "goalPredicateType": "double_threat" },
     "candidateCol": 2,
     "scores": [-4, -3, 18, 2, 2, 18, -3],
     "expectedResult": "tied"
   },
   {
-    "description": "Cat 3: wrong move (negative score)",
-    "puzzle": { "id": 4, "category": 3, "moveString": "4455", "goalPredicateType": "double_threat" },
+    "description": "double_threat: wrong move (negative score)",
+    "puzzle": { "id": 4, "category": "double_threat", "moveString": "4455", "goalPredicateType": "double_threat" },
     "candidateCol": 0,
     "scores": [-4, -3, 18, 2, 2, 18, -3],
     "expectedResult": "wrong"
   },
   {
-    "description": "Cat 4: correct fork setup",
-    "puzzle": { "id": 5, "category": 4, "moveString": "12345", "goalPredicateType": "fork_setup" },
+    "description": "fork_setup: correct fork setup",
+    "puzzle": { "id": 5, "category": "fork_setup", "moveString": "12345", "goalPredicateType": "fork_setup" },
     "candidateCol": 3,
     "scores": [0, 2, 0, 3, 2, -1, 0],
     "expectedResult": "correct"
   },
   {
-    "description": "Cat 4: tied (same positive score)",
-    "puzzle": { "id": 5, "category": 4, "moveString": "12345", "goalPredicateType": "fork_setup" },
+    "description": "fork_setup: tied (same positive score)",
+    "puzzle": { "id": 5, "category": "fork_setup", "moveString": "12345", "goalPredicateType": "fork_setup" },
     "candidateCol": 1,
     "scores": [0, 2, 0, 3, 2, -1, 0],
     "expectedResult": "tied"
   },
   {
-    "description": "Cat 5: correct zugzwang (least bad move)",
-    "puzzle": { "id": 6, "category": 5, "moveString": "4444455566", "goalPredicateType": "zugzwang" },
+    "description": "zugzwang: correct zugzwang (least bad move)",
+    "puzzle": { "id": 6, "category": "zugzwang", "moveString": "4444455566", "goalPredicateType": "zugzwang" },
     "candidateCol": 6,
     "scores": [-16, -16, -16, -16, -16, -16, -2],
     "expectedResult": "correct"
   },
   {
-    "description": "Cat 5: wrong zugzwang (not the least bad)",
-    "puzzle": { "id": 6, "category": 5, "moveString": "4444455566", "goalPredicateType": "zugzwang" },
+    "description": "zugzwang: wrong zugzwang (not the least bad)",
+    "puzzle": { "id": 6, "category": "zugzwang", "moveString": "4444455566", "goalPredicateType": "zugzwang" },
     "candidateCol": 0,
     "scores": [-16, -16, -16, -16, -16, -16, -2],
     "expectedResult": "wrong"
   },
   {
-    "description": "Cat 6: correct parity control (above average positive score)",
-    "puzzle": { "id": 7, "category": 6, "moveString": "43445", "goalPredicateType": "parity_control" },
+    "description": "parity_control: correct parity control (above average positive score)",
+    "puzzle": { "id": 7, "category": "parity_control", "moveString": "43445", "goalPredicateType": "parity_control" },
     "candidateCol": 3,
     "scores": [0, 0, 0, 4, 0, 2, 0],
     "expectedResult": "correct"
   },
   {
-    "description": "Cat 6: wrong (below average positive score)",
-    "puzzle": { "id": 7, "category": 6, "moveString": "43445", "goalPredicateType": "parity_control" },
+    "description": "parity_control: wrong (below average positive score)",
+    "puzzle": { "id": 7, "category": "parity_control", "moveString": "43445", "goalPredicateType": "parity_control" },
     "candidateCol": 5,
     "scores": [0, 0, 0, 4, 0, 2, 0],
     "expectedResult": "wrong"

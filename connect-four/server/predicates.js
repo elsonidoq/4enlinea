@@ -36,19 +36,19 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
   const winScore = immediateWinScore(moveCount);
 
   switch (puzzle.category) {
-    case 1: return evalCat1(candidateCol, scores, winScore);
-    case 2: return evalCat2(candidateCol, scores, winScore, moveCount);
-    case 3: return evalCat3(candidateCol, scores, winScore, puzzle.moveString);
-    case 4: return evalCat4(candidateCol, scores, winScore);
-    case 5: return evalCat5(candidateCol, scores);
-    case 6: return evalCat6(candidateCol, scores, winScore);
-    case 7: return evalCat7(candidateCol, scores, puzzle.moveString);
+    case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, winScore);
+    case 'forced_block': return evalForcedBlock(candidateCol, scores, winScore, moveCount);
+    case 'double_threat': return evalDoubleThreat(candidateCol, scores, winScore, puzzle.moveString);
+    case 'fork_setup': return evalForkSetup(candidateCol, scores, winScore);
+    case 'zugzwang': return evalZugzwang(candidateCol, scores);
+    case 'parity_control': return evalParityControl(candidateCol, scores, winScore);
+    case 'forbidden_columns': return evalForbiddenColumns(candidateCol, scores, puzzle.moveString);
     default: return { result: 'wrong' };
   }
 }
 
-// Cat 1: Play the immediate winning move.
-function evalCat1(candidateCol, scores, winScore) {
+// immediate_threat: Play the immediate winning move.
+function evalImmediateThreat(candidateCol, scores, winScore) {
   const winningCols = scores.reduce((acc, s, i) => {
     if (s >= winScore && s > 0) acc.push(i);  // Bug 1 fix: >= not ===
     return acc;
@@ -64,8 +64,8 @@ function evalCat1(candidateCol, scores, winScore) {
   return { result: 'wrong', correctCol: winningCols[0] };
 }
 
-// Cat 2: Block the opponent's immediate winning threat.
-function evalCat2(candidateCol, scores, winScore, moveCount) {
+// forced_block: Block the opponent's immediate winning threat.
+function evalForcedBlock(candidateCol, scores, winScore, moveCount) {
   const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
   const blockingCols = scores.reduce((acc, s, i) => {
     if (s >= 0) acc.push(i);
@@ -90,8 +90,8 @@ function evalCat2(candidateCol, scores, winScore, moveCount) {
   return { result: 'wrong', correctCol: blockingCols[0] };
 }
 
-// Cat 3: Create a double threat (≥2 simultaneous winning threats after the move).
-function evalCat3(candidateCol, scores, winScore, moveString) {
+// double_threat: Create a double threat (≥2 simultaneous winning threats after the move).
+function evalDoubleThreat(candidateCol, scores, winScore, moveString) {
   const { board, heights } = parseBoard(moveString);
   const moveCount = moveString.length;
   const player = currentPlayer(moveCount);
@@ -153,8 +153,8 @@ function evalCat3(candidateCol, scores, winScore, moveString) {
   return { result: 'wrong', correctCol: doubleThreatCols[0] };
 }
 
-// Cat 4: Play the move that creates a multi-path fork (3+ winning columns).
-function evalCat4(candidateCol, scores, winScore) {
+// fork_setup: Play the move that creates a multi-path fork (3+ winning columns).
+function evalForkSetup(candidateCol, scores, winScore) {
   // Bug 4 fix: exclude immediate wins with s >= winScore (not s !== winScore)
   const maxScore = Math.max(...scores.filter(s => s > 0 && s < winScore));
   if (!isFinite(maxScore) || maxScore <= 0) return { result: 'wrong' };
@@ -176,8 +176,8 @@ function evalCat4(candidateCol, scores, winScore) {
   return { result: 'wrong', correctCol: bestCols[0] };
 }
 
-// Cat 5: Choose the best move in a zugzwang (all moves losing, pick least bad).
-function evalCat5(candidateCol, scores) {
+// zugzwang: Choose the best move in a zugzwang (all moves losing, pick least bad).
+function evalZugzwang(candidateCol, scores) {
   // Bug 5 fix: zugzwang requires all scores to be non-positive
   if (Math.max(...scores) > 0) return { result: 'wrong' };
 
@@ -196,8 +196,8 @@ function evalCat5(candidateCol, scores) {
   return { result: 'wrong', correctCol: bestCols[0] };
 }
 
-// Cat 6: Choose the move that best controls parity (positive score ≥ average positive).
-function evalCat6(candidateCol, scores, winScore) {
+// parity_control: Choose the move that best controls parity (positive score ≥ average positive).
+function evalParityControl(candidateCol, scores, winScore) {
   const posScores = scores.filter(s => s > 0 && s < winScore);
   // Bug 6 fix: need ≥2 positive moves for parity to be a meaningful choice
   if (posScores.length < 2) return { result: 'wrong' };
@@ -219,28 +219,28 @@ function evalCat6(candidateCol, scores, winScore) {
   return { result: 'wrong', correctCol: aboveAvgCols[0] };
 }
 
-// Cat 7: Identify columns that would hand the opponent an immediate win.
-// A column is forbidden if playing there leaves the opponent with an immediate winning reply.
-// A position passes (for generation) when forbiddenCols.length >= 1.
-// For user evaluation: playing a safe (non-forbidden) column is correct.
-function evalCat7(candidateCol, scores, moveString) {
-  const { heights } = parseBoard(moveString);
+// forbidden_columns: Identify columns that would hand the opponent an immediate win.
+// A column is forbidden if: Red plays there (and does NOT win), and then Yellow plays
+// in that same column one row above and wins.
+function evalForbiddenColumns(candidateCol, scores, moveString) {
+  const { board, heights } = parseBoard(moveString);
   const moveCount = moveString.length;
-  // After playing c (move count becomes moveCount+1), if the opponent can win immediately
-  // their win score from that position = ceil((42 - (moveCount+1)) / 2).
-  // From the current player's perspective, this loss score = -ceil((41 - moveCount) / 2).
-  const opponentImmediateWinScore = -Math.ceil((41 - moveCount) / 2);
+  const red = currentPlayer(moveCount);
+  const yellow = 3 - red;
 
-  const forbiddenCols = scores.reduce((acc, s, i) => {
-    if (heights[i] < ROWS && s === opponentImmediateWinScore) acc.push(i);
-    return acc;
-  }, []);
+  const forbiddenCols = [];
+  for (let c = 0; c < COLS; c++) {
+    const h = heights[c];
+    if (h >= ROWS || h + 1 >= ROWS) continue;
+    const b = board.map(r => [...r]);
+    b[h][c] = red;
+    if (checkWin(b, h, c, red)) continue;
+    b[h + 1][c] = yellow;
+    if (checkWin(b, h + 1, c, yellow)) forbiddenCols.push(c);
+  }
 
   if (forbiddenCols.length === 0) return { result: 'wrong', forbiddenCols: [] };
-
-  if (forbiddenCols.includes(candidateCol)) {
-    return { result: 'wrong', forbiddenCols };
-  }
+  if (forbiddenCols.includes(candidateCol)) return { result: 'wrong', forbiddenCols };
   return { result: 'correct', forbiddenCols };
 }
 

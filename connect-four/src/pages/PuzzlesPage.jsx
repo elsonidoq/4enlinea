@@ -5,28 +5,11 @@ import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
 import { PaywallModal } from '../components/PaywallModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
+import { CATEGORY_NAMES, CATEGORY_CHIPS, CATEGORY_ORDER } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const COLS = 7;
 const ROWS = 6;
-
-const CATEGORY_NAMES = {
-  1: 'Immediate Threat',
-  2: 'Forced Block',
-  3: 'Double Threat',
-  4: 'Fork Setup',
-  5: 'Zugzwang',
-  6: 'Parity Control',
-};
-
-const CATEGORY_CHIPS = {
-  1: { label: 'Immediate', color: '#60a5fa', bg: 'rgba(37,99,235,.2)', border: 'rgba(37,99,235,.4)' },
-  2: { label: 'Block',     color: '#f87171', bg: 'rgba(220,38,38,.2)', border: 'rgba(220,38,38,.4)' },
-  3: { label: 'Double',    color: '#fb923c', bg: 'rgba(234,88,12,.2)', border: 'rgba(234,88,12,.4)' },
-  4: { label: 'Fork',      color: '#2dd4bf', bg: 'rgba(13,148,136,.2)', border: 'rgba(13,148,136,.4)' },
-  5: { label: 'Zugzwang',  color: '#c084fc', bg: 'rgba(147,51,234,.2)', border: 'rgba(147,51,234,.4)' },
-  6: { label: 'Parity',    color: '#fcd34d', bg: 'rgba(245,184,32,.2)', border: 'rgba(245,184,32,.4)' },
-};
 
 function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));

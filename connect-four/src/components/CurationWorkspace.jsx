@@ -3,29 +3,20 @@ import { Board } from './Board.jsx';
 import { PredicateChecklist } from './PredicateChecklist.jsx';
 import { RejectModal } from './RejectModal.jsx';
 import { MultiMoveSequencer } from './MultiMoveSequencer.jsx';
+import { CATEGORY_NAMES } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const ROWS = 6;
 const COLS = 7;
 
-const CATEGORY_NAMES = {
-  1: 'Immediate Win',
-  2: 'Forced Block',
-  3: 'Double Threat',
-  4: 'Fork Setup',
-  5: 'Zugzwang',
-  6: 'Parity Control',
-  7: 'Forbidden Columns',
-};
-
 const GOAL_PROMPTS = {
-  1: 'Find the winning move.',
-  2: "Block your opponent's threat.",
-  3: 'Find the move that creates two simultaneous threats.',
-  4: 'Set up a fork — a sequence that leads to two unstoppable threats.',
-  5: 'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
-  6: 'Control the parity of this column to secure the win.',
-  7: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
+  immediate_threat:  'Find the winning move.',
+  forced_block:      "Block your opponent's threat.",
+  double_threat:     'Find the move that creates two simultaneous threats.',
+  fork_setup:        'Set up a fork — a sequence that leads to two unstoppable threats.',
+  zugzwang:          'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
+  parity_control:    'Control the parity of this column to secure the win.',
+  forbidden_columns: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
 };
 
 function buildBoard(moves, userPlayer) {
@@ -58,41 +49,33 @@ function deriveHighlightCol(category, scores, moveString) {
   const heights = getHeights(moveString);
   const legalCols = scores.map((_, i) => i).filter(i => heights[i] < ROWS);
 
-  switch (category) {
-    case 1:
-      return legalCols.find(i => scores[i] >= winScore && winScore > 0) ?? null;
-    case 2: {
-      const blocking = legalCols.filter(i => scores[i] >= 0);
-      return blocking.length === 1 ? blocking[0] : null;
+  if (category === 'immediate_threat') {
+    return legalCols.find(i => scores[i] >= winScore && winScore > 0) ?? null;
+  } else if (category === 'forced_block') {
+    const blocking = legalCols.filter(i => scores[i] >= 0);
+    return blocking.length === 1 ? blocking[0] : null;
+  } else if (category === 'double_threat') {
+    let best = -Infinity, bestCol = null;
+    for (const i of legalCols) {
+      if (scores[i] > best) { best = scores[i]; bestCol = i; }
     }
-    case 3: {
-      let best = -Infinity, bestCol = null;
-      for (const i of legalCols) {
-        if (scores[i] > best) { best = scores[i]; bestCol = i; }
-      }
-      return bestCol;
-    }
-    case 4:
-    case 6: {
-      const nonWinPos = legalCols.filter(i => scores[i] > 0 && scores[i] !== winScore);
-      if (nonWinPos.length === 0) return null;
-      return nonWinPos.reduce((best, i) => scores[i] > scores[best] ? i : best);
-    }
-    case 5: {
-      // highlight_cells from DB is the authoritative source; this fallback just picks max score
-      const maxScore = Math.max(...legalCols.map(i => scores[i]));
-      return legalCols.find(i => scores[i] === maxScore) ?? null;
-    }
-    case 7: {
-      // hint is the SAFE column — find the first col that is NOT forbidden
-      const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
-      const forbidden = new Set(legalCols.filter(i => scores[i] === opponentWinScore));
-      const safe = legalCols.find(i => !forbidden.has(i));
-      return safe ?? null;
-    }
-    default:
-      return null;
+    return bestCol;
+  } else if (category === 'fork_setup' || category === 'parity_control') {
+    const nonWinPos = legalCols.filter(i => scores[i] > 0 && scores[i] !== winScore);
+    if (nonWinPos.length === 0) return null;
+    return nonWinPos.reduce((best, i) => scores[i] > scores[best] ? i : best);
+  } else if (category === 'zugzwang') {
+    // highlight_cells from DB is the authoritative source; this fallback just picks max score
+    const maxScore = Math.max(...legalCols.map(i => scores[i]));
+    return legalCols.find(i => scores[i] === maxScore) ?? null;
+  } else if (category === 'forbidden_columns') {
+    // hint is the SAFE column — find the first col that is NOT forbidden
+    const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
+    const forbidden = new Set(legalCols.filter(i => scores[i] === opponentWinScore));
+    const safe = legalCols.find(i => !forbidden.has(i));
+    return safe ?? null;
   }
+  return null;
 }
 
 export function CurationWorkspace({ category, status = 'pending', onBack }) {
@@ -311,7 +294,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
         />
 
         <div style={metaRow}>
-          <span style={catLabel}>Cat {category} — {CATEGORY_NAMES[category] ?? 'Unknown'}</span>
+          <span style={catLabel}>{CATEGORY_NAMES[category] ?? 'Unknown'}</span>
           <span style={moveStringDisplay}>{candidate.move_string || '(empty)'}</span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -367,7 +350,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
         )}
 
         {/* Multi-move sequencer for cats 4 and 6 */}
-        {[4, 6].includes(category) && (
+        {['fork_setup', 'parity_control'].includes(category) && (
           <MultiMoveSequencer
             category={category}
             baseMoveString={candidate.move_string}

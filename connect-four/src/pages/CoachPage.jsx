@@ -5,15 +5,11 @@ import { PaywallModal } from '../components/PaywallModal.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { Board } from '../components/Board.jsx';
 import { track } from '../lib/track.js';
+import { CATEGORY_NAMES } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const ROWS = 6;
 const COLS = 7;
-
-const CATEGORY_NAMES = {
-  1: 'Immediate Threat', 2: 'Forced Block', 3: 'Double Threat',
-  4: 'Fork Setup', 5: 'Zugzwang', 6: 'Parity Control',
-};
 
 function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));

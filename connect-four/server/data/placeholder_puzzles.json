@@ -1,6 +1,6 @@
 [
   {
-    "category": 1,
+    "category": "immediate_threat",
     "move_string": "121212",
     "goal_prompt": "Win the game in one move.",
     "goal_predicate_type": "immediate_threat",
@@ -10,7 +10,7 @@
     "is_active": true
   },
   {
-    "category": 2,
+    "category": "forced_block",
     "move_string": "152634",
     "goal_prompt": "Block your opponent's winning move.",
     "goal_predicate_type": "forced_block",
@@ -20,7 +20,7 @@
     "is_active": true
   },
   {
-    "category": 3,
+    "category": "double_threat",
     "move_string": "41526354",
     "goal_prompt": "Find the move that creates multiple threats.",
     "goal_predicate_type": "double_threat",
@@ -30,7 +30,7 @@
     "is_active": true
   },
   {
-    "category": 4,
+    "category": "fork_setup",
     "move_string": "",
     "goal_prompt": "Play the move that sets up the most winning paths.",
     "goal_predicate_type": "fork_setup",
@@ -40,7 +40,7 @@
     "is_active": true
   },
   {
-    "category": 5,
+    "category": "zugzwang",
     "move_string": "",
     "goal_prompt": "Choose the best move to maintain your advantage.",
     "goal_predicate_type": "zugzwang",
@@ -50,7 +50,7 @@
     "is_active": true
   },
   {
-    "category": 6,
+    "category": "parity_control",
     "move_string": "",
     "goal_prompt": "Play the move with the strongest strategic value.",
     "goal_predicate_type": "parity_control",

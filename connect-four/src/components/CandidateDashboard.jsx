@@ -1,16 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
+import { CATEGORY_NAMES, CATEGORY_ORDER } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
-
-const CATEGORY_NAMES = {
-  1: 'Immediate Threat',
-  2: 'Forced Block',
-  3: 'Double Threat',
-  4: 'Fork Setup',
-  5: 'Zugzwang',
-  6: 'Parity Control',
-  7: 'Forbidden Columns',
-};
 
 export function CandidateDashboard({ onSelectCategory }) {
   const [stats, setStats] = useState([]);
@@ -120,7 +111,7 @@ export function CandidateDashboard({ onSelectCategory }) {
                 <Fragment key={row.category}>
                   <tr style={tr}>
                     <td style={td}>
-                      <span style={catNum}>{row.category}</span>
+                      <span style={catNum}>{CATEGORY_ORDER.indexOf(row.category) + 1}</span>
                       <span style={{ color: 'var(--text)', fontSize: 13 }}>{CATEGORY_NAMES[row.category]}</span>
                     </td>
                     <td style={{ ...td, fontWeight: 700, color: row.pending > 0 ? 'var(--text)' : 'var(--text-muted)' }}>

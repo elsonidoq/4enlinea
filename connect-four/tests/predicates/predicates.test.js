@@ -31,14 +31,14 @@ describe('evaluatePredicate() edge cases', () => {
   });
 
   test('cat 1 returns correctCol when result is wrong', () => {
-    const puzzle = { id: 1, category: 1, moveString: '112233', goalPredicateType: 'immediate_win' };
+    const puzzle = { id: 1, category: 'immediate_threat', moveString: '112233', goalPredicateType: 'immediate_win' };
     const result = evaluatePredicate(puzzle, 0, [-2, -1, -1, 18, -2, -2, -3]);
     assert.equal(result.result, 'wrong');
     assert.equal(result.correctCol, 3);
   });
 
   test('cat 5 handles all-equal negative scores as tied', () => {
-    const puzzle = { id: 5, category: 5, moveString: '44444', goalPredicateType: 'zugzwang' };
+    const puzzle = { id: 5, category: 'zugzwang', moveString: '44444', goalPredicateType: 'zugzwang' };
     const scores = [-1, -1, -1, -1, -1, -1, -1];
     const result = evaluatePredicate(puzzle, 0, scores);
     // All equal: any move is "correct" (tied)

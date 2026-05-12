@@ -64,7 +64,7 @@ export function countWinningThreats(board, colHeights, player) {
 
 // Classify a position given the move string, candidate column (0-indexed),
 // and the solver scores for all 7 columns.
-// Returns { tag, category } — never throws.
+// Returns { tag } — never throws.
 export function classify(moves, candidateCol, scores) {
   const moveCount = moves.length;
   const score = scores[candidateCol];
@@ -80,7 +80,7 @@ export function classify(moves, candidateCol, scores) {
     if (row < ROWS) {
       board[row][candidateCol] = currentPlayer;
       if (checkWin(board, row, candidateCol, currentPlayer)) {
-        return { tag: 'immediate_threat', category: 1 };
+        return { tag: 'immediate_threat' };
       }
       board[row][candidateCol] = 0;
     }
@@ -101,7 +101,7 @@ export function classify(moves, candidateCol, scores) {
     // At least one other move must be losing (otherwise we're not "forced" to block)
     const someOtherIsLosing = scores.some((s, i) => i !== candidateCol && s < 0);
     if (allOthersAreLoss && someOtherIsLosing) {
-      return { tag: 'forced_block', category: 2 };
+      return { tag: 'forced_block' };
     }
   }
 
@@ -118,7 +118,7 @@ export function classify(moves, candidateCol, scores) {
       colHeights[candidateCol]++;
       const threats = countWinningThreats(board, colHeights, currentPlayer);
       if (threats >= 2) {
-        return { tag: 'double_threat', category: 3 };
+        return { tag: 'double_threat' };
       }
     }
   }
@@ -132,7 +132,7 @@ export function classify(moves, candidateCol, scores) {
     // Check if multiple columns remain winning — indicative of fork setup
     const winningCols = scores.filter(s => s > 0).length;
     if (winningCols >= 3) {
-      return { tag: 'fork_setup', category: 4 };
+      return { tag: 'fork_setup' };
     }
   }
 
@@ -143,7 +143,7 @@ export function classify(moves, candidateCol, scores) {
     const allNegative = scores.every(s => s <= 0);
     const isBestBadMove = scores.every(s => s <= score || s === 0);
     if (allNegative && isBestBadMove && scores.some(s => s < score)) {
-      return { tag: 'zugzwang', category: 5 };
+      return { tag: 'zugzwang' };
     }
   }
 
@@ -154,7 +154,7 @@ export function classify(moves, candidateCol, scores) {
     const posScores = scores.filter(s => s > 0);
     const avgPos = posScores.reduce((a, b) => a + b, 0) / (posScores.length || 1);
     if (score >= avgPos && posScores.length >= 2) {
-      return { tag: 'parity_control', category: 6 };
+      return { tag: 'parity_control' };
     }
   }
 
@@ -163,13 +163,13 @@ export function classify(moves, candidateCol, scores) {
   // Only valid when the current player has no winning move (all scores <= 0).
   const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
   if (scores.some(s => s === opponentWinScore) && scores.every(s => s <= 0)) {
-    return { tag: 'forbidden_column', category: 7 };
+    return { tag: 'forbidden_columns' };
   }
 
   // ── Fallback ──────────────────────────────────────────────────────────────
-  if (score > 0) return { tag: 'best_move', category: 0 };
-  if (score === 0) return { tag: 'drawing_move', category: 0 };
-  return { tag: 'suboptimal_move', category: 0 };
+  if (score > 0) return { tag: 'best_move' };
+  if (score === 0) return { tag: 'drawing_move' };
+  return { tag: 'suboptimal_move' };
 }
 
 function isImmediateWin(score, winScore) {

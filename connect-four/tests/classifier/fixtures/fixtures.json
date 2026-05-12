@@ -1,6 +1,6 @@
 [
   {
-    "description": "Cat 1: immediate win col 4 — p1 has 1,2,3 in bottom row, col4 completes 4-in-a-row",
+    "description": "immediate_threat: immediate win col 4 — p1 has 1,2,3 in bottom row, col4 completes 4-in-a-row",
     "moves": "112233",
     "candidateCol": 3,
     "expectedCategory": 1,
@@ -8,7 +8,7 @@
     "scores": [-2, -1, -1, 18, -2, -2, -3]
   },
   {
-    "description": "Cat 1: immediate win col 7 — p1 has 4,5,6 at bottom, col7 completes",
+    "description": "immediate_threat: immediate win col 7 — p1 has 4,5,6 at bottom, col7 completes",
     "moves": "415263",
     "candidateCol": 6,
     "expectedCategory": 1,
@@ -16,7 +16,7 @@
     "scores": [2, 6, 10, 12, 12, 12, 18]
   },
   {
-    "description": "Cat 1: immediate win col 4 — p2 blocks but p1 has forced win at col 4",
+    "description": "immediate_threat: immediate win col 4 — p2 blocks but p1 has forced win at col 4",
     "moves": "172737",
     "candidateCol": 3,
     "expectedCategory": 1,
@@ -24,7 +24,7 @@
     "scores": [-18, -18, -18, 18, -18, -18, 0]
   },
   {
-    "description": "Cat 2: forced block — all other moves are losing, col 3 is the only safe square",
+    "description": "forced_block: forced block — all other moves are losing, col 3 is the only safe square",
     "moves": "11224",
     "candidateCol": 2,
     "expectedCategory": 2,
@@ -32,7 +32,7 @@
     "scores": [-18, -18, 0, -18, -18, -18, -18]
   },
   {
-    "description": "Cat 3: double threat — placing at col 3 creates 2 simultaneous winning threats",
+    "description": "double_threat: double threat — placing at col 3 creates 2 simultaneous winning threats",
     "moves": "4455",
     "candidateCol": 2,
     "expectedCategory": 3,
@@ -40,7 +40,7 @@
     "scores": [-4, -3, 18, 2, 2, 18, -3]
   },
   {
-    "description": "Cat 3: double threat — col 6 also creates 2 threats in same position",
+    "description": "double_threat: double threat — col 6 also creates 2 threats in same position",
     "moves": "4455",
     "candidateCol": 5,
     "expectedCategory": 3,
@@ -48,7 +48,7 @@
     "scores": [-4, -3, 18, 2, 2, 18, -3]
   },
   {
-    "description": "Cat 4: fork setup — col4 is winning with 3+ winning columns available (multi-path win)",
+    "description": "fork_setup: fork setup — col4 is winning with 3+ winning columns available (multi-path win)",
     "moves": "12345",
     "candidateCol": 3,
     "expectedCategory": 4,
@@ -56,7 +56,7 @@
     "scores": [0, 2, 0, 3, 2, -1, 0]
   },
   {
-    "description": "Cat 4: fork setup — col3 wins in a position with 3 winning columns, 0 threats after placement",
+    "description": "fork_setup: fork setup — col3 wins in a position with 3 winning columns, 0 threats after placement",
     "moves": "123",
     "candidateCol": 2,
     "expectedCategory": 4,
@@ -64,7 +64,7 @@
     "scores": [0, 1, 3, 1, 1, 2, 0]
   },
   {
-    "description": "Cat 5: zugzwang — col 7 is the least bad move in a losing position",
+    "description": "zugzwang: zugzwang — col 7 is the least bad move in a losing position",
     "moves": "4444455566",
     "candidateCol": 6,
     "expectedCategory": 5,
@@ -72,7 +72,7 @@
     "scores": [-16, -16, -16, -16, -16, -16, -2]
   },
   {
-    "description": "Cat 6: parity control — col4 score above average among positive moves, only 2 positive cols",
+    "description": "parity_control: parity control — col4 score above average among positive moves, only 2 positive cols",
     "moves": "43445",
     "candidateCol": 3,
     "expectedCategory": 6,
