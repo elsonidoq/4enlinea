@@ -2,6 +2,20 @@
 
 ## Core Concept: Parity Control
 
+### What "the parity-controlling player" means
+
+In Connect Four, squares are classified by row parity:
+- **Odd squares**: rows 1, 3, 5 (counting from the bottom)
+- **Even squares**: rows 2, 4, 6
+
+When all remaining columns have an **even number of empty squares**, the player whose turn it is (White, the first player) is in a bind: any column they enter will leave an odd number of empty squares in that column, allowing the opponent to immediately respond in the same column. If Black (the second player) follows this "follow-up" strategy — always responding in the same column — Black will obtain all even squares and White will obtain all odd squares, with White having no way to break this.
+
+**Formal definition (Allis 1988):** *A player is in control of the Zugzwang if they are able to guide the way odd and even squares are divided among both players.*
+
+In the initial position, Black controls the Zugzwang because all columns are empty (even number of empty squares in each), so White must move first and Black can always play follow-up.
+
+**Practical consequence:** The parity-controlling player can guarantee ownership of even squares — and therefore invalidate opponent threats that require odd squares — without needing to calculate specific move sequences. The strategic rules below describe how this guarantee is exercised or maintained.
+
 A player who controls parity (zugzwang/follow-up) can predict which rows they will naturally obtain in future play.
 
 Most strategic rules are mechanisms for guaranteeing ownership — or denial — of critical squares.
