@@ -16,6 +16,14 @@ In the initial position, Black controls the Zugzwang because all columns are emp
 
 **Practical consequence:** The parity-controlling player can guarantee ownership of even squares — and therefore invalidate opponent threats that require odd squares — without needing to calculate specific move sequences. The strategic rules below describe how this guarantee is exercised or maintained.
 
+### How White gains control
+
+White starts without control — Black holds it by default because all columns begin with an even number of empty squares. Black cannot exploit this immediately, however: pure follow-up from move 1 gives White all of row 1 and an instant win. Black is therefore forced to take some odd squares early, and this is White's window.
+
+**The mechanism:** White creates an **odd threat** (a winning threat on an odd-numbered row) in a column that Black cannot safely enter. That column is effectively removed from Black's follow-up calculus. If White then plays elsewhere so that all remaining accessible columns have an even number of empty squares, it becomes Black's turn on a fully even board — and White can play follow-up. Control has shifted.
+
+**The core trade:** Black gives up an odd square to contest something critical; White responds by establishing a poisoned odd-threat column. Once Black is locked out of that column, White restructures the rest of the board to even and seizes Zugzwang.
+
 A player who controls parity (zugzwang/follow-up) can predict which rows they will naturally obtain in future play.
 
 Most strategic rules are mechanisms for guaranteeing ownership — or denial — of critical squares.
