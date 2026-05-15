@@ -21,3 +21,6 @@
 - [Puzzle gen improvements — spec 004 complete](project_puzzle_gen_improvements.md) — T001–T012 done; softmax generation, per-player temperatures, player-perspective color normalization in CurationWorkspace.jsx
 - [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
 - [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs for 10+ min; likely solver IPC deadlock or terminal-position edge case; classifier tests are fast (22/22, ~56ms)
+- [Category cleanup 2026-05-13](project_category_cleanup.md) — fork_setup/parity_control removed; zugzwang→forced_win; future proper zugzwang will be a distinct category
+- [Migration constraint order](feedback_migration_constraint_order.md) — drop constraints before updating data, not after; learned from broken migration 013
+- [correct_col migration gap](project_correct_col_migration.md) — column was absent until 016_correct_col.sql; needed by claimeven/figure_7/j_shape; confirm applied before querying it

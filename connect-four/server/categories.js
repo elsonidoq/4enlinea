@@ -1,23 +1,30 @@
 export const VALID_CATEGORIES = new Set([
   'immediate_threat', 'forced_block', 'double_threat',
-  'fork_setup', 'zugzwang', 'parity_control', 'forbidden_columns',
+  'forced_win', 'forbidden_columns',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ]);
 
 export const PAID_CATEGORIES = new Set([
-  'fork_setup', 'zugzwang', 'parity_control',
+  'forced_win', 'forbidden_columns',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ]);
 
 export const CATEGORY_ORDER = [
   'immediate_threat', 'forced_block', 'double_threat',
-  'fork_setup', 'zugzwang', 'parity_control', 'forbidden_columns',
+  'forced_win', 'forbidden_columns',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ];
 
 export const CATEGORY_NAMES = {
   immediate_threat:  'Immediate Threat',
   forced_block:      'Forced Block',
   double_threat:     'Double Threat',
-  fork_setup:        'Fork Setup',
-  zugzwang:          'Zugzwang',
-  parity_control:    'Parity Control',
+  forced_win:        'Forced Win',
   forbidden_columns: 'Forbidden Columns',
+  z_threat:          'Z-Threat',
+  claimeven:         'Claimeven',
+  undercut:          'Undercut',
+  overcut:           'Overcut',
+  figure_7:          'Figure 7',
+  j_shape:           'J-Shape',
 };

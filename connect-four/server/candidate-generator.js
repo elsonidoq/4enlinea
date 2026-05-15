@@ -1,5 +1,9 @@
 import { evaluatePredicate } from './predicates.js';
-import { classify, checkWin, countWinningThreats } from './classifier.js';
+import {
+  classify, checkWin, countWinningThreats,
+  detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
+  detectFigure7, detectJShape,
+} from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 const ROWS = 6;
@@ -103,62 +107,6 @@ function computeLowCategoryHighlight(moveString, correctCols) {
   return [{ col, row: heights[col], role: 'hint' }];
 }
 
-// fork_setup highlight
-function computeForkSetupHighlight(moveString, correctCols) {
-  if (correctCols.length === 0) return [];
-  const C = correctCols[0];
-  const board0 = buildBoard(moveString);
-  if (!board0) return [];
-  const H0 = getHeights(moveString);
-  if (H0[C] >= ROWS) return [];
-  const currentPlayer = moveString.length % 2 === 0 ? 1 : 2;
-
-  const setupCell = { col: C, row: H0[C], role: 'hint' };
-  const B1 = copyBoard(board0);
-  const H1 = [...H0];
-  B1[H1[C]][C] = currentPlayer;
-  H1[C]++;
-
-  const forkCandidates = [];
-  for (let f = 0; f < COLS; f++) {
-    if (H1[f] >= ROWS) continue;
-    const B2f = copyBoard(B1);
-    const H2f = [...H1];
-    B2f[H2f[f]][f] = currentPlayer;
-    H2f[f]++;
-    const count = countWinningThreats(B2f, H2f, currentPlayer);
-    if (count >= 2) forkCandidates.push({ f, count });
-  }
-
-  if (forkCandidates.length === 0) return [setupCell];
-
-  forkCandidates.sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    const da = Math.abs(a.f - 3), db = Math.abs(b.f - 3);
-    if (da !== db) return da - db;
-    return a.f - b.f;
-  });
-  const forkCol = forkCandidates[0].f;
-  const forkCell = { col: forkCol, row: H1[forkCol], role: 'hint' };
-
-  const B2 = copyBoard(B1);
-  const H2 = [...H1];
-  B2[H2[forkCol]][forkCol] = currentPlayer;
-  H2[forkCol]++;
-
-  const threatCells = [];
-  for (let t = 0; t < COLS; t++) {
-    if (H2[t] >= ROWS) continue;
-    B2[H2[t]][t] = currentPlayer;
-    if (checkWin(B2, H2[t], t, currentPlayer)) {
-      threatCells.push({ col: t, row: H2[t], role: 'threat' });
-    }
-    B2[H2[t]][t] = 0;
-  }
-
-  return [setupCell, forkCell, ...threatCells];
-}
-
 // Returns the single forced-block column for the current player, or null if not strictly forced.
 // "Forced" means exactly one legal col has score > opponentImmediateWin (the blocking col,
 // which may still be a losing score — Yellow is losing but not immediately) and all others
@@ -183,7 +131,7 @@ function getForcedBlock(moveString, scores) {
   return betterThanImmediateLoss[0];
 }
 
-// Recursively trace a zugzwang sequence starting with Red playing redCol on ms.
+// Recursively trace a forced-win sequence starting with Red playing redCol on ms.
 // Returns an array [redCol, yellowCol, ..., finalWinnerCol] or null.
 // depth = number of Red plays so far (starts at 1, max 4).
 //
@@ -195,9 +143,9 @@ function getForcedBlock(moveString, scores) {
 //
 // Case A is the terminal: after any Yellow move Red wins immediately (sign-flip: oiw1 = -winScore2).
 // Case B recurses, building up forced moves until Case A is reached.
-async function traceZugzwang(ms, redCol, depth, solver) {
+async function traceForcedWin(ms, redCol, depth, solver) {
   const indent = '  '.repeat(depth);
-  console.log(`${indent}[depth=${depth}] traceZugzwang ms="${ms}" redCol=${redCol+1}`);
+  console.log(`${indent}[depth=${depth}] traceForcedWin ms="${ms}" redCol=${redCol+1}`);
 
   const ms1 = ms + (redCol + 1);
   if (isGameOver(ms1)) { console.log(`${indent}  → game over after redCol, return null`); return null; }
@@ -258,21 +206,21 @@ async function traceZugzwang(ms, redCol, depth, solver) {
   const heights2 = getHeights(ms2);
   for (let c = 0; c < COLS; c++) {
     if (heights2[c] >= ROWS) continue;
-    const subTrace = await traceZugzwang(ms2, c, depth + 1, solver);
+    const subTrace = await traceForcedWin(ms2, c, depth + 1, solver);
     if (subTrace !== null) return [redCol, yellowCol, ...subTrace];
   }
   console.log(`${indent}  → no sub-trace found, return null`);
   return null;
 }
 
-// zugzwang predicate: exactly one column initiates a valid zugzwang sequence.
-export async function checkZugzwangPredicate(ms, solver) {
+// forced_win predicate: exactly one column initiates a valid forced-win sequence.
+export async function checkForcedWinPredicate(ms, solver) {
   const heights = getHeights(ms);
   const redPlayer = ms.length % 2 === 0 ? 1 : 2;
   const correctCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] >= ROWS) continue;
-    const trace = await traceZugzwang(ms, c, 1, solver);
+    const trace = await traceForcedWin(ms, c, 1, solver);
     if (trace === null) continue;
     let msEnd = ms;
     for (const col of trace) msEnd += (col + 1);
@@ -314,12 +262,12 @@ export function checkForbiddenColumnsPredicate(ms) {
   };
 }
 
-// zugzwang highlight — trace forced sequence from the initiating move.
-export async function computeZugzwangHighlight(solver, moveString, correctCols) {
+// forced_win highlight — trace forced sequence from the initiating move.
+export async function computeForcedWinHighlight(solver, moveString, correctCols) {
   if (correctCols.length === 0) return [];
 
   const redCol = correctCols[0];
-  const trace = await traceZugzwang(moveString, redCol, 1, solver);
+  const trace = await traceForcedWin(moveString, redCol, 1, solver);
   if (!trace) return [];
 
   const cells = [];
@@ -347,40 +295,6 @@ export async function computeZugzwangHighlight(solver, moveString, correctCols) 
   return cells;
 }
 
-// parity_control highlight
-function computeParityControlHighlight(moveString) {
-  const board0 = buildBoard(moveString);
-  if (!board0) return [];
-  const heights = getHeights(moveString);
-  const currentPlayer = moveString.length % 2 === 0 ? 1 : 2;
-  const opponent = 3 - currentPlayer;
-
-  const liveThreats = [];
-  for (let c = 0; c < COLS; c++) {
-    for (let r = heights[c]; r < ROWS; r++) {
-      if ((r - heights[c]) % 2 !== 0) continue;
-      const board = copyBoard(board0);
-      board[r][c] = currentPlayer;
-      if (!checkWin(board, r, c, currentPlayer)) continue;
-      board[r][c] = 0; // restore before undercut check
-      if (r > heights[c]) {
-        board[r - 1][c] = opponent;
-        if (checkWin(board, r - 1, c, opponent)) continue;
-      }
-      liveThreats.push({ col: c, row: r });
-    }
-  }
-
-  if (liveThreats.length === 0) return [];
-
-  const cells = [];
-  for (const { col: c, row: r } of liveThreats) {
-    cells.push({ col: c, row: r, role: 'threat' });
-    if (r > heights[c]) cells.push({ col: c, row: r - 1, role: 'support' });
-  }
-  return cells;
-}
-
 // Forbidden columns highlight — mark each forbidden column with role 'loser'.
 function computeForbiddenColumnsHighlight(moveString, correctCols) {
   const heights = getHeights(moveString);
@@ -394,9 +308,7 @@ function computeForbiddenColumnsHighlight(moveString, correctCols) {
 
 async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
   if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
-  if (category === 'fork_setup') return computeForkSetupHighlight(moveString, correctCols);
-  if (category === 'zugzwang') return computeZugzwangHighlight(solver, moveString, correctCols);
-  if (category === 'parity_control') return computeParityControlHighlight(moveString);
+  if (category === 'forced_win') return computeForcedWinHighlight(solver, moveString, correctCols);
   if (category === 'forbidden_columns') return computeForbiddenColumnsHighlight(moveString, correctCols);
   return [];
 }
@@ -404,8 +316,8 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
 // Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
 // after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
 async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
-  const T1 = rng() * 4 + 0.1;
-  const T2 = rng() * 4 + 0.1;
+  const T1 = rng() * 5 + 0.1;
+  const T2 = rng() * 5 + 0.1;
   const temps = [T1, T2];
   let moveString = '';
   const heights = Array(COLS).fill(0);
@@ -444,11 +356,102 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
   return null;
 }
 
+// T011 — check* functions for the 6 new tactical categories
+
+export function checkZThreatPredicate(ms, scores) {
+  const result = detectZThreat(ms, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  const correctCol = result.highlightMetadata.column;
+  return {
+    passes: true,
+    correctCols: [correctCol],
+    correct_col: correctCol,
+    highlight_metadata: result.highlightMetadata,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
+export async function checkClaimevenPredicate(ms, scores, solver) {
+  const result = await detectClaimeven(ms, scores, solver);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols: [result.correctCol],
+    correct_col: result.correctCol,
+    highlight_metadata: result.highlightMetadata, // null for claimeven
+    category_evidence: result.categoryEvidence,
+  };
+}
+
+export function checkUndercutPredicate(ms, scores) {
+  const result = detectUndercut(ms, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  // For undercut, "correct" = any column except the killing_threat column
+  const killingCol = result.highlightMetadata.cells.find(c => c.role === 'killing_threat').column;
+  const heights = getHeights(ms);
+  const correctCols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (heights[c] < ROWS && c !== killingCol) correctCols.push(c);
+  }
+  return {
+    passes: correctCols.length >= 1,
+    correctCols,
+    correct_col: null, // undercut has no single correct col; eval derives from highlight_metadata
+    highlight_metadata: result.highlightMetadata,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
+export function checkOvercutPredicate(ms, scores) {
+  const result = detectOvercut(ms, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  const majorCol = result.highlightMetadata.cells.find(c => c.role === 'major_threat').column;
+  return {
+    passes: true,
+    correctCols: [majorCol],
+    correct_col: null, // overcut eval derives from highlight_metadata
+    highlight_metadata: result.highlightMetadata,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
+export function checkFigure7Predicate(ms, scores) {
+  const result = detectFigure7(ms, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols: [result.correctCol],
+    correct_col: result.correctCol,
+    highlight_metadata: result.highlightMetadata,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
+export function checkJShapePredicate(ms, scores) {
+  const result = detectJShape(ms, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols: [result.correctCol],
+    correct_col: result.correctCol,
+    highlight_metadata: result.highlightMetadata,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
 // Check whether the current position satisfies the category predicate.
-// Returns { passes, correctCols }.
+// Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
 async function checkPredicate(category, moveString, scores, solver) {
-  if (category === 'zugzwang') return checkZugzwangPredicate(moveString, solver);
+  if (category === 'forced_win') return checkForcedWinPredicate(moveString, solver);
   if (category === 'forbidden_columns') return checkForbiddenColumnsPredicate(moveString);
+
+  // New tactical categories — priority order per Decision 5
+  if (category === 'z_threat') return checkZThreatPredicate(moveString, scores);
+  if (category === 'undercut') return checkUndercutPredicate(moveString, scores);
+  if (category === 'overcut') return checkOvercutPredicate(moveString, scores);
+  if (category === 'claimeven') return checkClaimevenPredicate(moveString, scores, solver);
+  if (category === 'figure_7') return checkFigure7Predicate(moveString, scores);
+  if (category === 'j_shape') return checkJShapePredicate(moveString, scores);
 
   const puzzle = { category, moveString };
   const heights = getHeights(moveString);
@@ -458,7 +461,7 @@ async function checkPredicate(category, moveString, scores, solver) {
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  // immediate_threat/forced_block/double_threat/fork_setup/parity_control: exactly one legal column must return 'correct'
+  // immediate_threat/forced_block/double_threat: exactly one legal column must return 'correct'
   const correctCols = legalCols.filter(c => {
     const r = evaluatePredicate(puzzle, c, scores);
     return r.result === 'correct';
@@ -502,12 +505,18 @@ export async function generateCandidates(category, count, seed) {
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
       let matchedCorrectCols = null;
+      let matchedHighlightMetadata = null;
+      let matchedCategoryEvidence = null;
+      let matchedCorrectCol = null;
       const onPosition = async (ms, sc) => {
         if (ms.length < minMoves) return false;
         if (!isClean(category, sc, ms.length)) return false;
-        const { passes, correctCols } = await checkPredicate(category, ms, sc, solver);
-        if (!passes) return false;
-        matchedCorrectCols = correctCols;
+        const predicateResult = await checkPredicate(category, ms, sc, solver);
+        if (!predicateResult.passes) return false;
+        matchedCorrectCols = predicateResult.correctCols;
+        matchedHighlightMetadata = predicateResult.highlight_metadata ?? null;
+        matchedCategoryEvidence = predicateResult.category_evidence ?? null;
+        matchedCorrectCol = predicateResult.correct_col ?? null;
         return true;
       };
 
@@ -537,6 +546,9 @@ export async function generateCandidates(category, count, seed) {
         classifier_tags: tags,
         debug_trace: trace,
         highlight_cells,
+        highlight_metadata: matchedHighlightMetadata,
+        category_evidence: matchedCategoryEvidence,
+        correct_col: matchedCorrectCol,
       });
 
       const now = Date.now();

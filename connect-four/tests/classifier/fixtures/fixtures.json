@@ -48,35 +48,11 @@
     "scores": [-4, -3, 18, 2, 2, 18, -3]
   },
   {
-    "description": "fork_setup: fork setup — col4 is winning with 3+ winning columns available (multi-path win)",
-    "moves": "12345",
-    "candidateCol": 3,
-    "expectedCategory": 4,
-    "expectedTag": "fork_setup",
-    "scores": [0, 2, 0, 3, 2, -1, 0]
-  },
-  {
-    "description": "fork_setup: fork setup — col3 wins in a position with 3 winning columns, 0 threats after placement",
-    "moves": "123",
-    "candidateCol": 2,
-    "expectedCategory": 4,
-    "expectedTag": "fork_setup",
-    "scores": [0, 1, 3, 1, 1, 2, 0]
-  },
-  {
-    "description": "zugzwang: zugzwang — col 7 is the least bad move in a losing position",
+    "description": "forced_win: col 7 is the least bad move in a losing position",
     "moves": "4444455566",
     "candidateCol": 6,
-    "expectedCategory": 5,
-    "expectedTag": "zugzwang",
+    "expectedCategory": 4,
+    "expectedTag": "forced_win",
     "scores": [-16, -16, -16, -16, -16, -16, -2]
-  },
-  {
-    "description": "parity_control: parity control — col4 score above average among positive moves, only 2 positive cols",
-    "moves": "43445",
-    "candidateCol": 3,
-    "expectedCategory": 6,
-    "expectedTag": "parity_control",
-    "scores": [0, 0, 0, 4, 0, 2, 0]
   }
 ]

@@ -49,45 +49,203 @@
     "expectedResult": "wrong"
   },
   {
-    "description": "fork_setup: correct fork setup",
-    "puzzle": { "id": 5, "category": "fork_setup", "moveString": "12345", "goalPredicateType": "fork_setup" },
-    "candidateCol": 3,
-    "scores": [0, 2, 0, 3, 2, -1, 0],
-    "expectedResult": "correct"
-  },
-  {
-    "description": "fork_setup: tied (same positive score)",
-    "puzzle": { "id": 5, "category": "fork_setup", "moveString": "12345", "goalPredicateType": "fork_setup" },
-    "candidateCol": 1,
-    "scores": [0, 2, 0, 3, 2, -1, 0],
-    "expectedResult": "tied"
-  },
-  {
-    "description": "zugzwang: correct zugzwang (least bad move)",
-    "puzzle": { "id": 6, "category": "zugzwang", "moveString": "4444455566", "goalPredicateType": "zugzwang" },
+    "description": "forced_win: correct (least bad move)",
+    "puzzle": { "id": 6, "category": "forced_win", "moveString": "4444455566", "goalPredicateType": "forced_win" },
     "candidateCol": 6,
     "scores": [-16, -16, -16, -16, -16, -16, -2],
     "expectedResult": "correct"
   },
   {
-    "description": "zugzwang: wrong zugzwang (not the least bad)",
-    "puzzle": { "id": 6, "category": "zugzwang", "moveString": "4444455566", "goalPredicateType": "zugzwang" },
+    "description": "forced_win: wrong (not the least bad)",
+    "puzzle": { "id": 6, "category": "forced_win", "moveString": "4444455566", "goalPredicateType": "forced_win" },
     "candidateCol": 0,
     "scores": [-16, -16, -16, -16, -16, -16, -2],
     "expectedResult": "wrong"
   },
+
   {
-    "description": "parity_control: correct parity control (above average positive score)",
-    "puzzle": { "id": 7, "category": "parity_control", "moveString": "43445", "goalPredicateType": "parity_control" },
+    "description": "z_threat: correct (plays Z-threat column)",
+    "puzzle": {
+      "id": 10, "category": "z_threat", "moveString": "4455663", "goalPredicateType": "z_threat",
+      "highlightMetadata": { "type": "capsule", "column": 3, "fromRow": 2, "toRow": 4, "badgeCount": 3 }
+    },
     "candidateCol": 3,
-    "scores": [0, 0, 0, 4, 0, 2, 0],
+    "scores": [0, 0, 0, 5, 0, 0, 0],
     "expectedResult": "correct"
   },
   {
-    "description": "parity_control: wrong (below average positive score)",
-    "puzzle": { "id": 7, "category": "parity_control", "moveString": "43445", "goalPredicateType": "parity_control" },
+    "description": "z_threat: wrong (plays non-Z-threat column)",
+    "puzzle": {
+      "id": 10, "category": "z_threat", "moveString": "4455663", "goalPredicateType": "z_threat",
+      "highlightMetadata": { "type": "capsule", "column": 3, "fromRow": 2, "toRow": 4, "badgeCount": 3 }
+    },
+    "candidateCol": 0,
+    "scores": [0, 0, 0, 5, 0, 0, 0],
+    "expectedResult": "wrong"
+  },
+
+  {
+    "description": "claimeven: correct (plays the correct equalising column)",
+    "puzzle": {
+      "id": 11, "category": "claimeven", "moveString": "44334455", "goalPredicateType": "claimeven",
+      "highlightMetadata": null,
+      "correctCol": 2
+    },
+    "candidateCol": 2,
+    "scores": [0, 0, 3, 0, 0, 0, 0],
+    "expectedResult": "correct"
+  },
+  {
+    "description": "claimeven: wrong (plays wrong column)",
+    "puzzle": {
+      "id": 11, "category": "claimeven", "moveString": "44334455", "goalPredicateType": "claimeven",
+      "highlightMetadata": null,
+      "correctCol": 2
+    },
     "candidateCol": 5,
-    "scores": [0, 0, 0, 4, 0, 2, 0],
+    "scores": [0, 0, 3, 0, 0, 0, 0],
+    "expectedResult": "wrong"
+  },
+
+  {
+    "description": "undercut: correct (avoids killing_threat column)",
+    "puzzle": {
+      "id": 12, "category": "undercut", "moveString": "445566332211", "goalPredicateType": "undercut",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 3, "row": 2, "role": "killing_threat" },
+          { "column": 3, "row": 4, "role": "dead_threat" }
+        ]
+      }
+    },
+    "candidateCol": 0,
+    "scores": [2, 0, 0, -3, 0, 0, 0],
+    "expectedResult": "correct"
+  },
+  {
+    "description": "undercut: wrong (plays killing_threat column)",
+    "puzzle": {
+      "id": 12, "category": "undercut", "moveString": "445566332211", "goalPredicateType": "undercut",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 3, "row": 2, "role": "killing_threat" },
+          { "column": 3, "row": 4, "role": "dead_threat" }
+        ]
+      }
+    },
+    "candidateCol": 3,
+    "scores": [2, 0, 0, -3, 0, 0, 0],
+    "expectedResult": "wrong"
+  },
+
+  {
+    "description": "overcut: correct (plays major_threat column)",
+    "puzzle": {
+      "id": 13, "category": "overcut", "moveString": "44556633221144", "goalPredicateType": "overcut",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 4, "row": 1, "role": "neutralised_threat" },
+          { "column": 4, "row": 3, "role": "major_threat" }
+        ]
+      }
+    },
+    "candidateCol": 4,
+    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "expectedResult": "correct"
+  },
+  {
+    "description": "overcut: wrong (plays non-major_threat column)",
+    "puzzle": {
+      "id": 13, "category": "overcut", "moveString": "44556633221144", "goalPredicateType": "overcut",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 4, "row": 1, "role": "neutralised_threat" },
+          { "column": 4, "row": 3, "role": "major_threat" }
+        ]
+      }
+    },
+    "candidateCol": 0,
+    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "expectedResult": "wrong"
+  },
+
+  {
+    "description": "figure_7: correct (plays completing column)",
+    "puzzle": {
+      "id": 14, "category": "figure_7", "moveString": "12345677654321", "goalPredicateType": "figure_7",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 2, "row": 0, "role": "pattern_piece" },
+          { "column": 3, "row": 1, "role": "pattern_piece" },
+          { "column": 4, "row": 2, "role": "pattern_piece" },
+          { "column": 5, "row": 2, "role": "pattern_piece" }
+        ]
+      },
+      "correctCol": 6
+    },
+    "candidateCol": 6,
+    "scores": [0, 0, 0, 0, 0, 0, 5],
+    "expectedResult": "correct"
+  },
+  {
+    "description": "figure_7: wrong (plays wrong column)",
+    "puzzle": {
+      "id": 14, "category": "figure_7", "moveString": "12345677654321", "goalPredicateType": "figure_7",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 2, "row": 0, "role": "pattern_piece" },
+          { "column": 3, "row": 1, "role": "pattern_piece" },
+          { "column": 4, "row": 2, "role": "pattern_piece" },
+          { "column": 5, "row": 2, "role": "pattern_piece" }
+        ]
+      },
+      "correctCol": 6
+    },
+    "candidateCol": 0,
+    "scores": [0, 0, 0, 0, 0, 0, 5],
+    "expectedResult": "wrong"
+  },
+
+  {
+    "description": "j_shape: correct (plays completing column)",
+    "puzzle": {
+      "id": 15, "category": "j_shape", "moveString": "4433441133", "goalPredicateType": "j_shape",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 3, "row": 0, "role": "pattern_piece" },
+          { "column": 3, "row": 2, "role": "pattern_piece" },
+          { "column": 4, "row": 1, "role": "pattern_piece" }
+        ]
+      },
+      "correctCol": 4
+    },
+    "candidateCol": 4,
+    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "expectedResult": "correct"
+  },
+  {
+    "description": "j_shape: wrong (plays wrong column)",
+    "puzzle": {
+      "id": 15, "category": "j_shape", "moveString": "4433441133", "goalPredicateType": "j_shape",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          { "column": 3, "row": 0, "role": "pattern_piece" },
+          { "column": 3, "row": 2, "role": "pattern_piece" },
+          { "column": 4, "row": 1, "role": "pattern_piece" }
+        ]
+      },
+      "correctCol": 4
+    },
+    "candidateCol": 0,
+    "scores": [0, 0, 0, 0, 4, 0, 0],
     "expectedResult": "wrong"
   }
 ]

@@ -55,6 +55,42 @@ export function Piece({ color = 'empty', highlight = null, heatValue = 0, step =
     shadow = '0 0 8px var(--yellow-g)';
   }
 
+  // Role colors: orange = killing/neutralised threat, purple = dead/major threat, teal = pattern piece, amber = z_range
+  if ((highlight === 'killing_threat' || highlight === 'neutralised_threat') && color === 'empty') {
+    bg = 'rgba(249,115,22,.18)';
+    border = '2px solid #f97316';
+    shadow = '0 0 8px rgba(249,115,22,.35)';
+  }
+
+  if ((highlight === 'dead_threat' || highlight === 'major_threat') && color === 'empty') {
+    bg = 'rgba(139,92,246,.18)';
+    border = '2px solid #8b5cf6';
+    shadow = '0 0 8px rgba(139,92,246,.35)';
+  }
+
+  if (highlight === 'pattern_piece' && color === 'empty') {
+    bg = 'rgba(20,184,166,.18)';
+    border = '2px solid #14b8a6';
+    shadow = '0 0 8px rgba(20,184,166,.35)';
+  }
+
+  if (highlight === 'pattern_piece' && (color === 'red' || color === 'yellow')) {
+    border = '2px solid #14b8a6';
+    shadow = '0 0 10px rgba(20,184,166,.6)';
+  }
+
+  if (highlight === 'figure7_threat' && color === 'empty') {
+    bg = 'rgba(251,191,36,.18)';
+    border = '2px solid #fbbf24';
+    shadow = '0 0 8px rgba(251,191,36,.5)';
+  }
+
+  if (highlight === 'z_range' && color === 'empty') {
+    bg = 'rgba(245,184,32,.12)';
+    border = '1.5px dashed var(--yellow)';
+    shadow = 'none';
+  }
+
   if (heatValue > 0 && color === 'empty') {
     bg = `rgba(232, 57, 46, ${Math.min(heatValue, 0.85)})`;
     border = '1px solid rgba(232, 57, 46, .4)';

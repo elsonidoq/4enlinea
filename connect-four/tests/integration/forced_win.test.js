@@ -1,8 +1,8 @@
-// Integration tests for zugzwang predicate and highlight — uses real c4solver binary.
+// Integration tests for forced_win predicate and highlight — uses real c4solver binary.
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
-import { checkZugzwangPredicate, computeZugzwangHighlight } from '../../server/candidate-generator.js';
+import { checkForcedWinPredicate, computeForcedWinHighlight } from '../../server/candidate-generator.js';
 
 // Case 1: confirmed false-positive from the annotated rejection set.
 // Sequence: initiator col3 → forced col3 → initiator col3 → forced col2 → wins col2.
@@ -17,16 +17,16 @@ let solver;
 before(() => { solver = createSolverProcess(); });
 after(() => { solver.destroy(); });
 
-describe('zugzwang predicate — case 2: correct 5-step sequence [3,4,4,5,5]', () => {
-  test('checkZugzwangPredicate passes and identifies col 3 (1-indexed) as the sole initiating move', async () => {
-    const result = await checkZugzwangPredicate(MOVE_STRING_2, solver);
+describe('forced_win predicate — case 2: correct 5-step sequence [3,4,4,5,5]', () => {
+  test('checkForcedWinPredicate passes and identifies col 3 (1-indexed) as the sole initiating move', async () => {
+    const result = await checkForcedWinPredicate(MOVE_STRING_2, solver);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols, [2]); // 0-indexed col 2 = 1-indexed col 3
   }, { timeout: 30_000 });
 
-  test('computeZugzwangHighlight returns the correct 5-step forced sequence [3,4,4,5,5]', async () => {
-    const { correctCols } = await checkZugzwangPredicate(MOVE_STRING_2, solver);
-    const cells = await computeZugzwangHighlight(solver, MOVE_STRING_2, correctCols);
+  test('computeForcedWinHighlight returns the correct 5-step forced sequence [3,4,4,5,5]', async () => {
+    const { correctCols } = await checkForcedWinPredicate(MOVE_STRING_2, solver);
+    const cells = await computeForcedWinHighlight(solver, MOVE_STRING_2, correctCols);
 
     // Expected (1-indexed): 3(hint) → 4(loser) → 4(hint) → 5(loser) → 5(winner)
     assert.equal(cells.length, 5);
@@ -38,16 +38,16 @@ describe('zugzwang predicate — case 2: correct 5-step sequence [3,4,4,5,5]', (
   }, { timeout: 30_000 });
 });
 
-describe('zugzwang predicate — zugzwang trace fix (>= oiw1 threshold)', () => {
-  test('checkZugzwangPredicate passes and identifies col 3 (1-indexed) as the sole initiating move', async () => {
-    const result = await checkZugzwangPredicate(MOVE_STRING, solver);
+describe('forced_win predicate — trace fix (>= oiw1 threshold)', () => {
+  test('checkForcedWinPredicate passes and identifies col 3 (1-indexed) as the sole initiating move', async () => {
+    const result = await checkForcedWinPredicate(MOVE_STRING, solver);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols, [2]); // 0-indexed col 2 = 1-indexed col 3
   }, { timeout: 30_000 });
 
-  test('computeZugzwangHighlight returns the correct 5-step forced sequence', async () => {
-    const { correctCols } = await checkZugzwangPredicate(MOVE_STRING, solver);
-    const cells = await computeZugzwangHighlight(solver, MOVE_STRING, correctCols);
+  test('computeForcedWinHighlight returns the correct 5-step forced sequence', async () => {
+    const { correctCols } = await checkForcedWinPredicate(MOVE_STRING, solver);
+    const cells = await computeForcedWinHighlight(solver, MOVE_STRING, correctCols);
 
     // Expected: Red col3 (hint) → Yellow col3 (loser) → Red col3 (hint) → Yellow col2 (loser) → Red col2 (winner)
     assert.equal(cells.length, 5);

@@ -131,7 +131,7 @@ const TEST_POSITIONS = [
 // Pattern tags the classifier can return
 const VALID_TAGS = new Set([
   'immediate_threat', 'forced_block', 'double_threat',
-  'fork_setup', 'zugzwang', 'parity_control',
+  'forced_win',
   'best_move', 'drawing_move', 'suboptimal_move',
 ]);
 

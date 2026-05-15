@@ -1,4 +1,4 @@
-// Goal predicate evaluator for all 6 puzzle categories.
+// Goal predicate evaluator for puzzle categories.
 // Each category defines what "correct" means for a puzzle.
 
 const ROWS = 6;
@@ -39,10 +39,14 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
     case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, winScore);
     case 'forced_block': return evalForcedBlock(candidateCol, scores, winScore, moveCount);
     case 'double_threat': return evalDoubleThreat(candidateCol, scores, winScore, puzzle.moveString);
-    case 'fork_setup': return evalForkSetup(candidateCol, scores, winScore);
-    case 'zugzwang': return evalZugzwang(candidateCol, scores);
-    case 'parity_control': return evalParityControl(candidateCol, scores, winScore);
+    case 'forced_win': return evalForcedWin(candidateCol, scores);
     case 'forbidden_columns': return evalForbiddenColumns(candidateCol, scores, puzzle.moveString);
+    case 'z_threat': return evalZThreat(candidateCol, puzzle);
+    case 'claimeven': return evalClaimeven(candidateCol, puzzle);
+    case 'undercut': return evalUndercut(candidateCol, puzzle);
+    case 'overcut': return evalOvercut(candidateCol, puzzle);
+    case 'figure_7': return evalFigure7(candidateCol, puzzle);
+    case 'j_shape': return evalJShape(candidateCol, puzzle);
     default: return { result: 'wrong' };
   }
 }
@@ -73,7 +77,7 @@ function evalForcedBlock(candidateCol, scores, winScore, moveCount) {
   }, []);
 
   // Bug 2 fix: all non-blocking moves must equal opponentImmediateWin,
-  // otherwise there's no forced block (it might be zugzwang or a different category).
+  // otherwise there's no forced block (it might be a different category).
   if (blockingCols.length === 0) return { result: 'wrong' };
 
   const allOthersAreImmediateLoss = scores.every(
@@ -153,32 +157,8 @@ function evalDoubleThreat(candidateCol, scores, winScore, moveString) {
   return { result: 'wrong', correctCol: doubleThreatCols[0] };
 }
 
-// fork_setup: Play the move that creates a multi-path fork (3+ winning columns).
-function evalForkSetup(candidateCol, scores, winScore) {
-  // Bug 4 fix: exclude immediate wins with s >= winScore (not s !== winScore)
-  const maxScore = Math.max(...scores.filter(s => s > 0 && s < winScore));
-  if (!isFinite(maxScore) || maxScore <= 0) return { result: 'wrong' };
-
-  const bestCols = scores.reduce((acc, s, i) => {
-    if (s === maxScore) acc.push(i);
-    return acc;
-  }, []);
-
-  if (bestCols.includes(candidateCol)) {
-    const others = bestCols.filter(c => c !== candidateCol);
-    return others.length > 0
-      ? { result: 'tied', tiedWith: others, correctCol: bestCols[0] }
-      : { result: 'correct', correctCol: candidateCol };
-  }
-  if (scores[candidateCol] > 0 && scores[candidateCol] < winScore) {
-    return { result: 'tied', tiedWith: bestCols, correctCol: bestCols[0] };
-  }
-  return { result: 'wrong', correctCol: bestCols[0] };
-}
-
-// zugzwang: Choose the best move in a zugzwang (all moves losing, pick least bad).
-function evalZugzwang(candidateCol, scores) {
-  // Bug 5 fix: zugzwang requires all scores to be non-positive
+// forced_win: Choose the initiating move in a forced-win sequence (all moves losing, pick the one that forces the win).
+function evalForcedWin(candidateCol, scores) {
   if (Math.max(...scores) > 0) return { result: 'wrong' };
 
   const maxScore = Math.max(...scores);
@@ -194,29 +174,6 @@ function evalZugzwang(candidateCol, scores) {
       : { result: 'correct', correctCol: candidateCol };
   }
   return { result: 'wrong', correctCol: bestCols[0] };
-}
-
-// parity_control: Choose the move that best controls parity (positive score ≥ average positive).
-function evalParityControl(candidateCol, scores, winScore) {
-  const posScores = scores.filter(s => s > 0 && s < winScore);
-  // Bug 6 fix: need ≥2 positive moves for parity to be a meaningful choice
-  if (posScores.length < 2) return { result: 'wrong' };
-
-  const avg = posScores.reduce((a, b) => a + b, 0) / posScores.length;
-  const bestScore = Math.max(...posScores);
-  const aboveAvgCols = scores.reduce((acc, s, i) => {
-    if (s > 0 && s < winScore && s >= avg) acc.push(i);
-    return acc;
-  }, []);
-
-  if (aboveAvgCols.includes(candidateCol)) {
-    const others = aboveAvgCols.filter(c => c !== candidateCol);
-    return others.length > 0
-      ? { result: 'tied', tiedWith: others, correctCol: aboveAvgCols[0] }
-      : { result: 'correct', correctCol: candidateCol };
-  }
-  // Below average but still positive — wrong
-  return { result: 'wrong', correctCol: aboveAvgCols[0] };
 }
 
 // forbidden_columns: Identify columns that would hand the opponent an immediate win.
@@ -242,6 +199,60 @@ function evalForbiddenColumns(candidateCol, scores, moveString) {
   if (forbiddenCols.length === 0) return { result: 'wrong', forbiddenCols: [] };
   if (forbiddenCols.includes(candidateCol)) return { result: 'wrong', forbiddenCols };
   return { result: 'correct', forbiddenCols };
+}
+
+// ── New category evaluators (T012) ───────────────────────────────────────────
+
+// z_threat: correct column is stored in highlightMetadata.column
+function evalZThreat(candidateCol, puzzle) {
+  const correctCol = puzzle.highlightMetadata?.column;
+  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
+  if (candidateCol === correctCol) return { result: 'correct', correctCol };
+  return { result: 'wrong', correctCol };
+}
+
+// claimeven: correct column stored as correctCol on puzzle
+function evalClaimeven(candidateCol, puzzle) {
+  const correctCol = puzzle.correctCol;
+  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
+  if (candidateCol === correctCol) return { result: 'correct', correctCol };
+  return { result: 'wrong', correctCol };
+}
+
+// undercut: any column except the killing_threat column is correct
+function evalUndercut(candidateCol, puzzle) {
+  const cells = puzzle.highlightMetadata?.cells;
+  if (!cells) return { result: 'wrong' };
+  const killing = cells.find(c => c.role === 'killing_threat');
+  if (!killing) return { result: 'wrong' };
+  if (candidateCol === killing.column) return { result: 'wrong', correctCol: null };
+  return { result: 'correct' };
+}
+
+// overcut: must play the major_threat column
+function evalOvercut(candidateCol, puzzle) {
+  const cells = puzzle.highlightMetadata?.cells;
+  if (!cells) return { result: 'wrong' };
+  const major = cells.find(c => c.role === 'major_threat');
+  if (!major) return { result: 'wrong' };
+  if (candidateCol === major.column) return { result: 'correct', correctCol: major.column };
+  return { result: 'wrong', correctCol: major.column };
+}
+
+// figure_7: correct column stored as correctCol on puzzle
+function evalFigure7(candidateCol, puzzle) {
+  const correctCol = puzzle.correctCol;
+  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
+  if (candidateCol === correctCol) return { result: 'correct', correctCol };
+  return { result: 'wrong', correctCol };
+}
+
+// j_shape: correct column stored as correctCol on puzzle
+function evalJShape(candidateCol, puzzle) {
+  const correctCol = puzzle.correctCol;
+  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
+  if (candidateCol === correctCol) return { result: 'correct', correctCol };
+  return { result: 'wrong', correctCol };
 }
 
 // ── Board utilities ───────────────────────────────────────────────────────────

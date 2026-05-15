@@ -13,10 +13,17 @@ const GOAL_PROMPTS = {
   immediate_threat:  'Find the winning move.',
   forced_block:      "Block your opponent's threat.",
   double_threat:     'Find the move that creates two simultaneous threats.',
+  forced_win:        'Play a sequence of forcing moves to create two unstoppable threats.',
   fork_setup:        'Set up a fork — a sequence that leads to two unstoppable threats.',
   zugzwang:          'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
   parity_control:    'Control the parity of this column to secure the win.',
   forbidden_columns: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
+  z_threat:          'Identify the column where a Z-threat gives you unstoppable parity control.',
+  claimeven:         'Use the Claimeven strategy — identify which columns Red can claim to guarantee a win.',
+  undercut:          'Find the move that undercuts your opponent, taking the square below their threat.',
+  overcut:           'Find the move that overcomes your opponent by playing above their intended threat.',
+  figure_7:          'Spot the Figure-7 pattern and play the key move to exploit it.',
+  j_shape:           'Spot the J-Shape pattern and play the key move to exploit it.',
 };
 
 function buildBoard(moves, userPlayer) {
@@ -165,7 +172,8 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     setScoresLoading(true);
     try {
       const movesWithClick = candidate.move_string + (col + 1).toString();
-      const res = await fetch(`${API}/api/admin/scores?moves=${encodeURIComponent(movesWithClick)}&category=${category}`);
+      const correctColParam = candidate.correct_col != null ? `&correct_col=${candidate.correct_col}` : '';
+      const res = await fetch(`${API}/api/admin/scores?moves=${encodeURIComponent(movesWithClick)}&category=${category}${correctColParam}`);
       const data = await res.json();
       if (res.ok) {
         setClickedScores(data.scores);
@@ -251,6 +259,49 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
         : role;
       highlightedCells.push([row, col, effectiveRole, step]);
     }
+  } else if (category === 'z_threat' && candidate.highlight_metadata?.type === 'capsule') {
+    // T028: highlight cells in z_threat column from fromRow to toRow
+    const { column, fromRow, toRow } = candidate.highlight_metadata;
+    for (let r = fromRow; r <= toRow; r++) {
+      highlightedCells.push([r, column, 'z_range']);
+    }
+  } else if (['undercut', 'overcut'].includes(category) && candidate.highlight_metadata?.type === 'cells') {
+    // T030: undercut/overcut cells with role-based colors
+    for (const { column, row, role } of candidate.highlight_metadata.cells) {
+      highlightedCells.push([row, column, role]);
+    }
+  } else if (['figure_7', 'j_shape'].includes(category) && candidate.highlight_metadata?.type === 'cells') {
+    // T031: pattern cells in teal
+    for (const { column, row, role } of candidate.highlight_metadata.cells) {
+      highlightedCells.push([row, column, role]);
+    }
+    if (candidate.correct_col != null && heights[candidate.correct_col] < ROWS) {
+      highlightedCells.push([heights[candidate.correct_col], candidate.correct_col, 'hint']);
+    }
+    // figure_7: also highlight the two derived threat cells in amber
+    if (category === 'figure_7' && candidate.category_evidence?.threat_cells) {
+      for (const { column, row } of candidate.category_evidence.threat_cells) {
+        highlightedCells.push([row, column, 'figure7_threat']);
+      }
+    }
+  } else if (category === 'claimeven' && candidate.category_evidence) {
+    // T029: simulation_trace → loser/winner steps; baseinverse_pair → hint cells
+    const { simulation_trace, baseinverse_pair } = candidate.category_evidence;
+    if (simulation_trace && simulation_trace.length > 0) {
+      let stepIdx = 0;
+      for (const { col, row, player } of simulation_trace) {
+        const step = ++stepIdx;
+        const role = step % 2 === 1 ? 'loser' : 'winner';
+        highlightedCells.push([row, col, role, step]);
+      }
+    }
+    if (baseinverse_pair) {
+      for (const col of baseinverse_pair) {
+        if (heights[col] < ROWS) {
+          highlightedCells.push([heights[col], col, 'hint']);
+        }
+      }
+    }
   } else if (highlightCol !== null && heights[highlightCol] < ROWS) {
     highlightedCells.push([heights[highlightCol], highlightCol, 'hint']);
   }
@@ -292,6 +343,16 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
           onColumnClick={handleColumnClick}
           highlightedCells={highlightedCells}
         />
+
+        {/* T028: z_threat badge info */}
+        {category === 'z_threat' && candidate.highlight_metadata?.type === 'capsule' && (
+          <div style={{ fontSize: 11, color: 'var(--yellow)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>Z-threat: col {candidate.highlight_metadata.column + 1}</span>
+            <span style={{ background: 'var(--surface)', border: '1px solid var(--yellow)', borderRadius: 4, padding: '1px 6px' }}>
+              {candidate.highlight_metadata.badgeCount} cells
+            </span>
+          </div>
+        )}
 
         <div style={metaRow}>
           <span style={catLabel}>{CATEGORY_NAMES[category] ?? 'Unknown'}</span>
@@ -370,6 +431,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
                 onChange={e => setGoalPrompt(e.target.value)}
                 rows={3}
                 style={ta}
+                placeholder={category === 'z_threat' ? `e.g. 'Find the column with ${candidate.highlight_metadata?.badgeCount ?? '?'} cells to the threat'` : undefined}
               />
             </div>
             <div style={fieldGroup}>
