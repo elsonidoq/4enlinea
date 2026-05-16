@@ -2,19 +2,31 @@
 
 ## Root
 
-[architectural_blueprint_and_algorithmic_operationalization_for_an_intelligent_connect_4_training_system.md](architectural_blueprint_and_algorithmic_operationalization_for_an_intelligent_connect_4_training_system.md) — deep theoretical reference on Connect 4 tactics, parity, zugzwang, and threat taxonomies — understanding the mathematical/pedagogical foundations of every pattern category
+### Connect Four Strategy (canonical — use these)
+
+[connect-four-strategy-reference.md](connect-four-strategy-reference.md) — **CANONICAL** — parity theory, zugzwang, claimeven, threat taxonomy, J-shape, Figure-7, sextuple, TSS/VCF/VCT, openings — understanding *why* positions win or lose
+
+[connect-four-implementation-guide.md](connect-four-implementation-guide.md) — **CANONICAL** — bitboard encoding, win detection, pattern predicates, solver integration, TSS algorithm, puzzle generation pipeline, explanation templates — implementing detection and search
+
+[connect-four-curriculum-guide.md](connect-four-curriculum-guide.md) — **CANONICAL** — 7 puzzle archetypes, 5-phase curriculum, learning analytics, admin dashboard — designing the teaching system
+
+### Connect Four Strategy (superseded — kept for reference only)
+
+[old_dont_read/architectural_blueprint_and_algorithmic_operationalization_for_an_intelligent_connect_4_training_system.md](architectural_blueprint_and_algorithmic_operationalization_for_an_intelligent_connect_4_training_system.md) — superseded by connect-four-implementation-guide.md and connect-four-curriculum-guide.md
+
+[old_dont_read/Connect_4_Training_Material_Design_2026-05-14.md](Connect_4_Training_Material_Design_2026-05-14.md) — superseded by connect-four-strategy-reference.md
+
+[old_dont_read/Connect_4_Training_Material_Generation_2026-05-14.md](Connect_4_Training_Material_Generation_2026-05-14.md) — superseded by connect-four-strategy-reference.md and connect-four-implementation-guide.md
+
+[old_dont_read/connect_four_strategy_pattern_analysis.md](connect_four_strategy_pattern_analysis.md) — superseded by connect-four-strategy-reference.md
+
+[old_dont_read/connect_four_training_application_design.md](connect_four_training_application_design.md) — superseded by connect-four-implementation-guide.md and connect-four-curriculum-guide.md
+
+### Other
 
 [best_practices_spec_driven_development.md](best_practices_spec_driven_development.md) — spec-driven development methodology using SpecKit + Claude Code for solo founders — understanding the workflow that drives this project's spec → plan → tasks pipeline
 
 [cloud_provider_research.md](cloud_provider_research.md) — VPS vs PaaS vs Serverless trade-offs for a solver-heavy app — choosing a cloud provider
-
-[Connect_4_Training_Material_Design_2026-05-14.md](Connect_4_Training_Material_Design_2026-05-14.md) — technical predicates and heuristics for Connect 4 tactics, formatted for AI agent code integration — implementing detection logic for tactical patterns
-
-[Connect_4_Training_Material_Generation_2026-05-14.md](Connect_4_Training_Material_Generation_2026-05-14.md) — algebraic/geometric logic for automated strategy detection (VCF, VCT, J-shape, Figure-7, overcutting) — formalising a new pattern detection predicate
-
-[connect_four_strategy_pattern_analysis.md](connect_four_strategy_pattern_analysis.md) — taxonomy of Connect 4 strategic patterns (parity, zugzwang, forks) with formal definitions — background reading before designing a new puzzle category
-
-[connect_four_training_application_design.md](connect_four_training_application_design.md) — pedagogical framework for an intelligent Connect 4 training system — understanding product design decisions around explanation depth and curriculum
 
 [launch_tactic.md](launch_tactic.md) — go-to-market plan for DecodeC4 MVP, retention metric gate (7-day unprompted return) — understanding launch success criteria
 

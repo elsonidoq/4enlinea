@@ -61,6 +61,93 @@ describe('detectFigure7 — structural and solver validation', () => {
     assert.equal(result.matched, false, 'empty board has no figure_7');
   }, { timeout: 10_000 });
 
+  // Regression: ascending-diagonal + horizontal-right shape where the completing cell
+  // is the far end of the horizontal arm (not the diagonal/horizontal junction).
+  // The shape B1-C2-D3-E3-F3 (col2,col3,col4,col5,col6 in 1-indexed) creates a double
+  // threat but is NOT a figure-7; the figure-7 requires the completing move to be the
+  // junction cell, not an arm extension.
+  //
+  // Board for move string '132464453556' (Red to play):
+  //      1   2   3   4   5   6   7
+  //   3 |   |   |   | R | R |   |   |
+  //   2 |   |   | R | Y | Y | Y |   |
+  //   1 | R | R | Y | Y | Y | R |   |
+  //
+  // Red has B1(1,0), C2(2,1), D3(3,2), E3(4,2) placed; F3(5,2) is empty at height.
+  // Incorrectly matched as figure_7 with completing cell = F3 (arm end, not junction).
+  test('non-corner completing cell (arm extension) is not a figure_7', async () => {
+    const ms = '132464453556';
+    const scores = await solver.query(ms);
+    const result = detectFigure7(ms, scores);
+    assert.equal(result.matched, false, 'extending a horizontal arm is not a figure_7 completing move');
+  }, { timeout: 10_000 });
+
+  // Move string "41432254553" (11 moves): the four placed cells and junction cell
+  // structurally resemble a figure-7, but this is NOT a genuine figure-7 trap because
+  // the double threat is achievable for the current player regardless of this shape
+  // (both post-placement threats land at gravity-top, so it's a generic double-threat,
+  // not a figure-7 setup). detectFigure7 should not fire here.
+  test('41432254553 does not match figure_7', async () => {
+    const ms = '41432254553';
+    const scores = await solver.query(ms);
+    const result = detectFigure7(ms, scores);
+    assert.equal(result.matched, false, '41432254553 is not a figure_7');
+  }, { timeout: 10_000 });
+
+  // Position after 14 moves '44444425765662' (Red to move):
+  //
+  //      1   2   3   4   5   6   7
+  //   3 |   |   |   | R |   | R |   |
+  //   2 |   | Y |   | Y | R | Y |   |
+  //   1 |   | R |   | R | Y | Y | R |
+  //
+  // Red forms a figure-7 shape with placed: (col4,row1),(col5,row2),(col6,row3),(col4,row3)
+  // completing: col5(1-indexed) = col4(0-indexed), gravity-accessible (colHeights[4]=2).
+  // Solver score for col5(1-idx) is +12.
+  //
+  // After placing in col5(1-idx)=col4(0-idx): the two post-placement threats land at
+  // rows above the current gravity-top — this exercises the fix that iterates all
+  // reachable rows, not just gravity-top.
+  test('detects figure-7 from movestring 44444425765662 (threats not immediately accessible)', async () => {
+    const ms = '44444425765662';
+    const scores = await solver.query(ms);
+    const result = detectFigure7(ms, scores);
+    assert.ok(result.matched, 'figure-7 must be detected even when post-placement threats are not gravity-accessible');
+    assert.equal(result.correctCol, 4, 'completing cell is col4 (0-indexed)');
+    assert.equal(result.highlightMetadata.cells.length, 4);
+  }, { timeout: 10_000 });
+
+  // FALSE POSITIVE — case 1: structural shape but threats land in different columns.
+  // Board: 462324415632426356 (18 moves, Red to move).
+  // Template placed={col1r0, col2r1, col3r2, col5r2} / comp=col4r2 is structurally
+  // valid, but after placing comp the two template-backed threats land in col4 and
+  // col6 (different columns). A genuine figure-7 zugzwang requires both threats in
+  // the same column at consecutive rows so that blocking the lower one immediately
+  // exposes the upper one (see training-material §E Q21).
+  test('462324415632426356 does not match figure_7 (threats in different columns)', async () => {
+    const ms = '462324415632426356';
+    const scores = await solver.query(ms);
+    const result = detectFigure7(ms, scores);
+    assert.equal(result.matched, false,
+      '462324415632426356: threats land in different columns — not a figure_7 zugzwang');
+  }, { timeout: 10_000 });
+
+  // FALSE POSITIVE — case 2: shape exists but its threats are in the same column
+  // 3 rows apart, so the zugzwang mechanism does not hold.
+  // Board: 444335255542677244273277571253 (30 moves, Red to move).
+  // Template placed={col4r2, col3r3, col3r4, col4r4} / comp=col2r4 structurally
+  // matches. After placing comp, both threats land in col5 at rows 1 and 4 (gap=3).
+  // The figure-7 zugzwang requires consecutive-row threats: blocking the gravity-top
+  // threat raises col height by 1, which must directly expose the second threat.
+  // A gap of 3 breaks the mechanism — blocking row 1 does not expose row 4.
+  test('444335255542677244273277571253 does not match figure_7 (threats not consecutive rows)', async () => {
+    const ms = '444335255542677244273277571253';
+    const scores = await solver.query(ms);
+    const result = detectFigure7(ms, scores);
+    assert.equal(result.matched, false,
+      '444335255542677244273277571253: same-column threats 3 rows apart — not a figure_7 zugzwang');
+  }, { timeout: 10_000 });
+
   test('when detectFigure7 fires, highlightMetadata is structurally valid', async () => {
     const positions = ['12345677654321', '765432176543', '441133'];
     for (const ms of positions) {

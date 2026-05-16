@@ -316,8 +316,8 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
 // Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
 // after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
 async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
-  const T1 = rng() * 5 + 0.1;
-  const T2 = rng() * 5 + 0.1;
+  const T1 = rng() * 4 + 0.1;
+  const T2 = rng() * 4 + 0.1;
   const temps = [T1, T2];
   let moveString = '';
   const heights = Array(COLS).fill(0);

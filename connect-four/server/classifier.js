@@ -15,7 +15,7 @@ function immediateWinScore(moveCount) {
 // Build a board grid from a move string (1-indexed columns).
 // Returns board[row][col] where row 0 is bottom, row 5 is top.
 // Values: 0 = empty, 1 = player 1 (first mover), 2 = player 2
-function parseBoardState(moves) {
+export function parseBoardState(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const colHeights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
@@ -48,7 +48,9 @@ export function checkWin(board, row, col, player) {
 }
 
 // Count distinct winning threats for a player on the current board.
-// A threat is an empty cell that would complete a 4-in-a-row.
+// Only checks gravity-top cells (the next immediately playable row per column).
+// Use this for immediate-move reasoning (forced_block, claimeven). For pattern
+// detectors that need all reachable threats, use countAllReachableThreats.
 export function countWinningThreats(board, colHeights, player) {
   let threats = 0;
   for (let col = 0; col < COLS; col++) {
@@ -58,6 +60,22 @@ export function countWinningThreats(board, colHeights, player) {
     board[row][col] = player;
     if (checkWin(board, row, col, player)) threats++;
     board[row][col] = 0;
+  }
+  return threats;
+}
+
+// Count distinct winning threats for a player across all reachable empty cells
+// (row >= colHeight for each column). Threats are counted at any reachable empty
+// cell, not only the gravity-top. Gravity-top restriction applies only to
+// immediate_threat and forced_block which act on the current move.
+function countAllReachableThreats(board, colHeights, player) {
+  let threats = 0;
+  for (let col = 0; col < COLS; col++) {
+    for (let row = colHeights[col]; row < ROWS; row++) {
+      board[row][col] = player;
+      if (checkWin(board, row, col, player)) threats++;
+      board[row][col] = 0;
+    }
   }
   return threats;
 }
@@ -116,7 +134,7 @@ export function classify(moves, candidateCol, scores) {
     if (row < ROWS) {
       board[row][candidateCol] = currentPlayer;
       colHeights[candidateCol]++;
-      const threats = countWinningThreats(board, colHeights, currentPlayer);
+      const threats = countAllReachableThreats(board, colHeights, currentPlayer);
       if (threats >= 2) {
         return { tag: 'double_threat' };
       }
@@ -314,6 +332,9 @@ function getWinningWindows(board, threatRow, threatCol, player) {
 // T009 — Figure-7 detection
 // Checks all four structural variants; current player occupies 4 of 5 template cells,
 // the 5th is empty and playable, and scores confirm a win.
+// Threats are counted at any reachable empty cell in the column (row >= colHeight),
+// not only the gravity-top. Gravity-top restriction applies only to immediate_threat
+// and forced_block which act on the current move.
 export function detectFigure7(moves, scores) {
   const moveCount = moves.length;
   const { board, colHeights } = parseBoardState(moves);
@@ -324,56 +345,77 @@ export function detectFigure7(moves, scores) {
     for (let y = 0; y < ROWS; y++) {
       const variants = [];
 
-      // Variant 1: ascending diagonal + horizontal right
+      // Variant 1: ascending diagonal + horizontal right (junction at index 2)
       if (x + 4 < COLS && y + 2 < ROWS) {
         variants.push([
           { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+2, row: y+2 },
           { col: x+3, row: y+2 }, { col: x+4, row: y+2 },
         ]);
+        // 1b: comp = arm cell adjacent to junction (x+3)
+        variants.push([
+          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+3, row: y+2 },
+          { col: x+2, row: y+2 }, { col: x+4, row: y+2 },
+        ]);
       }
-      // Variant 2: ascending diagonal + horizontal left
+      // Variant 2: ascending diagonal + horizontal left (junction at index 2)
       if (x + 2 < COLS && y + 2 < ROWS) {
         variants.push([
           { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+2, row: y+2 },
           { col: x+1, row: y+2 }, { col: x, row: y+2 },
         ]);
+        // 2b: comp = arm cell adjacent to junction (x+1)
+        variants.push([
+          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+1, row: y+2 },
+          { col: x+2, row: y+2 }, { col: x, row: y+2 },
+        ]);
       }
-      // Variant 3: descending diagonal + horizontal right
+      // Variant 3: descending diagonal + horizontal right (junction at index 2)
       if (x - 2 >= 0 && y + 2 < ROWS) {
         variants.push([
           { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-2, row: y+2 },
           { col: x-1, row: y+2 }, { col: x, row: y+2 },
         ]);
+        // 3b: comp = arm cell adjacent to junction (x-1)
+        variants.push([
+          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-1, row: y+2 },
+          { col: x-2, row: y+2 }, { col: x, row: y+2 },
+        ]);
       }
-      // Variant 4: descending diagonal + horizontal left
+      // Variant 4: descending diagonal + horizontal left (junction at index 2)
       if (x - 4 >= 0 && y + 2 < ROWS) {
         variants.push([
           { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-2, row: y+2 },
           { col: x-3, row: y+2 }, { col: x-4, row: y+2 },
         ]);
+        // 4b: comp = arm cell adjacent to junction (x-3)
+        variants.push([
+          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-3, row: y+2 },
+          { col: x-2, row: y+2 }, { col: x-4, row: y+2 },
+        ]);
       }
 
       for (const template of variants) {
-        // Try each cell as the completing (empty + playable) cell
-        for (let skipIdx = 0; skipIdx < template.length; skipIdx++) {
-          const comp = template[skipIdx];
-          const placed = template.filter((_, i) => i !== skipIdx);
+        // Only the corner (index 2) is a valid completing cell: it is the junction where
+        // the diagonal arm meets the horizontal arm, so playing it creates both threats
+        // simultaneously. Allowing arm-end cells produces false positives where a
+        // horizontal already in place gets extended, which is not a figure-7 trap.
+        const comp = template[2];
+        const placed = template.filter((_, i) => i !== 2);
 
-          if (!placed.every(c => board[c.row][c.col] === currentPlayer)) continue;
-          if (board[comp.row][comp.col] !== 0) continue;
-          if (colHeights[comp.col] !== comp.row) continue;
-          if (!scores || scores[comp.col] <= 0) continue;
+        if (!placed.every(c => board[c.row][c.col] === currentPlayer)) continue;
+        if (board[comp.row][comp.col] !== 0) continue;
+        if (colHeights[comp.col] !== comp.row) continue;
+        if (!scores || scores[comp.col] <= 0) continue;
 
-          // The double threat must be generated by the figure-7 shape itself:
-          // after placing comp, count threats whose winning 4-in-a-row shares ≥3 cells
-          // with the template (the connect-4 is the 7-shape + 1 extra disk).
-          const templateSet = new Set([...placed, comp].map(c => `${c.row},${c.col}`));
-          board[comp.row][comp.col] = currentPlayer;
-          colHeights[comp.col]++;
-          const threatCells = [];
-          for (let col = 0; col < COLS; col++) {
-            const row = colHeights[col];
-            if (row >= ROWS || board[row][col] !== 0) continue;
+        // The double threat must be generated by the figure-7 shape itself:
+        // after placing comp, count threats whose winning 4-in-a-row shares ≥3 cells
+        // with the template (the connect-4 is the 7-shape + 1 extra disk).
+        const templateSet = new Set([...placed, comp].map(c => `${c.row},${c.col}`));
+        board[comp.row][comp.col] = currentPlayer;
+        colHeights[comp.col]++;
+        const threatCells = [];
+        for (let col = 0; col < COLS; col++) {
+          for (let row = colHeights[col]; row < ROWS; row++) {
             board[row][col] = currentPlayer;
             const wins = checkWin(board, row, col, currentPlayer);
             board[row][col] = 0;
@@ -383,23 +425,41 @@ export function detectFigure7(moves, scores) {
               threatCells.push({ column: col, row });
             }
           }
-          board[comp.row][comp.col] = 0;
-          colHeights[comp.col]--;
-          if (threatCells.length < 2) continue;
-
-          return {
-            matched: true,
-            highlightMetadata: {
-              type: 'cells',
-              cells: placed.map(c => ({ column: c.col, row: c.row, role: 'pattern_piece' })),
-            },
-            correctCol: comp.col,
-            categoryEvidence: {
-              pattern_cells: placed.map(c => ({ column: c.col, row: c.row })),
-              threat_cells: threatCells,
-            },
-          };
         }
+        // gravityTopCount uses incremented colHeights (comp already placed) for accuracy.
+        // A figure-7 zugzwang has at most 1 gravity-top threat (the forcing move). Two or
+        // more gravity-top threats means the position is a direct fork, not a figure-7.
+        const gravityTopCount = threatCells.filter(t => t.row === colHeights[t.column]).length;
+        const hasAboveGravity = threatCells.some(t => t.row > colHeights[t.column]);
+        board[comp.row][comp.col] = 0;
+        colHeights[comp.col]--;
+        if (threatCells.length < 2) continue;
+        // Genuine figure-7 zugzwang: two threats in the same column at consecutive
+        // rows, with the lower threat at most 1 above the current gravity-top.
+        // "Blocking one immediately enables the other" (training material §E Q21):
+        // one opponent fill raises the column by 1, placing the lower threat at
+        // gravity-top; Red then plays there, leaving the upper threat exposed.
+        const hasConsecutivePair = threatCells.some(t1 =>
+          threatCells.some(t2 =>
+            t2.column === t1.column &&
+            t2.row === t1.row + 1 &&
+            t1.row <= colHeights[t1.column] + 1
+          )
+        );
+        if (!hasConsecutivePair) continue;
+
+        return {
+          matched: true,
+          highlightMetadata: {
+            type: 'cells',
+            cells: placed.map(c => ({ column: c.col, row: c.row, role: 'pattern_piece' })),
+          },
+          correctCol: comp.col,
+          categoryEvidence: {
+            pattern_cells: placed.map(c => ({ column: c.col, row: c.row })),
+            threat_cells: threatCells,
+          },
+        };
       }
     }
   }
@@ -409,6 +469,9 @@ export function detectFigure7(moves, scores) {
 // T010 — J-Shape detection
 // Canonical: {(c,r),(c,r+2),(c+1,r+1)} with (c+1,r+2) completing.
 // Mirror: {(c,r),(c,r+2),(c-1,r+1)} with (c-1,r+2) completing.
+// Threats are counted at any reachable empty cell in the column (row >= colHeight),
+// not only the gravity-top. Gravity-top restriction applies only to immediate_threat
+// and forced_block which act on the current move.
 export function detectJShape(moves, scores) {
   const moveCount = moves.length;
   const { board, colHeights } = parseBoardState(moves);
@@ -418,7 +481,7 @@ export function detectJShape(moves, scores) {
   function tryTemplate(placed, completing, templateColsAtCompletingRow) {
     if (!placed.every(cell => board[cell.row][cell.col] === currentPlayer)) return false;
     if (board[completing.row][completing.col] !== 0) return false;
-    if (colHeights[completing.col] !== completing.row) return false;
+    if (colHeights[completing.col] > completing.row) return false;
     // Guard: opponent must not occupy the row above the completing row in any template column
     if (completing.row + 1 < ROWS) {
       if (templateColsAtCompletingRow.some(tc => board[completing.row + 1][tc] === opponent)) return false;

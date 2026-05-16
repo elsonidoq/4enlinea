@@ -14,12 +14,13 @@ Authoritative reference for Connect Four strategy theory. Covers everything need
 
 **Players:** Red moves first (odd move numbers: 1, 3, 5…). Yellow/Black moves second (even move numbers: 2, 4, 6…).
 
-**Solution:** Connect Four is a solved game (Allen and Allis, 1988). With perfect play:
+**Solution:** Connect Four is a solved game (Allen and Allis, independently, October 1988; see Allis 1988 thesis at tromp.github.io/c4/connect4_thesis.pdf and Wikipedia). With perfect play:
 - Red wins if the first move is in column D (center).
 - The game is drawn if Red opens in columns C or E.
-- Black wins if Red opens in columns A, B, F, or G.
+- Black wins if Red opens in columns B or F (Black wins on or before move 42).
+- Black wins if Red opens in columns A or G (Black wins on or before move 40).
 
-**State space:** ~4.5 trillion reachable positions.
+**State space:** ~4.53 trillion reachable positions (4,531,985,219,092 exactly; source: en.wikipedia.org/wiki/Connect_Four).
 
 ---
 
@@ -29,7 +30,7 @@ Authoritative reference for Connect Four strategy theory. Covers everything need
 
 The board has 6 rows (even). Red moves first. In any column that fills completely, Red places discs on rows 1, 3, 5 and Black on rows 2, 4, 6.
 
-**Mantra: "Red likes odd numbers."** Red's natural rows are 1, 3, 5 (odd). Black's natural rows are 2, 4, 6 (even). A threat on a naturally-owned row is *parity-aligned*.
+**Mantra: "Red likes odd numbers."** Red's natural rows are 1, 3, 5 (odd). Black's natural rows are 2, 4, 6 (even). A threat on a naturally-owned row is *parity-aligned*. (Source: Allis 1988 thesis §3.3 — "White likes to get odd threats"; tromp.github.io/c4/connect4_thesis.pdf)
 
 A parity-aligned threat is strategically valuable because, all else being equal, if the column must be filled, the owning player will be the one to place the disc that completes it.
 
@@ -44,6 +45,8 @@ row_owner(c, move_number) = (move_number % 2 == 1) ? Red : Black
 A threat at (c, r) is parity-aligned for Red if r is odd; for Black if r is even.
 
 ### 2.3 Endgame Parity Outcome Table
+
+*Note: this table is a project-specific generalization extending Allis 1988 §3.3 cases 1–4 (one threat per player, different columns) to multiple threats. It has not been verified against an external source beyond those four base cases.*
 
 When the board is nearly full and both players have only latent threats remaining, the outcome is determined by the *net parity of unshared odd-row threats*:
 
@@ -68,6 +71,8 @@ A **ghost threat** is a visually apparent winning line that is mathematically un
 
 ### 2.5 Threat Interaction Rules (T1–T7)
 
+*Note: T1–T7 are project-specific formalizations derived from Allis 1988 parity theory. This naming scheme does not appear in any external source verified during cross-reference.*
+
 These rules determine whether two threats in the same column neutralize each other:
 
 - **T1 (Adjacent pair — terminal):** Two major threats at rows r and r+1 in the same column for the same player = guaranteed win; one of them will be reached regardless of play order.
@@ -79,6 +84,8 @@ These rules determine whether two threats in the same column neutralize each oth
 - **T7 (Cancellation — same parity, separate columns):** Red and Black each holding one odd-row threat in different columns = draw. They cancel each other.
 
 ### 2.6 Victory Rules (V1–V5)
+
+*Note: V1–V5 are project-specific formalizations generalizing Allis 1988 §3.3. This naming scheme does not appear in any external source verified during cross-reference.*
 
 Simplified endgame outcome rules when no immediate tactical sequences exist:
 
@@ -114,6 +121,8 @@ Unlike chess, Connect Four zugzwang is permanent: discs cannot be moved, so no "
 
 A **dead column** is one where no four-in-a-row is formable for either player in any remaining empty cell. Dead columns contribute no threats but consume turns as they fill.
 
+*Terminology note: "dead column" / "dead space" is used throughout this document as a project-local term. The Wikibooks Connect Four article (en.wikibooks.org/wiki/Connect_Four) uses "zugzwang spaces" for the related concept of cells that precede a critical square but are themselves non-decisive — a stricter definition than "dead column" as used here.*
+
 Detection: for each empty cell (c, r) in column c, check all four directions (horizontal, vertical, two diagonals). If no direction contains a window of four that is free of opponent discs, all empty cells in c are dead.
 
 ### 3.4 Dead-Space Parity Formula
@@ -132,6 +141,8 @@ where:
 **Result = 1 → Black is forced.**
 
 **Why n matters:** Zugzwang depends on whose turn it is *after* all dead moves are exhausted, not just how many dead cells exist. At game start (n = 0) the formula simplifies to `S_dead mod 2`, which is why some sources omit n — but that shortcut is only valid at the start or when n is known to be even.
+
+**Derivation:** The formula follows from the basic turn-order rule: when an even number of empty spaces remains, it is Red's turn (source: en.wikibooks.org/wiki/Connect_Four). After n moves with S_dead dead-space moves still to come, the first non-dead move arrives when 42 − n − S_dead spaces remain; that count is even iff (n + S_dead) is even, giving Result = 0 → Red is forced.
 
 ### 3.5 Precursor Structures
 
@@ -159,12 +170,14 @@ Techniques for controlling or escaping zugzwang:
 
 ### 4.1 Mechanics
 
-A **claimeven position** is one where every column has an *even* number of empty spaces. Black wins any claimeven position by following a single rule: whenever Red plays in a column, Black immediately plays in the same column (the cell directly above Red's disc).
+A **claimeven position** is one where every column has an *even* number of empty spaces. Black wins any claimeven position — **provided Red has no unrefuted odd-row threat** — by following a single rule: whenever Red plays in a column, Black immediately plays in the same column (the cell directly above Red's disc). (Source: Allis 1988 thesis §4.2–4.3, tromp.github.io/c4/connect4_thesis.pdf — "An odd threat for White gives him control of the Zugzwang … White will win the game, if Black cannot connect four men.")
 
 **Why it works:** By responding in the same column, Black ensures:
 1. Red fills all odd rows (1, 3, 5) in every column.
 2. Black fills all even rows (2, 4, 6).
 3. If Red has no odd-row winning line that isn't undercut by a Black even-row line, Black wins.
+
+**Critical precondition:** If Red has already created an odd-row threat (a threat on an odd row that Black cannot refute via the §4.2 failure conditions), Red — not Black — controls the Zugzwang, and the follow-up strategy no longer guarantees Black a win.
 
 ### 4.2 Failure Conditions
 
@@ -295,7 +308,8 @@ Row 1:          R  R           ← Red discs at D1, D3... wait
 
 Canonical cells Red must own: **{D1, D3, E2, E3}**  
 Primary threat target: **F3** (horizontal: D3–E3–F3–G3)  
-Secondary targets: **G3** or **G4** via diagonal continuations
+Secondary targets: **G3** or **G4** via diagonal continuations  
+(Source: tromp.github.io/c4.html — "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image")
 
 **Generalized predicate:**
 ```
@@ -332,11 +346,10 @@ Both F3 and F4 are in **column F**. Blocking F3 (playing f3) immediately makes F
 **Formal predicate:**
 ```
 Fig7(P, x, y) ⟺
-  Owns(P, {(x,y), (x+1,y+1), (x+2,y+2)})  -- diagonal arm
-  ∧ Owns(P, {(x+2,y+2), (x+3,y+2), (x+4,y+2)})  -- horizontal arm
-  -- threats at (x+5, y+2) and (x+2, y+3) are in the same column
-  -- only when (x+5) = (x+2)+3... this is satisfied when
-  -- diagonal tip column = horizontal extension column
+  Owns(P, {(x,y), (x+1,y+1), (x+2,y+2)})      -- diagonal arm (ascending, hinge at top-right)
+  ∧ Owns(P, {(x,y+2), (x+1,y+2), (x+2,y+2)})  -- horizontal arm (left base to hinge)
+  -- threats at (x+3, y+2) [horizontal ext.] and (x+3, y+3) [diagonal ext.]
+  -- both in column x+3 — the same-column property is always satisfied
 ```
 
 **The same-column property is the defining characteristic.** A configuration with a diagonal arm and horizontal arm sharing a hinge cell, but whose two threat extensions land in *different* columns, is a fork but not a Figure-7.
@@ -349,6 +362,8 @@ Fig7(P, x, y) ⟺
 **Failure conditions:** If the hinge cell (E3 in the canonical example) is occupied by the opponent, both arms are broken simultaneously.
 
 ### 7.3 Sextuple Threat
+
+*Note: the Sextuple Threat concept and structure below are project-specific formalizations; this pattern was not found in any external source verified during cross-reference.*
 
 **What it is:** Six distinct winning threat cells simultaneously active in a dense cluster, providing enough redundancy that blocking any subset still leaves a winning continuation.
 
@@ -372,6 +387,8 @@ Fig7(P, x, y) ⟺
 ---
 
 ## 8. Threat-Space Search, VCF, and VCT
+
+*Note: TSS/VCF/VCT definitions and the VCF ⊂ VCT ⊂ TSS hierarchy below could not be verified from the provided source list (baeldung.com/cs/gomoku-threat-space-search returned HTTP 403). The definitions are consistent with general combinatorial game theory literature but remain unconfirmed against a citable URL.*
 
 ### 8.1 Threat-Space Search (TSS)
 
@@ -415,17 +432,23 @@ VCT requires deeper search than VCF because the defender has more options at eac
 
 ### 9.1 The 5-4 Opening
 
-Red builds a stack of 5 discs in column D (D1, D3, D5 own; d2, d4 opponent's responses) then 4 in column E. With perfect continuation, Red wins. The critical deviation: if Red deviates to C1 instead of D5, the advantage flips to Black.
+Red builds a stack of 5 discs in column D (D1, D3, D5 own; d2, d4 opponent's responses) then 4 in column E. With perfect continuation, Red wins. The critical deviation: if Red deviates to C1 instead of D5, the advantage flips to Black. (Source: tromp.github.io/c4.html — "Joseki 7-8"; 5-4 line confirmed.)
 
 ### 9.2 The 3-4 Opening
+
+*Unverified: this opening name was not confirmed in any external source reviewed during cross-reference (tromp.github.io mentions the line but not this name).*
 
 A variation of 5-4 where Red delays the D5 capture, allowing more diagonal variety. Red accepts a slightly longer forcing sequence in exchange for less predictable mid-game patterns.
 
 ### 9.3 Candlesticks Opening
 
+*Unverified: this opening name was not found in any Connect Four strategy source reviewed during cross-reference. Two URLs in the review list (domo.com, spotfire.com) were financial candlestick-chart pages, unrelated to Connect Four.*
+
 Move sequence leading to two separated stacks resembling candles. Red wins by establishing a triple threat through zugzwang control when Red occupies row 3 in two separate columns (e.g., B3 and F3) combined with an even-row threat at D2.
 
 ### 9.4 Third-Row Gambit (Black)
+
+*Unverified: this gambit name was not found in any external source reviewed during cross-reference.*
 
 Black willingly cedes row 3 to Red (allowing Red to build a J-shape or similar structure) in exchange for dominating row 5. Black's counter-threats at C5 and B5 must be evaluated against Red's row-3 initiative:
 

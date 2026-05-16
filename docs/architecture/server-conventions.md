@@ -66,6 +66,14 @@ Categories that store their answer as a scalar (claimeven, figure_7, j_shape) re
 At forced-win terminal positions, all opponent columns score identically — the solver cannot identify which column blocks. Use direct `checkWin` board detection instead.
 Reference: `reference_c4solver_behavior.md` and `reference_cat5_forced_block_detection.md` in memory.
 
+## Threat-Counting Invariant
+
+Pattern detectors (`detectFigure7`, `detectJShape`, `countAllReachableThreats`) count threats at any reachable empty cell `(col, row)` where `row >= colHeights[col]`. A threat is valid even if pieces must fill below it first — those pieces arrive in the natural course of play.
+
+The gravity-top restriction (only `row === colHeights[col]`) applies exclusively to `immediate_threat` and `forced_block` detection, which reason about the current player's single immediate move.
+
+`countWinningThreats` uses the gravity-top restriction and is reserved for `detectClaimeven` (which requires immediate-move semantics). Do not use it in pattern detectors.
+
 ## Environment Variables
 
 | Variable | Purpose |
