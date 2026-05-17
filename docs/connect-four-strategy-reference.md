@@ -22,6 +22,11 @@ Authoritative reference for Connect Four strategy theory. Covers everything need
 
 **State space:** ~4.53 trillion reachable positions (4,531,985,219,092 exactly; source: en.wikipedia.org/wiki/Connect_Four).
 
+**Primary sources:**
+- Allis, V. (1988). *A Knowledge-based Approach of Connect-Four*. tromp.github.io/c4/connect4_thesis.pdf
+- Allen, J.D. (1990). *Expert Play in Connect-Four*. tromp.github.io/c4.html (hosted by Tromp)
+- Tromp, J. Solver and state-space resources. tromp.github.io/c4/c4.html
+
 ---
 
 ## 2. Parity Theory
@@ -46,7 +51,7 @@ A threat at (c, r) is parity-aligned for Red if r is odd; for Black if r is even
 
 ### 2.3 Endgame Parity Outcome Table
 
-*Note: this table is a project-specific generalization extending Allis 1988 §3.3 cases 1–4 (one threat per player, different columns) to multiple threats. It has not been verified against an external source beyond those four base cases.*
+*Note: this table is a project-specific generalization extending Allis 1988 §3.3 cases 1–4 (one threat per player, different columns) to multiple threats. Several entries are disputed or confirmed wrong — **prefer the formula at the bottom of this section** over the table where they conflict.*
 
 When the board is nearly full and both players have only latent threats remaining, the outcome is determined by the *net parity of unshared odd-row threats*:
 
@@ -55,13 +60,13 @@ When the board is nearly full and both players have only latent threats remainin
 | 1 | 0 | Red wins |
 | 3 | 0 | Red wins |
 | 0 | 0 | Draw |
-| 2 | 0 | Draw (even net — Red does not control zugzwang) |
-| 1 | 1 | Draw (cancel) |
-| 0 | 1 | Black wins |
+| 2 | 0 | Draw (even net — Red does not control zugzwang) *(disputed — formula predicts Red wins)* |
+| 1 | 1 | Red wins (Black's odd-row threat is on Red's natural parity rows; Red controls zugzwang and Black's threat is useless) |
+| 0 | 1 | Black wins *(disputed — formula predicts Draw; Black's odd-row threat may be asymmetrically weak)* |
 | 0 | 2 | Black wins (Black uses claimeven to guarantee even rows) |
-| 1 | 2 | Red wins (Red's net is −1 from Black's perspective, but odd net favors Red) |
+| 1 | 2 | Draw (Black's net advantage is +1, one short of the +2 needed to force a win; threats are mutually sacrificed) |
 
-**Key rule:** Red needs an *odd net advantage* in unshared odd-row threats to control zugzwang. An even net (including 0) means Red cannot force the issue.
+**General formula** (Allen, formalized in Bagan et al. 2025): Red wins if `Red_odd > Black_odd`; Black wins if `Black_odd ≥ Red_odd + 2`; otherwise Draw. *Note: the (1R, 1B) case is an exception — Red wins due to parity asymmetry (Black's odd-row threat is on Red's natural row and is functionally useless, per Allis). The simplified formula does not capture this asymmetry.* Where this table conflicts with the formula, the formula takes precedence — except for the (1,1) case above.
 
 ### 2.4 Parity Traps and Ghost Threats
 
@@ -81,7 +86,7 @@ These rules determine whether two threats in the same column neutralize each oth
 - **T4 (Same parity, same column — independent):** Two threats at rows 3 and 5 (both odd) in the same column do not undercut each other; both remain active.
 - **T5 (Different parity, different column — independent):** Threats at rows 3 (odd) and 6 (even) in separate columns do not interact.
 - **T6 (Red even-row threat — worthless):** An isolated Red threat on an even row has zero strategic value unless it creates an adjacent pair with an odd-row threat.
-- **T7 (Cancellation — same parity, separate columns):** Red and Black each holding one odd-row threat in different columns = draw. They cancel each other.
+- **T7 (Parity asymmetry — odd threats are not symmetric):** Red holding one odd-row threat and Black holding one odd-row threat in a different column = **Red wins**. Black's odd-row threat is on Red's naturally-owned parity rows; Red is not forced to sacrifice into it and simply controls zugzwang via its own threat. This is why Black needs a net +2 advantage in odd threats to overcome Red's structural parity advantage.
 
 ### 2.6 Victory Rules (V1–V5)
 
@@ -109,7 +114,7 @@ Eval(S, P) < Eval(Pass(S), P)
 
 In Connect Four, zugzwang arises when all neutral (dead) columns are exhausted and every remaining legal move plays into a column containing the opponent's threat at a higher row.
 
-Unlike chess, Connect Four zugzwang is permanent: discs cannot be moved, so no "waiting move" exists once dead space is gone.
+Unlike chess, Connect Four has no passing moves — the obligation to move is permanent. However, *control* of zugzwang (who is ultimately forced into a critical column) is fluid: forcing moves that open odd-count board regions can transfer that control from one player to the other. (Allis 1988, Chapter 4: "moves in Connect-Four are also governed by such actions where a misplaced chip can cause the influence and control of Zugzwang to shift.")
 
 ### 3.2 Types
 
@@ -197,7 +202,7 @@ This reduces the position to a simpler claimeven configuration.
 
 ### 4.4 Claimodd (Red's Variant)
 
-*Note: "Claimodd" is not one of Allis's nine original strategic rules, but is a natural structural complement to Claimeven used in contemporary heuristic analysis.*
+*Note: "Claimodd" is not one of Allis's nine original strategic rules, nor does the term appear in Allen or any other canonical source. The label was coined by the WeakC4 project (2swap.github.io/WeakC4/explanation/) as part of its Steady-State Language. The underlying concept — Red forcing an odd-row threat while Black takes even rows — is canonical and appears in Allis under "odd threats," Baseinverse, and Vertical. "Claimodd" is used here as a compact label for that idea, but it is a WeakC4 term.*
 
 When Red faces an all-even position, simple claimeven would give Red even rows — the wrong parity. Red's strategy is **"claimeven everywhere except claimodd in the center column."**
 
@@ -211,7 +216,9 @@ Claimeven and claimodd positions form an "island of simplicity" in Connect Four'
 
 ## 5. Threat Taxonomy
 
-A single threat can have multiple properties simultaneously. These axes are orthogonal:
+A single threat can have multiple properties simultaneously. These axes are orthogonal.
+
+*Canonical taxonomy note: Allen's *Expert Play in Connect-Four* (tromp.github.io/c4.html) uses: Major (1 cell missing), Minor (2+ cells missing), Odd/Even (threat on an odd/even row), Mixed (window contains both players' discs — dead). The multi-axis taxonomy below extends these concepts; the Z-Threat/0-Threat/#-Threat labels do not appear in Allen or Allis.*
 
 ### 5.1 Structural Axis (how many cells missing)
 
@@ -303,13 +310,13 @@ All fork-based patterns work by the same principle (**Baseinverse**): a player c
 **Canonical configuration (Red):**
 ```
 Col:   A  B  C  D  E  F  G
-Row 3:          .  .  .        ← threat cells: D3, E3, F3
-Row 2:             R  .        ← R=Red disc at E2; F2 empty
-Row 1:          R  R           ← Red discs at D1, D3... wait
+Row 3:          R  R  .        ← Red discs at D3, E3; primary threat at F3
+Row 2:             R  .        ← Red disc at E2; F2 empty
+Row 1:          R              ← Red disc at D1
 ```
 
 Canonical cells Red must own: **{D1, D3, E2, E3}**  
-Primary threat target: **F3** (horizontal: D3–E3–F3–G3)  
+Primary threat target: **F3** (completes horizontal D3–E3–F3–G3)  
 Secondary targets: **G3** or **G4** via diagonal continuations  
 (Source: Tromp's glossary at tromp.github.io/c4.html names this the "J Configuration," defined as "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image." The name "J-Shape" used elsewhere in this project is a local alias for the same pattern.)
 
@@ -435,8 +442,8 @@ These are the nine mathematically proven strategic constructions used by Allis's
 | 2 | Baseinverse | §6.2 | Two directly playable squares paired together. The opponent can only play one, so the controller always obtains the other. |
 | 3 | Vertical | §6.3 | Two vertically adjacent empty squares where the upper is odd. Guarantees access to at least one of the two squares. |
 | 4 | Aftereven | §6.4 | A group completed through a collection of Claimevens. When the opponent opens a Claimeven column, the controller responds above, preserving the required even squares. |
-| 5 | Lowinverse | §6.5 | Two columns each containing a Vertical configuration. Combining the paired vertical threats guarantees at least one favorable continuation. |
-| 6 | Highinverse | §6.6 | A higher-order inverse involving two columns with three stacked empty squares each. Combines vertical parity effects and inverse control. |
+| 5 | Lowinverse | §6.5 | Two columns each containing a Vertical configuration (odd number of empty squares). Because two odd counts sum to an even number, the opponent is forced to open one column first, surrendering its upper odd square to the controller. Two isolated odd-parity columns become a paired zugzwang asset. |
+| 6 | Highinverse | §6.6 | Extends Lowinverse to also include the even-numbered squares directly above each Vertical pair. The controller gains not just the upper odd squares but also the even squares above them, compounding the parity advantage across two rows. |
 | 7 | Baseclaim | §6.7 | One Claimeven + two Baseinverses. Depending on the opponent's move order, either the Claimeven response or a Baseinverse secures the critical square. |
 | 8 | Before | §6.8 | A winning group prepared in advance using embedded Claimevens and Verticals before the opponent can interfere. |
 | 9 | Specialbefore | §6.9 | A specialized Before with one directly playable square and an additional external playable square that together preserve the winning structure. |
