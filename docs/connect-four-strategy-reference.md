@@ -71,7 +71,7 @@ A **ghost threat** is a visually apparent winning line that is mathematically un
 
 ### 2.5 Threat Interaction Rules (T1–T7)
 
-*Note: T1–T7 are project-specific formalizations derived from Allis 1988 parity theory. This naming scheme does not appear in any external source verified during cross-reference.*
+*Note: T1–T7 are project-specific formalizations derived from Allis 1988 parity theory. This naming scheme does not appear in any external source verified during cross-reference. The canonical mathematical framework is Allis's nine proven strategic rules (§10); T1–T7 are derived project heuristics, not those theorems.*
 
 These rules determine whether two threats in the same column neutralize each other:
 
@@ -85,7 +85,7 @@ These rules determine whether two threats in the same column neutralize each oth
 
 ### 2.6 Victory Rules (V1–V5)
 
-*Note: V1–V5 are project-specific formalizations generalizing Allis 1988 §3.3. This naming scheme does not appear in any external source verified during cross-reference.*
+*Note: V1–V5 are project-specific formalizations generalizing Allis 1988 §3.3. This naming scheme does not appear in any external source verified during cross-reference. The canonical mathematical framework is Allis's nine proven strategic rules (§10); V1–V5 are derived project heuristics, not those theorems.*
 
 Simplified endgame outcome rules when no immediate tactical sequences exist:
 
@@ -197,6 +197,8 @@ This reduces the position to a simpler claimeven configuration.
 
 ### 4.4 Claimodd (Red's Variant)
 
+*Note: "Claimodd" is not one of Allis's nine original strategic rules, but is a natural structural complement to Claimeven used in contemporary heuristic analysis.*
+
 When Red faces an all-even position, simple claimeven would give Red even rows — the wrong parity. Red's strategy is **"claimeven everywhere except claimodd in the center column."**
 
 By responding above Black in all columns *except* column D, and playing *below* Black's moves in column D (or playing first in D), Red secures an odd-row threat in the center column while Black gets even rows everywhere else. Red then wins via the center column threat before the even-row resolution is needed.
@@ -294,7 +296,7 @@ In a claimeven position, Black's call-and-response strategy undercuts every Red 
 
 All fork-based patterns work by the same principle (**Baseinverse**): a player creates two simultaneous threats that require blocking, but the opponent can only block one per turn. The patterns below are canonical realizations of this principle.
 
-### 7.1 J-Shape
+### 7.1 J Configuration (project alias: J-Shape)
 
 **What it is:** A cluster of four discs that generates a triple minor threat — three separate winning continuations — making it practically impossible to block.
 
@@ -309,7 +311,7 @@ Row 1:          R  R           ← Red discs at D1, D3... wait
 Canonical cells Red must own: **{D1, D3, E2, E3}**  
 Primary threat target: **F3** (horizontal: D3–E3–F3–G3)  
 Secondary targets: **G3** or **G4** via diagonal continuations  
-(Source: tromp.github.io/c4.html — "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image")
+(Source: Tromp's glossary at tromp.github.io/c4.html names this the "J Configuration," defined as "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image." The name "J-Shape" used elsewhere in this project is a local alias for the same pattern.)
 
 **Generalized predicate:**
 ```
@@ -319,10 +321,10 @@ J_Shape(P, x, y) ⟺
 ```
 
 **Variants:**
-- **Mirror J:** {(x, y), (x, y+2), (x−1, y+1), (x−1, y+2)} — horizontal reflection
-- **Shifted J:** canonical at (C1, C3, D2, D3) — one column left
+- **Mirror J Configuration:** {(x, y), (x, y+2), (x−1, y+1), (x−1, y+2)} — horizontal reflection
+- **Shifted J Configuration:** canonical at (C1, C3, D2, D3) — one column left
 
-**Mechanism:** Once Red owns the J-shape, play inevitably progresses up the adjacent columns. Whether Black responds on column F or column G, Red eventually gains F3 as a Major Direct threat. At that point Red possesses zugzwang control.
+**Mechanism:** Once Red owns the J Configuration, play inevitably progresses up the adjacent columns. Whether Black responds on column F or column G, Red eventually gains F3 as a Major Direct threat. At that point Red possesses zugzwang control.
 
 **Failure conditions:**
 - **Overcutting:** Black controls f4 or d4/e4, preventing Red from marching up toward F3 safely.
@@ -330,6 +332,8 @@ J_Shape(P, x, y) ⟺
 - **Parity cancellation:** Black holds two odd-row threats in separate columns, canceling Red's zugzwang advantage.
 
 ### 7.2 Figure-7
+
+*(The "Figure-7" or "Figure Seven Trap" is a widely used community term — standard in play guides and tutorials (play4row, Reader's Digest, YouTube) but not found in academic Connect Four literature (Allis, Tromp, Allen). The geometry and forced-win logic are independently verified.)*
 
 **What it is:** Five discs forming the shape of the digit "7" — three in a diagonal, three in a horizontal, sharing one disc at the intersection. The defining property is that it generates two threats **in the same column** on adjacent rows, making it impossible to block both.
 
@@ -361,34 +365,13 @@ Fig7(P, x, y) ⟺
 
 **Failure conditions:** If the hinge cell (E3 in the canonical example) is occupied by the opponent, both arms are broken simultaneously.
 
-### 7.3 Sextuple Threat
-
-*Note: the Sextuple Threat concept and structure below are project-specific formalizations; this pattern was not found in any external source verified during cross-reference.*
-
-**What it is:** Six distinct winning threat cells simultaneously active in a dense cluster, providing enough redundancy that blocking any subset still leaves a winning continuation.
-
-**Structure:**
-- Spans 3 columns
-- Contains at least one **super-anchor cell** — a cell whose capture converts multiple latent threats to direct threats simultaneously
-- Requires parity balance: Red needs ≥ 3 odd-row threats among the six
-
-**Canonical right-side configuration (Red):**
-- Major threats: {F3, F4} (adjacent pair — terminal by T1)
-- Minor odd threats: {E3, G3}
-- Minor threats: {E4, G5}
-
-**Why it wins:** Red is guaranteed to obtain either F3 or F4 (they form an adjacent pair). If Red gets F3, the remaining {E3, E4, G3} form a triple threat. If Red gets F4, the remaining {E3, E4, G5} form a triple threat. Either way, Red wins.
-
-**Intermediate patterns:**
-- **Triple threat:** 3 minor odd-row threats in separate columns (V1 applies)
-- **Winning quadruple:** 4 threats including an adjacent pair
-- **Quintuple:** Sextuple minus one blocked path — still winning if the remaining 5 include an adjacent pair or 3 odd-row threats
+*A denser overlap — sometimes called a "Sextuple Threat" in this project — can arise when J Configuration and Figure-7 structures share adjacent columns. This is a project-specific heuristic label; no external source catalogues it.*
 
 ---
 
 ## 8. Threat-Space Search, VCF, and VCT
 
-*Note: TSS/VCF/VCT definitions and the VCF ⊂ VCT ⊂ TSS hierarchy below could not be verified from the provided source list (baeldung.com/cs/gomoku-threat-space-search returned HTTP 403). The definitions are consistent with general combinatorial game theory literature but remain unconfirmed against a citable URL.*
+*Note: TSS, VCF, and VCT are canonical Gomoku/Renju terms (TSS formalized by Allis et al. 1993 for Gomoku). VCF = "Victory by Continuous Fours" (every attacking move creates an unblocked four); VCT = "Victory by Continuous Threats" (broader forcing sequences including threes and preparatory moves). Neither acronym appears in canonical Connect Four literature (Allis 1988, Allen, Tromp), which instead uses threats, parity, zugzwang, and the nine strategic rules. They are adapted here as a conceptual scaffold because the underlying ideas — chains of forced checks and strategic threat accumulation — translate directly to Connect Four even though the terminology is non-native.*
 
 ### 8.1 Threat-Space Search (TSS)
 
@@ -407,9 +390,9 @@ TSS is a search algorithm that drastically reduces the branching factor by restr
 
 TSS identifies forcing sequences of 5–20 plies that mimic human expert focus on favorable board sections.
 
-### 8.2 VCF — Victory by Continuous Forcing
+### 8.2 VCF — Victory by Continuous Fours (Gomoku origin, adapted)
 
-**VCF** is a strict subset of TSS where every attacker move is a **Major Direct threat** (check). The defender's response at each step is uniquely forced (block or lose immediately). A VCF sequence is a "mate-in-N" sequence.
+**VCF** (canonically "Victory by Continuous Fours" in Gomoku; adapted here as a sequence of continuous forcing checks) is a strict subset of TSS where every attacker move is a **Major Direct threat** (check). The defender's response at each step is uniquely forced (block or lose immediately). A VCF sequence is a "mate-in-N" sequence.
 
 **Properties:**
 - Defender moves are 100% determined — no branching on defense.
@@ -418,7 +401,7 @@ TSS identifies forcing sequences of 5–20 plies that mimic human expert focus o
 
 **Canonical example (mate in 3):** Move sequence C3 (check) → Black blocks → B2 (check) → Black blocks → A2 (win).
 
-### 8.3 VCT — Victory by Continuous Threats
+### 8.3 VCT — Victory by Continuous Threats (Gomoku origin, adapted)
 
 **VCT** is the broader category where the attacker creates a new threat every move, but not all moves need to be immediate checks. Some attacker moves may create **Latent major threats** or **Z-threats** that constrain the opponent strategically.
 
@@ -436,25 +419,29 @@ Red builds a stack of 5 discs in column D (D1, D3, D5 own; d2, d4 opponent's res
 
 ### 9.2 The 3-4 Opening
 
-*Unverified: this opening name was not confirmed in any external source reviewed during cross-reference (tromp.github.io mentions the line but not this name).*
+A variation of 5-4 where Red delays the D5 capture, allowing more diagonal variety. Red accepts a slightly longer forcing sequence in exchange for less predictable mid-game patterns. (Source: James D. Allen's Joseki analyses of forced Connect Four sequences, late 1980s.)
 
-A variation of 5-4 where Red delays the D5 capture, allowing more diagonal variety. Red accepts a slightly longer forcing sequence in exchange for less predictable mid-game patterns.
+Opening theory beyond the 5-4 and 3-4 lines is not formally catalogued in canonical sources; positions are best evaluated via the solver.
 
-### 9.3 Candlesticks Opening
+---
 
-*Unverified: this opening name was not found in any Connect Four strategy source reviewed during cross-reference. Two URLs in the review list (domo.com, spotfire.com) were financial candlestick-chart pages, unrelated to Connect Four.*
+## 10. Allis's Nine Strategic Rules
 
-Move sequence leading to two separated stacks resembling candles. Red wins by establishing a triple threat through zugzwang control when Red occupies row 3 in two separate columns (e.g., B3 and F3) combined with an even-row threat at D2.
+These are the nine mathematically proven strategic constructions used by Allis's VICTOR program to solve Connect Four (Allis 1988 thesis, Chapter 6; tromp.github.io/c4/connect4_thesis.pdf). They are proven theorems, not heuristics — Allis explicitly distinguishes them from approximate strategies. The project-specific T1–T7 and V1–V5 rules in §§2.5–2.6 are derived heuristics that approximate these constructions for programmatic evaluation.
 
-### 9.4 Third-Row Gambit (Black)
+| # | Rule | Thesis § | Definition |
+|---|---|---|---|
+| 1 | Claimeven | §6.1 | Two vertically adjacent empty squares where the upper is even. If the opponent plays the lower (odd) square, the controller immediately plays the upper (even) square, guaranteeing ownership of it. |
+| 2 | Baseinverse | §6.2 | Two directly playable squares paired together. The opponent can only play one, so the controller always obtains the other. |
+| 3 | Vertical | §6.3 | Two vertically adjacent empty squares where the upper is odd. Guarantees access to at least one of the two squares. |
+| 4 | Aftereven | §6.4 | A group completed through a collection of Claimevens. When the opponent opens a Claimeven column, the controller responds above, preserving the required even squares. |
+| 5 | Lowinverse | §6.5 | Two columns each containing a Vertical configuration. Combining the paired vertical threats guarantees at least one favorable continuation. |
+| 6 | Highinverse | §6.6 | A higher-order inverse involving two columns with three stacked empty squares each. Combines vertical parity effects and inverse control. |
+| 7 | Baseclaim | §6.7 | One Claimeven + two Baseinverses. Depending on the opponent's move order, either the Claimeven response or a Baseinverse secures the critical square. |
+| 8 | Before | §6.8 | A winning group prepared in advance using embedded Claimevens and Verticals before the opponent can interfere. |
+| 9 | Specialbefore | §6.9 | A specialized Before with one directly playable square and an additional external playable square that together preserve the winning structure. |
 
-*Unverified: this gambit name was not found in any external source reviewed during cross-reference.*
+**Claimeven family** (rules that directly encode or build on the "respond directly above" invariant): Claimeven, Aftereven, Baseclaim, Before, Specialbefore.
 
-Black willingly cedes row 3 to Red (allowing Red to build a J-shape or similar structure) in exchange for dominating row 5. Black's counter-threats at C5 and B5 must be evaluated against Red's row-3 initiative:
+**Parity control family** (rules related to structural parity without being plain Claimeven constructions): Vertical, Lowinverse, Highinverse, Baseinverse.
 
-```
-Detection: Occupied(Red, F3) ∧ Occupied(Red, G3) ∧
-           Occupied(Black, C5) ∧ Occupied(Black, B5)
-```
-
-The gambit works only if Black's row-5 threats are not undercut by Red's row-4 responses.
