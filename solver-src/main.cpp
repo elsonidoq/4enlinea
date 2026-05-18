@@ -66,6 +66,7 @@ int main(int argc, char** argv) {
     Position P;
     if(P.play(line) != line.size()) {
       std::cerr << "Line " << l << ": Invalid move " << (P.nbMoves() + 1) << " \"" << line << "\"" << std::endl;
+      std::cout << std::endl;
     } else {
       std::cout << line;
       if(explain) {

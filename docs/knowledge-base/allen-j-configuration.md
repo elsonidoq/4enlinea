@@ -4,7 +4,7 @@ type: tactical_pattern
 canonical: true
 source:
   doc: allen_2010
-  location: "Ch. 5 (J-Shape Races); Allen 1990 glossary"
+  location: "Ch. 7 (Minor Threats), p. 117"
   verbatim_quote: |
     The configuration shown in Diagram 63 is called the J shape because the four red
     disks form a shape like the letter J.
@@ -13,10 +13,6 @@ source:
     other tactical issues), so sooner or later Red must get either G3 or G4 in Diagram
     63. In either case, F3 becomes a major threat, so it is easy to see that this
     triple threat is equivalent to a major odd-row threat.
-
-    [Allen 1990 glossary definition:]
-    J Configuration: the common winning Eques configuration comprising D1-D3-E2-E3
-    or its mirror image.
 
 statement: |
   The J Configuration (also called J Shape) is a cluster of four Red discs at a
@@ -43,15 +39,27 @@ formal_predicate: |
   #   T2: diagonal ascending (x-1,y+1)-(x,y+2)-(x+1,y+3)... [depends on board]
   #   T3: diagonal from lower anchor
 
-  def j_configuration(board, player, x, y):
+  def j_configuration(board, player, x, y, opponent_threats=None):
       # Canonical: (x,y) = lower-left anchor; y must be odd
+      opponent = BLACK if player == RED else RED
+      if opponent_threats is None:
+          opponent_threats = []
+      far_col = x + 2
+      far_row = y + 2  # horizontal extension arm cell row
+      # Parity cancellation: opponent has an odd-row threat in the far column
+      opp_odd_in_far_col = any(
+          t.col == far_col and t.row % 2 == 1
+          for t in opponent_threats
+      )
       return (
-          y % 2 == 1                              # parity load-bearing
-          and board[x][y] == player              # (x, y) = lower left
-          and board[x][y+2] == player            # (x, y+2) = upper left
-          and board[x+1][y+1] == player          # (x+1, y+1) = center right
-          and board[x+1][y+2] == player          # (x+1, y+2) = upper right
-          and x+3 <= 7                            # horizontal extension on board
+          y % 2 == 1                                  # parity load-bearing
+          and board[x][y] == player                  # (x, y) = lower left
+          and board[x][y+2] == player                # (x, y+2) = upper left
+          and board[x+1][y+1] == player              # (x+1, y+1) = center right
+          and board[x+1][y+2] == player              # (x+1, y+2) = upper right
+          and x+3 <= 7                                # edge proximity: far column on board
+          and board[far_col][far_row] != opponent    # overcutting: opponent not in far arm cell
+          and not opp_odd_in_far_col                 # parity cancellation: no opponent odd-row threat in far column
       )
 
   # Mirror J (reflection about vertical axis):
@@ -71,26 +79,27 @@ formal_predicate: |
   #   Secondary diagonal threats: at (x+2, y+3) and/or (x+2, y+1) depending on board state
 
 worked_examples:
-  - movestring: "D1 d2 D3 el E2 d4 E3"
+  - movestring: "4445545"
     description: |
-      Movestring from Allen Diagram 63 (converted to 1-indexed columns: D=4, E=5).
-      Red plays D1(col4), D3(col4), E2(col5), E3(col5). Black plays d2, e1, d4.
+      Movestring from Allen Diagram 63 (converted to numeric columns: D=4, E=5).
+      Red plays col4, col4, col5, col5. Black plays col4, col5, col4.
       Red has discs at {D1, D3, E2, E3} = canonical J Configuration.
       Black to play and loses. The triple threat (F3, G3, G4) is equivalent to a
       major odd-row threat.
     expected_behavior: "solver score: Red wins; position has triple minor threat equivalent to major odd-row threat"
     solver_verified: PENDING
     notes: |
-      Allen's Diagram 63 has movestring notation "D1! d2 D3! el E2 d4 E3 (8)"
-      in Allen's notation. The exclamation marks denote best moves. In column
-      notation: D=4, E=5, using 1-indexed columns A-G = 1-7.
+      Allen's Diagram 63 notation: "D1! d2 D3! el E2 d4 E3 (8)" (exclamation marks
+      denote best moves). Converted to numeric column notation: D=4, E=5,
+      using 1-indexed columns A-G = 1-7.
 
-  - movestring: PENDING
+  - movestring: "54455143"
     description: |
-      Mirror J Configuration: Red discs at {E1, E3, D2, D3} (mirrored from
-      canonical {D1, D3, E2, E3}). Triple threat at C3, B3, B4.
+      Mirror J Configuration: Red discs at {col5 row1, col5 row3, col4 row2, col4 row3}
+      (mirrored from canonical {D1, D3, E2, E3}). Triple threat at C3, B3, B4.
+      Black has pieces at col4 row1, col5 row2, col1 row1, col3 row1.
     expected_behavior: "solver confirms Red wins via mirror J; same equivalence to major odd-row threat"
-    solver_verified: PENDING
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING
@@ -127,7 +136,7 @@ last_verified: 2026-05-17
 
 ## Verbatim source
 
-From Allen 2010, *The Complete Book of Connect 4*, Chapter 5:
+From Allen 2010, *The Complete Book of Connect 4*, Chapter 7, p. 117:
 
 > The configuration shown in Diagram 63 is called the J shape because the four red disks form a shape like the letter J.
 >

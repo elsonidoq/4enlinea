@@ -45,12 +45,13 @@ worked_examples:
   - movestring: "1115222555577773663636617"
     description: |
       After 25 moves (Yellow to move). Red has Z-Threats at col4 row3 and col4 row5.
-      Solver scores are all negative for Yellow (all columns -2 to -6), meaning Yellow
-      wins regardless. Red's threats at col4 are zugzwang-relevant but Yellow's external
-      structure is sufficient to win before Red can exploit col4 row3 or row5.
-      This illustrates the structural situation in which Red threats become ghost threats:
-      they exist on parity-aligned rows but the zugzwang balance favours Yellow.
-    expected_behavior: "all solver scores negative for Yellow (Yellow loses = Red wins is WRONG — negative from Yellow's perspective means Yellow loses, i.e. Yellow wins if negative? See note); col4 row3 and row5 are major Red threats that do not translate to a win for Red"
+      Solver scores are all negative for Yellow (all columns -2 to -6), meaning Red wins
+      from this position regardless of Yellow's move. Red's col4 threats are active and
+      realized — this position does NOT demonstrate ghost-threat neutralization. It
+      illustrates the parity/Z-Threat structure relevant to ghost-threat analysis, but a
+      true ghost-threat example requires a position where Red has odd-row threats yet
+      Yellow wins (positive solver scores from Yellow's perspective). That is deferred to PENDING.
+    expected_behavior: "all solver scores negative for Yellow (Yellow loses; Red wins); col4 row3 and row5 are major Red threats that ARE realized — Red wins from this position"
     solver_verified: 2026-05-17
     notes: |
       c4solver score convention: score from the perspective of the player to move.

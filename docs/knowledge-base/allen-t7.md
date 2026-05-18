@@ -60,20 +60,21 @@ formal_predicate: |
   # G3 mantra: "Red likes odd numbers" — count remaining uncancelled Red odd threats.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "42354643256425346355663"
     description: |
-      Red has exactly one major odd-row threat at (col B, row 3). Black has exactly
-      one major odd-row threat at (col F, row 3). T7: these cancel. Remaining after
-      T7: no odd-row threats for either player. V5: Draw.
+      Red has exactly one major odd-row threat at col1 row3. Black has exactly
+      one major odd-row threat at col7 row5 (different column). T7: these cancel.
+      Remaining after T7: no odd-row threats for either player. V5: Draw.
+      Solver confirms all column scores = 0.
     expected_behavior: "solver confirms Draw; T7 cancellation leaves no winning threats"
-    solver_verified: PENDING
-  - movestring: PENDING
+    solver_verified: 2026-05-18
+  - movestring: "77273746"
     description: |
-      Red has two major odd-row threats at (col C, row 3) and (col E, row 5). Black
-      has one major odd-row threat at (col G, row 3). T7 cancels one Red threat
+      Red has two major odd-row threats at (col 1, row 1) and (col 5, row 1). Black
+      has one major odd-row threat at (col 7, row 5). T7 cancels one Red threat
       against Black's one threat. Remaining: one Red odd-row threat. V3: Red wins.
     expected_behavior: "solver confirms Red wins; T7 cancels one pair, leaving Red with one uncancelled odd-row threat"
-    solver_verified: PENDING
+    solver_verified: true
 
 false_positives:
   - movestring: "1115222555577773663636617"

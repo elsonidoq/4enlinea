@@ -41,7 +41,13 @@ formal_predicate: |
   # Input: board B, Before group G, set of Claimeven CE and Vertical VE instances
   # Output: bool — can Before be applied to G?
 
-  def can_before(board, group_squares, claimeven_instances, vertical_instances):
+  def can_before(board, group_squares, claimeven_instances, vertical_instances, controller):
+      # controller = the player who applies Before (the Zugzwang controller)
+      # The Before group must contain no opponent discs (Allis §6.8: "a group without
+      # men of the opponent")
+      opponent = WHITE if controller == BLACK else BLACK
+      if any(board[sq.col][sq.row] == opponent for sq in group_squares):
+          return False
       empty_in_group = [(sq.col, sq.row) for sq in group_squares
                         if board[sq.col][sq.row] == EMPTY]
       # Each empty square must be covered by either Claimeven (as upper) or Vertical (as upper)

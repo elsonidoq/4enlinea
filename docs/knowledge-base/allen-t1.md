@@ -56,13 +56,13 @@ worked_examples:
     solver_verified: 2026-05-17
     notes: "Included as a boundary case to show T1 requires consecutive rows."
 
-  - movestring: PENDING
+  - movestring: "613461653556247156"
     description: |
-      Red has adjacent major threats at rows 3 and 4 in the same column. Red wins
+      Red has adjacent major threats at col4 row3 and col4 row4. Red wins
       unconditionally because one of the two threats will be reached first and the other
-      immediately becomes Major Direct.
+      immediately becomes Major Direct. Solver confirms col4 score = +12.
     expected_behavior: "solver confirms Red wins; adjacent threat column shows highest score"
-    solver_verified: PENDING
+    solver_verified: 2026-05-18
 
 false_positives:
   - movestring: "1115222555577773663636617"

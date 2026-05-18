@@ -43,9 +43,17 @@ formal_predicate: |
   #        Claimeven CE and Vertical VE instances for the Before part
   # Output: bool — can Specialbefore be applied?
 
-  def can_specialbefore(board, group_squares, extra_playable_col, ce_instances, ve_instances):
+  def can_specialbefore(board, group_squares, extra_playable_col, ce_instances, ve_instances, controller):
+      # controller = the player who applies Specialbefore (the Zugzwang controller)
+      # (a) The Specialbefore group must contain no opponent discs (Allis §6.9 requirement)
+      opponent = WHITE if controller == BLACK else BLACK
+      if any(board[sq.col][sq.row] == opponent for sq in group_squares):
+          return False
       empty_in_group = [(sq.col, sq.row) for sq in group_squares
                         if board[sq.col][sq.row] == EMPTY]
+      # (b) No empty square of the group may lie in the top row (row 6) (Allis §6.9 requirement)
+      if any(r == 6 for _, r in empty_in_group):
+          return False
       # At least one empty square of the group must be directly playable
       def is_directly_playable(board, col, row):
           return row == 1 or board[col][row-1] != EMPTY  # lowest empty in column

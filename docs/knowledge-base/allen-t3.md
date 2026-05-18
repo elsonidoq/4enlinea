@@ -49,6 +49,20 @@ formal_predicate: |
               result.append((col, player))
       return result
 
+  # T3 also applies to minor threats (Allen explicit: "this important rule also applies
+  # to minor threats"). The minor-threat variant follows the same structure: same column,
+  # same player, one threat at row 2 and one at row 5.
+  def t3_pairs_minor(minor_threats):
+      result = []
+      by_player_col = {}
+      for t in minor_threats:
+          key = (t.player, t.col)
+          by_player_col.setdefault(key, set()).add(t.row)
+      for (player, col), rows in by_player_col.items():
+          if 2 in rows and 5 in rows:
+              result.append((col, player))
+      return result
+
   # Effect on V1/V2 counting when t3_pairs() returns (col, player):
   #   Replace the single column (col) in the player's threat list with TWO
   #   virtual separate odd-threated columns. This doubles the zugzwang leverage
@@ -60,22 +74,22 @@ formal_predicate: |
   #   So Black with only a single column containing row-2+row-5 satisfies V2 alone.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "3112213213122337"
     description: |
-      Red has major threats at (col D, row 2) and (col D, row 5). No other threats.
-      T3 predicts this is equivalent to two odd-threated columns for Red, satisfying
-      V1 (three odd-threated columns) is NOT met, but it IS equivalent to one V2-level
-      Black situation flipped. With perfect play Red wins because T3 gives Red
-      zugzwang control twice — same as holding two separate odd-row threats.
+      Red has major threats at col4 row2 and col4 row5 (T3 pair). Black has a
+      major threat at col4 row3 (minor co-threat). Col5 score = +4 (Red wins).
+      T3 gives Red zugzwang control twice from this single column, acting as two
+      separate odd-row threats and driving Red's winning advantage.
     expected_behavior: "solver confirms Red wins; T3 is the reason (one column acts as two odd-threated columns)"
-    solver_verified: PENDING
-  - movestring: PENDING
+    solver_verified: 2026-05-18
+  - movestring: "1116517162522722336333"
     description: |
-      Black has major threats at (col E, row 2) and (col E, row 5). No other major
-      threats. T3 gives Black two virtual odd-threated columns, satisfying V2
-      (Black wins with two odd-row threats in separate columns).
+      Black has major threats at col4 row2 and col4 row5 (T3 pair). No Red major
+      threats. All solver scores negative (Black wins). T3 gives Black the
+      equivalent of two virtual odd-threated columns from one physical column,
+      satisfying V2 (two odd-row threats → Black wins).
     expected_behavior: "solver confirms Black wins; T3 gives Black the equivalent of two odd-row threats"
-    solver_verified: PENDING
+    solver_verified: 2026-05-18
 
 false_positives:
   - movestring: PENDING
@@ -105,7 +119,7 @@ related:
   - "[[allen-v1]] — T3 doubles the odd-threated column count for V1 evaluation"
   - "[[allen-v2]] — T3 can give Black two effective odd-threated columns from a single physical column"
 
-last_verified: 2026-05-17
+last_verified: 2026-05-18
 ---
 
 ## Verbatim source

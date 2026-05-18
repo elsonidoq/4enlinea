@@ -44,7 +44,13 @@ formal_predicate: |
   # Input: board B, a White group G (list of squares), Claimeven instances CE
   # Output: bool — can Aftereven be applied to group G?
 
-  def can_aftereven(board, group_squares, claimeven_instances):
+  def can_aftereven(board, group_squares, claimeven_instances, controller):
+      # controller = the player who applies Aftereven (the Zugzwang controller)
+      # The Aftereven group must contain no discs belonging to the group owner's opponent
+      # (Allis §6.4: "a group which can be completed by the controller of the Zugzwang")
+      opponent = WHITE if controller == BLACK else BLACK
+      if any(board[sq.col][sq.row] == opponent for sq in group_squares):
+          return False
       empty_in_group = [sq for sq in group_squares if board[sq.col][sq.row] == EMPTY]
       # All empty squares must be claimable by Claimeven instances
       ce_uppers = {ce.upper_square for ce in claimeven_instances}

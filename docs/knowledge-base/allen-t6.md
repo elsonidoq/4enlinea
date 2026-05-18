@@ -51,22 +51,22 @@ formal_predicate: |
   # They do not contribute to Red's odd-threated column count or any other metric.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "41523647152"
     description: |
-      Red has only a single major threat at (col B, row 4) — an even row. No other
-      threats. T6 predicts this Red threat is worthless. Black wins (or draws if Black
-      also has no odd-row threats). This demonstrates that Red's even-row threat
+      Red has only a single major threat at col3 row2 — an even row. No other
+      threats for Red. T6 predicts this Red threat is worthless. Black wins decisively
+      (all column scores -9 to -15). This demonstrates that Red's even-row threat
       provides zero strategic value.
-    expected_behavior: "solver confirms Black wins or draws; Red's B4 even-row threat plays no role"
-    solver_verified: PENDING
-  - movestring: PENDING
+    expected_behavior: "solver confirms Black wins or draws; Red's even-row threat plays no role"
+    solver_verified: 2026-05-18
+  - movestring: "31313212256"
     description: |
       Red has threats at (col C, row 4) and (col D, row 3). The C4 threat is even-row.
       The D3 threat is odd-row in a different column. T6 applies to C4 (isolated even-row
       threat) — it's worthless. The outcome depends only on D3 (V3: Red wins with
       uncontested odd-row threat).
     expected_behavior: "solver confirms Red wins via D3; C4 is irrelevant to the outcome"
-    solver_verified: PENDING
+    solver_verified: 2026-05-18
 
 false_positives:
   - movestring: PENDING

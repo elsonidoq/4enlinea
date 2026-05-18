@@ -26,7 +26,21 @@ preconditions:
 formal_predicate: |
   # Claimodd strategy for Red in an all-even position:
 
-  def claimodd_strategy(board, red_move):
+  def claimodd_strategy(board, current_player, red_move):
+      # Guard: validate all four preconditions before applying the strategy
+      # (1) It must be Red's turn
+      if current_player != RED:
+          return None  # strategy does not apply
+      # (2) All columns must have an even number of empty cells (all-even position)
+      if any(count_empty(board, col) % 2 != 0 for col in range(1, 8)):
+          return None
+      # (3) Red must have no uncontested odd-row threat already established
+      if has_uncontested_odd_threat(board, RED):
+          return None
+      # (4) Center column (col 4) must not be full
+      if count_empty(board, CENTER_COL) == 0:
+          return None
+
       if red_move.col == CENTER_COL:
           # In center column: Red plays *at or below* Black's previous disc —
           # i.e., Red plays first in col D when possible, establishing an

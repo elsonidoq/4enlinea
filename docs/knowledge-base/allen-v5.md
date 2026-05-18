@@ -4,7 +4,7 @@ type: victory_rule
 canonical: true
 source:
   doc: allen_2010
-  location: "Ch. 4, p. 101 (Victory Rules section, V5)"
+  location: "Ch. 4, p. 102 (Victory Rules section, V5)"
   verbatim_quote: |
     V5: Otherwise the game is drawn.
 
@@ -80,7 +80,7 @@ last_verified: 2026-05-17
 
 ## Verbatim source
 
-From Allen 2010, *The Complete Book of Connect 4*, Chapter 4, p. 101:
+From Allen 2010, *The Complete Book of Connect 4*, Chapter 4, p. 102:
 
 > **V5: Otherwise the game is drawn.**
 >

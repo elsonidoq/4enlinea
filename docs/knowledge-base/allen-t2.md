@@ -50,6 +50,9 @@ formal_predicate: |
                   lower, upper = col_threats[i], col_threats[j]
                   if lower.player != upper.player:  # opposite players
                       if lower.row % 2 != upper.row % 2:  # opposite parity
+                          # Sub-case 3 (lower=odd, upper=even) requires immediately adjacent rows
+                          if lower.row % 2 == 1 and upper.row != lower.row + 1:
+                              continue  # adjacency required for sub-case 3
                           # Lower threat neutralizes upper threat
                           neutralized.add((upper.player, upper.col, upper.row))
       return neutralized
@@ -60,22 +63,22 @@ formal_predicate: |
   # because odd ≠ even, and lower Red threat neutralizes upper Black threat.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "442435355667716253"
     description: |
-      Black has an even-row major threat at (col C, row 4); Red has a major threat at
-      (col C, row 5). Black's row-4 threat undercuts Red's row-5 threat — Black
+      Black has an even-row major threat at (col 4, row 4); Red has a major threat at
+      (col 4, row 5). Black's row-4 threat undercuts Red's row-5 threat — Black
       reaches C4 first, winning before Red can use C5. T2 sub-case 2: Black even below
-      Red odd. The position should otherwise be balanced; the column C interaction
-      is the deciding factor.
-    expected_behavior: "solver confirms Black wins; Red's C5 threat is rendered irrelevant by Black's C4 threat"
-    solver_verified: PENDING
+      Red odd. Additional Black threats at col2 row4 and col3 row4 also present; col4
+      interaction is the decisive factor.
+    expected_behavior: "solver confirms Black wins; Red's col4 row5 threat is rendered irrelevant by Black's col4 row4 threat"
+    solver_verified: true
 
-  - movestring: PENDING
+  - movestring: "123432411325112233"
     description: |
-      Red has an even-row major threat at (col E, row 4); Black has a major threat at
-      (col E, row 5). Red's row-4 threat undercuts Black's row-5 threat. T2 sub-case 1.
-    expected_behavior: "solver confirms Red wins; Black's E5 threat neutralized by Red's E4 threat"
-    solver_verified: PENDING
+      Red has an even-row major threat at (col 4, row 4); Black has a major threat at
+      (col 4, row 5). Red's row-4 threat undercuts Black's row-5 threat. T2 sub-case 1.
+    expected_behavior: "solver confirms Red wins; Black's col4 row5 threat neutralized by Red's col4 row4 threat"
+    solver_verified: true
 
 false_positives:
   - movestring: "1115222555577773663636617"

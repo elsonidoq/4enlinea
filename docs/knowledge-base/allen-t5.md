@@ -56,21 +56,23 @@ formal_predicate: |
   # threat.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "211332112233112233"
     description: |
-      Red has a major threat at (col C, row 3) and Black has a major threat at
-      (col C, row 6). T5 predicts these do not interact — Black's row-6 threat is
+      Red has a major threat at (col 4, row 3) and Black has a major threat at
+      (col 4, row 6). T5 predicts these do not interact — Black's row-6 threat is
       independent of Red's row-3 threat. Red wins via the row-3 odd-row threat;
-      Black's row-6 even threat gives Black no zugzwang leverage here.
-    expected_behavior: "solver confirms Red wins; Black's C6 threat plays no role in the outcome"
-    solver_verified: PENDING
-  - movestring: PENDING
+      Black's row-6 even threat gives Black no zugzwang leverage here. (Col 4 also
+      has Black row-4 and Red row-5 threats; all four threats coexist in the column.)
+    expected_behavior: "solver confirms Red wins; Black's col4 row6 threat plays no role in the outcome"
+    solver_verified: true
+  - movestring: "234132244135523445422335"
     description: |
-      Red has major threats at (col D, row 3) and (col D, row 6) — same player.
+      Red has major threats at (col 1, row 3) and (col 1, row 6) — same player.
       T5 Case A: Red's row-6 threat is worthless, giving no bonus over the single
-      row-3 threat.
-    expected_behavior: "solver score equivalent to position with only Red's D3 threat; D6 does not add value"
-    solver_verified: PENDING
+      row-3 threat. Additional threats present in col5 and col6; col1 row3+row6
+      is the T5 illustration.
+    expected_behavior: "solver score equivalent to position with only Red's col1 row3 threat; col1 row6 does not add value"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

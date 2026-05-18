@@ -19,11 +19,15 @@ export function createSolverProcess() {
     buffer = lines.pop();
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      const entry = queue.shift();
+      if (!entry) continue;
+      if (!trimmed) {
+        entry.reject(new Error('Invalid position: "' + entry.moveString + '"'));
+        continue;
+      }
       const parts = trimmed.split(/\s+/);
       const scores = (parts.length === 8 ? parts.slice(1) : parts).map(Number);
-      const entry = queue.shift();
-      if (entry) entry.resolve(scores);
+      entry.resolve(scores);
     }
   });
 
@@ -37,21 +41,30 @@ export function createSolverProcess() {
 
   return {
     query(moveString) {
+      let callerResolve, callerReject;
+      const callerPromise = new Promise((res, rej) => { callerResolve = res; callerReject = rej; });
+
       pending = pending.then(() =>
-        new Promise((resolve, reject) => {
+        new Promise((chainResolve) => {
           const startTime = Date.now();
           queue.push({
+            moveString,
             resolve: (result) => {
               const elapsed = Date.now() - startTime;
               // console.log(`[solver.query] moveString="${moveString}" took ${elapsed}ms`);
-              resolve(result);
+              chainResolve();
+              callerResolve(result);
             },
-            reject,
+            reject: (err) => {
+              chainResolve();
+              callerReject(err);
+            },
           });
           process.stdin.write(moveString + '\n');
         })
       );
-      return pending;
+
+      return callerPromise;
     },
     destroy() {
       try { process.kill(); } catch {}
