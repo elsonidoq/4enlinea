@@ -1,0 +1,1512 @@
+<!-- fetch_references.py | url: https://en.wikibooks.org/wiki/Connect_Four | fetched: 2026-05-17T16:26:49Z -->
+<!DOCTYPE html>
+<html class="client-nojs vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-sticky-header-enabled vector-toc-available skin-thumbsize-clientpref-standard" lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<title>Connect Four - Wikibooks, open books for an open world</title>
+<script>(function(){var className="client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-sticky-header-enabled vector-toc-available skin-thumbsize-clientpref-standard";var cookie=document.cookie.match(/(?:^|; )enwikibooksmwclientpreferences=([^;]+)/);if(cookie){cookie[1].split('%2C').forEach(function(pref){className=className.replace(new RegExp('(^| )'+pref.replace(/-clientpref-\w+$|[^\w-]+/g,'')+'-clientpref-\\w+( |$)'),'$1'+pref+'$2');});}document.documentElement.className=className;}());RLCONF={"wgBreakFrames":false,"wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgRequestId":"7d504446-173e-4589-af89-773d64fe99f8","wgCanonicalNamespace":"","wgCanonicalSpecialPageName":false,"wgNamespaceNumber":0,"wgPageName":"Connect_Four","wgTitle":"Connect Four","wgCurRevisionId":4422357,"wgRevisionId":4422357,"wgArticleId":133555,"wgIsArticle":true,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":["Books to be broken into subpages","Alphabetical/C","Subject:Games","Subject:Games/all books","Subject:Recreational activities/all books","Subject:Miscellaneous/all books","Subject:Books by subject/all books","Book:Wikibooks Stacks/Books","Shelf:Games/all books","Department:Recreational activities/all books","Partly developed books","Books by completion status/all books","Book:Connect Four","Shelf:Games","One-page books"],"wgPageViewLanguage":"en","wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgRelevantPageName":"Connect_Four","wgRelevantArticleId":133555,"wgTempUserName":null,"wgIsProbablyEditable":true,"wgRelevantPageIsProbablyEditable":true,"wgRestrictionEdit":[],"wgRestrictionMove":[],"wgNoticeProject":"wikibooks","wgFlaggedRevsParams":{"tags":{"value":{"levels":3}}},"wgStableRevisionId":4422357,"wgConfirmEditCaptchaNeededForGenericEdit":false,"wgConfirmEditForceShowCaptcha":false,"wgMediaViewerOnClick":true,"wgMediaViewerEnabledByDefault":true,"wgVisualEditor":{"pageLanguageCode":"en","pageLanguageDir":"ltr","pageVariantFallbacks":"en"},"wgMFDisplayWikibaseDescriptions":{"search":true,"watchlist":true,"tagline":false,"nearby":true},"wgWMESchemaEditAttemptStepOversample":false,"wgWMEPageLength":30000,"wgTestKitchenUserExperiments":{"overrides":[],"enrolled":[],"assigned":[],"subject_ids":[]},"wgEditSubmitButtonLabelPublish":true,"wgVisualEditorPageIsDisambiguation":false,"wgULSPosition":"interlanguage","wgULSisCompactLinksEnabled":false,"wgVector2022LanguageInHeader":true,"wgULSisLanguageSelectorEmpty":false,"wgULSLanguageSelectorV2Enabled":false,"wgWikibaseItemId":"Q17254","wgCheckUserClientHintsHeadersJsApi":["brands","architecture","bitness","fullVersionList","mobile","model","platform","platformVersion"],"wgSiteNoticeId":"2.27"};
+RLSTATE={"ext.globalCssJs.user.styles":"ready","site.styles":"ready","user.styles":"ready","ext.globalCssJs.user":"ready","user":"ready","user.options":"loading","ext.math.styles":"ready","ext.wikimediamessages.styles":"ready","skins.vector.search.codex.styles":"ready","skins.vector.styles":"ready","skins.vector.icons":"ready","ext.flaggedRevs.basic":"ready","mediawiki.codex.messagebox.styles":"ready","ext.visualEditor.desktopArticleTarget.noscript":"ready","ext.uls.interlanguage":"ready","wikibase.client.init":"ready","ext.dismissableSiteNotice.styles":"ready"};RLPAGEMODULES=["ext.math.polyfills","ext.parsermigration.survey","site","mediawiki.page.ready","mediawiki.toc","skins.vector.js","ext.centralNotice.geoIP","ext.centralNotice.startUp","ext.flaggedRevs.advanced","ext.gadget.wikidialog","ext.gadget.commons-file","ext.urlShortener.toolbar","ext.centralauth.centralautologin","ext.testKitchen","mmv.bootstrap","ext.visualEditor.desktopArticleTarget.init","ext.echo.centralauth","ext.eventLogging","ext.wikimediaEvents","ext.navigationTiming","ext.uls.interface","wikibase.client.vector-2022","wikibase.databox.fromWikidata","ext.checkUser.clientHints","ext.quicksurveys.init","ext.dismissableSiteNotice"];</script>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.loader.impl(function(){return["user.options@12s5i",function($,jQuery,require,module){mw.user.tokens.set({"patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});
+}];});});</script>
+<link rel="stylesheet" href="/w/load.php?lang=en&amp;modules=ext.dismissableSiteNotice.styles%7Cext.flaggedRevs.basic%7Cext.math.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cmediawiki.codex.messagebox.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022">
+<script async="" src="/w/load.php?lang=en&amp;modules=startup&amp;only=scripts&amp;raw=1&amp;skin=vector-2022"></script>
+<meta name="ResourceLoaderDynamicStyles" content="">
+<link rel="stylesheet" href="/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022">
+<meta name="generator" content="MediaWiki 1.47.0-wmf.2">
+<meta name="referrer" content="origin">
+<meta name="referrer" content="origin-when-cross-origin">
+<meta name="robots" content="max-image-preview:standard">
+<meta name="format-detection" content="telephone=no">
+<meta name="viewport" content="width=1120">
+<meta property="og:title" content="Connect Four - Wikibooks, open books for an open world">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="//upload.wikimedia.org">
+<link rel="alternate" type="application/x-wiki" title="Edit" href="/w/index.php?title=Connect_Four&amp;action=edit">
+<link rel="icon" href="/static/favicon/wikibooks.ico">
+<link rel="search" type="application/opensearchdescription+xml" href="/w/rest.php/v1/search" title="Wikibooks (en)">
+<link rel="EditURI" type="application/rsd+xml" href="//en.wikibooks.org/w/api.php?action=rsd">
+<link rel="canonical" href="https://en.wikibooks.org/wiki/Connect_Four">
+<link rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/deed.en">
+<link rel="alternate" type="application/atom+xml" title="Wikibooks Atom feed" href="/w/index.php?title=Special:RecentChanges&amp;feed=atom">
+<link rel="dns-prefetch" href="//meta.wikimedia.org" />
+<link rel="dns-prefetch" href="auth.wikimedia.org">
+</head>
+<body class="skin--responsive skin-vector skin-vector-search-vue mediawiki ltr sitedir-ltr mw-hide-empty-elt ns-0 ns-subject mw-editable page-Connect_Four rootpage-Connect_Four skin-vector-2022 action-view">
+<div id="mw-aria-live-region" class="mw-aria-live-region" aria-live="polite"></div><a class="mw-jump-link" href="#bodyContent">Jump to content</a>
+<div class="vector-header-container">
+	<header class="vector-header mw-header no-font-mode-scale">
+		<div class="vector-header-start">
+			<nav class="vector-main-menu-landmark" aria-label="Site">
+				
+<div id="vector-main-menu-dropdown" class="vector-dropdown vector-main-menu-dropdown vector-button-flush-left vector-button-flush-right"  title="Main menu" >
+	<input type="checkbox" id="vector-main-menu-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-main-menu-dropdown" class="vector-dropdown-checkbox "  aria-label="Main menu"  >
+	<label id="vector-main-menu-dropdown-label" for="vector-main-menu-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-menu mw-ui-icon-wikimedia-menu"></span>
+
+<span class="vector-dropdown-label-text">Main menu</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+				<div id="vector-main-menu-unpinned-container" class="vector-unpinned-container">
+		
+<div id="vector-main-menu" class="vector-main-menu vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-main-menu-pinnable-header vector-pinnable-header-unpinned"
+	data-feature-name="main-menu-pinned"
+	data-pinnable-element-id="vector-main-menu"
+	data-pinned-container-id="vector-main-menu-pinned-container"
+	data-unpinned-container-id="vector-main-menu-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Main menu</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-main-menu.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-main-menu.unpin">hide</button>
+</div>
+
+	
+<div id="p-navigation" class="vector-menu mw-portlet mw-portlet-navigation"  >
+	<div class="vector-menu-heading">
+		Navigation
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-mainpage" class="mw-list-item"><a href="/wiki/Main_Page" title="Visit the main page [z]" accesskey="z"><span>Main Page</span></a></li><li id="n-help" class="mw-list-item"><a href="/wiki/Help:Contents" title="Find help on how to use and edit Wikibooks"><span>Help</span></a></li><li id="n-Browse" class="mw-list-item"><a href="/wiki/Wikibooks:Card_Catalog_Office" title="Check out what Wikibooks has to offer"><span>Browse</span></a></li><li id="n-Cookbook" class="mw-list-item"><a href="/wiki/Cookbook:Table_of_Contents" title="Learn recipes from around the world"><span>Cookbook</span></a></li><li id="n-Wikijunior" class="mw-list-item"><a href="/wiki/Wikijunior" title="Books for children"><span>Wikijunior</span></a></li><li id="n-Featured-books" class="mw-list-item"><a href="/wiki/Wikibooks:Featured_books" title="The best of Wikibooks"><span>Featured books</span></a></li><li id="n-recentchanges" class="mw-list-item"><a href="/wiki/Special:RecentChanges" title="A list of recent changes in the wiki [r]" accesskey="r"><span>Recent changes</span></a></li><li id="n-specialpages" class="mw-list-item"><a href="/wiki/Special:SpecialPages" title="A list of all special pages [q]" accesskey="q"><span>Special pages</span></a></li><li id="n-randomrootpage" class="mw-list-item"><a href="/wiki/Special:RandomInCategory/Book:Wikibooks_Stacks/Books"><span>Random book</span></a></li><li id="n-Using-Wikibooks" class="mw-list-item"><a href="/wiki/Using_Wikibooks"><span>Using Wikibooks</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-community" class="vector-menu mw-portlet mw-portlet-community"  >
+	<div class="vector-menu-heading">
+		Community
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-Reading-room-forum" class="mw-list-item"><a href="/wiki/Wikibooks:Reading_room"><span>Reading room forum</span></a></li><li id="n-portal" class="mw-list-item"><a href="/wiki/Wikibooks:Community_Portal" title="Find your way around the Wikibooks community"><span>Community portal</span></a></li><li id="n-maintenance" class="mw-list-item"><a href="/wiki/Wikibooks:Maintenance" title="Frequent tasks that you can help with"><span>Help out!</span></a></li><li id="n-Policies-and-guidelines" class="mw-list-item"><a href="/wiki/Wikibooks:Policies_and_guidelines" title="Pages detailing important rules and procedures"><span>Policies and guidelines</span></a></li><li id="n-contact" class="mw-list-item"><a href="/wiki/Wikibooks:Contact_us" title="Alternative methods of communication"><span>Contact us</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+</div>
+
+				</div>
+
+	</div>
+</div>
+
+		</nav>
+			
+<a href="/wiki/Main_Page" class="mw-logo">
+	<img class="mw-logo-icon" src="/static/images/icons/wikibooks.svg" alt="" aria-hidden="true" height="50" width="50">
+	<span class="mw-logo-container skin-invert">
+		<img class="mw-logo-wordmark" alt="Wikibooks" src="/static/images/mobile/copyright/wikibooks-wordmark-vi.svg" style="width: 7.5em; height: 0.9375em;">
+		<img class="mw-logo-tagline" alt="The Free Textbook Project" src="/static/images/mobile/copyright/wikibooks-tagline-en.svg" width="120" height="10" style="width: 7.5em; height: 0.625em;">
+	</span>
+</a>
+
+		</div>
+		<div class="vector-header-end">
+			
+<div id="p-search" role="search" class="vector-search-box-vue  vector-search-box-collapses vector-search-box-show-thumbnail vector-search-box-auto-expand-width vector-search-box">
+	<a href="/wiki/Special:Search" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only search-toggle" title="Search Wikibooks [f]" accesskey="f"><span class="vector-icon mw-ui-icon-search mw-ui-icon-wikimedia-search"></span>
+
+<span>Search</span>
+	</a>
+	<div class="vector-typeahead-search-container">
+		<div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail cdx-typeahead-search--auto-expand-width">
+			<form action="/w/index.php" id="searchform" class="cdx-search-input cdx-search-input--has-end-button">
+				<div id="simpleSearch" class="cdx-search-input__input-wrapper"  data-search-loc="header-moved">
+					<div class="cdx-text-input cdx-text-input--has-start-icon">
+						<input
+							class="cdx-text-input__input mw-searchInput" autocomplete="off"
+							 type="search" name="search" placeholder="Search Wikibooks" aria-label="Search Wikibooks" autocapitalize="none" spellcheck="false" title="Search Wikibooks [f]" accesskey="f" id="searchInput"
+							>
+						<span class="cdx-text-input__icon cdx-text-input__start-icon"></span>
+					</div>
+					<input type="hidden" name="title" value="Special:Search">
+				</div>
+				<button class="cdx-button cdx-search-input__end-button">Search</button>
+			</form>
+		</div>
+	</div>
+</div>
+
+			<nav class="vector-user-links vector-user-links-wide" aria-label="Personal tools">
+	<div class="vector-user-links-main">
+	
+<div id="p-vector-user-menu-preferences" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-vector-user-menu-userpage" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	<nav class="vector-appearance-landmark" aria-label="Appearance">
+		
+<div id="vector-appearance-dropdown" class="vector-dropdown "  title="Change the appearance of the page&#039;s font size, width, and color" >
+	<input type="checkbox" id="vector-appearance-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-appearance-dropdown" class="vector-dropdown-checkbox "  aria-label="Appearance"  >
+	<label id="vector-appearance-dropdown-label" for="vector-appearance-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-appearance mw-ui-icon-wikimedia-appearance"></span>
+
+<span class="vector-dropdown-label-text">Appearance</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+			<div id="vector-appearance-unpinned-container" class="vector-unpinned-container">
+				
+			</div>
+		
+	</div>
+</div>
+
+	</nav>
+	
+<div id="p-vector-user-menu-notifications" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-vector-user-menu-overflow" class="vector-menu mw-portlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			<li id="pt-sitesupport-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="https://donate.wikimedia.org/?wmf_source=donate&amp;wmf_medium=sidebar&amp;wmf_campaign=en.wikibooks.org&amp;uselang=en" class=""><span>Donations</span></a>
+</li>
+<li id="pt-createaccount-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:CreateAccount&amp;returnto=Connect+Four" title="You are encouraged to create an account and log in; however, it is not mandatory" class=""><span>Create account</span></a>
+</li>
+<li id="pt-login-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:UserLogin&amp;returnto=Connect+Four" title="You are encouraged to log in; however, it is not mandatory [o]" accesskey="o" class=""><span>Log in</span></a>
+</li>
+
+			
+		</ul>
+		
+	</div>
+</div>
+
+	</div>
+	
+<div id="vector-user-links-dropdown" class="vector-dropdown vector-user-menu vector-button-flush-right vector-user-menu-logged-out user-links-collapsible-item"  title="More options" >
+	<input type="checkbox" id="vector-user-links-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-user-links-dropdown" class="vector-dropdown-checkbox "  aria-label="Personal tools"  >
+	<label id="vector-user-links-dropdown-label" for="vector-user-links-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-ellipsis mw-ui-icon-wikimedia-ellipsis"></span>
+
+<span class="vector-dropdown-label-text">Personal tools</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+		
+<div id="p-personal" class="vector-menu mw-portlet mw-portlet-personal user-links-collapsible-item"  title="User menu" >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			<li id="pt-sitesupport" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="https://donate.wikimedia.org/?wmf_source=donate&amp;wmf_medium=sidebar&amp;wmf_campaign=en.wikibooks.org&amp;uselang=en" class=""><span class="vector-icon mw-ui-icon-heart mw-ui-icon-wikimedia-heart"></span>
+
+<span>Donations</span></a>
+</li>
+<li id="pt-createaccount" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:CreateAccount&amp;returnto=Connect+Four" title="You are encouraged to create an account and log in; however, it is not mandatory" class=""><span class="vector-icon mw-ui-icon-userAdd mw-ui-icon-wikimedia-userAdd"></span>
+
+<span>Create account</span></a>
+</li>
+<li id="pt-login" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:UserLogin&amp;returnto=Connect+Four" title="You are encouraged to log in; however, it is not mandatory [o]" accesskey="o" class=""><span class="vector-icon mw-ui-icon-logIn mw-ui-icon-wikimedia-logIn"></span>
+
+<span>Log in</span></a>
+</li>
+
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+	</div>
+</div>
+
+</nav>
+
+		</div>
+	</header>
+</div>
+<div class="mw-page-container">
+	<div class="mw-page-container-inner">
+		<div class="vector-sitenotice-container">
+			<div id="siteNotice"><div id="mw-dismissablenotice-anonplace"></div><script>(function(){var node=document.getElementById("mw-dismissablenotice-anonplace");if(node){node.outerHTML="\u003Cdiv class=\"mw-dismissable-notice\"\u003E\u003Cdiv class=\"mw-dismissable-notice-close\"\u003E[\u003Ca tabindex=\"0\" role=\"button\"\u003Edismiss\u003C/a\u003E]\u003C/div\u003E\u003Cdiv class=\"mw-dismissable-notice-body\"\u003E\u003C!-- CentralNotice --\u003E\u003Cdiv id=\"localNotice\" data-nosnippet=\"\"\u003E\u003Cdiv class=\"anonnotice\" lang=\"en\" dir=\"ltr\"\u003E\u003Cp\u003EAn \u003Ca href=\"/wiki/Wikibooks:Reading_room/Proposals#Proposal_related_to_FlaggedRevs\" title=\"Wikibooks:Reading room/Proposals\"\u003Eongoing proposal\u003C/a\u003E involving the FlaggedRevs extension is open for discussion.\n\u003C/p\u003E\u003C/div\u003E\u003C/div\u003E\u003C/div\u003E\u003C/div\u003E";}}());</script></div>
+		</div>
+		<div class="vector-column-start">
+			<div class="vector-main-menu-container">
+		<div id="mw-navigation">
+			<nav id="mw-panel" class="vector-main-menu-landmark" aria-label="Site">
+				<div id="vector-main-menu-pinned-container" class="vector-pinned-container">
+				
+				</div>
+		</nav>
+		</div>
+	</div>
+	<div class="vector-sticky-pinned-container">
+				<nav id="mw-panel-toc" aria-label="Contents" data-event-name="ui.sidebar-toc" class="mw-table-of-contents-container vector-toc-landmark">
+					<div id="vector-toc-pinned-container" class="vector-pinned-container">
+					<div id="vector-toc" class="vector-toc vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-toc-pinnable-header vector-pinnable-header-pinned"
+	data-feature-name="toc-pinned"
+	data-pinnable-element-id="vector-toc"
+	data-pinned-container-id="vector-toc-pinned-container"
+	data-unpinned-container-id="vector-toc-unpinned-container"
+>
+	<h2 class="vector-pinnable-header-label">Contents</h2>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-toc.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-toc.unpin">hide</button>
+</div>
+
+
+	<ul class="vector-toc-contents" id="mw-panel-toc-list">
+		<li id="toc-mw-content-text"
+			class="vector-toc-list-item vector-toc-level-1">
+			<a href="#" class="vector-toc-link">
+				<div class="vector-toc-text">Beginning</div>
+			</a>
+		</li>
+		<li id="toc-Theory"
+		class="vector-toc-list-item vector-toc-level-1">
+		<a class="vector-toc-link" href="#Theory">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">1</span>
+				<span>Theory</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Theory-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-Theory-based_strategy_for_7x6_board"
+		class="vector-toc-list-item vector-toc-level-1">
+		<a class="vector-toc-link" href="#Theory-based_strategy_for_7x6_board">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">2</span>
+				<span>Theory-based strategy for 7x6 board</span>
+			</div>
+		</a>
+		
+			<button aria-controls="toc-Theory-based_strategy_for_7x6_board-sublist" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-toc-toggle">
+				<span class="vector-icon mw-ui-icon-wikimedia-expand"></span>
+				<span>Toggle Theory-based strategy for 7x6 board subsection</span>
+			</button>
+		
+		<ul id="toc-Theory-based_strategy_for_7x6_board-sublist" class="vector-toc-list">
+			<li id="toc-Tactics"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Tactics">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">2.1</span>
+					<span>Tactics</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Tactics-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+	</li>
+	<li id="toc-Strategy_for_any_board_size,_2D_or_3D"
+		class="vector-toc-list-item vector-toc-level-1">
+		<a class="vector-toc-link" href="#Strategy_for_any_board_size,_2D_or_3D">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">3</span>
+				<span>Strategy for any board size, 2D or 3D</span>
+			</div>
+		</a>
+		
+			<button aria-controls="toc-Strategy_for_any_board_size,_2D_or_3D-sublist" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-toc-toggle">
+				<span class="vector-icon mw-ui-icon-wikimedia-expand"></span>
+				<span>Toggle Strategy for any board size, 2D or 3D subsection</span>
+			</button>
+		
+		<ul id="toc-Strategy_for_any_board_size,_2D_or_3D-sublist" class="vector-toc-list">
+			<li id="toc-Even_Height"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Even_Height">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.1</span>
+					<span>Even Height</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_Height-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Even_domain,_odd_height"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Even_domain,_odd_height">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.2</span>
+					<span>Even domain, odd height</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_domain,_odd_height-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Odd_domain"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Odd_domain">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.3</span>
+					<span>Odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_domain-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+	</li>
+	<li id="toc-Theory_and_strategy_for_selected_variants"
+		class="vector-toc-list-item vector-toc-level-1">
+		<a class="vector-toc-link" href="#Theory_and_strategy_for_selected_variants">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">4</span>
+				<span>Theory and strategy for selected variants</span>
+			</div>
+		</a>
+		
+			<button aria-controls="toc-Theory_and_strategy_for_selected_variants-sublist" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-toc-toggle">
+				<span class="vector-icon mw-ui-icon-wikimedia-expand"></span>
+				<span>Toggle Theory and strategy for selected variants subsection</span>
+			</button>
+		
+		<ul id="toc-Theory_and_strategy_for_selected_variants-sublist" class="vector-toc-list">
+			<li id="toc-2-way_gravity_(aka_&quot;Connect_Four_Flip&quot;)"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#2-way_gravity_(aka_&quot;Connect_Four_Flip&quot;)">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.1</span>
+					<span>2-way gravity (aka "Connect Four Flip")</span>
+				</div>
+			</a>
+			
+			<ul id="toc-2-way_gravity_(aka_&quot;Connect_Four_Flip&quot;)-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Edge_(4-way/6-way)_gravity"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Edge_(4-way/6-way)_gravity">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.2</span>
+					<span>Edge (4-way/6-way) gravity</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Edge_(4-way/6-way)_gravity-sublist" class="vector-toc-list">
+				<li id="toc-Boards_with_even_domain"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Boards_with_even_domain">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.2.1</span>
+					<span>Boards with even domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Boards_with_even_domain-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Boards_with_odd_domain"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Boards_with_odd_domain">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.2.2</span>
+					<span>Boards with odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Boards_with_odd_domain-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Zero_gravity,_surface-sticking"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Zero_gravity,_surface-sticking">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.3</span>
+					<span>Zero gravity, surface-sticking</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Zero_gravity,_surface-sticking-sublist" class="vector-toc-list">
+				<li id="toc-No_barriers"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#No_barriers">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.3.1</span>
+					<span>No barriers</span>
+				</div>
+			</a>
+			
+			<ul id="toc-No_barriers-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-With_barriers"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#With_barriers">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.3.2</span>
+					<span>With barriers</span>
+				</div>
+			</a>
+			
+			<ul id="toc-With_barriers-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Two-move_turns"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Two-move_turns">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4</span>
+					<span>Two-move turns</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Two-move_turns-sublist" class="vector-toc-list">
+				<li id="toc-Stacking_(downward_gravity)"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Stacking_(downward_gravity)">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.1</span>
+					<span>Stacking (downward gravity)</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Stacking_(downward_gravity)-sublist" class="vector-toc-list">
+				<li id="toc-Even_domain"
+			class="vector-toc-list-item vector-toc-level-4">
+			<a class="vector-toc-link" href="#Even_domain">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.1.1</span>
+					<span>Even domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_domain-sublist" class="vector-toc-list">
+				<li id="toc-Even_height_2"
+			class="vector-toc-list-item vector-toc-level-5">
+			<a class="vector-toc-link" href="#Even_height_2">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.1.1.1</span>
+					<span>Even height</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_height_2-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Odd_height"
+			class="vector-toc-list-item vector-toc-level-5">
+			<a class="vector-toc-link" href="#Odd_height">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.1.1.2</span>
+					<span>Odd height</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_height-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Odd_domain_2"
+			class="vector-toc-list-item vector-toc-level-4">
+			<a class="vector-toc-link" href="#Odd_domain_2">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.1.2</span>
+					<span>Odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_domain_2-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Four-way/6-way_gravity"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Four-way/6-way_gravity">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.2</span>
+					<span>Four-way/6-way gravity</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Four-way/6-way_gravity-sublist" class="vector-toc-list">
+				<li id="toc-Even_domain_2"
+			class="vector-toc-list-item vector-toc-level-4">
+			<a class="vector-toc-link" href="#Even_domain_2">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.2.1</span>
+					<span>Even domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_domain_2-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Odd_domain_3"
+			class="vector-toc-list-item vector-toc-level-4">
+			<a class="vector-toc-link" href="#Odd_domain_3">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.4.2.2</span>
+					<span>Odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_domain_3-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Collapsing_lines"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Collapsing_lines">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.5</span>
+					<span>Collapsing lines</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Collapsing_lines-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Inversed"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Inversed">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.6</span>
+					<span>Inversed</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Inversed-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Wrap-around"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Wrap-around">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.7</span>
+					<span>Wrap-around</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Wrap-around-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Diagonal_stacking"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Diagonal_stacking">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.8</span>
+					<span>Diagonal stacking</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Diagonal_stacking-sublist" class="vector-toc-list">
+				<li id="toc-Even_domain_3"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Even_domain_3">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.8.1</span>
+					<span>Even domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_domain_3-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Odd_domain_4"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Odd_domain_4">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.8.2</span>
+					<span>Odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_domain_4-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Chess-knight_motion,_no_gravity"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Chess-knight_motion,_no_gravity">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.9</span>
+					<span>Chess-knight motion, no gravity</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Chess-knight_motion,_no_gravity-sublist" class="vector-toc-list">
+				<li id="toc-Even_domain_4"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Even_domain_4">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.9.1</span>
+					<span>Even domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Even_domain_4-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Odd_domain_5"
+			class="vector-toc-list-item vector-toc-level-3">
+			<a class="vector-toc-link" href="#Odd_domain_5">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.9.2</span>
+					<span>Odd domain</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Odd_domain_5-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+		</li>
+		<li id="toc-Scoring_variant"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Scoring_variant">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">4.10</span>
+					<span>Scoring variant</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Scoring_variant-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+	</li>
+</ul>
+</div>
+
+					</div>
+		</nav>
+			</div>
+		</div>
+		<div class="mw-content-container">
+			<main id="content" class="mw-body">
+				<header class="mw-body-header vector-page-titlebar no-font-mode-scale">
+					<nav aria-label="Contents" class="vector-toc-landmark">
+						
+<div id="vector-page-titlebar-toc" class="vector-dropdown vector-page-titlebar-toc vector-button-flush-left"  title="Table of Contents" >
+	<input type="checkbox" id="vector-page-titlebar-toc-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-page-titlebar-toc" class="vector-dropdown-checkbox "  aria-label="Toggle the table of contents"  >
+	<label id="vector-page-titlebar-toc-label" for="vector-page-titlebar-toc-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-listBullet mw-ui-icon-wikimedia-listBullet"></span>
+
+<span class="vector-dropdown-label-text">Toggle the table of contents</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+							<div id="vector-page-titlebar-toc-unpinned-container" class="vector-unpinned-container">
+			</div>
+		
+	</div>
+</div>
+
+					</nav>
+					<h1 id="firstHeading" class="firstHeading mw-first-heading"><span lang="en" dir="ltr"><span class="mw-page-title-main">Connect Four</span></span></h1>
+							
+<div id="p-lang-btn" class="vector-dropdown mw-portlet mw-portlet-lang"  >
+	<input type="checkbox" id="p-lang-btn-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-p-lang-btn" class="vector-dropdown-checkbox mw-interlanguage-selector" aria-label="Go to an article in another language. Available in 1 language"   >
+	<label id="p-lang-btn-label" for="p-lang-btn-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--action-progressive mw-portlet-lang-heading-1" aria-hidden="true"  ><span class="vector-icon mw-ui-icon-language-progressive mw-ui-icon-wikimedia-language-progressive"></span>
+
+<span class="vector-dropdown-label-text">1 language</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+		<div class="vector-menu-content">
+			
+			<ul class="vector-menu-content-list">
+				
+				<li class="interlanguage-link interwiki-de mw-list-item"><a href="https://de.wikibooks.org/wiki/Vier_gewinnt" title="Vier gewinnt – German" lang="de" hreflang="de" data-title="Vier gewinnt" data-language-autonym="Deutsch" data-language-local-name="German" class="interlanguage-link-target"><span>Deutsch</span></a></li>
+			</ul>
+			<div class="after-portlet after-portlet-lang"><span class="wb-langlinks-edit wb-langlinks-link"><a href="https://www.wikidata.org/wiki/Special:EntityPage/Q17254#sitelinks-wikibooks" title="Edit interlanguage links" class="wbc-editpage">Edit links</a></span></div>
+		</div>
+
+	</div>
+</div>
+</header>
+				<div class="vector-page-toolbar vector-feature-custom-font-size-clientpref--excluded">
+					<div class="vector-page-toolbar-container">
+						<div id="left-navigation">
+							<nav aria-label="Namespaces">
+								
+<div id="p-associated-pages" class="vector-menu vector-menu-tabs mw-portlet mw-portlet-associated-pages"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-nstab-main" class="selected vector-tab-noicon mw-list-item"><a href="/wiki/Connect_Four" title="View the content page [c]" accesskey="c"><span>Book</span></a></li><li id="ca-talk" class="vector-tab-noicon mw-list-item"><a href="/wiki/Talk:Connect_Four" rel="discussion" title="Discussion about the content page [t]" accesskey="t"><span>Discussion</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+								
+<div id="vector-variants-dropdown" class="vector-dropdown emptyPortlet"  >
+	<input type="checkbox" id="vector-variants-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-variants-dropdown" class="vector-dropdown-checkbox " aria-label="Change language variant"   >
+	<label id="vector-variants-dropdown-label" for="vector-variants-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet" aria-hidden="true"  ><span class="vector-dropdown-label-text">English</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+					
+<div id="p-variants" class="vector-menu mw-portlet mw-portlet-variants emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+				
+	</div>
+</div>
+
+							</nav>
+						</div>
+						<div id="right-navigation" class="vector-collapsible">
+							<nav aria-label="Views">
+								
+<div id="p-views" class="vector-menu vector-menu-tabs mw-portlet mw-portlet-views"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-view" class="selected vector-tab-noicon mw-list-item"><a href="/wiki/Connect_Four"><span>Read</span></a></li><li id="ca-ve-edit" class="vector-tab-noicon mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;veaction=edit" title="Edit this page [v]" accesskey="v"><span>Edit</span></a></li><li id="ca-edit" class="collapsible vector-tab-noicon mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=edit" title="Edit the source code of this page [e]" accesskey="e"><span>Edit source</span></a></li><li id="ca-history" class="vector-tab-noicon mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=history" title="Past revisions of this page [h]" accesskey="h"><span>View history</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+							</nav>
+				
+							<nav class="vector-page-tools-landmark" aria-label="Page tools">
+								
+<div id="vector-page-tools-dropdown" class="vector-dropdown vector-page-tools-dropdown"  >
+	<input type="checkbox" id="vector-page-tools-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-page-tools-dropdown" class="vector-dropdown-checkbox "  aria-label="Tools"  >
+	<label id="vector-page-tools-dropdown-label" for="vector-page-tools-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet" aria-hidden="true"  ><span class="vector-dropdown-label-text">Tools</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+									<div id="vector-page-tools-unpinned-container" class="vector-unpinned-container">
+						
+<div id="vector-page-tools" class="vector-page-tools vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-page-tools-pinnable-header vector-pinnable-header-unpinned"
+	data-feature-name="page-tools-pinned"
+	data-pinnable-element-id="vector-page-tools"
+	data-pinned-container-id="vector-page-tools-pinned-container"
+	data-unpinned-container-id="vector-page-tools-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Tools</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-page-tools.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-page-tools.unpin">hide</button>
+</div>
+
+	
+<div id="p-cactions" class="vector-menu mw-portlet mw-portlet-cactions emptyPortlet vector-has-collapsible-items"  >
+	<div class="vector-menu-heading">
+		Actions
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			<li id="ca-more-view" class="selected vector-more-collapsible-item mw-list-item"><a data-mw-interface  href="/wiki/Connect_Four" class=""><span>Read</span></a>
+</li>
+<li id="ca-more-ve-edit" class="vector-more-collapsible-item mw-list-item"><a data-mw-interface  href="/w/index.php?title=Connect_Four&amp;veaction=edit" title="Edit this page [v]" accesskey="v" class=""><span>Edit</span></a>
+</li>
+<li id="ca-more-edit" class="collapsible vector-more-collapsible-item mw-list-item"><a data-mw-interface  href="/w/index.php?title=Connect_Four&amp;action=edit" title="Edit the source code of this page [e]" accesskey="e" class=""><span>Edit source</span></a>
+</li>
+<li id="ca-more-history" class="vector-more-collapsible-item mw-list-item"><a data-mw-interface  href="/w/index.php?title=Connect_Four&amp;action=history" class=""><span>View history</span></a>
+</li>
+
+			
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-tb" class="vector-menu mw-portlet mw-portlet-tb"  >
+	<div class="vector-menu-heading">
+		General
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="t-whatlinkshere" class="mw-list-item"><a href="/wiki/Special:WhatLinksHere/Connect_Four" title="A list of all wiki pages that link here [j]" accesskey="j"><span>What links here</span></a></li><li id="t-recentchangeslinked" class="mw-list-item"><a href="/wiki/Special:RecentChangesLinked/Connect_Four" rel="nofollow" title="Recent changes in pages linked from this page [k]" accesskey="k"><span>Related changes</span></a></li><li id="t-upload" class="mw-list-item"><a href="//commons.wikimedia.org/wiki/Special:UploadWizard?uselang=en" title="Upload files [u]" accesskey="u"><span>Upload file</span></a></li><li id="t-permalink" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;oldid=4422357" title="Permanent link to this revision of this page"><span>Permanent link</span></a></li><li id="t-info" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=info" title="More information about this page"><span>Page information</span></a></li><li id="t-cite" class="mw-list-item"><a href="/w/index.php?title=Special:CiteThisPage&amp;page=Connect_Four&amp;id=4422357&amp;wpFormIdentifier=titleform" title="Information on how to cite this page"><span>Cite this page</span></a></li><li id="t-urlshortener" class="mw-list-item"><a href="/w/index.php?title=Special:UrlShortener&amp;url=https%3A%2F%2Fen.wikibooks.org%2Fwiki%2FConnect_Four"><span>Get shortened URL</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-sister_projects" class="vector-menu mw-portlet mw-portlet-sister_projects"  >
+	<div class="vector-menu-heading">
+		Sister projects
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-Wikipedia" class="mw-list-item"><a href="https://en.wikipedia.org/wiki/Main_Page"><span>Wikipedia</span></a></li><li id="n-Wikiversity" class="mw-list-item"><a href="https://en.wikiversity.org/wiki/Wikiversity:Main_Page"><span>Wikiversity</span></a></li><li id="n-Wiktionary" class="mw-list-item"><a href="https://en.wiktionary.org/wiki/Wiktionary:Main_Page"><span>Wiktionary</span></a></li><li id="n-Wikiquote" class="mw-list-item"><a href="https://en.wikiquote.org/wiki/Main_Page"><span>Wikiquote</span></a></li><li id="n-Wikisource" class="mw-list-item"><a href="https://en.wikisource.org/wiki/Main_Page"><span>Wikisource</span></a></li><li id="n-Wikinews" class="mw-list-item"><a href="https://en.wikinews.org/wiki/Main_Page"><span>Wikinews</span></a></li><li id="n-Wikivoyage" class="mw-list-item"><a href="https://en.wikivoyage.org/wiki/Main_Page"><span>Wikivoyage</span></a></li><li id="n-Commons" class="mw-list-item"><a href="https://commons.wikimedia.org/wiki/Main_Page"><span>Commons</span></a></li><li id="n-Wikidata" class="mw-list-item"><a href="https://www.wikidata.org/wiki/Wikidata:Main_Page"><span>Wikidata</span></a></li><li id="n-MediaWiki" class="mw-list-item"><a href="https://www.mediawiki.org/wiki/Main_Page"><span>MediaWiki</span></a></li><li id="n-Meta-Wiki" class="mw-list-item"><a href="https://meta.wikimedia.org/wiki/Main_Page"><span>Meta-Wiki</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-coll-print_export" class="vector-menu mw-portlet mw-portlet-coll-print_export"  >
+	<div class="vector-menu-heading">
+		Print/export
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="coll-create_a_book" class="mw-list-item"><a href="/w/index.php?title=Special:Book&amp;bookcmd=book_creator&amp;referer=Connect+Four"><span>Create a collection</span></a></li><li id="coll-download-as-rl" class="mw-list-item"><a href="/w/index.php?title=Special:DownloadAsPdf&amp;page=Connect_Four&amp;action=show-download-screen"><span>Download as PDF</span></a></li><li id="t-print" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;printable=yes" title="Printable version of this page [p]" accesskey="p"><span>Printable version</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-wikibase-otherprojects" class="vector-menu mw-portlet mw-portlet-wikibase-otherprojects"  >
+	<div class="vector-menu-heading">
+		In other projects
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li class="wb-otherproject-link wb-otherproject-commons mw-list-item"><a href="https://commons.wikimedia.org/wiki/Category:Connect_Four" hreflang="en"><span>Wikimedia Commons</span></a></li><li class="wb-otherproject-link wb-otherproject-wikipedia mw-list-item"><a href="https://en.wikipedia.org/wiki/Connect_Four" hreflang="en"><span>Wikipedia</span></a></li><li id="t-wikibase" class="wb-otherproject-link wb-otherproject-wikibase-dataitem mw-list-item"><a href="https://www.wikidata.org/wiki/Special:EntityPage/Q17254" title="Link to connected data repository item [g]" accesskey="g"><span>Wikidata item</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+</div>
+
+									</div>
+				
+	</div>
+</div>
+
+							</nav>
+						</div>
+					</div>
+				</div>
+				<div class="vector-column-end no-font-mode-scale">
+					<div class="vector-sticky-pinned-container">
+						<div class="wp25eastereggs-vector-sitenotice-landmark"></div>
+						<nav class="vector-page-tools-landmark" aria-label="Page tools">
+							<div id="vector-page-tools-pinned-container" class="vector-pinned-container">
+				
+							</div>
+		</nav>
+						<nav class="vector-appearance-landmark" aria-label="Appearance">
+							<div id="vector-appearance-pinned-container" class="vector-pinned-container">
+				<div id="vector-appearance" class="vector-appearance vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-appearance-pinnable-header vector-pinnable-header-pinned"
+	data-feature-name="appearance-pinned"
+	data-pinnable-element-id="vector-appearance"
+	data-pinned-container-id="vector-appearance-pinned-container"
+	data-unpinned-container-id="vector-appearance-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Appearance</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-appearance.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-appearance.unpin">hide</button>
+</div>
+
+
+</div>
+
+							</div>
+		</nav>
+					</div>
+				</div>
+				<div id="bodyContent" class="vector-body" aria-labelledby="firstHeading" data-mw-ve-target-container>
+					<div class="vector-body-before-content">
+							<div class="mw-indicators">
+		<div id="mw-indicator-status" class="mw-indicator"><div class="mw-parser-output"><span typeof="mw:File"><a href="/wiki/Help:Development_stages" title="25% developed"><img alt="25% developed" src="//upload.wikimedia.org/wikipedia/commons/thumb/c/ce/25_percent.svg/40px-25_percent.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail" decoding="async" width="24" height="24" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/c/ce/25_percent.svg/60px-25_percent.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail 2x" data-file-width="9" data-file-height="9" /></a></span></div></div>
+		</div>
+
+						<div id="siteSub" class="noprint">From Wikibooks, open books for an open world</div>
+					</div>
+					<div id="contentSub"><div id="mw-content-subtitle"></div></div>
+					
+					
+					<div id="mw-content-text" class="mw-body-content"><div class="mw-content-ltr mw-parser-output" lang="en" dir="ltr"><style data-mw-deduplicate="TemplateStyles:r4525831">.mw-parser-output .ambox{border:1px solid #a2a9b1;border-left:10px solid #36c;background-color:#fbfbfb;box-sizing:border-box}.mw-parser-output .ambox+link+.ambox,.mw-parser-output .ambox+link+style+.ambox,.mw-parser-output .ambox+link+link+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+style+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+link+.ambox{margin-top:-1px}html body.mediawiki .mw-parser-output .ambox.mbox-small-left{margin:4px 1em 4px 0;overflow:hidden;width:238px;border-collapse:collapse;font-size:88%;line-height:1.25em}.mw-parser-output .ambox-speedy{border-left:10px solid #b32424;background-color:#fee7e6}.mw-parser-output .ambox-delete{border-left:10px solid #b32424}.mw-parser-output .ambox-content{border-left:10px solid #f28500}.mw-parser-output .ambox-style{border-left:10px solid #fc3}.mw-parser-output .ambox-move{border-left:10px solid #9932cc}.mw-parser-output .ambox-protection{border-left:10px solid #a2a9b1}.mw-parser-output .ambox .mbox-text{border:none;padding:0.25em 0.5em;width:100%}.mw-parser-output .ambox .mbox-image{border:none;padding:2px 0 2px 0.5em;text-align:center}.mw-parser-output .ambox .mbox-imageright{border:none;padding:2px 0.5em 2px 0;text-align:center}.mw-parser-output .ambox .mbox-empty-cell{border:none;padding:0;width:1px}.mw-parser-output .ambox .mbox-image-div{width:52px}html.client-js body.skin-minerva .mw-parser-output .mbox-text-span{margin-left:23px!important}@media(min-width:720px){.mw-parser-output .ambox{margin:0 10%}}</style><table class="plainlinks metadata ambox ambox-move" role="presentation"><tbody><tr><td class="mbox-image"><div class="mbox-image-div"><span typeof="mw:File"><span><img src="//upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Split-arrows.svg/40px-Split-arrows.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail" decoding="async" width="40" height="13" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Split-arrows.svg/120px-Split-arrows.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail 2x" data-file-width="60" data-file-height="20"></span></span></div></td><td class="mbox-text"><div class="mbox-text-span"><b>A Wikibookian believes this page should be split into smaller pages with a narrower subtopic.</b><br>
+<p>You can help by splitting this big page into smaller ones. Please make sure to follow the <a href="//en.wikibooks.org/wiki/Wikibooks:NP" class="mw-redirect" title="Wikibooks:NP">naming policy</a>. Dividing books into smaller sections can provide more focus and allow each one to do one thing well, which benefits everyone.<br>
+</p>
+<small>You can ask for help in dividing this book in the <a href="//en.wikibooks.org/wiki/Wikibooks:Reading_room/Assistance" class="mw-redirect" title="Wikibooks:Reading room/Assistance">assistance reading room</a>.</small></div></td></tr></tbody></table> 
+<ul><li>For other reading until then, Sterling Publishing and Hasbro are supposed to release a book soon by James Allen entitled, <i>The Complete Book of Connect Four</i>. In addition, refer to the <a href="#Additional_Resources">Additional Resources section</a>.</li></ul>
+<hr>
+<style data-mw-deduplicate="TemplateStyles:r4571338">.mw-parser-output .ns-subject .messagebox.notice{border-left-color:var(--color-link,#36c);border-left-width:8px;border-spacing:0;box-sizing:border-box;border-collapse:collapse}.mw-parser-output table.messagebox>tbody>tr>td>p{margin:0}</style><style data-mw-deduplicate="TemplateStyles:r4597640">.mw-parser-output .mbox-side{width:250px;float:right;clear:right;margin:4px 0 4px 1em;margin-left:10px;background:var(--background-color-neutral-subtle,#f8f9fa);color:inherit;border:1px solid var(--border-color-base,#a2a9b1)}.mw-parser-output .mbox-side td{padding:0.5em;padding-left:0em}.mw-parser-output .messagebox.mbox-side{border-left-color:#1e90ff;border-left-width:10px}.mw-parser-output .messagebox.mbox-side-notice{border-left-color:#1e90ff}.mw-parser-output .messagebox.mbox-side-warning{border-left-color:#b22222}.mw-parser-output .messagebox.mbox-side-serious{border-left-color:#b22222}.mw-parser-output .messagebox.mbox-side-content{border-left-color:#f28500}.mw-parser-output .messagebox.mbox-side-style{border-left-color:#f4c430}.mw-parser-output .messagebox.mbox-side-merge{border-left-color:#9932cc}.mw-parser-output .messagebox.mbox-side-growth{border-left-color:#228b22}.mw-parser-output .messagebox.mbox-side-idea{border-left-color:yellow}.mw-parser-output .messagebox.mbox-side-query{border-left-color:#ffb734}.mw-parser-output .messagebox.mbox-side-move{border-left-color:#9932cc}</style><table class="plainlinks messagebox mbox-side mbox-side-notice" role="presentation"><tbody><tr><td class="mbox-image"><span typeof="mw:File"><span><img alt="" src="//upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/60px-Wikipedia-logo-v2.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail" decoding="async" width="45" height="41" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/120px-Wikipedia-logo-v2.svg.png?utm_source=en.wikibooks.org&amp;utm_campaign=parser&amp;utm_content=thumbnail 2x" data-file-width="103" data-file-height="94"></span></span></td><td class="mbox-text"><a href="https://en.wikipedia.org/wiki/" class="extiw" title="w:">Wikipedia</a> has related information at
+<a href="https://en.wikipedia.org/wiki/Connect_four" class="extiw" title="wikipedia:Connect four"><i><b>Connect four</b></i></a>.</td></tr></tbody></table>
+<meta property="mw:PageProp/toc">
+<div class="mw-heading mw-heading2"><h2 id="Theory">Theory</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=1" title="Edit section: Theory" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=1" title="Edit section's source code: Theory"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The board has 42 spaces: 7 columns (vertical lines) and 6 rows (horizontal lines).  When all 42 spaces are empty, it is the first player's (Red) turn to move.  It is Red's turn again when there are 40 empty spaces, and again when there are 38 empty spaces.  There is a pattern: <u>when the number of empty spaces is even, it is Red's turn to move</u>.  Conversely, <u>when there are an odd number of empty spaces, it's Black's turn</u>.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Often there are certain spaces that both players want to occupy and don't want the opponent to occupy.  These shall be referred to as  "critical" spaces.  A wise player will never move under a critical space, but instead wait for the opponent to do so.  If both players play this way, no critical space will be playable until one player is <i>forced</i> to move under it due to having no other options (this situation is known as "zugzwang").  Who gets to occupy critical spaces depends, of course, on whose turn it will be when the only playable spaces are those directly below the critical spaces.  This depends on the number of empty spaces remaining on the board when the only playable spaces are those directly below the critical spaces.  Whether or not that number is even or 
+odd can be predicted based on how many spaces are above the above the critical spaces (whether the critical spaces are on even rows or odd rows*), and how many critical spaces there are.  *Note: "odd rows" refers to the 3rd and 5th row up, and excludes the bottom row because its spaces are always playable.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A critical space on an even row has an even number of empty spaces above it.  For instance, the 2nd row has four rows above it, therefore any space on the 2nd row has 4 spaces above it.  A critical space on an odd row has an odd number of empty spaces above it.
+</p>
+<ul><li>If the only critical space is even (on an even row), the number of empty spaces remaining when a player is forced to move underneath the empty space is even.  For example, if the critical space is on the 2nd row, there will be 6 empty spaces remaining (one full column) when the move underneath the critical space is forced.  An even number of empty spaces means it is Red's turn, therefore Red must move under the critical space and Black will occupy the critical space.</li>
+<li>If there are multiple critical spaces and all of them are even, the number of empty spaces remaining when <i>Zugzwang</i> occurs is: (even #) + (even #) = <b>(even #)</b>   and therefore it will be Red's turn when <i>Zugzwang</i> occurs and Black will occupy the critical spaces.</li>
+<li>If the only critical space is odd (on an odd row), there will an odd # of empty spaces when Zugzwang occurs.  Therefore it will be Black's turn, and therefore Red will get the critical space.</li>
+<li>If there are 2 critical spaces and both are odd, the sum of empty spaces when Zugzwang occurs will be: (odd #) + (odd #) = <b>(even #)</b>    and therefore it will be Red's turn to move, allowing Black to occupy whichever critical space Red move under.  If Black's occupation of that critical space does not end the game, the game will continue until another zugzwang occurs.  In that situation, there will be one critical space on an odd row, which is the same situation as previously described.  Red will therefore occupy the 2nd critical space.  The following generalization can be made: <u>For any even # of odd-row critical spaces, Black will get the 1st, 3rd, etc., and Red will get the 2nd, 4th, etc.</u></li>
+<li>If there are 3 critical spaces and all 3 are odd, the sum of empty spaces when Zugzwang occurs is: (odd #) + (odd #) + (odd #) = <b>(odd #)</b>   resulting in Black's turn and therefore Red's occupation of whichever critical space Black chooses to give Red.  If Red's occupation of that critical space does not end the game, the game will continue until the previous situation occurs.  So another generalization can be made: <u>For any odd # of odd-row critical spaces, Red will get the 1st, 3rd, etc., and Black will get the 2nd, 4th, etc.</u>  (Note that each generalization is implied by each other)</li>
+<li>If there are 2 critical spaces, one being odd and the other being even, the following will result from Zugzwang: (odd #) + (even #) = <b>(odd #)</b>    and therefore Red will get the first (decided by Black) critical space.  Thus only odd-row critical spaces influence the result; even-row critical spaces have no affect because even #'s do not change the evenness/oddness of the sum of the empty spaces remaining.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Theory-based_strategy_for_7x6_board">Theory-based strategy for 7x6 board</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=2" title="Edit section: Theory-based strategy for 7x6 board" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=2" title="Edit section's source code: Theory-based strategy for 7x6 board"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Expert players attempt to create a long-term attack that one's opponent will be forced to move under late in the game when the board is nearly filled.  There is a rule of thumb that can be used to tell which kinds of attacks are good long-term attacks (leading to victory), and which attacks the opponent will get to block.  Red needs one more unshared attack on an odd row than Black in order to win, or an odd number of shared odd-row attacks.  Black needs either an even-row attack or a combination of odd-row attacks.  If Black is to win via odd-row attacks, Black needs 2 odd-row attacks, each on a different column, and Red must have no odd-row attack on any column separate from Black's 2 columns, and no even threat below either of Black's odd-row attacks.  A draw results if Red has an odd-row attack in a separate column from Black's odd-row threats (separate attacks like these will hereby be referred to as “unshared” as earlier).  When Black wins, it is usually by an attack on an even row because those attacks are easier to obtain.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If both players play flawlessly, Red wins.  Therefore, in short, <u>Red's strategy is to play offense</u> and seek an odd-row attack while preventing Black's odd threats (and even threats below his own odd threats).  <u>Black's strategy is primarily to defend</u> Red's odd-row attacks and then to obtain (usually) an even-row attack.  The major reason Black is on defense is that if Red has an odd-row attack and Black has an even-row attack, Red wins.  <u>Black should be content to earn a draw against Red</u>, because it often means Black outplayed Red since Red has the advantage.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Tactics">Tactics</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=3" title="Edit section: Tactics" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=3" title="Edit section's source code: Tactics"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<div class="mw-heading mw-heading2"><h2 id="Strategy_for_any_board_size,_2D_or_3D"><span id="Strategy_for_any_board_size.2C_2D_or_3D"></span>Strategy for any board size, 2D or 3D</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=4" title="Edit section: Strategy for any board size, 2D or 3D" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=4" title="Edit section's source code: Strategy for any board size, 2D or 3D"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Note: Any board size’ strategy can be derived using the method of the "Theory" section.  The same generalizations cannot always be made, but using the same method, one will arrive at the correct new generalizations and understand why the bullet-rules below are true.
+</p>
+<ul><li>For a list of win/loss results for 2D boards, see <a rel="nofollow" class="external text" href="https://tromp.github.io/c4/c4.html">John Tromp's webpage</a><sup>*</sup></li></ul>
+<p>*While expert players on LittleGolem believe 8x8 to be a second player win, no proof is known.
+</p><p>Note:
+</p>
+<ul><li>For 3D "boards", assume a box shape.</li>
+<li>The bullet-rules below assume attacks that are not immediately playable.</li>
+<li>A 2D board's area, or a 3D board's volume, will be referred to as its "domain".</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Even_Height">Even Height</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=5" title="Edit section: Even Height" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=5" title="Edit section's source code: Even Height"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;With these boards, everything is the same is in 7x6 since 7x6 falls in this category. The only difference between 7x6 and other board sizes of this category is the win/loss results, depending on the board size.  The strategy section above is summarized below:
+</p><p>For Red to win: 
+</p>
+<ul><li>1 more unshared odd-row attack than Black, or</li>
+<li>the same # of unshared odd-row attacks as Black, plus an odd # of shared ones, or</li>
+<li>an odd # of odd-row attacks (whether shared or unshared), if Black has no unshared ones</li></ul>
+<p>For Black to win:
+</p>
+<ul><li>an even-row attack, if Red has no odd-row attacks, or</li>
+<li>two more unshared odd-row attacks than red, or</li>
+<li>the same # of unshared odd-row attacks as Red, plus an even # of shared ones, or</li>
+<li>one more unshared odd-row attack than Red, plus any # of shared ones, or</li>
+<li>one unshared odd-row attack plus any number of shared ones, if Red has no unshared ones, or</li>
+<li>an even # of odd-row attacks (whether shared or unshared), if Red has no unshared ones</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Even_domain,_odd_height"><span id="Even_domain.2C_odd_height"></span>Even domain, odd height</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=6" title="Edit section: Even domain, odd height" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=6" title="Edit section's source code: Even domain, odd height"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red: 1 more unshared even-row attack than Black to win, or odd # of shared even-row attacks.</li>
+<li>Black: odd-row attack or even # of even-row attacks (2 more unshared than Red, or the same # of shared) to win.</li>
+<li>If Red and Black have the same # of unshared even-row attacks, the game is drawn.</li>
+<li>If Red has 1 even-row attack and Black has 1 odd-row attack, Red wins.</li></ul>
+<p>Remark: The even rows in these types of boards are like 7x6's odd rows.
+</p><p>Note: the situation described in the "Tactics" section applies to (even)by(odd) boards if one reads the section replacing "odd" with "even" and vice versa.  ("Red" and "Black" stay the same)
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Odd_domain">Odd domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=7" title="Edit section: Odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=7" title="Edit section's source code: Odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red: odd-row attack or even # of even-row attacks (2 more unshared than Black, or the same # of shared) to win.</li>
+<li>Black: 1 more unshared even-row attack than Red to win, or odd # of shared even-row attacks.</li>
+<li>If Red and Black have the same # of unshared even-row attacks, the game is drawn.</li>
+<li>If Black has 1 even-row attack and Red has 1 odd-row attack, Black wins.</li></ul>
+<p>Remark: The even rows in odd-area boards are like 7x6's odd rows, and Red in odd-area boards is like Black in 7x6 (but the win/loss results vary with size).
+</p><p>Note: the situation described in the "Tactics" section applies to (odd)by(odd) boards if one reads the section replacing "Red" with "Black" and vice versa, and replacing "odd" with "even" and vice versa.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Theory_and_strategy_for_selected_variants">Theory and strategy for selected variants</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=8" title="Edit section: Theory and strategy for selected variants" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=8" title="Edit section's source code: Theory and strategy for selected variants"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The theory of the following variants is, as you will see, derived using the same principles as used for regular Connect Four and its board size variations.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="2-way_gravity_(aka_&quot;Connect_Four_Flip&quot;)"><span id="2-way_gravity_.28aka_.22Connect_Four_Flip.22.29"></span>2-way gravity (aka "Connect Four Flip")</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=9" title="Edit section: 2-way gravity (aka &quot;Connect Four Flip&quot;)" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=9" title="Edit section's source code: 2-way gravity (aka &quot;Connect Four Flip&quot;)"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within two weeks.
+</p>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Edge_(4-way/6-way)_gravity"><span id="Edge_.284-way.2F6-way.29_gravity"></span>Edge (4-way/6-way) gravity</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=10" title="Edit section: Edge (4-way/6-way) gravity" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=10" title="Edit section's source code: Edge (4-way/6-way) gravity"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p><a rel="nofollow" class="external text" href="http://www.itsyourturn.com/t_helptopic2070.html#helpitem1222">Click for explanation of the game rules (on a 2D board).</a> (referred to as "Stack 4x4")
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Red moves when the number of empty spaces = even.  There are two types of long-term 3-piece attacks: "even zugzwang value" and "odd zugzwang value", whose meanings will be explained.  Furthermore, there are 2 ways to make attacks: orthogonally (horizontally or vertically) or diagonally.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;An orthogonal attack can create up to 2 critical spaces.  If it only forms one, the zugzwang situation will be such that one player will be forced to move to one of 4 spaces—2 spaces in the column where the critical space lies and 2 spaces in the row where it lies.  Spaces like these---which, when filled, allow the critical space to be occupied on the next turn---will hereby be referred to as "zugzwang spaces".  So orthogonals with one end and discontinuous (unconnected/gapped) form 4 zugzwang spaces and 1 critical space, which means when Zugzwang occurs, 5 empty spaces remain.  This sum will be referred to as a "zugzwang value" for convenience.  Single critical space orthogonals, as shown, have a zugzwang value of 5--or more importantly, an odd zugzwang value.
+</p><p>An orthogonal can form 2 critical spaces by one of two ways: an open-ended connected line (being at least 3 spaces from either perpendicular edge of the board or 2 spaces from any legal move in the extension of the line), or a discontinuous line with two gaps.  In both cases, there are 6 zugzwang spaces.  Its zugzwang value (ZV from now on) is 8, hence is even.  Note, however, that once the 1st critical space is occupied by one player, the 2nd one is immediately playable by the other.  Therefore in some situations, an open-ended orthogonal attack can be thought of as forming 1 critical space with 4 zugzwang spaces, and thus having an odd ZV (the "one" critical space could be on either side of the line, depending on which one the opponent chooses).
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Diagonals, whether continuous or not, form 4 zugzwang spaces for each critical space they create.  A discontinuous diagonal forms 1 critical space and therefore has an odd ZV (five).  A continuous, open-ended diagonal has a ZV of: (2 critical spaces) + 4 + 4 = 10, which is of course even.  Notice that this is a combination of 2 odd-ZV attacks.  A closed-ended diagonal, for example, has only 1 critical space and 4 zugzwang spaces, and therefore has a ZV of 5 which is odd.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; For 3D, box-shaped boards with 6-way gravity, the only thing that changes is that 2 more zugzwang spaces are created by each kind of attack.  Adding an even # to another # does not change the evenness/oddness of it.  Therefore, the evenness/oddness of the ZV's will be the same, and each player will need the same attacks as in 4-way-gravity.
+</p><p>From these facts, the following conclusions can be drawn.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Boards_with_even_domain">Boards with even domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=11" title="Edit section: Boards with even domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=11" title="Edit section's source code: Boards with even domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs 1 more unshared odd-ZV attack than Black to win, or an odd # of shared odd-ZV attacks.
+<ul><li>Any attack will accomplish this.</li></ul></li>
+<li>Black needs an even-ZV attack to win or an even # of odd-ZV attacks (2 more unshared than Red, or the same # of shared).
+<ul><li>A 2 critical space orthogonal, a 2-critical-space diagonal, or 2 of any other type of attack will achieve this.</li></ul></li>
+<li>If Red and Black each have 1 unshared odd-ZV attack, and Black has no even-ZV attacks, the game is drawn.</li>
+<li>If Red has an odd-ZV attack and Black has an even-ZV attack, Red wins.</li></ul>
+<p>Note: shared attacks are probably rare situations in the edge-gravity variant, but they are possible.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Boards_with_odd_domain">Boards with odd domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=12" title="Edit section: Boards with odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=12" title="Edit section's source code: Boards with odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs an even-ZV attack to win or an even # of odd-ZV attacks (2 more unshared than Black, or the same # of shared).
+<ul><li>A 2 critical space orthogonal, a 2-critical-space diagonal, or 2 of any other type of attack will achieve this.</li></ul></li>
+<li>Black needs 1 more unshared odd-ZV attack than Red to win, or an odd # of shared odd-ZV attacks.
+<ul><li>Any attack will accomplish this.</li></ul></li>
+<li>If Red and Black each have 1 unshared odd-ZV attack, and Red has no even-ZV attacks, the game is drawn.</li>
+<li>If Red has an even-ZV attack and Black has an odd-ZV attack, Black wins.</li></ul>
+<p>(In other words, what a color needs for boards with odd domain is the opposite of what that color needs for boards of even domain.)
+</p>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Zero_gravity,_surface-sticking"><span id="Zero_gravity.2C_surface-sticking"></span>Zero gravity, surface-sticking</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=13" title="Edit section: Zero gravity, surface-sticking" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=13" title="Edit section's source code: Zero gravity, surface-sticking"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within two weeks.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="No_barriers">No barriers</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=14" title="Edit section: No barriers" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=14" title="Edit section's source code: No barriers"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Subsection to be included in forthcoming section.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="With_barriers">With barriers</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=15" title="Edit section: With barriers" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=15" title="Edit section's source code: With barriers"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Subsection to be included in forthcoming section.
+</p>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Two-move_turns">Two-move turns</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=16" title="Edit section: Two-move turns" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=16" title="Edit section's source code: Two-move turns"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<div class="mw-heading mw-heading4"><h4 id="Stacking_(downward_gravity)"><span id="Stacking_.28downward_gravity.29"></span>Stacking (downward gravity)</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=17" title="Edit section: Stacking (downward gravity)" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=17" title="Edit section's source code: Stacking (downward gravity)"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Rules: Red's 1st turn is one move.  Then every turn after that (including Black's first turn) is 2 moves.  Other than that, same rules as standard Connect Four.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;In this variant, which rows each player needs depends not on whether they are even or odd, but on which player moves last (and on the board dimensions).
+</p><p>Who moves first depends only on how many turns it takes to fill the entire board.  <b>If the # of turns is even</b>, then each player has the same # of turns and therefore <b>Black moves last</b>.  <u>If the # of turns is odd</u>, Red gets 1 more turn than Black and therefore <u>Red moves last</u>.
+</p><p>For boards with even domain, the last move is the first and only move of the last turn.  On boards with odd domain, the last move is the 2nd move of the last turn.  This is important because it determines which zugzwang-values each player needs.
+</p><p>Consider, for example, the 8x8 board.  Red moves last and takes the top row; he moves when there is 1 space left.  Before that, Black moves and takes the 6th and 7th row; she moves when there are 2 and 3 spaces left.  The alternation continues and the following list can be generated:
+</p>
+<ul><li>Red moves when there are: 1, 4,5, 8,9, 12,13, 16,17, 20,21... spaces left.</li></ul>
+<p>If the board were instead 9x9, Red moves last and takes rows 8 and 9, thus moving when there are 1 and 2 spaces left.  This will change the list to:
+</p>
+<ul><li>Red moves when there are: 1,2, 5,6, 9,10, 13,14, 17,18, 21,22... spaces left.</li></ul>
+<p>To see why this is important, consider some attacks.  It has been demonstrated that on an 8x8 board, a 6th-row attack is good for Black.  It has a ZV of 5 (4th, 5th, 6th, 7th, and 8th row are empty when Zugzwang occurs) and notice from the list that Red moves when there are 5 empty spaces left.  One 6th-row attack would therefore be useless for Red.  But what if Red had two 6th-row attacks?  The combined ZV would be 10, and notice from the list that Black moves when there are 10 empty spaces left.  On Red's turn there would be 9 empty spaces left, and Red would move twice in one column and make Connect Four with one of the 6th-row attacks, so two -6th row attacks are good for Red in 8x8.  The complete strategy for the 2-move-turn variant can be solved using this method.
+</p><p>The strategy will now be categorized by board dimensions.  But note that the bottom 2 rows are never included in the list of strategic attacks since they are always immediately playable.  Strategic rules of thumb only apply to critical spaces that will not be filled until immediately after Zugzwang.
+</p>
+<div class="mw-heading mw-heading5"><h5 id="Even_domain">Even domain</h5><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=18" title="Edit section: Even domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=18" title="Edit section's source code: Even domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li># of turns = <span class="mwe-math-element mwe-math-element-inline"><span class="mwe-math-mathml-inline mwe-math-mathml-a11y" style="display: none;"><math xmlns="http://www.w3.org/1998/Math/MathML" alttext="{\displaystyle (area/2)+1}">
+  <semantics>
+    <mrow class="MJX-TeXAtom-ORD">
+      <mstyle displaystyle="true" scriptlevel="0">
+        <mo stretchy="false">(</mo>
+        <mi>a</mi>
+        <mi>r</mi>
+        <mi>e</mi>
+        <mi>a</mi>
+        <mrow class="MJX-TeXAtom-ORD">
+          <mo>/</mo>
+        </mrow>
+        <mn>2</mn>
+        <mo stretchy="false">)</mo>
+        <mo>+</mo>
+        <mn>1</mn>
+      </mstyle>
+    </mrow>
+    <annotation encoding="application/x-tex">{\displaystyle (area/2)+1}</annotation>
+  </semantics>
+</math></span><img src="https://wikimedia.org/api/rest_v1/media/math/render/svg/6287caa005165b0bc8980bab8c9f4ceb1454aae5" class="mwe-math-fallback-image-inline mw-invert skin-invert" aria-hidden="true" style="vertical-align: -0.838ex; width:12.729ex; height:2.843ex;" alt="{\displaystyle (area/2)+1}"></span>
+<ul><li>Alternate: if the area is a multiple of 4 (meaning, if area/4 = an integer), Red moves last.  If not a multiple of 4, Black moves last.</li></ul></li>
+<li>Last turn consists of 1 move.</li>
+<li>Last mover moves when # of empty spaces = (<i>any multiple of 4</i> + 0 or 1) = {1, 4,5, 8,9, 12,13, 16,17, 20,21, 24,25...}</li>
+<li>2nd-to-last mover moves when # of empty spaces = the combination of the sets {2,3} and {<i>any multiple of 4</i> + (2 or 3)} = {2,3, 6,7, 10,11, 14,15, 18,19, 22,23...}</li></ul>
+<div class="mw-heading mw-heading6"><h6 id="Even_height_2">Even height</h6><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=19" title="Edit section: Even height" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=19" title="Edit section's source code: Even height"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Last mover can win with:
+</p>
+<ul><li>any even row being the top row or a multiple of 4 rows (2 even rows) down from the top row (note: 4 rows down from the top = 5 rows down, 8 rows down from the top = 9 rows down, and so on).</li>
+<li>1 more unshared good odd row than 2nd-to-last mover---good being a multiple of 2 odd rows down from the top row (meaning, the 4th row down or any multiple of 4 rows down from the 4th row down)---or an odd # of shared ones. (If equal # of unshared ones, a draw results.)</li>
+<li>the combinations of bad attacks listed 2 paragraphs below which result in "+"</li></ul>
+<p>2nd-to-last mover can win with:
+</p>
+<ul><li>any odd row being the 2nd-to-top row or a multiple of 4 rows (2 odd rows) down from the 2nd-to-top row</li>
+<li>1 more unshared good even row than last-mover---good being the 3rd-to-top row or a multiple of 2 even rows down from the 3rd-to-top row---or an odd # of shared ones. (If equal # of unshared ones, a draw results.)</li>
+<li>an odd # (&gt;1) of bad even rows (3 more unshared than last-mover, or the same # of shared).</li>
+<li>the combinations of bad attacks listed in the paragraph below which result in "-"</li></ul>
+<p>The following situations are solved by adding the ZV's of each attack together and knowing which player benefits from the new ZV that results.
+</p>
+<ul><li>Good even-row attack for last-mover (which will be referred to as "+even") + bad even-row attack for last-mover ("-even", aka "good even-row attack for 2nd-to-last mover) = good for 2nd-to-last mover.  Summarized: (+even) + (-even) = -</li>
+<li>(-even) + (-even) = + equivalent to (+odd)</li>
+<li>(+odd) + (+odd) = - equivalent to (-odd)</li>
+<li>(+even) + (+odd) = -</li>
+<li>(+even) + (-odd) = +</li>
+<li>(+odd) + (-odd) = +</li>
+<li>(+odd) + (-even) = +</li></ul>
+<p>(For the situations above where the 1st attack is + and the 2nd is -, the same results apply whether the last-mover has both of the mentioned attacks (1 good and one bad) or whether the last-mover has the first attack and the 2nd-to-last mover has the second attack (meaning, each player has 1 good attack). For the situations with 2 good attacks or 2 bad attacks, the result assumes that the corresponding player has both of the attacks.)
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;~~~Result for 7x6 board: Black wins.
+</p>
+<div class="mw-heading mw-heading6"><h6 id="Odd_height">Odd height</h6><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=20" title="Edit section: Odd height" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=20" title="Edit section's source code: Odd height"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Last mover can win with:<br>
+</p>
+<ul><li>any odd row being the top row or a multiple of 4 rows (2 odd rows) down from the top row.</li>
+<li>1 more unshared good even row than 2nd-to-last mover---good being the 2nd-to-top row or a multiple of 2 even rows down from the 2nd-to-top row---or an odd # of shared ones. (If equal # of unshared ones, a draw results.)</li>
+<li>the combinations of bad attacks listed 2 paragraphs below which result in "+"</li></ul>
+<p>2nd-to-last mover can win with:<br>
+</p>
+<ul><li>any even row being the 2nd-to-top row or a multiple of 4 rows (2 even rows) down from the 2nd-to-top row.</li>
+<li>1 more unshared good odd row than last-mover---good being the 3rd-to-top row or a multiple of 2 odd rows down from the 3rd-to-top row---or an odd # of shared ones.</li>
+<li>an odd # (&gt;1) of bad odd rows (3 more unshared than last-mover, or the same # of shared).</li>
+<li>the combinations of bad attacks listed in the paragraph below which result in "-"</li></ul>
+<p>Other notable situations:<br>
+</p>
+<ul><li>(-odd) + (-odd) = + equivalent to (+even)</li>
+<li>(+even) + (+even) = - equivalent to (-even)</li>
+<li>(+even) + (+odd) = -</li>
+<li>(+even) + (-even) = +</li>
+<li>(+even) + (-odd) = +</li>
+<li>(+odd) + (-odd) = -</li>
+<li>(+odd) + (-even) = +</li></ul>
+<div class="mw-heading mw-heading5"><h5 id="Odd_domain_2">Odd domain</h5><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=21" title="Edit section: Odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=21" title="Edit section's source code: Odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li># of turns = <span class="mwe-math-element mwe-math-element-inline"><span class="mwe-math-mathml-inline mwe-math-mathml-a11y" style="display: none;"><math xmlns="http://www.w3.org/1998/Math/MathML" alttext="{\displaystyle [(area-1)/2]+1}">
+  <semantics>
+    <mrow class="MJX-TeXAtom-ORD">
+      <mstyle displaystyle="true" scriptlevel="0">
+        <mo stretchy="false">[</mo>
+        <mo stretchy="false">(</mo>
+        <mi>a</mi>
+        <mi>r</mi>
+        <mi>e</mi>
+        <mi>a</mi>
+        <mo>−<!-- − --></mo>
+        <mn>1</mn>
+        <mo stretchy="false">)</mo>
+        <mrow class="MJX-TeXAtom-ORD">
+          <mo>/</mo>
+        </mrow>
+        <mn>2</mn>
+        <mo stretchy="false">]</mo>
+        <mo>+</mo>
+        <mn>1</mn>
+      </mstyle>
+    </mrow>
+    <annotation encoding="application/x-tex">{\displaystyle [(area-1)/2]+1}</annotation>
+  </semantics>
+</math></span><img src="https://wikimedia.org/api/rest_v1/media/math/render/svg/fa57486c77ae08f58c1273ad9025f6c71d4f60b0" class="mwe-math-fallback-image-inline mw-invert skin-invert" aria-hidden="true" style="vertical-align: -0.838ex; width:18.025ex; height:2.843ex;" alt="{\displaystyle [(area-1)/2]+1}"></span> = <span class="mwe-math-element mwe-math-element-inline"><span class="mwe-math-mathml-inline mwe-math-mathml-a11y" style="display: none;"><math xmlns="http://www.w3.org/1998/Math/MathML" alttext="{\displaystyle (area+1)/2}">
+  <semantics>
+    <mrow class="MJX-TeXAtom-ORD">
+      <mstyle displaystyle="true" scriptlevel="0">
+        <mo stretchy="false">(</mo>
+        <mi>a</mi>
+        <mi>r</mi>
+        <mi>e</mi>
+        <mi>a</mi>
+        <mo>+</mo>
+        <mn>1</mn>
+        <mo stretchy="false">)</mo>
+        <mrow class="MJX-TeXAtom-ORD">
+          <mo>/</mo>
+        </mrow>
+        <mn>2</mn>
+      </mstyle>
+    </mrow>
+    <annotation encoding="application/x-tex">{\displaystyle (area+1)/2}</annotation>
+  </semantics>
+</math></span><img src="https://wikimedia.org/api/rest_v1/media/math/render/svg/617e15828b758b3f3af30a83e84b8365a8294691" class="mwe-math-fallback-image-inline mw-invert skin-invert" aria-hidden="true" style="vertical-align: -0.838ex; width:12.729ex; height:2.843ex;" alt="{\displaystyle (area+1)/2}"></span></li>
+<li>Last turn consists of 2 moves.</li>
+<li>Last mover moves when # of empty spaces = 1,2, (<i>any multiple of 4</i> + 1 or 2)</li>
+<li>2nd-to-last mover moves when # of empty spaces = 3,4, (<i>any multiple of 4</i> - 0 or 1)</li></ul>
+<p>Last mover can win with:<br>
+</p>
+<ul><li>any even row being the 2nd-to-top row or any even row a multiple of 4 rows (2 even rows) down from the 2nd-to-top row</li>
+<li>1 more unshared good odd row than 2nd-to-last mover---good being the top row or a multiple of 4 rows (2 odd rows) down from the top row---or an odd # of shared ones.</li>
+<li>an odd # (&gt;1) of bad odd rows (3 more unshared than 2nd-to-last mover, or the same # of shared).</li>
+<li>the combinations of bad attacks listed 2 paragraphs below which result in "+"</li></ul>
+<p>2nd-to-last mover can win with:<br>
+</p>
+<ul><li>any odd row being the 3rd-to-top row or any odd row a multiple of 4 rows (2 odd rows) down from the 3rd-to-top row.</li>
+<li>1 more unshared good even row than last mover---good being the 4th-to-top row or a multiple of 4 rows (2 even rows) down from the 4th-to-top row---or an odd # of shared ones.</li>
+<li>the combinations of bad attacks listed in the paragraph below which result in "-"</li></ul>
+<p>Other notable situations:<br>
+</p>
+<ul><li>(-even) + (-even) = + equivalent to (+even)</li>
+<li>(+odd) + (+odd) = - equivalent to (-even)</li>
+<li>(-even) + (-odd) = +</li>
+<li>(+even) + (-even) = +</li>
+<li>(+even) + -(odd) = +</li>
+<li>(+odd) + (-odd) = +</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Four-way/6-way_gravity"><span id="Four-way.2F6-way_gravity"></span>Four-way/6-way gravity</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=22" title="Edit section: Four-way/6-way gravity" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=22" title="Edit section's source code: Four-way/6-way gravity"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>This (non-existent, but possible) variation is a combination of the 4-way/6-way gravity variant and the 2-move turn variant.
+</p><p>Who moves last is relevant.  The same 2 (4 condensed to 2) formulas apply for figuring out the # of turns as with the regular 2-move-turn variant:<br>
+</p>
+<ul><li>Even domain: # of turns = (<i>#spaces</i>/2)+1</li>
+<li>Odd domain: # of turns = (<i>#spaces</i>+1)/2</li></ul>
+<p>Critical spaces in this variant have higher ZV's than those in 1-move-turn edge gravity.  There are three different base ZV's that can be created: 9, 14, and 16.
+</p>
+<ul><li>ZV's of 9 are created by any attack that creates just one critical space.  ZV's of 18 are created by open-ended connected diagonals, and 2-critical-space discontinuous diagonals whose 2 critical spaces are separated by 2 diagonal spaces.</li>
+<li>ZV's of 14 are created by 2-critical-space orthogonals.</li>
+<li>ZV's of 16 are created by 2-critical-space diagonals whose 2 critical spaces are separated by only 1 diagonal space.</li></ul>
+<p>The kinds of attacks needed for each player are <i>equivalent</i> to those needed in the regular 2-move-turn variant in the corresponding board sizes.
+</p><p>By "equivalent attacks" the following is meant.  Consider two situations: a connected single-ended orthogonal attack on an 8x8 board with 4-way gravity, and a 4th-row attack on an 8x8 board with downward gravity.  Both situations have a zugzwang-value of 7, and therefore are equivalent.  So on an 8x8 board, the last mover (who would benefit from a 4th-row attack in the regular 2-move variant) would benefit from a connected single-ended orthogonal attack in 4-way gravity 2-move-turn.
+</p><p>In similar fashion (using the principle of equivalence) one derives the following rules:
+</p>
+<div class="mw-heading mw-heading5"><h5 id="Even_domain_2">Even domain</h5><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=23" title="Edit section: Even domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=23" title="Edit section's source code: Even domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Last mover can win with:
+</p>
+<ul><li>2, 3, or [(2 or 3) + (multiple of 4)] of 9-ZV attacks</li>
+<li>An odd # of 14-ZV attacks</li>
+<li>A good attack plus a bad attack.</li></ul>
+<p>2nd-to-last mover can win with:
+</p>
+<ul><li>1 or [(0 or 1) + (multiple of 4)] of 9-ZV attacks</li>
+<li>An even # of 14-ZV attacks</li>
+<li>A 16-ZV attack</li>
+<li>Two bad attacks.</li></ul>
+<div class="mw-heading mw-heading5"><h5 id="Odd_domain_3">Odd domain</h5><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=24" title="Edit section: Odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=24" title="Edit section's source code: Odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Last mover can win with:
+</p>
+<ul><li>3, 4, or [(3 or 4) + (multiple of 4) of 9-ZV attacks</li>
+<li>An even # of 14-ZV attacks</li>
+<li>A 16-ZV attack</li>
+<li>Two bad attacks.</li></ul>
+<p>2nd-to-last mover can win with:
+</p>
+<ul><li>1, 2, or [(1 or 2) + (multiple of 4) of 9-ZV attacks</li>
+<li>An odd # of 14-ZV attacks</li>
+<li>A good attack plus a bad attack.</li></ul>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Collapsing_lines">Collapsing lines</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=25" title="Edit section: Collapsing lines" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=25" title="Edit section's source code: Collapsing lines"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within a few months.
+</p>
+<ul><li>Note: I've removed my colleague's submission temporarily, but will incorporate it into this section. "Teachme2play" is an expert and specializes in variants including this one.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Inversed">Inversed</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=26" title="Edit section: Inversed" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=26" title="Edit section's source code: Inversed"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within a few months.
+</p>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Wrap-around">Wrap-around</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=27" title="Edit section: Wrap-around" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=27" title="Edit section's source code: Wrap-around"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within a few months.
+</p>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Diagonal_stacking">Diagonal stacking</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=28" title="Edit section: Diagonal stacking" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=28" title="Edit section's source code: Diagonal stacking"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Rules: a piece can be placed diagonally above another piece.  The bottom row is always playable.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;There is only one type of long-term diagonal attack that can be made: a connected one pointed downward (meaning the critical space is below it).  This has a ZV of 3 (resulting from the critical space and the 2 zugzwang-spaces below it).
+</p><p>Single orthogonals, whether connected or gapped, have a ZV of 3.  Doubles have a ZV of 6.
+</p><p>In short, all critical spaces have 2 zugzwang-spaces.
+</p><p>Since the turns consist of only one move each, the strategy can be understood in more than one way.  One could think in terms of last-mover and 2nd-to-last mover (as with 2-move-turn variants), or simply in terms of Red and Black and the evenness/oddness of the # of empty spaces left (as with regular Connect Four).  The latter approach will be taken and the strategic rules are:
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Even_domain_3">Even domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=29" title="Edit section: Even domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=29" title="Edit section's source code: Even domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs 1 more unshared critical space than Black, or an odd # of shared ones.</li>
+<li>Black needs an even # of critical spaces (shared, or 2 more unshared than Red).</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Odd_domain_4">Odd domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=30" title="Edit section: Odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=30" title="Edit section's source code: Odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs an even # of critical spaces (shared, or 2 more unshared than Black).</li>
+<li>Black needs 1 more unshared critical space than Red, or an odd # of shared ones.</li></ul>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Chess-knight_motion,_no_gravity"><span id="Chess-knight_motion.2C_no_gravity"></span>Chess-knight motion, no gravity</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=31" title="Edit section: Chess-knight motion, no gravity" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=31" title="Edit section's source code: Chess-knight motion, no gravity"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Rules: Red's first move can be anywhere, then pieces can be placed a <a href="https://en.wikipedia.org/wiki/Knight_(chess)" class="extiw" title="wikipedia:Knight (chess)">knight-move</a> away from another piece.
+</p><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No matter how a critical space is made, it will have a ZV of 9.  All single-critical-space attacks will have ZV's of 9 and all double-critical-space attacks will have ZV's of 18.
+</p><p>Strategic rules:
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Even_domain_4">Even domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=32" title="Edit section: Even domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=32" title="Edit section's source code: Even domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs 1 more unshared critical space than Black, or an odd # of shared ones.</li>
+<li>Black needs an even # of critical spaces (shared, or 2 more unshared than Red).</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Odd_domain_5">Odd domain</h4><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=33" title="Edit section: Odd domain" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=33" title="Edit section's source code: Odd domain"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Red needs an even # of critical spaces (shared, or 2 more unshared than Black).</li>
+<li>Black needs 1 more unshared critical space than Red, or an odd # of shared ones.</li></ul>
+<hr>
+<div class="mw-heading mw-heading3"><h3 id="Scoring_variant">Scoring variant</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;veaction=edit&amp;section=34" title="Edit section: Scoring variant" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;action=edit&amp;section=34" title="Edit section's source code: Scoring variant"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Section forthcoming: expected to be complete within two weeks.  
+</p>
+<!-- 
+NewPP limit report
+Parsed by mw‐web.eqiad.main‐6d66d55d66‐cgfst
+Cached time: 20260418143336
+Cache expiry: 2592000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.134 seconds
+Real time usage: 0.206 seconds
+Preprocessor visited node count: 1414/1000000
+Revision size: 27847/2097152 bytes
+Post‐expand include size: 15263/2097152 bytes
+Template argument size: 3058/2097152 bytes
+Highest expansion depth: 30/100
+Expensive parser function count: 0/500
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 3304/5000000 bytes
+Lua time usage: 0.081/10.000 seconds
+Lua memory usage: 2048446/52428800 bytes
+Number of Wikibase entities loaded: 0/500
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%  150.846      1 -total
+ 58.63%   88.440      1 Template:Shelves
+ 21.52%   32.455      1 Template:Subjects/leaf
+ 20.72%   31.251      1 Template:Subjects/0
+ 19.78%   29.834      1 Template:Split
+ 18.80%   28.363      1 Template:Ambox
+ 12.04%   18.157      1 Template:Wikipedia
+ 11.98%   18.072     11 Template:Evalx
+ 11.51%   17.367      2 Template:Subjects/1
+ 11.50%   17.345      8 Template:Parsable
+-->
+
+<!-- Render ID 9555efb2-3b33-11f1-8854-ffdceda11fdf -->
+
+<!-- Saved in parser cache with key enwikibooks:pcache:133555:|#|:idhash:canonical and timestamp 20260418143336 and revision id 4422357. Rendering was triggered because: diff-pageSaved in parser cache with key enwikibooks:stable-pcache:133555:|#|:idhash:canonical and timestamp 20260418143336 and revision id 4422357. Rendering was triggered because: unknown
+ -->
+</div><!--
+Post‐processing cache key enwikibooks:stable‐pcache‐postproc:133555:|#|:idhash:injectTOC=0!postproc=1!skin=vector‐2022, generated at 20260515095208
+--><noscript><img src="https://en.wikibooks.org/wiki/Special:CentralAutoLogin/start?useformat=desktop&amp;type=1x1&amp;usesul3=1" alt="" width="1" height="1" style="border: none; position: absolute;"></noscript>
+<div class="printfooter" data-nosnippet="">Retrieved from "<a dir="ltr" href="https://en.wikibooks.org/w/index.php?title=Connect_Four&amp;oldid=4422357">https://en.wikibooks.org/w/index.php?title=Connect_Four&amp;oldid=4422357</a>"</div></div>
+					<div id="catlinks" class="catlinks" data-mw-interface=""><div id="mw-normal-catlinks" class="mw-normal-catlinks"><a href="/wiki/Special:Categories" title="Special:Categories">Categories</a>: <ul><li><a href="/wiki/Category:Book:Connect_Four" title="Category:Book:Connect Four">Book:Connect Four</a></li><li><a href="/wiki/Category:Shelf:Games" title="Category:Shelf:Games">Shelf:Games</a></li><li><a href="/wiki/Category:One-page_books" title="Category:One-page books">One-page books</a></li></ul></div><div id="mw-hidden-catlinks" class="mw-hidden-catlinks mw-hidden-cats-hidden">Hidden categories: <ul><li><a href="/wiki/Category:Books_to_be_broken_into_subpages" title="Category:Books to be broken into subpages">Books to be broken into subpages</a></li><li><a href="/wiki/Category:Alphabetical/C" title="Category:Alphabetical/C">Alphabetical/C</a></li><li><a href="/wiki/Category:Subject:Games" title="Category:Subject:Games">Subject:Games</a></li><li><a href="/wiki/Category:Subject:Games/all_books" title="Category:Subject:Games/all books">Subject:Games/all books</a></li><li><a href="/wiki/Category:Subject:Recreational_activities/all_books" title="Category:Subject:Recreational activities/all books">Subject:Recreational activities/all books</a></li><li><a href="/wiki/Category:Subject:Miscellaneous/all_books" title="Category:Subject:Miscellaneous/all books">Subject:Miscellaneous/all books</a></li><li><a href="/wiki/Category:Subject:Books_by_subject/all_books" title="Category:Subject:Books by subject/all books">Subject:Books by subject/all books</a></li><li><a href="/wiki/Category:Book:Wikibooks_Stacks/Books" title="Category:Book:Wikibooks Stacks/Books">Book:Wikibooks Stacks/Books</a></li><li><a href="/wiki/Category:Shelf:Games/all_books" title="Category:Shelf:Games/all books">Shelf:Games/all books</a></li><li><a href="/wiki/Category:Department:Recreational_activities/all_books" title="Category:Department:Recreational activities/all books">Department:Recreational activities/all books</a></li><li><a href="/wiki/Category:Partly_developed_books" title="Category:Partly developed books">Partly developed books</a></li><li><a href="/wiki/Category:Books_by_completion_status/all_books" title="Category:Books by completion status/all books">Books by completion status/all books</a></li></ul></div></div>
+				</div>
+			</main>
+			
+		</div>
+		<div class="mw-footer-container">
+			
+<footer id="footer" class="mw-footer" >
+	<ul id="footer-info">
+	<li id="footer-info-lastmod"> This page was last edited on 15 July 2024, at 02:27.</li>
+	<li id="footer-info-copyright">Text is available under the <a rel="nofollow" class="external text" href="//creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike License</a>; additional terms may apply. By using this site, you agree to the <a class="external text" data-mw-original-href="//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use" href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use">Terms of Use</a> and <a class="external text" data-mw-original-href="//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy" href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy">Privacy Policy.</a></li>
+</ul>
+
+	<ul id="footer-places">
+	<li id="footer-places-privacy"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy">Privacy policy</a></li>
+	<li id="footer-places-about"><a href="/wiki/Wikibooks:Welcome">About Wikibooks</a></li>
+	<li id="footer-places-disclaimers"><a href="/wiki/Wikibooks:General_disclaimer">Disclaimers</a></li>
+	<li id="footer-places-wm-codeofconduct"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Universal_Code_of_Conduct">Code of Conduct</a></li>
+	<li id="footer-places-developers"><a href="https://developer.wikimedia.org">Developers</a></li>
+	<li id="footer-places-statslink"><a href="https://stats.wikimedia.org/#/en.wikibooks.org">Statistics</a></li>
+	<li id="footer-places-cookiestatement"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement">Cookie statement</a></li>
+	<li id="footer-places-mobileview"><a href="//en.wikibooks.org/w/index.php?title=Connect_Four&amp;mobileaction=toggle_view_mobile" class="noprint stopMobileRedirectToggle">Mobile view</a></li>
+</ul>
+
+	<ul id="footer-icons" class="noprint">
+	<li id="footer-copyrightico"><a href="https://www.wikimedia.org/" class="cdx-button cdx-button--fake-button cdx-button--size-large cdx-button--fake-button--enabled"><picture><source media="(min-width: 500px)" srcset="/static/images/footer/wikimedia-button.svg" width="84" height="29"><img src="/static/images/footer/wikimedia.svg" width="25" height="25" alt="Wikimedia Foundation" lang="en" loading="lazy"></picture></a></li>
+	<li id="footer-poweredbyico"><a href="https://www.mediawiki.org/" class="cdx-button cdx-button--fake-button cdx-button--size-large cdx-button--fake-button--enabled"><picture><source media="(min-width: 500px)" srcset="/w/resources/assets/poweredby_mediawiki.svg" width="88" height="31"><img src="/w/resources/assets/mediawiki_compact.svg" alt="Powered by MediaWiki" lang="en" width="25" height="25" loading="lazy"></picture></a></li>
+</ul>
+
+</footer>
+
+		</div>
+	</div> 
+</div> 
+<div class="vector-header-container vector-sticky-header-container no-font-mode-scale">
+	<div id="vector-sticky-header" class="vector-sticky-header">
+		<div class="vector-sticky-header-start">
+			<div class="vector-sticky-header-icon-start vector-button-flush-left" aria-hidden="true">
+				<button class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-sticky-header-search-toggle" tabindex="-1" data-event-name="ui.vector-sticky-search-form.icon"><span class="vector-icon mw-ui-icon-search mw-ui-icon-wikimedia-search"></span>
+
+<span>Search</span>
+			</button>
+		</div>
+			
+		<div role="search" class="vector-search-box-vue  vector-search-box-show-thumbnail vector-search-box">
+			<div class="vector-typeahead-search-container">
+				<div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail">
+					<form action="/w/index.php" id="vector-sticky-search-form" class="cdx-search-input cdx-search-input--has-end-button">
+						<div  class="cdx-search-input__input-wrapper"  data-search-loc="header-moved">
+							<div class="cdx-text-input cdx-text-input--has-start-icon">
+								<input
+									class="cdx-text-input__input mw-searchInput" autocomplete="off"
+									
+									type="search" name="search" placeholder="Search Wikibooks">
+								<span class="cdx-text-input__icon cdx-text-input__start-icon"></span>
+							</div>
+							<input type="hidden" name="title" value="Special:Search">
+						</div>
+						<button class="cdx-button cdx-search-input__end-button">Search</button>
+					</form>
+				</div>
+			</div>
+		</div>
+		<div class="vector-sticky-header-context-bar">
+				<nav aria-label="Contents" class="vector-toc-landmark">
+						
+					<div id="vector-sticky-header-toc" class="vector-dropdown mw-portlet mw-portlet-sticky-header-toc vector-sticky-header-toc vector-button-flush-left"  >
+						<input type="checkbox" id="vector-sticky-header-toc-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-sticky-header-toc" class="vector-dropdown-checkbox "  aria-label="Toggle the table of contents"  >
+						<label id="vector-sticky-header-toc-label" for="vector-sticky-header-toc-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-listBullet mw-ui-icon-wikimedia-listBullet"></span>
+
+<span class="vector-dropdown-label-text">Toggle the table of contents</span>
+						</label>
+						<div class="vector-dropdown-content">
+					
+						<div id="vector-sticky-header-toc-unpinned-container" class="vector-unpinned-container">
+						</div>
+					
+						</div>
+					</div>
+			</nav>
+				<div class="vector-sticky-header-context-bar-primary" aria-hidden="true" ><span lang="en" dir="ltr"><span class="mw-page-title-main">Connect Four</span></span></div>
+			</div>
+		</div>
+		<div class="vector-sticky-header-end" aria-hidden="true">
+			<div class="vector-sticky-header-icons">
+				<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-talk-sticky-header" tabindex="-1" data-event-name="talk-sticky-header"><span class="vector-icon mw-ui-icon-speechBubbles mw-ui-icon-wikimedia-speechBubbles"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-subject-sticky-header" tabindex="-1" data-event-name="subject-sticky-header"><span class="vector-icon mw-ui-icon-article mw-ui-icon-wikimedia-article"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-history-sticky-header" tabindex="-1" data-event-name="history-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-history mw-ui-icon-wikimedia-wikimedia-history"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only mw-watchlink" id="ca-watchstar-sticky-header" tabindex="-1" data-event-name="watch-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-star mw-ui-icon-wikimedia-wikimedia-star"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-ve-edit-sticky-header" tabindex="-1" data-event-name="ve-edit-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-edit mw-ui-icon-wikimedia-wikimedia-edit"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-edit-sticky-header" tabindex="-1" data-event-name="wikitext-edit-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-wikiText mw-ui-icon-wikimedia-wikimedia-wikiText"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-viewsource-sticky-header" tabindex="-1" data-event-name="ve-edit-protected-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-editLock mw-ui-icon-wikimedia-wikimedia-editLock"></span>
+
+<span></span>
+			</a>
+		</div>
+			<div class="vector-sticky-header-buttons">
+				<button class="cdx-button cdx-button--weight-quiet mw-interlanguage-selector" id="p-lang-btn-sticky-header" tabindex="-1" data-event-name="ui.dropdown-p-lang-btn-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-language mw-ui-icon-wikimedia-wikimedia-language"></span>
+
+<span>1 language</span>
+			</button>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--action-progressive" id="ca-addsection-sticky-header" tabindex="-1" data-event-name="addsection-sticky-header"><span class="vector-icon mw-ui-icon-speechBubbleAdd-progressive mw-ui-icon-wikimedia-speechBubbleAdd-progressive"></span>
+
+<span>Add topic</span>
+			</a>
+		</div>
+			<div class="vector-sticky-header-icon-end">
+				<div class="vector-user-links">
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<div class="mw-portlet mw-portlet-dock-bottom emptyPortlet" id="p-dock-bottom">
+	<ul>
+		
+	</ul>
+</div>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgHostname":"mw-web.eqiad.main-f4c66ff5b-9qz4t","wgBackendResponseTime":80,"wgPageParseReport":{"limitreport":{"cputime":"0.134","walltime":"0.206","ppvisitednodes":{"value":1414,"limit":1000000},"revisionsize":{"value":27847,"limit":2097152},"postexpandincludesize":{"value":15263,"limit":2097152},"templateargumentsize":{"value":3058,"limit":2097152},"expansiondepth":{"value":30,"limit":100},"expensivefunctioncount":{"value":0,"limit":500},"unstrip-depth":{"value":0,"limit":20},"unstrip-size":{"value":3304,"limit":5000000},"entityaccesscount":{"value":0,"limit":500},"timingprofile":["100.00%  150.846      1 -total"," 58.63%   88.440      1 Template:Shelves"," 21.52%   32.455      1 Template:Subjects/leaf"," 20.72%   31.251      1 Template:Subjects/0"," 19.78%   29.834      1 Template:Split"," 18.80%   28.363      1 Template:Ambox"," 12.04%   18.157      1 Template:Wikipedia"," 11.98%   18.072     11 Template:Evalx"," 11.51%   17.367      2 Template:Subjects/1"," 11.50%   17.345      8 Template:Parsable"]},"scribunto":{"limitreport-timeusage":{"value":"0.081","limit":"10.000"},"limitreport-memusage":{"value":2048446,"limit":52428800}},"cachereport":{"origin":"mw-web.eqiad.main-6d66d55d66-cgfst","timestamp":"20260418143336","ttl":2592000,"transientcontent":false}}});});</script>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"Article","name":"Connect Four","url":"https:\/\/en.wikibooks.org\/wiki\/Connect_Four","sameAs":"http:\/\/www.wikidata.org\/entity\/Q17254","mainEntity":"http:\/\/www.wikidata.org\/entity\/Q17254","author":{"@type":"Organization","name":"Contributors to Wikimedia projects"},"publisher":{"@type":"Organization","name":"Wikimedia Foundation, Inc.","logo":{"@type":"ImageObject","url":"https:\/\/www.wikimedia.org\/static\/images\/wmf-hor-googpub.png"}},"datePublished":"2007-09-12T14:20:12Z","headline":"children's board game"}</script>
+</body>
+</html>

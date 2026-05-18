@@ -25,6 +25,7 @@ Authoritative reference for Connect Four strategy theory. Covers everything need
 **Primary sources:**
 - Allis, V. (1988). *A Knowledge-based Approach of Connect-Four*. tromp.github.io/c4/connect4_thesis.pdf
 - Allen, J.D. (1990). *Expert Play in Connect-Four*. tromp.github.io/c4.html (hosted by Tromp)
+- Allen, J. D. (2010). *The Complete Book of Connect 4: Puzzles, Strategies, the Stories Behind the World's Most Popular Game.* Sterling Publishing. Chapter 4 ("Major Threat Analysis") is the canonical home of the T1–T7 and V1–V5 rule labels used throughout this document.
 - Tromp, J. Solver and state-space resources. tromp.github.io/c4/c4.html
 
 ---
@@ -39,7 +40,7 @@ The board has 6 rows (even). Red moves first. In any column that fills completel
 
 A parity-aligned threat is strategically valuable because, all else being equal, if the column must be filled, the owning player will be the one to place the disc that completes it.
 
-### 2.2 Parity Detection Formula
+### 2.2 Parity Detection Formula → KB: [derived-parity-formula](knowledge-base/derived-parity-formula.md)
 
 For a given column c with current height h (discs already in c), the next disc played in c lands on row h+1. Whether that row belongs to Red or Black depends on whose turn it is when that disc is played:
 
@@ -51,24 +52,28 @@ A threat at (c, r) is parity-aligned for Red if r is odd; for Black if r is even
 
 ### 2.3 Endgame Parity Outcome Table
 
-*Note: this table is a project-specific generalization extending Allis 1988 §3.3 cases 1–4 (one threat per player, different columns) to multiple threats. Several entries are disputed or confirmed wrong — **prefer the formula at the bottom of this section** over the table where they conflict.*
+*Note: this table is derived from Allis 1988 §3.3 cases 1–4 and Allen Ch. 4 (T1–T7, V1–V5). All entries are consistent with those canonical sources.*
 
-When the board is nearly full and both players have only latent threats remaining, the outcome is determined by the *net parity of unshared odd-row threats*:
+*Preconditions: the table assumes (a) only major threats are present, (b) at most one threat per column per player, and (c) no further tactical interactions between columns. Allen explicitly states these limits (Allen 2010 ch. 4 preamble: "The rules in this chapter are not complete, because they do not cover the following points: Complicated configurations of minor threats; Columns with three or more major threats; Tactical interactions between columns.").*
+
+When the board is nearly full and both players have only latent threats remaining, the outcome is determined by the *count of unshared odd-row threats*:
 
 | Red unshared odd threats | Black unshared odd threats | Result |
 |---|---|---|
 | 1 | 0 | Red wins |
 | 3 | 0 | Red wins |
 | 0 | 0 | Draw |
-| 2 | 0 | Draw (even net — Red does not control zugzwang) *(disputed — formula predicts Red wins)* |
-| 1 | 1 | Red wins (Black's odd-row threat is on Red's natural parity rows; Red controls zugzwang and Black's threat is useless) |
-| 0 | 1 | Black wins *(disputed — formula predicts Draw; Black's odd-row threat may be asymmetrically weak)* |
-| 0 | 2 | Black wins (Black uses claimeven to guarantee even rows) |
-| 1 | 2 | Draw (Black's net advantage is +1, one short of the +2 needed to force a win; threats are mutually sacrificed) |
+| 2 | 0 | Draw (even count — Red is forced first; Allis §3.3: odd+odd=even turns, Red sacrifices one threat, leaving the other to be lost too) |
+| 1 | 1 | Draw (Allen T7: Red and Black odd-row threats in separate columns cancel each other; Allis §3.3 case 4: odd+odd=even, Red forced first, both threats lost) |
+| 0 | 1 | Draw (Black's single odd-row threat cannot override zugzwang; Black needs two, per Allen V2) |
+| 0 | 2 | Black wins (Black uses claimeven to guarantee even rows; Allen V2) |
+| 1 | 2 | Draw (after T7 cancels Red's one odd threat against one of Black's, Black holds one remaining odd threat — insufficient for V2) |
 
-**General formula** (Allen, formalized in Bagan et al. 2025): Red wins if `Red_odd > Black_odd`; Black wins if `Black_odd ≥ Red_odd + 2`; otherwise Draw. *Note: the (1R, 1B) case is an exception — Red wins due to parity asymmetry (Black's odd-row threat is on Red's natural row and is functionally useless, per Allis). The simplified formula does not capture this asymmetry.* Where this table conflicts with the formula, the formula takes precedence — except for the (1,1) case above.
+**Correct principle** (Allen Ch. 4, G3/T7/V1–V5; Allis §3.3): Red wins with an **odd count** of uncancelled odd-row threats (1 or 3). An even count (2) yields Draw — Red is forced first and sacrifices threats pairwise. Black wins with 2+ uncancelled odd-row threats (Allen V2). Red and Black odd-row threats in separate columns cancel each other (Allen T7). Red's isolated even-row threats are always worthless (Allen T6). *A previous version of this document cited the formula `Red_odd > Black_odd` attributed to "Bagan et al. 2025" — both the formula and the attribution are incorrect. Bagan et al. (2024/2025) study Poset Positional Games (Maker-Breaker complexity on posets); they do not formalize standard Connect Four parity rules.*
 
-### 2.4 Parity Traps and Ghost Threats
+### 2.4 Parity Traps and Ghost Threats → KB: [community-parity-trap](knowledge-base/community-parity-trap.md) · [community-ghost-threat](knowledge-base/community-ghost-threat.md)
+
+*Note: "Parity trap" and "ghost threat" are project-local labels for canonical phenomena. "Parity trap" corresponds to Allen's general description of zugzwang resolution (G2–G3); "ghost threat" is a consequence of an opponent's odd-column Z-threat (Allis §3.3, case 1). Neither term appears in Allis, Allen, or Tromp.*
 
 A **parity trap** is a structural state where a player is compelled to fill the cell beneath their opponent's threat, handing the opponent the win. It occurs when a column has k empty cells, the opponent's threat sits at the top, and the player has no Z-threats elsewhere to toggle zugzwang.
 
@@ -76,29 +81,29 @@ A **ghost threat** is a visually apparent winning line that is mathematically un
 
 ### 2.5 Threat Interaction Rules (T1–T7)
 
-*Note: T1–T7 are project-specific formalizations derived from Allis 1988 parity theory. This naming scheme does not appear in any external source verified during cross-reference. The canonical mathematical framework is Allis's nine proven strategic rules (§10); T1–T7 are derived project heuristics, not those theorems.*
+*Note: T1–T7 follow Allen's Chapter 4 transformation rules, which share the same T1–T7 naming and numbering. Allen's T rules are proven rules for simplifying major-threat endgame analysis; they are not the same as Allis's nine strategic rules in §10, which are geometric constructions used by Black to draw against any White strategy.*
 
 These rules determine whether two threats in the same column neutralize each other:
 
-- **T1 (Adjacent pair — terminal):** Two major threats at rows r and r+1 in the same column for the same player = guaranteed win; one of them will be reached regardless of play order.
-- **T2 (Cross-parity undercut):** A threat at an even row undercuts a same-player threat at the row above (odd). The lower, even-row threat is reached first, neutralizing the upper.
-- **T3 (Double toggle):** Threats at rows 2 and 5 in the same column control zugzwang twice — equivalent to two independent odd-row threats.
-- **T4 (Same parity, same column — independent):** Two threats at rows 3 and 5 (both odd) in the same column do not undercut each other; both remain active.
-- **T5 (Different parity, different column — independent):** Threats at rows 3 (odd) and 6 (even) in separate columns do not interact.
-- **T6 (Red even-row threat — worthless):** An isolated Red threat on an even row has zero strategic value unless it creates an adjacent pair with an odd-row threat.
-- **T7 (Parity asymmetry — odd threats are not symmetric):** Red holding one odd-row threat and Black holding one odd-row threat in a different column = **Red wins**. Black's odd-row threat is on Red's naturally-owned parity rows; Red is not forced to sacrifice into it and simply controls zugzwang via its own threat. This is why Black needs a net +2 advantage in odd threats to overcome Red's structural parity advantage.
+- **T1 (Adjacent pair — terminal):** Two major threats at rows r and r+1 in the same column for the same player = guaranteed win; one of them will be reached regardless of play order. → KB: [allen-t1](knowledge-base/allen-t1.md)
+- **T2 (Cross-parity undercut):** An opponent's threat at an even row undercuts your threat at the row above (odd) in the same column. The lower, even-row threat is reached first, ending the game in the opponent's favor before your upper threat can be played. (Allen T2: "Threats may neutralize (undercut) opponents threats with opposite row parity.") Symmetrically, a Red odd-row threat at row r in column c neutralizes a Black even-row threat immediately above it at row r+1 (Allen 2010 T2, third sub-case). → KB: [allen-t2](knowledge-base/allen-t2.md)
+- **T3 (Double toggle):** Threats at rows 2 and 5 in the same column control zugzwang twice — equivalent to two independent odd-row threats. → KB: [allen-t3](knowledge-base/allen-t3.md)
+- **T4 (Same parity, same column — independent):** Two same-parity threats in the same column do not interact: same-coloured pairs give no bonus (both remain active but cumulative parity is unchanged); opposite-coloured pairs do not cancel either. (Allen 2010 T4.) → KB: [allen-t4](knowledge-base/allen-t4.md)
+- **T5 (Different parity, same column — independent):** Threats at rows 3 (odd) and 6 (even) in the same column do not interact. By the time the column fills to row 6, the row-3 threat has long since been resolved (taken, blocked, or made irrelevant), so the two threats cannot affect each other's playability. (Allen T5.) → KB: [allen-t5](knowledge-base/allen-t5.md)
+- **T6 (Red even-row threat — worthless):** An isolated Red threat on an even row has zero strategic value unless it creates an adjacent pair with an odd-row threat. → KB: [allen-t6](knowledge-base/allen-t6.md)
+- **T7 (Odd threat cancellation):** Red holding one odd-row threat and Black holding one odd-row threat in a **different** column = **Draw** — the threats cancel each other (Allen T7: "Red and Black odd-row threats in separate columns cancel each other"). Mechanism: the combined odd+odd empty-cell count is even, so Red is forced to move first into one of the two odd-threated columns, sacrificing Red's own threat; Black's threat is then also lost. This is why Black needs **two** odd-row threats (V2) — not just one — to overcome Red's structural parity advantage. → KB: [allen-t7](knowledge-base/allen-t7.md)
 
 ### 2.6 Victory Rules (V1–V5)
 
-*Note: V1–V5 are project-specific formalizations generalizing Allis 1988 §3.3. This naming scheme does not appear in any external source verified during cross-reference. The canonical mathematical framework is Allis's nine proven strategic rules (§10); V1–V5 are derived project heuristics, not those theorems.*
+*Note: V1–V5 follow Allen's Chapter 4 Victory Rules, which share the same V1–V5 naming and numbering. They are applied after first simplifying threats with T1–T7. They are not the same as Allis's nine strategic rules in §10.*
 
 Simplified endgame outcome rules when no immediate tactical sequences exist:
 
-- **V1:** Red wins with three or more odd-row threats in separate columns (odd net advantage ≥ 3).
-- **V2:** Black wins with two odd-row threats in separate columns (Black controls zugzwang via even count).
-- **V3:** Red wins with one uncontested odd-row threat (no Black counter in the same column).
-- **V4:** Black wins with an even-row threat if Red has no odd-row threats.
-- **V5:** Otherwise, draw.
+- **V1:** Red wins with three odd-row threats in separate columns (after T7 cancellation). Four uncancelled odd-threated columns favor Black; Allen calls this 'rarer than a four-leaf clover' (Allen 2010 p. 100). For practical purposes, treat V1 as firing only at an odd uncancelled count ≥ 3. → KB: [allen-v1](knowledge-base/allen-v1.md)
+- **V2:** Black wins with two odd-row threats in separate columns (Black controls zugzwang via even count). → KB: [allen-v2](knowledge-base/allen-v2.md)
+- **V3:** Red wins with one uncontested odd-row threat (no Black counter in the same column). → KB: [allen-v3](knowledge-base/allen-v3.md)
+- **V4:** Black wins with an even-row threat if Red has no odd-row threats. → KB: [allen-v4](knowledge-base/allen-v4.md)
+- **V5:** Otherwise, draw. → KB: [allen-v5](knowledge-base/allen-v5.md)
 
 ---
 
@@ -118,6 +123,8 @@ Unlike chess, Connect Four has no passing moves — the obligation to move is pe
 
 ### 3.2 Types
 
+*Note: the three-way "offensive / defensive / mutual" classification is a project-local convenience taxonomy. Allis and Allen treat zugzwang as a single phenomenon and do not subdivide it by type in this way.*
+
 - **Offensive zugzwang:** Player holds an odd number of odd-row threats in separate columns, forcing the opponent to eventually play into one of those columns.
 - **Defensive zugzwang:** Player is forced to make the next non-dead move, handing the opponent the right to play last in the critical column.
 - **Mutual zugzwang:** Both players hold major threats at the same cell (or adjacent pair). Whoever is forced to play that column loses.
@@ -130,7 +137,7 @@ A **dead column** is one where no four-in-a-row is formable for either player in
 
 Detection: for each empty cell (c, r) in column c, check all four directions (horizontal, vertical, two diagonals). If no direction contains a window of four that is free of opponent discs, all empty cells in c are dead.
 
-### 3.4 Dead-Space Parity Formula
+### 3.4 Dead-Space Parity Formula → KB: [derived-dead-space-parity](knowledge-base/derived-dead-space-parity.md)
 
 After all dead-space moves are exhausted, the player forced to make the first meaningful (non-dead) move is determined by:
 
@@ -148,6 +155,8 @@ where:
 **Why n matters:** Zugzwang depends on whose turn it is *after* all dead moves are exhausted, not just how many dead cells exist. At game start (n = 0) the formula simplifies to `S_dead mod 2`, which is why some sources omit n — but that shortcut is only valid at the start or when n is known to be even.
 
 **Derivation:** The formula follows from the basic turn-order rule: when an even number of empty spaces remains, it is Red's turn (source: en.wikibooks.org/wiki/Connect_Four). After n moves with S_dead dead-space moves still to come, the first non-dead move arrives when 42 − n − S_dead spaces remain; that count is even iff (n + S_dead) is even, giving Result = 0 → Red is forced.
+
+**Caveat:** the formula assumes S_dead is stable, i.e., no currently-dead cell becomes live (or vice versa) during the remaining play. For end-of-game zugzwang analysis this typically holds; for mid-game positions, recompute S_dead at each step.
 
 ### 3.5 Precursor Structures
 
@@ -175,7 +184,7 @@ Techniques for controlling or escaping zugzwang:
 
 ### 4.1 Mechanics
 
-A **claimeven position** is one where every column has an *even* number of empty spaces. Black wins any claimeven position — **provided Red has no unrefuted odd-row threat** — by following a single rule: whenever Red plays in a column, Black immediately plays in the same column (the cell directly above Red's disc). (Source: Allis 1988 thesis §4.2–4.3, tromp.github.io/c4/connect4_thesis.pdf — "An odd threat for White gives him control of the Zugzwang … White will win the game, if Black cannot connect four men.")
+A **claimeven position** is one where every column has an *even* number of empty spaces. Black wins any claimeven position — **provided Red has no unrefuted odd-row threat** — by following a single rule: whenever Red plays in a column, Black immediately plays in the same column (the cell directly above Red's disc). (Source: Allis 1988 thesis §5.2 [informal] and §6.1 [formal definition], tromp.github.io/c4/connect4_thesis.pdf. The control-of-zugzwang preconditions are developed in §4 — see §4.5 for 'An odd threat for White gives him control of the Zugzwang.')
 
 **Why it works:** By responding in the same column, Black ensures:
 1. Red fills all odd rows (1, 3, 5) in every column.
@@ -200,7 +209,7 @@ When a column has odd empty spaces, Black's correction is:
 
 This reduces the position to a simpler claimeven configuration.
 
-### 4.4 Claimodd (Red's Variant)
+### 4.4 Claimodd (Red's Variant) → KB: [community-claimodd](knowledge-base/community-claimodd.md)
 
 *Note: "Claimodd" is not one of Allis's nine original strategic rules, nor does the term appear in Allen or any other canonical source. The label was coined by the WeakC4 project (2swap.github.io/WeakC4/explanation/) as part of its Steady-State Language. The underlying concept — Red forcing an odd-row threat while Black takes even rows — is canonical and appears in Allis under "odd threats," Baseinverse, and Vertical. "Claimodd" is used here as a compact label for that idea, but it is a WeakC4 term.*
 
@@ -218,14 +227,14 @@ Claimeven and claimodd positions form an "island of simplicity" in Connect Four'
 
 A single threat can have multiple properties simultaneously. These axes are orthogonal.
 
-*Canonical taxonomy note: Allen's *Expert Play in Connect-Four* (tromp.github.io/c4.html) uses: Major (1 cell missing), Minor (2+ cells missing), Odd/Even (threat on an odd/even row), Mixed (window contains both players' discs — dead). The multi-axis taxonomy below extends these concepts; the Z-Threat/0-Threat/#-Threat labels do not appear in Allen or Allis.*
+*Canonical taxonomy note: Allen's *Expert Play in Connect-Four* (tromp.github.io/c4.html) uses: Major (exactly 1 non-vertical cell missing), Minor (exactly 2 cells missing in a non-vertical window), Odd/Even (threat on an odd/even row), Mixed (window contains both players' discs — dead). Vertical threats are classified as Atari (immediately playable) rather than Major or Minor. The multi-axis taxonomy below extends these concepts; the Z-Threat/0-Threat/#-Threat labels do not appear in Allen or Allis.*
 
 ### 5.1 Structural Axis (how many cells missing)
 
 | Property | Definition |
 |---|---|
-| **Major** | Exactly 1 cell missing to complete four-in-a-row |
-| **Minor** | 2 or more cells missing |
+| **Major** | Exactly 1 (non-vertical) cell missing to complete a four-in-a-row. *Vertical threats are excluded from this classification — they are either immediately playable (atari) or not yet relevant.* (Allen 1990 glossary; Allen 2010 ch. 3.) |
+| **Minor** | Exactly 2 cells missing in a non-vertical four-in-a-row. *(Configurations with 3 or 4 empty cells are not separately classified in canonical literature.)* (Allen 1990 glossary.) |
 
 ### 5.2 Playability Axis (can it be played now)
 
@@ -244,7 +253,7 @@ A "Major Direct" threat (3 discs + immediately playable empty cell) is a check �
 | **Unavoidable** | Latent + parity-aligned + no opponent threat below it in the same column |
 | **Mutual** | Both players can win by playing the same cell |
 
-### 5.4 Zugzwang Axis (parity interaction)
+### 5.4 Zugzwang Axis (parity interaction) → KB: [community-z-threat](knowledge-base/community-z-threat.md)
 
 | Property | Definition |
 |---|---|
@@ -303,7 +312,7 @@ In a claimeven position, Black's call-and-response strategy undercuts every Red 
 
 All fork-based patterns work by the same principle (**Baseinverse**): a player creates two simultaneous threats that require blocking, but the opponent can only block one per turn. The patterns below are canonical realizations of this principle.
 
-### 7.1 J Configuration (project alias: J-Shape)
+### 7.1 J Configuration / J-Shape → KB: [allen-j-configuration](knowledge-base/allen-j-configuration.md)
 
 **What it is:** A cluster of four discs that generates a triple minor threat — three separate winning continuations — making it practically impossible to block.
 
@@ -318,7 +327,7 @@ Row 1:          R              ← Red disc at D1
 Canonical cells Red must own: **{D1, D3, E2, E3}**  
 Primary threat target: **F3** (completes horizontal D3–E3–F3–G3)  
 Secondary targets: **G3** or **G4** via diagonal continuations  
-(Source: Tromp's glossary at tromp.github.io/c4.html names this the "J Configuration," defined as "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image." The name "J-Shape" used elsewhere in this project is a local alias for the same pattern.)
+(Sources: Allen 1990 glossary at tromp.github.io/c4.html names this the "J Configuration," defined as "the common winning Eques configuration comprising D1-D3-E2-E3 or its mirror image." Allen's later Hasbro book (Allen 2010 ch. 5) uses "J-Shape" and "J-Shape Races." Both terms are canonical synonyms from different Allen works.)
 
 **Generalized predicate:**
 ```
@@ -338,7 +347,7 @@ J_Shape(P, x, y) ⟺
 - **Edge proximity:** The required extension cells (e.g., H3) are off the board.
 - **Parity cancellation:** Black holds two odd-row threats in separate columns, canceling Red's zugzwang advantage.
 
-### 7.2 Figure-7
+### 7.2 Figure-7 → KB: [community-figure-7](knowledge-base/community-figure-7.md) · [community-sextuple-threat](knowledge-base/community-sextuple-threat.md)
 
 *(The "Figure-7" or "Figure Seven Trap" is a widely used community term — standard in play guides and tutorials (play4row, Reader's Digest, YouTube) but not found in academic Connect Four literature (Allis, Tromp, Allen). The geometry and forced-win logic are independently verified.)*
 
@@ -428,25 +437,25 @@ Red builds a stack of 5 discs in column D (D1, D3, D5 own; d2, d4 opponent's res
 
 A variation of 5-4 where Red delays the D5 capture, allowing more diagonal variety. Red accepts a slightly longer forcing sequence in exchange for less predictable mid-game patterns. (Source: James D. Allen's Joseki analyses of forced Connect Four sequences, late 1980s.)
 
-Opening theory beyond the 5-4 and 3-4 lines is not formally catalogued in canonical sources; positions are best evaluated via the solver.
+Allen 2010 catalogues 26+ josekis (Chapters 9, 12, 13). Beyond what a human can reasonably memorize, positions are best evaluated via the solver.
 
 ---
 
 ## 10. Allis's Nine Strategic Rules
 
-These are the nine mathematically proven strategic constructions used by Allis's VICTOR program to solve Connect Four (Allis 1988 thesis, Chapter 6; tromp.github.io/c4/connect4_thesis.pdf). They are proven theorems, not heuristics — Allis explicitly distinguishes them from approximate strategies. The project-specific T1–T7 and V1–V5 rules in §§2.5–2.6 are derived heuristics that approximate these constructions for programmatic evaluation.
+These are the nine mathematically proven strategic constructions used by Allis's VICTOR program to solve Connect Four (Allis 1988 thesis, Chapter 6; tromp.github.io/c4/connect4_thesis.pdf). They are proven theorems, not heuristics — Allis explicitly distinguishes them from approximate strategies. Allen 2010's T1–T7 and V1–V5 (§§2.5–2.6) are a complementary canonical formalization, focused on major-threat endgame analysis. They are not derived from Allis's nine rules but address an adjacent problem (predicting endgame outcomes from a stable major-threat configuration) and are themselves proven correct in Allen 2010 Chapter 4.
 
 | # | Rule | Thesis § | Definition |
 |---|---|---|---|
-| 1 | Claimeven | §6.1 | Two vertically adjacent empty squares where the upper is even. If the opponent plays the lower (odd) square, the controller immediately plays the upper (even) square, guaranteeing ownership of it. |
-| 2 | Baseinverse | §6.2 | Two directly playable squares paired together. The opponent can only play one, so the controller always obtains the other. |
-| 3 | Vertical | §6.3 | Two vertically adjacent empty squares where the upper is odd. Guarantees access to at least one of the two squares. |
-| 4 | Aftereven | §6.4 | A group completed through a collection of Claimevens. When the opponent opens a Claimeven column, the controller responds above, preserving the required even squares. |
-| 5 | Lowinverse | §6.5 | Two columns each containing a Vertical configuration (odd number of empty squares). Because two odd counts sum to an even number, the opponent is forced to open one column first, surrendering its upper odd square to the controller. Two isolated odd-parity columns become a paired zugzwang asset. |
-| 6 | Highinverse | §6.6 | Extends Lowinverse to also include the even-numbered squares directly above each Vertical pair. The controller gains not just the upper odd squares but also the even squares above them, compounding the parity advantage across two rows. |
-| 7 | Baseclaim | §6.7 | One Claimeven + two Baseinverses. Depending on the opponent's move order, either the Claimeven response or a Baseinverse secures the critical square. |
-| 8 | Before | §6.8 | A winning group prepared in advance using embedded Claimevens and Verticals before the opponent can interfere. |
-| 9 | Specialbefore | §6.9 | A specialized Before with one directly playable square and an additional external playable square that together preserve the winning structure. |
+| 1 | Claimeven | §6.1 | Two vertically adjacent empty squares where the upper is even. If the opponent plays the lower (odd) square, the controller immediately plays the upper (even) square, guaranteeing ownership of it. → KB: [allis-claimeven](knowledge-base/allis-claimeven.md) |
+| 2 | Baseinverse | §6.2 | Two directly playable squares paired together. The opponent can only play one, so the controller always obtains the other. → KB: [allis-baseinverse](knowledge-base/allis-baseinverse.md) |
+| 3 | Vertical | §6.3 | Two vertically adjacent empty squares where the upper is odd. Guarantees access to at least one of the two squares. → KB: [allis-vertical](knowledge-base/allis-vertical.md) |
+| 4 | Aftereven | §6.4 | A group completed through a collection of Claimevens. When the opponent opens a Claimeven column, the controller responds above, preserving the required even squares. → KB: [allis-aftereven](knowledge-base/allis-aftereven.md) |
+| 5 | Lowinverse | §6.5 | Two columns each containing a Vertical configuration (odd number of empty squares). Because two odd counts sum to an even number, the opponent is forced to open one column first, surrendering its upper odd square to the controller. Two isolated odd-parity columns become a paired zugzwang asset. → KB: [allis-lowinverse](knowledge-base/allis-lowinverse.md) |
+| 6 | Highinverse | §6.6 | Extends Lowinverse to also include the even-numbered squares directly above each Vertical pair. The controller gains not just the upper odd squares but also the even squares above them, compounding the parity advantage across two rows. → KB: [allis-highinverse](knowledge-base/allis-highinverse.md) |
+| 7 | Baseclaim | §6.7 | One Claimeven + two Baseinverses. Depending on the opponent's move order, either the Claimeven response or a Baseinverse secures the critical square. → KB: [allis-baseclaim](knowledge-base/allis-baseclaim.md) |
+| 8 | Before | §6.8 | A winning group prepared in advance using embedded Claimevens and Verticals before the opponent can interfere. → KB: [allis-before](knowledge-base/allis-before.md) |
+| 9 | Specialbefore | §6.9 | A specialized Before with one directly playable square and an additional external playable square that together preserve the winning structure. → KB: [allis-specialbefore](knowledge-base/allis-specialbefore.md) |
 
 **Claimeven family** (rules that directly encode or build on the "respond directly above" invariant): Claimeven, Aftereven, Baseclaim, Before, Specialbefore.
 

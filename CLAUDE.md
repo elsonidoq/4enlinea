@@ -27,3 +27,6 @@ The script prints two boards followed by analysis rows:
 3. **`par` row** — empty-cell count per column with parity: `O` = odd, `E` = even (key for zugzwang reasoning).
 4. **`scr` row** — c4solver score for each column (`--` = full column).
 5. **Major threats list** — explicit enumeration of every `[R]`/`[Y]`/`[*]` cell as `colC rowR (player)`, sorted by column then row.
+
+## When Asked to Write a Prompt section under workflow conventions.\n\n## When Asked to Write a Prompt
+If the user asks you to 'write a prompt' or 'draft a prompt' for use in another context, produce the prompt text directly. Do NOT begin exploring code, running tools, or solving the underlying problem yourself unless explicitly asked.
