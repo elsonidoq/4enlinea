@@ -59,14 +59,17 @@ formal_predicate: |
   # restriction which states that the upper squares must lie in the same row").
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "45675172537"
     description: |
-      Lowinverse at c2-c3 and d2-d3 (upper squares c3 and d3, both odd row 3). White
-      threatens at a3-d3 (needs both c3 and d3). Lowinverse refutes a3-d3 because the
-      controller guarantees getting at least one of c3/d3 from each column. Additionally
-      both Verticals c2-c3 and d2-d3 are active side effects.
-    expected_behavior: "solver confirms Black refutes a3-d3; Lowinverse at c2-c3-d2-d3 is the refutation"
-    solver_verified: PENDING
+      Lowinverse at col4 rows2-3 and col6 rows2-3 (move 11, Yellow to move). Col4 has Red
+      at row1 with rows2-3 empty; col6 has Red at row1 with rows2-3 empty. Both upper
+      squares are row3 (odd) → valid Lowinverse. Red has a minor threat (r) at the window
+      cols4-7 row3 (Red discs at col5 row3 and col7 row3, empty at col4 row3 and col6 row3)
+      — this window requires BOTH upper-odd squares (col4,row3) and (col6,row3). Lowinverse
+      refutes it: Black guarantees getting at least one from each column's pair.
+      All solver scores ≤ 0 (range -5 to -14).
+    expected_behavior: "Lowinverse at col4 rows2-3 + col6 rows2-3 refutes minor threat window cols4-7 row3; all scr ≤ 0"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

@@ -63,13 +63,16 @@ formal_predicate: |
   #     after playing row_lower, treat row_upper as a Claimeven-like follow-up.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "41424"
     description: |
-      White threatens via a vertical group requiring both (col E, row 4) and (col E, row 5).
-      Row 5 is odd. Black applies Vertical at (E4, E5): if White plays E4, Black immediately
-      plays E5. White cannot complete any vertical group needing both E4 and E5.
-    expected_behavior: "solver confirms Black refutes the vertical threat; Vertical fires correctly at E4-E5"
-    solver_verified: PENDING
+      Vertical pair at col4 rows4-5 (move 5, Yellow to move). Red has 3 discs stacked at
+      col4 rows1-3; rows4 and 5 are empty. Lower=row4 (even), upper=row5 (odd) → valid
+      Vertical (not Claimeven, because upper is odd). Red major threat [R] at col4 row4
+      (3-in-a-row vertical window rows1-4). If Red plays col4 row4, Black immediately plays
+      col4 row5, denying Red the vertical group rows2-5 (which needs both row4 and row5).
+      All solver scores ≤ 0 (range -7 to -18); Black wins or draws everywhere.
+    expected_behavior: "solver confirms Black refutes Red's vertical threat via Vertical at col4 rows4-5; all scr ≤ 0"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

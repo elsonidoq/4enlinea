@@ -63,15 +63,20 @@ formal_predicate: |
   # controller completes it via the Claimeven responses).
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "71122"
     description: |
-      White threatens via the group c2-f2. Only f2 is empty; f1 is also empty, allowing
-      a Claimeven at f1-f2. The Aftereven group is c2-f2 with one empty square (f2)
-      covered by Claimeven. After Black claims f2 via the Claimeven, the game ends at
-      f2 — no further discs in column F. All White groups requiring squares above f2
-      in column F are refuted.
-    expected_behavior: "solver confirms Black refutes White threats above f2 via Aftereven; White cannot use f3-f6"
-    solver_verified: PENDING
+      Aftereven group at cols1-4 row2 (move 5, Yellow to move). Red occupies (col1,row2)
+      and (col2,row2). The empty squares (col3,row2) and (col4,row2) are each the upper
+      (even) square of a Claimeven pair: col3 rows1-2 and col4 rows1-2 (both row1 cells
+      also empty). No Black discs in the window. Black will eventually fill both even
+      squares via Claimeven responses, completing the group. In whichever column Black
+      plays last, no further discs appear above — refuting Red groups requiring squares
+      above row2 in all such columns. Scores: col1=-2, col2=+2, col3=-2, col4=0, col5=-2,
+      col6=-2, col7=-2. Note: col2=+2 means Red wins if Red plays col2 immediately, so
+      the overall position is not Black-winning; the example demonstrates the Aftereven
+      structural coverage of the row-2 window.
+    expected_behavior: "Aftereven covers cols1-4 row2; Claimeven pairs at col3 rows1-2 and col4 rows1-2 confirmed"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

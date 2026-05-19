@@ -1,0 +1,151 @@
+# Allen V-rule worked example movestrings
+# Verified with visualize_board.sh + c4solver on 2026-05-18.
+#
+# V-rule summary:
+#   V1: Red wins — ≥3 Red odd-row threats in separate cols after T1–T7
+#   V2: Black wins — ≥2 Black odd-row threats in separate cols after T1–T7
+#   V3: Red wins — exactly 1 Red odd-row threat, 0 Black odd-row threats after T1–T7
+#   V4: Black wins — Black even-row threat, no odd threats either side after T1–T7
+#   V5: Draw — no surviving threats after T1–T7
+
+allen_v_rule_examples:
+  v5:
+    movestring: "42354643256425346355663"
+    hard: false
+    last_failure: ""
+    description: "Draw: no surviving threats after T1–T7"
+    verification:
+      major_threats:
+        - col: 1
+          row: 3
+          player: Red
+          parity: odd
+        - col: 7
+          row: 5
+          player: Yellow
+          parity: odd
+      t7_cancellations: "col1-row3(R) + col7-row5(Y) → both cancelled (separate columns)"
+      scr: [0, 0, 0, 0, 0, 0, 0]
+      par: [6E, 3O, 1O, 1O, 1O, 1O, 6E]
+      surviving_threats_after_t7: []
+
+  v3:
+    movestring: "77273746"
+    hard: false
+    last_failure: ""
+    description: "Red wins: 1 Red odd-row threat, 0 Black odd-row threats after T1–T7"
+    verification:
+      major_threats:
+        - col: 1
+          row: 1
+          player: Red
+          parity: odd
+        - col: 5
+          row: 1
+          player: Red
+          parity: odd
+        - col: 7
+          row: 5
+          player: Yellow
+          parity: odd
+      t7_cancellations: "col5-row1(R) + col7-row5(Y) → both cancelled (separate columns)"
+      scr: [17, -17, -17, -17, 17, -17, 16]
+      par: [6E, 5O, 5O, 5O, 6E, 5O, 2E]
+      surviving_threats_after_t7:
+        - col: 1
+          row: 1
+          player: Red
+          parity: odd
+      v_rule_fires: V3
+
+  v2:
+    movestring: "727364"
+    hard: false
+    last_failure: ""
+    description: "Black wins: 2 Black odd-row threats in separate columns after T1–T7"
+    verification:
+      major_threats:
+        - col: 1
+          row: 1
+          player: Yellow
+          parity: odd
+        - col: 5
+          row: 1
+          player: Yellow
+          parity: odd
+      t7_cancellations: "none (Red has 0 odd-row threats)"
+      scr: [-18, -18, -18, -18, -18, -18, -18]
+      par: [6E, 5O, 5O, 5O, 6E, 5O, 4E]
+      surviving_threats_after_t7:
+        - col: 1
+          row: 1
+          player: Yellow
+          parity: odd
+        - col: 5
+          row: 1
+          player: Yellow
+          parity: odd
+      v_rule_fires: V2
+
+  v1:
+    movestring: "44452556366"
+    hard: false
+    last_failure: ""
+    description: "Red wins: 3 Red odd-row threats in separate columns after T1–T7"
+    verification:
+      major_threats:
+        - col: 1
+          row: 1
+          player: Red
+          parity: odd
+        - col: 3
+          row: 3
+          player: Red
+          parity: odd
+        - col: 7
+          row: 3
+          player: Red
+          parity: odd
+        - col: 3
+          row: 2
+          player: Yellow
+          parity: even
+        - col: 7
+          row: 2
+          player: Yellow
+          parity: even
+      t7_cancellations: "none (Black has 0 odd-row threats)"
+      surviving_threats_after_t7:
+        - col: 1
+          row: 1
+          player: Red
+          parity: odd
+        - col: 3
+          row: 3
+          player: Red
+          parity: odd
+        - col: 7
+          row: 3
+          player: Red
+          parity: odd
+      v_rule_fires: V1
+
+  v4:
+    movestring: "2134124321317273"
+    hard: false
+    last_failure: ""
+    description: "Black wins: Black even-row threat, no odd threats either side after T1–T7"
+    verification:
+      major_threats:
+        - col: 4
+          row: 4
+          player: Yellow
+          parity: even
+      t7_cancellations: "none (neither player has odd-row threats)"
+      scr: [-4, -4, -5, -13, -11, -5, -4]
+      surviving_threats_after_t7:
+        - col: 4
+          row: 4
+          player: Yellow
+          parity: even
+      v_rule_fires: V4

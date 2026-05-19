@@ -67,18 +67,19 @@ formal_predicate: |
   #   Secondary: All groups solved by the Claimevens within the Before.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "36666"
     description: |
-      Before group d3-g3 (a horizontal group at row 3). Empty squares: d3, f3, g3
-      (say e3 is occupied by the controller). The controller uses a Vertical at
-      f2-f3 and a Claimeven at g1-g2... wait, that doesn't work since Claimeven
-      requires odd-even. Let me use the Allis example: Vertical at e1-e2 (upper e2
-      even — actually this would be Claimeven), and Claimeven at f1-f2 and g1-g2.
-      Actually the Allis diagram 6.8 has a group d3-g3 with empties f3 and g3.
-      Claimeven covers g1-g2 but g2 is even and... this requires reading the diagram
-      carefully. Using PENDING until exact board from Allis diagram 6.8 is reconstructed.
-    expected_behavior: "solver confirms Black refutes groups requiring all successors of the Before group's empty squares"
-    solver_verified: PENDING
+      Before group: "/" diagonal (col3,row1)→(col4,row2)→(col5,row3)→(col6,row4)
+      (move 5, Yellow to move). Red discs at (col3,row1) and (col6,row4); empty squares
+      at (col4,row2) and (col5,row3). No Yellow discs in the window. Neither empty square
+      is in row 6. Coverage: (col4,row2) is even-row with (col4,row1) also empty →
+      Claimeven pair col4 rows1-2. (col5,row3) is odd-row with (col5,row2) also empty →
+      Vertical pair col5 rows2-3 (upper=row3 odd). Mixed Claimeven+Vertical → Before
+      (not Aftereven). Successors of empty squares are (col4,row3) and (col5,row4);
+      opponent groups requiring BOTH successors are refuted. All solver scores ≤ 0
+      (range -1 to -13).
+    expected_behavior: "solver confirms Black refutes groups requiring successors col4,row3 and col5,row4; Before fires with Claimeven+Vertical mix"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

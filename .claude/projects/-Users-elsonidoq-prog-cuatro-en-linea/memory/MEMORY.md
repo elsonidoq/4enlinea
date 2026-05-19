@@ -24,3 +24,4 @@
 - [Category cleanup 2026-05-13](project_category_cleanup.md) — fork_setup/parity_control removed; zugzwang→forced_win; future proper zugzwang will be a distinct category
 - [Migration constraint order](feedback_migration_constraint_order.md) — drop constraints before updating data, not after; learned from broken migration 013
 - [correct_col migration gap](project_correct_col_migration.md) — column was absent until 016_correct_col.sql; needed by claimeven/figure_7/j_shape; confirm applied before querying it
+- [Allen V-rule example movestrings](reference_allen_v_rule_examples.md) — ALL V1–V5 verified 2026-05-18; V1=`44452556366`, V4=`2134124321317273`; results in `allen_v_rule_examples.yaml`

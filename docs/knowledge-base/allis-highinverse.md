@@ -67,13 +67,18 @@ formal_predicate: |
   #       All groups containing (col_b, row_b_lower) AND (col_a, row_a_top).
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "45675172537"
     description: |
-      Highinverse at columns c and d with triples c2-c3-c4 and d2-d3-d4 (upper squares
-      c4 and d4, both even row 4). White threatens groups needing both c4 and d4, and
-      groups needing both c3 and d3. Highinverse refutes both simultaneously.
-    expected_behavior: "solver confirms Black refutes both White threats; Highinverse covers both upper pairs"
-    solver_verified: PENDING
+      Highinverse at col4 and col6 (move 11, Yellow to move; same position as lowinverse
+      example). Col4 has Red at row1 with rows2,3,4 all empty: lower=row2 (even), middle=row3
+      (odd), upper=row4 (even). Col6 identical. This is a valid Highinverse triple in each
+      column. The rule refutes: (1) groups needing both upper-even squares col4,row4 and
+      col6,row4; (2) groups needing both middle-odd squares col4,row3 and col6,row3 (the
+      minor threat window cols4-7 row3 falls here). Lower squares of both columns (row2)
+      are not directly playable (row1 in each column is occupied), so the conditional
+      Baseinverse-like refutations do not apply. All solver scores ≤ 0.
+    expected_behavior: "Highinverse at col4 rows2-4 + col6 rows2-4 refutes threats through both upper-even and middle-odd squares"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

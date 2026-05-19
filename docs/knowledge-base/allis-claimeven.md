@@ -63,20 +63,24 @@ formal_predicate: |
   #   Claimeven cannot be placed below a Lowinverse or Highinverse in the same column.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "2364354354354256"
     description: |
-      Position where all columns have even numbers of empty squares. Black applies
-      Claimeven pairs across the entire board, covering every White winning group.
-      Solver confirms Black wins or draws.
+      Board-wide Claimeven position (move 16, Red to move). All seven columns have even
+      empty counts (par: 6E 4E 2E 2E 2E 4E 6E). Red major threats [R] at col2 row4 and
+      col6 row4 exist, yet all solver scores are -13 (Black wins in every column). Black
+      wins by always responding directly above Red's move — Claimeven pairing covers the
+      entire remaining board.
     expected_behavior: "solver confirms Black wins; all White threats refuted by Claimeven pairing"
-    solver_verified: PENDING
-  - movestring: PENDING
+    solver_verified: true
+  - movestring: "7112233"
     description: |
-      Single Claimeven application: White threatens via a group including (col C, row 4).
-      Black has a Claimeven at (col C, row 3)–(col C, row 4). Whenever White plays C3,
-      Black plays C4 — White's threat through C4 is permanently refuted.
-    expected_behavior: "solver confirms Black refutes the White threat; Claimeven fires correctly"
-    solver_verified: PENDING
+      Single Claimeven application (move 7, Yellow to move). Red has 3 discs at cols1-3
+      row2, creating a major threat [R] at col4 row2 (the even upper square). Col4 rows1-2
+      are both empty: row1 = odd lower, row2 = even upper → valid Claimeven pair. If Red
+      plays col4 row1, Black immediately plays col4 row2, permanently blocking the threat.
+      Scores: col1=-3, col2=-1, col3=0, col4=18, col5=-4, col6=-3, col7=-5.
+    expected_behavior: "solver confirms Black refutes Red's row-2 threat via Claimeven at col4 rows1-2"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

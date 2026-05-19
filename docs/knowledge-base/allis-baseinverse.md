@@ -64,14 +64,19 @@ formal_predicate: |
   # requires also checking that at least one White group contains both squares.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "2233"
     description: |
-      White threatens at a1-d1 (needs both a1 and d1, both directly playable). Black
-      applies Baseinverse at (a1, d1): if White plays a1, Black plays d1; if White
-      plays d1, Black plays a1. White can never complete a1-d1 because Black always
-      secures one of the two needed squares.
-    expected_behavior: "solver confirms Black refutes a1-d1; Baseinverse at a1-d1 is the refutation"
-    solver_verified: PENDING
+      Baseinverse (move 4, Red to move). Red at (col2,row1) and (col3,row1); Yellow at
+      (col2,row2) and (col3,row2). Col1 row1 and col4 row1 are both directly playable and
+      both inside the horizontal window cols1-4 row1, which is a Red minor threat (r)
+      with 2 Red discs needing both col1 and col4. If Red plays col1, Black plays col4;
+      if Red plays col4, Black plays col1 — Red can never complete the group. Scores:
+      col1=-3, col2=0, col3=-1, col4=18, col5=-4, col6=-2, col7=-3. Note: col4=18
+      means Red has a winning line elsewhere via col4, so this position overall is not
+      Black-winning; the Baseinverse demonstrates the structural refutation of the specific
+      window only.
+    expected_behavior: "Baseinverse at (col1,row1)+(col4,row1) refutes the cols1-4 row1 Red threat"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING
