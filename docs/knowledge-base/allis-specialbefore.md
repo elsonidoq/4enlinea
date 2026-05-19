@@ -84,16 +84,19 @@ formal_predicate: |
   #   4. All groups solved by the Verticals within the Before.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "2365555"
     description: |
-      Specialbefore group d2-g2 with Claimevens at f1-f2 and g1-g2 and a Vertical
-      at e2-e3. Extra playable square: b1. The Before group d2-g2 has e2 as a directly
-      playable empty square. When White plays e2, instead of playing e3 (Vertical's
-      response), Black plays d3 (completing the Before group's last empty square early)
-      — this is the "special" move that makes it a Specialbefore. The extra square b1
-      then handles the Baseinverse-like refutation of a1-d1.
-    expected_behavior: "solver confirms Black refutes both the Before-successor groups and the Baseinverse group"
-    solver_verified: PENDING
+      Before group: "/" diagonal (col2,r1)-(col3,r2)-(col4,r3)-(col5,r4). Red at
+      col2r1 (move 1) and col5r4 (move 7); Yellow at col3r1 (move 2) which is NOT
+      in the Before group window. col6r1=Red (move 3).
+      Directly playable Before square: col3 row2 — col3r1 is Yellow-occupied, so
+        col3r2 is the lowest empty in col3; no Claimeven/Vertical coverage needed.
+      Other Before empty covered: col4r3 by Vertical (row3 is odd, col4r2 empty).
+      Extra directly playable square: col1r1 (col1 fully empty; col1 ∉ {2,3,4,5}).
+        Baseinverse pair: (col3r2, col1r1).
+      Red minor threats (r) appear at col3r2, col3r4, col4r3.
+    expected_behavior: "solver scores all negative (-13,-2,-1,-15,-14,-2,-13); Before group present with one directly playable empty (col3r2) and Vertical cover on col4r3; extra playable col1r1 confirmed"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING

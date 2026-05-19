@@ -68,16 +68,17 @@ formal_predicate: |
   #   - If White plays P3: Black plays P2; Claimeven at P2-E then handles P1-related groups.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "263223362"
     description: |
-      Three directly playable squares at b1, c1, e1 with e2 being the even square
-      above c1 (=E). White threatens b1-e4 (needs b1 and e4) and c1-f1 (needs c1
-      and f1). Baseclaim at b1, c1, e1 with E=c2 handles both: 
-      - White plays b1 → Black plays e1 + Claimeven at c1-c2 solves b1-e4.
-      - White plays c1 → Black plays e1 + Baseinverse at b1-c2 solves b1-e4.
-      - White plays e1 → Black plays c1 + Baseinverse at b1-c2 solves b1-e4.
-    expected_behavior: "solver confirms Black refutes both White threats; Baseclaim is the refutation"
-    solver_verified: PENDING
+      P1=col5 row1, P2=col4 row1 (odd), P3=col1 row1, E=col4 row2.
+      Board after 9 moves: Red at col2r1,r3,r4 and col3r1,r3; Yellow at col2r2,
+      col3r2, col6r1,r2. Columns 1, 4, 5, 7 empty.
+      P1+E window: "\" diagonal (col5,r1)-(col4,r2)-(col3,r3)-(col2,r4) — Red at
+        col3r3 and col2r4, empties at P1 and E → minor Red threat (r).
+      P2+P3 window: horizontal row1 (col1,r1)-(col2,r1)-(col3,r1)-(col4,r1) — Red
+        at col2r1 and col3r1, empties at P3 and P2 → minor Red threat (r).
+    expected_behavior: "solver scores all negative (-15,-15,-15,-3,-3,-3,-15); both required Red threats present; Baseclaim structure confirmed"
+    solver_verified: true
 
 false_positives:
   - movestring: PENDING
