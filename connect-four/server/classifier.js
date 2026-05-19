@@ -481,7 +481,7 @@ export function detectJShape(moves, scores) {
   function tryTemplate(placed, completing, templateColsAtCompletingRow) {
     if (!placed.every(cell => board[cell.row][cell.col] === currentPlayer)) return false;
     if (board[completing.row][completing.col] !== 0) return false;
-    if (colHeights[completing.col] > completing.row) return false;
+    if (colHeights[completing.col] !== completing.row) return false;
     // Guard: opponent must not occupy the row above the completing row in any template column
     if (completing.row + 1 < ROWS) {
       if (templateColsAtCompletingRow.some(tc => board[completing.row + 1][tc] === opponent)) return false;
