@@ -63,7 +63,7 @@ formal_predicate: |
   #     after playing row_lower, treat row_upper as a Claimeven-like follow-up.
 
 worked_examples:
-  - movestring: "41424"
+  - movestring: "30313"
     description: |
       Vertical pair at col4 rows4-5 (move 5, Yellow to move). Red has 3 discs stacked at
       col4 rows1-3; rows4 and 5 are empty. Lower=row4 (even), upper=row5 (odd) → valid

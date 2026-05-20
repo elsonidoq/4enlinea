@@ -28,5 +28,8 @@ The script prints two boards followed by analysis rows:
 4. **`scr` row** — c4solver score for each column (`--` = full column).
 5. **Major threats list** — explicit enumeration of every `[R]`/`[Y]`/`[*]` cell as `colC rowR (player)`, sorted by column then row.
 
-## When Asked to Write a Prompt section under workflow conventions.\n\n## When Asked to Write a Prompt
+## When Asked to Write a Prompt
 If the user asks you to 'write a prompt' or 'draft a prompt' for use in another context, produce the prompt text directly. Do NOT begin exploring code, running tools, or solving the underlying problem yourself unless explicitly asked.
+
+## Answering Questions
+If the user asks a question, answer the question first before editing any files or running any tools.

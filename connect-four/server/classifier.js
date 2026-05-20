@@ -2,6 +2,18 @@
 // Cats 1-3: bitboard-detectable (no extra solver queries).
 // Cats 4-6: solver-guided (secondary solver query required).
 
+/**
+ * All coordinates are 0-indexed: column 0–6 (left to right), row 0–5 (bottom to top).
+ * PARITY: row 0 = even 0-indexed = odd 1-indexed (user-visible). Load-bearing for
+ * Undercut/J-Shape logic — do not switch rows to 1-indexed without auditing every r%2 check.
+ *
+ * @typedef {{ column: number, row: number, role: string }} HighlightCell
+ *
+ * @typedef {{ type: 'cells', cells: HighlightCell[] }
+ *          | { type: 'capsule', column: number, fromRow: number, toRow: number, badgeCount: number }
+ *         } HighlightMetadata
+ */
+
 const ROWS = 6;
 const COLS = 7;
 const TOTAL_CELLS = ROWS * COLS; // 42
@@ -19,7 +31,7 @@ export function parseBoardState(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const colHeights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1; // convert to 0-indexed
+    const col = parseInt(moves[i], 10);
     const row = colHeights[col];
     board[row][col] = (i % 2 === 0) ? 1 : 2; // player 1 moves first
     colHeights[col]++;
@@ -242,6 +254,9 @@ export function detectUndercut(moves, scores) {
     for (const R of currentThreats[col]) {
       const kill = opponentThreats[col].find(rp => rp < R);
       if (kill === undefined) continue;
+      if (R % 2 === kill % 2) continue; // U1: T2 requires opposite parity (same parity = T4, no interaction)
+      if (R === 5 && kill === 2) continue; // U2: T5 exception — rows 5+2 (0-indexed) = rows 6+3 (1-indexed), no interaction
+      if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue; // U3: T2 sub-case 3 requires adjacent rows
       return {
         matched: true,
         highlightMetadata: {
@@ -289,6 +304,16 @@ export function detectOvercut(moves, scores) {
     for (const R of currentThreats[col]) {
       const neutralised = opponentThreats[col].find(rp => rp < R);
       if (neutralised === undefined) continue;
+      // O1: verify at least one T2-blocking mechanism — if none hold, T2 fires normally (undercut, not overcut)
+      const sameParity = R % 2 === neutralised % 2; // T4: same parity, no interaction
+      const t5Exception = (R === 5 && neutralised === 2) || (R === 2 && neutralised === 5); // T5: rows 6+3 (1-indexed)
+      const chainT2 = currentThreats[col].some(Rpp => {
+        if (Rpp >= neutralised) return false;
+        if (Rpp % 2 === 0 && neutralised % 2 === 1) return true; // T2 sub-case 2: CP even below opp odd (any distance)
+        if (Rpp % 2 === 1 && neutralised % 2 === 0 && Rpp + 1 === neutralised) return true; // T2 sub-case 3: adjacent
+        return false;
+      });
+      if (!sameParity && !t5Exception && !chainT2) continue;
       return {
         matched: true,
         highlightMetadata: {
@@ -345,18 +370,6 @@ export function detectFigure7(moves, scores) {
     for (let y = 0; y < ROWS; y++) {
       const variants = [];
 
-      // Variant 1: ascending diagonal + horizontal right (junction at index 2)
-      if (x + 4 < COLS && y + 2 < ROWS) {
-        variants.push([
-          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+2, row: y+2 },
-          { col: x+3, row: y+2 }, { col: x+4, row: y+2 },
-        ]);
-        // 1b: comp = arm cell adjacent to junction (x+3)
-        variants.push([
-          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+3, row: y+2 },
-          { col: x+2, row: y+2 }, { col: x+4, row: y+2 },
-        ]);
-      }
       // Variant 2: ascending diagonal + horizontal left (junction at index 2)
       if (x + 2 < COLS && y + 2 < ROWS) {
         variants.push([
@@ -434,6 +447,8 @@ export function detectFigure7(moves, scores) {
         board[comp.row][comp.col] = 0;
         colHeights[comp.col]--;
         if (threatCells.length < 2) continue;
+        if (gravityTopCount >= 2) continue; // F1: two gravity-top threats = direct fork, not figure-7 zugzwang
+        if (!hasAboveGravity) continue; // F2: zugzwang requires at least one above-gravity threat
         // Genuine figure-7 zugzwang: two threats in the same column at consecutive
         // rows, with the lower threat at most 1 above the current gravity-top.
         // "Blocking one immediately enables the other" (training material §E Q21):
@@ -478,24 +493,33 @@ export function detectJShape(moves, scores) {
   const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
   const opponent = 3 - currentPlayer;
 
-  function tryTemplate(placed, completing, templateColsAtCompletingRow) {
+  function tryTemplate(placed, completing, farCol) {
     if (!placed.every(cell => board[cell.row][cell.col] === currentPlayer)) return false;
     if (board[completing.row][completing.col] !== 0) return false;
     if (colHeights[completing.col] !== completing.row) return false;
-    // Guard: opponent must not occupy the row above the completing row in any template column
-    if (completing.row + 1 < ROWS) {
-      if (templateColsAtCompletingRow.some(tc => board[completing.row + 1][tc] === opponent)) return false;
-    }
+    // J4: opponent must not occupy the far column at the completing row
+    if (board[completing.row][farCol] === opponent) return false;
     if (!scores || scores[completing.col] <= 0) return false;
     return true;
   }
 
   // Canonical variant: tall column c, short side c+1
-  for (let c = 0; c < COLS - 1; c++) {
-    for (let r = 0; r <= ROWS - 3; r++) {
+  for (let c = 0; c < COLS - 2; c++) { // J2: farCol=c+2 must be in bounds
+    for (let r = 0; r <= ROWS - 4; r++) { // J2: diagonal extension row r+3 must be in bounds
+      if (r % 2 !== 0) continue; // J1: anchor parity (0-indexed even = 1-indexed odd, load-bearing)
       const placed = [{ col: c, row: r }, { col: c, row: r+2 }, { col: c+1, row: r+1 }];
       const completing = { col: c+1, row: r+2 };
-      if (tryTemplate(placed, completing, [c, c+1])) {
+      const farCol = c + 2;
+      if (tryTemplate(placed, completing, farCol)) {
+        // J3: parity cancellation — reject if opponent has an odd-1-indexed threat in farCol
+        let oppOddInFarCol = false;
+        for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
+          if (board[row][farCol] !== 0 || row % 2 !== 0) continue; // even 0-indexed = odd 1-indexed
+          board[row][farCol] = opponent;
+          if (checkWin(board, row, farCol, opponent)) oppOddInFarCol = true;
+          board[row][farCol] = 0;
+        }
+        if (oppOddInFarCol) continue;
         return {
           matched: true,
           highlightMetadata: {
@@ -512,11 +536,22 @@ export function detectJShape(moves, scores) {
   }
 
   // Mirror variant: tall column c, short side c-1
-  for (let c = 1; c < COLS; c++) {
-    for (let r = 0; r <= ROWS - 3; r++) {
+  for (let c = 2; c < COLS; c++) { // J2: farCol=c-2 must be in bounds
+    for (let r = 0; r <= ROWS - 4; r++) { // J2: diagonal extension row r+3 must be in bounds
+      if (r % 2 !== 0) continue; // J1: anchor parity
       const placed = [{ col: c, row: r }, { col: c, row: r+2 }, { col: c-1, row: r+1 }];
       const completing = { col: c-1, row: r+2 };
-      if (tryTemplate(placed, completing, [c, c-1])) {
+      const farCol = c - 2;
+      if (tryTemplate(placed, completing, farCol)) {
+        // J3: parity cancellation
+        let oppOddInFarCol = false;
+        for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
+          if (board[row][farCol] !== 0 || row % 2 !== 0) continue;
+          board[row][farCol] = opponent;
+          if (checkWin(board, row, farCol, opponent)) oppOddInFarCol = true;
+          board[row][farCol] = 0;
+        }
+        if (oppOddInFarCol) continue;
         return {
           matched: true,
           highlightMetadata: {
@@ -557,7 +592,7 @@ export async function detectClaimeven(moves, scores, solver) {
     baseinversePair = [correctCol];
   } else if (oddCols.length === 2) {
     // Subtype B: opponent's last move made one of these columns odd
-    const lastCol = parseInt(moves[moveCount - 1], 10) - 1;
+    const lastCol = parseInt(moves[moveCount - 1], 10);
     if (!oddCols.includes(lastCol)) return { matched: false };
     subtype = 'B';
     baseinversePair = [...oddCols];
@@ -567,7 +602,7 @@ export async function detectClaimeven(moves, scores, solver) {
   }
 
   // Run simulation from position after correct move
-  const newMoves = moves + (correctCol + 1).toString();
+  const newMoves = moves + correctCol.toString();
   const simResult = await runClaimevenSimulation(newMoves, solver);
   if (!simResult.yellowWins) return { matched: false };
 
@@ -617,7 +652,7 @@ async function runClaimevenSimulation(ms, solver) {
     board[redHeightBefore][redCol] = redPlayer;
     const newHeights = [...colHeights];
     newHeights[redCol]++;
-    currentMs += (redCol + 1).toString();
+    currentMs += redCol.toString();
 
     if (checkWin(board, redHeightBefore, redCol, redPlayer)) return { yellowWins: false, trace };
     if (currentMs.length === TOTAL_CELLS) return { yellowWins: false, trace };
@@ -641,7 +676,7 @@ async function runClaimevenSimulation(ms, solver) {
     const yellowRow = newHeights[yellowCol];
     trace.push({ col: yellowCol, row: yellowRow, player: yellowPlayer });
     board[yellowRow][yellowCol] = yellowPlayer;
-    currentMs += (yellowCol + 1).toString();
+    currentMs += yellowCol.toString();
 
     if (checkWin(board, yellowRow, yellowCol, yellowPlayer)) return { yellowWins: true, trace };
   }

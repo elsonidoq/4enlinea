@@ -68,7 +68,7 @@ formal_predicate: |
   #   - If White plays P3: Black plays P2; Claimeven at P2-E then handles P1-related groups.
 
 worked_examples:
-  - movestring: "263223362"
+  - movestring: "152112251"
     description: |
       P1=col5 row1, P2=col4 row1 (odd), P3=col1 row1, E=col4 row2.
       Board after 9 moves: Red at col2r1,r3,r4 and col3r1,r3; Yellow at col2r2,

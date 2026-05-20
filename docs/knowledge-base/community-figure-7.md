@@ -63,7 +63,7 @@ formal_predicate: |
   # a threat column will fire on positions that are not Figure-7 traps.
 
 worked_examples:
-  - movestring: "54333541514"
+  - movestring: "43222430403"
     description: |
       After 11 moves (Yellow to move). Red has the canonical Figure-7 at anchor (x=3, y=1):
       diagonal arm {C1(col3r1), D2(col4r2), E3(col5r3)}, horizontal arm {C3(col3r3), D3(col4r3)},
@@ -81,7 +81,7 @@ worked_examples:
       create additional threat complexity.
 
 false_positives:
-  - movestring: "41432254553"
+  - movestring: "30321143442"
     why_not: |
       After 11 moves (Yellow to move). Red has discs at B1, C2, D1, D2, E1, E2 forming
       a partially overlapping shape. The major threat is at col6 row2 (R) — the horizontal
@@ -100,7 +100,7 @@ false_positives:
       threat that passes the gravity check but is not a figure-7 trap." Documented
       2026-05-17 as the canonical far-arm-end false positive.
 
-  - movestring: "33344646555"
+  - movestring: "22233535444"
     why_not: |
       After 11 moves (Yellow to move). Red has the full Figure-7 shape at anchor (3,1):
       {C1, C3, D2, D3, E3} ✓ plus extra disc E1. Col6 has F1=Yellow(row1) and F2=Yellow(row2),

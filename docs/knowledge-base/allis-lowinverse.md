@@ -59,7 +59,7 @@ formal_predicate: |
   # restriction which states that the upper squares must lie in the same row").
 
 worked_examples:
-  - movestring: "45675172537"
+  - movestring: "34564061426"
     description: |
       Lowinverse at col4 rows2-3 and col6 rows2-3 (move 11, Yellow to move). Col4 has Red
       at row1 with rows2-3 empty; col6 has Red at row1 with rows2-3 empty. Both upper

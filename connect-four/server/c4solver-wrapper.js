@@ -60,7 +60,10 @@ export function createSolverProcess() {
               callerReject(err);
             },
           });
-          process.stdin.write(moveString + '\n');
+          // Move strings in this codebase use 0-indexed columns (0-6).
+          // c4solver requires 1-indexed columns (1-7), so convert here — the only place.
+          const solverInput = moveString.split('').map(ch => (parseInt(ch, 10) + 1).toString()).join('');
+          process.stdin.write(solverInput + '\n');
         })
       );
 

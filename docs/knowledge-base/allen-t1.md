@@ -47,7 +47,7 @@ formal_predicate: |
   # T4 and T5 must NOT fire on an adjacent pair (T1 takes precedence).
 
 worked_examples:
-  - movestring: "44215312361121332263"
+  - movestring: "33104201250010221152"
     description: |
       Red has a major threat at col 4 row 3 (odd) and Yellow has a major threat at col 4
       row 5 (odd). These are NOT adjacent (rows 3 and 5 differ by 2), so T1 does NOT apply
@@ -56,7 +56,7 @@ worked_examples:
     solver_verified: 2026-05-17
     notes: "Included as a boundary case to show T1 requires consecutive rows."
 
-  - movestring: "613461653556247156"
+  - movestring: "502350542445136045"
     description: |
       Red has adjacent major threats at col4 row3 and col4 row4. Red wins
       unconditionally because one of the two threats will be reached first and the other
@@ -65,7 +65,7 @@ worked_examples:
     solver_verified: 2026-05-18
 
 false_positives:
-  - movestring: "1115222555577773663636617"
+  - movestring: "0004111444466662552525506"
     why_not: |
       Red has major threats at col 4 rows 3 and 5 in the same column — same parity
       (both odd) but NOT adjacent (differ by 2). T1 requires consecutive rows (r and r+1).

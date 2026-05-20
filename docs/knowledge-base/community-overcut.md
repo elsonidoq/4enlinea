@@ -108,7 +108,7 @@ formal_predicate: |
   #   makes R immediately playable. Non-adjacent active forcing is possible but rarer.
 
 worked_examples:
-  - movestring: "37644565255642234456335266"
+  - movestring: "26533454144531123345224155"
     description: |
       Move 26, Red to move. Column 7 (1-indexed) has 5 empty cells (rows 2–6, parity 5O).
       Red has a major threat at col7 row6 (even). Yellow has a major threat at col7 row4
@@ -125,7 +125,7 @@ worked_examples:
       is not undercut. Red's odd column parity (5O) guarantees Red fills the even-indexed
       cells within the column (rows 2, 4, 6) — reaching both the block and the win.
 
-  - movestring: "3476324141134417557465576166657"
+  - movestring: "2365213030023306446354465055546"
     description: |
       Move 31, Yellow to move. Column 3 has 3 empty cells (rows 4–6, parity 3O).
       Yellow has a major threat at col3 row5 (odd). Red has a major threat at col3 row4
@@ -144,7 +144,7 @@ worked_examples:
       Yellow's turn), physically blocks Red's row4 threat, and forces a defensive response
       at row5. The tempo gained shifts zugzwang to Yellow's advantage elsewhere.
 
-  - movestring: "43751455437445773174731"
+  - movestring: "32640344326334662063620"
     description: |
       Move 23, Yellow to move. Column 2 is completely empty (6 empty cells, parity 6E).
       Yellow has major threats at col2 row2 (even) and col2 row4 (even). Red has a major
@@ -164,7 +164,7 @@ worked_examples:
       surviving row2, Yellow wins via V4 (Black even-row threats with no Red odd-row
       counter in col2).
 
-  - movestring: "3235331144452262262"
+  - movestring: "2124220033341151151"
     description: |
       Move 19, Yellow to move. Column 4 has 3 empty cells (rows 4–6, parity 3O).
       Yellow has a major threat at col4 row5 (odd). Red has a major threat at col4 row4
@@ -185,7 +185,7 @@ worked_examples:
       col7 even-row major threat.
 
 false_positives:
-  - movestring: "442435355667716253"
+  - movestring: "331324244556605142"
     why_not: |
       Move 18, Red to move. Column 4 contains Red major threat at row5 (odd, upper)
       and Yellow major threat at row4 (even, lower). This is the structural overcut
@@ -197,7 +197,7 @@ false_positives:
       score -12 (Red loses). Playing col4 in particular is dominated by Yellow's row4
       major threat completing first.
 
-  - movestring: "21342516141223453142546"
+  - movestring: "10231405030112342031435"
     why_not: |
       Move 23, Yellow to move. Column 3 shows the structural overcut pattern: Yellow
       major threat at col3 row5 (odd, upper) vs Red major threat at col3 row4 (even,
@@ -252,15 +252,15 @@ same-parity pair (T4), (c) T5's row-3+row-6 special case, (d) chain neutralizati
 from below.
 
 **Three verified sub-cases from the worked examples:**
-1. *Same-parity (T4)* — `37644565255642234456335266`: both threats at even rows (4 and
+1. *Same-parity (T4)* — `26533454144531123345224155`: both threats at even rows (4 and
    6). T4 says same-parity threats don't interact; the upper even-row threat wins when
    the current player fills the odd-parity column first.
-2. *Active forcing* — `3476324141134417557465576166657` and `3235331144452262262`:
+2. *Active forcing* — `2365213030023306446354465055546` and `2124220033341151151`:
    opposite parity (Red even below Yellow odd), but the current player acts first in
    the odd-parity column, physically blocking the opponent's lower threat and turning
    the upper threat into an immediate check. T2 describes passive endgame resolution;
    active forcing bypasses it.
-3. *Chain T2* — `43751455437445773174731`: a third friendly threat below the opponent's
+3. *Chain T2* — `32640344326334662063620`: a third friendly threat below the opponent's
    lower threat kills it via T2 (bottom-up application) before T2 can neutralize the
    upper threat.
 

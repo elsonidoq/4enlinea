@@ -75,7 +75,7 @@ async function main() {
   const moveGrid = Array.from({length: ROWS}, () => Array(COLS).fill(0));
   const tmpH = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     moveGrid[tmpH[col]][col] = i + 1;
     tmpH[col]++;
   }
@@ -85,7 +85,7 @@ async function main() {
   // Detect game over (solver hangs on won positions)
   let gameOver = false;
   if (moves.length > 0) {
-    const lastCol = parseInt(moves[moves.length - 1], 10) - 1;
+    const lastCol = parseInt(moves[moves.length - 1], 10);
     const lastRow = colHeights[lastCol] - 1;
     const lastPlayer = moves.length % 2 === 1 ? 1 : 2;
     gameOver = checkWin(board, lastRow, lastCol, lastPlayer);

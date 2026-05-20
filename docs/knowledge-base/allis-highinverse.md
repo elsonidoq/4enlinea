@@ -67,7 +67,7 @@ formal_predicate: |
   #       All groups containing (col_b, row_b_lower) AND (col_a, row_a_top).
 
 worked_examples:
-  - movestring: "45675172537"
+  - movestring: "34564061426"
     description: |
       Highinverse at col4 and col6 (move 11, Yellow to move; same position as lowinverse
       example). Col4 has Red at row1 with rows2,3,4 all empty: lower=row2 (even), middle=row3

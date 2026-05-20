@@ -10,7 +10,7 @@ export function parseBoardState(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const colHeights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     board[colHeights[col]][col] = (i % 2 === 0) ? 1 : 2;
     colHeights[col]++;
   }

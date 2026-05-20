@@ -5,7 +5,7 @@ const ROWS = 6;
 
 function getHeights(moveString) {
   const h = Array(COLS).fill(0);
-  for (const ch of moveString) h[parseInt(ch, 10) - 1]++;
+  for (const ch of moveString) h[parseInt(ch, 10)]++;
   return h;
 }
 
@@ -43,7 +43,7 @@ export function MultiMoveSequencer({ category, baseMoveString, solverScores, onS
     if (!started || finished) return;
     if (heights[col] >= ROWS) return;
 
-    const newSeq = sequenceMoves + (col + 1).toString();
+    const newSeq = sequenceMoves + col.toString();
     setSequenceMoves(newSeq);
 
     if (isHumanTurn) {

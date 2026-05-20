@@ -19,7 +19,7 @@ describe('detectUndercut — structure and eval', () => {
   }, { timeout: 10_000 });
 
   test('when detectUndercut fires, highlightMetadata is structurally valid', async () => {
-    const positions = ['765432176543', '12345671234567', '44554433'];
+    const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = detectUndercut(ms, scores);
@@ -53,7 +53,7 @@ describe('detectOvercut — structure and eval', () => {
   }, { timeout: 10_000 });
 
   test('when detectOvercut fires, highlightMetadata is structurally valid', async () => {
-    const positions = ['765432176543', '12345671234567', '44554433'];
+    const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = detectOvercut(ms, scores);
@@ -88,7 +88,7 @@ describe('checkUndercutPredicate — end-to-end', () => {
   }, { timeout: 10_000 });
 
   test('structure is valid when passes=true', async () => {
-    const positions = ['765432176543', '12345671234567', '44554433'];
+    const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = checkUndercutPredicate(ms, scores);
@@ -115,7 +115,7 @@ describe('checkOvercutPredicate — end-to-end', () => {
   }, { timeout: 10_000 });
 
   test('structure is valid when passes=true', async () => {
-    const positions = ['765432176543', '12345671234567', '44554433'];
+    const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = checkOvercutPredicate(ms, scores);
@@ -135,7 +135,7 @@ describe('checkOvercutPredicate — end-to-end', () => {
 describe('evalUndercut — from highlightMetadata', () => {
   test('non-killing col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'undercut', moveString: '445566332211',
+      id: 99, category: 'undercut', moveString: '334455221100',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -150,7 +150,7 @@ describe('evalUndercut — from highlightMetadata', () => {
 
   test('killing col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'undercut', moveString: '445566332211',
+      id: 99, category: 'undercut', moveString: '334455221100',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -164,7 +164,7 @@ describe('evalUndercut — from highlightMetadata', () => {
   });
 
   test('missing highlightMetadata returns wrong', () => {
-    const puzzle = { id: 99, category: 'undercut', moveString: '445566332211', highlightMetadata: null };
+    const puzzle = { id: 99, category: 'undercut', moveString: '334455221100', highlightMetadata: null };
     const result = evaluatePredicate(puzzle, 0, []);
     assert.equal(result.result, 'wrong');
   });
@@ -173,7 +173,7 @@ describe('evalUndercut — from highlightMetadata', () => {
 describe('evalOvercut — from highlightMetadata', () => {
   test('major_threat col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'overcut', moveString: '44556633221144',
+      id: 99, category: 'overcut', moveString: '33445522110033',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -189,7 +189,7 @@ describe('evalOvercut — from highlightMetadata', () => {
 
   test('non-major col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'overcut', moveString: '44556633221144',
+      id: 99, category: 'overcut', moveString: '33445522110033',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -204,7 +204,7 @@ describe('evalOvercut — from highlightMetadata', () => {
   });
 
   test('missing highlightMetadata returns wrong', () => {
-    const puzzle = { id: 99, category: 'overcut', moveString: '44556633221144', highlightMetadata: null };
+    const puzzle = { id: 99, category: 'overcut', moveString: '33445522110033', highlightMetadata: null };
     const result = evaluatePredicate(puzzle, 4, []);
     assert.equal(result.result, 'wrong');
   });

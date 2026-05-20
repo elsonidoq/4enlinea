@@ -13,7 +13,7 @@ function parseBoard(moveString) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moveString.length; i++) {
-    const col = parseInt(moveString[i], 10) - 1;
+    const col = parseInt(moveString[i], 10);
     board[heights[col]][col] = (i % 2 === 0) ? 1 : 2;
     heights[col]++;
   }

@@ -56,7 +56,7 @@ formal_predicate: |
   # before Black's even-row structure resolves.
 
 worked_examples:
-  - movestring: "4"
+  - movestring: "3"
     description: |
       After Red's first move in col D (D1 = Red, move 1). This is the canonical
       claimodd opening: Red plays center first, establishing an odd-parity anchor
@@ -68,7 +68,7 @@ worked_examples:
     solver_verified: 2026-05-17
 
 false_positives:
-  - movestring: "444444"
+  - movestring: "333333"
     why_not: |
       After 6 moves (all col D), the center column is completely full (0 empty).
       All other columns have 6E empty cells — the all-even trigger fires. But

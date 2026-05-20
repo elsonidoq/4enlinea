@@ -64,7 +64,7 @@ formal_predicate: |
   # requires also checking that at least one White group contains both squares.
 
 worked_examples:
-  - movestring: "2233"
+  - movestring: "1122"
     description: |
       Baseinverse (move 4, Red to move). Red at (col2,row1) and (col3,row1); Yellow at
       (col2,row2) and (col3,row2). Col1 row1 and col4 row1 are both directly playable and

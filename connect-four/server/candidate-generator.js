@@ -6,6 +6,8 @@ import {
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+
+/** @import { HighlightCell, HighlightMetadata } from './classifier.js' */
 const ROWS = 6;
 const COLS = 7;
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
@@ -48,7 +50,7 @@ function immediateWinScore(moveCount) {
 
 function getHeights(moveString) {
   const heights = Array(COLS).fill(0);
-  for (const ch of moveString) heights[parseInt(ch, 10) - 1]++;
+  for (const ch of moveString) heights[parseInt(ch, 10)]++;
   return heights;
 }
 
@@ -59,7 +61,7 @@ function buildBoard(moveString) {
   const heights = Array(COLS).fill(0);
   let player = 1;
   for (const ch of moveString) {
-    const col = parseInt(ch, 10) - 1;
+    const col = parseInt(ch, 10);
     if (heights[col] >= ROWS) return null;
     board[heights[col]][col] = player;
     heights[col]++;
@@ -104,7 +106,7 @@ function computeLowCategoryHighlight(moveString, correctCols) {
   if (correctCols.length === 0) return [];
   const heights = getHeights(moveString);
   const col = correctCols[0];
-  return [{ col, row: heights[col], role: 'hint' }];
+  return [{ column: col, row: heights[col], role: 'hint' }];
 }
 
 // Returns the single forced-block column for the current player, or null if not strictly forced.
@@ -147,7 +149,7 @@ async function traceForcedWin(ms, redCol, depth, solver) {
   const indent = '  '.repeat(depth);
   console.log(`${indent}[depth=${depth}] traceForcedWin ms="${ms}" redCol=${redCol+1}`);
 
-  const ms1 = ms + (redCol + 1);
+  const ms1 = ms + redCol;
   if (isGameOver(ms1)) { console.log(`${indent}  → game over after redCol, return null`); return null; }
   let scores1;
   try { scores1 = await solver.query(ms1); } catch { console.log(`${indent}  → solver error, return null`); return null; }
@@ -199,7 +201,7 @@ async function traceForcedWin(ms, redCol, depth, solver) {
   const yellowCol = betterCols[0];
   console.log(`${indent}  → Case B: forced block col ${yellowCol+1}`);
 
-  const ms2 = ms1 + (yellowCol + 1);
+  const ms2 = ms1 + yellowCol;
   if (isGameOver(ms2)) { console.log(`${indent}  → game over after forced block, return null`); return null; }
   if (depth >= 4) { console.log(`${indent}  → max depth, return null`); return null; }
 
@@ -223,7 +225,7 @@ export async function checkForcedWinPredicate(ms, solver) {
     const trace = await traceForcedWin(ms, c, 1, solver);
     if (trace === null) continue;
     let msEnd = ms;
-    for (const col of trace) msEnd += (col + 1);
+    for (const col of trace) msEnd += col;
     const boardEnd = buildBoard(msEnd);
     if (boardEnd && hasWon(boardEnd, redPlayer)) correctCols.push(c);
   }
@@ -282,14 +284,14 @@ export async function computeForcedWinHighlight(solver, moveString, correctCols)
     const isRedTurn = (i % 2 === 0);
 
     if (isLast) {
-      cells.push({ col, row: h[col], role: 'winner' });
+      cells.push({ column: col, row: h[col], role: 'winner' });
     } else if (isRedTurn) {
-      cells.push({ col, row: h[col], role: 'hint' });
+      cells.push({ column: col, row: h[col], role: 'hint' });
     } else {
-      cells.push({ col, row: h[col], role: 'loser' });
+      cells.push({ column: col, row: h[col], role: 'loser' });
     }
 
-    ms += (col + 1);
+    ms += col;
   }
 
   return cells;
@@ -303,9 +305,14 @@ function computeForbiddenColumnsHighlight(moveString, correctCols) {
     if (heights[c] < ROWS) legalCols.push(c);
   }
   const forbiddenCols = legalCols.filter(c => !correctCols.includes(c));
-  return forbiddenCols.map(col => ({ col, row: heights[col], role: 'loser' }));
+  return forbiddenCols.map(col => ({ column: col, row: heights[col], role: 'loser' }));
 }
 
+// highlight_cells: per-step animation for sequence categories (immediate_threat, forced_block,
+//   double_threat, forced_win, forbidden_columns). Shape: [{ column, row, role }]. 0-indexed.
+// highlight_metadata: static pattern for tactical categories (z_threat, undercut, overcut,
+//   claimeven, figure_7, j_shape). Shape: { type, cells: [{ column, row, role }] } or capsule.
+// These are never both populated for the same candidate. New categories → use highlight_metadata.
 async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
   if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
   if (category === 'forced_win') return computeForcedWinHighlight(solver, moveString, correctCols);
@@ -349,7 +356,7 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 
     board[heights[col]][col] = player;
     heights[col]++;
-    moveString += (col + 1).toString();
+    moveString += col.toString();
     if (hasWon(board, player)) return null;
     player = 3 - player;
   }

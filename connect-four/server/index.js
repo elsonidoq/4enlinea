@@ -36,6 +36,31 @@ function makeLimit(max, windowMs = 60_000) {
   return rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false });
 }
 
+/** Assert a 0-indexed column value (integer 0–6). */
+function isValidCol0(col) {
+  return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6;
+}
+
+/** Validate a highlight_metadata object. Returns null if valid, error string if not. */
+function validateHighlightMetadata(hm) {
+  if (hm === null || hm === undefined) return null;
+  if (hm.type === 'capsule') {
+    if (!isValidCol0(hm.column)) return `highlight_metadata.column out of range: ${hm.column}`;
+    if (!Number.isInteger(hm.fromRow) || hm.fromRow < 0 || hm.fromRow > 5) return `highlight_metadata.fromRow out of range: ${hm.fromRow}`;
+    if (!Number.isInteger(hm.toRow) || hm.toRow < 0 || hm.toRow > 5) return `highlight_metadata.toRow out of range: ${hm.toRow}`;
+    return null;
+  }
+  if (hm.type === 'cells') {
+    if (!Array.isArray(hm.cells)) return 'highlight_metadata.cells must be an array';
+    for (const cell of hm.cells) {
+      if (!isValidCol0(cell.column)) return `highlight_metadata cell column out of range: ${cell.column}`;
+      if (!Number.isInteger(cell.row) || cell.row < 0 || cell.row > 5) return `highlight_metadata cell row out of range: ${cell.row}`;
+    }
+    return null;
+  }
+  return `highlight_metadata.type unknown: ${hm.type}`;
+}
+
 app.use('/api/explain-move', makeLimit(30));
 app.use('/api/scores', makeLimit(60));
 app.use('/api/explain', makeLimit(60));
@@ -48,7 +73,7 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-const MOVES_RE = /^[1-7]{0,42}$/;
+const MOVES_RE = /^[0-6]{0,42}$/;
 
 function validateMoves(moves) {
   if (typeof moves !== 'string') return 'moves must be a string';
@@ -482,7 +507,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   if (!puzzleId) return res.status(400).json({ error: 'invalid puzzle id' });
 
   const { candidateCol, moveHistory = [] } = req.body;
-  if (typeof candidateCol !== 'number' || candidateCol < 0 || candidateCol > 6) {
+  if (!isValidCol0(candidateCol)) {
     return res.status(400).json({ error: 'candidateCol must be integer 0-6' });
   }
 
@@ -566,7 +591,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
 });
 
 // POST /api/puzzles/:id/sequence/move — stateless per-move validation for sequence-mode puzzles
-const SEQUENCE_POSITION_RE = /^[1-7]{0,41}$/;
+const SEQUENCE_POSITION_RE = /^[0-6]{0,41}$/;
 const sequenceStrategy = new ForcedWinStrategy();
 
 app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
@@ -598,7 +623,7 @@ app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
 
   // Check column is not full (parse position to get heights)
   const heights = Array(7).fill(0);
-  for (const ch of position) heights[parseInt(ch, 10) - 1]++;
+  for (const ch of position) heights[parseInt(ch, 10)]++;
   if (heights[col] >= 6) {
     return res.status(400).json({ error: 'Column is full' });
   }
@@ -629,7 +654,7 @@ app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
     return res.json({ outcome: 'success' });
   }
 
-  const positionAfterLearnerMove = position + String(col + 1);
+  const positionAfterLearnerMove = position + String(col);
   const aiCol = getAiResponseCol(positionAfterLearnerMove);
   return res.json({ outcome: 'continue', aiCol });
 });
@@ -992,7 +1017,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
 
   // moves is the board state AFTER the clicked column is appended.
   // Extract last move to evaluate predicate for that column.
-  const candidateCol = parseInt(moves[moves.length - 1], 10) - 1;
+  const candidateCol = parseInt(moves[moves.length - 1], 10);
   const preClickMoves = moves.slice(0, -1);
 
   let scores;
@@ -1012,7 +1037,11 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
     const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else {
-    const correctCol = req.query.correct_col !== undefined ? parseInt(req.query.correct_col, 10) : null;
+    const correctColRaw = req.query.correct_col !== undefined ? parseInt(req.query.correct_col, 10) : null;
+    if (correctColRaw !== null && !isValidCol0(correctColRaw)) {
+      return res.status(400).json({ error: 'correct_col must be integer 0-6' });
+    }
+    const correctCol = correctColRaw;
     const puzzle = { category, moveString: preClickMoves, correctCol };
     const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
     predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
@@ -1046,6 +1075,13 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
   if (candidate.status === 'approved') return res.status(409).json({ error: 'candidate already approved' });
+
+  const hmErr = validateHighlightMetadata(candidate.highlight_metadata);
+  if (hmErr) return res.status(400).json({ error: `Invalid highlight_metadata: ${hmErr}` });
+
+  if (candidate.correct_col !== null && !isValidCol0(candidate.correct_col)) {
+    return res.status(400).json({ error: `correct_col out of range: ${candidate.correct_col}` });
+  }
 
   // Validate cooperative_ai_moves for multi-move categories
 

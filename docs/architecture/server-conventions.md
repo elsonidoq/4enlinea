@@ -15,14 +15,14 @@ Two other invocation modes spawn a fresh child process per call:
 
 ## Solver Input/Output Format
 
-- **Input**: A move string written to stdin, followed by `\n`. Format: digits `1–7`, one per move, 0–42 characters.
+- **Input**: A move string written to stdin, followed by `\n`. Format: digits `1–7`, one per move, 0–42 characters. `c4solver-wrapper.js` converts from 0-indexed (`0–6`) to `1–7` before writing — callers always pass 0-indexed strings.
 - **Output** (standard mode): One line per query. When a move string is non-empty, the first token is the input echoed back; scores are tokens 1–7 (0-indexed). When the input is empty, only 7 tokens are returned.
 - **Empty board special case**: The persistent solver hangs on empty input. Use the hardcoded `EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0]` constant instead.
 
 ## Move String Convention
 
-**MUST**: Move strings use 1-indexed columns `1–7`, concatenated, no separator.
-**MUST**: Column indices in JavaScript code are 0-indexed (0–6); convert at the boundary.
+**MUST**: Move strings use **0-indexed** columns `0–6`, concatenated, no separator. This applies everywhere: DB storage, API wire format, and all server/frontend logic.
+**MUST**: The only conversion from 0-indexed to 1-indexed happens inside `c4solver-wrapper.js` `query()` before writing to the solver's stdin. No other file may perform this conversion.
 **MUST**: Player parity derived from move count: even = player 1 (Red), odd = player 2 (Yellow).
 
 ## Board Representation (Server)
@@ -36,7 +36,7 @@ Sequence-mode puzzle validation uses a strategy object with:
 ```js
 validateMove(position, col) → { valid: boolean, reason?: string }
 ```
-- `position`: move string before the learner's move (1-indexed).
+- `position`: move string before the learner's move (0-indexed, digits `0–6`).
 - `col`: 0-indexed column.
 - All logic is bitboard-only — no solver calls.
 

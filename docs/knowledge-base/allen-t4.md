@@ -56,7 +56,7 @@ formal_predicate: |
   #     across *different* columns, not within this one.
 
 worked_examples:
-  - movestring: "1115222555577773663636617"
+  - movestring: "0004111444466662552525506"
     description: |
       Case A — same player, same parity, same column. Red has two major threats
       at col 4 row 3 and col 4 row 5 (both odd). Column 4 is entirely empty
@@ -71,7 +71,7 @@ worked_examples:
       T4 is a structural/parity rule independent of playability, so this is valid.
       The Yellow win comes from external structure, not from T4 interaction.
 
-  - movestring: "44215312361121332263"
+  - movestring: "33104201250010221152"
     description: |
       Case B — opposite players, same parity, same column. Red has a major
       threat at col 4 row 3 (odd) and Yellow has a major threat at col 4 row 5
@@ -86,14 +86,14 @@ worked_examples:
       of move order, not of Yellow's threat being neutralized by T4.
 
 false_positives:
-  - movestring: "1221212667676"
+  - movestring: "0110101556565"
     why_not: |
       Two Red major threats at col2 row5 and col6 row5 — same parity (both odd)
       but DIFFERENT columns. T4 does not apply; each threat contributes
       independently to V1 counting as a separate odd-threated column. A naive
       predicate checking only "two same-parity Red threats" without enforcing
       the same-column constraint would incorrectly fire T4 here.
-  - movestring: "172736162132"
+  - movestring: "061625051021"
     why_not: |
       Two Red major threats at col4 row1 (odd) and col4 row2 (even) — same
       column but DIFFERENT parity. T4 requires same parity; this case is T5
@@ -101,7 +101,7 @@ false_positives:
       (adjacent pair) takes precedence over both T4 and T5. A naive predicate
       checking only "two Red threats in the same column" without enforcing
       same-parity would incorrectly fire T4 here.
-  - movestring: "16273617213"
+  - movestring: "05162506102"
     why_not: |
       Two Red major threats at col4 row1 (odd) and col4 row2 (even) — same
       column, adjacent rows (differ by 1). T1 (adjacent pair) takes precedence

@@ -1,251 +1,594 @@
 [
   {
     "description": "immediate_threat: correct immediate win",
-    "puzzle": { "id": 1, "category": "immediate_threat", "moveString": "112233", "goalPredicateType": "immediate_win" },
+    "puzzle": {
+      "id": 1,
+      "category": "immediate_threat",
+      "moveString": "001122",
+      "goalPredicateType": "immediate_win"
+    },
     "candidateCol": 3,
-    "scores": [-2, -1, -1, 18, -2, -2, -3],
+    "scores": [
+      -2,
+      -1,
+      -1,
+      18,
+      -2,
+      -2,
+      -3
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "immediate_threat: wrong move (not the winning column)",
-    "puzzle": { "id": 1, "category": "immediate_threat", "moveString": "112233", "goalPredicateType": "immediate_win" },
+    "puzzle": {
+      "id": 1,
+      "category": "immediate_threat",
+      "moveString": "001122",
+      "goalPredicateType": "immediate_win"
+    },
     "candidateCol": 0,
-    "scores": [-2, -1, -1, 18, -2, -2, -3],
+    "scores": [
+      -2,
+      -1,
+      -1,
+      18,
+      -2,
+      -2,
+      -3
+    ],
     "expectedResult": "wrong"
   },
   {
     "description": "immediate_threat: tied (two immediate wins available)",
-    "puzzle": { "id": 2, "category": "immediate_threat", "moveString": "445566", "goalPredicateType": "immediate_win" },
+    "puzzle": {
+      "id": 2,
+      "category": "immediate_threat",
+      "moveString": "334455",
+      "goalPredicateType": "immediate_win"
+    },
     "candidateCol": 2,
-    "scores": [17, 17, 18, 17, 17, 17, 18],
+    "scores": [
+      17,
+      17,
+      18,
+      17,
+      17,
+      17,
+      18
+    ],
     "expectedResult": "tied"
   },
   {
     "description": "forced_block: correct forced block",
-    "puzzle": { "id": 3, "category": "forced_block", "moveString": "11224", "goalPredicateType": "forced_block" },
+    "puzzle": {
+      "id": 3,
+      "category": "forced_block",
+      "moveString": "00113",
+      "goalPredicateType": "forced_block"
+    },
     "candidateCol": 2,
-    "scores": [-18, -18, 0, -18, -18, -18, -18],
+    "scores": [
+      -18,
+      -18,
+      0,
+      -18,
+      -18,
+      -18,
+      -18
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "forced_block: wrong (plays non-blocking column)",
-    "puzzle": { "id": 3, "category": "forced_block", "moveString": "11224", "goalPredicateType": "forced_block" },
+    "puzzle": {
+      "id": 3,
+      "category": "forced_block",
+      "moveString": "00113",
+      "goalPredicateType": "forced_block"
+    },
     "candidateCol": 0,
-    "scores": [-18, -18, 0, -18, -18, -18, -18],
+    "scores": [
+      -18,
+      -18,
+      0,
+      -18,
+      -18,
+      -18,
+      -18
+    ],
     "expectedResult": "wrong"
   },
   {
     "description": "double_threat: correct double threat (tied with col 6 which also creates double threat)",
-    "puzzle": { "id": 4, "category": "double_threat", "moveString": "4455", "goalPredicateType": "double_threat" },
+    "puzzle": {
+      "id": 4,
+      "category": "double_threat",
+      "moveString": "3344",
+      "goalPredicateType": "double_threat"
+    },
     "candidateCol": 2,
-    "scores": [-4, -3, 18, 2, 2, 18, -3],
+    "scores": [
+      -4,
+      -3,
+      18,
+      2,
+      2,
+      18,
+      -3
+    ],
     "expectedResult": "tied"
   },
   {
     "description": "double_threat: wrong move (negative score)",
-    "puzzle": { "id": 4, "category": "double_threat", "moveString": "4455", "goalPredicateType": "double_threat" },
+    "puzzle": {
+      "id": 4,
+      "category": "double_threat",
+      "moveString": "3344",
+      "goalPredicateType": "double_threat"
+    },
     "candidateCol": 0,
-    "scores": [-4, -3, 18, 2, 2, 18, -3],
+    "scores": [
+      -4,
+      -3,
+      18,
+      2,
+      2,
+      18,
+      -3
+    ],
     "expectedResult": "wrong"
   },
   {
     "description": "forced_win: correct (least bad move)",
-    "puzzle": { "id": 6, "category": "forced_win", "moveString": "4444455566", "goalPredicateType": "forced_win" },
+    "puzzle": {
+      "id": 6,
+      "category": "forced_win",
+      "moveString": "3333344455",
+      "goalPredicateType": "forced_win"
+    },
     "candidateCol": 6,
-    "scores": [-16, -16, -16, -16, -16, -16, -2],
+    "scores": [
+      -16,
+      -16,
+      -16,
+      -16,
+      -16,
+      -16,
+      -2
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "forced_win: wrong (not the least bad)",
-    "puzzle": { "id": 6, "category": "forced_win", "moveString": "4444455566", "goalPredicateType": "forced_win" },
+    "puzzle": {
+      "id": 6,
+      "category": "forced_win",
+      "moveString": "3333344455",
+      "goalPredicateType": "forced_win"
+    },
     "candidateCol": 0,
-    "scores": [-16, -16, -16, -16, -16, -16, -2],
+    "scores": [
+      -16,
+      -16,
+      -16,
+      -16,
+      -16,
+      -16,
+      -2
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "z_threat: correct (plays Z-threat column)",
     "puzzle": {
-      "id": 10, "category": "z_threat", "moveString": "4455663", "goalPredicateType": "z_threat",
-      "highlightMetadata": { "type": "capsule", "column": 3, "fromRow": 2, "toRow": 4, "badgeCount": 3 }
+      "id": 10,
+      "category": "z_threat",
+      "moveString": "3344552",
+      "goalPredicateType": "z_threat",
+      "highlightMetadata": {
+        "type": "capsule",
+        "column": 3,
+        "fromRow": 2,
+        "toRow": 4,
+        "badgeCount": 3
+      }
     },
     "candidateCol": 3,
-    "scores": [0, 0, 0, 5, 0, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      5,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "z_threat: wrong (plays non-Z-threat column)",
     "puzzle": {
-      "id": 10, "category": "z_threat", "moveString": "4455663", "goalPredicateType": "z_threat",
-      "highlightMetadata": { "type": "capsule", "column": 3, "fromRow": 2, "toRow": 4, "badgeCount": 3 }
+      "id": 10,
+      "category": "z_threat",
+      "moveString": "3344552",
+      "goalPredicateType": "z_threat",
+      "highlightMetadata": {
+        "type": "capsule",
+        "column": 3,
+        "fromRow": 2,
+        "toRow": 4,
+        "badgeCount": 3
+      }
     },
     "candidateCol": 0,
-    "scores": [0, 0, 0, 5, 0, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      5,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "claimeven: correct (plays the correct equalising column)",
     "puzzle": {
-      "id": 11, "category": "claimeven", "moveString": "44334455", "goalPredicateType": "claimeven",
+      "id": 11,
+      "category": "claimeven",
+      "moveString": "33223344",
+      "goalPredicateType": "claimeven",
       "highlightMetadata": null,
       "correctCol": 2
     },
     "candidateCol": 2,
-    "scores": [0, 0, 3, 0, 0, 0, 0],
+    "scores": [
+      0,
+      0,
+      3,
+      0,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "claimeven: wrong (plays wrong column)",
     "puzzle": {
-      "id": 11, "category": "claimeven", "moveString": "44334455", "goalPredicateType": "claimeven",
+      "id": 11,
+      "category": "claimeven",
+      "moveString": "33223344",
+      "goalPredicateType": "claimeven",
       "highlightMetadata": null,
       "correctCol": 2
     },
     "candidateCol": 5,
-    "scores": [0, 0, 3, 0, 0, 0, 0],
+    "scores": [
+      0,
+      0,
+      3,
+      0,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "undercut: correct (avoids killing_threat column)",
     "puzzle": {
-      "id": 12, "category": "undercut", "moveString": "445566332211", "goalPredicateType": "undercut",
+      "id": 12,
+      "category": "undercut",
+      "moveString": "334455221100",
+      "goalPredicateType": "undercut",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 3, "row": 2, "role": "killing_threat" },
-          { "column": 3, "row": 4, "role": "dead_threat" }
+          {
+            "column": 3,
+            "row": 2,
+            "role": "killing_threat"
+          },
+          {
+            "column": 3,
+            "row": 4,
+            "role": "dead_threat"
+          }
         ]
       }
     },
     "candidateCol": 0,
-    "scores": [2, 0, 0, -3, 0, 0, 0],
+    "scores": [
+      2,
+      0,
+      0,
+      -3,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "undercut: wrong (plays killing_threat column)",
     "puzzle": {
-      "id": 12, "category": "undercut", "moveString": "445566332211", "goalPredicateType": "undercut",
+      "id": 12,
+      "category": "undercut",
+      "moveString": "334455221100",
+      "goalPredicateType": "undercut",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 3, "row": 2, "role": "killing_threat" },
-          { "column": 3, "row": 4, "role": "dead_threat" }
+          {
+            "column": 3,
+            "row": 2,
+            "role": "killing_threat"
+          },
+          {
+            "column": 3,
+            "row": 4,
+            "role": "dead_threat"
+          }
         ]
       }
     },
     "candidateCol": 3,
-    "scores": [2, 0, 0, -3, 0, 0, 0],
+    "scores": [
+      2,
+      0,
+      0,
+      -3,
+      0,
+      0,
+      0
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "overcut: correct (plays major_threat column)",
     "puzzle": {
-      "id": 13, "category": "overcut", "moveString": "44556633221144", "goalPredicateType": "overcut",
+      "id": 13,
+      "category": "overcut",
+      "moveString": "33445522110033",
+      "goalPredicateType": "overcut",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 4, "row": 1, "role": "neutralised_threat" },
-          { "column": 4, "row": 3, "role": "major_threat" }
+          {
+            "column": 4,
+            "row": 1,
+            "role": "neutralised_threat"
+          },
+          {
+            "column": 4,
+            "row": 3,
+            "role": "major_threat"
+          }
         ]
       }
     },
     "candidateCol": 4,
-    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "overcut: wrong (plays non-major_threat column)",
     "puzzle": {
-      "id": 13, "category": "overcut", "moveString": "44556633221144", "goalPredicateType": "overcut",
+      "id": 13,
+      "category": "overcut",
+      "moveString": "33445522110033",
+      "goalPredicateType": "overcut",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 4, "row": 1, "role": "neutralised_threat" },
-          { "column": 4, "row": 3, "role": "major_threat" }
+          {
+            "column": 4,
+            "row": 1,
+            "role": "neutralised_threat"
+          },
+          {
+            "column": 4,
+            "row": 3,
+            "role": "major_threat"
+          }
         ]
       }
     },
     "candidateCol": 0,
-    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "figure_7: correct (plays completing column)",
     "puzzle": {
-      "id": 14, "category": "figure_7", "moveString": "12345677654321", "goalPredicateType": "figure_7",
+      "id": 14,
+      "category": "figure_7",
+      "moveString": "01234566543210",
+      "goalPredicateType": "figure_7",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 2, "row": 0, "role": "pattern_piece" },
-          { "column": 3, "row": 1, "role": "pattern_piece" },
-          { "column": 4, "row": 2, "role": "pattern_piece" },
-          { "column": 5, "row": 2, "role": "pattern_piece" }
+          {
+            "column": 2,
+            "row": 0,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 3,
+            "row": 1,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 4,
+            "row": 2,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 5,
+            "row": 2,
+            "role": "pattern_piece"
+          }
         ]
       },
       "correctCol": 6
     },
     "candidateCol": 6,
-    "scores": [0, 0, 0, 0, 0, 0, 5],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      5
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "figure_7: wrong (plays wrong column)",
     "puzzle": {
-      "id": 14, "category": "figure_7", "moveString": "12345677654321", "goalPredicateType": "figure_7",
+      "id": 14,
+      "category": "figure_7",
+      "moveString": "01234566543210",
+      "goalPredicateType": "figure_7",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 2, "row": 0, "role": "pattern_piece" },
-          { "column": 3, "row": 1, "role": "pattern_piece" },
-          { "column": 4, "row": 2, "role": "pattern_piece" },
-          { "column": 5, "row": 2, "role": "pattern_piece" }
+          {
+            "column": 2,
+            "row": 0,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 3,
+            "row": 1,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 4,
+            "row": 2,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 5,
+            "row": 2,
+            "role": "pattern_piece"
+          }
         ]
       },
       "correctCol": 6
     },
     "candidateCol": 0,
-    "scores": [0, 0, 0, 0, 0, 0, 5],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      5
+    ],
     "expectedResult": "wrong"
   },
-
   {
     "description": "j_shape: correct (plays completing column)",
     "puzzle": {
-      "id": 15, "category": "j_shape", "moveString": "4433441133", "goalPredicateType": "j_shape",
+      "id": 15,
+      "category": "j_shape",
+      "moveString": "3322330022",
+      "goalPredicateType": "j_shape",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 3, "row": 0, "role": "pattern_piece" },
-          { "column": 3, "row": 2, "role": "pattern_piece" },
-          { "column": 4, "row": 1, "role": "pattern_piece" }
+          {
+            "column": 3,
+            "row": 0,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 3,
+            "row": 2,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 4,
+            "row": 1,
+            "role": "pattern_piece"
+          }
         ]
       },
       "correctCol": 4
     },
     "candidateCol": 4,
-    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ],
     "expectedResult": "correct"
   },
   {
     "description": "j_shape: wrong (plays wrong column)",
     "puzzle": {
-      "id": 15, "category": "j_shape", "moveString": "4433441133", "goalPredicateType": "j_shape",
+      "id": 15,
+      "category": "j_shape",
+      "moveString": "3322330022",
+      "goalPredicateType": "j_shape",
       "highlightMetadata": {
         "type": "cells",
         "cells": [
-          { "column": 3, "row": 0, "role": "pattern_piece" },
-          { "column": 3, "row": 2, "role": "pattern_piece" },
-          { "column": 4, "row": 1, "role": "pattern_piece" }
+          {
+            "column": 3,
+            "row": 0,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 3,
+            "row": 2,
+            "role": "pattern_piece"
+          },
+          {
+            "column": 4,
+            "row": 1,
+            "role": "pattern_piece"
+          }
         ]
       },
       "correctCol": 4
     },
     "candidateCol": 0,
-    "scores": [0, 0, 0, 0, 4, 0, 0],
+    "scores": [
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0
+    ],
     "expectedResult": "wrong"
   }
 ]

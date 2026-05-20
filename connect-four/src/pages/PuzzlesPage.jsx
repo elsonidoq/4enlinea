@@ -16,7 +16,7 @@ function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
     heights[col]++;
   }

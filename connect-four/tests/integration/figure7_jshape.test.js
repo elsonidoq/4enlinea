@@ -11,15 +11,15 @@ before(() => { solver = createSolverProcess(); });
 after(() => { solver.destroy(); });
 
 describe('detectJShape — structural and solver validation', () => {
-  // Position '344332' (6 moves, P1 to move):
-  // P1 (player 1) pieces: col2 r0 (move '3'), col2 r2 (move '3' again), col3 r1 (move '4')
+  // Position '233221' (6 moves, P1 to move):
+  // P1 (player 1) pieces: col2 r0 (move '2'), col2 r2 (move '2' again), col3 r1 (move '3')
   //   Move sequence: 3=col2, 4=col3, 4=col3, 3=col2, 3=col2, 2=col1
-  // After '344332': heights = [0,1,3,2,0,0,0]  (0-indexed cols)
+  // After '233221': heights = [0,1,3,2,0,0,0]  (0-indexed cols)
   //   P1 at: col2 r0 (move0), col3 r1 (move2), col2 r2 (move4)
   //   P2 at: col3 r0 (move1), col2 r1 (move3... wait, col2 height is already 1), col1 r0 (move5)
   // Canonical j_shape: placed={col:c,row:r},{col:c,row:r+2},{col:c+1,row:r+1} completing=(c+1,r+2)
   // With c=2,r=0: placed={(2,0),(2,2),(3,1)}, completing=(3,2)
-  // At '344332': col2 heights = 3 (moves at r0,r1,r2), so col2 has r2 occupied
+  // At '233221': col2 heights = 3 (moves at r0,r1,r2), so col2 has r2 occupied
   // Let's test a cleaner position: P1 needs (2,0),(2,2),(3,1) with (3,2) playable at height
 
   test('returns matched=false for empty board', async () => {
@@ -31,7 +31,7 @@ describe('detectJShape — structural and solver validation', () => {
 
   test('when detectJShape fires, highlightMetadata is structurally valid', async () => {
     // Try several mid-game positions to find one where j_shape fires
-    const positions = ['344332', '12345677654321', '441133'];
+    const positions = ['233221', '01234566543210', '330022'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = detectJShape(ms, scores);
@@ -67,7 +67,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   // threat but is NOT a figure-7; the figure-7 requires the completing move to be the
   // junction cell, not an arm extension.
   //
-  // Board for move string '132464453556' (Red to play):
+  // Board for move string '021353342445' (Red to play):
   //      1   2   3   4   5   6   7
   //   3 |   |   |   | R | R |   |   |
   //   2 |   |   | R | Y | Y | Y |   |
@@ -76,7 +76,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   // Red has B1(1,0), C2(2,1), D3(3,2), E3(4,2) placed; F3(5,2) is empty at height.
   // Incorrectly matched as figure_7 with completing cell = F3 (arm end, not junction).
   test('non-corner completing cell (arm extension) is not a figure_7', async () => {
-    const ms = '132464453556';
+    const ms = '021353342445';
     const scores = await solver.query(ms);
     const result = detectFigure7(ms, scores);
     assert.equal(result.matched, false, 'extending a horizontal arm is not a figure_7 completing move');
@@ -88,13 +88,13 @@ describe('detectFigure7 — structural and solver validation', () => {
   // (both post-placement threats land at gravity-top, so it's a generic double-threat,
   // not a figure-7 setup). detectFigure7 should not fire here.
   test('41432254553 does not match figure_7', async () => {
-    const ms = '41432254553';
+    const ms = '30321143442';
     const scores = await solver.query(ms);
     const result = detectFigure7(ms, scores);
     assert.equal(result.matched, false, '41432254553 is not a figure_7');
   }, { timeout: 10_000 });
 
-  // Position after 14 moves '44444425765662' (Red to move):
+  // Position after 14 moves '33333314654551' (Red to move):
   //
   //      1   2   3   4   5   6   7
   //   3 |   |   |   | R |   | R |   |
@@ -109,7 +109,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   // rows above the current gravity-top — this exercises the fix that iterates all
   // reachable rows, not just gravity-top.
   test('detects figure-7 from movestring 44444425765662 (threats not immediately accessible)', async () => {
-    const ms = '44444425765662';
+    const ms = '33333314654551';
     const scores = await solver.query(ms);
     const result = detectFigure7(ms, scores);
     assert.ok(result.matched, 'figure-7 must be detected even when post-placement threats are not gravity-accessible');
@@ -125,7 +125,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   // the same column at consecutive rows so that blocking the lower one immediately
   // exposes the upper one (see training-material §E Q21).
   test('462324415632426356 does not match figure_7 (threats in different columns)', async () => {
-    const ms = '462324415632426356';
+    const ms = '351213304521315245';
     const scores = await solver.query(ms);
     const result = detectFigure7(ms, scores);
     assert.equal(result.matched, false,
@@ -141,7 +141,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   // threat raises col height by 1, which must directly expose the second threat.
   // A gap of 3 breaks the mechanism — blocking row 1 does not expose row 4.
   test('444335255542677244273277571253 does not match figure_7 (threats not consecutive rows)', async () => {
-    const ms = '444335255542677244273277571253';
+    const ms = '333224144431566133162166460142';
     const scores = await solver.query(ms);
     const result = detectFigure7(ms, scores);
     assert.equal(result.matched, false,
@@ -149,7 +149,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   }, { timeout: 10_000 });
 
   test('when detectFigure7 fires, highlightMetadata is structurally valid', async () => {
-    const positions = ['12345677654321', '765432176543', '441133'];
+    const positions = ['01234566543210', '654321065432', '330022'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = detectFigure7(ms, scores);
@@ -181,7 +181,7 @@ describe('checkFigure7Predicate — end-to-end', () => {
   }, { timeout: 10_000 });
 
   test('structure is valid when passes=true', async () => {
-    const positions = ['12345677654321', '765432176543', '441133'];
+    const positions = ['01234566543210', '654321065432', '330022'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
       const result = checkFigure7Predicate(ms, scores);
@@ -209,7 +209,7 @@ describe('checkJShapePredicate — end-to-end', () => {
 describe('evalFigure7 — from correctCol', () => {
   test('correct col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'figure_7', moveString: '12345677654321',
+      id: 99, category: 'figure_7', moveString: '01234566543210',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -228,7 +228,7 @@ describe('evalFigure7 — from correctCol', () => {
 
   test('wrong col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'figure_7', moveString: '12345677654321',
+      id: 99, category: 'figure_7', moveString: '01234566543210',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -247,7 +247,7 @@ describe('evalFigure7 — from correctCol', () => {
 
   test('missing correctCol returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'figure_7', moveString: '12345677654321',
+      id: 99, category: 'figure_7', moveString: '01234566543210',
       highlightMetadata: null,
     };
     const result = evaluatePredicate(puzzle, 6, []);
@@ -258,7 +258,7 @@ describe('evalFigure7 — from correctCol', () => {
 describe('evalJShape — from correctCol', () => {
   test('correct col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'j_shape', moveString: '4433441133',
+      id: 99, category: 'j_shape', moveString: '3322330022',
       highlightMetadata: {
         type: 'cells',
         cells: [
@@ -276,7 +276,7 @@ describe('evalJShape — from correctCol', () => {
 
   test('wrong col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'j_shape', moveString: '4433441133',
+      id: 99, category: 'j_shape', moveString: '3322330022',
       highlightMetadata: {
         type: 'cells',
         cells: [

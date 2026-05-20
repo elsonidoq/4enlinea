@@ -40,7 +40,7 @@ formal_predicate: |
       return parity_aligned_for(player, r)   # valid at game start; recompute mid-game
 
 worked_examples:
-  - movestring: "4"
+  - movestring: "3"
     description: |
       After Red's first move in col D (D1 = Red). Col D now has height 1.
       Threat at (col4, row3) would be parity-aligned for Red (row3 is odd).

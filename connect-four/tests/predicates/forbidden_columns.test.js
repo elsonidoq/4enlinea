@@ -2,13 +2,13 @@
 // A column is forbidden if: Red plays there (without winning), and Yellow plays
 // in that same column one row above and wins.
 //
-// Positive fixture: "111111222222343343"
+// Positive fixture: "000000111111232232"
 //   Cols 0 and 1 are fully stacked (R/Y alternating). Col 2 (0-indexed) has 4 discs.
 //   Col 3 (0-indexed) has height 2 with Yellow at row 0, Red at row 1.
-//   If Red plays col 4 (1-indexed / col 3 0-indexed) at row 2, Yellow plays row 3 and
+//   If Red plays col 3 (0-indexed) at row 2, Yellow plays row 3 and
 //   completes a winning line through col 3. Cols 2,4,5,6 (0-indexed) are safe.
 //
-// Negative fixture: "44"
+// Negative fixture: "33"
 //   Early game — no forbidden columns exist.
 
 import { test, describe } from 'node:test';
@@ -18,8 +18,8 @@ import { evaluatePredicate } from '../../server/predicates.js';
 const FORBIDDEN_COL = 3;   // 0-indexed (col 4 in 1-indexed notation)
 const SAFE_COL = 4;         // 0-indexed (col 5 in 1-indexed notation)
 
-describe('forbidden_columns — positive fixture ("111111222222343343")', () => {
-  const MOVE_STRING = '111111222222343343';
+describe('forbidden_columns — positive fixture ("000000111111232232")', () => {
+  const MOVE_STRING = '000000111111232232';
   const puzzle = { id: 1, category: 'forbidden_columns', moveString: MOVE_STRING };
 
   test('playing the forbidden column returns wrong with forbiddenCols populated', () => {
@@ -41,8 +41,8 @@ describe('forbidden_columns — positive fixture ("111111222222343343")', () => 
   });
 });
 
-describe('forbidden_columns — negative fixture ("44")', () => {
-  const MOVE_STRING = '44';
+describe('forbidden_columns — negative fixture ("33")', () => {
+  const MOVE_STRING = '33';
   const puzzle = { id: 2, category: 'forbidden_columns', moveString: MOVE_STRING };
 
   test('no forbidden columns exist — any play returns wrong', () => {

@@ -111,8 +111,40 @@
 ## Phase 5: Polish & Cross-Cutting Concerns
 
 - [X] T032 Run full test suite (`cd connect-four && npm test`) and confirm all integration tests, predicate tests, and classifier precision checks pass with no regressions on existing categories
-- [ ] T033 [P] Manual SC-003 verification: open a z_threat puzzle in Chrome/Firefox/Safari; confirm capsule overlay and count badge render correctly and are positioned over the right column
-- [ ] T034 [P] Manual SC-004 verification: present one `undercut` puzzle and one `overcut` puzzle to a tester who has not read the goal_prompt; confirm the tester correctly identifies which highlighted cell is the "killing" cell and which is the "dead/neutralised" cell without additional instruction; record pass/fail in the PR description
+- [X] T033 [P] Manual SC-003 verification: open a z_threat puzzle in Chrome/Firefox/Safari; confirm capsule overlay and count badge render correctly and are positioned over the right column
+- [X] T034 [P] Manual SC-004 verification: present one `undercut` puzzle and one `overcut` puzzle to a tester who has not read the goal_prompt; confirm the tester correctly identifies which highlighted cell is the "killing" cell and which is the "dead/neutralised" cell without additional instruction; record pass/fail in the PR description
+
+---
+
+---
+
+## Phase 6: Classifier Correctness Fixes
+
+**Purpose**: Apply the 11 post-audit spec fixes (J1–J4, U1–U3, O1, F1–F3) to `classifier.js`. All tasks target `connect-four/server/classifier.js` unless otherwise noted.
+
+- [X] T037 Fix `detectJShape` — anchor parity (J1): add `if (r % 2 !== 0) continue;` at the top of both the canonical and mirror `r` loops so that only 0-indexed even anchor rows (= 1-indexed odd rows) are accepted; this guards the parity load-bearing property of the J Configuration per `allen-j-configuration.md`.
+
+- [X] T038 Fix `detectJShape` — edge proximity (J2): tighten loop bounds in the canonical variant from `c < COLS - 1` to `c < COLS - 2` and from `r <= ROWS - 3` to `r <= ROWS - 4` (mirrored: `c >= 2`), ensuring that the far column `c+2` and diagonal extension row `r+3` are always within the 7×6 board per `allen-j-configuration.md` precondition.
+
+- [X] T039 Fix `detectJShape` — parity cancellation (J3): after the `tryTemplate` guard passes, enumerate opponent major threats (cells where placing the opponent completes a 4-in-a-row) in the far column `c+2` (canonical) / `c-2` (mirror); if any such threat exists at an even 0-indexed row (= odd 1-indexed row), reject the anchor; this enforces `opp_odd_in_far_col == False` per `allen-j-configuration.md` formal predicate.
+
+- [X] T040 Fix `detectJShape` — guard cell (J4): replace the `templateColsAtCompletingRow` guard inside `tryTemplate` with a single check `board[completing.row][farCol] === opponent` (where `farCol = c+2` canonical / `c-2` mirror), removing the old `board[completing.row + 1][tc]` loop; this matches `allen-j-configuration.md` `board[far_col][far_row] != opponent` (far column, completing row = `y+2` 0-indexed).
+
+- [X] T041 Fix `detectUndercut` — opposite-parity requirement (U1): add `if (R % 2 === kill % 2) continue;` immediately after `const kill = opponentThreats[col].find(rp => rp < R);` returns a value; same 0-indexed parity means same 1-indexed parity, which is T4 (no interaction), not a T2 undercut per `allen-t2.md`; flag any existing `undercut` DB records for manual re-review after this fix.
+
+- [X] T042 Fix `detectUndercut` — T5 exception (U2): add `if (R === 5 && kill === 2) continue;` after the U1 parity check (0-indexed rows 5 and 2 correspond to 1-indexed rows 6 and 3); T5 overrides T2 for this specific pair per `allen-t5.md`.
+
+- [X] T043 Fix `detectUndercut` — sub-case 3 adjacency (U3): add `if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue;` after the U2 T5 check; when current player's R is 0-indexed odd (= 1-indexed even) and opponent's kill is 0-indexed even (= 1-indexed odd), T2 sub-case 3 requires `R = kill + 1` (adjacent rows) per `allen-t2.md`.
+
+- [X] T044 Fix `detectOvercut` — T2-blocking mechanism check (O1): after finding the `(R, neutralised)` pair, verify that at least one of the four T2-blocking conditions holds before returning a match: (a) `neutralised` is not a major threat for the opponent; (b) `R % 2 === neutralised % 2` (same parity, T4); (c) `(R === 5 && neutralised === 2) || (R === 2 && neutralised === 5)` (T5 exception, 0-indexed); or (d) a current-player major threat at R″ < neutralised satisfies the chain-T2 condition (current even + opponent odd at any distance, or current odd + opponent even at R″ + 1 = neutralised); skip this `(R, neutralised)` pair if none of these hold; the solver gate is not sufficient alone because the win may be unrelated to this column's overcut pattern per `community-overcut.md`.
+
+- [X] T045 Fix `detectFigure7` — gravity-top count filter (F1): add `if (gravityTopCount >= 2) continue;` immediately after the `gravityTopCount` assignment (line ~432); two gravity-top threats is a direct fork, not a Figure-7 zugzwang, per `community-figure-7.md` formal predicate.
+
+- [X] T046 Fix `detectFigure7` — above-gravity requirement (F2): add `if (!hasAboveGravity) continue;` immediately after the `hasAboveGravity` assignment (line ~433); at least one threat must be above gravity for the zugzwang element per `community-figure-7.md` formal predicate.
+
+- [X] T047 Fix `detectFigure7` — remove ascending+right variant (F3): delete the two variant-1 branches (the `if (x + 4 < COLS && y + 2 < ROWS)` block and its `1b` sibling) from the inner loop body; the ascending+right template generates threat cells in different columns (diagonal at x+3, horizontal at x+5 or x+1), violating the same-column property, and is already self-filtered by `hasConsecutivePair`; removing it eliminates dead code and prevents any future regression if `hasConsecutivePair` is ever relaxed.
+
+- [X] T048 Re-run full test suite after all Phase 6 fixes: `cd connect-four && npm test`; confirm all existing tests pass (no regressions on z_threat, claimeven, figure_7, j_shape integration tests) and the undercut/overcut integration test (`tests/integration/undercut_overcut.test.js`) passes with the new parity and adjacency guards.
 
 ---
 

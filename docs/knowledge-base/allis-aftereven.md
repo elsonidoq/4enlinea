@@ -63,7 +63,7 @@ formal_predicate: |
   # controller completes it via the Claimeven responses).
 
 worked_examples:
-  - movestring: "71122"
+  - movestring: "60011"
     description: |
       Aftereven group at cols1-4 row2 (move 5, Yellow to move). Red occupies (col1,row2)
       and (col2,row2). The empty squares (col3,row2) and (col4,row2) are each the upper

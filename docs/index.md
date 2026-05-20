@@ -48,6 +48,8 @@
 
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 
+[architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields
+
 ## mvp
 
 [mvp/mvp_product_spec.md](mvp/mvp_product_spec.md) — canonical MVP product spec: Puzzle Trainer, Sparring, AI Coach; the single question the MVP answers — understanding overall product scope and what is Phase 2

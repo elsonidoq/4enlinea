@@ -21,7 +21,7 @@ describe('detectZThreat — structure and eval', () => {
   test('returns matched=false for an immediate_threat position (isClean filtered at pipeline level)', async () => {
     // "112233": P1 wins immediately at col 3; all cols negative except col 3 with winScore.
     // detectZThreat may or may not fire; if it does, badgeCount must be odd and column winning.
-    const ms = '112233';
+    const ms = '001122';
     const scores = await solver.query(ms);
     const result = detectZThreat(ms, scores);
     if (result.matched) {
@@ -34,7 +34,7 @@ describe('detectZThreat — structure and eval', () => {
 
   test('when detectZThreat fires, highlightMetadata is structurally valid', async () => {
     // Mid-game position with some complexity
-    const ms = '765432176543';
+    const ms = '654321065432';
     const scores = await solver.query(ms);
     const result = detectZThreat(ms, scores);
     if (result.matched) {
@@ -52,7 +52,7 @@ describe('detectZThreat — structure and eval', () => {
 
 describe('checkZThreatPredicate — end-to-end with solver scores', () => {
   test('returns passes=false when no z_threat is found', async () => {
-    const ms = '44';
+    const ms = '33';
     const scores = await solver.query(ms);
     const result = checkZThreatPredicate(ms, scores);
     if (!result.passes) {
@@ -66,7 +66,7 @@ describe('checkZThreatPredicate — end-to-end with solver scores', () => {
 describe('evalZThreat — from highlightMetadata', () => {
   test('correct col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'z_threat', moveString: '4455663',
+      id: 99, category: 'z_threat', moveString: '2233441',
       highlightMetadata: { type: 'capsule', column: 3, fromRow: 2, toRow: 4, badgeCount: 3 },
     };
     const result = evaluatePredicate(puzzle, 3, []);
@@ -76,7 +76,7 @@ describe('evalZThreat — from highlightMetadata', () => {
 
   test('wrong col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'z_threat', moveString: '4455663',
+      id: 99, category: 'z_threat', moveString: '2233441',
       highlightMetadata: { type: 'capsule', column: 3, fromRow: 2, toRow: 4, badgeCount: 3 },
     };
     const result = evaluatePredicate(puzzle, 0, []);
@@ -85,7 +85,7 @@ describe('evalZThreat — from highlightMetadata', () => {
   });
 
   test('missing highlightMetadata returns wrong', () => {
-    const puzzle = { id: 99, category: 'z_threat', moveString: '44', highlightMetadata: null };
+    const puzzle = { id: 99, category: 'z_threat', moveString: '22', highlightMetadata: null };
     const result = evaluatePredicate(puzzle, 3, []);
     assert.equal(result.result, 'wrong');
   });

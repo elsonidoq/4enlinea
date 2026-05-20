@@ -27,4 +27,5 @@
 - [Allen V-rule example movestrings](reference_allen_v_rule_examples.md) — ALL V1–V5 verified 2026-05-18; V1=`44452556366`, V4=`2134124321317273`; results in `allen_v_rule_examples.yaml`
 - [Never generate random boards](feedback_no_random_boards.md) — random movestrings are not valid game positions; always source candidates from DB, git history, or KB examples
 - [Gemini model name](reference_gemini_model.md) — correct model is `gemini-3.1-pro-preview`; use in all MCP Gemini tool calls
+- [Answer questions before editing](feedback_answer_before_editing.md) — always answer the question in text first, then proceed with any file edits or tool calls
 - [Overcut KB entry](project_overcut_kb.md) — `docs/knowledge-base/community-overcut.md` written 2026-05-19; 4 worked examples, 2 false positives; three verified sub-cases: same-parity (T4), active-forcing (odd column), chain-T2

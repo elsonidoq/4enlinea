@@ -84,7 +84,7 @@ formal_predicate: |
   #   4. All groups solved by the Verticals within the Before.
 
 worked_examples:
-  - movestring: "2365555"
+  - movestring: "1254444"
     description: |
       Before group: "/" diagonal (col2,r1)-(col3,r2)-(col4,r3)-(col5,r4). Red at
       col2r1 (move 1) and col5r4 (move 7); Yellow at col3r1 (move 2) which is NOT

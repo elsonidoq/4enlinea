@@ -56,7 +56,7 @@ formal_predicate: |
   # threat.
 
 worked_examples:
-  - movestring: "211332112233112233"
+  - movestring: "100221001122001122"
     description: |
       Red has a major threat at (col 4, row 3) and Black has a major threat at
       (col 4, row 6). T5 predicts these do not interact — Black's row-6 threat is
@@ -65,7 +65,7 @@ worked_examples:
       has Black row-4 and Red row-5 threats; all four threats coexist in the column.)
     expected_behavior: "solver confirms Red wins; Black's col4 row6 threat plays no role in the outcome"
     solver_verified: true
-  - movestring: "234132244135523445422335"
+  - movestring: "123021133024412334311224"
     description: |
       Red has major threats at (col 1, row 3) and (col 1, row 6) — same player.
       T5 Case A: Red's row-6 threat is worthless, giving no bonus over the single

@@ -42,7 +42,7 @@ formal_predicate: |
   # condition — solver confirmation is required for a definitive determination.
 
 worked_examples:
-  - movestring: "1115222555577773663636617"
+  - movestring: "0004111444466662552525506"
     description: |
       After 25 moves (Yellow to move). Red has Z-Threats at col4 row3 and col4 row5.
       Solver scores are all negative for Yellow (all columns -2 to -6), meaning Red wins

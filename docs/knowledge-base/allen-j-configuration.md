@@ -79,7 +79,7 @@ formal_predicate: |
   #   Secondary diagonal threats: at (x+2, y+3) and/or (x+2, y+1) depending on board state
 
 worked_examples:
-  - movestring: "4445545"
+  - movestring: "3334434"
     description: |
       Movestring from Allen Diagram 63 (converted to numeric columns: D=4, E=5).
       Red plays col4, col4, col5, col5. Black plays col4, col5, col4.
@@ -93,7 +93,7 @@ worked_examples:
       denote best moves). Converted to numeric column notation: D=4, E=5,
       using 1-indexed columns A-G = 1-7.
 
-  - movestring: "54455143"
+  - movestring: "43344032"
     description: |
       Mirror J Configuration: Red discs at {col5 row1, col5 row3, col4 row2, col4 row3}
       (mirrored from canonical {D1, D3, E2, E3}). Triple threat at C3, B3, B4.

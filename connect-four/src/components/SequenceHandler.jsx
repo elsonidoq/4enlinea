@@ -10,7 +10,7 @@ function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
     heights[col]++;
   }
@@ -46,11 +46,11 @@ export function SequenceHandler({ puzzle, onNext }) {
       const data = await res.json();
 
       if (data.outcome === 'success') {
-        setCurrentPosition(prev => prev + String(col + 1));
+        setCurrentPosition(prev => prev + String(col));
         setStatus('success');
       } else if (data.outcome === 'continue') {
         // Append learner's move + AI's block (both 1-indexed)
-        setCurrentPosition(prev => prev + String(col + 1) + String(data.aiCol + 1));
+        setCurrentPosition(prev => prev + String(col) + String(data.aiCol));
         setStatus('idle');
       } else {
         setStatus('fail');

@@ -61,7 +61,7 @@ Rationale: Constitution §V — analytics writes MUST NOT block user-facing oper
 
 ## Input Validation
 
-**MUST**: Validate `moves` strings with the regex `/^[1-7]{0,42}$/`.
+**MUST**: Validate `moves` strings with the regex `/^[0-6]{0,42}$/`.
 **MUST**: Validate `candidateCol` as an integer `0–6`.
 **MUST**: Validate `category` against `VALID_CATEGORIES` (Set from `server/categories.js`).
 All validation happens at the route handler, before any solver or DB call.

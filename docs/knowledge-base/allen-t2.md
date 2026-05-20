@@ -63,7 +63,7 @@ formal_predicate: |
   # because odd ≠ even, and lower Red threat neutralizes upper Black threat.
 
 worked_examples:
-  - movestring: "442435355667716253"
+  - movestring: "331324244556605142"
     description: |
       Black has an even-row major threat at (col 4, row 4); Red has a major threat at
       (col 4, row 5). Black's row-4 threat undercuts Red's row-5 threat — Black
@@ -73,7 +73,7 @@ worked_examples:
     expected_behavior: "solver confirms Black wins; Red's col4 row5 threat is rendered irrelevant by Black's col4 row4 threat"
     solver_verified: true
 
-  - movestring: "123432411325112233"
+  - movestring: "012321300214001122"
     description: |
       Red has an even-row major threat at (col 4, row 4); Black has a major threat at
       (col 4, row 5). Red's row-4 threat undercuts Black's row-5 threat. T2 sub-case 1.
@@ -81,7 +81,7 @@ worked_examples:
     solver_verified: true
 
 false_positives:
-  - movestring: "1115222555577773663636617"
+  - movestring: "0004111444466662552525506"
     why_not: |
       Red has two odd-row threats in col 4 at rows 3 and 5 (same player, same parity).
       T2 requires OPPOSITE players; this is a same-player same-parity pair — T4 applies,

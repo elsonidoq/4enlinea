@@ -67,7 +67,7 @@ formal_predicate: |
   #   Secondary: All groups solved by the Claimevens within the Before.
 
 worked_examples:
-  - movestring: "36666"
+  - movestring: "25555"
     description: |
       Before group: "/" diagonal (col3,row1)→(col4,row2)→(col5,row3)→(col6,row4)
       (move 5, Yellow to move). Red discs at (col3,row1) and (col6,row4); empty squares

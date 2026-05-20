@@ -264,3 +264,82 @@ running the real solver.
 ## Complexity Tracking
 
 No constitution violations. No complexity justification needed.
+
+---
+
+## Classifier Bug Fixes (post-audit)
+
+Cross-check of the spec against the KB revealed 11 discrepancies (J1–J4, U1–U3, O1, F1–F3). All affect detection functions in `classifier.js`. Each entry names the discrepancy ID, the current wrong behaviour, the required change, and whether a DB fix is also needed.
+
+---
+
+### detectJShape — fixes J1, J2, J3, J4
+
+**J1 — Missing anchor parity**
+- Current: iterates `for (let r = 0; r <= ROWS - 3; r++)` with no parity guard.
+- Required: add `if (r % 2 !== 0) continue;` (0-indexed even = 1-indexed odd). The canonical J Configuration has lower anchor D1 (0-indexed row 0, even); odd 0-indexed anchor rows are parity-wrong and produce false positives.
+
+**J2 — Missing edge proximity**
+- Current: `for (let c = 0; c < COLS - 1; c++)` permits `c+2 == COLS` (off-board far column); `r <= ROWS - 3` permits `r+3 == ROWS` (off-board diagonal extension row).
+- Required: tighten loop bounds to `c < COLS - 2` (canonical) / `c >= 2` (mirror) and `r <= ROWS - 4`, so far column `c+2` and diagonal extension row `r+3` are always in bounds.
+
+**J3 — Missing parity cancellation**
+- Current: no check for opponent odd-row major threats in the far column.
+- Required: before returning a match, enumerate opponent major threats in column `c+2` (canonical) / `c-2` (mirror); if any sit at an odd 1-indexed row (= even 0-indexed row), reject this anchor.
+
+**J4 — Guard checks wrong cell**
+- Current: `tryTemplate` checks `board[completing.row + 1][tc]` for `tc ∈ {c, c+1}` — i.e., the row above the completing row in the two template columns (rows r+3 in columns c and c+1).
+- Required: replace with a single check `board[completing.row][c+2] === opponent` (canonical) / `board[completing.row][c-2] === opponent` (mirror) — i.e., the far-column cell at the same row as the completing cell (`board[r+2][c+2]` in row-major 0-indexed), per `allen-j-configuration.md` `board[far_col][far_row] != opponent`.
+
+**DB fix**: No — no undercut/j_shape puzzles exist yet (classifier fixtures are manually curated and T020–T025 are still pending).
+
+---
+
+### detectUndercut — fixes U1, U2, U3
+
+**U1 — Missing opposite-parity requirement**
+- Current: `opponentThreats[col].find(rp => rp < R)` — finds any opponent threat below R with no parity check.
+- Required: add `if (R % 2 === kill % 2) continue;` after finding `kill`. Same 0-indexed parity means same 1-indexed parity → T4 (no interaction), not undercut.
+
+**U2 — Missing T5 exception**
+- Current: no exclusion for the row-3+row-6 pair.
+- Required: add `if (R === 5 && kill === 2) continue;` (0-indexed: 1-indexed rows 6 and 3). T5 overrides T2 for this specific pair; neither threat undercuts the other.
+
+**U3 — Missing adjacency constraint for sub-case 3**
+- Current: any distance between R (even 0-indexed = odd 1-indexed... wait no) and kill is accepted.
+- Required: add `if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue;` — when current player's R is odd 0-indexed (= even 1-indexed) and opponent's kill is even 0-indexed (= odd 1-indexed), T2 sub-case 3 requires adjacency (R = kill + 1).
+
+**DB fix**: Needed for U1 — any stored `undercut` candidates or puzzles with same-parity R/R′ do not satisfy T2 and should be re-reviewed. Flag for manual curation review after the code fix lands.
+
+---
+
+### detectOvercut — fix O1
+
+**O1 — No parity analysis / T2-blocking mechanism check**
+- Current: returns any column where current player has R > opponent R′ and `scores[col] > 0`, with no check that T2 is actually blocked.
+- Required: after finding `(R, neutralised)` pair, verify that exactly one of the four T2-blocking mechanisms holds:
+  - (a) `!opponentMajorThreats[col].includes(neutralised)` — opponent's threat is minor (not a major 4-in-a-row threat);
+  - (b) `R % 2 === neutralised % 2` — same parity (T4);
+  - (c) `(R === 5 && neutralised === 2) || (R === 2 && neutralised === 5)` — T5 exception (0-indexed rows 5 and 2 = 1-indexed 6 and 3);
+  - (d) any current-player major threat at R″ < neutralised satisfies the T2 condition against neutralised (even current + odd opponent at any distance, or odd current + even opponent adjacent).
+  The solver gate (`scores[col] > 0`) provides a strong backstop, but without the explicit check the detector may fire on positions where the win is unrelated to the overcut pattern in that column.
+
+**DB fix**: No — no overcut puzzles exist yet.
+
+---
+
+### detectFigure7 — fixes F1, F2, F3
+
+**F1 — gravityTopCount computed but not checked**
+- Current: `gravityTopCount` is computed but the code does not `continue` when it is ≥ 2.
+- Required: add `if (gravityTopCount >= 2) continue;` immediately after the `gravityTopCount` assignment. Two gravity-top threats is a direct fork, not a Figure-7 zugzwang.
+
+**F2 — hasAboveGravity computed but not checked**
+- Current: `hasAboveGravity` is computed but the code does not `continue` when it is false.
+- Required: add `if (!hasAboveGravity) continue;` immediately after the `hasAboveGravity` assignment. At least one threat must be above gravity for the zugzwang element.
+
+**F3 — Variant 1 (ascending + right) is structurally wrong**
+- Current: variants 1 and 1b (ascending + right) enumerate the horizontal arm extending to `x+4,y+2`, placing threat cells in different columns (diagonal at x+3, horizontal at x+5 or x+1). This violates the same-column property and is self-filtered by `hasConsecutivePair`, but the dead code is misleading and wastes iterations.
+- Required: remove the two variant-1 branches (`if (x + 4 < COLS && y + 2 < ROWS) { variants.push([...]) }` and its `1b` sibling) from the loop body.
+
+**DB fix**: No — F3 was self-filtering (hasConsecutivePair rejects cross-column pairs) so no false positives reached the DB. F1/F2 tighten the filter; any stored figure_7 puzzles that pass F1/F2 are already correct (the filter only rejects cases that were borderline).

@@ -10,7 +10,7 @@ import express from 'express';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from '../../server/completionStrategies.js';
 import { checkWin } from '../../server/classifier.js';
 
-// Test positions using the well-known double-threat setup '4455' (player 1 to move):
+// Test positions using the well-known double-threat setup '3344' (player 1 to move):
 //   col 0 (0-indexed): no threat after → fail
 //   col 1 (0-indexed): exactly 1 threat after (at col 2) → continue, aiCol=2
 //   col 2 (0-indexed): 2 threats after → success
@@ -49,7 +49,7 @@ function buildTestApp() {
     return user?.tier === 'paid';
   }
 
-  const POSITION_RE = /^[1-7]{0,41}$/;
+  const POSITION_RE = /^[0-6]{0,41}$/;
   const strategy = new ForcedWinStrategy();
 
   app.post('/api/puzzles/:id/sequence/move', (req, res) => {
@@ -58,7 +58,7 @@ function buildTestApp() {
 
     const { position, col } = req.body;
     if (typeof position !== 'string' || !POSITION_RE.test(position)) {
-      return res.status(400).json({ error: 'position must be a string of 0–41 digits 1–7' });
+      return res.status(400).json({ error: 'position must be a string of 0–41 digits 0–6' });
     }
     if (!Number.isInteger(col) || col < 0 || col > 6) {
       return res.status(400).json({ error: 'col must be an integer 0–6' });
@@ -68,7 +68,7 @@ function buildTestApp() {
     }
 
     const heights = Array(7).fill(0);
-    for (const ch of position) heights[parseInt(ch, 10) - 1]++;
+    for (const ch of position) heights[parseInt(ch, 10)]++;
     if (heights[col] >= 6) {
       return res.status(400).json({ error: 'Column is full' });
     }
@@ -96,7 +96,7 @@ function buildTestApp() {
       return res.json({ outcome: 'success' });
     }
 
-    const posAfterLearner = position + String(col + 1);
+    const posAfterLearner = position + String(col);
     const aiCol = getAiResponseCol(posAfterLearner);
     return res.json({ outcome: 'continue', aiCol });
   });
@@ -129,7 +129,7 @@ async function post(path, body, headers = {}) {
 const PAID = { Authorization: 'Bearer paid-token' };
 const FREE = { Authorization: 'Bearer free-token' };
 
-// Position '4455': player 1 to move; no threats before move.
+// Position '3344': player 1 to move; no threats before move.
 // col 1 (0-indexed) → 1 threat at col 2 → continue
 // col 2 (0-indexed) → 2 threats → success
 // col 0 (0-indexed) → 0 threats → fail
@@ -138,7 +138,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('(a) forcing move → outcome: continue with aiCol', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 1 },
+      { position: '3344', col: 1 },
       PAID,
     );
     assert.equal(status, 200);
@@ -150,7 +150,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('(b) non-forcing move → outcome: fail with reason', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 0 },
+      { position: '3344', col: 0 },
       PAID,
     );
     assert.equal(status, 200);
@@ -162,7 +162,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('(c) double-threat final move → outcome: success', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 2 },
+      { position: '3344', col: 2 },
       PAID,
     );
     assert.equal(status, 200);
@@ -170,12 +170,12 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   });
 
   test('(d) immediate win on final sequence step → outcome: success (not fail)', async () => {
-    // Position '112233': P1 has 3 in a row at row 0 cols 0-2, so there is 1 immediate
+    // Position '001122': P1 has 3 in a row at row 0 cols 0-2, so there is 1 immediate
     // threat before the move (col 3). Playing col 3 wins — should succeed, not be
     // rejected by validateMove's "no threat before move" guard.
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '112233', col: 3 },
+      { position: '001122', col: 3 },
       PAID,
     );
     assert.equal(status, 200);
@@ -185,7 +185,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('(e) anonymous caller on forced_win puzzle → 403', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 2 },
+      { position: '3344', col: 2 },
       {},
     );
     assert.equal(status, 403);
@@ -195,7 +195,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('(f) free-tier caller on forced_win puzzle → 403', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 2 },
+      { position: '3344', col: 2 },
       FREE,
     );
     assert.equal(status, 403);
@@ -205,7 +205,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('single-move puzzle returns 400 on sequence/move', async () => {
     const { status, body } = await post(
       `/api/puzzles/${TEST_PUZZLE_SINGLE_ID}/sequence/move`,
-      { position: '4455', col: 2 },
+      { position: '3344', col: 2 },
       PAID,
     );
     assert.equal(status, 400);
@@ -224,7 +224,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('invalid col returns 400', async () => {
     const { status } = await post(
       `/api/puzzles/${TEST_PUZZLE_ID}/sequence/move`,
-      { position: '4455', col: 7 },
+      { position: '3344', col: 7 },
       PAID,
     );
     assert.equal(status, 400);
@@ -233,7 +233,7 @@ describe('POST /api/puzzles/:id/sequence/move', () => {
   test('unknown puzzle id returns 404', async () => {
     const { status } = await post(
       '/api/puzzles/nonexistent/sequence/move',
-      { position: '4455', col: 2 },
+      { position: '3344', col: 2 },
       PAID,
     );
     assert.equal(status, 404);

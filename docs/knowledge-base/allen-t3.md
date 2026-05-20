@@ -74,7 +74,7 @@ formal_predicate: |
   #   So Black with only a single column containing row-2+row-5 satisfies V2 alone.
 
 worked_examples:
-  - movestring: "3112213213122337"
+  - movestring: "2001102102011226"
     description: |
       Red has major threats at col4 row2 and col4 row5 (T3 pair). Black has a
       major threat at col4 row3 (minor co-threat). Col5 score = +4 (Red wins).
@@ -82,7 +82,7 @@ worked_examples:
       separate odd-row threats and driving Red's winning advantage.
     expected_behavior: "solver confirms Red wins; T3 is the reason (one column acts as two odd-threated columns)"
     solver_verified: 2026-05-18
-  - movestring: "1116517162522722336333"
+  - movestring: "0005406051411611225222"
     description: |
       Black has major threats at col4 row2 and col4 row5 (T3 pair). No Red major
       threats. All solver scores negative (Black wins). T3 gives Black the

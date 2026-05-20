@@ -10,7 +10,7 @@
 
 allen_v_rule_examples:
   v5:
-    movestring: "42354643256425346355663"
+    movestring: "31243532145314235244552"
     hard: false
     last_failure: ""
     description: "Draw: no surviving threats after T1–T7"
@@ -30,7 +30,7 @@ allen_v_rule_examples:
       surviving_threats_after_t7: []
 
   v3:
-    movestring: "77273746"
+    movestring: "66162635"
     hard: false
     last_failure: ""
     description: "Red wins: 1 Red odd-row threat, 0 Black odd-row threats after T1–T7"
@@ -59,7 +59,7 @@ allen_v_rule_examples:
       v_rule_fires: V3
 
   v2:
-    movestring: "727364"
+    movestring: "616253"
     hard: false
     last_failure: ""
     description: "Black wins: 2 Black odd-row threats in separate columns after T1–T7"
@@ -88,7 +88,7 @@ allen_v_rule_examples:
       v_rule_fires: V2
 
   v1:
-    movestring: "44452556366"
+    movestring: "33341445255"
     hard: false
     last_failure: ""
     description: "Red wins: 3 Red odd-row threats in separate columns after T1–T7"
@@ -131,7 +131,7 @@ allen_v_rule_examples:
       v_rule_fires: V1
 
   v4:
-    movestring: "2134124321317273"
+    movestring: "1023013210206162"
     hard: false
     last_failure: ""
     description: "Black wins: Black even-row threat, no odd threats either side after T1–T7"

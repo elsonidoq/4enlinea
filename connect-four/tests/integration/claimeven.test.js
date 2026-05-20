@@ -11,13 +11,13 @@ before(() => { solver = createSolverProcess(); });
 after(() => { solver.destroy(); });
 
 describe('detectClaimeven — subtype B (spec fixture)', () => {
-  // Position: '4344444667' (10 moves, P1 to move)
+  // Position: '3233333556' (10 moves, P1 to move)
   // Heights after: col0=0,col1=0,col2=1,col3=3,col4=4,col5=0,col6=1 (0-indexed)
   // Odd-height columns: col2 (height 1) and col6 (height 1) — both odd
-  // Last move was in col6 (move '7' = col6 0-indexed) → subtype B
+  // Last move was in col6 (move '6' = col6 0-indexed) → subtype B
   // Correct col = col2 (the other odd col)
   test('detects subtype B on spec fixture 4344444667', async () => {
-    const ms = '4344444667';
+    const ms = '3233333556';
     const scores = await solver.query(ms);
     const result = await detectClaimeven(ms, scores, solver);
 
@@ -31,7 +31,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
   }, { timeout: 60_000 });
 
   test('correctCol comes from the non-last-move odd column', async () => {
-    const ms = '4344444667';
+    const ms = '3233333556';
     const scores = await solver.query(ms);
     const result = await detectClaimeven(ms, scores, solver);
 
@@ -53,8 +53,8 @@ describe('detectClaimeven — subtype A', () => {
   test('returns matched=false when >2 odd columns', async () => {
     // After exactly 1 move in one column, heights are [1,0,0,0,0,0,0] — col0 is odd
     // After 3 moves each to different columns, multiple odd columns exist
-    // '123' → col0,col1,col2 each at height 1 → 3 odd cols
-    const ms = '123';
+    // '012' → col0,col1,col2 each at height 1 → 3 odd cols
+    const ms = '012';
     const scores = await solver.query(ms);
     const result = await detectClaimeven(ms, scores, solver);
     // 3 odd columns should not match (spec says 1 or 2 odd cols only)
@@ -72,7 +72,7 @@ describe('checkClaimevenPredicate — end-to-end', () => {
   }, { timeout: 10_000 });
 
   test('structure is valid when passes=true', async () => {
-    const ms = '4344444667';
+    const ms = '3233333556';
     const scores = await solver.query(ms);
     const result = await checkClaimevenPredicate(ms, scores, solver);
 
@@ -88,7 +88,7 @@ describe('checkClaimevenPredicate — end-to-end', () => {
 describe('evalClaimeven — from correctCol', () => {
   test('correct col returns correct', () => {
     const puzzle = {
-      id: 99, category: 'claimeven', moveString: '4344444667',
+      id: 99, category: 'claimeven', moveString: '2122222445',
       highlightMetadata: null, correctCol: 2,
     };
     const result = evaluatePredicate(puzzle, 2, []);
@@ -98,7 +98,7 @@ describe('evalClaimeven — from correctCol', () => {
 
   test('wrong col returns wrong', () => {
     const puzzle = {
-      id: 99, category: 'claimeven', moveString: '4344444667',
+      id: 99, category: 'claimeven', moveString: '2122222445',
       highlightMetadata: null, correctCol: 2,
     };
     const result = evaluatePredicate(puzzle, 5, []);
@@ -107,7 +107,7 @@ describe('evalClaimeven — from correctCol', () => {
   });
 
   test('missing correctCol returns wrong', () => {
-    const puzzle = { id: 99, category: 'claimeven', moveString: '4344444667', highlightMetadata: null };
+    const puzzle = { id: 99, category: 'claimeven', moveString: '2122222445', highlightMetadata: null };
     const result = evaluatePredicate(puzzle, 2, []);
     assert.equal(result.result, 'wrong');
   });

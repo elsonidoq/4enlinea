@@ -49,7 +49,7 @@ On auth state change, `ProfileStore` automatically swaps the store and tracks th
 
 Board is a 2D array `board[row][col]` where row 0 is the bottom row.
 Cell values: `'empty'`, `'red'` (player 1), `'yellow'` (player 2).
-Move strings are 1-indexed (columns `1–7`); code uses 0-indexed columns (0–6).
+Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wire, and in all frontend logic. The +1 conversion to 1-indexed happens only inside `c4solver-wrapper.js` on the server.
 
 ## Board Component API
 

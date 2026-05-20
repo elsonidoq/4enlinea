@@ -30,7 +30,7 @@ function buildBoard(moves, userPlayer) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     if (isNaN(col) || col < 0 || col >= COLS || heights[col] >= ROWS) continue;
     board[heights[col]][col] = (i % 2 === 0) === (userPlayer === 1) ? 'red' : 'yellow';
     heights[col]++;
@@ -40,7 +40,7 @@ function buildBoard(moves, userPlayer) {
 
 function getHeights(moveString) {
   const h = Array(COLS).fill(0);
-  for (const ch of moveString) h[parseInt(ch, 10) - 1]++;
+  for (const ch of moveString) h[parseInt(ch, 10)]++;
   return h;
 }
 
@@ -171,7 +171,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     setClickedCol(col);
     setScoresLoading(true);
     try {
-      const movesWithClick = candidate.move_string + (col + 1).toString();
+      const movesWithClick = candidate.move_string + col.toString();
       const correctColParam = candidate.correct_col != null ? `&correct_col=${candidate.correct_col}` : '';
       const res = await fetch(`${API}/api/admin/scores?moves=${encodeURIComponent(movesWithClick)}&category=${category}${correctColParam}`);
       const data = await res.json();
@@ -250,14 +250,15 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
   const highlightedCells = [];
   if (candidate.highlight_cells && candidate.highlight_cells.length > 0) {
     let stepIdx = 0;
-    for (const { col, row, role } of candidate.highlight_cells) {
+    for (const { column, col, row, role } of candidate.highlight_cells) {
+      const colVal = column ?? col; // backwards-compat: accept old 'col' key
       const isSequenceStep = role === 'hint' || role === 'loser' || role === 'winner';
       const step = isSequenceStep ? ++stepIdx : null;
       // Alternate red/yellow by step parity: odd = red (loser), even = yellow (winner)
       const effectiveRole = isSequenceStep && step !== null
         ? (step % 2 === 1 ? 'loser' : 'winner')
         : role;
-      highlightedCells.push([row, col, effectiveRole, step]);
+      highlightedCells.push([row, colVal, effectiveRole, step]);
     }
   } else if (category === 'z_threat' && candidate.highlight_metadata?.type === 'capsule') {
     // T028: highlight cells in z_threat column from fromRow to toRow

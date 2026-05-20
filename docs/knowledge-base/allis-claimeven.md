@@ -63,7 +63,7 @@ formal_predicate: |
   #   Claimeven cannot be placed below a Lowinverse or Highinverse in the same column.
 
 worked_examples:
-  - movestring: "2364354354354256"
+  - movestring: "1253243243243145"
     description: |
       Board-wide Claimeven position (move 16, Red to move). All seven columns have even
       empty counts (par: 6E 4E 2E 2E 2E 4E 6E). Red major threats [R] at col2 row4 and
@@ -72,7 +72,7 @@ worked_examples:
       entire remaining board.
     expected_behavior: "solver confirms Black wins; all White threats refuted by Claimeven pairing"
     solver_verified: true
-  - movestring: "7112233"
+  - movestring: "6001122"
     description: |
       Single Claimeven application (move 7, Yellow to move). Red has 3 discs at cols1-3
       row2, creating a major threat [R] at col4 row2 (the even upper square). Col4 rows1-2

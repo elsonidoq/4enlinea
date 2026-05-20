@@ -34,7 +34,7 @@ formal_predicate: |
   # For an empty column, h == 0 and empty_count == T.row.
 
 worked_examples:
-  - movestring: "1115222555577773663636617"
+  - movestring: "0004111444466662552525506"
     description: |
       After 25 moves (Yellow to move). Column 4 is entirely empty; height = 0.
       Red has a major threat at col4 row3.

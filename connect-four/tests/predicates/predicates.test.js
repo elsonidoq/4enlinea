@@ -27,20 +27,20 @@ describe('evaluatePredicate()', () => {
 
 describe('evaluatePredicate() edge cases', () => {
   test('returns wrong for unknown category', () => {
-    const puzzle = { id: 99, category: 99, moveString: '44', goalPredicateType: 'unknown' };
+    const puzzle = { id: 99, category: 99, moveString: '33', goalPredicateType: 'unknown' };
     const result = evaluatePredicate(puzzle, 3, [0, 0, 0, 5, 0, 0, 0]);
     assert.equal(result.result, 'wrong');
   });
 
   test('cat 1 returns correctCol when result is wrong', () => {
-    const puzzle = { id: 1, category: 'immediate_threat', moveString: '112233', goalPredicateType: 'immediate_win' };
+    const puzzle = { id: 1, category: 'immediate_threat', moveString: '001122', goalPredicateType: 'immediate_win' };
     const result = evaluatePredicate(puzzle, 0, [-2, -1, -1, 18, -2, -2, -3]);
     assert.equal(result.result, 'wrong');
     assert.equal(result.correctCol, 3);
   });
 
   test('forced_win handles all-equal negative scores as tied', () => {
-    const puzzle = { id: 5, category: 'forced_win', moveString: '44444', goalPredicateType: 'forced_win' };
+    const puzzle = { id: 5, category: 'forced_win', moveString: '33333', goalPredicateType: 'forced_win' };
     const scores = [-1, -1, -1, -1, -1, -1, -1];
     const result = evaluatePredicate(puzzle, 0, scores);
     // All equal: any move is "correct" (tied)
@@ -57,7 +57,7 @@ const singleMoveFixtures = [
     id: 'reg-imm-1',
     category: 'immediate_threat',
     interaction_mode: 'single_move',
-    move_string: '112233',
+    move_string: '001122',
     scores: [-2, -1, -1, 18, -2, -2, -3],
     candidateCol: 3,
     expectedResult: 'correct',
@@ -66,7 +66,7 @@ const singleMoveFixtures = [
     id: 'reg-fb-1',
     category: 'forced_block',
     interaction_mode: 'single_move',
-    move_string: '11224',
+    move_string: '00113',
     scores: [-18, -18, 0, -18, -18, -18, -18],
     candidateCol: 2,
     expectedResult: 'correct',
@@ -75,7 +75,7 @@ const singleMoveFixtures = [
     id: 'reg-dt-1',
     category: 'double_threat',
     interaction_mode: 'single_move',
-    move_string: '4455',
+    move_string: '3344',
     scores: [-4, -3, 18, 2, 2, 18, -3],
     candidateCol: 2,
     expectedResult: 'tied',

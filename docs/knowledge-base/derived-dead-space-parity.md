@@ -39,7 +39,7 @@ formal_predicate: |
   #   ↔ result == 0 → Red is forced first.
 
 worked_examples:
-  - movestring: "444444"
+  - movestring: "333333"
     description: |
       After 6 moves (all in col D). Col D is full (0 empty). All other cols have 6E
       empty cells. If col D's cells are "dead" (no four-in-a-row formable through col D

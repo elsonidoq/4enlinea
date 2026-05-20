@@ -53,7 +53,7 @@ function hasStructuralFigure7(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const colHeights = Array(COLS).fill(0);
   for (let i = 0; i < moveCount; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     board[colHeights[col]][col] = (i % 2 === 0) ? 1 : 2;
     colHeights[col]++;
   }
@@ -132,7 +132,7 @@ async function main() {
       const col = legal[Math.floor(rng() * legal.length)];
       board[heights[col]][col] = player;
       heights[col]++;
-      ms += (col + 1).toString();
+      ms += col.toString();
       if (hasWon(board, player)) break;
       player = 3 - player;
     }
