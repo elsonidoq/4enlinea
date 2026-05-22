@@ -1,0 +1,544 @@
+1
+00:00:00,000 --> 00:00:04,966
+To the untrained eye, this connect 4 position might look unassuming.
+
+2
+00:00:06,033 --> 00:00:10,879
+This one, you might not even be able to tell who is winning.
+
+3
+00:00:11,966 --> 00:00:16,812
+But an expert could tell you, all of these positions share a special property,
+
+4
+00:00:17,900 --> 00:00:20,994
+one which is actually quite extraordinary.
+
+5
+00:00:21,066 --> 00:00:26,776
+One feature of all of these positions is that the amount of space remaining in each column is even.
+
+6
+00:00:26,833 --> 00:00:29,807
+This column has 6 empty spots.
+
+7
+00:00:29,866 --> 00:00:32,384
+This column has 4.
+
+8
+00:00:32,466 --> 00:00:36,064
+This is true for all of the games I've shown.
+
+9
+00:00:36,133 --> 00:00:40,403
+Not a single column with an odd number of pieces.
+
+10
+00:00:40,466 --> 00:00:46,272
+What's more, in each of these cases, it so happens that Yellow, player 2, is winning.
+
+11
+00:00:46,333 --> 00:00:47,691
+It might not look like it,
+
+12
+00:00:47,691 --> 00:00:50,620
+ but Yellow is winning so spectacularly in these games,
+
+13
+00:00:50,620 --> 00:00:52,683
+ that even a fool could beat an expert.
+
+14
+00:00:52,683 --> 00:00:56,045
+ As long as that fool knows what makes these positions special.
+
+15
+00:00:56,266 --> 00:00:59,312
+Remember how all of the empty space is even?
+
+16
+00:00:59,366 --> 00:01:04,356
+That means that we can cut those remaining columns up into groups of 2.
+
+17
+00:01:04,433 --> 00:01:10,887
+Now, since it's red's turn in all of these cases, let's let Red start by making a move.
+
+18
+00:01:10,966 --> 00:01:16,436
+When drawn like this, yellow is almost beckoned to fill in the uncoupled pair.
+
+19
+00:01:16,499 --> 00:01:22,401
+And, since the entire board is divied up into pairs, Yellow can just keep doing this forever.
+
+20
+00:01:22,466 --> 00:01:27,816
+Wherever Red goes, yellow fills in the unpaired spot.
+
+21
+00:01:27,899 --> 00:01:30,513
+We can even take away the pairings.
+
+22
+00:01:30,566 --> 00:01:35,724
+All Yellow is doing is responding, thoughtlessly, to Red's last move.
+
+23
+00:01:35,799 --> 00:01:42,277
+A randomly placed red stone, is followed by a Yellow stone immediately above.
+
+24
+00:01:42,333 --> 00:01:50,059
+So on, and so forth. [silence]
+
+25
+00:01:50,133 --> 00:01:53,323
+Wait a minute... did yellow just win?
+
+26
+00:01:53,399 --> 00:01:58,965
+Let's try again, with a different board which we saw at the beginning.
+
+27
+00:01:59,033 --> 00:02:05,151
+Remember, nothing fancy. Red initiates, then Yellow naively responds.
+
+28
+00:02:05,233 --> 00:02:12,431
+On and on, until the end of the game. [silence]
+
+29
+00:02:12,499 --> 00:02:15,569
+Like magic, Yellow has won again.
+
+30
+00:02:15,633 --> 00:02:20,263
+Now, I promised you those boards at the beginning had something magical about them.
+
+31
+00:02:20,333 --> 00:02:26,355
+Does the columns having an even amount of empty space necessitate this winning condition for Yellow?
+
+32
+00:02:26,433 --> 00:02:30,151
+Yellow is winning in this position.
+
+33
+00:02:30,233 --> 00:02:33,879
+and it also has all even columns.
+
+34
+00:02:33,933 --> 00:02:40,963
+However, it is not one of the special ones I showed before. Let's try our strategy here!
+
+35
+00:02:41,033 --> 00:02:44,967
+Just like before, red then yellow.
+
+36
+00:02:45,033 --> 00:02:50,023
+But with this last Red move, Yellow is starting to panic.
+
+37
+00:02:50,099 --> 00:02:55,233
+If Yellow continues our simple strategy, Red will immediately win.
+
+38
+00:03:01,366 --> 00:03:05,972
+So, Yellow, in a last ditch effort, breaks our strategy.
+
+39
+00:03:06,033 --> 00:03:10,807
+Perhaps, by making some threats on the right side, Yellow can regain the tempo?
+
+40
+00:03:14,899 --> 00:03:20,033
+Unfortunately for Yellow, the damage is already done.
+
+41
+00:03:20,099 --> 00:03:23,241
+Red immediately plays in the second column...
+
+42
+00:03:23,299 --> 00:03:27,809
+Yellow is forced to block the horizontal threat,
+
+43
+00:03:27,866 --> 00:03:32,736
+but Red wins on a diagonal anyways.
+
+44
+00:03:34,833 --> 00:03:40,903
+So, our naive just-follow-red strategy didn't work in this case,
+
+45
+00:03:40,966 --> 00:03:46,676
+Despite the fact that yellow is winning, and all of the columns are even.
+
+46
+00:03:46,733 --> 00:03:54,099
+Indeed, it is the case that the 4 boards at the beginning weren't just any boards with all even columns.
+
+47
+00:03:54,166 --> 00:03:56,177
+They were especially selected,
+
+48
+00:03:56,177 --> 00:04:00,522
+ as boards which can be won with our simple follow-red strategy.
+
+49
+00:04:00,633 --> 00:04:04,228
+If Yellow could always win by just playing call-and-response,
+
+50
+00:04:04,228 --> 00:04:06,389
+ that wouldn't be much fun, would it?
+
+51
+00:04:06,499 --> 00:04:10,985
+So, what is it about these positions which makes them special?
+
+52
+00:04:11,066 --> 00:04:15,648
+When we play our naive strategy, let's take note of what happens.
+
+53
+00:04:15,699 --> 00:04:19,849
+Let's mark all of the disks already played before we start.
+
+54
+00:04:26,966 --> 00:04:31,980
+Regardless of what Red chooses, after the point where we start to use our strategy,
+
+55
+00:04:32,033 --> 00:04:36,447
+all of the red disks end up on an odd row.
+
+56
+00:04:36,500 --> 00:04:41,394
+That is, the first, third, and fifth rows from the bottom.
+
+57
+00:04:41,466 --> 00:04:45,328
+Similarly, yellow inevitably gets all of the even rows.
+
+58
+00:04:45,400 --> 00:04:51,014
+Since Yellow is the one employing this strategy, let's call it 'claimeven'.
+
+59
+00:04:51,066 --> 00:04:57,544
+Yellow, by merely following Red, can get hold of all of the remaining even-row spaces.
+
+60
+00:04:57,600 --> 00:04:59,550
+What makes this board special,
+
+61
+00:04:59,550 --> 00:05:04,033
+ is that even when we fill in all of the Red pieces on the odd rows,
+
+62
+00:05:04,033 --> 00:05:05,850
+ no line of 4 disks is made.
+
+63
+00:05:06,000 --> 00:05:10,558
+However, Yellow is able to lay claim to the entire top row.
+
+64
+00:05:10,633 --> 00:05:13,517
+So, it doesn't matter the order which Red plays.
+
+65
+00:05:13,517 --> 00:05:18,357
+ The result is already guaranteed for Yellow, as long as Yellow plays Claimeven.
+
+66
+00:05:18,466 --> 00:05:21,488
+Well, what about this slightly different board?
+
+67
+00:05:21,566 --> 00:05:27,468
+It was another one of the 4 at the beginning, so it also wins by claimeven.
+
+68
+00:05:27,533 --> 00:05:31,203
+If we imagine all the red stones filling in the odd rows...
+
+69
+00:05:31,266 --> 00:05:33,856
+There's a red line of 4!
+
+70
+00:05:33,933 --> 00:05:39,499
+But... in this case, it is hovering immediately over a Yellow line of 4.
+
+71
+00:05:39,566 --> 00:05:43,620
+So, for Red to win... Yellow would already have to have won.
+
+72
+00:05:43,700 --> 00:05:47,418
+We say that the red line of 4 is undercut.
+
+73
+00:05:47,500 --> 00:05:49,538
+Let's play it out!
+
+74
+00:05:56,633 --> 00:06:01,119
+Sure enough, we win on the precise line that we predicted!
+
+75
+00:06:01,200 --> 00:06:03,513
+This is what makes these boards special.
+
+76
+00:06:03,513 --> 00:06:06,063
+ If there are red winning lines on odd rows,
+
+77
+00:06:06,063 --> 00:06:09,618
+ they are all undercut by yellow winning chains on even rows.
+
+78
+00:06:10,833 --> 00:06:13,063
+Let's try some examples.
+
+79
+00:06:13,133 --> 00:06:17,907
+It's Yellow's turn. How can we force a win using Claimeven?
+
+80
+00:06:17,966 --> 00:06:20,628
+Pause now if you want to think about it.
+
+81
+00:06:22,733 --> 00:06:27,987
+By placing this disk in the center column, Yellow can kill two birds with one stone.
+
+82
+00:06:28,066 --> 00:06:30,944
+This move makes all of the columns even,
+
+83
+00:06:31,000 --> 00:06:37,070
+and guarantees that Red can't make a line of 4 until after Yellow gets a line of 4 on the 4th row.
+
+84
+00:06:43,200 --> 00:06:46,246
+Let's try this trickier example.
+
+85
+00:06:46,300 --> 00:06:50,906
+We may naively play the spot which yields even amounts of empty space in each column.
+
+86
+00:06:50,966 --> 00:06:57,060
+But red has other plans in mind. Let's see what happens if we try to play Claimeven.
+
+87
+00:06:57,133 --> 00:07:00,371
+Red claims this spot on the seventh column.
+
+88
+00:07:00,433 --> 00:07:05,759
+See how that makes this threat on an odd row? Pay attention to that threat.
+
+89
+00:07:05,833 --> 00:07:11,327
+Oblivious, Yellow continues playing Claimeven. Let's see what happens.
+
+90
+00:07:13,433 --> 00:07:16,095
+Well, that didn't work.
+
+91
+00:07:16,166 --> 00:07:19,620
+So then, what was yellow supposed to do?
+
+92
+00:07:19,700 --> 00:07:22,194
+Pause now if you want to think about it.
+
+93
+00:07:24,300 --> 00:07:29,074
+The trick is blocking that third row threat before it comes to fruition.
+
+94
+00:07:29,133 --> 00:07:33,331
+Now, most columns have an even amount of empty space.
+
+95
+00:07:33,400 --> 00:07:35,654
+But two columns don't.
+
+96
+00:07:35,733 --> 00:07:38,515
+Is there any hope of using Claimeven?
+
+97
+00:07:38,566 --> 00:07:42,260
+It turns out, here, the trick is as follows:
+
+98
+00:07:42,333 --> 00:07:47,251
+If Red plays in one of these spots, then Yellow plays the other.
+
+99
+00:07:47,333 --> 00:07:51,075
+From there, we can continue with Claimeven.
+
+100
+00:07:56,166 --> 00:08:00,724
+Reducing a complex position to a simple one is difficult.
+
+101
+00:08:00,800 --> 00:08:05,070
+However, an expert player up against a newbie might make it look easy.
+
+102
+00:08:05,133 --> 00:08:10,507
+As expected, capitalizing on these situations on the fly is the hallmark of expertise.
+
+103
+00:08:10,566 --> 00:08:13,468
+Attentive practice can help you see it coming.
+
+104
+00:08:15,566 --> 00:08:16,422
+Before we part,
+
+105
+00:08:16,422 --> 00:08:20,962
+ I'll give you a taste of how this can be generalized, with one last puzzle.
+
+106
+00:08:21,066 --> 00:08:25,776
+In this case, and unlike the others, Red, AKA player 1, is winning.
+
+107
+00:08:25,776 --> 00:08:28,070
+ But for now, it's Yellow's turn.
+
+108
+00:08:28,200 --> 00:08:32,806
+How can we apply our understanding of claimeven to this position?
+
+109
+00:08:32,866 --> 00:08:39,128
+For one, we notice that there is precisely one column that doesn't have an even amount of spaces left.
+
+110
+00:08:39,200 --> 00:08:42,438
+This means we can't play claimeven.
+
+111
+00:08:42,500 --> 00:08:44,154
+If Yellow goes anywhere but the middle,
+
+112
+00:08:44,233 --> 00:08:47,927
+we find that there are two even spaces we need to take.
+
+113
+00:08:48,000 --> 00:08:52,246
+So, Claimeven doesn't exactly work when you are player 1.
+
+114
+00:08:52,300 --> 00:08:56,282
+Well, what happens if we just naively respond to Yellow anyways?
+
+115
+00:08:56,333 --> 00:09:01,731
+We'll follow this pattern here, Red will get the top of each coupled pair of spaces.
+
+116
+00:09:01,800 --> 00:09:02,873
+In other words,
+
+117
+00:09:02,873 --> 00:09:09,116
+ Red will play Claimeven, except, on the center column, it will instead be Claimodd.
+
+118
+00:09:09,233 --> 00:09:14,391
+But, something weird is going on on the middle column, there's an unpaired spot...
+
+119
+00:09:14,466 --> 00:09:18,760
+One other thing we notice is that there is an odd-row red threat on the center column.
+
+120
+00:09:18,833 --> 00:09:24,615
+Since that is on the top half of one of the coupled spaces, Red will get that space.
+
+121
+00:09:24,666 --> 00:09:26,539
+That means the game will end there,
+
+122
+00:09:26,539 --> 00:09:27,478
+ and consequently,
+
+123
+00:09:27,478 --> 00:09:31,548
+ we don't need to worry about what happens on the top of the middle column.
+
+124
+00:09:31,700 --> 00:09:37,098
+Alright, let's try it! Claimeven, except claimodd in the middle.
+
+125
+00:09:41,200 --> 00:09:46,910
+Once again, this only works because this position was, in some sense, simple to begin with.
+
+126
+00:09:46,966 --> 00:09:53,684
+Red, through training and expertise, was able to force a position which permits such a simple strategy.
+
+127
+00:09:53,766 --> 00:09:55,802
+Most positions aren't like this-
+
+128
+00:09:55,802 --> 00:10:00,770
+ most positions can't be naively solved just using Claimeven and/or Claimodd.
+
+129
+00:10:00,900 --> 00:10:02,702
+But let this serve as a taste,
+
+130
+00:10:02,702 --> 00:10:10,928
+ an idea from which we could devise a more expressive positional language which permits the solution of a much larger class of boards.
+
+131
+00:10:11,033 --> 00:10:15,267
+Understanding these positions is not only crucial for the learner,
+
+132
+00:10:15,267 --> 00:10:17,749
+ but also for the connect 4 researcher.
+
+133
+00:10:17,866 --> 00:10:22,712
+Solving a game requires an immense search of billions of options on behalf of either player.
+
+134
+00:10:22,766 --> 00:10:33,156
+However, these positions from which a player can win via Claimeven prove to be a small island of simplicity in an otherwise chaotic sea of complex situations.
+
+135
+00:10:33,233 --> 00:10:39,567
+These positions will serve as a foothold, an indispensable landmark for further reduction.
+
+136
+00:10:39,633 --> 00:10:42,871
+Stay tuned! This has been 2swap.
+
