@@ -1,3 +1,5 @@
+// Single source of truth for category slugs — never hard-code these lists elsewhere; always import from this file.
+// Keep in sync with src/lib/categories.js (frontend mirror).
 export const VALID_CATEGORIES = new Set([
   'immediate_threat', 'forced_block', 'double_threat',
   'forced_win', 'forbidden_columns',

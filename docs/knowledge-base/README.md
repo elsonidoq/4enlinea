@@ -1,5 +1,13 @@
 # Connect Four Strategy Knowledge Base
 
+## What this KB is — and what it is not
+
+This KB documents **complete strategic patterns**: what a tactic looks like when fully formed on the board and why it wins. It is the source of truth for strategic theory — formal predicates, worked examples, false positives, and known limitations all describe the *finished* configuration.
+
+**This KB does not document puzzle generation or classifier logic.** The classifier (`connect-four/server/classifier.js`) implements a different, complementary predicate: it detects the *one-move-away* state — the position where playing `correct_col` will create the pattern. These two predicates are related but intentionally distinct. Read `classifier.js` and its header comment for that layer.
+
+---
+
 Machine-checkable entries for Connect Four strategic concepts (transformation rules, victory rules, tactical patterns, strategic constructions, and project-local heuristics). The primary consumer is Claude Code during implementation work — when building a trap detector, a pattern recognizer, or any module that reasons about strategic concepts, this directory is the source of truth.
 
 Compared with `docs/connect-four-strategy-reference.md` (long-form prose reference), entries here are:

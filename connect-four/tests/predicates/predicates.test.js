@@ -46,6 +46,15 @@ describe('evaluatePredicate() edge cases', () => {
     // All equal: any move is "correct" (tied)
     assert.ok(result.result === 'correct' || result.result === 'tied');
   });
+
+  // Regression: odd moveCount=19, score=11=floor((42-19)/2) but no gravity-top 4-in-a-row.
+  // evalImmediateThreat must use board checkWin, not score comparison.
+  test('cat 1 false-positive: odd moveCount=19, score=11, no gravity-top 4-in-a-row — must be wrong', () => {
+    const puzzle = { id: 99, category: 'immediate_threat', moveString: '0116034064222505306' };
+    const scores = [-9, -11, -9, -11, 8, 11, 8];
+    const result = evaluatePredicate(puzzle, 5, scores);
+    assert.notEqual(result.result, 'correct', 'col5 has score=winScore but no immediate 4-in-a-row');
+  });
 });
 
 // ── HTTP regression: single-move categories unaffected by interaction_mode guard ──────

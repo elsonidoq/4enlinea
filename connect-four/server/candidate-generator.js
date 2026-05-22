@@ -1,6 +1,6 @@
 import { evaluatePredicate } from './predicates.js';
 import {
-  classify, checkWin, countWinningThreats,
+  classify, checkWin, countWinningThreats, parseBoardState,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
   detectFigure7, detectJShape,
 } from './classifier.js';
@@ -42,10 +42,6 @@ export function softmaxSample(legalCols, scores, T, rng) {
     if (r < cum) return legalCols[j];
   }
   return legalCols[legalCols.length - 1];
-}
-
-function immediateWinScore(moveCount) {
-  return Math.floor((42 - moveCount) / 2);
 }
 
 function getHeights(moveString) {
@@ -477,10 +473,11 @@ async function checkPredicate(category, moveString, scores, solver) {
 }
 
 // For non-immediate_threat categories: reject if any column would be an immediate win (distractor).
-function isClean(category, scores, moveCount) {
+function isClean(category, ms) {
   if (category === 'immediate_threat') return true;
-  const winScore = immediateWinScore(moveCount);
-  return !scores.some(s => s >= winScore && winScore > 0);
+  const { board, colHeights } = parseBoardState(ms);
+  const player = (ms.length % 2 === 0) ? 1 : 2;
+  return countWinningThreats(board, colHeights, player) === 0;
 }
 
 /**
@@ -507,7 +504,7 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const rawMinMoves = 14 + Math.floor(rng() * 21);
+      const rawMinMoves = 8 + Math.floor(rng() * 5);
       const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
@@ -517,7 +514,7 @@ export async function generateCandidates(category, count, seed) {
       let matchedCorrectCol = null;
       const onPosition = async (ms, sc) => {
         if (ms.length < minMoves) return false;
-        if (!isClean(category, sc, ms.length)) return false;
+        if (!isClean(category, ms)) return false;
         const predicateResult = await checkPredicate(category, ms, sc, solver);
         if (!predicateResult.passes) return false;
         matchedCorrectCols = predicateResult.correctCols;

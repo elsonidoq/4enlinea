@@ -1,6 +1,27 @@
 // Pattern classifier for Connect Four positions.
 // Cats 1-3: bitboard-detectable (no extra solver queries).
 // Cats 4-6: solver-guided (secondary solver query required).
+//
+// PURPOSE AND DESIGN
+// ------------------
+// This file serves two use cases:
+//   1. Puzzle generation: during gameplay simulation, the classifier detects whether
+//      the current board is a valid candidate for a specific puzzle type. A candidate
+//      is a position where playing `correct_col` *creates* the target pattern.
+//   2. Sparring hints: during live play against the solver, the classifier identifies
+//      tactics the learner could apply ("you could build a Figure-7 here") or tactics
+//      the AI is about to use ("beware, the AI is one move from a Figure-7").
+//
+// In both use cases the classifier operates in pre-completion mode: it detects the
+// one-move-away state, not the finished pattern.
+//
+// RELATIONSHIP TO THE KNOWLEDGE BASE
+// ------------------------------------
+// The KB (`docs/knowledge-base/`) documents the *complete* strategic pattern —
+// what the tactic looks like when fully formed and why it wins. The predicates here
+// are necessarily different: they describe the board *before* the completing move.
+// When in doubt about what a tactic is or why it works, read the KB entry first.
+// When in doubt about how the classifier detects it, read the functions below.
 
 /**
  * All coordinates are 0-indexed: column 0–6 (left to right), row 0–5 (bottom to top).
@@ -18,11 +39,6 @@ const ROWS = 6;
 const COLS = 7;
 const TOTAL_CELLS = ROWS * COLS; // 42
 
-// c4solver winning score convention: score = floor((42 + 1 - movesWhenGameEnds) / 2)
-// For an immediate win (game ends at moveCount + 1 stones): score = floor((42 - moveCount) / 2)
-function immediateWinScore(moveCount) {
-  return Math.floor((42 - moveCount) / 2);
-}
 
 // Build a board grid from a move string (1-indexed columns).
 // Returns board[row][col] where row 0 is bottom, row 5 is top.
@@ -32,7 +48,9 @@ export function parseBoardState(moves) {
   const colHeights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
     const col = parseInt(moves[i], 10);
+    if (col < 0 || col >= COLS) continue;
     const row = colHeights[col];
+    if (row >= ROWS) continue;
     board[row][col] = (i % 2 === 0) ? 1 : 2; // player 1 moves first
     colHeights[col]++;
   }
@@ -76,34 +94,15 @@ export function countWinningThreats(board, colHeights, player) {
   return threats;
 }
 
-// Count distinct winning threats for a player across all reachable empty cells
-// (row >= colHeight for each column). Threats are counted at any reachable empty
-// cell, not only the gravity-top. Gravity-top restriction applies only to
-// immediate_threat and forced_block which act on the current move.
-function countAllReachableThreats(board, colHeights, player) {
-  let threats = 0;
-  for (let col = 0; col < COLS; col++) {
-    for (let row = colHeights[col]; row < ROWS; row++) {
-      board[row][col] = player;
-      if (checkWin(board, row, col, player)) threats++;
-      board[row][col] = 0;
-    }
-  }
-  return threats;
-}
-
 // Classify a position given the move string, candidate column (0-indexed),
 // and the solver scores for all 7 columns.
 // Returns { tag } — never throws.
 export function classify(moves, candidateCol, scores) {
   const moveCount = moves.length;
   const score = scores[candidateCol];
-  const winScore = immediateWinScore(moveCount);
 
   // ── Category 1: Immediate Threat ─────────────────────────────────────────
-  // This move wins the game immediately.
-  // Use >= because for odd moveCount, winScore equals win-in-2 score; board check disambiguates.
-  if (score >= winScore && score > 0) {
+  if (score > 0) {
     const { board, colHeights } = parseBoardState(moves);
     const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
     const row = colHeights[candidateCol];
@@ -116,46 +115,79 @@ export function classify(moves, candidateCol, scores) {
     }
   }
 
-  // ── Category 2: Forced Block ──────────────────────────────────────────────
-  // The opponent has an immediate winning threat; any other move loses instantly.
-  // Indicator: all non-candidate playable columns have score equal to the
-  // worst possible loss (opponent wins on their very next move).
-  if (score >= 0) {
-    // Opponent wins on their very next turn: game ends at moveCount+2 stones
-    // score convention: -floor((42+1-(moveCount+2))/2) = -floor((41-moveCount)/2)
-    const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
-    const allOthersAreLoss = scores.every((s, i) => {
-      if (i === candidateCol) return true;
-      return s < 0 && s >= opponentImmediateWin;
-    });
-    // At least one other move must be losing (otherwise we're not "forced" to block)
-    const someOtherIsLosing = scores.some((s, i) => i !== candidateCol && s < 0);
-    if (allOthersAreLoss && someOtherIsLosing) {
-      return { tag: 'forced_block' };
-    }
-  }
-
   // ── Category 3: Double Threat ─────────────────────────────────────────────
-  // After this move, the current player has ≥2 simultaneous winning threats.
-  // We detect this by building the board state after the candidate move
-  // and counting threats for the same player.
-  if (score > 0) {
+  {
     const { board, colHeights } = parseBoardState(moves);
     const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
     const row = colHeights[candidateCol];
     if (row < ROWS) {
       board[row][candidateCol] = currentPlayer;
       colHeights[candidateCol]++;
-      const threats = countAllReachableThreats(board, colHeights, currentPlayer);
-      if (threats >= 2) {
+
+      const threatCells = [];
+      for (let c = 0; c < COLS; c++) {
+        for (let r = colHeights[c]; r < ROWS; r++) {
+          board[r][c] = currentPlayer;
+          if (checkWin(board, r, c, currentPlayer)) threatCells.push({ col: c, row: r });
+          board[r][c] = 0;
+        }
+      }
+
+      // Case A: two or more distinct columns each have a threat at their gravity-top
+      const gravityTopCols = new Set(threatCells.filter(t => t.row === colHeights[t.col]).map(t => t.col));
+      if (gravityTopCols.size >= 2) {
+        board[row][candidateCol] = 0;
+        colHeights[candidateCol]--;
         return { tag: 'double_threat' };
+      }
+
+      // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
+      const byCol = {};
+      for (const t of threatCells) {
+        if (!byCol[t.col]) byCol[t.col] = [];
+        byCol[t.col].push(t.row);
+      }
+      for (const col of Object.keys(byCol)) {
+        const rows = byCol[col].sort((a, b) => a - b);
+        for (let i = 0; i < rows.length - 1; i++) {
+          if (rows[i + 1] === rows[i] + 1) {
+            board[row][candidateCol] = 0;
+            colHeights[candidateCol]--;
+            return { tag: 'double_threat' };
+          }
+        }
+      }
+
+      board[row][candidateCol] = 0;
+      colHeights[candidateCol]--;
+    }
+  }
+
+  // ── Category 2: Forced Block ──────────────────────────────────────────────
+  if (score >= 0) {
+    const { board, colHeights } = parseBoardState(moves);
+    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
+    const opponent = 3 - currentPlayer;
+    if (countWinningThreats(board, colHeights, opponent) > 0) {
+      board[colHeights[candidateCol]][candidateCol] = currentPlayer;
+      colHeights[candidateCol]++;
+      const threatsAfter = countWinningThreats(board, colHeights, opponent);
+      board[--colHeights[candidateCol]][candidateCol] = 0;
+      if (threatsAfter === 0) {
+        const someOtherFails = scores.some((_, i) => {
+          if (i === candidateCol || colHeights[i] >= ROWS) return false;
+          board[colHeights[i]][i] = currentPlayer;
+          colHeights[i]++;
+          const t = countWinningThreats(board, colHeights, opponent);
+          board[--colHeights[i]][i] = 0;
+          return t > 0;
+        });
+        if (someOtherFails) return { tag: 'forced_block' };
       }
     }
   }
 
   // ── Category 4: Forced Win ────────────────────────────────────────────────
-  // All moves are losing but this is the "least bad" — opponent must play into a
-  // forced sequence that ends in the current player winning.
   if (score < 0) {
     const allNegative = scores.every(s => s <= 0);
     const isBestBadMove = scores.every(s => s <= score || s === 0);
@@ -165,21 +197,24 @@ export function classify(moves, candidateCol, scores) {
   }
 
   // ── Category 5: Forbidden Column ─────────────────────────────────────────
-  // Playing in a column that gives the opponent an immediate winning response.
-  // Only valid when the current player has no winning move (all scores <= 0).
-  const opponentWinScore = -Math.ceil((41 - moveCount) / 2);
-  if (scores.some(s => s === opponentWinScore) && scores.every(s => s <= 0)) {
-    return { tag: 'forbidden_columns' };
+  if (scores.every(s => s <= 0)) {
+    const { board, colHeights } = parseBoardState(moves);
+    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
+    const opponent = 3 - currentPlayer;
+    const row = colHeights[candidateCol];
+    if (row < ROWS) {
+      board[row][candidateCol] = currentPlayer;
+      colHeights[candidateCol]++;
+      const givesOpponentWin = countWinningThreats(board, colHeights, opponent) > 0;
+      board[--colHeights[candidateCol]][candidateCol] = 0;
+      if (givesOpponentWin) return { tag: 'forbidden_columns' };
+    }
   }
 
   // ── Fallback ──────────────────────────────────────────────────────────────
   if (score > 0) return { tag: 'best_move' };
   if (score === 0) return { tag: 'drawing_move' };
   return { tag: 'suboptimal_move' };
-}
-
-function isImmediateWin(score, winScore) {
-  return score >= winScore;
 }
 
 // ── New category detection functions (T005–T010) ──────────────────────────────
@@ -575,7 +610,7 @@ export function detectJShape(moves, scores) {
 // Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
 export async function detectClaimeven(moves, scores, solver) {
   const moveCount = moves.length;
-  if (moveCount === 0) return { matched: false };
+  if (moveCount === 0 || moveCount % 2 === 0) return { matched: false };
   const { colHeights } = parseBoardState(moves);
 
   // Identify odd-height columns (odd empty-space count)

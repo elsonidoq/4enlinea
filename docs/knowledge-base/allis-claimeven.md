@@ -32,12 +32,21 @@ statement: |
   by non-overlapping Claimevens (a "claimeven position"), Black wins immediately via
   the pairing argument without any further search.
 
+  Extended Claimeven (two-odd-columns variant, source: 2swap/WeakC4 video): if exactly
+  two columns have odd parity, those two columns are treated as a cross-column pair.
+  When White plays into one odd-parity column, Black responds in the other odd-parity
+  column (not above). After that one exchange both columns become even-parity, and
+  standard Claimeven resumes for all remaining columns. The condition for this to work
+  is the same as for the all-even case: after the cross-column exchange, no White
+  winning group on an odd row may remain unrefuted by a lower Yellow group.
+
 preconditions:
   - "The controller of Zugzwang (typically Black) is applying the rule."
   - "Two vertically adjacent empty squares exist at (col, row_odd) and (col, row_odd+1=even)."
   - "The upper square row_odd+1 is even (rows 2, 4, 6)."
   - "Both squares are empty."
   - "The square is not already part of a Baseinverse or other conflicting rule on the same squares."
+  - "(Extended variant) Exactly two columns have odd parity, and after the cross-column exchange those two columns reduce to even parity with no unrefuted White odd-row threats remaining."
 
 formal_predicate: |
   # Input: board state B, column c, row r (the lower/odd square of the pair)
@@ -53,8 +62,12 @@ formal_predicate: |
           and board[col][row_upper] == EMPTY
       )
 
-  # Strategy: whenever opponent plays (col, row_lower), immediately play (col, row_upper).
+  # Strategy (standard): whenever opponent plays (col, row_lower), immediately play (col, row_upper).
   # Solved groups: all White groups that include (col, row_upper) are refuted.
+
+  # Strategy (extended — two odd-parity columns col_A and col_B):
+  #   If opponent plays into col_A → Black plays into col_B (and vice versa).
+  #   Both columns then have even parity; standard Claimeven applies to all columns thereafter.
 
   # Combination constraint (from Allis Ch.7):
   #   Multiple Claimevens can be combined if their sets of squares are disjoint AND
@@ -63,23 +76,28 @@ formal_predicate: |
   #   Claimeven cannot be placed below a Lowinverse or Highinverse in the same column.
 
 worked_examples:
-  - movestring: "1253243243243145"
+  - movestring: "3233253335"
     description: |
-      Board-wide Claimeven position (move 16, Red to move). All seven columns have even
-      empty counts (par: 6E 4E 2E 2E 2E 4E 6E). Red major threats [R] at col2 row4 and
-      col6 row4 exist, yet all solver scores are -13 (Black wins in every column). Black
-      wins by always responding directly above Red's move — Claimeven pairing covers the
-      entire remaining board.
-    expected_behavior: "solver confirms Black wins; all White threats refuted by Claimeven pairing"
+      Board-wide Claimeven position (move 10, Red to move). All six non-full columns
+      have even empty counts (par: 6E 6E 4E 0E 6E 4E 6E). No major threats for either
+      player. Red has no tactical shortcut. All solver scores are negative (-2 to -11),
+      confirming Yellow wins regardless of where Red plays. Yellow wins purely by
+      responding directly above every Red move — the entire remaining board is covered
+      by Claimeven pairs.
+    expected_behavior: "all solver scores negative for Yellow; no major threats; Yellow wins via pure Claimeven pairing"
     solver_verified: true
-  - movestring: "6001122"
+  - movestring: "3233333556"
     description: |
-      Single Claimeven application (move 7, Yellow to move). Red has 3 discs at cols1-3
-      row2, creating a major threat [R] at col4 row2 (the even upper square). Col4 rows1-2
-      are both empty: row1 = odd lower, row2 = even upper → valid Claimeven pair. If Red
-      plays col4 row1, Black immediately plays col4 row2, permanently blocking the threat.
-      Scores: col1=-3, col2=-1, col3=0, col4=18, col5=-4, col6=-3, col7=-5.
-    expected_behavior: "solver confirms Black refutes Red's row-2 threat via Claimeven at col4 rows1-2"
+      Extended Claimeven with two odd-parity columns (move 10, Red to move).
+      Col3 and col7 each have 5 empty cells (5O) — odd parity. All other non-full
+      columns are even (col1=6E, col2=6E, col5=6E, col6=4E). No major threats for
+      either player. All solver scores are -2 (Yellow wins in every column).
+      Yellow's strategy: cols 1, 2, 5, 6 are covered by standard Claimeven (respond
+      above Red). For cols 3 and 7, Yellow uses the cross-column pair: if Red plays
+      col3, Yellow plays col7 (and vice versa), consuming the bottommost even cell
+      in each and reducing both to even parity. Standard Claimeven then covers the
+      rest. Source for the two-odd-columns extension: 2swap/WeakC4 Claimeven video.
+    expected_behavior: "all solver scores -2; no major threats; Yellow wins via Claimeven + cross-column pairing of the two odd-parity columns"
     solver_verified: true
 
 false_positives:
@@ -138,3 +156,4 @@ From Allis 1988, *A Knowledge-based Approach of Connect-Four*, Chapter 6 §6.1:
 - **Foundational rule:** Claimeven is the most elementary of the nine rules. Allis §6.10 notes: "The most elementary rules are the Claimeven, Baseinverse, Lowinverse and Vertical. These four rules are based on simple observations which can be made by any experienced player of the game."
 - **Combination constraint summary (from §7.1):** Multiple Claimevens can be applied simultaneously if (a) their square sets are disjoint and (b) applying one does not release an odd number of squares in a shared column before another fires. Claimevens can coexist with Baseinverses and Verticals freely (if squares are disjoint). Cannot be placed below Lowinverse or Highinverse in the same column.
 - **Allen connection:** Allen's V4 ("Black wins with an even-row threat") is the macroscopic consequence of Claimeven — if all White groups are refuted by Claimevens, Black wins via V4. T6 ("Red's isolated even-row threats are worthless") mirrors Claimeven from the Red perspective: Red cannot use even rows strategically.
+- **Two-odd-columns extension (2swap/WeakC4):** The WeakC4 Claimeven video (subtitles 93–99) demonstrates that exactly-two-odd-columns positions can be reduced to the standard all-even case by treating the two odd columns as a cross-column pair. This extension is not in Allis; it is sourced from `docs/external_references/Claimeven_video_subtitles.srt`.

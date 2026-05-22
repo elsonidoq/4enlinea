@@ -19,20 +19,20 @@ const GOAL_PROMPTS = {
   parity_control:    'Control the parity of this column to secure the win.',
   forbidden_columns: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
   z_threat:          'Identify the column where a Z-threat gives you unstoppable parity control.',
-  claimeven:         'Use the Claimeven strategy — identify which columns Red can claim to guarantee a win.',
+  claimeven:         'Use the Claimeven strategy — identify which columns Yellow can claim to guarantee a draw.',
   undercut:          'Find the move that undercuts your opponent, taking the square below their threat.',
   overcut:           'Find the move that overcomes your opponent by playing above their intended threat.',
   figure_7:          'Spot the Figure-7 pattern and play the key move to exploit it.',
   j_shape:           'Spot the J-Shape pattern and play the key move to exploit it.',
 };
 
-function buildBoard(moves, userPlayer) {
+function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
     const col = parseInt(moves[i], 10);
     if (isNaN(col) || col < 0 || col >= COLS || heights[col] >= ROWS) continue;
-    board[heights[col]][col] = (i % 2 === 0) === (userPlayer === 1) ? 'red' : 'yellow';
+    board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
     heights[col]++;
   }
   return board;
@@ -238,8 +238,8 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
     );
   }
 
-  const userPlayer = candidate.move_string.length % 2 === 0 ? 1 : 2;
-  const board = buildBoard(candidate.move_string, userPlayer);
+  const userIsYellow = category === 'claimeven' || candidate.move_string.length % 2 === 1;
+  const board = buildBoard(candidate.move_string);
   const highlightCol = deriveHighlightCol(category, candidate.solver_scores, candidate.move_string);
   const displayScores = clickedScores ?? candidate.solver_scores;
   const moveCount = candidate.move_string.length;
@@ -254,9 +254,9 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
       const colVal = column ?? col; // backwards-compat: accept old 'col' key
       const isSequenceStep = role === 'hint' || role === 'loser' || role === 'winner';
       const step = isSequenceStep ? ++stepIdx : null;
-      // Alternate red/yellow by step parity: odd = red (loser), even = yellow (winner)
+      // Odd steps = user's move, even steps = opponent's move
       const effectiveRole = isSequenceStep && step !== null
-        ? (step % 2 === 1 ? 'loser' : 'winner')
+        ? (step % 2 === 1 ? (userIsYellow ? 'winner' : 'loser') : (userIsYellow ? 'loser' : 'winner'))
         : role;
       highlightedCells.push([row, colVal, effectiveRole, step]);
     }
@@ -360,7 +360,7 @@ export function CurationWorkspace({ category, status = 'pending', onBack }) {
           <span style={moveStringDisplay}>{candidate.move_string || '(empty)'}</span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>You are RED ●</div>
+          <div style={{ fontSize: 11, color: userIsYellow ? 'var(--yellow)' : 'var(--red)', fontWeight: 700 }}>You are {userIsYellow ? 'YELLOW' : 'RED'} ●</div>
           {candidate.rejection_reason && (
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               Rejected: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{candidate.rejection_reason}</span>

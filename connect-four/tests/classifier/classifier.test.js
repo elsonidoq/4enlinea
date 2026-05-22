@@ -69,11 +69,58 @@ describe('classify() false-positive regressions', () => {
     assert.notEqual(result.tag, 'forbidden_columns', 'forbidden_columns requires all scores <= 0');
   });
 
-  // forbidden_columns positive: all scores <= 0, opponentWinScore present — must be forbidden_columns.
-  // moveCount=10, opponentWinScore = -ceil((41-10)/2) = -16
-  test('forbidden_columns synthetic: all-negative scores with opponentWinScore=-16 present — must be forbidden_columns', () => {
-    const result = classify('0123401234', 0, [-18, -16, -18, -16, -18, -18, -18]);
+  // forbidden_columns positive (board-based): all scores <= 0, playing col5 hands Y a gravity-top win.
+  // moveCount=6: Y has col1r0,col2r0,col3r0; col5r0 leaves Y threat at col4r0 open.
+  test('forbidden_columns board-based: col5 gives opponent gravity-top win — must be forbidden_columns', () => {
+    const result = classify('010263', 5, [-18, -18, -18, -18, -3, -18, -18]);
     assert.equal(result.tag, 'forbidden_columns');
+  });
+
+  // Cat 1 regression: moveCount=19 odd, score[2]=11=winScore, no 4-in-a-row — must NOT be immediate_threat
+  test('C1 regression: odd moveCount=19, score=11, no 4-in-a-row — not immediate_threat', () => {
+    const result = classify('3133101113201232540', 2, [2, -1000, 11, 4, 9, 8, 7]);
+    assert.notEqual(result.tag, 'immediate_threat', 'C1 false-positive must not be immediate_threat');
+  });
+});
+
+describe('classify() double_threat', () => {
+  // Existing fixtures kept
+  test('3344 col2 → double_threat', () => {
+    const result = classify('3344', 2, [-4, -3, 18, 2, 2, 18, -3]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  test('3344 col5 → double_threat', () => {
+    const result = classify('3344', 5, [-4, -3, 18, 2, 2, 18, -3]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // New fixtures
+  test('3333344044114 col0 → double_threat', () => {
+    const result = classify('3333344044114', 0, [13, 11, -1, 0, -1, -1, -1]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  test('2444222343 col3 → double_threat', () => {
+    const result = classify('2444222343', 3, [-13, -14, -13, 15, -13, -13, -13]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  test('3333334244442555 col5 (figure-7 completing move, Case A) → double_threat', () => {
+    const result = classify('3333334244442555', 5, [-13, 13, -13, -1000, -13, 12, -13]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // Also: movestring that is Cat 3 via the new Cat 1 regression position
+  test('3133101113201232540 col2 → double_threat (not immediate_threat)', () => {
+    const result = classify('3133101113201232540', 2, [2, -1000, 11, 4, 9, 8, 7]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // Counter-test: placing in col0 on '3344' creates 0 threats — not double_threat
+  test('3344 col0 → not double_threat (no threats created)', () => {
+    const result = classify('3344', 0, [-4, -3, 18, 2, 2, 18, -3]);
+    assert.notEqual(result.tag, 'double_threat');
   });
 });
 

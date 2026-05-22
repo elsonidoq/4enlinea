@@ -900,6 +900,7 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       debug_trace: c.debug_trace ?? null,
       highlight_cells: c.highlight_cells ?? null,
       highlight_metadata: c.highlight_metadata ?? null,
+      category_evidence: c.category_evidence ?? null,
       correct_col: c.correct_col ?? null,
     }));
     const { error } = await supabase.from('candidates').insert(rows);

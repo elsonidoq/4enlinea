@@ -4,10 +4,6 @@
 const ROWS = 6;
 const COLS = 7;
 
-function immediateWinScore(moveCount) {
-  return Math.floor((42 - moveCount) / 2);
-}
-
 // Returns a fresh board + heights from a move string.
 function parseBoard(moveString) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
@@ -33,12 +29,11 @@ function currentPlayer(moveCount) {
 // @returns {{ result: 'correct'|'wrong'|'tied', correctCol?: number, tiedWith?: number[] }}
 export function evaluatePredicate(puzzle, candidateCol, scores) {
   const moveCount = puzzle.moveString.length;
-  const winScore = immediateWinScore(moveCount);
 
   switch (puzzle.category) {
-    case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, winScore);
-    case 'forced_block': return evalForcedBlock(candidateCol, scores, winScore, moveCount);
-    case 'double_threat': return evalDoubleThreat(candidateCol, scores, winScore, puzzle.moveString);
+    case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, puzzle.moveString);
+    case 'forced_block': return evalForcedBlock(candidateCol, scores, moveCount);
+    case 'double_threat': return evalDoubleThreat(candidateCol, scores, puzzle.moveString);
     case 'forced_win': return evalForcedWin(candidateCol, scores);
     case 'forbidden_columns': return evalForbiddenColumns(candidateCol, scores, puzzle.moveString);
     case 'z_threat': return evalZThreat(candidateCol, puzzle);
@@ -52,9 +47,15 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
 }
 
 // immediate_threat: Play the immediate winning move.
-function evalImmediateThreat(candidateCol, scores, winScore) {
+function evalImmediateThreat(candidateCol, scores, moveString) {
+  const { board, heights } = parseBoard(moveString);
+  const player = currentPlayer(moveString.length);
   const winningCols = scores.reduce((acc, s, i) => {
-    if (s >= winScore && s > 0) acc.push(i);  // Bug 1 fix: >= not ===
+    if (s > 0 && heights[i] < ROWS) {
+      board[heights[i]][i] = player;
+      if (checkWin(board, heights[i], i, player)) acc.push(i);
+      board[heights[i]][i] = 0;
+    }
     return acc;
   }, []);
 
@@ -69,7 +70,7 @@ function evalImmediateThreat(candidateCol, scores, winScore) {
 }
 
 // forced_block: Block the opponent's immediate winning threat.
-function evalForcedBlock(candidateCol, scores, winScore, moveCount) {
+function evalForcedBlock(candidateCol, scores, moveCount) {
   const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
   const blockingCols = scores.reduce((acc, s, i) => {
     if (s >= 0) acc.push(i);
@@ -95,7 +96,7 @@ function evalForcedBlock(candidateCol, scores, winScore, moveCount) {
 }
 
 // double_threat: Create a double threat (≥2 simultaneous winning threats after the move).
-function evalDoubleThreat(candidateCol, scores, winScore, moveString) {
+function evalDoubleThreat(candidateCol, scores, moveString) {
   const { board, heights } = parseBoard(moveString);
   const moveCount = moveString.length;
   const player = currentPlayer(moveCount);

@@ -8,6 +8,7 @@ specs/008-new-puzzle-categories/plan.md
 
 - `docs/index.md` — all design, architecture, and product docs
 - `specs/index.md` — all feature specs (001–008) with status and decisions
+- `docs/knowledge-base/README.md` — strategy KB: schema, entry list, and how the KB relates to `classifier.js`
 
 Read the relevant index before starting any task that touches architecture, data model, API contracts, or product decisions.
 
@@ -33,3 +34,6 @@ If the user asks you to 'write a prompt' or 'draft a prompt' for use in another 
 
 ## Answering Questions
 If the user asks a question, answer the question first before editing any files or running any tools.
+
+## The knowledge-base
+The knowledge base's goal is to provide expertise knowledge to a coding agent, structured in a AI friendly way, so that a coding agent has the right context to make expert based decisions
