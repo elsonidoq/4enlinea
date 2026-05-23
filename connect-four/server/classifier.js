@@ -102,7 +102,7 @@ export function classify(moves, candidateCol, scores) {
   const score = scores[candidateCol];
 
   // ── Category 1: Immediate Threat ─────────────────────────────────────────
-  if (score > 0) {
+  {
     const { board, colHeights } = parseBoardState(moves);
     const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
     const row = colHeights[candidateCol];
@@ -608,7 +608,7 @@ export function detectJShape(moves, scores) {
 // T006 — Claimeven detection (async — runs solver simulation)
 // Subtype A: exactly 1 odd column → unique equalising move.
 // Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
-export async function detectClaimeven(moves, scores, solver) {
+export async function detectClaimeven(moves, solver) {
   const moveCount = moves.length;
   if (moveCount === 0 || moveCount % 2 === 0) return { matched: false };
   const { colHeights } = parseBoardState(moves);

@@ -47,6 +47,16 @@ describe('evaluatePredicate() edge cases', () => {
     assert.ok(result.result === 'correct' || result.result === 'tied');
   });
 
+  // Regression: evalForcedBlock false positive — all non-blocking cols scored opponentImmediateWin
+  // due to floor/ceil mismatch, but Yellow has no immediately playable winning threat (wins in 4 plies
+  // via a double-threat setup, not in 2). Board check correctly rejects this as forced_block.
+  test('forced_block false-positive: no immediately playable Yellow threat — must be wrong', () => {
+    const puzzle = { id: 99, category: 'forced_block', moveString: '3251333421640522' };
+    const scores = [-12, 0, -12, -12, -12, -12, -12];
+    const result = evaluatePredicate(puzzle, 1, scores);
+    assert.notEqual(result.result, 'correct', 'col1 should not be a forced block — Yellow has no immediate win');
+  });
+
   // Regression: odd moveCount=19, score=11=floor((42-19)/2) but no gravity-top 4-in-a-row.
   // evalImmediateThreat must use board checkWin, not score comparison.
   test('cat 1 false-positive: odd moveCount=19, score=11, no gravity-top 4-in-a-row — must be wrong', () => {

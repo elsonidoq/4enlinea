@@ -4,7 +4,7 @@ import { detectClaimeven } from './classifier.js';
 const moves = process.argv[2] ?? '';
 const solver = createSolverProcess();
 
-const result = await detectClaimeven(moves, null, solver);
+const result = await detectClaimeven(moves, solver);
 console.log(JSON.stringify(result, null, 2));
 
 if (result.matched) {

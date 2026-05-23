@@ -106,27 +106,40 @@ function computeLowCategoryHighlight(moveString, correctCols) {
 }
 
 // Returns the single forced-block column for the current player, or null if not strictly forced.
-// "Forced" means exactly one legal col has score > opponentImmediateWin (the blocking col,
-// which may still be a losing score — Yellow is losing but not immediately) and all others
-// equal opponentImmediateWin (Red wins immediately if Yellow plays there).
-// Note: the blocking col score must be NEGATIVE (< 0) for Red to be winning at ms2.
-// Using >= 0 was wrong: it required Yellow to be non-losing, making Red unable to win at ms2.
-function getForcedBlock(moveString, scores) {
-  const moveCount = moveString.length;
+// "Forced" means exactly one legal col is safe (opponent cannot win immediately after playing
+// there) and at least one other col gives the opponent an immediate win.
+// Uses direct board checks instead of score thresholds to avoid floor/ceil scoring ambiguity.
+function getForcedBlock(moveString) {
+  const board = buildBoard(moveString);
+  if (!board) return null;
   const heights = getHeights(moveString);
-  const opponentImmediateWin = -Math.floor((41 - moveCount) / 2);
+  const player = (moveString.length % 2 === 0) ? 1 : 2;
+  const opponent = 3 - player;
 
-  const betterThanImmediateLoss = [];
+  const safeCols = [];
+  let hasImmediateThreat = false;
   for (let c = 0; c < COLS; c++) {
     if (heights[c] >= ROWS) continue;
-    if (scores[c] > opponentImmediateWin) {
-      betterThanImmediateLoss.push(c);
+    board[heights[c]][c] = player;
+    heights[c]++;
+    let oppWins = false;
+    for (let oc = 0; oc < COLS && !oppWins; oc++) {
+      if (heights[oc] >= ROWS) continue;
+      board[heights[oc]][oc] = opponent;
+      if (hasWon(board, opponent)) oppWins = true;
+      board[heights[oc]][oc] = 0;
     }
-    // scores[c] === opponentImmediateWin: immediate loss — skip
-    // scores[c] < opponentImmediateWin: impossible for legal cols, skip
+    heights[c]--;
+    board[heights[c]][c] = 0;
+    if (oppWins) {
+      hasImmediateThreat = true;
+    } else {
+      safeCols.push(c);
+    }
   }
-  if (betterThanImmediateLoss.length !== 1) return null;
-  return betterThanImmediateLoss[0];
+
+  if (!hasImmediateThreat || safeCols.length !== 1) return null;
+  return safeCols[0];
 }
 
 // Recursively trace a forced-win sequence starting with Red playing redCol on ms.
@@ -375,7 +388,7 @@ export function checkZThreatPredicate(ms, scores) {
 }
 
 export async function checkClaimevenPredicate(ms, scores, solver) {
-  const result = await detectClaimeven(ms, scores, solver);
+  const result = await detectClaimeven(ms, solver);
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,

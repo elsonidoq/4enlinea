@@ -50,6 +50,8 @@
 
 [architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields
 
+[architecture/db-schema.md](architecture/db-schema.md) — live table schemas: columns, types, PKs, FKs, and defaults for all 10 public tables — writing DB queries or migrations
+
 ## mvp
 
 [mvp/mvp_product_spec.md](mvp/mvp_product_spec.md) — canonical MVP product spec: Puzzle Trainer, Sparring, AI Coach; the single question the MVP answers — understanding overall product scope and what is Phase 2
