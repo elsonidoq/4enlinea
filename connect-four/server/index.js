@@ -6,11 +6,12 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify } from './classifier.js';
+import { classify, checkWin } from './classifier.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
-import { checkZugzwangPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
+import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +36,31 @@ function makeLimit(max, windowMs = 60_000) {
   return rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false });
 }
 
+/** Assert a 0-indexed column value (integer 0–6). */
+function isValidCol0(col) {
+  return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6;
+}
+
+/** Validate a highlight_metadata object. Returns null if valid, error string if not. */
+function validateHighlightMetadata(hm) {
+  if (hm === null || hm === undefined) return null;
+  if (hm.type === 'capsule') {
+    if (!isValidCol0(hm.column)) return `highlight_metadata.column out of range: ${hm.column}`;
+    if (!Number.isInteger(hm.fromRow) || hm.fromRow < 0 || hm.fromRow > 5) return `highlight_metadata.fromRow out of range: ${hm.fromRow}`;
+    if (!Number.isInteger(hm.toRow) || hm.toRow < 0 || hm.toRow > 5) return `highlight_metadata.toRow out of range: ${hm.toRow}`;
+    return null;
+  }
+  if (hm.type === 'cells') {
+    if (!Array.isArray(hm.cells)) return 'highlight_metadata.cells must be an array';
+    for (const cell of hm.cells) {
+      if (!isValidCol0(cell.column)) return `highlight_metadata cell column out of range: ${cell.column}`;
+      if (!Number.isInteger(cell.row) || cell.row < 0 || cell.row > 5) return `highlight_metadata cell row out of range: ${cell.row}`;
+    }
+    return null;
+  }
+  return `highlight_metadata.type unknown: ${hm.type}`;
+}
+
 app.use('/api/explain-move', makeLimit(30));
 app.use('/api/scores', makeLimit(60));
 app.use('/api/explain', makeLimit(60));
@@ -47,7 +73,7 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-const MOVES_RE = /^[1-7]{0,42}$/;
+const MOVES_RE = /^[0-6]{0,42}$/;
 
 function validateMoves(moves) {
   if (typeof moves !== 'string') return 'moves must be a string';
@@ -451,7 +477,7 @@ app.get('/api/puzzles/:id', async (req, res) => {
 
   const { data: puzzle, error } = await supabase
     .from('puzzles')
-    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty')
+    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty, interaction_mode, highlight_metadata, correct_col')
     .eq('id', id)
     .eq('is_active', true)
     .single();
@@ -469,6 +495,9 @@ app.get('/api/puzzles/:id', async (req, res) => {
     goalPredicateType: puzzle.goal_predicate_type,
     cooperativeAiMoves: puzzle.cooperative_ai_moves ?? [],
     difficulty: puzzle.difficulty,
+    interactionMode: puzzle.interaction_mode ?? 'single_move',
+    highlightMetadata: puzzle.highlight_metadata ?? null,
+    correctCol: puzzle.correct_col ?? null,
   });
 });
 
@@ -478,7 +507,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   if (!puzzleId) return res.status(400).json({ error: 'invalid puzzle id' });
 
   const { candidateCol, moveHistory = [] } = req.body;
-  if (typeof candidateCol !== 'number' || candidateCol < 0 || candidateCol > 6) {
+  if (!isValidCol0(candidateCol)) {
     return res.status(400).json({ error: 'candidateCol must be integer 0-6' });
   }
 
@@ -487,7 +516,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   if (supabase) {
     const { data } = await supabase
       .from('puzzles')
-      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves')
+      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col')
       .eq('id', puzzleId)
       .eq('is_active', true)
       .single();
@@ -497,6 +526,9 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   if (!puzzle) return res.status(404).json({ error: 'puzzle not found' });
   if (!userCanAccessCategory(req.user, puzzle.category)) {
     return res.status(403).json({ error: 'This category requires a paid subscription' });
+  }
+  if (puzzle.interaction_mode === 'sequence') {
+    return res.status(400).json({ error: 'Use /sequence/move for sequence-mode puzzles' });
   }
 
   // Get solver scores
@@ -513,6 +545,8 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     moveString: puzzle.move_string,
     goalPredicateType: puzzle.goal_predicate_type,
     goalPredicateParams: puzzle.goal_predicate_params,
+    highlightMetadata: puzzle.highlight_metadata ?? null,
+    correctCol: puzzle.correct_col ?? null,
   };
 
   const evaluation = evaluatePredicate(puzzleForPredicate, candidateCol, scores);
@@ -554,6 +588,75 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     correctCol: evaluation.correctCol ?? null,
     tiedWith: evaluation.tiedWith ?? null,
   });
+});
+
+// POST /api/puzzles/:id/sequence/move — stateless per-move validation for sequence-mode puzzles
+const SEQUENCE_POSITION_RE = /^[0-6]{0,41}$/;
+const sequenceStrategy = new ForcedWinStrategy();
+
+app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
+  const puzzleId = req.params.id;
+
+  // Load puzzle
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { data: puzzle, error } = await supabase
+    .from('puzzles')
+    .select('id, category, interaction_mode')
+    .eq('id', puzzleId)
+    .eq('is_active', true)
+    .single();
+
+  if (error || !puzzle) return res.status(404).json({ error: 'puzzle not found' });
+
+  const { position, col } = req.body;
+
+  if (typeof position !== 'string' || !SEQUENCE_POSITION_RE.test(position)) {
+    return res.status(400).json({ error: 'position must be a string of 0–41 digits 1–7' });
+  }
+  if (!Number.isInteger(col) || col < 0 || col > 6) {
+    return res.status(400).json({ error: 'col must be an integer 0–6' });
+  }
+  if (puzzle.interaction_mode !== 'sequence') {
+    return res.status(400).json({ error: 'Use /sequence/move for sequence-mode puzzles' });
+  }
+
+  // Check column is not full (parse position to get heights)
+  const heights = Array(7).fill(0);
+  for (const ch of position) heights[parseInt(ch, 10)]++;
+  if (heights[col] >= 6) {
+    return res.status(400).json({ error: 'Column is full' });
+  }
+
+  // Tier gate for forced_win
+  if (puzzle.category === 'forced_win' && !userCanAccessCategory(req.user, puzzle.category)) {
+    return res.status(403).json({ error: 'This category requires a paid subscription' });
+  }
+
+  // If the chosen col is itself an immediate win, succeed without running validateMove.
+  // This handles the final step of a forcing sequence where a built-up threat is cashed in.
+  const { board: boardBefore, colHeights: heightsBefore } = parseBoardState(position);
+  const learner = position.length % 2 === 0 ? 1 : 2;
+  const winRow = heightsBefore[col];
+  const boardForWin = boardBefore.map(r => [...r]);
+  boardForWin[winRow][col] = learner;
+  if (checkWin(boardForWin, winRow, col, learner)) {
+    return res.json({ outcome: 'success' });
+  }
+
+  const result = sequenceStrategy.validateMove(position, col);
+  if (!result.valid) {
+    return res.json({ outcome: 'fail', reason: result.reason });
+  }
+
+  const threatsAfter = countThreatsAfterMove(position, col);
+  if (threatsAfter >= 2) {
+    return res.json({ outcome: 'success' });
+  }
+
+  const positionAfterLearnerMove = position + String(col);
+  const aiCol = getAiResponseCol(positionAfterLearnerMove);
+  return res.json({ outcome: 'continue', aiCol });
 });
 
 // ── Coach endpoints (T059-T061) ────────────────────────────────────────────────
@@ -772,8 +875,8 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
   if (!VALID_CATEGORIES.has(category)) {
     return res.status(400).json({ error: 'invalid category' });
   }
-  if (!Number.isInteger(count) || count < 1 || count > 100) {
-    return res.status(400).json({ error: 'count must be integer 1–100' });
+  if (!Number.isInteger(count) || count < 1 || count > 1000) {
+    return res.status(400).json({ error: 'count must be integer 1–1000' });
   }
   if (seed !== undefined && !Number.isInteger(seed)) {
     return res.status(400).json({ error: 'seed must be an integer' });
@@ -796,6 +899,9 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       user_player: c.move_string.length % 2 === 0 ? 1 : 2,
       debug_trace: c.debug_trace ?? null,
       highlight_cells: c.highlight_cells ?? null,
+      highlight_metadata: c.highlight_metadata ?? null,
+      category_evidence: c.category_evidence ?? null,
+      correct_col: c.correct_col ?? null,
     }));
     const { error } = await supabase.from('candidates').insert(rows);
     if (error) return res.status(500).json({ error: error.message });
@@ -842,7 +948,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
 
   const { data, error, count } = await supabase
     .from('candidates')
-    .select('id, category, move_string, solver_scores, classifier_tags, status, rejection_reason, created_at, debug_trace, highlight_cells', { count: 'exact' })
+    .select('id, category, move_string, solver_scores, classifier_tags, status, rejection_reason, created_at, debug_trace, highlight_cells, highlight_metadata, category_evidence, correct_col', { count: 'exact' })
     .eq('category', category)
     .eq('status', status)
     .order('created_at', { ascending: true })
@@ -912,7 +1018,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
 
   // moves is the board state AFTER the clicked column is appended.
   // Extract last move to evaluate predicate for that column.
-  const candidateCol = parseInt(moves[moves.length - 1], 10) - 1;
+  const candidateCol = parseInt(moves[moves.length - 1], 10);
   const preClickMoves = moves.slice(0, -1);
 
   let scores;
@@ -925,14 +1031,19 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   const classResult = classify(preClickMoves, candidateCol, scores);
 
   let predicatePass;
-  if (category === 'zugzwang') {
-    const { correctCols } = await checkZugzwangPredicate(preClickMoves, solver);
+  if (category === 'forced_win') {
+    const { correctCols } = await checkForcedWinPredicate(preClickMoves, solver);
     predicatePass = correctCols.includes(candidateCol);
   } else if (category === 'forbidden_columns') {
     const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else {
-    const puzzle = { category, moveString: preClickMoves };
+    const correctColRaw = req.query.correct_col !== undefined ? parseInt(req.query.correct_col, 10) : null;
+    if (correctColRaw !== null && !isValidCol0(correctColRaw)) {
+      return res.status(400).json({ error: 'correct_col must be integer 0-6' });
+    }
+    const correctCol = correctColRaw;
+    const puzzle = { category, moveString: preClickMoves, correctCol };
     const evalResult = evaluatePredicate(puzzle, candidateCol, scores);
     predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied';
   }
@@ -959,17 +1070,21 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status')
+    .select('id, category, move_string, status, highlight_metadata, correct_col')
     .eq('id', id)
     .single();
 
   if (fetchErr || !candidate) return res.status(404).json({ error: 'candidate not found' });
   if (candidate.status === 'approved') return res.status(409).json({ error: 'candidate already approved' });
 
-  // Validate cooperative_ai_moves for multi-move categories
-  if (['fork_setup', 'parity_control'].includes(candidate.category) && cooperative_ai_moves.length === 0) {
-    return res.status(400).json({ error: 'cooperative_ai_moves required for fork_setup and parity_control' });
+  const hmErr = validateHighlightMetadata(candidate.highlight_metadata);
+  if (hmErr) return res.status(400).json({ error: `Invalid highlight_metadata: ${hmErr}` });
+
+  if (candidate.correct_col !== null && !isValidCol0(candidate.correct_col)) {
+    return res.status(400).json({ error: `correct_col out of range: ${candidate.correct_col}` });
   }
+
+  // Validate cooperative_ai_moves for multi-move categories
 
   const predicateType = candidate.category;
 
@@ -984,6 +1099,9 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
       cooperative_ai_moves,
       difficulty: Number(difficulty),
       is_active: true,
+      interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
+      highlight_metadata: candidate.highlight_metadata ?? null,
+      correct_col: candidate.correct_col ?? null,
     })
     .select('id')
     .single();

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
 import { PaywallModal } from '../components/PaywallModal.jsx';
+import { SequenceHandler } from '../components/SequenceHandler.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_NAMES, CATEGORY_CHIPS, CATEGORY_ORDER } from '../lib/categories.js';
@@ -15,7 +16,7 @@ function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
   const heights = Array(COLS).fill(0);
   for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10) - 1;
+    const col = parseInt(moves[i], 10);
     board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
     heights[col]++;
   }
@@ -309,64 +310,76 @@ export default function PuzzlesPage() {
 
       <SessionAccuracy stats={sessionStats} prevStats={prevSessionStats} />
 
-      {/* Prompt */}
-      <div style={{ padding: '8px 20px 10px' }}>
-        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.4px', color: 'var(--text)' }}>
-          {puzzle.goalPrompt}
-        </div>
-        {isWrong && (
-          <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 4 }}>Not the best — try again</div>
-        )}
-      </div>
-
-      {/* Board */}
-      <div style={{ padding: '0 16px' }}>
-        <Board
-          board={board}
-          onColumnClick={handleColumnClick}
-          canPlay={canPlay}
-          highlightedCells={correctCol !== null ? [[heights?.[correctCol] - 1 ?? 0, correctCol, 'winning']] : []}
+      {/* Sequence mode: delegate entirely to SequenceHandler */}
+      {puzzle.interactionMode === 'sequence' ? (
+        <SequenceHandler
+          key={puzzle.id}
+          puzzle={puzzle}
+          onNext={() => loadPuzzle(selectedCategory)}
         />
-      </div>
-
-      {/* Feedback */}
-      {feedback && (
-        <div style={{
-          ...expl,
-          borderLeftColor: isCorrect ? 'var(--green)' : isWrong ? 'var(--red)' : 'var(--text-muted)',
-        }}>
-          <div style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '1.5px',
-            textTransform: 'uppercase',
-            color: isCorrect ? 'var(--green)' : isWrong ? 'var(--red)' : 'var(--text-sub)',
-            marginBottom: 5,
-          }}>
-            {isCorrect && '✓ Correct Move'}
-            {isWrong && '✗ Not the best move'}
-            {isRevealed && `Best move: Col ${(correctCol ?? 0) + 1}`}
+      ) : (
+        <>
+          {/* Prompt */}
+          <div style={{ padding: '8px 20px 10px' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.4px', color: 'var(--text)' }}>
+              {puzzle.goalPrompt}
+            </div>
+            {isWrong && (
+              <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 4 }}>Not the best — try again</div>
+            )}
           </div>
-          <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }}>
-            {isCorrect && (feedback === 'correct_first' ? t('puzzle.correctFirst') : feedback === 'tied' ? t('puzzle.tied', { col: (correctCol ?? 0) + 1 }) : t('puzzle.correctRetry'))}
-            {isWrong && t('puzzle.wrong')}
-            {isRevealed && t('puzzle.revealed')}
+
+          {/* Board */}
+          <div style={{ padding: '0 16px' }}>
+            <Board
+              board={board}
+              onColumnClick={handleColumnClick}
+              canPlay={canPlay}
+              highlightedCells={correctCol !== null ? [[heights?.[correctCol] - 1 ?? 0, correctCol, 'winning']] : []}
+              highlightMetadata={puzzle?.highlightMetadata ?? null}
+            />
           </div>
-        </div>
-      )}
 
-      {(isCorrect || isRevealed) && correctCol !== null && (
-        <div style={{ padding: '0 16px 8px' }}>
-          <DeepRevealButton moves={moves} candidateCol={correctCol} />
-        </div>
-      )}
+          {/* Feedback */}
+          {feedback && (
+            <div style={{
+              ...expl,
+              borderLeftColor: isCorrect ? 'var(--green)' : isWrong ? 'var(--red)' : 'var(--text-muted)',
+            }}>
+              <div style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '1.5px',
+                textTransform: 'uppercase',
+                color: isCorrect ? 'var(--green)' : isWrong ? 'var(--red)' : 'var(--text-sub)',
+                marginBottom: 5,
+              }}>
+                {isCorrect && '✓ Correct Move'}
+                {isWrong && '✗ Not the best move'}
+                {isRevealed && `Best move: Col ${(correctCol ?? 0) + 1}`}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }}>
+                {isCorrect && (feedback === 'correct_first' ? t('puzzle.correctFirst') : feedback === 'tied' ? t('puzzle.tied', { col: (correctCol ?? 0) + 1 }) : t('puzzle.correctRetry'))}
+                {isWrong && t('puzzle.wrong')}
+                {isRevealed && t('puzzle.revealed')}
+              </div>
+            </div>
+          )}
 
-      {feedback && (
-        <div style={{ padding: '0 16px 12px' }}>
-          <button onClick={() => loadPuzzle(selectedCategory)} style={btnPrimary}>
-            Next puzzle →
-          </button>
-        </div>
+          {(isCorrect || isRevealed) && correctCol !== null && (
+            <div style={{ padding: '0 16px 8px' }}>
+              <DeepRevealButton moves={moves} candidateCol={correctCol} />
+            </div>
+          )}
+
+          {feedback && (
+            <div style={{ padding: '0 16px 12px' }}>
+              <button onClick={() => loadPuzzle(selectedCategory)} style={btnPrimary}>
+                Next puzzle →
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

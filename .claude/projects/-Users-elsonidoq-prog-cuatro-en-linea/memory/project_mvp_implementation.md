@@ -20,8 +20,8 @@ Spec lives at `specs/001-decodec4-mvp/` (plan.md, spec.md, tasks.md, data-model.
   - New: POST /api/stripe/create-checkout, POST /api/stripe/webhook, POST /api/stripe/portal
   - Rate limiting via `express-rate-limit` on all routes
   - Supabase JWT auth middleware (`loadUser`) on all requests
-- `classifier.js` — Pattern classifier, all 6 categories (1=immediate_threat, 2=forced_block, 3=double_threat, 4=fork_setup, 5=zugzwang, 6=parity_control)
-- `predicates.js` — Goal predicate evaluator for all 6 puzzle categories; returns correct/wrong/tied
+- `classifier.js` — Pattern classifier, 5 categories (immediate_threat, forced_block, double_threat, forced_win, forbidden_columns)
+- `predicates.js` — Goal predicate evaluator for puzzle categories; returns correct/wrong/tied
 - `migrations/001_initial.sql` — users, tracks, stripe_events tables + RLS
 - `migrations/002_explanation_cache.sql` — explanation_cache table
 - `migrations/003_puzzles.sql` — puzzles, puzzle_attempts, blunders tables

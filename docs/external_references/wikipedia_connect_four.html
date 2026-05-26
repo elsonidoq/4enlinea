@@ -1,0 +1,1342 @@
+<!-- fetch_references.py | url: https://en.wikipedia.org/wiki/Connect_Four | fetched: 2026-05-17T16:26:49Z -->
+<!DOCTYPE html>
+<html class="client-nojs vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-sticky-header-enabled vector-toc-available skin-theme-clientpref-thumb-standard" lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<title>Connect Four - Wikipedia</title>
+<script>(function(){var className="client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-sticky-header-enabled vector-toc-available skin-theme-clientpref-thumb-standard";var cookie=document.cookie.match(/(?:^|; )enwikimwclientpreferences=([^;]+)/);if(cookie){cookie[1].split('%2C').forEach(function(pref){className=className.replace(new RegExp('(^| )'+pref.replace(/-clientpref-\w+$|[^\w-]+/g,'')+'-clientpref-\\w+( |$)'),'$1'+pref+'$2');});}document.documentElement.className=className;}());RLCONF={"wgBreakFrames":false,"wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgRequestId":"ed78e3c0-0e77-4a25-b264-fae8807b2bc4","wgCanonicalNamespace":"","wgCanonicalSpecialPageName":false,"wgNamespaceNumber":0,"wgPageName":"Connect_Four","wgTitle":"Connect Four","wgCurRevisionId":1352110974,"wgRevisionId":1352110974,"wgArticleId":294075,"wgIsArticle":true,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":["CS1: long volume value","Articles with short description","Short description is different from Wikidata","Use American English from February 2026","All Wikipedia articles written in American English","Use mdy dates from February 2026","Articles needing additional references from June 2019","All articles needing additional references","All articles with specifically marked weasel-worded phrases","Articles with specifically marked weasel-worded phrases from August 2021","Commons category link from Wikidata","Abstract strategy games","Board games introduced in 1974","Children's board games","Computer-assisted proofs","Connection games","Games played on Go boards","In-a-row games","Milton Bradley Company games","Paper-and-pencil games","Solved games"],"wgPageViewLanguage":"en","wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgRelevantPageName":"Connect_Four","wgRelevantArticleId":294075,"wgTempUserName":null,"wgIsProbablyEditable":true,"wgRelevantPageIsProbablyEditable":true,"wgRestrictionEdit":[],"wgRestrictionMove":[],"wgNoticeProject":"wikipedia","wgFlaggedRevsParams":{"tags":{"status":{"levels":1}}},"wgConfirmEditCaptchaNeededForGenericEdit":"hcaptcha","wgConfirmEditForceShowCaptcha":false,"wgConfirmEditHCaptchaVisualEditorOnLoadIntegrationEnabled":false,"wgConfirmEditHCaptchaSiteKey":"5d0c670e-a5f4-4258-ad16-1f42792c9c62","wgMediaViewerOnClick":true,"wgMediaViewerEnabledByDefault":true,"wgPopupsFlags":0,"wgVisualEditor":{"pageLanguageCode":"en","pageLanguageDir":"ltr","pageVariantFallbacks":"en"},"wgMFDisplayWikibaseDescriptions":{"search":true,"watchlist":true,"tagline":false,"nearby":true},"wgWMESchemaEditAttemptStepOversample":false,"wgWMEPageLength":20000,"wgTestKitchenUserExperiments":{"overrides":[],"enrolled":[],"assigned":[],"subject_ids":[]},"wgEditSubmitButtonLabelPublish":true,"wgVisualEditorPageIsDisambiguation":false,"wgULSPosition":"interlanguage","wgULSisCompactLinksEnabled":false,"wgVector2022LanguageInHeader":true,"wgULSisLanguageSelectorEmpty":false,"wgULSLanguageSelectorV2Enabled":false,"wgWikibaseItemId":"Q17254","wgCheckUserClientHintsHeadersJsApi":["brands","architecture","bitness","fullVersionList","mobile","model","platform","platformVersion"],"GEHomepageSuggestedEditsEnableTopics":true,"wgGESuggestedEditsTaskTypes":{"taskTypes":["copyedit","link-recommendation"],"unavailableTaskTypes":[]},"wgGETopicsMatchModeEnabled":false,"wgGELevelingUpEnabledForUser":false,"wgPersonalDashboardMenuVisible":false};
+RLSTATE={"ext.globalCssJs.user.styles":"ready","site.styles":"ready","user.styles":"ready","ext.globalCssJs.user":"ready","user":"ready","user.options":"loading","ext.wikimediamessages.styles":"ready","ext.cite.styles":"ready","skins.vector.search.codex.styles":"ready","skins.vector.styles":"ready","skins.vector.icons":"ready","jquery.makeCollapsible.styles":"ready","ext.visualEditor.desktopArticleTarget.noscript":"ready","ext.uls.interlanguage":"ready","wikibase.client.init":"ready"};RLPAGEMODULES=["ext.parsermigration.survey","ext.cite.ux-enhancements","mediawiki.page.media","site","mediawiki.page.ready","jquery.makeCollapsible","mediawiki.toc","skins.vector.js","ext.centralNotice.geoIP","ext.centralNotice.startUp","ext.gadget.ReferenceTooltips","ext.gadget.switcher","ext.urlShortener.toolbar","ext.centralauth.centralautologin","ext.testKitchen","mmv.bootstrap","ext.popups","ext.visualEditor.desktopArticleTarget.init","ext.echo.centralauth","ext.eventLogging","ext.wikimediaEvents","ext.navigationTiming","ext.uls.interface","ext.cx.eventlogging.campaigns","ext.cx.uls.quick.actions","wikibase.client.vector-2022","wikibase.databox.fromWikidata","ext.checkUser.clientHints","ext.quicksurveys.init","ext.growthExperiments.SuggestedEditSession"];</script>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.loader.impl(function(){return["user.options@12s5i",function($,jQuery,require,module){mw.user.tokens.set({"patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});
+}];});});</script>
+<link rel="stylesheet" href="/w/load.php?lang=en&amp;modules=ext.cite.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022">
+<script async="" src="/w/load.php?lang=en&amp;modules=startup&amp;only=scripts&amp;raw=1&amp;skin=vector-2022"></script>
+<meta name="ResourceLoaderDynamicStyles" content="">
+<link rel="stylesheet" href="/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022">
+<meta name="generator" content="MediaWiki 1.47.0-wmf.1">
+<meta name="referrer" content="origin">
+<meta name="referrer" content="origin-when-cross-origin">
+<meta name="robots" content="max-image-preview:standard">
+<meta name="format-detection" content="telephone=no">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/8/84/Connect-four.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="900">
+<meta name="viewport" content="width=1120">
+<meta property="og:title" content="Connect Four - Wikipedia">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="//upload.wikimedia.org">
+<link rel="alternate" type="application/x-wiki" title="Edit this page" href="/w/index.php?title=Connect_Four&amp;action=edit">
+<link rel="apple-touch-icon" href="/static/apple-touch/wikipedia.png">
+<link rel="icon" href="/static/favicon/wikipedia.ico">
+<link rel="search" type="application/opensearchdescription+xml" href="/w/rest.php/v1/search" title="Wikipedia (en)">
+<link rel="EditURI" type="application/rsd+xml" href="//en.wikipedia.org/w/api.php?action=rsd">
+<link rel="canonical" href="https://en.wikipedia.org/wiki/Connect_Four">
+<link rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/deed.en">
+<link rel="alternate" type="application/atom+xml" title="Wikipedia Atom feed" href="/w/index.php?title=Special:RecentChanges&amp;feed=atom">
+<link rel="dns-prefetch" href="//meta.wikimedia.org" />
+<link rel="dns-prefetch" href="auth.wikimedia.org">
+</head>
+<body class="skin--responsive skin-vector skin-vector-search-vue mediawiki ltr sitedir-ltr mw-hide-empty-elt ns-0 ns-subject mw-editable page-Connect_Four rootpage-Connect_Four skin-vector-2022 action-view">
+<div id="mw-aria-live-region" class="mw-aria-live-region" aria-live="polite"></div><a class="mw-jump-link" href="#bodyContent">Jump to content</a>
+<div class="vector-header-container">
+	<header class="vector-header mw-header no-font-mode-scale">
+		<div class="vector-header-start">
+			<nav class="vector-main-menu-landmark" aria-label="Site">
+				
+<div id="vector-main-menu-dropdown" class="vector-dropdown vector-main-menu-dropdown vector-button-flush-left vector-button-flush-right"  title="Main menu" >
+	<input type="checkbox" id="vector-main-menu-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-main-menu-dropdown" class="vector-dropdown-checkbox "  aria-label="Main menu"  >
+	<label id="vector-main-menu-dropdown-label" for="vector-main-menu-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-menu mw-ui-icon-wikimedia-menu"></span>
+
+<span class="vector-dropdown-label-text">Main menu</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+				<div id="vector-main-menu-unpinned-container" class="vector-unpinned-container">
+		
+<div id="vector-main-menu" class="vector-main-menu vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-main-menu-pinnable-header vector-pinnable-header-unpinned"
+	data-feature-name="main-menu-pinned"
+	data-pinnable-element-id="vector-main-menu"
+	data-pinned-container-id="vector-main-menu-pinned-container"
+	data-unpinned-container-id="vector-main-menu-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Main menu</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-main-menu.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-main-menu.unpin">hide</button>
+</div>
+
+	
+<div id="p-navigation" class="vector-menu mw-portlet mw-portlet-navigation"  >
+	<div class="vector-menu-heading">
+		Navigation
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-mainpage-description" class="mw-list-item"><a href="/wiki/Main_Page" title="Visit the main page [z]" accesskey="z"><span>Main page</span></a></li><li id="n-contents" class="mw-list-item"><a href="/wiki/Wikipedia:Contents" title="Guides to browsing Wikipedia"><span>Contents</span></a></li><li id="n-currentevents" class="mw-list-item"><a href="/wiki/Portal:Current_events" title="Articles related to current events"><span>Current events</span></a></li><li id="n-randompage" class="mw-list-item"><a href="/wiki/Special:Random" title="Visit a randomly selected article [x]" accesskey="x"><span>Random article</span></a></li><li id="n-aboutsite" class="mw-list-item"><a href="/wiki/Wikipedia:About" title="Learn about Wikipedia and how it works"><span>About Wikipedia</span></a></li><li id="n-contactpage" class="mw-list-item"><a href="//en.wikipedia.org/wiki/Wikipedia:Contact_us" title="How to contact Wikipedia"><span>Contact us</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-interaction" class="vector-menu mw-portlet mw-portlet-interaction"  >
+	<div class="vector-menu-heading">
+		Contribute
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-help" class="mw-list-item"><a href="/wiki/Help:Contents" title="Guidance on how to use and edit Wikipedia"><span>Help</span></a></li><li id="n-introduction" class="mw-list-item"><a href="/wiki/Help:Introduction" title="Learn how to edit Wikipedia"><span>Learn to edit</span></a></li><li id="n-portal" class="mw-list-item"><a href="/wiki/Wikipedia:Community_portal" title="The hub for editors"><span>Community portal</span></a></li><li id="n-recentchanges" class="mw-list-item"><a href="/wiki/Special:RecentChanges" title="A list of recent changes to Wikipedia [r]" accesskey="r"><span>Recent changes</span></a></li><li id="n-upload" class="mw-list-item"><a href="/wiki/Wikipedia:File_upload_wizard" title="Add images or other media for use on Wikipedia"><span>Upload file</span></a></li><li id="n-specialpages" class="mw-list-item"><a href="/wiki/Special:SpecialPages" title="A list of all special pages [q]" accesskey="q"><span>Special pages</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+</div>
+
+				</div>
+
+	</div>
+</div>
+
+		</nav>
+			
+<a href="/wiki/Main_Page" class="mw-logo">
+	<img class="mw-logo-icon" src="/static/images/icons/enwiki-25.svg" alt="" aria-hidden="true" height="50" width="50">
+	<span class="mw-logo-container skin-invert">
+		<img class="mw-logo-wordmark" alt="Wikipedia" src="/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg" style="width: 8.75em; height: 1.375em;">
+		<img class="mw-logo-tagline" alt="The Free Encyclopedia" src="/static/images/mobile/copyright/wikipedia-tagline-en-25.svg" width="140" height="11" style="width: 8.75em; height: 0.6875em;">
+	</span>
+</a>
+
+		</div>
+		<div class="vector-header-end">
+			
+<div id="p-search" role="search" class="vector-search-box-vue  vector-search-box-collapses vector-search-box-show-thumbnail vector-search-box-auto-expand-width vector-search-box">
+	<a href="/wiki/Special:Search" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only search-toggle" title="Search Wikipedia [f]" accesskey="f"><span class="vector-icon mw-ui-icon-search mw-ui-icon-wikimedia-search"></span>
+
+<span>Search</span>
+	</a>
+	<div class="vector-typeahead-search-container">
+		<div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail cdx-typeahead-search--auto-expand-width">
+			<form action="/w/index.php" id="searchform" class="cdx-search-input cdx-search-input--has-end-button">
+				<div id="simpleSearch" class="cdx-search-input__input-wrapper"  data-search-loc="header-moved">
+					<div class="cdx-text-input cdx-text-input--has-start-icon">
+						<input
+							class="cdx-text-input__input mw-searchInput" autocomplete="off"
+							 type="search" name="search" placeholder="Search Wikipedia" aria-label="Search Wikipedia" autocapitalize="none" spellcheck="false" title="Search Wikipedia [f]" accesskey="f" id="searchInput"
+							>
+						<span class="cdx-text-input__icon cdx-text-input__start-icon"></span>
+					</div>
+					<input type="hidden" name="title" value="Special:Search">
+				</div>
+				<button class="cdx-button cdx-search-input__end-button">Search</button>
+			</form>
+		</div>
+	</div>
+</div>
+
+			<nav class="vector-user-links vector-user-links-wide" aria-label="Personal tools">
+	<div class="vector-user-links-main">
+	
+<div id="p-vector-user-menu-preferences" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-vector-user-menu-userpage" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	<nav class="vector-appearance-landmark" aria-label="Appearance">
+		
+<div id="vector-appearance-dropdown" class="vector-dropdown "  title="Change the appearance of the page&#039;s font size, width, and color" >
+	<input type="checkbox" id="vector-appearance-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-appearance-dropdown" class="vector-dropdown-checkbox "  aria-label="Appearance"  >
+	<label id="vector-appearance-dropdown-label" for="vector-appearance-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-appearance mw-ui-icon-wikimedia-appearance"></span>
+
+<span class="vector-dropdown-label-text">Appearance</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+			<div id="vector-appearance-unpinned-container" class="vector-unpinned-container">
+				
+			</div>
+		
+	</div>
+</div>
+
+	</nav>
+	
+<div id="p-vector-user-menu-notifications" class="vector-menu mw-portlet emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+<div id="p-vector-user-menu-overflow" class="vector-menu mw-portlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			<li id="pt-sitesupport-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="https://donate.wikimedia.org/?wmf_source=donate&amp;wmf_medium=sidebar&amp;wmf_campaign=en.wikipedia.org&amp;uselang=en" class=""><span>Donate</span></a>
+</li>
+<li id="pt-createaccount-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:CreateAccount&amp;returnto=Connect+Four" title="You are encouraged to create an account and log in; however, it is not mandatory" class=""><span>Create account</span></a>
+</li>
+<li id="pt-login-2" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:UserLogin&amp;returnto=Connect+Four" title="You&#039;re encouraged to log in; however, it&#039;s not mandatory. [o]" accesskey="o" class=""><span>Log in</span></a>
+</li>
+
+			
+		</ul>
+		
+	</div>
+</div>
+
+	</div>
+	
+<div id="vector-user-links-dropdown" class="vector-dropdown vector-user-menu vector-button-flush-right vector-user-menu-logged-out user-links-collapsible-item"  title="Log in and more options" >
+	<input type="checkbox" id="vector-user-links-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-user-links-dropdown" class="vector-dropdown-checkbox "  aria-label="Personal tools"  >
+	<label id="vector-user-links-dropdown-label" for="vector-user-links-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-ellipsis mw-ui-icon-wikimedia-ellipsis"></span>
+
+<span class="vector-dropdown-label-text">Personal tools</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+		
+<div id="p-personal" class="vector-menu mw-portlet mw-portlet-personal user-links-collapsible-item"  title="User menu" >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			<li id="pt-sitesupport" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="https://donate.wikimedia.org/?wmf_source=donate&amp;wmf_medium=sidebar&amp;wmf_campaign=en.wikipedia.org&amp;uselang=en" class=""><span class="vector-icon mw-ui-icon-heart mw-ui-icon-wikimedia-heart"></span>
+
+<span>Donate</span></a>
+</li>
+<li id="pt-createaccount" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:CreateAccount&amp;returnto=Connect+Four" title="You are encouraged to create an account and log in; however, it is not mandatory" class=""><span class="vector-icon mw-ui-icon-userAdd mw-ui-icon-wikimedia-userAdd"></span>
+
+<span>Create account</span></a>
+</li>
+<li id="pt-login" class="mw-list-item user-links-collapsible-item"><a data-mw-interface  href="/w/index.php?title=Special:UserLogin&amp;returnto=Connect+Four" title="You&#039;re encouraged to log in; however, it&#039;s not mandatory. [o]" accesskey="o" class=""><span class="vector-icon mw-ui-icon-logIn mw-ui-icon-wikimedia-logIn"></span>
+
+<span>Log in</span></a>
+</li>
+
+			
+		</ul>
+		
+	</div>
+</div>
+
+	
+	</div>
+</div>
+
+</nav>
+
+		</div>
+	</header>
+</div>
+<div class="mw-page-container">
+	<div class="mw-page-container-inner">
+		<div class="vector-sitenotice-container">
+			<div id="siteNotice"><!-- CentralNotice --></div>
+		</div>
+		<div class="vector-column-start">
+			<div class="vector-main-menu-container">
+		<div id="mw-navigation">
+			<nav id="mw-panel" class="vector-main-menu-landmark" aria-label="Site">
+				<div id="vector-main-menu-pinned-container" class="vector-pinned-container">
+				
+				</div>
+		</nav>
+		</div>
+	</div>
+	<div class="vector-sticky-pinned-container">
+				<nav id="mw-panel-toc" aria-label="Contents" data-event-name="ui.sidebar-toc" class="mw-table-of-contents-container vector-toc-landmark">
+					<div id="vector-toc-pinned-container" class="vector-pinned-container">
+					<div id="vector-toc" class="vector-toc vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-toc-pinnable-header vector-pinnable-header-pinned"
+	data-feature-name="toc-pinned"
+	data-pinnable-element-id="vector-toc"
+	data-pinned-container-id="vector-toc-pinned-container"
+	data-unpinned-container-id="vector-toc-unpinned-container"
+>
+	<h2 class="vector-pinnable-header-label">Contents</h2>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-toc.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-toc.unpin">hide</button>
+</div>
+
+
+	<ul class="vector-toc-contents" id="mw-panel-toc-list">
+		<li id="toc-mw-content-text"
+			class="vector-toc-list-item vector-toc-level-1">
+			<a href="#" class="vector-toc-link">
+				<div class="vector-toc-text">(Top)</div>
+			</a>
+		</li>
+		<li id="toc-Gameplay"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Gameplay">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">1</span>
+				<span>Gameplay</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Gameplay-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-Mathematical_solution"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Mathematical_solution">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">2</span>
+				<span>Mathematical solution</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Mathematical_solution-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-Rule_variations"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Rule_variations">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">3</span>
+				<span>Rule variations</span>
+			</div>
+		</a>
+		
+			<button aria-controls="toc-Rule_variations-sublist" class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-toc-toggle">
+				<span class="vector-icon mw-ui-icon-wikimedia-expand"></span>
+				<span>Toggle Rule variations subsection</span>
+			</button>
+		
+		<ul id="toc-Rule_variations-sublist" class="vector-toc-list">
+			<li id="toc-PopOut"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#PopOut">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.1</span>
+					<span>PopOut</span>
+				</div>
+			</a>
+			
+			<ul id="toc-PopOut-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Pop_10"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Pop_10">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.2</span>
+					<span>Pop 10</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Pop_10-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Five-in-a-Row"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Five-in-a-Row">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.3</span>
+					<span>Five-in-a-Row</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Five-in-a-Row-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+		<li id="toc-Power_Up"
+			class="vector-toc-list-item vector-toc-level-2">
+			<a class="vector-toc-link" href="#Power_Up">
+				<div class="vector-toc-text">
+					<span class="vector-toc-numb">3.4</span>
+					<span>Power Up</span>
+				</div>
+			</a>
+			
+			<ul id="toc-Power_Up-sublist" class="vector-toc-list">
+			</ul>
+		</li>
+	</ul>
+	</li>
+	<li id="toc-Other_versions"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Other_versions">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">4</span>
+				<span>Other versions</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Other_versions-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-Popular_culture"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Popular_culture">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">5</span>
+				<span>Popular culture</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Popular_culture-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-Reviews"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#Reviews">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">6</span>
+				<span>Reviews</span>
+			</div>
+		</a>
+		
+		<ul id="toc-Reviews-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-See_also"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#See_also">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">7</span>
+				<span>See also</span>
+			</div>
+		</a>
+		
+		<ul id="toc-See_also-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-References"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#References">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">8</span>
+				<span>References</span>
+			</div>
+		</a>
+		
+		<ul id="toc-References-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+	<li id="toc-External_links"
+		class="vector-toc-list-item vector-toc-level-1 vector-toc-list-item-expanded">
+		<a class="vector-toc-link" href="#External_links">
+			<div class="vector-toc-text">
+				<span class="vector-toc-numb">9</span>
+				<span>External links</span>
+			</div>
+		</a>
+		
+		<ul id="toc-External_links-sublist" class="vector-toc-list">
+		</ul>
+	</li>
+</ul>
+</div>
+
+					</div>
+		</nav>
+			</div>
+		</div>
+		<div class="mw-content-container">
+			<main id="content" class="mw-body">
+				<header class="mw-body-header vector-page-titlebar no-font-mode-scale">
+					<nav aria-label="Contents" class="vector-toc-landmark">
+						
+<div id="vector-page-titlebar-toc" class="vector-dropdown vector-page-titlebar-toc vector-button-flush-left"  title="Table of Contents" >
+	<input type="checkbox" id="vector-page-titlebar-toc-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-page-titlebar-toc" class="vector-dropdown-checkbox "  aria-label="Toggle the table of contents"  >
+	<label id="vector-page-titlebar-toc-label" for="vector-page-titlebar-toc-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-listBullet mw-ui-icon-wikimedia-listBullet"></span>
+
+<span class="vector-dropdown-label-text">Toggle the table of contents</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+							<div id="vector-page-titlebar-toc-unpinned-container" class="vector-unpinned-container">
+			</div>
+		
+	</div>
+</div>
+
+					</nav>
+					<h1 id="firstHeading" class="firstHeading mw-first-heading"><span lang="en" dir="ltr"><span class="mw-page-title-main">Connect Four</span></span></h1>
+							
+<div id="p-lang-btn" class="vector-dropdown mw-portlet mw-portlet-lang"  >
+	<input type="checkbox" id="p-lang-btn-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-p-lang-btn" class="vector-dropdown-checkbox mw-interlanguage-selector" aria-label="Go to an article in another language. Available in 23 languages"   >
+	<label id="p-lang-btn-label" for="p-lang-btn-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--action-progressive mw-portlet-lang-heading-23" aria-hidden="true"  ><span class="vector-icon mw-ui-icon-language-progressive mw-ui-icon-wikimedia-language-progressive"></span>
+
+<span class="vector-dropdown-label-text">23 languages</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+		<div class="vector-menu-content">
+			
+			<ul class="vector-menu-content-list">
+				
+				<li class="interlanguage-link interwiki-ar mw-list-item"><a href="https://ar.wikipedia.org/wiki/%D8%A7%D9%84%D8%A3%D8%B1%D8%A8%D8%B9%D8%A9_%D8%AA%D8%B1%D8%A8%D8%AD" title="الأربعة تربح – Arabic" lang="ar" hreflang="ar" data-title="الأربعة تربح" data-language-autonym="العربية" data-language-local-name="Arabic" class="interlanguage-link-target"><span>العربية</span></a></li><li class="interlanguage-link interwiki-ca mw-list-item"><a href="https://ca.wikipedia.org/wiki/Quatre_en_ratlla" title="Quatre en ratlla – Catalan" lang="ca" hreflang="ca" data-title="Quatre en ratlla" data-language-autonym="Català" data-language-local-name="Catalan" class="interlanguage-link-target"><span>Català</span></a></li><li class="interlanguage-link interwiki-cs mw-list-item"><a href="https://cs.wikipedia.org/wiki/Cestovn%C3%AD_pi%C5%A1kvorky" title="Cestovní piškvorky – Czech" lang="cs" hreflang="cs" data-title="Cestovní piškvorky" data-language-autonym="Čeština" data-language-local-name="Czech" class="interlanguage-link-target"><span>Čeština</span></a></li><li class="interlanguage-link interwiki-da mw-list-item"><a href="https://da.wikipedia.org/wiki/Fire_p%C3%A5_stribe" title="Fire på stribe – Danish" lang="da" hreflang="da" data-title="Fire på stribe" data-language-autonym="Dansk" data-language-local-name="Danish" class="interlanguage-link-target"><span>Dansk</span></a></li><li class="interlanguage-link interwiki-de mw-list-item"><a href="https://de.wikipedia.org/wiki/Vier_gewinnt" title="Vier gewinnt – German" lang="de" hreflang="de" data-title="Vier gewinnt" data-language-autonym="Deutsch" data-language-local-name="German" class="interlanguage-link-target"><span>Deutsch</span></a></li><li class="interlanguage-link interwiki-eo mw-list-item"><a href="https://eo.wikipedia.org/wiki/Kunligu_Kvar" title="Kunligu Kvar – Esperanto" lang="eo" hreflang="eo" data-title="Kunligu Kvar" data-language-autonym="Esperanto" data-language-local-name="Esperanto" class="interlanguage-link-target"><span>Esperanto</span></a></li><li class="interlanguage-link interwiki-es mw-list-item"><a href="https://es.wikipedia.org/wiki/Conecta_4" title="Conecta 4 – Spanish" lang="es" hreflang="es" data-title="Conecta 4" data-language-autonym="Español" data-language-local-name="Spanish" class="interlanguage-link-target"><span>Español</span></a></li><li class="interlanguage-link interwiki-et mw-list-item"><a href="https://et.wikipedia.org/wiki/Gravitrips" title="Gravitrips – Estonian" lang="et" hreflang="et" data-title="Gravitrips" data-language-autonym="Eesti" data-language-local-name="Estonian" class="interlanguage-link-target"><span>Eesti</span></a></li><li class="interlanguage-link interwiki-fa mw-list-item"><a href="https://fa.wikipedia.org/wiki/%DA%86%D9%87%D8%A7%D8%B1_%D8%B1%D8%AC" title="چهار رج – Persian" lang="fa" hreflang="fa" data-title="چهار رج" data-language-autonym="فارسی" data-language-local-name="Persian" class="interlanguage-link-target"><span>فارسی</span></a></li><li class="interlanguage-link interwiki-fi mw-list-item"><a href="https://fi.wikipedia.org/wiki/Nelj%C3%A4n_suora" title="Neljän suora – Finnish" lang="fi" hreflang="fi" data-title="Neljän suora" data-language-autonym="Suomi" data-language-local-name="Finnish" class="interlanguage-link-target"><span>Suomi</span></a></li><li class="interlanguage-link interwiki-fr mw-list-item"><a href="https://fr.wikipedia.org/wiki/Puissance_4" title="Puissance 4 – French" lang="fr" hreflang="fr" data-title="Puissance 4" data-language-autonym="Français" data-language-local-name="French" class="interlanguage-link-target"><span>Français</span></a></li><li class="interlanguage-link interwiki-he mw-list-item"><a href="https://he.wikipedia.org/wiki/%D7%90%D7%A8%D7%91%D7%A2_%D7%91%D7%A9%D7%95%D7%A8%D7%94" title="ארבע בשורה – Hebrew" lang="he" hreflang="he" data-title="ארבע בשורה" data-language-autonym="עברית" data-language-local-name="Hebrew" class="interlanguage-link-target"><span>עברית</span></a></li><li class="interlanguage-link interwiki-hu mw-list-item"><a href="https://hu.wikipedia.org/wiki/Connect_four" title="Connect four – Hungarian" lang="hu" hreflang="hu" data-title="Connect four" data-language-autonym="Magyar" data-language-local-name="Hungarian" class="interlanguage-link-target"><span>Magyar</span></a></li><li class="interlanguage-link interwiki-it mw-list-item"><a href="https://it.wikipedia.org/wiki/Forza_quattro" title="Forza quattro – Italian" lang="it" hreflang="it" data-title="Forza quattro" data-language-autonym="Italiano" data-language-local-name="Italian" class="interlanguage-link-target"><span>Italiano</span></a></li><li class="interlanguage-link interwiki-ko mw-list-item"><a href="https://ko.wikipedia.org/wiki/%EC%BB%A4%EB%84%A5%ED%8A%B8%ED%8F%AC" title="커넥트포 – Korean" lang="ko" hreflang="ko" data-title="커넥트포" data-language-autonym="한국어" data-language-local-name="Korean" class="interlanguage-link-target"><span>한국어</span></a></li><li class="interlanguage-link interwiki-nl mw-list-item"><a href="https://nl.wikipedia.org/wiki/Vier_op_%27n_rij" title="Vier op &#039;n rij – Dutch" lang="nl" hreflang="nl" data-title="Vier op &#039;n rij" data-language-autonym="Nederlands" data-language-local-name="Dutch" class="interlanguage-link-target"><span>Nederlands</span></a></li><li class="interlanguage-link interwiki-pl mw-list-item"><a href="https://pl.wikipedia.org/wiki/Czw%C3%B3rki" title="Czwórki – Polish" lang="pl" hreflang="pl" data-title="Czwórki" data-language-autonym="Polski" data-language-local-name="Polish" class="interlanguage-link-target"><span>Polski</span></a></li><li class="interlanguage-link interwiki-pt mw-list-item"><a href="https://pt.wikipedia.org/wiki/Lig_4" title="Lig 4 – Portuguese" lang="pt" hreflang="pt" data-title="Lig 4" data-language-autonym="Português" data-language-local-name="Portuguese" class="interlanguage-link-target"><span>Português</span></a></li><li class="interlanguage-link interwiki-ru mw-list-item"><a href="https://ru.wikipedia.org/wiki/%D0%A7%D0%B5%D1%82%D1%8B%D1%80%D0%B5_%D0%B2_%D1%80%D1%8F%D0%B4" title="Четыре в ряд – Russian" lang="ru" hreflang="ru" data-title="Четыре в ряд" data-language-autonym="Русский" data-language-local-name="Russian" class="interlanguage-link-target"><span>Русский</span></a></li><li class="interlanguage-link interwiki-simple mw-list-item"><a href="https://simple.wikipedia.org/wiki/Connect_Four" title="Connect Four – Simple English" lang="en-simple" hreflang="en-simple" data-title="Connect Four" data-language-autonym="Simple English" data-language-local-name="Simple English" class="interlanguage-link-target"><span>Simple English</span></a></li><li class="interlanguage-link interwiki-sv mw-list-item"><a href="https://sv.wikipedia.org/wiki/Fyra_i_rad" title="Fyra i rad – Swedish" lang="sv" hreflang="sv" data-title="Fyra i rad" data-language-autonym="Svenska" data-language-local-name="Swedish" class="interlanguage-link-target"><span>Svenska</span></a></li><li class="interlanguage-link interwiki-uk mw-list-item"><a href="https://uk.wikipedia.org/wiki/%D0%A7%D0%BE%D1%82%D0%B8%D1%80%D0%B8_%D0%B2_%D1%80%D1%8F%D0%B4" title="Чотири в ряд – Ukrainian" lang="uk" hreflang="uk" data-title="Чотири в ряд" data-language-autonym="Українська" data-language-local-name="Ukrainian" class="interlanguage-link-target"><span>Українська</span></a></li><li class="interlanguage-link interwiki-zh mw-list-item"><a href="https://zh.wikipedia.org/wiki/%E5%B1%8F%E9%A2%A8%E5%BC%8F%E5%9B%9B%E5%AD%90%E6%A3%8B" title="屏風式四子棋 – Chinese" lang="zh" hreflang="zh" data-title="屏風式四子棋" data-language-autonym="中文" data-language-local-name="Chinese" class="interlanguage-link-target"><span>中文</span></a></li>
+			</ul>
+			<div class="after-portlet after-portlet-lang"><span class="wb-langlinks-edit wb-langlinks-link"><a href="https://www.wikidata.org/wiki/Special:EntityPage/Q17254#sitelinks-wikipedia" title="Edit interlanguage links" class="wbc-editpage">Edit links</a></span></div>
+		</div>
+
+	</div>
+</div>
+</header>
+				<div class="vector-page-toolbar vector-feature-custom-font-size-clientpref--excluded">
+					<div class="vector-page-toolbar-container">
+						<div id="left-navigation">
+							<nav aria-label="Namespaces">
+								
+<div id="p-associated-pages" class="vector-menu vector-menu-tabs mw-portlet mw-portlet-associated-pages"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-nstab-main" class="selected vector-tab-noicon mw-list-item"><a href="/wiki/Connect_Four" title="View the content page [c]" accesskey="c"><span>Article</span></a></li><li id="ca-talk" class="vector-tab-noicon mw-list-item"><a href="/wiki/Talk:Connect_Four" rel="discussion" title="Discuss improvements to the content page [t]" accesskey="t"><span>Talk</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+								
+<div id="vector-variants-dropdown" class="vector-dropdown emptyPortlet"  >
+	<input type="checkbox" id="vector-variants-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-variants-dropdown" class="vector-dropdown-checkbox " aria-label="Change language variant"   >
+	<label id="vector-variants-dropdown-label" for="vector-variants-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet" aria-hidden="true"  ><span class="vector-dropdown-label-text">English</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+					
+<div id="p-variants" class="vector-menu mw-portlet mw-portlet-variants emptyPortlet"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+				
+	</div>
+</div>
+
+							</nav>
+						</div>
+						<div id="right-navigation" class="vector-collapsible">
+							<nav aria-label="Views">
+								
+<div id="p-views" class="vector-menu vector-menu-tabs mw-portlet mw-portlet-views"  >
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-view" class="selected vector-tab-noicon mw-list-item"><a href="/wiki/Connect_Four"><span>Read</span></a></li><li id="ca-edit" class="vector-tab-noicon mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=edit" title="Edit this page [e]" accesskey="e"><span>Edit</span></a></li><li id="ca-history" class="vector-tab-noicon mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=history" title="Past revisions of this page [h]" accesskey="h"><span>View history</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+							</nav>
+				
+							<nav class="vector-page-tools-landmark" aria-label="Page tools">
+								
+<div id="vector-page-tools-dropdown" class="vector-dropdown vector-page-tools-dropdown"  >
+	<input type="checkbox" id="vector-page-tools-dropdown-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-page-tools-dropdown" class="vector-dropdown-checkbox "  aria-label="Tools"  >
+	<label id="vector-page-tools-dropdown-label" for="vector-page-tools-dropdown-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet" aria-hidden="true"  ><span class="vector-dropdown-label-text">Tools</span>
+	</label>
+	<div class="vector-dropdown-content">
+
+
+									<div id="vector-page-tools-unpinned-container" class="vector-unpinned-container">
+						
+<div id="vector-page-tools" class="vector-page-tools vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-page-tools-pinnable-header vector-pinnable-header-unpinned"
+	data-feature-name="page-tools-pinned"
+	data-pinnable-element-id="vector-page-tools"
+	data-pinned-container-id="vector-page-tools-pinned-container"
+	data-unpinned-container-id="vector-page-tools-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Tools</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-page-tools.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-page-tools.unpin">hide</button>
+</div>
+
+	
+<div id="p-cactions" class="vector-menu mw-portlet mw-portlet-cactions emptyPortlet vector-has-collapsible-items"  >
+	<div class="vector-menu-heading">
+		Actions
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-tb" class="vector-menu mw-portlet mw-portlet-tb"  >
+	<div class="vector-menu-heading">
+		General
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="t-whatlinkshere" class="mw-list-item"><a href="/wiki/Special:WhatLinksHere/Connect_Four" title="List of all English Wikipedia pages containing links to this page [j]" accesskey="j"><span>What links here</span></a></li><li id="t-recentchangeslinked" class="mw-list-item"><a href="/wiki/Special:RecentChangesLinked/Connect_Four" rel="nofollow" title="Recent changes in pages linked from this page [k]" accesskey="k"><span>Related changes</span></a></li><li id="t-upload" class="mw-list-item"><a href="//en.wikipedia.org/wiki/Wikipedia:File_Upload_Wizard" title="Upload files [u]" accesskey="u"><span>Upload file</span></a></li><li id="t-permalink" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;oldid=1352110974" title="Permanent link to this revision of this page"><span>Permanent link</span></a></li><li id="t-info" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;action=info" title="More information about this page"><span>Page information</span></a></li><li id="t-cite" class="mw-list-item"><a href="/w/index.php?title=Special:CiteThisPage&amp;page=Connect_Four&amp;id=1352110974&amp;wpFormIdentifier=titleform" title="Information on how to cite this page"><span>Cite this page</span></a></li><li id="t-urlshortener" class="mw-list-item"><a href="/w/index.php?title=Special:UrlShortener&amp;url=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FConnect_Four"><span>Get shortened URL</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-coll-print_export" class="vector-menu mw-portlet mw-portlet-coll-print_export"  >
+	<div class="vector-menu-heading">
+		Print/export
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="coll-download-as-rl" class="mw-list-item"><a href="/w/index.php?title=Special:DownloadAsPdf&amp;page=Connect_Four&amp;action=show-download-screen" title="Download this page as a PDF file"><span>Download as PDF</span></a></li><li id="t-print" class="mw-list-item"><a href="/w/index.php?title=Connect_Four&amp;printable=yes" title="Printable version of this page [p]" accesskey="p"><span>Printable version</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+<div id="p-wikibase-otherprojects" class="vector-menu mw-portlet mw-portlet-wikibase-otherprojects"  >
+	<div class="vector-menu-heading">
+		In other projects
+	</div>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li class="wb-otherproject-link wb-otherproject-commons mw-list-item"><a href="https://commons.wikimedia.org/wiki/Category:Connect_Four" hreflang="en"><span>Wikimedia Commons</span></a></li><li class="wb-otherproject-link wb-otherproject-wikibooks mw-list-item"><a href="https://en.wikibooks.org/wiki/Connect_Four" hreflang="en"><span>Wikibooks</span></a></li><li id="t-wikibase" class="wb-otherproject-link wb-otherproject-wikibase-dataitem mw-list-item"><a href="https://www.wikidata.org/wiki/Special:EntityPage/Q17254" title="Structured data on this page hosted by Wikidata [g]" accesskey="g"><span>Wikidata item</span></a></li>
+		</ul>
+		
+	</div>
+</div>
+
+</div>
+
+									</div>
+				
+	</div>
+</div>
+
+							</nav>
+						</div>
+					</div>
+				</div>
+				<div class="vector-column-end no-font-mode-scale">
+					<div class="vector-sticky-pinned-container">
+						<div class="wp25eastereggs-vector-sitenotice-landmark"></div>
+						<nav class="vector-page-tools-landmark" aria-label="Page tools">
+							<div id="vector-page-tools-pinned-container" class="vector-pinned-container">
+				
+							</div>
+		</nav>
+						<nav class="vector-appearance-landmark" aria-label="Appearance">
+							<div id="vector-appearance-pinned-container" class="vector-pinned-container">
+				<div id="vector-appearance" class="vector-appearance vector-pinnable-element">
+	<div
+	class="vector-pinnable-header vector-appearance-pinnable-header vector-pinnable-header-pinned"
+	data-feature-name="appearance-pinned"
+	data-pinnable-element-id="vector-appearance"
+	data-pinned-container-id="vector-appearance-pinned-container"
+	data-unpinned-container-id="vector-appearance-unpinned-container"
+>
+	<div class="vector-pinnable-header-label">Appearance</div>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-pin-button" data-event-name="pinnable-header.vector-appearance.pin">move to sidebar</button>
+	<button class="vector-pinnable-header-toggle-button vector-pinnable-header-unpin-button" data-event-name="pinnable-header.vector-appearance.unpin">hide</button>
+</div>
+
+
+</div>
+
+							</div>
+		</nav>
+					</div>
+				</div>
+				<div id="bodyContent" class="vector-body" aria-labelledby="firstHeading" data-mw-ve-target-container>
+					<div class="vector-body-before-content">
+							<div class="mw-indicators">
+		</div>
+
+						<div id="siteSub" class="noprint">From Wikipedia, the free encyclopedia</div>
+					</div>
+					<div id="contentSub"><div id="mw-content-subtitle"></div></div>
+					
+					
+					<div id="mw-content-text" class="mw-body-content"><div class="mw-subjectpageheader">
+</div><div class="mw-content-ltr mw-parser-output" lang="en" dir="ltr"><div class="shortdescription nomobile noexcerpt noprint searchaux" style="display:none">Two-player board game</div>
+<p class="mw-empty-elt">
+
+</p>
+<style data-mw-deduplicate="TemplateStyles:r1353403208">.mw-parser-output .infobox-subbox{padding:0;border:none;margin:-3px;width:auto;min-width:100%;font-size:100%;clear:none;float:none;background-color:transparent;color:inherit}.mw-parser-output .infobox-3cols-child{margin:-3px}.mw-parser-output .infobox .navbar{font-size:100%}@media screen{html.skin-theme-clientpref-night .mw-parser-output .infobox-full-data:not(.notheme)>div:not(.notheme)[style]{background:#1f1f23!important;color:#f8f9fa}}@media screen and (prefers-color-scheme:dark){html.skin-theme-clientpref-os .mw-parser-output .infobox-full-data:not(.notheme)>div:not(.notheme)[style]{background:#1f1f23!important;color:#f8f9fa}}@media(min-width:640px){body.skin--responsive .mw-parser-output .infobox-table{display:table!important}body.skin--responsive .mw-parser-output .infobox-table>caption{display:table-caption!important}body.skin--responsive .mw-parser-output .infobox-table>tbody{display:table-row-group}body.skin--responsive .mw-parser-output .infobox-table th,body.skin--responsive .mw-parser-output .infobox-table td{padding-left:inherit;padding-right:inherit}}</style><table class="infobox" style="width:150;"><caption class="infobox-title"><i>Connect Four</i></caption><tbody><tr><td colspan="2" class="infobox-image"><span class="mw-default-size" typeof="mw:File/Frameless"><a href="/wiki/File:Connect_4_game_logo.png" class="mw-file-description"><img src="//upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Connect_4_game_logo.png/250px-Connect_4_game_logo.png" decoding="async" width="250" height="79" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Connect_4_game_logo.png/500px-Connect_4_game_logo.png 2x" data-file-width="636" data-file-height="201" /></a></span></td></tr><tr><td colspan="2" class="infobox-image"><span typeof="mw:File"><a href="/wiki/File:Connect-four.jpg" class="mw-file-description"><img src="//upload.wikimedia.org/wikipedia/commons/thumb/8/84/Connect-four.jpg/250px-Connect-four.jpg" decoding="async" width="250" height="188" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/8/84/Connect-four.jpg/500px-Connect-four.jpg 2x" data-file-width="640" data-file-height="480" /></a></span><div class="infobox-caption">Two people playing Connect Four</div></td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Other names</th><td class="infobox-data"><i>4 in a Row</i><br /><i>The Captain's Duel</i><br /><i>The Captain's Mistress</i></td></tr><tr><th scope="row" class="infobox-label" style="width:160;"><a href="/wiki/Game_designer" class="mw-redirect" title="Game designer">Designers</a></th><td class="infobox-data">Howard Wexler<sup id="cite&#95;ref-nyu/nyugcgamedesign/Intro&#95;1-0" class="reference"><a href="#cite_note-nyu/nyugcgamedesign/Intro-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-howardwexlertoys/bio/hasbro&#95;2-0" class="reference"><a href="#cite_note-howardwexlertoys/bio/hasbro-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup><br />Ned Strongin<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-newportbeachindy/strongin-fun&#95;5-0" class="reference"><a href="#cite_note-newportbeachindy/strongin-fun-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-justia.com/inventor/ned-strongin&#95;6-0" class="reference"><a href="#cite_note-justia.com/inventor/ned-strongin-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-/boardgames/designer/ned-strongin&#95;7-0" class="reference"><a href="#cite_note-/boardgames/designer/ned-strongin-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-uspto.report/TM/90252052&#95;8-0" class="reference"><a href="#cite_note-uspto.report/TM/90252052-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-google/patent/US4863174A&#95;9-0" class="reference"><a href="#cite_note-google/patent/US4863174A-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup></td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Publishers</th><td class="infobox-data"><a href="/wiki/Milton_Bradley_Company" title="Milton Bradley Company">Milton Bradley</a><br /><a href="/wiki/Hasbro" title="Hasbro">Hasbro</a></td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Publication</th><td class="infobox-data">1974<span class="noprint">&#59;&#32;52&#160;years ago</span><span style="display:none">&#160;(<span class="bday dtstart published updated">1974</span>)</span></td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Years active</th><td class="infobox-data">1974–present</td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Genres</th><td class="infobox-data"><a href="/wiki/Connection_game" title="Connection game">Connection game</a></td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Languages</th><td class="infobox-data">English</td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Players</th><td class="infobox-data">2</td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Playing time</th><td class="infobox-data">10 min</td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Age range</th><td class="infobox-data">6+</td></tr><tr><th scope="row" class="infobox-label" style="width:160;">Materials required</th><td class="infobox-data">a playing board and tokens</td></tr></tbody></table>
+<p><b>Connect Four</b> (also known as <b>Connect 4</b>, <b>Four Up</b>, <b>Plot Four</b>, <b>Find Four</b>, <b>Captain's Mistress</b>, <b>Four in a Row</b>, <b>Drop Four</b>, and, in the <a href="/wiki/Soviet_Union" title="Soviet Union">Soviet Union</a>, <b>Gravitrips</b>) is a game in which the players choose a color and then take turns dropping colored tokens into a six-row, seven-column vertically suspended grid. The pieces fall straight down, occupying the lowest available space within the column. The objective of the game is to be the first to form a horizontal, vertical, or diagonal line of four of one's own tokens. It is therefore a type of <a href="/wiki/M,n,k-game" title="M,n,k-game"><i>m</i>,<i>n</i>,<i>k</i>-game</a> (7, 6, 4) with restricted piece placement. Connect Four is a <a href="/wiki/Solved_game" title="Solved game">solved game</a>; the first player can always win by playing the right moves.
+</p><p>The game was created by <b>Howard Wexler</b>, and first sold under the <i>Connect Four</i> trademark<sup id="cite&#95;ref-uspto&#95;10-0" class="reference"><a href="#cite_note-uspto-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup> by <a href="/wiki/Milton_Bradley_Company" title="Milton Bradley Company">Milton Bradley</a> in February 1974.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Gameplay">Gameplay</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=1" title="Edit section: Gameplay"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<style data-mw-deduplicate="TemplateStyles:r1244412712">.mw-parser-output .templatequote{overflow:hidden;margin:1em 0;padding:0 32px}.mw-parser-output .templatequotecite{line-height:1.5em;text-align:left;margin-top:0}@media(min-width:500px){.mw-parser-output .templatequotecite{padding-left:1.6em}}</style><blockquote class="templatequote"><p>Object: Connect four of your discs in a row while preventing your opponent from doing the same. But, look out&#160;&#8211;&#32;your opponent can sneak up on you and win the game!</p></blockquote><div class="templatequotecite"><p style="display: inline; padding-left: 2.3em;">—&#8202;Milton Bradley, Connect Four "Pretty Sneaky, Sis" television commercial, 1977<sup id="cite&#95;ref-11" class="reference"><a href="#cite_note-11"><span class="cite-bracket">&#91;</span>11<span class="cite-bracket">&#93;</span></a></sup><span style="display:none" data-plural="0"></span></p></div>
+<p>A gameplay example (below right) shows the first player starting Connect Four by dropping one of their yellow discs into the center column of an empty game board. The two players then alternate turns dropping one of their discs at a time into an unfilled column, until the second player, with red discs, achieves a diagonal four in a row, and wins the game. If the board fills up before either player achieves four in a row, then the game is a draw.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Mathematical_solution">Mathematical solution</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=2" title="Edit section: Mathematical solution"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Connect Four is a two-player game with <a href="/wiki/Perfect_information" title="Perfect information">perfect information</a> for both sides, meaning that nothing is hidden from anyone. Connect Four also belongs to the classification of an adversarial, <a href="/wiki/Zero-sum_game" title="Zero-sum game">zero-sum game</a>, since a player's advantage is an opponent's disadvantage.
+</p><p>One measure of complexity of the Connect Four game is the number of possible board positions. For classic Connect Four played on a 7-column-wide, 6-row-high grid, there are 4,531,985,219,092 positions<sup id="cite&#95;ref-oeis&#95;12-0" class="reference"><a href="#cite_note-oeis-12"><span class="cite-bracket">&#91;</span>12<span class="cite-bracket">&#93;</span></a></sup> for all game boards populated with 0 to 42 pieces.
+</p>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="/wiki/File:Connect_Four.gif" class="mw-file-description"><img src="//upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Connect_Four.gif/250px-Connect_Four.gif" decoding="async" width="250" height="148" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/a/ad/Connect_Four.gif 2x" data-file-width="320" data-file-height="190" /></a><figcaption>Gameplay of Connect Four</figcaption></figure>
+<p>The game was first <a href="/wiki/Solved_game" title="Solved game">solved</a> by James Dow Allen (October 1, 1988), and independently by <a href="/wiki/Victor_Allis" title="Victor Allis">Victor Allis</a> (October 16, 1988).<sup id="cite&#95;ref-Tromp&#95;13-0" class="reference"><a href="#cite_note-Tromp-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup> Allis describes a knowledge-based approach,<sup id="cite&#95;ref-Allis&#95;14-0" class="reference"><a href="#cite_note-Allis-14"><span class="cite-bracket">&#91;</span>14<span class="cite-bracket">&#93;</span></a></sup> with nine strategies, as a solution for Connect Four. Allen also describes winning strategies<sup id="cite&#95;ref-Allen&#95;15-0" class="reference"><a href="#cite_note-Allen-15"><span class="cite-bracket">&#91;</span>15<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-allenBook&#95;16-0" class="reference"><a href="#cite_note-allenBook-16"><span class="cite-bracket">&#91;</span>16<span class="cite-bracket">&#93;</span></a></sup> in his analysis of the game. At the time of the initial solutions for Connect Four, <a href="/wiki/Brute-force_search" title="Brute-force search">brute-force analysis</a> was not deemed feasible given the game's complexity and the computer technology available at the time.
+</p><p>Connect Four has since been solved with brute-force methods, beginning with <a href="/wiki/John_Tromp" title="John Tromp">John Tromp</a>'s work in compiling an 8-ply database.<sup id="cite&#95;ref-Tromp&#95;13-1" class="reference"><a href="#cite_note-Tromp-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-17" class="reference"><a href="#cite_note-17"><span class="cite-bracket">&#91;</span>17<span class="cite-bracket">&#93;</span></a></sup> The artificial intelligence algorithms able to strongly solve Connect Four are <a href="/wiki/Minimax" title="Minimax">minimax</a> or <a href="/wiki/Negamax" title="Negamax">negamax</a>, with optimizations that include <a href="/wiki/Alpha-beta_pruning" class="mw-redirect" title="Alpha-beta pruning">alpha-beta pruning</a>, move ordering, and <a href="/wiki/Transposition_table" title="Transposition table">transposition tables</a>. The code for solving Connect Four with these methods is also the basis for the <a href="/wiki/Fhourstones" title="Fhourstones">Fhourstones</a> integer performance benchmark.<sup id="cite&#95;ref-Fhourstones&#95;18-0" class="reference"><a href="#cite_note-Fhourstones-18"><span class="cite-bracket">&#91;</span>18<span class="cite-bracket">&#93;</span></a></sup>
+In 2025, a win-draw-loss look-up table was computed for the classic 7x6 board.<sup id="cite&#95;ref-19" class="reference"><a href="#cite_note-19"><span class="cite-bracket">&#91;</span>19<span class="cite-bracket">&#93;</span></a></sup>
+</p><p>The solved conclusion for Connect Four is <a href="/wiki/First-player-win" class="mw-redirect" title="First-player-win">first-player win</a>. With <a href="/wiki/Perfect_play" class="mw-redirect" title="Perfect play">perfect play</a>, the first player can force a win,<sup id="cite&#95;ref-Tromp&#95;13-2" class="reference"><a href="#cite_note-Tromp-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-Allis&#95;14-1" class="reference"><a href="#cite_note-Allis-14"><span class="cite-bracket">&#91;</span>14<span class="cite-bracket">&#93;</span></a></sup><sup id="cite&#95;ref-Allen&#95;15-1" class="reference"><a href="#cite_note-Allen-15"><span class="cite-bracket">&#91;</span>15<span class="cite-bracket">&#93;</span></a></sup> on or before the 41st move<sup id="cite&#95;ref-c4solve&#95;20-0" class="reference"><a href="#cite_note-c4solve-20"><span class="cite-bracket">&#91;</span>20<span class="cite-bracket">&#93;</span></a></sup> by starting in the middle column. The game is a theoretical draw when the first player starts in the columns adjacent to the center. For the edges of the game board, column 1 and 2 on left (or column 7 and 6 on right), the exact move-value score for first player start is loss on the 40th move,<sup id="cite&#95;ref-c4solve&#95;20-1" class="reference"><a href="#cite_note-c4solve-20"><span class="cite-bracket">&#91;</span>20<span class="cite-bracket">&#93;</span></a></sup> and loss on the 42nd move,<sup id="cite&#95;ref-c4solve&#95;20-2" class="reference"><a href="#cite_note-c4solve-20"><span class="cite-bracket">&#91;</span>20<span class="cite-bracket">&#93;</span></a></sup> respectively. In other words, by starting with the four outer columns, the first player allows the second player to force a win.<sup id="cite&#95;ref-21" class="reference"><a href="#cite_note-21"><span class="cite-bracket">&#91;</span>21<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Rule_variations">Rule variations</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=3" title="Edit section: Rule variations"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>There are many variations of Connect Four with differing game board sizes, game pieces, and gameplay rules. Many variations are popular with game theory and artificial intelligence research, rather than with physical game boards and gameplay by persons.
+</p><p>The most commonly used Connect Four board size is 7 columns × 6 rows. Size variations include 5×4, 6×5, 8×7, 9×7, 10×7, 8×8, Infinite Connect-Four,<sup id="cite&#95;ref-22" class="reference"><a href="#cite_note-22"><span class="cite-bracket">&#91;</span>22<span class="cite-bracket">&#93;</span></a></sup> and Cylinder-Infinite Connect-Four.<sup id="cite&#95;ref-23" class="reference"><a href="#cite_note-23"><span class="cite-bracket">&#91;</span>23<span class="cite-bracket">&#93;</span></a></sup>
+</p><p>Several versions of Hasbro's Connect Four physical gameboard make it easy to remove game pieces from the bottom one at a time. Along with traditional <a href="/wiki/Gameplay" title="Gameplay">gameplay</a>, this feature allows for variations of the game.<sup id="cite&#95;ref-24" class="reference"><a href="#cite_note-24"><span class="cite-bracket">&#91;</span>24<span class="cite-bracket">&#93;</span></a></sup> Some earlier game versions also included specially marked discs, and cardboard column extenders, for additional variations to the game.<sup id="cite&#95;ref-25" class="reference"><a href="#cite_note-25"><span class="cite-bracket">&#91;</span>25<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="PopOut">PopOut</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=4" title="Edit section: PopOut"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<style data-mw-deduplicate="TemplateStyles:r1353705441">.mw-parser-output .hatnote{font-style:italic}.mw-parser-output div.hatnote{padding-left:1.6em;margin-bottom:0.5em}.mw-parser-output .hatnote i{font-style:normal}.mw-parser-output .hatnote+span.mw-empty-elt+.hatnote,.mw-parser-output .hatnote+link+.hatnote{margin-top:-0.5em}@media print{body.ns-0 .mw-parser-output .hatnote{display:none!important}}</style><div role="note" class="hatnote navigation-not-searchable">"PopOut" redirects here. For other uses, see <a href="/wiki/Pop_Out_(disambiguation)" class="mw-disambig" title="Pop Out (disambiguation)">Pop Out (disambiguation)</a>.</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="/wiki/File:Connect_Four.jpg" class="mw-file-description"><img src="//upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Connect_Four.jpg/250px-Connect_Four.jpg" decoding="async" width="250" height="189" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Connect_Four.jpg/500px-Connect_Four.jpg 2x" data-file-width="3312" data-file-height="2508" /></a><figcaption>A travel version of the Milton Bradley game</figcaption></figure>
+<p><i>PopOut</i> starts the same as traditional gameplay, with an empty board and players alternating turns placing their own colored discs into the board. During each turn, a player can either add another disc from the top, or if one has any discs of their own color on the bottom row, remove (or "pop out") a disc of one's own color from the bottom. Popping a disc out from the bottom drops every disc above it down one space, changing their relationship with the rest of the board and changing the possibilities for a connection. The first player to connect four of their discs horizontally, vertically, or diagonally wins the game.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Pop_10">Pop 10</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=5" title="Edit section: Pop 10"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>Before play begins, <i>Pop 10</i> is set up differently from the traditional game. Taking turns, each player places one of their own color discs into the slots filling up only the bottom row, then moving on to the next row until it is filled, and so forth until all rows have been filled.
+</p><p>Gameplay works by players taking turns removing a disc of one's own color through the bottom of the board. If the disc that was removed was part of a four-disc connection at the time of its removal, the player sets it aside out of play and immediately takes another turn. If it was not part of a "connect four", then it must be placed back on the board through a slot at the top into any open space in an alternate column (whenever possible) and the turn ends, switching to the other player. The first player to set aside ten discs of their color wins the game.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Five-in-a-Row">Five-in-a-Row</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=6" title="Edit section: Five-in-a-Row"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>The <i>Five-in-a-Row</i> variation for Connect Four is a game played on a 6 high, 9 wide grid. Two additional board columns, already filled with player pieces in an alternating pattern, are added to the left and right sides of the standard 6-by-7 game board. The game plays similarly to the original Connect Four, except players must now get five pieces in a row to win. This is still a 42-ply game since the two new columns added to the game represent twelve game pieces already played, before the start of a game.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Power_Up">Power Up</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=7" title="Edit section: Power Up"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p>In this variation of Connect Four, players begin a game with one or more specially marked "Power Checkers" game pieces, which each player may choose to play once per game. When playing a piece marked with an anvil icon, for example, the player may immediately pop out all pieces below it, leaving the anvil piece at the bottom row of the game board. Other marked game pieces include one with a wall icon, allowing a player to play a second consecutive non-winning turn with an unmarked piece; a "×2" icon, allowing for an unrestricted second turn with an unmarked piece; and a bomb icon, allowing a player to immediately pop out an opponent's piece.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Other_versions">Other versions</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=8" title="Edit section: Other versions"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<style data-mw-deduplicate="TemplateStyles:r1305433154">.mw-parser-output .ambox{border:1px solid #a2a9b1;border-left:10px solid #36c;background-color:#fbfbfb;box-sizing:border-box}.mw-parser-output .ambox+link+.ambox,.mw-parser-output .ambox+link+style+.ambox,.mw-parser-output .ambox+link+link+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+style+.ambox,.mw-parser-output .ambox+.mw-empty-elt+link+link+.ambox{margin-top:-1px}html body.mediawiki .mw-parser-output .ambox.mbox-small-left{margin:4px 1em 4px 0;overflow:hidden;width:238px;border-collapse:collapse;font-size:88%;line-height:1.25em}.mw-parser-output .ambox-speedy{border-left:10px solid #b32424;background-color:#fee7e6}.mw-parser-output .ambox-delete{border-left:10px solid #b32424}.mw-parser-output .ambox-content{border-left:10px solid #f28500}.mw-parser-output .ambox-style{border-left:10px solid #fc3}.mw-parser-output .ambox-move{border-left:10px solid #9932cc}.mw-parser-output .ambox-protection{border-left:10px solid #a2a9b1}.mw-parser-output .ambox .mbox-text{border:none;padding:0.25em 0.5em;width:100%}.mw-parser-output .ambox .mbox-image{border:none;padding:2px 0 2px 0.5em;text-align:center}.mw-parser-output .ambox .mbox-imageright{border:none;padding:2px 0.5em 2px 0;text-align:center}.mw-parser-output .ambox .mbox-empty-cell{border:none;padding:0;width:1px}.mw-parser-output .ambox .mbox-image-div{width:52px}@media(min-width:720px){.mw-parser-output .ambox{margin:0 10%}}@media print{body.ns-0 .mw-parser-output .ambox{display:none!important}}</style><table class="box-More&#95;citations&#95;needed plainlinks metadata ambox ambox-content ambox-Refimprove" role="presentation"><tbody><tr><td class="mbox-image"><div class="mbox-image-div"><span typeof="mw:File"><a href="/wiki/File:Question_book-new.svg" class="mw-file-description"><img alt="icon" src="//upload.wikimedia.org/wikipedia/en/thumb/9/99/Question_book-new.svg/60px-Question_book-new.svg.png" decoding="async" width="50" height="39" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/en/thumb/9/99/Question_book-new.svg/120px-Question_book-new.svg.png 2x" data-file-width="512" data-file-height="399" /></a></span></div></td><td class="mbox-text"><div class="mbox-text-span">This section <b>needs additional citations for <a href="/wiki/Wikipedia:Verifiability" title="Wikipedia:Verifiability">verification</a></b>.<span class="hide-when-compact"> Please help <a href="/wiki/Special:EditPage/Connect_Four" title="Special:EditPage/Connect Four">improve this article</a> by <a href="/wiki/Help:Referencing_for_beginners" title="Help:Referencing for beginners">adding citations to reliable sources</a>&#32;in this section. Unsourced material may be challenged and removed.<br /><small><span class="plainlinks"><i>Find sources:</i>&#160;<a rel="nofollow" class="external text" href="https://www.google.com/search?as_eq=wikipedia&amp;q=%22Connect+Four%22">"Connect Four"</a>&#160;–&#160;<a rel="nofollow" class="external text" href="https://www.google.com/search?tbm=nws&amp;q=%22Connect+Four%22+-wikipedia&amp;tbs=ar:1">news</a>&#160;<b>·</b> <a rel="nofollow" class="external text" href="https://www.google.com/search?&amp;q=%22Connect+Four%22&amp;tbs=bkt:s&amp;tbm=bks">newspapers</a>&#160;<b>·</b> <a rel="nofollow" class="external text" href="https://www.google.com/search?tbs=bks:1&amp;q=%22Connect+Four%22+-wikipedia">books</a>&#160;<b>·</b> <a rel="nofollow" class="external text" href="https://scholar.google.com/scholar?q=%22Connect+Four%22">scholar</a>&#160;<b>·</b> <a rel="nofollow" class="external text" href="https://www.jstor.org/action/doBasicSearch?Query=%22Connect+Four%22&amp;acc=on&amp;wc=on">JSTOR</a></span></small></span>  <span class="date-container"><i>(<span class="date">June 2019</span>)</i></span><span class="hide-when-compact"><i> (<small><a href="/wiki/Help:Maintenance_template_removal" title="Help:Maintenance template removal">Learn how and when to remove this message</a></small>)</i></span></div></td></tr></tbody></table>
+<p>Hasbro also produces various sizes of Giant Connect Four, suitable for outdoor use. The largest is built from weather-resistant wood, and measures 120&#160;cm in both width and height. Connect Four was released for the <a href="/wiki/Microvision" title="Microvision">Microvision</a> video game console in 1979, developed by Robert Hoffberg. It was also released for the <a href="/wiki/TI-99/4A#99/4" title="TI-99/4A">Texas Instruments 99/4</a> computer the same year.
+</p><p>With the proliferation of mobile devices, Connect Four has regained popularity as a game that can be played quickly and against another person over an <a href="/wiki/Internet" title="Internet">Internet</a> connection.
+</p><p>In 2007, Milton Bradley published Connect Four Stackers. Instead of the usual grid, the game features a board to place colored discs on. Just like standard Connect Four, the object of the game is to try get four in a row of a specific color of discs.<sup id="cite&#95;ref-26" class="reference"><a href="#cite_note-26"><span class="cite-bracket">&#91;</span>26<span class="cite-bracket">&#93;</span></a></sup>
+</p><p>In 2008, another board variation Hasbro published as a physical game is <a href="/wiki/Connect_4x4" title="Connect 4x4">Connect 4x4</a>.<sup id="cite&#95;ref-27" class="reference"><a href="#cite_note-27"><span class="cite-bracket">&#91;</span>27<span class="cite-bracket">&#93;</span></a></sup> This game features a two-layer vertical grid with colored discs for four players, plus blocking discs. The object of the game is also to get four in a row for a specific color of discs.
+</p><p>In 2013, <a href="/wiki/Bay_Tek_Entertainment" title="Bay Tek Entertainment">Bay Tek Games</a> released a Connect Four <a href="/wiki/Redemption_game" title="Redemption game">ticket redemption arcade game</a> under license from Hasbro. There are standard and deluxe versions of the game. Two players move and drop the checkers using buttons. If only one player is playing, the player plays against the computer. Both the player that wins and the player that loses get tickets. The player that wins gets to play a bonus round where a checker is moving and the player needs to press the button at the right time to get the ticket jackpot.
+</p><p>In 2015, Winning Moves published Connect Four Twist &amp; Turn. This game variant features a game tower instead of the flat game grid. The tower has five rings that twist independently. Gameplay is similar to standard Connect Four where players try to get four in a row of their own colored discs. However, with Twist &amp; Turn, players have the choice to twist a ring after they have played a piece. It adds a subtle layer of strategy to the gameplay.<sup class="noprint Inline-Template" style="margin-left:0.1em; white-space:nowrap;">&#91;<i><a href="/wiki/Wikipedia:Manual_of_Style/Words_to_watch#Unsupported_attributions" title="Wikipedia:Manual of Style/Words to watch"><span title="The material near this tag may use weasel words or too-vague attribution. (August 2021)">according to whom?</span></a></i>&#93;</sup>
+</p><p>In 2018, Bay Tek Games released their second Connect Four arcade game, Connect 4 Hoops. Players throw basketballs into basketball hoops, and they show up as checkers on the video screen. The game can be played by two players, or by one player against the computer. Both the player that wins and the player that loses get tickets.
+</p><p>In 2018, Hasbro released Connect 4 Shots. This version requires the players to bounce coloured balls into the grid until one player achieves four in a row.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Popular_culture">Popular culture</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=9" title="Edit section: Popular culture"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li>Broadcaster and writer <a href="/wiki/Stuart_Maconie" title="Stuart Maconie">Stuart Maconie</a>—while working at the <i><a href="/wiki/NME" title="NME">NME</a></i>—started a rumour that Connect Four was invented by <a href="/wiki/David_Bowie" title="David Bowie">David Bowie</a>, which became an <a href="/wiki/Urban_myth" class="mw-redirect" title="Urban myth">urban myth</a>.<sup id="cite&#95;ref-28" class="reference"><a href="#cite_note-28"><span class="cite-bracket">&#91;</span>28<span class="cite-bracket">&#93;</span></a></sup></li>
+<li>On <a href="/wiki/The_Hub_(TV_channel)" class="mw-redirect" title="The Hub (TV channel)">The Hub</a>'s game show <a href="/wiki/Family_Game_Night_(TV_series)" class="mw-redirect" title="Family Game Night (TV series)"><i>Family Game Night</i></a>, there is a game under the name "<a href="/wiki/Family_Game_Night_(TV_series)#Connect_4_Basketball" class="mw-redirect" title="Family Game Night (TV series)">Connect 4 Basketball</a>" in which teams use colored balls.</li>
+<li>In the video game <i><a href="/wiki/A_Way_Out_(video_game)" class="mw-redirect" title="A Way Out (video game)">A Way Out</a></i>, Vincent and Leo can play Connect Four as a <a href="/wiki/Minigame" title="Minigame">minigame</a>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Reviews">Reviews</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=10" title="Edit section: Reviews"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li><i>Games and Puzzles</i> <sup id="cite&#95;ref-29" class="reference"><a href="#cite_note-29"><span class="cite-bracket">&#91;</span>29<span class="cite-bracket">&#93;</span></a></sup></li>
+<li><i>Family Games: The 100 Best</i><sup id="cite&#95;ref-30" class="reference"><a href="#cite_note-30"><span class="cite-bracket">&#91;</span>30<span class="cite-bracket">&#93;</span></a></sup></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="See_also">See also</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=11" title="Edit section: See also"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul><li><a href="/wiki/Gomoku" title="Gomoku">Gomoku</a> (five in a line on a 15×15 Go board)</li>
+<li><a href="/wiki/Hex_(board_game)" title="Hex (board game)">Hex</a> (a connection game)</li>
+<li><a href="/wiki/Pente" title="Pente">Pente</a> (five in a line, on a 19×19 grid, with capture)</li>
+<li><a href="/wiki/Score_four" title="Score four">Score four</a> (four in a line, on a three-dimensional 4×4×4 grid)</li>
+<li><a href="/wiki/Teeko" title="Teeko">Teeko</a> (four in a line or a square, on a 5×5 grid)</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="References">References</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=12" title="Edit section: References"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<style data-mw-deduplicate="TemplateStyles:r1327269900">.mw-parser-output .reflist-columns-2{column-width:30em}.mw-parser-output .reflist-columns-3{column-width:25em}body.skin-vector-2022 .mw-parser-output .reflist-columns-2{column-width:27em}body.skin-vector-2022 .mw-parser-output .reflist-columns-3{column-width:22.5em}.mw-parser-output .references[data-mw-group=upper-alpha]{list-style-type:upper-alpha}.mw-parser-output .references[data-mw-group=upper-roman]{list-style-type:upper-roman}.mw-parser-output .references[data-mw-group=lower-alpha]{list-style-type:lower-alpha}.mw-parser-output .references[data-mw-group=lower-greek]{list-style-type:lower-greek}.mw-parser-output .references[data-mw-group=lower-roman]{list-style-type:lower-roman}.mw-parser-output div.reflist-liststyle-upper-alpha .references{list-style-type:upper-alpha}.mw-parser-output div.reflist-liststyle-upper-roman .references{list-style-type:upper-roman}.mw-parser-output div.reflist-liststyle-lower-alpha .references{list-style-type:lower-alpha}.mw-parser-output div.reflist-liststyle-lower-greek .references{list-style-type:lower-greek}.mw-parser-output div.reflist-liststyle-lower-roman .references{list-style-type:lower-roman}</style><div>
+<div class="mw-references-wrap mw-references-columns"><ol class="references">
+<li id="cite&#95;note-nyu/nyugcgamedesign/Intro-1"><span class="mw-cite-backlink"><b><a href="#cite_ref-nyu/nyugcgamedesign/Intro_1-0">^</a></b></span> <span class="reference-text"><style data-mw-deduplicate="TemplateStyles:r1333433106">.mw-parser-output cite.citation{font-style:inherit;word-wrap:break-word}.mw-parser-output .citation q{quotes:"\"""\"""'""'"}.mw-parser-output .citation:target{background-color:rgba(0,127,255,0.133)}.mw-parser-output .id-lock-free.id-lock-free a{background:url("//upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg")right 0.1em center/9px no-repeat}.mw-parser-output .id-lock-limited.id-lock-limited a,.mw-parser-output .id-lock-registration.id-lock-registration a{background:url("//upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg")right 0.1em center/9px no-repeat}.mw-parser-output .id-lock-subscription.id-lock-subscription a{background:url("//upload.wikimedia.org/wikipedia/commons/a/aa/Lock-red-alt-2.svg")right 0.1em center/9px no-repeat}.mw-parser-output .cs1-ws-icon a{background:url("//upload.wikimedia.org/wikipedia/commons/4/4c/Wikisource-logo.svg")right 0.1em center/12px no-repeat}body:not(.skin-timeless):not(.skin-minerva) .mw-parser-output .id-lock-free a,body:not(.skin-timeless):not(.skin-minerva) .mw-parser-output .id-lock-limited a,body:not(.skin-timeless):not(.skin-minerva) .mw-parser-output .id-lock-registration a,body:not(.skin-timeless):not(.skin-minerva) .mw-parser-output .id-lock-subscription a,body:not(.skin-timeless):not(.skin-minerva) .mw-parser-output .cs1-ws-icon a{background-size:contain;padding:0 1em 0 0}.mw-parser-output .cs1-code{color:inherit;background:inherit;border:none;padding:inherit}.mw-parser-output .cs1-hidden-error{display:none;color:var(--color-error,#bf3c2c)}.mw-parser-output .cs1-visible-error{color:var(--color-error,#bf3c2c)}.mw-parser-output .cs1-maint{display:none;color:#085;margin-left:0.3em}.mw-parser-output .cs1-kern-left{padding-left:0.2em}.mw-parser-output .cs1-kern-right{padding-right:0.2em}.mw-parser-output .citation .mw-selflink{font-weight:inherit}@media screen{.mw-parser-output .cs1-format{font-size:95%}html.skin-theme-clientpref-night .mw-parser-output .cs1-maint{color:#18911f}}@media screen and (prefers-color-scheme:dark){html.skin-theme-clientpref-os .mw-parser-output .cs1-maint{color:#18911f}}</style><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://wikis.nyu.edu/display/nyugcgamedesign/Intro+to+Game+Design">"Intro to Game Design - NYU Game Center - Game Design"</a>. <i>NYU Wikis</i>. <a href="/wiki/NYU" class="mw-redirect" title="NYU">NYU</a><span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=NYU+Wikis&amp;rft.atitle=Intro+to+Game+Design+-+NYU+Game+Center+-+Game+Design&amp;rft&#95;id=https%3A%2F%2Fwikis.nyu.edu%2Fdisplay%2Fnyugcgamedesign%2FIntro%2Bto%2BGame%2BDesign&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-howardwexlertoys/bio/hasbro-2"><span class="mw-cite-backlink"><b><a href="#cite_ref-howardwexlertoys/bio/hasbro_2-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.howardwexlertoys.com/bio/working-at-hasbro/">"Inventing Toys at Hasbro"</a>. <i>Howard Wexler toys .com</i>. June 18, 2012<span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Howard+Wexler+toys+.com&amp;rft.atitle=Inventing+Toys+at+Hasbro&amp;rft.date=2012-06-18&amp;rft&#95;id=https%3A%2F%2Fwww.howardwexlertoys.com%2Fbio%2Fworking-at-hasbro%2F&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><b><a href="#cite_ref-3">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="http://www1.cuny.edu/events/cunymatters/2001_winter/backmatter.htm">"A City College Toy Story"</a>. <i>CUNY Matters</i>. City University of New York. Winter 2001.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=CUNY+Matters&amp;rft.atitle=A+City+College+Toy+Story&amp;rft.ssn=winter&amp;rft.date=2001&amp;rft&#95;id=http%3A%2F%2Fwww1.cuny.edu%2Fevents%2Fcunymatters%2F2001&#95;winter%2Fbackmatter.htm&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><b><a href="#cite_ref-4">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation news cs1"><a rel="nofollow" class="external text" href="https://archive.nytimes.com/query.nytimes.com/gst/fullpage-950CEFD7163AF93BA25757C0A9679D8B63.html">"Obituary: Ned Strongin"</a>. <i><a href="/wiki/The_New_York_Times" title="The New York Times">The New York Times</a></i>. April 18, 2011.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=article&amp;rft.jtitle=The+New+York+Times&amp;rft.atitle=Obituary%3A+Ned+Strongin&amp;rft.date=2011-04-18&amp;rft&#95;id=https%3A%2F%2Farchive.nytimes.com%2Fquery.nytimes.com%2Fgst%2Ffullpage-950CEFD7163AF93BA25757C0A9679D8B63.html&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-newportbeachindy/strongin-fun-5"><span class="mw-cite-backlink"><b><a href="#cite_ref-newportbeachindy/strongin-fun_5-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFHall2011" class="citation news cs1">Hall, Sara (May 13, 2011). <a rel="nofollow" class="external text" href="https://www.newportbeachindy.com/strongin-made-fun-his-business/">"Strongin Made Fun His Business"</a>. <i><a href="/wiki/Newport_Beach_Independent" class="mw-redirect" title="Newport Beach Independent">Newport Beach Independent</a></i>. Firebrand Media LLC<span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=article&amp;rft.jtitle=Newport+Beach+Independent&amp;rft.atitle=Strongin+Made+Fun+His+Business&amp;rft.date=2011-05-13&amp;rft.aulast=Hall&amp;rft.aufirst=Sara&amp;rft&#95;id=https%3A%2F%2Fwww.newportbeachindy.com%2Fstrongin-made-fun-his-business%2F&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-justia.com/inventor/ned-strongin-6"><span class="mw-cite-backlink"><b><a href="#cite_ref-justia.com/inventor/ned-strongin_6-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://patents.justia.com/inventor/ned-strongin">"Ned Strongin"</a>. <i>Justia Patents</i><span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Justia+Patents&amp;rft.atitle=Ned+Strongin&amp;rft&#95;id=https%3A%2F%2Fpatents.justia.com%2Finventor%2Fned-strongin&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-/boardgames/designer/ned-strongin-7"><span class="mw-cite-backlink"><b><a href="#cite_ref-/boardgames/designer/ned-strongin_7-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://boardgames.com/designer/ned-strongin">"Designed by Ned Strongin"</a>. <i>Board Games</i><span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Board+Games&amp;rft.atitle=Designed+by+Ned+Strongin&amp;rft&#95;id=https%3A%2F%2Fboardgames.com%2Fdesigner%2Fned-strongin&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-uspto.report/TM/90252052-8"><span class="mw-cite-backlink"><b><a href="#cite_ref-uspto.report/TM/90252052_8-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://uspto.report/TM/90252052">"POWER LORDS - Ned Strongin Creative Services"</a>. <i>USPTO.report</i><span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=USPTO.report&amp;rft.atitle=POWER+LORDS+-+Ned+Strongin+Creative+Services&amp;rft&#95;id=https%3A%2F%2Fuspto.report%2FTM%2F90252052&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-google/patent/US4863174A-9"><span class="mw-cite-backlink"><b><a href="#cite_ref-google/patent/US4863174A_9-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFCummings1989" class="citation web cs1">Cummings, Gerald W. (September 5, 1989). <a rel="nofollow" class="external text" href="https://patents.google.com/patent/US4863174A/en">"Ball catcher and thrower"</a>. <i><a href="/wiki/Google_patents" class="mw-redirect" title="Google patents">google patents</a></i><span class="reference-accessdate">. Retrieved <span class="nowrap">November 15,</span> 2022</span>. <q>Current Assignee: NED STRONGIN CREATIVE SERVICES 1140 BROADWAY NEW YORK NY 10001 A NY PARTNERSHIP NED STRONGIN CREATIVE SERVICES</q></cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=google+patents&amp;rft.atitle=Ball+catcher+and+thrower&amp;rft.date=1989-09-05&amp;rft.aulast=Cummings&amp;rft.aufirst=Gerald+W.&amp;rft&#95;id=https%3A%2F%2Fpatents.google.com%2Fpatent%2FUS4863174A%2Fen&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-uspto-10"><span class="mw-cite-backlink"><b><a href="#cite_ref-uspto_10-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://tsdr.uspto.gov/#caseNumber=73019915&amp;caseType=SERIAL_NO&amp;searchType=statusSearch">"Connect Four"</a>. <i>United States Patent and Trademark Office</i>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=United+States+Patent+and+Trademark+Office&amp;rft.atitle=Connect+Four&amp;rft&#95;id=https%3A%2F%2Ftsdr.uspto.gov%2F%23caseNumber%3D73019915%26caseType%3DSERIAL&#95;NO%26searchType%3DstatusSearch&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-11"><span class="mw-cite-backlink"><b><a href="#cite_ref-11">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.youtube.com/watch?v=KN3nohBw_CE">"Connect Four - "Pretty Sneaky, Sis..." (Commercial, 1981)"</a>. <i>YouTube</i>. December 18, 2016. <a rel="nofollow" class="external text" href="https://ghostarchive.org/varchive/youtube/20211212/KN3nohBw_CE">Archived</a> from the original on December 12, 2021<span class="reference-accessdate">. Retrieved <span class="nowrap">December 18,</span> 2016</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=YouTube&amp;rft.atitle=Connect+Four+-+%22Pretty+Sneaky%2C+Sis...%22+%28Commercial%2C+1981%29&amp;rft.date=2016-12-18&amp;rft&#95;id=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DKN3nohBw&#95;CE&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-oeis-12"><span class="mw-cite-backlink"><b><a href="#cite_ref-oeis_12-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFNeil&#95;Sloane2012" class="citation web cs1"><a href="/wiki/Neil_Sloane" title="Neil Sloane">Neil Sloane</a>, ed. (2012). <a rel="nofollow" class="external text" href="https://oeis.org/A212693">"Number of legal 7 X 6 Connect-Four positions after n plies"</a>. <i>Online Encyclopedia of Integer Sequences</i>. sequence A212693<span class="reference-accessdate">. Retrieved <span class="nowrap">February 12,</span> 2023</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Online+Encyclopedia+of+Integer+Sequences&amp;rft.atitle=Number+of+legal+7+X+6+Connect-Four+positions+after+n+plies&amp;rft.date=2012&amp;rft&#95;id=https%3A%2F%2Foeis.org%2FA212693&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-Tromp-13"><span class="mw-cite-backlink">^ <a href="#cite_ref-Tromp_13-0"><sup><i><b>a</b></i></sup></a> <a href="#cite_ref-Tromp_13-1"><sup><i><b>b</b></i></sup></a> <a href="#cite_ref-Tromp_13-2"><sup><i><b>c</b></i></sup></a></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://tromp.github.io/c4/c4.html">"John's Connect Four Playground"</a>. Homepages. May 25, 2010.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=John%27s+Connect+Four+Playground&amp;rft.pub=Homepages&amp;rft.date=2010-05-25&amp;rft&#95;id=https%3A%2F%2Ftromp.github.io%2Fc4%2Fc4.html&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-Allis-14"><span class="mw-cite-backlink">^ <a href="#cite_ref-Allis_14-0"><sup><i><b>a</b></i></sup></a> <a href="#cite_ref-Allis_14-1"><sup><i><b>b</b></i></sup></a></span> <span class="reference-text">Allis, Victor, <a rel="nofollow" class="external text" href="http://www.informatik.uni-trier.de/~fernau/DSL0607/Masterthesis-Viergewinnt.pdf"><i>A Knowledge-based Approach of Connect-Four</i></a>, Vrije Universiteit, October 1988</span>
+</li>
+<li id="cite&#95;note-Allen-15"><span class="mw-cite-backlink">^ <a href="#cite_ref-Allen_15-0"><sup><i><b>a</b></i></sup></a> <a href="#cite_ref-Allen_15-1"><sup><i><b>b</b></i></sup></a></span> <span class="reference-text">
+Allen, James D., <a rel="nofollow" class="external text" href="https://tromp.github.io/c4.html"><i>Expert Play in Connect-Four</i></a>, 1990</span>
+</li>
+<li id="cite&#95;note-allenBook-16"><span class="mw-cite-backlink"><b><a href="#cite_ref-allenBook_16-0">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFAllen2010" class="citation book cs1">Allen, James D. (2010). <span class="id-lock-registration" title="Free registration required"><a rel="nofollow" class="external text" href="https://archive.org/details/isbn_9781402756214"><i>The Complete Book of Connect 4: History, Strategy, Puzzles</i></a></span>. Sterling Publishing Company. <a href="/wiki/ISBN_(identifier)" class="mw-redirect" title="ISBN (identifier)">ISBN</a>&#160;<a href="/wiki/Special:BookSources/978-1402756214" title="Special:BookSources/978-1402756214"><bdi>978-1402756214</bdi></a>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=book&amp;rft.btitle=The+Complete+Book+of+Connect+4%3A+History%2C+Strategy%2C+Puzzles&amp;rft.pub=Sterling+Publishing+Company&amp;rft.date=2010&amp;rft.isbn=978-1402756214&amp;rft.aulast=Allen&amp;rft.aufirst=James+D.&amp;rft&#95;id=https%3A%2F%2Farchive.org%2Fdetails%2Fisbn&#95;9781402756214&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-17"><span class="mw-cite-backlink"><b><a href="#cite_ref-17">^</a></b></span> <span class="reference-text">Tromp, John, <a rel="nofollow" class="external text" href="https://archive.ics.uci.edu/ml/datasets/Connect-4"><i>Connect-4 Data Set</i></a>, February 4, 1995</span>
+</li>
+<li id="cite&#95;note-Fhourstones-18"><span class="mw-cite-backlink"><b><a href="#cite_ref-Fhourstones_18-0">^</a></b></span> <span class="reference-text">Tromp, John, <a rel="nofollow" class="external text" href="https://tromp.github.io/c4/fhour.html"><i>The Fhourstones Benchmark</i></a>, 1992</span>
+</li>
+<li id="cite&#95;note-19"><span class="mw-cite-backlink"><b><a href="#cite_ref-19">^</a></b></span> <span class="reference-text">Böck, Markus <a rel="nofollow" class="external text" href="https://doi.org/10.5281/zenodo.14582823"><i>Connect4 7 x 6 Strong Solution</i>, 2025</a></span>
+</li>
+<li id="cite&#95;note-c4solve-20"><span class="mw-cite-backlink">^ <a href="#cite_ref-c4solve_20-0"><sup><i><b>a</b></i></sup></a> <a href="#cite_ref-c4solve_20-1"><sup><i><b>b</b></i></sup></a> <a href="#cite_ref-c4solve_20-2"><sup><i><b>c</b></i></sup></a></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFasun.net2013" class="citation book cs1">asun.net (2013). <i>Four in a Row Solver [computer software]</i>. Microsoft Corporation.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=book&amp;rft.btitle=Four+in+a+Row+Solver+%5Bcomputer+software%5D&amp;rft.pub=Microsoft+Corporation&amp;rft.date=2013&amp;rft.au=asun.net&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-21"><span class="mw-cite-backlink"><b><a href="#cite_ref-21">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFCahn2023" class="citation web cs1">Cahn, Lauren (November 1, 2023). <a rel="nofollow" class="external text" href="https://www.rd.com/article/how-to-win-connect-4/">"How to Win Connect 4 Every Time, According to the Computer Scientist Who Solved It"</a>. <i>Reader&#39;s Digest</i><span class="reference-accessdate">. Retrieved <span class="nowrap">May 24,</span> 2025</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Reader%26%23039%3Bs+Digest&amp;rft.atitle=How+to+Win+Connect+4+Every+Time%2C+According+to+the+Computer+Scientist+Who+Solved+It&amp;rft.date=2023-11-01&amp;rft.aulast=Cahn&amp;rft.aufirst=Lauren&amp;rft&#95;id=https%3A%2F%2Fwww.rd.com%2Farticle%2Fhow-to-win-connect-4%2F&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-22"><span class="mw-cite-backlink"><b><a href="#cite_ref-22">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFYamaguchiK.&#95;YamaguchiT.&#95;TanakaT.&#95;Kaneko2012" class="citation journal cs1 cs1-prop-long-vol">Yamaguchi, Y.; K. Yamaguchi; T. Tanaka; T. Kaneko (2012). "Infinite Connect-Four is solved: Draw". <i>Advances in Computer Games, ACG 2011</i>. LNCS 7168: <span class="nowrap">208–</span>219.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=article&amp;rft.jtitle=Advances+in+Computer+Games%2C+ACG+2011&amp;rft.atitle=Infinite+Connect-Four+is+solved%3A+Draw&amp;rft.volume=LNCS+7168&amp;rft.pages=208-219&amp;rft.date=2012&amp;rft.aulast=Yamaguchi&amp;rft.aufirst=Y.&amp;rft.au=K.+Yamaguchi&amp;rft.au=T.+Tanaka&amp;rft.au=T.+Kaneko&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-23"><span class="mw-cite-backlink"><b><a href="#cite_ref-23">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFYamaguchiK.&#95;YamaguchiT.&#95;Tanaka2013" class="citation journal cs1">Yamaguchi, Y.; K. Yamaguchi; T. Tanaka (2013). "Cylinder-Infinite-Connect-Four except for Widths 2, 6, and 11 is Solved: Drawn". <i>The 8th International Conference on Computers and Games (CG2013)</i>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=article&amp;rft.jtitle=The+8th+International+Conference+on+Computers+and+Games+%28CG2013%29&amp;rft.atitle=Cylinder-Infinite-Connect-Four+except+for+Widths+2%2C+6%2C+and+11+is+Solved%3A+Drawn&amp;rft.date=2013&amp;rft.aulast=Yamaguchi&amp;rft.aufirst=Y.&amp;rft.au=K.+Yamaguchi&amp;rft.au=T.+Tanaka&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-24"><span class="mw-cite-backlink"><b><a href="#cite_ref-24">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.hasbro.com/common/documents/dad2614d1c4311ddbd0b0800200c9a66/DE3C8F8050569047F5AA9FBB9F16909B.pdf">"C4 Classic Grid"</a> <span class="cs1-format">(PDF)</span>. Hasbro Inc. 2012.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=C4+Classic+Grid&amp;rft.pub=Hasbro+Inc&amp;rft.date=2012&amp;rft&#95;id=https%3A%2F%2Fwww.hasbro.com%2Fcommon%2Fdocuments%2Fdad2614d1c4311ddbd0b0800200c9a66%2FDE3C8F8050569047F5AA9FBB9F16909B.pdf&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-25"><span class="mw-cite-backlink"><b><a href="#cite_ref-25">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.hasbro.com/common/documents/dad2614d1c4311ddbd0b0800200c9a66/1EF6874419B9F36910222EB9858E8CB8.pdf">"Connect 4"</a> <span class="cs1-format">(PDF)</span>. Hasbro Inc. 2009.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=Connect+4&amp;rft.pub=Hasbro+Inc&amp;rft.date=2009&amp;rft&#95;id=https%3A%2F%2Fwww.hasbro.com%2Fcommon%2Fdocuments%2Fdad2614d1c4311ddbd0b0800200c9a66%2F1EF6874419B9F36910222EB9858E8CB8.pdf&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-26"><span class="mw-cite-backlink"><b><a href="#cite_ref-26">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.hasbro.com/common/documents/dad2614d1c4311ddbd0b0800200c9a66/1EEF8C3819B9F369101244129F2A84EB.pdf">"Connect 4 Stackers"</a> <span class="cs1-format">(PDF)</span>. Hasbro Inc. 2006.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=Connect+4+Stackers&amp;rft.pub=Hasbro+Inc&amp;rft.date=2006&amp;rft&#95;id=https%3A%2F%2Fwww.hasbro.com%2Fcommon%2Fdocuments%2Fdad2614d1c4311ddbd0b0800200c9a66%2F1EEF8C3819B9F369101244129F2A84EB.pdf&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-27"><span class="mw-cite-backlink"><b><a href="#cite_ref-27">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite class="citation web cs1"><a rel="nofollow" class="external text" href="https://www.hasbro.com/common/documents/dad2614d1c4311ddbd0b0800200c9a66/4B5F7AAD5056900B1006CFD8A247EBDC.pdf">"Connect 4x4"</a> <span class="cs1-format">(PDF)</span>. Hasbro Inc. 2008.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=Connect+4x4&amp;rft.pub=Hasbro+Inc&amp;rft.date=2008&amp;rft&#95;id=https%3A%2F%2Fwww.hasbro.com%2Fcommon%2Fdocuments%2Fdad2614d1c4311ddbd0b0800200c9a66%2F4B5F7AAD5056900B1006CFD8A247EBDC.pdf&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-28"><span class="mw-cite-backlink"><b><a href="#cite_ref-28">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFThair2009" class="citation web cs1">Thair, David (May 22, 2009). <a rel="nofollow" class="external text" href="https://www.bbc.co.uk/blogs/comedy/2009/05/hignfy-guest-interview-stuart-maconie.shtml">"HIGNFY Guest interview: Stuart Maconie"</a>. <i>Comedy Blog</i>. BBC.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=unknown&amp;rft.jtitle=Comedy+Blog&amp;rft.atitle=HIGNFY+Guest+interview%3A+Stuart+Maconie&amp;rft.date=2009-05-22&amp;rft.aulast=Thair&amp;rft.aufirst=David&amp;rft&#95;id=https%3A%2F%2Fwww.bbc.co.uk%2Fblogs%2Fcomedy%2F2009%2F05%2Fhignfy-guest-interview-stuart-maconie.shtml&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-29"><span class="mw-cite-backlink"><b><a href="#cite_ref-29">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFPaddy&#95;O&#39;Sullivan1976" class="citation magazine cs1">Paddy O'Sullivan (May 1976). <a rel="nofollow" class="external text" href="https://archive.org/details/sim_games-and-puzzles_1976-05_48/page/22/mode/2up">"Connect 4"</a>. <i>Games and Puzzles</i>. No.&#160;48. A H C Publications. pp.&#160;<span class="nowrap">22–</span>23.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal&amp;rft.genre=article&amp;rft.jtitle=Games+and+Puzzles&amp;rft.atitle=Connect+4&amp;rft.issue=48&amp;rft.pages=22-23&amp;rft.date=1976-05&amp;rft.au=Paddy+O%27Sullivan&amp;rft&#95;id=https%3A%2F%2Farchive.org%2Fdetails%2Fsim&#95;games-and-puzzles&#95;1976-05&#95;48%2Fpage%2F22%2Fmode%2F2up&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+<li id="cite&#95;note-30"><span class="mw-cite-backlink"><b><a href="#cite_ref-30">^</a></b></span> <span class="reference-text"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFLowder2010" class="citation book cs1">Lowder, James (2010). <a rel="nofollow" class="external text" href="https://archive.org/details/familygames100be0000unse/page/70/mode/2up"><i>Family games: The 100 best</i></a>. Green Ronin. <a href="/wiki/ISBN_(identifier)" class="mw-redirect" title="ISBN (identifier)">ISBN</a>&#160;<a href="/wiki/Special:BookSources/978-1-934547-21-2" title="Special:BookSources/978-1-934547-21-2"><bdi>978-1-934547-21-2</bdi></a>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=book&amp;rft.btitle=Family+games%3A+The+100+best&amp;rft.pub=Green+Ronin&amp;rft.date=2010&amp;rft.isbn=978-1-934547-21-2&amp;rft.aulast=Lowder&amp;rft.aufirst=James&amp;rft&#95;id=https%3A%2F%2Farchive.org%2Fdetails%2Ffamilygames100be0000unse%2Fpage%2F70%2Fmode%2F2up&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></span>
+</li>
+</ol></div></div>
+<div class="mw-heading mw-heading2"><h2 id="External_links">External links</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=Connect_Four&amp;action=edit&amp;section=13" title="Edit section: External links"><span>edit</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<style data-mw-deduplicate="TemplateStyles:r1314755338">.mw-parser-output .side-box{margin:4px 0;box-sizing:border-box;border:1px solid #aaa;font-size:88%;line-height:1.25em;background-color:var(--background-color-interactive-subtle,#f8f9fa);color:inherit;display:flow-root}.mw-parser-output .infobox .side-box{font-size:100%}.mw-parser-output .side-box-abovebelow,.mw-parser-output .side-box-text{padding:0.25em 0.9em}.mw-parser-output .side-box-image{padding:2px 0 2px 0.9em;text-align:center}.mw-parser-output .side-box-imageright{padding:2px 0.9em 2px 0;text-align:center}@media(min-width:500px){.mw-parser-output .side-box-flex{display:flex;align-items:center}.mw-parser-output .side-box-text{flex:1;min-width:0}}@media(min-width:640px){.mw-parser-output .side-box{width:238px}.mw-parser-output .side-box-right{clear:right;float:right;margin-left:1em}.mw-parser-output .side-box-left{margin-right:1em}}</style><style data-mw-deduplicate="TemplateStyles:r1311551236">@media print{body.ns-0 .mw-parser-output .sistersitebox{display:none!important}}@media screen{html.skin-theme-clientpref-night .mw-parser-output .sistersitebox img[src*="Wiktionary-logo-en-v2.svg"]{filter:invert(1)brightness(55%)contrast(250%)hue-rotate(180deg)}}@media screen and (prefers-color-scheme:dark){html.skin-theme-clientpref-os .mw-parser-output .sistersitebox img[src*="Wiktionary-logo-en-v2.svg"]{filter:invert(1)brightness(55%)contrast(250%)hue-rotate(180deg)}}</style><div class="side-box side-box-right plainlinks sistersitebox"><style data-mw-deduplicate="TemplateStyles:r1126788409">.mw-parser-output .plainlist ol,.mw-parser-output .plainlist ul{line-height:inherit;list-style:none;margin:0;padding:0}.mw-parser-output .plainlist ol li,.mw-parser-output .plainlist ul li{margin-bottom:0}</style>
+<div class="side-box-flex">
+<div class="side-box-image"><span class="noviewer" typeof="mw:File"><a href="/wiki/File:Commons-logo.svg" class="mw-file-description"><img alt="Wikimedia Commons logo" src="//upload.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png" decoding="async" width="30" height="40" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/60px-Commons-logo.svg.png 2x" data-file-width="1024" data-file-height="1376" /></a></span></div>
+<div class="side-box-text plainlist">Wikimedia Commons has media related to <span style="font-weight: bold; font-style: italic;"><a href="https://commons.wikimedia.org/wiki/Category:Connect_Four" class="extiw" title="commons:Category:Connect Four">Connect Four</a></span>.</div></div>
+</div>
+<link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1314755338" /><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1311551236" /><div class="side-box side-box-right plainlinks sistersitebox"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1126788409" />
+<div class="side-box-flex">
+<div class="side-box-image"><span class="noviewer" typeof="mw:File"><a href="/wiki/File:Wikibooks-logo.svg" class="mw-file-description"><img alt="Wikibooks logo" src="//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png" decoding="async" width="40" height="40" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/120px-Wikibooks-logo.svg.png 2x" data-file-width="300" data-file-height="300" /></a></span></div>
+<div class="side-box-text plainlist">Wikibooks has more on the topic of: <i><b><a href="https://en.wikibooks.org/wiki/Special:Search/Connect_Four" class="extiw" title="wikibooks:Special:Search/Connect Four">Connect Four</a></b></i></div></div>
+</div>
+<ul><li><a rel="nofollow" class="external text" href="https://www.boardgamegeek.com/boardgame/2719">Connect Four</a>   at <a href="/wiki/BoardGameGeek" title="BoardGameGeek">BoardGameGeek</a></li>
+<li><a rel="nofollow" class="external text" href="http://mathworld.wolfram.com/Connect-Four.html">Connect Four</a> at <a href="/wiki/MathWorld" title="MathWorld">MathWorld</a></li>
+<li><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFHaran" class="citation web cs1"><a href="/wiki/Brady_Haran" title="Brady Haran">Haran, Brady</a>. <a rel="nofollow" class="external text" href="https://web.archive.org/web/20131203073310/http://www.numberphile.com/videos/connect4.html">"Connect Four"</a>. Numberphile. Archived from <a rel="nofollow" class="external text" href="http://www.numberphile.com/videos/connect4.html">the original</a> on December 3, 2013<span class="reference-accessdate">. Retrieved <span class="nowrap">December 2,</span> 2013</span>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=Connect+Four&amp;rft.pub=Numberphile&amp;rft.aulast=Haran&amp;rft.aufirst=Brady&amp;rft&#95;id=http%3A%2F%2Fwww.numberphile.com%2Fvideos%2Fconnect4.html&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span></li>
+<li><a rel="nofollow" class="external text" href="https://connect4.gamesolver.org/en/">Connect Four game solver</a> (<link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333433106" /><cite id="CITEREFTalwalkar" class="citation web cs1">Talwalkar, Presh. <a rel="nofollow" class="external text" href="https://mindyourdecisions.com/blog/2013/08/20/how-to-win-at-connect-four-every-time-a-game-solver-you-can-use-from-your-smartphone-or-computer/">"Connect 4 solver on smartphone or computer"</a>.</cite><span title="ctx&#95;ver=Z39.88-2004&amp;rft&#95;val&#95;fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.genre=unknown&amp;rft.btitle=Connect+4+solver+on+smartphone+or+computer&amp;rft.aulast=Talwalkar&amp;rft.aufirst=Presh&amp;rft&#95;id=https%3A%2F%2Fmindyourdecisions.com%2Fblog%2F2013%2F08%2F20%2Fhow-to-win-at-connect-four-every-time-a-game-solver-you-can-use-from-your-smartphone-or-computer%2F&amp;rfr&#95;id=info%3Asid%2Fen.wikipedia.org%3AConnect+Four" class="Z3988"></span>)</li></ul>
+<div class="navbox-styles"><style data-mw-deduplicate="TemplateStyles:r1333133064">.mw-parser-output .hlist dl,.mw-parser-output .hlist ol,.mw-parser-output .hlist ul{margin:0;padding:0}.mw-parser-output .hlist dd,.mw-parser-output .hlist dt,.mw-parser-output .hlist li{margin:0;display:inline}.mw-parser-output .hlist.inline,.mw-parser-output .hlist.inline dl,.mw-parser-output .hlist.inline ol,.mw-parser-output .hlist.inline ul,.mw-parser-output .hlist dl dl,.mw-parser-output .hlist dl ol,.mw-parser-output .hlist dl ul,.mw-parser-output .hlist ol dl,.mw-parser-output .hlist ol ol,.mw-parser-output .hlist ol ul,.mw-parser-output .hlist ul dl,.mw-parser-output .hlist ul ol,.mw-parser-output .hlist ul ul{display:inline}.mw-parser-output .hlist .mw-empty-li{display:none}.mw-parser-output .hlist dt::after{content:": "}.mw-parser-output .hlist dd::after,.mw-parser-output .hlist li::after{content:"\a0 · ";font-weight:bold}.mw-parser-output .hlist dd:last-child::after,.mw-parser-output .hlist dt:last-child::after,.mw-parser-output .hlist li:last-child::after{content:none}.mw-parser-output .hlist dd dd:first-child::before,.mw-parser-output .hlist dd dt:first-child::before,.mw-parser-output .hlist dd li:first-child::before,.mw-parser-output .hlist dt dd:first-child::before,.mw-parser-output .hlist dt dt:first-child::before,.mw-parser-output .hlist dt li:first-child::before,.mw-parser-output .hlist li dd:first-child::before,.mw-parser-output .hlist li dt:first-child::before,.mw-parser-output .hlist li li:first-child::before{content:" (";font-weight:normal}.mw-parser-output .hlist dd dd:last-child::after,.mw-parser-output .hlist dd dt:last-child::after,.mw-parser-output .hlist dd li:last-child::after,.mw-parser-output .hlist dt dd:last-child::after,.mw-parser-output .hlist dt dt:last-child::after,.mw-parser-output .hlist dt li:last-child::after,.mw-parser-output .hlist li dd:last-child::after,.mw-parser-output .hlist li dt:last-child::after,.mw-parser-output .hlist li li:last-child::after{content:")";font-weight:normal}.mw-parser-output .hlist ol{counter-reset:listitem}.mw-parser-output .hlist ol>li{counter-increment:listitem}.mw-parser-output .hlist ol>li::before{content:" "counter(listitem)"\a0 "}.mw-parser-output .hlist dd ol>li:first-child::before,.mw-parser-output .hlist dt ol>li:first-child::before,.mw-parser-output .hlist li ol>li:first-child::before{content:" ("counter(listitem)"\a0 "}</style><style data-mw-deduplicate="TemplateStyles:r1353707246">.mw-parser-output .navbox{box-sizing:border-box;border:1px solid #a2a9b1;width:100%;clear:both;font-size:88%;text-align:center;padding:1px;margin:1em auto 0}.mw-parser-output .navbox .navbox{margin-top:0}.mw-parser-output .navbox+.navbox-styles+.navbox,.mw-parser-output .navbox+span.mw-empty-elt+.navbox-styles+.navbox{margin-top:-1px}.mw-parser-output .navbox-inner,.mw-parser-output .navbox-subgroup{width:100%}.mw-parser-output .navbox-group,.mw-parser-output .navbox-title,.mw-parser-output .navbox-abovebelow{padding:0.25em 1em;line-height:1.5em;text-align:center}.mw-parser-output .navbox-group{white-space:nowrap;text-align:right}.mw-parser-output .navbox,.mw-parser-output .navbox-subgroup{background-color:#fdfdfd;color:inherit}.mw-parser-output .navbox-list{line-height:1.5em;border-color:#fdfdfd}.mw-parser-output .navbox-list-with-group{text-align:left;border-left-width:2px;border-left-style:solid}.mw-parser-output tr+tr>.navbox-abovebelow,.mw-parser-output tr+tr>.navbox-group,.mw-parser-output tr+tr>.navbox-image,.mw-parser-output tr+tr>.navbox-list{border-top:2px solid #fdfdfd}.mw-parser-output .navbox-title{background-color:#ccf;color:inherit}.mw-parser-output .navbox-abovebelow,.mw-parser-output .navbox-group,.mw-parser-output .navbox-subgroup .navbox-title{background-color:#ddf;color:inherit}.mw-parser-output .navbox-subgroup .navbox-group,.mw-parser-output .navbox-subgroup .navbox-abovebelow{background-color:#e6e6ff;color:inherit}.mw-parser-output .navbox-even{background-color:#f7f7f7;color:inherit}.mw-parser-output .navbox-odd{background-color:transparent;color:inherit}.mw-parser-output .navbox .hlist td dl,.mw-parser-output .navbox .hlist td ol,.mw-parser-output .navbox .hlist td ul,.mw-parser-output .navbox td.hlist dl,.mw-parser-output .navbox td.hlist ol,.mw-parser-output .navbox td.hlist ul{padding:0.125em 0}.mw-parser-output .navbox .navbar{display:block;font-size:100%}.mw-parser-output .navbox-title .navbar{float:left;text-align:left;margin-right:0.5em}body.skin--responsive .mw-parser-output .navbox-image img{max-width:none!important}@media print{body.ns-0 .mw-parser-output .navbox{display:none!important}}</style></div><div role="navigation" class="navbox" aria-labelledby="Milton&#95;Bradley&#95;Company5213" style="padding:3px"><table class="nowraplinks mw-collapsible mw-collapsed navbox-inner" style="border-spacing:0;background:transparent;color:inherit"><tbody><tr><th scope="col" class="navbox-title" colspan="3"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333133064" /><style data-mw-deduplicate="TemplateStyles:r1239400231">.mw-parser-output .navbar{display:inline;font-size:88%;font-weight:normal}.mw-parser-output .navbar-collapse{float:left;text-align:left}.mw-parser-output .navbar-boxtext{word-spacing:0}.mw-parser-output .navbar ul{display:inline-block;white-space:nowrap;line-height:inherit}.mw-parser-output .navbar-brackets::before{margin-right:-0.125em;content:"[ "}.mw-parser-output .navbar-brackets::after{margin-left:-0.125em;content:" ]"}.mw-parser-output .navbar li{word-spacing:-0.125em}.mw-parser-output .navbar a>span,.mw-parser-output .navbar a>abbr{text-decoration:inherit}.mw-parser-output .navbar-mini abbr{font-variant:small-caps;border-bottom:none;text-decoration:none;cursor:inherit}.mw-parser-output .navbar-ct-full{font-size:114%;margin:0 7em}.mw-parser-output .navbar-ct-mini{font-size:114%;margin:0 4em}html.skin-theme-clientpref-night .mw-parser-output .navbar li a abbr{color:var(--color-base)!important}@media(prefers-color-scheme:dark){html.skin-theme-clientpref-os .mw-parser-output .navbar li a abbr{color:var(--color-base)!important}}@media print{.mw-parser-output .navbar{display:none!important}}</style><div class="navbar plainlinks hlist navbar-mini"><ul><li class="nv-view"><a href="/wiki/Template:Milton_Bradley" title="Template:Milton Bradley"><abbr title="View this template">v</abbr></a></li><li class="nv-talk"><a href="/wiki/Template_talk:Milton_Bradley" title="Template talk:Milton Bradley"><abbr title="Discuss this template">t</abbr></a></li><li class="nv-edit"><a href="/wiki/Special:EditPage/Template:Milton_Bradley" title="Special:EditPage/Template:Milton Bradley"><abbr title="Edit this template">e</abbr></a></li></ul></div><div id="Milton&#95;Bradley&#95;Company5213" style="font-size:114%;margin:0 4em"><a href="/wiki/Milton_Bradley_Company" title="Milton Bradley Company">Milton Bradley Company</a></div></th></tr><tr><th scope="row" class="navbox-group" style="width:1%">Products <br /> (<a href="/wiki/List_of_Milton_Bradley_Company_products" title="List of Milton Bradley Company products">list</a>)</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em"></div><table class="nowraplinks navbox-subgroup" style="border-spacing:0"><tbody><tr><th scope="row" class="navbox-group" style="width:1%">Board games</th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/13_Dead_End_Drive" title="13 Dead End Drive">13 Dead End Drive</a></i></li>
+<li><i><a href="/wiki/Aggravation_(board_game)" title="Aggravation (board game)">Aggravation</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Axis_%26_Allies" title="Axis &amp; Allies">Axis &amp; Allies</a></i></li>
+<li><i><a href="/wiki/Battle-Cry_(Milton_Bradley_game)" title="Battle-Cry (Milton Bradley game)">Battle Cry</a></i></li>
+<li><i><a href="/wiki/Battle_Masters" title="Battle Masters">Battle Masters</a></i></li>
+<li><i><a href="/wiki/Battleship_(game)" title="Battleship (game)">Battleship</a></i></li>
+<li><i><a href="/wiki/Broadsides_and_Boarding_Parties" title="Broadsides and Boarding Parties">Broadsides and Boarding Parties</a></i></li>
+<li><i><a href="/wiki/Candy_Land" title="Candy Land">Candyland</a></i></li>
+<li><i><a href="/wiki/The_Game_of_Life" title="The Game of Life">The Checkered Game of Life</a></i></li>
+<li><i><a class="mw-selflink selflink">Connect Four</a></i></li>
+<li><i><a href="/wiki/Conquest_of_the_Empire" title="Conquest of the Empire">Conquest of the Empire</a></i></li>
+<li><i><a href="/wiki/Crossfire_(board_game)" title="Crossfire (board game)">Crossfire</a></i></li>
+<li><i><a href="/wiki/Dark_Tower_(game)" title="Dark Tower (game)">Dark Tower</a></i></li>
+<li><i><a href="/wiki/Don%27t_Break_the_Ice" title="Don&#39;t Break the Ice">Don't Break the Ice</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Dragonmaster_(card_game)" title="Dragonmaster (card game)">Dragonmaster</a></i></li>
+<li><i><a href="/wiki/Easy_Money_(board_game)" title="Easy Money (board game)">Easy Money</a></i></li>
+<li><i><a href="/wiki/Enchanted_Palace" title="Enchanted Palace">Enchanted Palace</a></i></li>
+<li><i><a href="/wiki/Fireball_Island" title="Fireball Island">Fireball Island</a></i></li>
+<li><i><a href="/wiki/Focus_(board_game)" title="Focus (board game)">Focus</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Fortress_America" title="Fortress America">Fortress America</a></i></li>
+<li><i><a href="/wiki/Go_to_the_Head_of_the_Class" title="Go to the Head of the Class">Go to the Head of the Class</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Guess_Who%3F" title="Guess Who?">Guess Who?</a></i></li>
+<li><i><a href="/wiki/Headache_(game)" title="Headache (game)">Headache</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/HeroQuest" title="HeroQuest">HeroQuest</a></i></li>
+<li><i><a href="/wiki/Hi_Ho!_Cherry-O" title="Hi Ho! Cherry-O">Hi Ho! Cherry-O</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Hotel_(board_game)" title="Hotel (board game)">Hotel</a></i></li>
+<li><i><a href="/wiki/Loopin%27_Louie" title="Loopin&#39; Louie">Loopin' Louie</a></i></li>
+<li><i><a href="/wiki/Mall_Madness" title="Mall Madness">Mall Madness</a></i></li>
+<li><i><a href="/wiki/Mouse_Trap_(board_game)" title="Mouse Trap (board game)">Mouse Trap</a></i></li>
+<li><i><a href="/wiki/Mystery_Date_(game)" title="Mystery Date (game)">Mystery Date</a></i></li>
+<li><i><a href="/wiki/Mystery_Mansion_(board_game)" title="Mystery Mansion (board game)">Mystery Mansion</a></i></li>
+<li><i><a href="/wiki/Operation_(game)" title="Operation (game)">Operation</a></i></li>
+<li><i><a href="/wiki/Park_and_Shop_(game)" title="Park and Shop (game)">Park and Shop</a></i></li>
+<li><i><a href="/wiki/Pass_the_Pigs" title="Pass the Pigs">Pass the Pigs</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Perfection_(board_game)" title="Perfection (board game)">Perfection</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Pirate_and_Traveler" title="Pirate and Traveler">Pirate and Traveler</a></i></li>
+<li><i><a href="/wiki/Power_Barons" title="Power Barons">Power Barons</a></i></li>
+<li><i><a href="/wiki/Pretty_Pretty_Princess" title="Pretty Pretty Princess">Pretty Pretty Princess</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Rack-O" title="Rack-O">Rack-O</a></i></li>
+<li><i><a href="/wiki/Scattergories" title="Scattergories">Scattergories</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Scotland_Yard_(board_game)" title="Scotland Yard (board game)">Scotland Yard</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Scrabble" title="Scrabble">Scrabble</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Shogun_(1986_board_game)" title="Shogun (1986 board game)">Shogun</a></i></li>
+<li><i><a href="/wiki/Snakes_and_ladders" title="Snakes and ladders">Snakes and ladders</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Square_Mile_(board_game)" title="Square Mile (board game)">Square Mile</a></i></li>
+<li><i><a href="/wiki/Stratego" title="Stratego">Stratego</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Thunder_Road_(board_game)" title="Thunder Road (board game)">Thunder Road</a></i></li>
+<li><i><a href="/wiki/Torpedo_Run!" title="Torpedo Run!">Torpedo Run!</a></i></li>
+<li><i><a href="/wiki/Trump:_The_Game" title="Trump: The Game">Trump: The Game</a></i></li>
+<li><i><a href="/wiki/Upwords" title="Upwords">Upwords</a></i></li>
+<li><i><a href="/wiki/Voice_of_the_Mummy" title="Voice of the Mummy">Voice of the Mummy</a></i></li>
+<li><i><a href="/wiki/Which_Witch%3F_(board_game)" title="Which Witch? (board game)">Which Witch?</a></i></li>
+<li><i><a href="/wiki/Why_(board_game)" title="Why (board game)">Why</a></i></li>
+<li><i><a href="/wiki/Yahtzee" title="Yahtzee">Yahtzee</a></i></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Electronic games</th><td class="navbox-list-with-group navbox-list navbox-even" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Big_Trak" title="Big Trak">Big Trak</a></i></li>
+<li><i><a href="/wiki/Heads_Up_Action_Soccer" title="Heads Up Action Soccer">Heads Up Action Soccer</a></i></li>
+<li><i><a href="/wiki/Merlin_(console)" title="Merlin (console)">Merlin</a></i></li>
+<li><i><a href="/wiki/Milton_(game)" title="Milton (game)">Milton</a></i></li>
+<li><i><a href="/wiki/Microvision" title="Microvision">Microvision</a></i></li>
+<li><i><a href="/wiki/OMNI_Entertainment_System" title="OMNI Entertainment System">OMNI</a></i></li>
+<li><i><a href="/wiki/Simon_(game)" title="Simon (game)">Simon</a></i></li>
+<li><i><a href="/wiki/Star_Bird" title="Star Bird">Star Bird</a></i></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Other games</th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Ants_in_the_Pants_(game)" title="Ants in the Pants (game)">Ants in the Pants</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Buckaroo!" title="Buckaroo!">Buckaroo!</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Don%27t_Spill_the_Beans" title="Don&#39;t Spill the Beans">Don't Spill the Beans</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Downfall_(game)" title="Downfall (game)">Downfall</a></i></li>
+<li><i><a href="/wiki/Gator_Golf" title="Gator Golf">Gator Golf</a></i></li>
+<li><i><a href="/wiki/Heroscape" title="Heroscape">Heroscape</a></i></li>
+<li><i><a href="/wiki/Hungry_Hungry_Hippos" title="Hungry Hungry Hippos">Hungry Hungry Hippos</a></i></li>
+<li><i><a href="/wiki/Jenga" title="Jenga">Jenga</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/KerPlunk_(game)" class="mw-redirect" title="KerPlunk (game)">KerPlunk</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Knock_Out_(tabletop_game)" title="Knock Out (tabletop game)">Knock Out</a></i></li>
+<li><i><a href="/wiki/Robotix_(toyline)" title="Robotix (toyline)">Robotix</a></i></li>
+<li><i><a href="/wiki/Twister_(game)" title="Twister (game)">Twister</a></i></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Toys</th><td class="navbox-list-with-group navbox-list navbox-even" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Barrel_of_Monkeys" title="Barrel of Monkeys">Barrel of Monkeys</a></i></li>
+<li><i><a href="/wiki/Mr._Bucket" title="Mr. Bucket">Mr. Bucket</a></i></li>
+<li><i><a href="/wiki/Buffalo_Bill_Gun" title="Buffalo Bill Gun">Buffalo Bill Gun</a></i></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Video games</th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Abadox" title="Abadox">Abadox</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Cabal_(arcade_game)" class="mw-redirect" title="Cabal (arcade game)">Cabal</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/California_Games" title="California Games">California Games</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Captain_Skyhawk" title="Captain Skyhawk">Captain Skyhawk</a></i></li>
+<li><i><a href="/wiki/Digger_T._Rock" title="Digger T. Rock">Digger T. Rock</a></i></li>
+<li><i><a href="/wiki/Jordan_vs_Bird:_One_on_One" class="mw-redirect" title="Jordan vs Bird: One on One">Jordan vs Bird: One on One</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Marble_Madness" title="Marble Madness">Marble Madness</a></i></li>
+<li><i><a href="/wiki/Race_America" title="Race America">Race America</a></i></li>
+<li><i><a href="/wiki/Time_Lord_(video_game)" title="Time Lord (video game)">Time Lord</a></i></li>
+<li><i><a href="/wiki/World_Games_(video_game)" title="World Games (video game)">World Games</a></i><sup>1</sup></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Consoles</th><td class="navbox-list-with-group navbox-list navbox-even" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Vectrex" title="Vectrex">Vectrex</a></li></ul>
+</div></td></tr></tbody></table><div></div></td><td class="noviewer navbox-image" rowspan="4" style="width:1px;padding:0 0 0 2px"><div><span typeof="mw:File"><a href="/wiki/File:Milton_Bradley_Company_logo.svg" class="mw-file-description"><img src="//upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Milton_Bradley_Company_logo.svg/120px-Milton_Bradley_Company_logo.svg.png" decoding="async" width="70" height="80" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Milton_Bradley_Company_logo.svg/250px-Milton_Bradley_Company_logo.svg.png 2x" data-file-width="253" data-file-height="289" /></a></span></div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">People</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Milton_Bradley" title="Milton Bradley">Milton Bradley</a></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Related topics</th><td class="navbox-list-with-group navbox-list navbox-even hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Milton-Bradley_Company_(building)" class="mw-redirect" title="Milton-Bradley Company (building)">Company building</a></li>
+<li><a href="/wiki/Gamemaster_(board_game_series)" title="Gamemaster (board game series)">Gamemaster Series</a></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Related companies</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Hasbro" title="Hasbro">Hasbro</a></li>
+<li><a href="/wiki/McLoughlin_Brothers" title="McLoughlin Brothers">McLoughlin Brothers</a></li>
+<li><a href="/wiki/Parker_Brothers" title="Parker Brothers">Parker Brothers</a></li>
+<li><a href="/wiki/Playskool" title="Playskool">Playskool</a></li></ul>
+</div></td></tr><tr><td class="navbox-abovebelow hlist" colspan="3"><div>
+<ul><li><span class="noviewer" typeof="mw:File"><span title="Category"><img alt="" src="//upload.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png" decoding="async" width="16" height="16" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png 2x" data-file-width="180" data-file-height="185" /></span></span> <a href="/wiki/Category:Milton_Bradley_Company_games" title="Category:Milton Bradley Company games">Category</a></li></ul>
+<hr />
+<ul><li><sup>1</sup><i>Licensed or not originally published by MB</i></li>
+<li><sup>2</sup><i>Only in the United States and Canada</i></li></ul>
+</div></td></tr></tbody></table></div>
+<div class="navbox-styles"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333133064" /><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1353707246" /></div><div role="navigation" class="navbox" aria-labelledby="Hasbro6270" style="padding:3px"><table class="nowraplinks mw-collapsible mw-collapsed navbox-inner" style="border-spacing:0;background:transparent;color:inherit"><tbody><tr><th scope="col" class="navbox-title" colspan="2"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333133064" /><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1239400231" /><div class="navbar plainlinks hlist navbar-mini"><ul><li class="nv-view"><a href="/wiki/Template:Hasbro" title="Template:Hasbro"><abbr title="View this template">v</abbr></a></li><li class="nv-talk"><a href="/wiki/Template_talk:Hasbro" title="Template talk:Hasbro"><abbr title="Discuss this template">t</abbr></a></li><li class="nv-edit"><a href="/wiki/Special:EditPage/Template:Hasbro" title="Special:EditPage/Template:Hasbro"><abbr title="Edit this template">e</abbr></a></li></ul></div><div id="Hasbro6270" style="font-size:114%;margin:0 4em"><a href="/wiki/Hasbro" title="Hasbro">Hasbro</a></div></th></tr><tr><th scope="row" class="navbox-group" style="width:1%">Intellectual<br />properties<br />currently<br />managed<br />by Hasbro</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em"></div><table class="nowraplinks navbox-subgroup" style="border-spacing:0"><tbody><tr><th scope="row" class="navbox-group" style="width:1%"><a href="/wiki/List_of_Hasbro_toys" title="List of Hasbro toys">Toys</a></th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Action_Man_(1993%E2%80%932006_toyline)" title="Action Man (1993–2006 toyline)">Action Man</a></li>
+<li><a href="/wiki/Alphie" title="Alphie">Alphie</a></li>
+<li><a href="/wiki/Army_Ants_(toy_line)" title="Army Ants (toy line)">Army Ants</a></li>
+<li><a href="/wiki/Baby_Alive" title="Baby Alive">Baby Alive</a></li>
+<li><a href="/wiki/The_Original_Battle_Trolls" title="The Original Battle Trolls">Battle Trolls</a></li>
+<li><a href="/wiki/Big_Bad_Beetleborgs" title="Big Bad Beetleborgs">Beetleborgs</a></li>
+<li><a href="/wiki/Blythe_(doll)" title="Blythe (doll)">Blythe</a></li>
+<li><a href="/wiki/DohVinci" title="DohVinci">DohVinci</a></li>
+<li><a href="/wiki/Easy-Bake_Oven" title="Easy-Bake Oven">Easy-Bake Oven</a></li>
+<li><a href="/wiki/Furby" title="Furby">Furby</a></li>
+<li><a href="/wiki/FurReal_Friends" title="FurReal Friends">FurReal Friends</a></li>
+<li><i><a href="/wiki/G.I._Joe" title="G.I. Joe">G.I. Joe</a></i>
+<ul><li><i><a href="/wiki/G.I._Joe:_America%27s_Movable_Fighting_Man" title="G.I. Joe: America&#39;s Movable Fighting Man">America's Movable Fighting Man</a></i></li>
+<li><i><a href="/wiki/G.I._Joe:_A_Real_American_Hero" title="G.I. Joe: A Real American Hero">A Real American Hero</a></i></li></ul></li>
+<li><a href="/wiki/Glo_Worm" title="Glo Worm">Glo Worm</a></li>
+<li><i><a href="/wiki/GoBots" title="GoBots">GoBots</a></i></li>
+<li><i><a href="/wiki/Smile_PreCure!" title="Smile PreCure!">Glitter Force</a></i>
+<ul><li><i><a href="/wiki/DokiDoki!_PreCure" title="DokiDoki! PreCure">Glitter Force Doki-Doki</a></i></li></ul></li>
+<li><a href="/wiki/Hanazuki:_Full_of_Treasures" title="Hanazuki: Full of Treasures">Hanazuki</a></li>
+<li><a href="/wiki/Inchworm_(toy)" title="Inchworm (toy)">Inchworm</a></li>
+<li><a href="/wiki/Inhumanoids" title="Inhumanoids">Inhumanoids</a></li>
+<li><a href="/wiki/Jem_(TV_series)" title="Jem (TV series)">Jem</a></li>
+<li><i><a href="/wiki/Julius_Jr." title="Julius Jr.">Julius Jr.</a></i></li>
+<li><a href="/wiki/Koosh_ball" title="Koosh ball">Koosh</a></li>
+<li><a href="/wiki/Kota_the_triceratops" title="Kota the triceratops">Kota the triceratops</a></li>
+<li><a href="/wiki/Lincoln_Logs" title="Lincoln Logs">Lincoln Logs</a></li>
+<li><a href="/wiki/Lite-Brite" title="Lite-Brite">Lite-Brite</a></li>
+<li><a href="/wiki/Littlest_Pet_Shop" title="Littlest Pet Shop">Littlest Pet Shop</a></li>
+<li><i><a href="/wiki/Luna_Petunia" title="Luna Petunia">Luna Petunia</a></i></li>
+<li><a href="/wiki/M.A.S.K._(franchise)" title="M.A.S.K. (franchise)">M.A.S.K.</a></li>
+<li><a href="/wiki/Masked_Rider_(TV_series)" title="Masked Rider (TV series)">Masked Rider</a></li>
+<li><a href="/wiki/Maxie%27s_World" title="Maxie&#39;s World">Maxie</a></li>
+<li><a href="/wiki/Micronauts" title="Micronauts">Micronauts</a></li>
+<li><a href="/wiki/Micro_Machines" title="Micro Machines">Micro Machines</a></li>
+<li><a href="/wiki/Mighty_Muggs" title="Mighty Muggs">Mighty Muggs</a></li>
+<li><a href="/wiki/Monkgomery" title="Monkgomery">Monkgomery</a></li>
+<li><a href="/wiki/Monster_Face" title="Monster Face">Monster Face</a></li>
+<li><a href="/wiki/My_Buddy_(doll)" title="My Buddy (doll)">My Buddy</a></li>
+<li><a href="/wiki/My_Little_Pony" title="My Little Pony">My Little Pony</a>
+<ul><li><a href="/wiki/My_Little_Pony:_Equestria_Girls" title="My Little Pony: Equestria Girls">Equestria Girls</a></li>
+<li><a href="/wiki/MoonDreamers" title="MoonDreamers">MoonDreamers</a></li></ul></li>
+<li><a href="/wiki/My_Pet_Monster" title="My Pet Monster">My Pet Monster</a></li>
+<li><a href="/wiki/NakNak" title="NakNak">NakNak</a></li>
+<li><a href="/wiki/Nerf" title="Nerf">Nerf</a></li>
+<li><a href="/wiki/Popples" title="Popples">Popples</a></li>
+<li><a href="/wiki/Mr._Potato_Head" title="Mr. Potato Head">Potato Head</a></li>
+<li><a href="/wiki/Pound_Puppies" title="Pound Puppies">Pound Puppies</a></li>
+<li><a href="/wiki/Power_Rangers" title="Power Rangers">Power Rangers</a></li>
+<li><a href="/wiki/Play-Doh" title="Play-Doh">Play-Doh</a></li>
+<li><a href="/wiki/Rom_the_Space_Knight" title="Rom the Space Knight">Rom the Space Knight</a></li>
+<li><a href="/wiki/Robotix" title="Robotix">Robotix</a></li>
+<li><a href="/wiki/Sit_%27n_Spin" class="mw-redirect" title="Sit &#39;n Spin">Sit 'n Spin</a></li>
+<li><a href="/wiki/Spirograph" title="Spirograph">Spirograph</a></li>
+<li><a href="/wiki/Starting_Lineup_(toy_line)" title="Starting Lineup (toy line)">Starting Lineup</a></li>
+<li><a href="/wiki/Stickle_Bricks" title="Stickle Bricks">Stickle Bricks</a></li>
+<li><a href="/wiki/Stretch_Armstrong" title="Stretch Armstrong">Stretch Armstrong</a></li>
+<li><a href="/wiki/Super_Soaker" title="Super Soaker">Super Soaker</a></li>
+<li><a href="/wiki/Talk_%27n_Play" title="Talk &#39;n Play">Talk 'n Play</a></li>
+<li><a href="/wiki/Tinkertoy" title="Tinkertoy">Tinkertoy</a></li>
+<li><a href="/wiki/Tonka" title="Tonka">Tonka</a></li>
+<li><a href="/wiki/Treehouse_Detectives" title="Treehouse Detectives">Treehouse Detectives</a></li>
+<li><a href="/wiki/Transformers" title="Transformers">Transformers</a>
+<ul><li><a href="/wiki/Transformers:_Beast_Wars" title="Transformers: Beast Wars">Beast Wars</a></li></ul></li>
+<li><a href="/wiki/Visionaries:_Knights_of_the_Magical_Light" title="Visionaries: Knights of the Magical Light">Visionaries</a></li>
+<li><a href="/wiki/VR_Troopers" title="VR Troopers">VR Troopers</a></li>
+<li><a href="/wiki/Watchimals" title="Watchimals">Watchimals</a></li>
+<li><a href="/wiki/Weeble" title="Weeble">Weeble</a></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%"><a href="/wiki/List_of_Hasbro_games" title="List of Hasbro games">Games</a></th><td class="navbox-list-with-group navbox-list navbox-even" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Acquire" title="Acquire">Acquire</a></i></li>
+<li><i><a href="/wiki/Aggravation_(board_game)" title="Aggravation (board game)">Aggravation</a></i></li>
+<li><i><a href="/wiki/Ants_in_the_Pants_(game)" title="Ants in the Pants (game)">Ants in the Pants</a></i></li>
+<li><i><a href="/wiki/Axis_%26_Allies" title="Axis &amp; Allies">Axis &amp; Allies</a></i></li>
+<li><i><a href="/wiki/Barrel_of_Monkeys" title="Barrel of Monkeys">Barrel of Monkeys</a></i></li>
+<li><i><a href="/wiki/Battleship_(game)" title="Battleship (game)">Battleship</a></i></li>
+<li><i><a href="/wiki/Boggle" title="Boggle">Boggle</a></i></li>
+<li><i><a href="/wiki/Bop_It" title="Bop It">Bop It</a></i></li>
+<li><i><a href="/wiki/Buckaroo!" title="Buckaroo!">Buckaroo!</a></i></li>
+<li><i><a href="/wiki/Candy_Land" title="Candy Land">Candy Land</a></i></li>
+<li><i><a href="/wiki/Catch_Phrase_(game)" title="Catch Phrase (game)">Catch Phrase</a></i></li>
+<li><i><a href="/wiki/Snakes_and_ladders" title="Snakes and ladders">Chutes &amp; Ladders</a></i></li>
+<li><i><a href="/wiki/Cluedo" title="Cluedo">Clue</a></i></li>
+<li><i><a class="mw-selflink selflink">Connect Four</a></i></li>
+<li><i><a href="/wiki/The_Game_of_Cootie" title="The Game of Cootie">Cootie</a></i></li>
+<li><i><a href="/wiki/Cranium_(board_game)" title="Cranium (board game)">Cranium</a></i></li>
+<li><i><a href="/wiki/Crocodile_Dentist" title="Crocodile Dentist">Crocodile Dentist</a></i></li>
+<li><i><a href="/wiki/Designer%27s_World" class="mw-redirect" title="Designer&#39;s World">Designer's World</a></i></li>
+<li><i><a href="/wiki/Don%27t_Break_the_Ice" title="Don&#39;t Break the Ice">Don't Break the Ice</a></i></li>
+<li><i><a href="/wiki/Don%27t_Spill_the_Beans" title="Don&#39;t Spill the Beans">Don't Spill the Beans</a></i></li>
+<li><i><a href="/wiki/Easy_Money_(board_game)" title="Easy Money (board game)">Easy Money</a></i></li>
+<li><i><a href="/wiki/Elefun" title="Elefun">Elefun</a></i></li>
+<li><i><a href="/wiki/Gator_Golf" title="Gator Golf">Gator Golf</a></i></li>
+<li><i><a href="/wiki/Girl_Talk_(board_game)" title="Girl Talk (board game)">Girl Talk</a></i></li>
+<li><i><a href="/wiki/Guess_Who%3F" title="Guess Who?">Guess Who?</a></i></li>
+<li><i><a href="/wiki/Hi_Ho!_Cherry-O" title="Hi Ho! Cherry-O">Hi Ho! Cherry-O</a></i></li>
+<li><i><a href="/wiki/HeroQuest" title="HeroQuest">HeroQuest</a></i></li>
+<li><i><a href="/wiki/Heroscape" title="Heroscape">Heroscape</a></i></li>
+<li><i><a href="/wiki/Hungry_Hungry_Hippos" title="Hungry Hungry Hippos">Hungry Hungry Hippos</a></i></li>
+<li><i><a href="/wiki/Jenga" title="Jenga">Jenga</a></i></li>
+<li><i><a href="/wiki/Lazer_Tag" title="Lazer Tag">Lazer Tag</a></i></li>
+<li><i><a href="/wiki/The_Game_of_Life" title="The Game of Life">The Game of Life</a></i></li>
+<li><i><a href="/wiki/Mastermind_(board_game)" title="Mastermind (board game)">Mastermind</a></i></li>
+<li><i><a href="/wiki/Mall_Madness" title="Mall Madness">Mall Madness</a></i></li>
+<li><i><a href="/wiki/Merlin_(console)" title="Merlin (console)">Merlin</a></i></li>
+<li><i><a href="/wiki/Microvision" title="Microvision">Microvision</a></i></li>
+<li><i><a href="/wiki/Milton_(game)" title="Milton (game)">Milton</a></i></li>
+<li><i><a href="/wiki/Monopoly_(game)" title="Monopoly (game)">Monopoly</a></i></li>
+<li><i><a href="/wiki/Mouse_Trap_(board_game)" title="Mouse Trap (board game)">Mouse Trap</a></i></li>
+<li><i><a href="/wiki/Mystery_Date_(game)" title="Mystery Date (game)">Mystery Date</a></i></li>
+<li><i><a href="/wiki/Nerf_Blaster" title="Nerf Blaster">Nerf Blaster</a></i></li>
+<li><i><a href="/wiki/Operation_(game)" title="Operation (game)">Operation</a></i></li>
+<li><i><a href="/wiki/Ouija" title="Ouija">Ouija</a></i></li>
+<li><i><a href="/wiki/Parcheesi" title="Parcheesi">Parcheesi</a></i></li>
+<li><i><a href="/wiki/Pay_Day_(board_game)" title="Pay Day (board game)">Pay Day</a></i></li>
+<li><i><a href="/wiki/Perfection_(board_game)" title="Perfection (board game)">Perfection</a></i></li>
+<li><i><a href="/wiki/Pit_(game)" title="Pit (game)">Pit</a></i></li>
+<li><i><a href="/wiki/Risk_(game)" title="Risk (game)">Risk</a></i></li>
+<li><i><a href="/wiki/Rook_(card_game)" title="Rook (card game)">Rook</a></i></li>
+<li><i><a href="/wiki/Pretty_Pretty_Princess" title="Pretty Pretty Princess">Pretty Pretty Princess</a></i></li>
+<li><i><a href="/wiki/Scattergories" title="Scattergories">Scattergories</a></i></li>
+<li><i><a href="/wiki/Scrabble" title="Scrabble">Scrabble</a></i><sup>1</sup></li>
+<li><i><a href="/wiki/Simon_(game)" title="Simon (game)">Simon</a></i></li>
+<li><i><a href="/wiki/Sorry!_(game)" title="Sorry! (game)">Sorry!</a></i></li>
+<li><i><a href="/wiki/Stay_Alive_(game)" title="Stay Alive (game)">Stay Alive</a></i></li>
+<li><i><a href="/wiki/Subbuteo" title="Subbuteo">Subbuteo</a></i></li>
+<li><i><a href="/wiki/Taboo_(game)" title="Taboo (game)">Taboo</a></i></li>
+<li><i><a href="/wiki/Trivial_Pursuit" title="Trivial Pursuit">Trivial Pursuit</a></i></li>
+<li><i><a href="/wiki/Trouble_(board_game)" title="Trouble (board game)">Trouble</a></i></li>
+<li><i><a href="/wiki/Twister_(game)" title="Twister (game)">Twister</a></i></li>
+<li><i><a href="/wiki/Yahtzee" title="Yahtzee">Yahtzee</a></i></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Other</th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><i><a href="/wiki/Alien_TV" title="Alien TV">Alien TV</a></i></li>
+<li><i><a href="/wiki/Ben_%26_Holly%27s_Little_Kingdom" title="Ben &amp; Holly&#39;s Little Kingdom">Ben &amp; Holly's Little Kingdom</a></i></li>
+<li><i><a href="/wiki/The_Big_Knights" title="The Big Knights">The Big Knights</a></i></li>
+<li><i><a href="/wiki/Cubix" title="Cubix">Cubix</a></i></li>
+<li><i><a href="/wiki/Cupcake_%26_Dino:_General_Services" title="Cupcake &amp; Dino: General Services">Cupcake &amp; Dino</a></i></li>
+<li><i><a href="/wiki/Duel_Masters" title="Duel Masters">Duel Masters</a></i>
+<ul><li><i><a href="/wiki/Kaijudo" title="Kaijudo">Kaijudo</a></i></li></ul></li>
+<li><i><a href="/wiki/Dungeons_%26_Dragons" title="Dungeons &amp; Dragons">Dungeons &amp; Dragons</a></i></li>
+<li><i><a href="/wiki/Exodus_(2026_video_game)" class="mw-redirect" title="Exodus (2026 video game)">Exodus</a></i></li>
+<li><i><a href="/wiki/Humf" title="Humf">Humf</a></i></li>
+<li><i><a href="/wiki/Kiya_%26_the_Kimoja_Heroes" title="Kiya &amp; the Kimoja Heroes">Kiya &amp; the Kimoja Heroes</a></i></li>
+<li><i><a href="/wiki/The_Magic_Hockey_Skates" title="The Magic Hockey Skates">The Magic Hockey Skates</a></i></li>
+<li><i><a href="/wiki/Magic:_The_Gathering" title="Magic: The Gathering">Magic: The Gathering</a></i></li>
+<li><i><a href="/wiki/Ninja_Express" title="Ninja Express">Ninja Express</a></i></li>
+<li><i><a href="/wiki/Pat_%26_Stan" title="Pat &amp; Stan">Pat &amp; Stan</a></i></li>
+<li><i><a href="/wiki/Peppa_Pig" title="Peppa Pig">Peppa Pig</a></i></li>
+<li><i><a href="/wiki/PJ_Masks" title="PJ Masks">PJ Masks</a></i></li>
+<li><i><a href="/wiki/Ricky_Zoom" title="Ricky Zoom">Ricky Zoom</a></i></li>
+<li><i><a href="/wiki/Tractor_Tom" title="Tractor Tom">Tractor Tom</a></i></li>
+<li><i><a href="/wiki/Void_Rivals" title="Void Rivals">Void Rivals</a></i></li>
+<li><i><a href="/wiki/Winston_Steinburger_and_Sir_Dudley_Ding_Dong" title="Winston Steinburger and Sir Dudley Ding Dong">Winston Steinburger and Sir Dudley Ding Dong</a></i></li></ul>
+</div></td></tr></tbody></table><div></div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Distributed <br />worldwide<br />by Hasbro</th><td class="navbox-list-with-group navbox-list navbox-even hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Beyblade" title="Beyblade">Beyblade</a><sup>2</sup></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Subsidiaries<br />and brands</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Avalon_Hill" title="Avalon Hill">Avalon Hill</a></li>
+<li><a href="/wiki/Cranium,_Inc." title="Cranium, Inc.">Cranium, Inc.</a></li>
+<li><a href="/wiki/Hasbro_Entertainment" title="Hasbro Entertainment">Hasbro Entertainment</a>
+<ul><li><a href="/wiki/Astley_Baker_Davies" title="Astley Baker Davies">Astley Baker Davies</a></li>
+<li><a href="/wiki/Discovery_Family" title="Discovery Family">Discovery Family</a> (40%)</li></ul></li>
+<li><a href="/wiki/Kenner_Products" title="Kenner Products">Kenner</a></li>
+<li><a href="/wiki/Milton_Bradley_Company" title="Milton Bradley Company">Milton Bradley</a></li>
+<li><a href="/wiki/Palitoy" title="Palitoy">Palitoy</a></li>
+<li><a href="/wiki/Parker_Brothers" title="Parker Brothers">Parker Brothers</a></li>
+<li><a href="/wiki/Playskool" title="Playskool">Playskool</a></li>
+<li><a href="/wiki/Tiger_Electronics" title="Tiger Electronics">Tiger Electronics</a></li>
+<li><a href="/wiki/Wizards_of_the_Coast" title="Wizards of the Coast">Wizards of the Coast</a>
+<ul><li><a href="/wiki/Archetype_Entertainment" title="Archetype Entertainment">Archetype Entertainment</a></li>
+<li><a href="/wiki/D%26D_Beyond" title="D&amp;D Beyond">D&amp;D Beyond</a></li>
+<li><a href="/wiki/Invoke_Studios" title="Invoke Studios">Invoke Studios</a></li></ul></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Other media</th><td class="navbox-list-with-group navbox-list navbox-even hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/List_of_comics_based_on_Hasbro_properties" title="List of comics based on Hasbro properties">Comics</a></li>
+<li><a href="/wiki/List_of_films_based_on_Hasbro_properties" title="List of films based on Hasbro properties">Films</a></li>
+<li><a href="/wiki/List_of_television_programs_based_on_Hasbro_properties" title="List of television programs based on Hasbro properties">Television programs</a></li>
+<li>Video games
+<ul><li><i><a href="/wiki/Hasbro_Family_Game_Night" title="Hasbro Family Game Night">Hasbro Family Game Night</a></i></li></ul></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">Conventions</th><td class="navbox-list-with-group navbox-list navbox-odd hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Auto_Assembly" title="Auto Assembly">Auto Assembly</a></li>
+<li><a href="/wiki/BotCon" title="BotCon">BotCon</a></li>
+<li><a href="/wiki/TFcon" title="TFcon">TFcon</a></li></ul>
+</div></td></tr><tr><th scope="row" class="navbox-group" style="width:1%">See also</th><td class="navbox-list-with-group navbox-list navbox-even hlist" style="width:100%;padding:0"><div style="padding:0 0.25em">
+<ul><li><a href="/wiki/Hasbro_Universe" title="Hasbro Universe">Hasbro Universe</a>
+<ul><li><a href="/wiki/Hasbro_Comic_Book_Universe" title="Hasbro Comic Book Universe">IDW</a></li>
+<li><a href="/wiki/Energon_Universe" title="Energon Universe">Skybound</a></li></ul></li>
+<li><a href="/wiki/Allspark" title="Allspark">Allspark</a></li>
+<li><a href="/wiki/Control-Vision" title="Control-Vision">Control-Vision</a></li>
+<li><a href="/wiki/Galoob" title="Galoob">Galoob</a></li>
+<li><a href="/wiki/Lionsgate_Canada" title="Lionsgate Canada">Lionsgate Canada</a></li>
+<li><a href="/wiki/MNRK_Music_Group" title="MNRK Music Group">MNRK Music Group</a></li>
+<li><a href="/wiki/Saban_Capital_Group" title="Saban Capital Group">Saban Capital Group</a>
+<ul><li><a href="/wiki/Saban_Brands" title="Saban Brands">Saban Brands</a></li></ul></li></ul>
+</div></td></tr><tr><td class="navbox-abovebelow hlist" colspan="2"><div>
+<ul><li><span class="noviewer" typeof="mw:File"><span title="Category"><img alt="" src="//upload.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png" decoding="async" width="16" height="16" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png 2x" data-file-width="180" data-file-height="185" /></span></span> <a href="/wiki/Category:Hasbro" title="Category:Hasbro">Category</a></li></ul>
+<hr />
+<ul><li><sup>1</sup><i>(U.S. and Canada)</i></li>
+<li><sup>2</sup><i>(except Japan and parts of Asia)</i></li></ul>
+</div></td></tr></tbody></table></div>
+<div class="navbox-styles"><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1333133064" /><link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1353707246" /></div><div role="navigation" class="navbox authority-control" aria-label="Navbox506" style="padding:3px"><table class="nowraplinks hlist navbox-inner" style="border-spacing:0;background:transparent;color:inherit"><tbody><tr><th scope="row" class="navbox-group" style="width:1%"><a href="/wiki/Help:Authority_control" title="Help:Authority control">Authority control databases</a>: National <span class="mw-valign-text-top noprint" typeof="mw:File/Frameless"><a href="https://www.wikidata.org/wiki/Q17254#identifiers" title="Edit this at Wikidata"><img alt="Edit this at Wikidata" src="//upload.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png" decoding="async" width="10" height="10" class="mw-file-element" data-file-width="20" data-file-height="20" /></a></span></th><td class="navbox-list-with-group navbox-list navbox-odd" style="width:100%;padding:0"><div style="padding:0 0.25em"><ul><li><span class="uid"><a rel="nofollow" class="external text" href="https://id.loc.gov/authorities/sh2010012010">United States</a></span></li><li><span class="uid"><a rel="nofollow" class="external text" href="https://www.nli.org.il/en/authorities/987007592926205171">Israel</a></span></li></ul></div></td></tr></tbody></table></div>
+<!-- 
+NewPP limit report
+Parsed by mw‐web.eqiad.canary‐95fc5c769‐rshww
+Cached time: 20260511220941
+Cache expiry: 1734631
+Cache expiry source: Template:Years_or_months_ago (currentmonth)
+Reduced expiry: true
+Complications: [vary‐revision‐sha1, prevent‐selective‐update, show‐toc]
+CPU time usage: 0.955 seconds
+Real time usage: 1.330 seconds
+Preprocessor visited node count: 2772/1000000
+Revision size: 20148/2097152 bytes
+Post‐expand include size: 134285/2097152 bytes
+Template argument size: 3492/2097152 bytes
+Highest expansion depth: 14/100
+Expensive parser function count: 7/500
+Unstrip recursion depth: 1/20
+Unstrip post‐expand size: 121680/5000000 bytes
+Lua time usage: 0.586/10.000 seconds
+Lua memory usage: 7462935/52428800 bytes
+Number of Wikibase entities loaded: 1/500
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00% 1147.311      1 -total
+ 29.71%  340.899      1 Template:Reflist
+ 20.90%  239.800     19 Template:Cite_web
+ 16.64%  190.955      4 Template:Navbox
+ 14.74%  169.107      1 Template:Milton_Bradley
+ 10.45%  119.837      1 Template:Short_description
+  9.25%  106.084      1 Template:Infobox_game
+  8.30%   95.270      1 Template:Infobox
+  8.19%   93.999      1 Template:More_citations_needed
+  8.04%   92.230      2 Template:Sister_project
+-->
+
+<!-- Render ID 1ba5cf44-4d86-11f1-8227-9d0af1422a10 -->
+
+<!-- Saved in parser cache with key enwiki:pcache:294075:|#|:idhash:canonical and timestamp 20260511220941 and revision id 1352110974. Rendering was triggered because: page_view
+ -->
+</div><noscript><img src="https://en.wikipedia.org/wiki/Special:CentralAutoLogin/start?useformat=desktop&amp;type=1x1&amp;usesul3=1" alt="" width="1" height="1" style="border: none; position: absolute;"></noscript>
+<div class="printfooter" data-nosnippet="">Retrieved from "<a dir="ltr" href="https://en.wikipedia.org/w/index.php?title=Connect_Four&amp;oldid=1352110974">https://en.wikipedia.org/w/index.php?title=Connect_Four&amp;oldid=1352110974</a>"</div></div>
+					<div id="catlinks" class="catlinks" data-mw-interface=""><div id="mw-normal-catlinks" class="mw-normal-catlinks"><a href="/wiki/Help:Category" title="Help:Category">Categories</a>: <ul><li><a href="/wiki/Category:Abstract_strategy_games" title="Category:Abstract strategy games">Abstract strategy games</a></li><li><a href="/wiki/Category:Board_games_introduced_in_1974" title="Category:Board games introduced in 1974">Board games introduced in 1974</a></li><li><a href="/wiki/Category:Children%27s_board_games" title="Category:Children&#039;s board games">Children&#039;s board games</a></li><li><a href="/wiki/Category:Computer-assisted_proofs" title="Category:Computer-assisted proofs">Computer-assisted proofs</a></li><li><a href="/wiki/Category:Connection_games" title="Category:Connection games">Connection games</a></li><li><a href="/wiki/Category:Games_played_on_Go_boards" title="Category:Games played on Go boards">Games played on Go boards</a></li><li><a href="/wiki/Category:In-a-row_games" title="Category:In-a-row games">In-a-row games</a></li><li><a href="/wiki/Category:Milton_Bradley_Company_games" title="Category:Milton Bradley Company games">Milton Bradley Company games</a></li><li><a href="/wiki/Category:Paper-and-pencil_games" title="Category:Paper-and-pencil games">Paper-and-pencil games</a></li><li><a href="/wiki/Category:Solved_games" title="Category:Solved games">Solved games</a></li></ul></div><div id="mw-hidden-catlinks" class="mw-hidden-catlinks mw-hidden-cats-hidden">Hidden categories: <ul><li><a href="/wiki/Category:CS1:_long_volume_value" title="Category:CS1: long volume value">CS1: long volume value</a></li><li><a href="/wiki/Category:Articles_with_short_description" title="Category:Articles with short description">Articles with short description</a></li><li><a href="/wiki/Category:Short_description_is_different_from_Wikidata" title="Category:Short description is different from Wikidata">Short description is different from Wikidata</a></li><li><a href="/wiki/Category:Use_American_English_from_February_2026" title="Category:Use American English from February 2026">Use American English from February 2026</a></li><li><a href="/wiki/Category:All_Wikipedia_articles_written_in_American_English" title="Category:All Wikipedia articles written in American English">All Wikipedia articles written in American English</a></li><li><a href="/wiki/Category:Use_mdy_dates_from_February_2026" title="Category:Use mdy dates from February 2026">Use mdy dates from February 2026</a></li><li><a href="/wiki/Category:Articles_needing_additional_references_from_June_2019" title="Category:Articles needing additional references from June 2019">Articles needing additional references from June 2019</a></li><li><a href="/wiki/Category:All_articles_needing_additional_references" title="Category:All articles needing additional references">All articles needing additional references</a></li><li><a href="/wiki/Category:All_articles_with_specifically_marked_weasel-worded_phrases" title="Category:All articles with specifically marked weasel-worded phrases">All articles with specifically marked weasel-worded phrases</a></li><li><a href="/wiki/Category:Articles_with_specifically_marked_weasel-worded_phrases_from_August_2021" title="Category:Articles with specifically marked weasel-worded phrases from August 2021">Articles with specifically marked weasel-worded phrases from August 2021</a></li><li><a href="/wiki/Category:Commons_category_link_from_Wikidata" title="Category:Commons category link from Wikidata">Commons category link from Wikidata</a></li></ul></div></div>
+				</div>
+			</main>
+			
+		</div>
+		<div class="mw-footer-container">
+			
+<footer id="footer" class="mw-footer" >
+	<ul id="footer-info">
+	<li id="footer-info-lastmod"> This page was last edited on 2 May 2026, at 03:08<span class="anonymous-show">&#160;(UTC)</span>.</li>
+	<li id="footer-info-copyright">Text is available under the <a href="/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License" title="Wikipedia:Text of the Creative Commons Attribution-ShareAlike 4.0 International License">Creative Commons Attribution-ShareAlike 4.0 License</a>;
+additional terms may apply. By using this site, you agree to the <a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use" class="extiw" title="foundation:Special:MyLanguage/Policy:Terms of Use">Terms of Use</a> and <a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy" class="extiw" title="foundation:Special:MyLanguage/Policy:Privacy policy">Privacy Policy</a>. Wikipedia® is a registered trademark of the <a rel="nofollow" class="external text" href="https://wikimediafoundation.org/">Wikimedia Foundation, Inc.</a>, a non-profit organization.</li>
+</ul>
+
+	<ul id="footer-places">
+	<li id="footer-places-privacy"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy">Privacy policy</a></li>
+	<li id="footer-places-about"><a href="/wiki/Wikipedia:About">About Wikipedia</a></li>
+	<li id="footer-places-disclaimers"><a href="/wiki/Wikipedia:General_disclaimer">Disclaimers</a></li>
+	<li id="footer-places-contact"><a href="//en.wikipedia.org/wiki/Wikipedia:Contact_us">Contact Wikipedia</a></li>
+	<li id="footer-places-legal-safety-contacts"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Legal:Wikimedia_Foundation_Legal_and_Safety_Contact_Information">Legal &amp; safety contacts</a></li>
+	<li id="footer-places-wm-codeofconduct"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Universal_Code_of_Conduct">Code of Conduct</a></li>
+	<li id="footer-places-developers"><a href="https://developer.wikimedia.org">Developers</a></li>
+	<li id="footer-places-statslink"><a href="https://stats.wikimedia.org/#/en.wikipedia.org">Statistics</a></li>
+	<li id="footer-places-cookiestatement"><a href="https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement">Cookie statement</a></li>
+	<li id="footer-places-mobileview"><a href="//en.wikipedia.org/w/index.php?title=Connect_Four&amp;mobileaction=toggle_view_mobile" class="noprint stopMobileRedirectToggle">Mobile view</a></li>
+</ul>
+
+	<ul id="footer-icons" class="noprint">
+	<li id="footer-copyrightico"><a href="https://www.wikimedia.org/" class="cdx-button cdx-button--fake-button cdx-button--size-large cdx-button--fake-button--enabled"><picture><source media="(min-width: 500px)" srcset="/static/images/footer/wikimedia-button.svg" width="84" height="29"><img src="/static/images/footer/wikimedia.svg" width="25" height="25" alt="Wikimedia Foundation" lang="en" loading="lazy"></picture></a></li>
+	<li id="footer-poweredbyico"><a href="https://www.mediawiki.org/" class="cdx-button cdx-button--fake-button cdx-button--size-large cdx-button--fake-button--enabled"><picture><source media="(min-width: 500px)" srcset="/w/resources/assets/poweredby_mediawiki.svg" width="88" height="31"><img src="/w/resources/assets/mediawiki_compact.svg" alt="Powered by MediaWiki" lang="en" width="25" height="25" loading="lazy"></picture></a></li>
+</ul>
+
+</footer>
+
+		</div>
+	</div> 
+</div> 
+<div class="vector-header-container vector-sticky-header-container no-font-mode-scale">
+	<div id="vector-sticky-header" class="vector-sticky-header">
+		<div class="vector-sticky-header-start">
+			<div class="vector-sticky-header-icon-start vector-button-flush-left" aria-hidden="true">
+				<button class="cdx-button cdx-button--weight-quiet cdx-button--icon-only vector-sticky-header-search-toggle" tabindex="-1" data-event-name="ui.vector-sticky-search-form.icon"><span class="vector-icon mw-ui-icon-search mw-ui-icon-wikimedia-search"></span>
+
+<span>Search</span>
+			</button>
+		</div>
+			
+		<div role="search" class="vector-search-box-vue  vector-search-box-show-thumbnail vector-search-box">
+			<div class="vector-typeahead-search-container">
+				<div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail">
+					<form action="/w/index.php" id="vector-sticky-search-form" class="cdx-search-input cdx-search-input--has-end-button">
+						<div  class="cdx-search-input__input-wrapper"  data-search-loc="header-moved">
+							<div class="cdx-text-input cdx-text-input--has-start-icon">
+								<input
+									class="cdx-text-input__input mw-searchInput" autocomplete="off"
+									
+									type="search" name="search" placeholder="Search Wikipedia">
+								<span class="cdx-text-input__icon cdx-text-input__start-icon"></span>
+							</div>
+							<input type="hidden" name="title" value="Special:Search">
+						</div>
+						<button class="cdx-button cdx-search-input__end-button">Search</button>
+					</form>
+				</div>
+			</div>
+		</div>
+		<div class="vector-sticky-header-context-bar">
+				<nav aria-label="Contents" class="vector-toc-landmark">
+						
+					<div id="vector-sticky-header-toc" class="vector-dropdown mw-portlet mw-portlet-sticky-header-toc vector-sticky-header-toc vector-button-flush-left"  >
+						<input type="checkbox" id="vector-sticky-header-toc-checkbox" role="button" aria-haspopup="true" data-event-name="ui.dropdown-vector-sticky-header-toc" class="vector-dropdown-checkbox "  aria-label="Toggle the table of contents"  >
+						<label id="vector-sticky-header-toc-label" for="vector-sticky-header-toc-checkbox" class="vector-dropdown-label cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only " aria-hidden="true"  ><span class="vector-icon mw-ui-icon-listBullet mw-ui-icon-wikimedia-listBullet"></span>
+
+<span class="vector-dropdown-label-text">Toggle the table of contents</span>
+						</label>
+						<div class="vector-dropdown-content">
+					
+						<div id="vector-sticky-header-toc-unpinned-container" class="vector-unpinned-container">
+						</div>
+					
+						</div>
+					</div>
+			</nav>
+				<div class="vector-sticky-header-context-bar-primary" aria-hidden="true" ><span lang="en" dir="ltr"><span class="mw-page-title-main">Connect Four</span></span></div>
+			</div>
+		</div>
+		<div class="vector-sticky-header-end" aria-hidden="true">
+			<div class="vector-sticky-header-icons">
+				<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-talk-sticky-header" tabindex="-1" data-event-name="talk-sticky-header"><span class="vector-icon mw-ui-icon-speechBubbles mw-ui-icon-wikimedia-speechBubbles"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-subject-sticky-header" tabindex="-1" data-event-name="subject-sticky-header"><span class="vector-icon mw-ui-icon-article mw-ui-icon-wikimedia-article"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-history-sticky-header" tabindex="-1" data-event-name="history-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-history mw-ui-icon-wikimedia-wikimedia-history"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only mw-watchlink" id="ca-watchstar-sticky-header" tabindex="-1" data-event-name="watch-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-star mw-ui-icon-wikimedia-wikimedia-star"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-edit-sticky-header" tabindex="-1" data-event-name="wikitext-edit-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-wikiText mw-ui-icon-wikimedia-wikimedia-wikiText"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-ve-edit-sticky-header" tabindex="-1" data-event-name="ve-edit-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-edit mw-ui-icon-wikimedia-wikimedia-edit"></span>
+
+<span></span>
+			</a>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--icon-only" id="ca-viewsource-sticky-header" tabindex="-1" data-event-name="ve-edit-protected-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-editLock mw-ui-icon-wikimedia-wikimedia-editLock"></span>
+
+<span></span>
+			</a>
+		</div>
+			<div class="vector-sticky-header-buttons">
+				<button class="cdx-button cdx-button--weight-quiet mw-interlanguage-selector" id="p-lang-btn-sticky-header" tabindex="-1" data-event-name="ui.dropdown-p-lang-btn-sticky-header"><span class="vector-icon mw-ui-icon-wikimedia-language mw-ui-icon-wikimedia-wikimedia-language"></span>
+
+<span>23 languages</span>
+			</button>
+			<a href="#" class="cdx-button cdx-button--fake-button cdx-button--fake-button--enabled cdx-button--weight-quiet cdx-button--action-progressive" id="ca-addsection-sticky-header" tabindex="-1" data-event-name="addsection-sticky-header"><span class="vector-icon mw-ui-icon-speechBubbleAdd-progressive mw-ui-icon-wikimedia-speechBubbleAdd-progressive"></span>
+
+<span>Add topic</span>
+			</a>
+		</div>
+			<div class="vector-sticky-header-icon-end">
+				<div class="vector-user-links">
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<div class="mw-portlet mw-portlet-dock-bottom emptyPortlet" id="p-dock-bottom">
+	<ul>
+		
+	</ul>
+</div>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgHostname":"mw-web.eqiad.main-78587766-pgxzs","wgBackendResponseTime":175,"wgPageParseReport":{"limitreport":{"cputime":"0.955","walltime":"1.330","ppvisitednodes":{"value":2772,"limit":1000000},"revisionsize":{"value":20148,"limit":2097152},"postexpandincludesize":{"value":134285,"limit":2097152},"templateargumentsize":{"value":3492,"limit":2097152},"expansiondepth":{"value":14,"limit":100},"expensivefunctioncount":{"value":7,"limit":500},"unstrip-depth":{"value":1,"limit":20},"unstrip-size":{"value":121680,"limit":5000000},"entityaccesscount":{"value":1,"limit":500},"timingprofile":["100.00% 1147.311      1 -total"," 29.71%  340.899      1 Template:Reflist"," 20.90%  239.800     19 Template:Cite_web"," 16.64%  190.955      4 Template:Navbox"," 14.74%  169.107      1 Template:Milton_Bradley"," 10.45%  119.837      1 Template:Short_description","  9.25%  106.084      1 Template:Infobox_game","  8.30%   95.270      1 Template:Infobox","  8.19%   93.999      1 Template:More_citations_needed","  8.04%   92.230      2 Template:Sister_project"]},"scribunto":{"limitreport-timeusage":{"value":"0.586","limit":"10.000"},"limitreport-memusage":{"value":7462935,"limit":52428800}},"cachereport":{"origin":"mw-web.eqiad.canary-95fc5c769-rshww","timestamp":"20260511220941","ttl":1734631,"transientcontent":true,"expiry-source":"Template:Years_or_months_ago (currentmonth)"}}});});</script>
+<script type="application/ld+json">{"@context":"https:\/\/schema.org","@type":"Article","name":"Connect Four","url":"https:\/\/en.wikipedia.org\/wiki\/Connect_Four","sameAs":"http:\/\/www.wikidata.org\/entity\/Q17254","mainEntity":"http:\/\/www.wikidata.org\/entity\/Q17254","author":{"@type":"Organization","name":"Contributors to Wikimedia projects"},"publisher":{"@type":"Organization","name":"Wikimedia Foundation, Inc.","logo":{"@type":"ImageObject","url":"https:\/\/www.wikimedia.org\/static\/images\/wmf-hor-googpub.png"}},"datePublished":"2003-08-11T15:11:46Z","dateModified":"2026-05-02T03:08:01Z","image":"https:\/\/upload.wikimedia.org\/wikipedia\/commons\/8\/84\/Connect-four.jpg","headline":"children's board game"}</script>
+</body>
+</html>

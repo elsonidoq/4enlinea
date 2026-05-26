@@ -1,24 +1,27 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.1.0
-Bump type: MINOR — new principle added (VI), materially expanded guidance in existing sections.
+Version change: 1.3.0 → 1.3.1
+Bump type: PATCH — clarification and pointer update; no new principle.
 
 Modified sections:
-  - Principle I: "Papergames review" softened to "future Papergames integration" (not a live surface)
-  - Principle V (Performance): numeric category references replaced with slug names
-  - Tier & Access Control table: numeric category references replaced with slugs; "All 6 pattern
-    categories" updated to "All 7 pattern categories" (forbidden_columns now a live category)
-Added sections:
-  - Principle VI: Implementation & Debugging Methodology
+  - Principle VIII: Documentation as First-Class Deliverable
+      · "Before planning" paragraph: added docs/architecture/ to the required reading list.
+      · "Concretely" bullet list: replaced with per-file mapping under docs/architecture/.
+      · "During implementation" paragraph: updated artifact pointer to docs/architecture/.
+
+Rationale: docs/architecture/ was created and populated as of 2026-05-15 and is now the
+single source of truth for conventions. Principle VIII was written before that directory
+existed, so all pointers still referenced data-model.md, contracts/, and plan.md directly.
+
+Added sections: N/A
 Removed sections: N/A
 
 Templates requiring updates:
-  ✅ .specify/templates/plan-template.md — Constitution Check section is generic; no structural
-     changes required; Principle VI compliance can be noted at plan-time as needed
-  ✅ .specify/templates/spec-template.md — no structural changes required; Principle VI informs
-     the Assumptions section (load-bearing assumptions should be surfaced there)
-  ✅ .specify/templates/tasks-template.md — no structural changes required
+  ✅ .specify/templates/plan-template.md — Constitution Check Principle VIII bullet updated
+     to include docs/architecture/ in the required reading list.
+  ✅ .specify/templates/tasks-template.md — Phase N: Polish architecture doc tasks updated
+     to reference docs/architecture/ files per the new mapping.
 
 Deferred TODOs: none
 -->
@@ -70,8 +73,6 @@ compounds too.
 - UI features MUST be manually verified on the golden path and at least one edge case before
   being reported complete. Type checking and automated tests verify code correctness, not
   feature correctness.
-- Free/paid tier gating MUST be tested for every new feature that touches account tiers:
-  anonymous, signed-in free, and paid paths each require an acceptance scenario.
 - Test data (board fixtures) MUST be deterministic and checked into the repo; no tests may
   depend on random board generation.
 
@@ -102,8 +103,7 @@ Inconsistent terminology or visual language breaks the learning loop.
 - Heatmap generation for the current board MUST complete in under 500 ms.
 - Puzzle goal predicate evaluation (bitboard-only: `immediate_threat`, `forced_block`,
   `double_threat`) MUST complete in under 100 ms.
-- Solver-required predicate evaluation (`fork_setup`, `zugzwang`, `parity_control`,
-  `forbidden_columns`) MUST complete in under 3 seconds.
+- Solver-required predicate evaluation (`forced_win`, `forbidden_columns`) MUST complete in under 3 seconds.
 - Any operation that cannot meet its latency budget MUST show a loading indicator within
   200 ms of initiation; silent hangs are prohibited.
 - Analytics writes to the `tracks` table MUST be fire-and-forget and MUST NOT block any
@@ -131,7 +131,7 @@ written. Discovering a missing join mid-implementation is a process failure, not
 
 **Validate signal validity before using it.** Before using a component's output to drive logic,
 verify with a concrete test case that the signal actually distinguishes the relevant cases.
-Known failure mode: solver scores are flat at zugzwang terminals — all opponent columns score
+Known failure mode: solver scores are flat at forced-win terminals — all opponent columns score
 identically, so scores cannot identify the forced block. Direct board threat detection is
 required in that case. Analogs exist for any component with edge-case output behavior.
 
@@ -142,11 +142,69 @@ it is load-bearing. Assumptions that hold only on the happy path and fail silent
 cases are bugs waiting to happen.
 
 **Rationale**: The heatmap parity bug (swap when AI opens), the curation re-review join miss
-(`annotator_note` discovered only after shipping), and the zugzwang forced-block misdiagnosis
+(`annotator_note` discovered only after shipping), and the forced-win forced-block misdiagnosis
 (flat solver scores cannot select a column) each stem from one of these failures — writing
 before mapping, using a signal without validating it, or leaving a critical assumption
 implicit. The heatmap bug investigation also spent 40+ rounds on theoretical analysis that
 two bash commands with a real moves string would have resolved immediately.
+
+### VII. Software Design Philosophy
+
+These aphorisms govern all design and implementation decisions across the codebase. When two
+approaches are equally valid by other measures, prefer the one that satisfies more of these.
+
+- Beautiful is better than ugly.
+- Explicit is better than implicit.
+- Simple is better than complex.
+- Complex is better than complicated.
+- Flat is better than nested.
+- Sparse is better than dense.
+- Readability counts.
+- Special cases aren't special enough to break the rules.
+- Although practicality beats purity.
+- Errors MUST NOT pass silently — unless explicitly silenced.
+- In the face of ambiguity, refuse the temptation to guess.
+- There should be one — and preferably only one — obvious way to do it.
+
+**Rationale**: These are the properties that make software maintainable long-term. They are
+not aspirational; they are constraints. "Practicality beats purity" is the sole escape hatch,
+and it requires a documented justification at the call site when invoked.
+
+### VIII. Documentation as First-Class Deliverable
+
+Documentation is as important as code. An architectural decision, convention, or design
+pattern that is not documented does not exist as a constraint — agents and developers MUST
+NOT be required to infer it by reading source code.
+
+**Before planning a new spec**, the author MUST read all existing architecture documentation
+(docs/architecture/, plan.md, data-model.md, contracts/, and the constitution) and ensure the
+new spec is consistent with established decisions. Undocumented decisions discovered during
+this review MUST be documented before planning continues.
+
+**During implementation**, any task that introduces a new architectural decision, convention,
+or design pattern MUST include documentation as part of its definition of done. The
+documentation MUST be present in the appropriate file under docs/architecture/ or contracts/,
+as mapped above, before the task is marked complete. A task that changes how something works
+without updating the corresponding spec artifact is not done.
+
+**Concretely**:
+- New DB schema decisions → docs/architecture/data-model.md
+- New API endpoint shape or error contract → docs/architecture/api-conventions.md
+- New server-side patterns (solver IPC, category registry, predicate evaluators) →
+  docs/architecture/server-conventions.md
+- New frontend patterns (state management, store interface, analytics, board API) →
+  docs/architecture/frontend-conventions.md
+- New testing patterns (fixture format, test types, runner config) →
+  docs/architecture/testing-conventions.md
+- New API contracts for a specific feature → contracts/ under the relevant spec
+- New cross-cutting invariants with no existing home → constitution amendment
+- Newly discovered gaps or unresolved decisions → docs/architecture/gap-report.md
+
+**Rationale**: Consistency across features is only possible when the source of truth for
+architectural decisions is the spec artifacts, not the code. When agents must read the
+implementation to understand conventions, they introduce inconsistencies proportional to how
+much of the codebase they must read. Explicit documentation closes this gap and makes future
+planning sessions fast and reliable.
 
 ## Tier & Access Control Constraints
 
@@ -157,7 +215,7 @@ gating is presentational only.
 |---|---|
 | Anonymous | Basic puzzles (`immediate_threat`, `forced_block`, `double_threat`), Sparring, one-line summaries only |
 | Signed-in (free) | Same as anonymous + 3 Deep Reveals per day |
-| Paid | All 7 pattern categories (including `fork_setup`, `zugzwang`, `parity_control`, `forbidden_columns`), unlimited Deep Reveals, Personal AI Coach, Premium Analytics, Advanced Training Paths, cross-device sync |
+| Paid | All pattern categories beyond the three free ones: `forced_win`, `forbidden_columns`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape` (8 total as of spec 008); unlimited Deep Reveals, Personal AI Coach, Premium Analytics, Advanced Training Paths, cross-device sync |
 
 - The free/paid split is a single configuration value. No feature may hard-code tier logic.
 - Deep Reveal quota (3/day for free users) is tracked server-side, keyed to the Supabase
@@ -181,4 +239,4 @@ Any practice that conflicts with a principle stated here MUST be updated to comp
 verify each principle before implementation begins, and again after Phase 1 design is
 complete.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-05-12
+**Version**: 1.3.1 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-05-15

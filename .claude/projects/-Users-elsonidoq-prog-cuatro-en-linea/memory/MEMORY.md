@@ -21,3 +21,14 @@
 - [Puzzle gen improvements — spec 004 complete](project_puzzle_gen_improvements.md) — T001–T012 done; softmax generation, per-player temperatures, player-perspective color normalization in CurationWorkspace.jsx
 - [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
 - [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs for 10+ min; likely solver IPC deadlock or terminal-position edge case; classifier tests are fast (22/22, ~56ms)
+- [Category cleanup 2026-05-13](project_category_cleanup.md) — fork_setup/parity_control removed; zugzwang→forced_win; future proper zugzwang will be a distinct category
+- [Migration constraint order](feedback_migration_constraint_order.md) — drop constraints before updating data, not after; learned from broken migration 013
+- [correct_col migration gap](project_correct_col_migration.md) — column was absent until 016_correct_col.sql; needed by claimeven/figure_7/j_shape; confirm applied before querying it
+- [Allen V-rule example movestrings](reference_allen_v_rule_examples.md) — ALL V1–V5 verified 2026-05-18; V1=`44452556366`, V4=`2134124321317273`; results in `allen_v_rule_examples.yaml`
+- [Never generate random boards](feedback_no_random_boards.md) — random movestrings are not valid game positions; always source candidates from DB, git history, or KB examples
+- [Gemini model name](reference_gemini_model.md) — correct model is `gemini-3.1-pro-preview`; use in all MCP Gemini tool calls
+- [Answer questions before editing](feedback_answer_before_editing.md) — always answer the question in text first, then proceed with any file edits or tool calls
+- [Overcut KB entry](project_overcut_kb.md) — `docs/knowledge-base/community-overcut.md` written 2026-05-19; 4 worked examples, 2 false positives; three verified sub-cases: same-parity (T4), active-forcing (odd column), chain-T2
+- [Classifier audit v2 (2026-05-20)](project_classifier_audit_v2.md) — j_shape 8/8 FP (broken: 3-of-4 matching, even anchor, wrong player); overcut 2/8 FP (T5 parity + [*] cell); claimeven 1/8 FP (wrong player); figure_7/z_threat/undercut healthy; full report at `reports/candidate-review-v2-2026-05-20.md`
+- [Classifier fixes 008 (2026-05-21)](project_classifier_fixes_008.md) — Cat1 outer gate removed; Cat2/Cat5 board-scan replacements; Cat3 rewritten (Case A/B, no countAllReachableThreats); Cat3 checked BEFORE Cat2; Case B generalized (no gravity-top requirement)
+- [immediateWinScore bug — DELETED](reference_immediateWinScore_bug.md) — formula ambiguous for odd moveCount; deleted from predicates.js + candidate-generator.js; use checkWin at gravity-top instead

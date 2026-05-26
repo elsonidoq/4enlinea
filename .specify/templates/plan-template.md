@@ -33,6 +33,14 @@
 
 [Gates determined based on constitution file]
 
+**Principle VIII — Documentation (MUST check before planning)**:
+- [ ] Existing architecture docs (docs/architecture/, data-model.md, contracts/, prior plan.md
+  files, constitution) were read before this plan was drafted.
+- [ ] Any undocumented conventions discovered during review have been documented before
+  planning continued.
+- [ ] tasks.md will include explicit documentation tasks for every new architectural decision
+  this feature introduces (DB schema, API shape, cross-cutting conventions).
+
 ## Project Structure
 
 ### Documentation (this feature)

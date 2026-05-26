@@ -1,0 +1,87 @@
+# API Conventions
+
+## Route Naming
+
+**MUST**: Public puzzle/game routes use `/api/<resource>` (e.g., `/api/puzzles`, `/api/scores`).
+**MUST**: Curation and admin routes use `/api/admin/<resource>` (e.g., `/api/admin/candidates`).
+**MUST**: Stripe routes use `/api/stripe/<action>` (e.g., `/api/stripe/create-checkout`).
+**MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
+
+## Error Response Shape
+
+**MUST**: All error responses use `{ "error": "<message string>" }` with no other keys.
+**MUST**: HTTP status codes: 400 for invalid input, 401 for unauthenticated, 403 for unauthorized/tier-gated, 404 for not found, 409 for conflict (already exists), 429 for quota exceeded, 500 for server errors, 503 for unavailable dependencies.
+
+## Success Response Shape
+
+**MUST**: 204 No Content for mutations with no return value (DELETE, resolve actions).
+**MUST**: 201 Created for insert operations that return an id.
+**MUST**: 200 with a JSON body for all other successful responses.
+
+## Auth Threading
+
+**MUST**: All routes run through the `loadUser` middleware, which:
+1. Reads `Authorization: Bearer <token>` from the request header.
+2. Validates the JWT with `supabase.auth.getUser(token)`.
+3. Fetches the user's `tier`, `deep_reveal_count`, `deep_reveal_reset_at`, `device_uuid` from `public.users`.
+4. Populates `req.user` (null for anonymous/invalid token).
+
+**MUST NOT**: Any route skip `loadUser` — it is registered globally via `app.use(loadUser)`.
+
+## Access Guards
+
+- **`requirePaid`**: Middleware for coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`.
+- **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
+- **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
+
+## Supabase Usage Pattern
+
+**MUST**: The server uses the **service role key** (`SUPABASE_SERVICE_ROLE_KEY`) for all DB operations. This bypasses RLS.
+**MUST NOT**: The server use the anon key for DB writes.
+The `supabase` client is initialized once at startup; routes check `if (!supabase)` and return 503 when the environment variable is not set.
+
+## Fire-and-Forget Writes
+
+**MUST**: Analytics writes (`tracks`) and non-critical DB inserts that must not block the response use the pattern:
+```js
+supabase.from('table').insert(data)
+  .then(() => {})
+  .catch(err => console.error('[label]', err.message));
+```
+The response is sent before the DB write completes.
+Rationale: Constitution §V — analytics writes MUST NOT block user-facing operations.
+
+## Pagination
+
+**MUST**: Admin list endpoints support `limit` (default 50, max 100) and `offset` query params.
+**MUST**: Return `total` (count) alongside `data` array.
+```json
+{ "candidates": [...], "total": 142 }
+```
+
+## Input Validation
+
+**MUST**: Validate `moves` strings with the regex `/^[0-6]{0,42}$/`.
+**MUST**: Validate `candidateCol` as an integer `0–6`.
+**MUST**: Validate `category` against `VALID_CATEGORIES` (Set from `server/categories.js`).
+All validation happens at the route handler, before any solver or DB call.
+
+## Empty Board Special Case
+
+The solver hangs on empty input. The server returns `EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0]` (center-favoring, approximate) for empty-board queries without invoking the solver.
+
+## Rate Limiting
+
+Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
+- `/api/explain-move`: 30 req/min
+- `/api/scores`, `/api/explain`: 60 req/min
+- `/api/stripe/create-checkout`: 10 req/min
+- All other `/api/` routes: 120 req/min
+
+## Sequence-Mode Puzzle Endpoint
+
+`POST /api/puzzles/:id/sequence/move` handles per-move validation for `interaction_mode = 'sequence'` puzzles.
+Accepts `{ position, col }` where `position` is the current move string (before the learner's move) and `col` is 0-indexed.
+Returns `{ outcome: 'success' | 'fail' | 'continue', aiCol?, reason? }`.
+All validation is bitboard-only — no solver calls.
+`POST /api/puzzles/:id/check` returns 400 for sequence-mode puzzles; callers must use the `/sequence/move` endpoint instead.

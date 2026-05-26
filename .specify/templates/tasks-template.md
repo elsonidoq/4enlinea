@@ -157,6 +157,19 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
 
+**Architecture documentation** (Constitution Principle VIII — MANDATORY, not optional):
+Any task in this feature that introduced a new architectural decision, convention, or design
+pattern MUST have a corresponding documentation task below. These are part of the definition
+of done and MUST be completed before the feature is marked shipped.
+
+- [ ] TXXX Update docs/architecture/data-model.md for any new DB schema decisions
+- [ ] TXXX Update docs/architecture/api-conventions.md for any new or changed API endpoint shapes
+- [ ] TXXX Update docs/architecture/server-conventions.md for any new server-side patterns
+- [ ] TXXX Update docs/architecture/frontend-conventions.md for any new frontend patterns
+- [ ] TXXX Update docs/architecture/testing-conventions.md for any new testing patterns
+- [ ] TXXX Update contracts/ for any new feature-specific API contracts
+- [ ] TXXX Amend constitution or docs/architecture/gap-report.md for new cross-cutting invariants
+
 ---
 
 ## Dependencies & Execution Order
