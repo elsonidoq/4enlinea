@@ -29,7 +29,7 @@ export class SupabaseStore {
       .select('*')
       .eq('user_id', this._userId)
       .eq('date', date)
-      .single();
+      .maybeSingle();
     return data ?? null;
   }
 

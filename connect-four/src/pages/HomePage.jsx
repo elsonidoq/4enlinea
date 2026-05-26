@@ -50,7 +50,7 @@ function checkWin(board, row, col, color) {
 }
 
 function buildMovesString(history) {
-  return history.map(c => c + 1).join('');
+  return history.join('');
 }
 
 export default function HomePage() {

@@ -1118,6 +1118,70 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
   res.status(201).json({ puzzle_id: puzzle.id, candidate_id: id });
 });
 
+// POST /api/admin/candidates/approve-batch
+app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { category, goal_prompt, difficulty = 2 } = req.body;
+  if (!category) return res.status(400).json({ error: 'category is required' });
+  if (!goal_prompt?.trim()) return res.status(400).json({ error: 'goal_prompt is required' });
+  if (![1, 2, 3].includes(Number(difficulty))) return res.status(400).json({ error: 'difficulty must be 1–3' });
+
+  const { data: candidates, error: fetchErr } = await supabase
+    .from('candidates')
+    .select('id, category, move_string, status, highlight_metadata, correct_col')
+    .eq('category', category)
+    .eq('status', 'pending');
+
+  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+  if (!candidates || candidates.length === 0) return res.json({ approved: 0, skipped: 0, errors: [] });
+
+  let approved = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const candidate of candidates) {
+    if (candidate.status === 'approved') { skipped++; continue; }
+
+    const hmErr = validateHighlightMetadata(candidate.highlight_metadata);
+    if (hmErr) { errors.push({ id: candidate.id, error: `Invalid highlight_metadata: ${hmErr}` }); continue; }
+
+    if (candidate.correct_col !== null && !isValidCol0(candidate.correct_col)) {
+      errors.push({ id: candidate.id, error: `correct_col out of range: ${candidate.correct_col}` });
+      continue;
+    }
+
+    const { error: insertErr } = await supabase
+      .from('puzzles')
+      .insert({
+        category: candidate.category,
+        move_string: candidate.move_string,
+        goal_prompt: goal_prompt.trim(),
+        goal_predicate_type: candidate.category,
+        goal_predicate_params: {},
+        cooperative_ai_moves: [],
+        difficulty: Number(difficulty),
+        is_active: true,
+        interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
+        highlight_metadata: candidate.highlight_metadata ?? null,
+        correct_col: candidate.correct_col ?? null,
+      });
+
+    if (insertErr) { errors.push({ id: candidate.id, error: insertErr.message }); continue; }
+
+    const { error: updateErr } = await supabase
+      .from('candidates')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+      .eq('id', candidate.id);
+
+    if (updateErr) { errors.push({ id: candidate.id, error: updateErr.message }); continue; }
+
+    approved++;
+  }
+
+  res.json({ approved, skipped, errors });
+});
+
 // T014: POST /api/admin/candidates/:id/reject
 app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });

@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { CATEGORY_NAMES, CATEGORY_ORDER } from '../lib/categories.js';
+import { CATEGORY_NAMES, CATEGORY_ORDER, GOAL_PROMPTS } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -10,6 +10,7 @@ export function CandidateDashboard({ onSelectCategory }) {
 
   // Per-category generate form state
   const [generatingCat, setGeneratingCat] = useState(null);
+  const [approveAllLoading, setApproveAllLoading] = useState({});
   const [genForms, setGenForms] = useState({});
   const [genResults, setGenResults] = useState({});
   const [genLoading, setGenLoading] = useState({});
@@ -79,6 +80,28 @@ export function CandidateDashboard({ onSelectCategory }) {
     }
   }
 
+  async function handleApproveAll(cat) {
+    const goalPrompt = GOAL_PROMPTS[cat] ?? '';
+    if (!confirm(`Approve all ${stats.find(r => r.category === cat)?.pending ?? ''} pending candidates for "${CATEGORY_NAMES[cat]}" with the default goal prompt?`)) return;
+    setApproveAllLoading(prev => ({ ...prev, [cat]: true }));
+    try {
+      const res = await fetch(`${API}/api/admin/candidates/approve-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: cat, goal_prompt: goalPrompt, difficulty: 2 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      const msg = `Approved ${data.approved}${data.errors.length > 0 ? `, ${data.errors.length} error(s)` : ''}.`;
+      alert(msg);
+      await loadStats();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setApproveAllLoading(prev => ({ ...prev, [cat]: false }));
+    }
+  }
+
   if (loading) return <div style={centred}>Loading…</div>;
   if (error) return <div style={centred}>Error: {error}</div>;
 
@@ -103,6 +126,7 @@ export function CandidateDashboard({ onSelectCategory }) {
           <tbody>
             {stats.map(row => {
               const isGenerating = genLoading[row.category];
+              const isApprovingAll = approveAllLoading[row.category];
               const result = genResults[row.category];
               const form = genForms[row.category] ?? { count: 30, seed: '' };
               const showForm = generatingCat === row.category;
@@ -135,6 +159,9 @@ export function CandidateDashboard({ onSelectCategory }) {
                             </button>
                             <button style={rejectAllBtn} onClick={() => handleRejectAll(row.category)}>
                               Delete all pending
+                            </button>
+                            <button style={approveAllBtn} onClick={() => handleApproveAll(row.category)} disabled={isApprovingAll}>
+                              {isApprovingAll ? '…' : 'Approve all'}
                             </button>
                           </>
                         ) : (
@@ -223,6 +250,7 @@ const genBtn = { padding: '5px 10px', borderRadius: 6, border: 'none', backgroun
 const reviewBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const reviewBtnDisabled = { ...reviewBtn, opacity: 0.4, cursor: 'default' };
 const rejectAllBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(239,68,68,.3)', background: 'transparent', color: 'var(--red)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+const approveAllBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(34,197,94,.3)', background: 'rgba(34,197,94,.08)', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const reviewApprovedBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(34,197,94,.3)', background: 'transparent', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const reviewRejectedBtn = { padding: '5px 10px', borderRadius: 6, border: '1.5px solid rgba(239,68,68,.3)', background: 'transparent', color: 'var(--red)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 const genForm = { display: 'flex', gap: 8, alignItems: 'center' };

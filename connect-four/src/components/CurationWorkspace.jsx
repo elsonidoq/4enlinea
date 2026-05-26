@@ -3,28 +3,11 @@ import { Board } from './Board.jsx';
 import { PredicateChecklist } from './PredicateChecklist.jsx';
 import { RejectModal } from './RejectModal.jsx';
 import { MultiMoveSequencer } from './MultiMoveSequencer.jsx';
-import { CATEGORY_NAMES } from '../lib/categories.js';
+import { CATEGORY_NAMES, GOAL_PROMPTS } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const ROWS = 6;
 const COLS = 7;
-
-const GOAL_PROMPTS = {
-  immediate_threat:  'Find the winning move.',
-  forced_block:      "Block your opponent's threat.",
-  double_threat:     'Find the move that creates two simultaneous threats.',
-  forced_win:        'Play a sequence of forcing moves to create two unstoppable threats.',
-  fork_setup:        'Set up a fork — a sequence that leads to two unstoppable threats.',
-  zugzwang:          'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
-  parity_control:    'Control the parity of this column to secure the win.',
-  forbidden_columns: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
-  z_threat:          'Identify the column where a Z-threat gives you unstoppable parity control.',
-  claimeven:         'Use the Claimeven strategy — identify which columns Yellow can claim to guarantee a draw.',
-  undercut:          'Find the move that undercuts your opponent, taking the square below their threat.',
-  overcut:           'Find the move that overcomes your opponent by playing above their intended threat.',
-  figure_7:          'Spot the Figure-7 pattern and play the key move to exploit it.',
-  j_shape:           'Spot the J-Shape pattern and play the key move to exploit it.',
-};
 
 function buildBoard(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
