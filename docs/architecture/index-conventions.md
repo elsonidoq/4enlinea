@@ -82,12 +82,11 @@ no index transformation occurs.
 The frontend converts 0-indexed values to 1-indexed **only at the display layer**:
 
 ```jsx
-Play column {pendingMove + 1}   // pendingMove is 0-indexed
 Col {postReveal.col + 1}        // postReveal.col is 0-indexed
 Z-threat: col {highlight_metadata.column + 1}
 ```
 
-All internal state (`pendingMove`, `col`, highlight array indices) stays 0-indexed until
+All internal state (`col`, highlight array indices) stays 0-indexed until
 the string is rendered to the user.
 
 ## `highlightedCells` Array (Frontend Internal)

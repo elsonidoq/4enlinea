@@ -6,8 +6,16 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, classifyAll, Board } from './classifier.js';
+import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
 import { explainSimulate } from './explainSimulate.js';
+import {
+  TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
+  isMajorThreatForPlayer, getScoreTier,
+  getBoardVisualization, buildKBSection,
+  buildFlatTable, buildRecommendPrompt, callLLM,
+  selectContrastMove, computeDeltaTable, buildExplainPrompt,
+  getPositionTier,
+} from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
@@ -63,6 +71,9 @@ function validateHighlightMetadata(hm) {
 }
 
 app.use('/api/explain-move', makeLimit(30));
+app.use('/api/recommend-move', makeLimit(5));
+app.use('/api/explain-move-llm', makeLimit(5));
+app.use('/api/llm-feedback', makeLimit(10));
 app.use('/api/scores', makeLimit(60));
 app.use('/api/explain', makeLimit(60));
 app.use('/api/stripe/create-checkout', makeLimit(10));
@@ -415,6 +426,283 @@ app.post('/api/explain-move', async (req, res) => {
   }
 
   res.json({ oneLiner, patternTag, deepReveal, quotaRemaining });
+});
+
+// ── LLM coaching endpoints ─────────────────────────────────────────────────────
+
+// POST /api/recommend-move — LLM move recommendation for a given board position.
+// Returns { recommendation: string, prompt: string }.
+// No auth required. Rate-limited to 5 req/min (LLM cost guard).
+app.post('/api/recommend-move', async (req, res) => {
+  const { movestring = '', rounds = 1 } = req.body;
+
+  if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring)) {
+    return res.status(400).json({ error: 'movestring must be 0–42 digits 0–6' });
+  }
+  const r = Number(rounds);
+  if (!Number.isInteger(r) || r < 1 || r > 2) {
+    return res.status(400).json({ error: 'rounds must be 1 or 2' });
+  }
+  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL) {
+    return res.status(503).json({ error: 'LLM service not configured' });
+  }
+
+  const ROWS = 6;
+  const numPlies = 2 * r + 1;
+
+  let board;
+  try {
+    board = new Board(movestring);
+  } catch (e) {
+    return res.status(400).json({ error: `Invalid movestring: ${e.message}` });
+  }
+
+  const playableCols = [0,1,2,3,4,5,6].filter(c => board.colHeights[c] < ROWS);
+  if (playableCols.length === 0) {
+    return res.status(400).json({ error: 'Board is full — no moves available' });
+  }
+
+  const perspective  = movestring.length % 2 === 0 ? 1 : 2;
+  const opponent     = perspective === 1 ? 2 : 1;
+  const playerName   = perspective === 1 ? 'Red' : 'Yellow';
+  const opponentName = perspective === 1 ? 'Yellow' : 'Red';
+
+  try {
+    // ── 1. Solver scores (for tier labeling of non-immediate columns) ──────────
+    let scores = EMPTY_BOARD_SCORES;
+    if (movestring.length > 0) {
+      scores = await solver.query(movestring);
+    }
+
+    // ── 2. Special case detection via board logic (NOT solver scores) ──────────
+    //
+    // IMMEDIATE WIN and IMMEDIATE LOSS must use board logic — solver scores have
+    // false positives at these boundaries (flat at forced-win terminals, off-by-1
+    // for odd moveCount). See reference_cat5_forced_block_detection memory.
+    const immediateWinSet = new Set(
+      getImmediateThreats(board.board, board.colHeights, perspective)
+    );
+
+    const forcedBlockCols = playableCols.filter(c =>
+      isMajorThreatForPlayer(board, c, board.colHeights[c], opponent)
+    );
+
+    const immediateLossSet = new Set();
+    for (const c of playableCols) {
+      if (immediateWinSet.has(c)) continue;
+      const postBoard = new Board(movestring + c);
+      const oppThreats = getImmediateThreats(postBoard.board, postBoard.colHeights, opponent);
+      if (oppThreats.length > 0) immediateLossSet.add(c);
+    }
+
+    // ── 3. explainSimulate in parallel for non-immediate-win columns ───────────
+    const simResults = await Promise.all(
+      playableCols.map(c => {
+        if (immediateWinSet.has(c)) {
+          return Promise.resolve({ patterns: {}, outcomes: IMMEDIATE_WIN_OUTCOMES });
+        }
+        const anchorCell = { col: c, row: board.colHeights[c] };
+        return explainSimulate(movestring + c, numPlies, anchorCell, perspective, solver);
+      })
+    );
+
+    // ── 4. Assemble per-column data and sort ───────────────────────────────────
+    const colData = playableCols.map((c, i) => ({
+      col:      c,
+      score:    scores[c],
+      tier:     getScoreTier(c, scores[c], immediateWinSet, immediateLossSet),
+      outcomes: simResults[i].outcomes,
+      patterns: simResults[i].patterns,
+    }));
+
+    colData.sort((a, b) =>
+      (TIER_ORDER[a.tier] - TIER_ORDER[b.tier]) || (a.col - b.col)
+    );
+
+    // ── 5. Overall position assessment ────────────────────────────────────────
+    let positionAssessment;
+    if (immediateWinSet.size > 0) {
+      positionAssessment = 'winning (an immediate winning move is available)';
+    } else {
+      const bestScore = Math.max(
+        ...playableCols.map(c => scores[c]).filter(s => s > -1000)
+      );
+      if (bestScore > 0)        positionAssessment = 'in a winning position';
+      else if (bestScore === 0) positionAssessment = 'in a drawing position';
+      else                      positionAssessment = 'in a losing position';
+    }
+
+    // ── 6. Board visualization ─────────────────────────────────────────────────
+    const boardViz = getBoardVisualization(movestring || '');
+
+    // ── 7. KB section for all patterns with ratio > 0 ─────────────────────────
+    const activePatternSet = new Set();
+    for (const { patterns } of colData) {
+      for (const [name, entry] of Object.entries(patterns)) {
+        if (entry.ratio > 0) activePatternSet.add(name);
+      }
+    }
+    const kbSection = buildKBSection([...activePatternSet]);
+
+    // ── 8. Build prompt and call LLM ──────────────────────────────────────────
+    const prompt = buildRecommendPrompt({
+      boardViz, playerName, opponentName,
+      positionAssessment, colData,
+      immediateWinSet, forcedBlockCols, immediateLossSet,
+      kbSection, rounds: r,
+    });
+
+    const recommendation = await callLLM(prompt);
+    res.json({ recommendation, prompt });
+
+  } catch (err) {
+    console.error('[recommend-move] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/explain-move-llm — LLM explanation of a specific user move.
+// Returns { explanation: string, prompt: string }.
+// No auth required. Rate-limited to 5 req/min (LLM cost guard).
+app.post('/api/explain-move-llm', async (req, res) => {
+  const { movestring, col, rounds } = req.body;
+
+  if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
+    return res.status(400).json({ error: 'movestring must be 0–42 digits 0–6' });
+  if (typeof col !== 'number' || !Number.isInteger(col) || col < 0 || col > 6)
+    return res.status(400).json({ error: 'col must be integer 0–6' });
+  const r = Number(rounds ?? 1);
+  if (!Number.isInteger(r) || r < 1 || r > 5)
+    return res.status(400).json({ error: 'rounds must be an integer between 1 and 5' });
+  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
+    return res.status(503).json({ error: 'LLM service not configured' });
+
+  let board;
+  try {
+    board = new Board(movestring);
+  } catch (e) {
+    return res.status(400).json({ error: `Invalid movestring: ${e.message}` });
+  }
+
+  if (board.colHeights[col] >= 6)
+    return res.status(400).json({ error: 'column is full' });
+
+  const numPlies = 2 * r + 1;
+  const perspective = movestring.length % 2 === 0 ? 1 : 2;
+  const playerName  = perspective === 1 ? 'Red' : 'Yellow';
+  const opponentPlayer = perspective === 1 ? 2 : 1;
+  const postMovestring = movestring + col;
+
+  try {
+    // ── 1. Pre-move solver scores for contrast selection ──────────────────────
+    const preScores = movestring.length > 0
+      ? await solver.query(movestring)
+      : EMPTY_BOARD_SCORES;
+
+    // ── 2. Derive position tier and select contrast move ─────────────────────
+    const positionTier = getPositionTier(preScores, board);
+    const contrast = selectContrastMove(preScores, col, board);
+    if (contrast === null) {
+      return res.json({
+        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
+        prompt: null,
+      });
+    }
+    const { contrastCol, isOptimal } = contrast;
+
+    // ── 3. Run explainSimulate concurrently ───────────────────────────────────
+    const anchorRow        = board.colHeights[col];
+    const contrastAnchorRow = board.colHeights[contrastCol];
+
+    const [userResult, contrastResult] = await Promise.all([
+      explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
+      explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
+    ]);
+
+    // ── 4. Compute delta table ────────────────────────────────────────────────
+    const { rows: deltaRows, insufficientTacticalData } =
+      computeDeltaTable(userResult.patterns, contrastResult.patterns);
+    const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
+
+    // ── 5. Board visualizations ───────────────────────────────────────────────
+    const [boardViz, postBoardViz] = await Promise.all([
+      getBoardVisualization(movestring || ''),
+      getBoardVisualization(postMovestring),
+    ]);
+
+    // ── 6. Forced-block and blunder detection ─────────────────────────────────
+    const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
+    const opponentName = perspective === 1 ? 'Yellow' : 'Red';
+    const forcedBlockNote = forcedBlock
+      ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
+      : null;
+
+    const postBoard = new Board(postMovestring);
+    const opponentWinCols = getImmediateThreats(postBoard.board, postBoard.colHeights, opponentPlayer);
+    const blunderNote = opponentWinCols.length > 0
+      ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
+      : null;
+
+    // ── 7. KB section for active patterns ────────────────────────────────────
+    const activePatterns = deltaRows.map(row => row.name);
+    const kbSection = buildKBSection(activePatterns);
+
+    // ── 8. Build prompt and call LLM ─────────────────────────────────────────
+    const prompt = buildExplainPrompt({
+      boardViz,
+      postBoardViz,
+      userCol: col,
+      contrastCol,
+      isOptimal,
+      positionTier,
+      deltaRows,
+      insufficientTacticalData,
+      allLinesDecided,
+      rounds: r,
+      totalLeaves: userResult.totalLeaves,
+      userOutcomes: userResult.outcomes,
+      contrastOutcomes: contrastResult.outcomes,
+      kbSection,
+      playerName,
+      forcedBlockNote,
+      blunderNote,
+    });
+
+    const explanation = await callLLM(prompt);
+    res.json({ explanation, prompt });
+
+  } catch (err) {
+    console.error('[explain-move-llm] error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/llm-feedback — record a flagged LLM response.
+// Returns { id: string }.
+// No auth required.
+app.post('/api/llm-feedback', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  const { movestring, llm_prompt, llm_response, human_note, feature } = req.body;
+
+  for (const [field, value] of Object.entries({ movestring, llm_prompt, llm_response, human_note, feature })) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      return res.status(400).json({ error: `${field} must be a non-empty string` });
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('llm_feedback')
+      .insert({ movestring, llm_prompt, llm_response, human_note, feature })
+      .select('id')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Puzzle endpoints (T035-T037) ───────────────────────────────────────────────

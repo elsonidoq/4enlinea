@@ -84,16 +84,32 @@ scanning functions can call `checkWin` on an empty cell without placing the piec
 
 ## Forward Simulation (`explainSimulate`)
 
-`explainSimulate(movestring, numPlies, anchorCell, perspective, solver)` in `explainSimulate.js`
+`explainSimulate(movestring, numPlies, anchorCell, perspective, solver, options={})` in `explainSimulate.js`
 plays out optimal continuations and aggregates which tactical patterns appear at the leaves.
 It answers "what does this move set up?" for the coach LLM.
 
+```
+options.detectors  — string[] of detector names to enable.
+                     Default: all names in DETECTOR_REGISTRY (including 'claimeven').
+                     Example (exclude claimeven):
+                       DETECTOR_REGISTRY.map(d => d.name).filter(n => n !== 'claimeven')
+```
+
 **Key design decisions**:
 
-- **classifyAllNoClaimeven**: a local sync helper that runs all 10 sync detectors but skips
-  `detectClaimeven`. Claimeven issues ~20 solver queries per call via `runClaimevenSimulation`,
-  which multiplies leaf cost by 21× and makes numPlies ≥ 3 prohibitive. Use `classifyAll()`
-  directly if claimeven data is needed.
+- **Detector registry** (`DETECTOR_REGISTRY` in `explainSimulate.js`): all detectors are
+  declared as `{ name, fn, isAsync, histType }` entries. Sync detectors receive `(board, scores)`;
+  async detectors receive `(board, solver)`. `options.detectors` filters this registry before
+  each simulation. Only patterns in the active registry appear as keys in the output `patterns`
+  object. **Adding a new detector = one entry in `DETECTOR_REGISTRY`; no other code changes
+  required.**
+  - `histType: 'col'`  → output entry has `colHistogram` keyed by column index string
+  - `histType: 'cell'` → output entry has `cellHistogram` keyed by `"colC,rowR"`
+  - `histType: null`   → no histogram field
+
+- **Claimeven cost**: `detectClaimeven` is async and issues ~20 solver queries per call via
+  `runClaimevenSimulation`. It is included in the default registry. To exclude it for speed,
+  filter it out via `options.detectors`. Measure actual cost via `result.timing.solverCalls`.
 
 - **Leaf filtering**: only leaves where `currentPlayer === perspective` contribute to `frequency`
   and histograms. All leaves count toward `total`. This ensures patterns are attributed to the
@@ -115,12 +131,20 @@ It answers "what does this move set up?" for the coach LLM.
   (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns — these return
   `cols` arrays only), involvement is determined by column match alone (noted as column proxy).
 
-**Cost estimate** (branching factor b ≈ 3, claimeven excluded):
+- **`timing` return field**: every call returns `{ totalMs, solverCalls, solverCacheHits }`.
+  `solverCalls` counts cache misses only (actual `solver.query()` invocations).
+  `solverCacheHits` counts positions served from the score cache.
 
-| numPlies | Leaves | Solver calls |
-|---|---|---|
-| 2 | ~9 | ~21 |
-| 4 | ~81 | ~120 |
+**Cost estimate** (branching factor b ≈ 3):
+
+| numPlies | Tree solver calls | +claimeven (~20/node) | Total with claimeven |
+|---|---|---|---|
+| 2 | ~21 | ~9 nodes × 20 = ~180 | ~200 |
+| 3 | ~40 | ~13 nodes × 20 = ~260 | ~300 |
+| 4 | ~120 | ~40 nodes × 20 = ~800 | ~920 |
+
+Run `./explain_simulate.sh <movestring> <col> <numPlies>` and check the printed `Timing` line
+to get the real numbers for a specific position.
 
 ## Solver Score Semantics (Critical Invariant)
 
@@ -135,6 +159,27 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 
 `getImmediateThreats` / `board.immediateThreats(player)` uses the gravity-top restriction and is reserved for immediate-move semantics (`detectClaimeven`, forced-block checks). Do not use it in pattern detectors.
 
+## LLM Coach Helpers (`llmCoachHelpers.js`)
+
+`connect-four/server/llmCoachHelpers.js` is the shared module for all LLM coaching server endpoints. It exports:
+
+- `buildRecommendPrompt({...})` — assembles the full move-recommendation prompt
+- `buildFlatTable(colData, rounds)` — formats the per-column pattern table for the prompt
+- `getScoreTier(col, score, immediateWinSet, immediateLossSet)` — classifies a column into IMMEDIATE WIN / WINS / DRAWS / LOSES / IMMEDIATE LOSS
+- `isMajorThreatForPlayer(board, col, row, player)` — checks whether a cell is a 3+empty major threat; not exported from `classifier.js`, this is the canonical server location
+- `getBoardVisualization(movestring)` — shells out to `scripts/visualize_board.mjs` via `spawnSync`, strips the `scr` row
+- `buildKBSection(patternNames)` / `loadKBStatement(id)` — loads KB article statements for active patterns
+- `callLLM(prompt)` — calls OpenAI chat completions API; reads `OPENAI_API_KEY` / `OPENAI_MODEL` from env
+- `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
+- `selectContrastMove(scores, userCol, board)` — pure; returns `{ contrastCol, isOptimal }` or `null` when all legal scores are equal. `isOptimal=true`: user played best, contrast = second-best; `isOptimal=false`: user played suboptimally, contrast = best. Tie-break: closest to col 3.
+- `computeDeltaTable(userPatterns, contrastPatterns)` — pure; returns `{ rows, insufficientTacticalData }`. Rows are `{ name, userRatio, contrastRatio, delta, userTop2, contrastTop2 }` sorted by delta descending.
+- `buildExplainPrompt({ boardViz, postBoardViz, playerName, isOptimal, userCol, contrastCol, deltaRows, insufficientTacticalData, allLinesDecided, rounds, totalLeaves, userOutcomes, contrastOutcomes, kbSection, forcedBlockNote, blunderNote })` — pure; builds the LLM prompt for `/api/explain-move-llm`. Solver scores never appear in output. Column references are 1-indexed to the LLM. `boardViz` = pre-move board, `postBoardViz` = post-move board.
+- `PATTERN_NAMES` — ordered string array of the 11 pattern names consumed by `computeDeltaTable`
+
+**Critical invariant**: solver scores are NEVER passed to the LLM. `getScoreTier` translates scores to tier labels (WINS/DRAWS/LOSES), and `getBoardVisualization` strips the `scr` row from board output. This invariant MUST be preserved by all callers.
+
+The CLI scripts (`scripts/recommend_next_move.mjs`, `scripts/explain_move.mjs`) import from this module. Server endpoints (`/api/recommend-move`, `/api/explain-move-llm`) also import from it and reuse the server-managed solver singleton rather than spawning their own.
+
 ## LLM Explanation Scripts
 
 CLI scripts that call an LLM must load `connect-four/server/.env` via Node's built-in
@@ -143,13 +188,17 @@ call site for this flag (e.g. `explain_move.sh`). Scripts themselves read
 `process.env.OPENAI_API_KEY` and `process.env.OPENAI_MODEL` directly — no `dotenv`
 package needed.
 
-**LLM prompt structure contract** for move explanations (`explain_move.mjs`):
+**LLM prompt structure contract** for move explanations (`buildExplainPrompt` / `explain_move.mjs` / `/api/explain-move-llm`):
 
 1. `## Role` — coach persona and move quality framing (strong / weak)
-2. `## Board position` — `visualize_board.mjs` output (annotated board, par row, solver scores)
-3. `## Solver scores` — pre-move scores relative to the user, with best/user labels (all 1-indexed for display)
-4. `## Pattern comparison` — delta table from two `explainSimulate` calls (user move vs contrast move), sorted by |Δratio|, showing top-2 histogram entries per row
-5. `## Task` — grounding instruction targeting 2–4 sentence response
+2. `## Move context` — player name, column played, optional forced-block / blunder annotations
+3. `## Board position (BEFORE ...)` — pre-move `visualize_board.mjs` output, `scr` row stripped
+4. `## Board position (AFTER ...)` — post-move `visualize_board.mjs` output, `scr` row stripped
+5. `## Pattern comparison` — delta table from two `explainSimulate` calls (user move vs contrast move), sorted by |Δratio|, showing top-2 histogram entries per row
+6. `## Pattern definitions` — KB article statements for active patterns (optional)
+7. `## Task` — grounding instruction targeting 2–4 sentence response
+
+Solver scores are intentionally excluded from the prompt. The LLM reasons from tactical patterns, outcome rates, and KB definitions only.
 
 When all pattern ratios are zero for both compared moves, `insufficient_tactical_data` is set and section 4 includes an explicit "No tactical patterns detected" notice rather than silently omitting the section (Principle VI: validate signal before use). The LLM is still called but told it has no pattern data.
 
@@ -170,6 +219,8 @@ When all pattern ratios are zero for both compared moves, `insufficient_tactical
 | `STRIPE_SECRET_KEY` | Stripe API (optional) |
 | `STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID` | Stripe price IDs |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification |
+| `OPENAI_API_KEY` | OpenAI API key for LLM coaching endpoints (optional; affected endpoints return 503 if absent) |
+| `OPENAI_MODEL` | OpenAI model name (e.g., `gpt-4o-mini`); required alongside `OPENAI_API_KEY` |
 | `SENTRY_DSN` | Error tracking (optional) |
 | `FRONTEND_URL` | Used in Stripe redirect URLs (default: `http://localhost:5173`) |
 | `PORT` | Server port (default: 3001) |

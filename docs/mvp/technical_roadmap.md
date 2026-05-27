@@ -165,7 +165,7 @@ Keep both endpoints as-is. The backend is the right shape; it just needs new end
 **Delivers:**
 - Full sparring game rebuilt in the new component architecture (Board, Column, Piece, turn management, AI difficulty via `/api/scores`).
 - Difficulty levels: easy (random among legal moves), medium (greedy best), hard (solver best with occasional suboptimal moves — configurable depth), perfect (solver best always). Difficulty controls the AI column-selection logic, not a separate code path.
-- **Commit-first toggle**: when enabled, all hints, solver scores, and heatmaps are hidden until the user commits a move. After commit: score of move played, engine's best move + score, pattern tag from Explanation Engine (if meaningful difference). This is a Deep Reveal and counts against the daily cap for free users.
+- **Commit-first toggle**: when enabled, all hints, solver scores, and heatmaps are hidden until the user commits a move. Clicking a column immediately commits — no confirmation step. After commit: score of move played, engine's best move + score, pattern tag from Explanation Engine (if meaningful difference). This is a Deep Reveal and counts against the daily cap for free users.
 - Hints-on mode (existing PoC behavior) preserved and accessible when commit-first is off.
 - Contextual suggestions in hints-on mode: "Warning: opponent can create a double threat", "Immediate threat available in col X".
 - Track events: `session_start`, `deep_reveal_viewed`.

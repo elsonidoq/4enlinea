@@ -25,6 +25,7 @@ import {
   detectOvercut,
   detectFigure7,
   detectJShape,
+  detectClaimeven,
 } from './classifier.js';
 
 const ROWS = 6;
@@ -32,37 +33,54 @@ const COLS = 7;
 // Solver rejects the empty board; use the known-correct scores instead.
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
-// Coordinate-based patterns: emit cellHistogram
-const COORD_PATTERNS = new Set(['z_threat', 'undercut', 'overcut', 'figure_7', 'j_shape']);
-// Directional patterns: emit colHistogram
-const DIREC_PATTERNS = new Set(['immediate_threat', 'double_threat', 'forced_block', 'forced_win', 'forbidden_columns']);
-// All pattern names in output order (claimeven excluded from simulation but kept in output)
-const ALL_PATTERNS = [
-  'immediate_threat', 'double_threat', 'forced_block', 'forced_win', 'forbidden_columns',
-  'z_threat', 'undercut', 'overcut', 'figure_7', 'j_shape', 'claimeven',
+/**
+ * Canonical list of all pattern detectors available to explainSimulate.
+ * Adding a new detector = one entry here; no other code changes required.
+ *
+ * @typedef {object} DetectorEntry
+ * @property {string}            name     — pattern name; matches classifyAll output keys
+ * @property {Function}          fn       — detector function
+ * @property {boolean}           isAsync  — true if fn returns a Promise (e.g. detectClaimeven)
+ * @property {'col'|'cell'|null} histType — histogram type emitted by aggregateLeaves:
+ *                                          'col'  → colHistogram keyed by column index string
+ *                                          'cell' → cellHistogram keyed by "colC,rowR"
+ *                                          null   → no histogram
+ */
+export const DETECTOR_REGISTRY = [
+  { name: 'immediate_threat',  fn: detectImmediateThreat,  isAsync: false, histType: 'col'  },
+  { name: 'double_threat',     fn: detectDoubleThreat,     isAsync: false, histType: 'col'  },
+  { name: 'forced_block',      fn: detectForcedBlock,      isAsync: false, histType: 'col'  },
+  { name: 'forced_win',        fn: detectForcedWin,        isAsync: false, histType: 'col'  },
+  { name: 'forbidden_columns', fn: detectForbiddenColumns, isAsync: false, histType: 'col'  },
+  { name: 'z_threat',          fn: detectZThreat,          isAsync: false, histType: 'cell' },
+  { name: 'undercut',          fn: detectUndercut,         isAsync: false, histType: 'cell' },
+  { name: 'overcut',           fn: detectOvercut,          isAsync: false, histType: 'cell' },
+  { name: 'figure_7',          fn: detectFigure7,          isAsync: false, histType: 'cell' },
+  { name: 'j_shape',           fn: detectJShape,           isAsync: false, histType: 'cell' },
+  { name: 'claimeven',         fn: detectClaimeven,        isAsync: true,  histType: 'col'  },
 ];
 
+/** O(1) lookup map built once from DETECTOR_REGISTRY. */
+const REGISTRY_MAP = new Map(DETECTOR_REGISTRY.map(d => [d.name, d]));
+
 /**
- * Runs all 10 sync detectors against a Board + scores. Excludes detectClaimeven:
- * that detector issues ~20 solver queries per call, making it prohibitive for
- * numPlies ≥ 3. Use classifyAll() directly when claimeven data is required.
- * @param {Board} board
- * @param {number[]} scores
- * @returns {Array<{detectorName: string, result: object}>}
+ * Runs a filtered subset of detectors against one board position.
+ * Sync detectors are called as fn(board, scores); async detectors as fn(board, solver).
+ * All async calls are launched concurrently via Promise.all.
+ *
+ * @param {Board}           board
+ * @param {number[]}        scores
+ * @param {object}          solver
+ * @param {DetectorEntry[]} registry  — already-filtered subset of DETECTOR_REGISTRY
+ * @returns {Promise<Array<{detectorName: string, result: object}>>}
  */
-function classifyAllNoClaimeven(board, scores) {
-  return [
-    { detectorName: 'immediate_threat',  result: detectImmediateThreat(board) },
-    { detectorName: 'double_threat',     result: detectDoubleThreat(board) },
-    { detectorName: 'forced_block',      result: detectForcedBlock(board, scores) },
-    { detectorName: 'forced_win',        result: detectForcedWin(board, scores) },
-    { detectorName: 'forbidden_columns', result: detectForbiddenColumns(board, scores) },
-    { detectorName: 'z_threat',          result: detectZThreat(board, scores) },
-    { detectorName: 'undercut',          result: detectUndercut(board, scores) },
-    { detectorName: 'overcut',           result: detectOvercut(board, scores) },
-    { detectorName: 'figure_7',          result: detectFigure7(board, scores) },
-    { detectorName: 'j_shape',           result: detectJShape(board, scores) },
-  ];
+async function runDetectors(board, scores, solver, registry) {
+  return Promise.all(
+    registry.map(async ({ name, fn, isAsync }) => ({
+      detectorName: name,
+      result: isAsync ? await fn(board, solver) : fn(board, scores),
+    }))
+  );
 }
 
 /**
@@ -122,10 +140,15 @@ function anchorInCells(anchorCell, activeCells) {
  * @param {string} ms
  * @param {object} solver
  * @param {Map<string, number[]>} cache
+ * @param {{calls: number, hits: number}} stats  — mutable counter updated in place
  * @returns {Promise<number[]>}
  */
-async function getScores(ms, solver, cache) {
-  if (cache.has(ms)) return cache.get(ms);
+async function getScores(ms, solver, cache, stats) {
+  if (cache.has(ms)) {
+    stats.hits++;
+    return cache.get(ms);
+  }
+  stats.calls++;
   const scores = ms.length === 0 ? EMPTY_BOARD_SCORES : await solver.query(ms);
   cache.set(ms, scores);
   return scores;
@@ -157,9 +180,11 @@ async function getScores(ms, solver, cache) {
  * @param {object} solver
  * @param {Map<string, number[]>} cache       solver score cache
  * @param {Map<string, Array>}    classCache  classification result cache (dedup)
+ * @param {DetectorEntry[]}       registry    active detector list
+ * @param {{calls: number, hits: number}} stats  solver call counter
  * @returns {Promise<Array<{leafType: string, patterns: Array|null, currentPlayer: number}>>}
  */
-async function collectLeaves(ms, numPlies, perspective, solver, cache, classCache) {
+async function collectLeaves(ms, numPlies, perspective, solver, cache, classCache, registry, stats) {
   const board = new Board(ms);
   const opponent = 3 - perspective;
   const wonByPerspective = board.hasWon(perspective);
@@ -184,13 +209,13 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
     }
     // Dedup: if this position was already classified via a transposition, skip.
     if (classCache.has(ms)) return [];
-    const scores = await getScores(ms, solver, cache);
-    const patterns = classifyAllNoClaimeven(board, scores);
+    const scores = await getScores(ms, solver, cache, stats);
+    const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
     return [{ leafType: 'depth_limit', patterns, currentPlayer: board.currentPlayer }];
   }
 
-  const scores = await getScores(ms, solver, cache);
+  const scores = await getScores(ms, solver, cache, stats);
   const legalCols = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] < ROWS) legalCols.push(col);
@@ -204,14 +229,14 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
   // Emit an intermediate sample for every perspective-to-move non-terminal node.
   // Dedup via classCache: if this position was already seen (transposition), skip.
   if (board.currentPlayer === perspective && !classCache.has(ms)) {
-    const patterns = classifyAllNoClaimeven(board, scores);
+    const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
     leaves.push({ leafType: 'intermediate', patterns, currentPlayer: board.currentPlayer });
   }
 
   for (const col of optimalCols) {
     const subLeaves = await collectLeaves(
-      ms + col, numPlies - 1, perspective, solver, cache, classCache
+      ms + col, numPlies - 1, perspective, solver, cache, classCache, registry, stats
     );
     for (const leaf of subLeaves) leaves.push(leaf);
   }
@@ -235,25 +260,26 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
  * @param {Array<{leafType: string, patterns: Array|null, currentPlayer: number}>} leaves
  * @param {{col: number, row: number}} anchorCell
  * @param {number} perspective  1 or 2
+ * @param {DetectorEntry[]} registry  — determines which pattern keys appear in output
  * @returns {{ patterns: object, outcomes: object }}
  */
-function aggregateLeaves(leaves, anchorCell, perspective) {
+function aggregateLeaves(leaves, anchorCell, perspective, registry) {
   // Outcome counters
   let wonByPerspective  = 0;
   let wonByOpponent     = 0;
   let draws             = 0;
-  let perspectiveLeaves = 0; // depth_limit leaves where currentPlayer === perspective
+  let perspectiveLeaves = 0; // depth_limit/intermediate leaves where currentPlayer === perspective
 
-  // Pattern accumulators (frequency counted over perspectiveLeaves)
+  // Pattern accumulators — keyed by detector name, initialised from active registry
   const agg = {};
-  for (const name of ALL_PATTERNS) {
+  for (const { name, histType } of registry) {
     agg[name] = {
       frequency: 0,
       ratio: 0,
       withAnchorDisc: 0,
       withoutAnchorDisc: 0,
-      ...(COORD_PATTERNS.has(name) ? { cellHistogram: {} } : {}),
-      ...(DIREC_PATTERNS.has(name) ? { colHistogram: {} }  : {}),
+      ...(histType === 'cell' ? { cellHistogram: {} } : {}),
+      ...(histType === 'col'  ? { colHistogram: {} }  : {}),
     };
   }
 
@@ -270,20 +296,21 @@ function aggregateLeaves(leaves, anchorCell, perspective) {
     for (const { detectorName, result } of leaf.patterns) {
       if (!result.matched) continue;
       const entry = agg[detectorName];
-      if (!entry) continue; // claimeven absent from classifyAllNoClaimeven output
+      if (!entry) continue;
 
       entry.frequency++;
       const activeCells = extractActiveCells(detectorName, result);
       if (anchorInCells(anchorCell, activeCells)) entry.withAnchorDisc++;
       else entry.withoutAnchorDisc++;
 
-      if (COORD_PATTERNS.has(detectorName)) {
+      const det = REGISTRY_MAP.get(detectorName);
+      if (det?.histType === 'cell') {
         for (const c of activeCells) {
           if (c.row === null) continue;
           const key = `col${c.col},row${c.row}`;
           entry.cellHistogram[key] = (entry.cellHistogram[key] ?? 0) + 1;
         }
-      } else if (DIREC_PATTERNS.has(detectorName)) {
+      } else if (det?.histType === 'col') {
         for (const c of activeCells) {
           const key = String(c.col);
           entry.colHistogram[key] = (entry.colHistogram[key] ?? 0) + 1;
@@ -293,7 +320,7 @@ function aggregateLeaves(leaves, anchorCell, perspective) {
   }
 
   // Ratios use perspectiveLeaves as denominator; expose total per entry for callers/tests.
-  for (const name of ALL_PATTERNS) {
+  for (const name of Object.keys(agg)) {
     agg[name].ratio = perspectiveLeaves > 0 ? agg[name].frequency / perspectiveLeaves : 0;
     agg[name].total = perspectiveLeaves;
   }
@@ -322,26 +349,48 @@ function aggregateLeaves(leaves, anchorCell, perspective) {
  * identifies the cell where that disc landed; it is fixed for the entire recursion
  * tree so disc-involvement tracking stays anchored to the original move.
  *
- * Practical numPlies range: 2–4. At numPlies=4 with claimeven excluded the typical
- * cost is ~120 solver calls (branching factor ~3); see plan for full cost table.
+ * Practical numPlies range: 2–4. With claimeven included, each perspective-to-move
+ * node issues ~20 extra solver queries; see timing output to measure actual cost.
  *
  * @param {string} movestring   position after candidate move (already played)
  * @param {number} numPlies     additional plies to simulate (0–6; 2–4 practical)
  * @param {{col: number, row: number}} anchorCell  0-indexed; fixed for entire tree
  * @param {number} perspective  1 (Red) or 2 (Yellow)
  * @param {object} solver       c4solver process wrapper with .query(ms) → Promise<number[]>
- * @returns {Promise<{totalLeaves: number, anchorCell, perspective, patterns: object, outcomes: object}>}
+ * @param {object} [options={}]
+ * @param {string[]} [options.detectors]  Detector names to enable. Default: all names in
+ *   DETECTOR_REGISTRY (including 'claimeven'). Pass a filtered array to reduce cost.
+ *   Example (exclude claimeven):
+ *     DETECTOR_REGISTRY.map(d => d.name).filter(n => n !== 'claimeven')
+ * @returns {Promise<{totalLeaves: number, anchorCell, perspective, patterns: object,
+ *                    outcomes: object, timing: object}>}
+ *   timing.totalMs         — wall-clock milliseconds for the full call
+ *   timing.solverCalls     — solver.query() invocations (cache misses only)
+ *   timing.solverCacheHits — positions served from the score cache
  */
-export async function explainSimulate(movestring, numPlies, anchorCell, perspective, solver) {
+export async function explainSimulate(movestring, numPlies, anchorCell, perspective, solver, options = {}) {
+  const registry = options.detectors
+    ? DETECTOR_REGISTRY.filter(d => options.detectors.includes(d.name))
+    : DETECTOR_REGISTRY;
+
+  const t0 = Date.now();
   const cache = new Map();
   const classCache = new Map();
-  const leaves = await collectLeaves(movestring, numPlies, perspective, solver, cache, classCache);
-  const { patterns, outcomes } = aggregateLeaves(leaves, anchorCell, perspective);
+  const stats = { calls: 0, hits: 0 };
+
+  const leaves = await collectLeaves(movestring, numPlies, perspective, solver, cache, classCache, registry, stats);
+  const { patterns, outcomes } = aggregateLeaves(leaves, anchorCell, perspective, registry);
+
   return {
     totalLeaves: leaves.length,
     anchorCell,
     perspective,
     patterns,
     outcomes,
+    timing: {
+      totalMs: Date.now() - t0,
+      solverCalls: stats.calls,
+      solverCacheHits: stats.hits,
+    },
   };
 }

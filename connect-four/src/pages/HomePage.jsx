@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
-import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
+import { ExplainMoveButton } from '../components/ExplainMoveButton.jsx';
 import { ClassifyAllPanel } from '../components/ClassifyAllPanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useDebugMode } from '../context/DebugContext.jsx';
@@ -53,6 +53,14 @@ function checkWin(board, row, col, color) {
 
 function buildMovesString(history) {
   return history.join('');
+}
+
+function rebuildBoard(history) {
+  let b = emptyBoard();
+  for (let i = 0; i < history.length; i++) {
+    b = placePiece(b, history[i], i % 2 === 0 ? 'red' : 'yellow');
+  }
+  return b;
 }
 
 export default function HomePage() {
@@ -141,10 +149,6 @@ export default function HomePage() {
 
   async function handleColumnClick(col) {
     if (turn !== 'red' || gameOver || aiThinking) return;
-    if (commitFirst) {
-      setPendingMove(col);
-      return;
-    }
     commitMove(col);
   }
 
@@ -202,6 +206,18 @@ export default function HomePage() {
     track('session_start', { mode: 'sparring' });
   }
 
+  function handleUndo() {
+    // Always land on even-length history so it's red's (user's) turn.
+    // Game can end on odd length (user wins) or even length (AI wins/draw).
+    const undoCount = moveHistory.length % 2 === 0 ? 2 : 1;
+    const newHistory = moveHistory.slice(0, -undoCount);
+    setMoveHistory(newHistory);
+    setBoard(rebuildBoard(newHistory));
+    setTurn('red');
+    setGameOver(null);
+    setPostReveal(null);
+  }
+
   const moveCount = moveHistory.length;
   const statusColor = gameOver === 'human' ? 'var(--green)'
     : gameOver === 'ai' ? 'var(--red)'
@@ -234,6 +250,17 @@ export default function HomePage() {
           ))}
         </div>
         <div style={moveCounter}>Move {moveCount}</div>
+        <button
+          onClick={handleUndo}
+          disabled={moveHistory.length === 0 || aiThinking}
+          style={{
+            ...btnUndo,
+            opacity: moveHistory.length === 0 || aiThinking ? 0.35 : 1,
+            cursor: moveHistory.length === 0 || aiThinking ? 'default' : 'pointer',
+          }}
+        >
+          ↩ Undo
+        </button>
       </div>
 
       {/* Status */}
@@ -270,18 +297,6 @@ export default function HomePage() {
           </span>
         </div>
       </div>
-
-      {/* Pending move confirm */}
-      {pendingMove !== null && commitFirst && (
-        <div style={{ padding: '10px 16px', display: 'flex', gap: 8 }}>
-          <button onClick={() => commitMove(pendingMove)} style={btnPrimary}>
-            Play column {pendingMove + 1}
-          </button>
-          <button onClick={() => setPendingMove(null)} style={btnSecondary}>
-            Cancel
-          </button>
-        </div>
-      )}
 
       {/* Post-reveal */}
       {postReveal && (
@@ -332,7 +347,7 @@ export default function HomePage() {
               {postReveal.oneLiner}
             </div>
           </div>
-          <DeepRevealButton moves={postReveal.moves} candidateCol={postReveal.col} />
+          <ExplainMoveButton key={`${postReveal.moves}-${postReveal.col}`} moves={postReveal.moves} col={postReveal.col} />
         </div>
       )}
 
@@ -483,6 +498,21 @@ const btnPrimary = {
   border: 'none',
   background: 'var(--red)',
   color: '#fff',
+  fontFamily: 'inherit',
+};
+
+const btnUndo = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '7px 14px',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: 'pointer',
+  border: '1.5px solid var(--border)',
+  background: 'transparent',
+  color: 'var(--text-muted)',
   fontFamily: 'inherit',
 };
 

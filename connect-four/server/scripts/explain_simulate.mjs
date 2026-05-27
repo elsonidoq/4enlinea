@@ -101,7 +101,8 @@ async function main() {
   }
 
   console.log('');
-  console.log('  Note: claimeven frequency is always 0 (excluded from simulation; ~20 solver calls/leaf)');
+  console.log(`  Timing   : ${result.timing.totalMs}ms  |  solver calls: ${result.timing.solverCalls} (cache hits: ${result.timing.solverCacheHits})`);
+  console.log('');
   console.log('        W/ANC = pattern involved the anchor disc | WO/ANC = pattern did not');
   console.log('        Column indices in DISTRIBUTION are 0-indexed; rows are 0-indexed (0=bottom)');
   console.log('');
