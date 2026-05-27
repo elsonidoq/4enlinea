@@ -28,7 +28,8 @@ Two other invocation modes spawn a fresh child process per call:
 ## Board Representation (Server)
 
 **MUST**: Boards are `board[row][col]` where row 0 is the bottom row. Values: `0` (empty), `1` (Red/player 1), `2` (Yellow/player 2).
-`parseBoard`/`parseBoardState` in `predicates.js` and `completionStrategies.js` convert a move string to this representation.
+`new Board(movestring)` in `classifier.js` is the standard entry point for board-state access in the classifier and detectors (see **Board Class** below).
+`parseBoardState` in `classifier.js` and `completionStrategies.js` is a lower-level primitive used by `Board` internally and by simulation loops that need mutable raw arrays.
 
 ## CompletionStrategy Interface
 
@@ -61,6 +62,26 @@ New category evaluators MUST be added as a named function `eval<CategoryCamelCas
 Categories that store their answer in `highlightMetadata` (z_threat, undercut, overcut) read `puzzle.highlightMetadata`.
 Categories that store their answer as a scalar (claimeven, figure_7, j_shape) read `puzzle.correctCol`.
 
+## Board Class
+
+`Board` in `classifier.js` is the standard entry point for board-state access in the
+classifier and detectors. Construct it once per position; pass it to all consumers.
+
+**MUST** use `new Board(movestring)` in `classify()` and all `detect*` functions.  
+**MUST NOT** call `parseBoardState` inside `classify()` or `detect*` functions; use
+`board.board` / `board.colHeights` / board methods instead.
+
+`parseBoardState` remains a free export for callers that need mutable raw arrays
+(simulation loops, one-shot predicate checks that do not share state across detectors).
+
+`board.withMove(col)` returns a new immutable `Board` for the position after placing in
+`col`. Use it instead of the mutation+undo pattern (`board[r][c] = player; ...; board[r][c] = 0`).  
+**The mutation+undo pattern MUST NOT appear in `classify()` or any `detect*` function.**
+
+`getReachableThreats(board, colHeights, player)` is O(42) and mutation-free because
+`checkWin` never reads `board[row][col]` itself — only neighbor cells. This means threat
+scanning functions can call `checkWin` on an empty cell without placing the piece first.
+
 ## Solver Score Semantics (Critical Invariant)
 
 At forced-win terminal positions, all opponent columns score identically — the solver cannot identify which column blocks. Use direct `checkWin` board detection instead.
@@ -68,11 +89,11 @@ Reference: `reference_c4solver_behavior.md` and `reference_cat5_forced_block_det
 
 ## Threat-Counting Invariant
 
-Pattern detectors (`detectFigure7`, `detectJShape`, `countAllReachableThreats`) count threats at any reachable empty cell `(col, row)` where `row >= colHeights[col]`. A threat is valid even if pieces must fill below it first — those pieces arrive in the natural course of play.
+Pattern detectors (`detectFigure7`, `detectJShape`) count threats at any reachable empty cell `(col, row)` where `row >= colHeights[col]`. A threat is valid even if pieces must fill below it first — those pieces arrive in the natural course of play. Use `board.reachableThreats(player)` (backed by `getReachableThreats`) for this.
 
 The gravity-top restriction (only `row === colHeights[col]`) applies exclusively to `immediate_threat` and `forced_block` detection, which reason about the current player's single immediate move.
 
-`countWinningThreats` uses the gravity-top restriction and is reserved for `detectClaimeven` (which requires immediate-move semantics). Do not use it in pattern detectors.
+`getImmediateThreats` / `board.immediateThreats(player)` uses the gravity-top restriction and is reserved for immediate-move semantics (`detectClaimeven`, forced-block checks). Do not use it in pattern detectors.
 
 ## Environment Variables
 

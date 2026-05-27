@@ -32,3 +32,4 @@
 - [Classifier audit v2 (2026-05-20)](project_classifier_audit_v2.md) — j_shape 8/8 FP (broken: 3-of-4 matching, even anchor, wrong player); overcut 2/8 FP (T5 parity + [*] cell); claimeven 1/8 FP (wrong player); figure_7/z_threat/undercut healthy; full report at `reports/candidate-review-v2-2026-05-20.md`
 - [Classifier fixes 008 (2026-05-21)](project_classifier_fixes_008.md) — Cat1 outer gate removed; Cat2/Cat5 board-scan replacements; Cat3 rewritten (Case A/B, no countAllReachableThreats); Cat3 checked BEFORE Cat2; Case B generalized (no gravity-top requirement)
 - [immediateWinScore bug — DELETED](reference_immediateWinScore_bug.md) — formula ambiguous for odd moveCount; deleted from predicates.js + candidate-generator.js; use checkWin at gravity-top instead
+- [Board class refactor — spec 009 complete](project_board_refactor_009.md) — done 2026-05-26; isT2Blocking(colThreats, Rp) drops R (spec listed it but it was dead); getMajorThreatCells is O(672) not O(42)

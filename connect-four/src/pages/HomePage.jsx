@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
+import { ClassifyAllPanel } from '../components/ClassifyAllPanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
+import { useDebugMode } from '../context/DebugContext.jsx';
 import { track } from '../lib/track.js';
 import { sampleColumnFromScores, DIFFICULTY_TEMPERATURES } from '../lib/aiDifficulty.js';
 
@@ -56,6 +58,7 @@ function buildMovesString(history) {
 export default function HomePage() {
   const { t } = useTranslation();
   const { session } = useStore();
+  const { debugMode } = useDebugMode();
   const [board, setBoard] = useState(emptyBoard());
   const [moveHistory, setMoveHistory] = useState([]);
   const [turn, setTurn] = useState('red');
@@ -77,6 +80,14 @@ export default function HomePage() {
   }, [turn, gameOver]);
 
   const moveString = buildMovesString(moveHistory);
+  // human: board right after human's last move (odd-length slice)
+  const humanMovestring = buildMovesString(
+    moveHistory.slice(0, moveHistory.length % 2 === 1 ? moveHistory.length : Math.max(0, moveHistory.length - 1))
+  );
+  // ai: board right after AI's last move (even-length slice, empty until AI has moved once)
+  const aiMovestring = moveHistory.length < 2 ? '' : buildMovesString(
+    moveHistory.slice(0, moveHistory.length % 2 === 0 ? moveHistory.length : moveHistory.length - 1)
+  );
 
   async function getAiColumn(moves) {
     // TODO(tech-debt): depth-limited solver (-d N -nb) was explored as a difficulty mechanism
@@ -238,6 +249,9 @@ export default function HomePage() {
           canPlay={turn === 'red' && !gameOver && !aiThinking}
         />
       </div>
+
+      {/* Debug panel */}
+      {debugMode && !gameOver && <ClassifyAllPanel humanMovestring={humanMovestring} aiMovestring={aiMovestring} />}
 
       {/* Commit-first toggle */}
       <div style={toggleRow}>

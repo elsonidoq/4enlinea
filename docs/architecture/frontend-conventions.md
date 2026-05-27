@@ -82,3 +82,46 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 Pages live in `src/pages/`. Current pages: `PuzzlesPage` (main puzzle flow).
 Components shared across pages live in `src/components/`.
+
+## Debug Panel (`ClassifyAllPanel`)
+
+A developer-only panel that shows the output of `classifyAll` for any board position: 11 detector rows (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns, z_threat, undercut, overcut, figure_7, j_shape, claimeven) + board state (scores, threats, parity).
+
+**Toggle**: `Cmd+Shift+D` (Mac) / `Ctrl+Shift+D` (Windows/Linux). State persists in `localStorage` under key `c4_debug`. Managed by `DebugContext` in `src/context/DebugContext.jsx`.
+
+**Future gating**: To restrict to developer users, replace the `localStorage` check in `DebugContext.jsx` with a role check (e.g. `session?.user?.role === 'developer'`).
+
+**API**: `POST /api/debug/classify-all` (localhost-only). Body: `{ moves: string }`. Returns `{ detectors, boardState, scores }`. Do not call from prod-user-facing code.
+
+**Adding to a new page** — two steps:
+
+```jsx
+// 1. Import at the top of the page file
+import { ClassifyAllPanel } from '../components/ClassifyAllPanel.jsx';
+import { useDebugMode } from '../context/DebugContext.jsx';
+
+// 2. Inside the component, compute two movestings:
+//    - humanMovestring: board right after the human's most recent move (odd-length slice)
+//    - aiMovestring:    board right after AI's most recent move (even-length slice, '' if AI hasn't moved)
+// Then render below the board (gate on !gameOver to avoid solver errors on won positions):
+const { debugMode } = useDebugMode();
+// ...
+{debugMode && !gameOver && (
+  <ClassifyAllPanel humanMovestring={humanMovestring} aiMovestring={aiMovestring} />
+)}
+```
+
+**Sparring example** (the reference implementation, `src/pages/HomePage.jsx`):
+
+```jsx
+const humanMovestring = buildMovesString(
+  moveHistory.slice(0, moveHistory.length % 2 === 1 ? moveHistory.length : Math.max(0, moveHistory.length - 1))
+);
+const aiMovestring = moveHistory.length < 2 ? '' : buildMovesString(
+  moveHistory.slice(0, moveHistory.length % 2 === 0 ? moveHistory.length : moveHistory.length - 1)
+);
+// Human plays at even indices (0, 2, 4…), AI at odd indices (1, 3, 5…).
+// humanMovestring = last odd-length prefix; aiMovestring = last even-length prefix.
+```
+
+For pages where only one perspective exists (e.g. Puzzles, where the position is fixed), pass the same string for both props or pass `''` for whichever is not applicable.

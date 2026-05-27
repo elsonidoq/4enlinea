@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
@@ -145,6 +145,8 @@ export default function PuzzlesPage() {
   const [prevSessionStats, setPrevSessionStats] = useState(null);
   const [startTime, setStartTime] = useState(null);
   const [correctCol, setCorrectCol] = useState(null);
+  // Stable puzzle selection per category within a session (Issue 3)
+  const categoryPuzzleRef = useRef({});
 
   useEffect(() => {
     fetchCategories();
@@ -181,7 +183,30 @@ export default function PuzzlesPage() {
       return;
     }
 
-    const randomPuzzle = categoryPuzzles.puzzles[Math.floor(Math.random() * categoryPuzzles.puzzles.length)];
+    // Exclude solved puzzles (Issue 4)
+    let solvedIds = new Set();
+    if (store?.getAllPuzzleAttempts) {
+      try {
+        const attempts = await store.getAllPuzzleAttempts();
+        for (const a of attempts) {
+          if (a.outcome === 'correct_first' || a.outcome === 'correct_retry' || a.outcome === 'tied') {
+            solvedIds.add(a.puzzle_id);
+          }
+        }
+      } catch {}
+    }
+    let pool = categoryPuzzles.puzzles.filter(p => !solvedIds.has(p.id));
+    if (pool.length === 0) pool = categoryPuzzles.puzzles; // fallback when all solved
+
+    // Stable selection per category within the session (Issue 3)
+    let chosenId = categoryPuzzleRef.current[categoryId];
+    if (!chosenId || !pool.find(p => p.id === chosenId)) {
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      chosenId = picked.id;
+      categoryPuzzleRef.current[categoryId] = chosenId;
+    }
+    const randomPuzzle = pool.find(p => p.id === chosenId);
+
     const puzzleRes = await fetch(`${API}/api/puzzles/${randomPuzzle.id}`, { headers });
     const puzzleData = await puzzleRes.json();
 

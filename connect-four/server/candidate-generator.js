@@ -1,6 +1,7 @@
 import { evaluatePredicate } from './predicates.js';
 import {
-  classify, checkWin, countWinningThreats, parseBoardState,
+  classify, checkWin, getImmediateThreats, parseBoardState,
+  hasActiveDoubleThreat, Board, hasWon,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
   detectFigure7, detectJShape,
 } from './classifier.js';
@@ -44,52 +45,9 @@ export function softmaxSample(legalCols, scores, T, rng) {
   return legalCols[legalCols.length - 1];
 }
 
-function getHeights(moveString) {
-  const heights = Array(COLS).fill(0);
-  for (const ch of moveString) heights[parseInt(ch, 10)]++;
-  return heights;
-}
-
-// Build a 2D board array from a move string. board[row][col], row 0 = bottom.
-// Returns null if any column is overfilled.
-function buildBoard(moveString) {
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  const heights = Array(COLS).fill(0);
-  let player = 1;
-  for (const ch of moveString) {
-    const col = parseInt(ch, 10);
-    if (heights[col] >= ROWS) return null;
-    board[heights[col]][col] = player;
-    heights[col]++;
-    player = 3 - player;
-  }
-  return board;
-}
-
-// Return true if `player` (1 or 2) has four in a row on `board`.
-function hasWon(board, player) {
-  const DIRS = [[0,1],[1,0],[1,1],[1,-1]];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (board[r][c] !== player) continue;
-      for (const [dr, dc] of DIRS) {
-        let len = 1;
-        while (len < 4) {
-          const nr = r + dr * len, nc = c + dc * len;
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS || board[nr][nc] !== player) break;
-          len++;
-        }
-        if (len === 4) return true;
-      }
-    }
-  }
-  return false;
-}
-
 // Return true if the position is finished (someone won or board is full).
 function isGameOver(moveString) {
-  const board = buildBoard(moveString);
-  if (!board) return true;
+  const board = new Board(moveString).board;
   return hasWon(board, 1) || hasWon(board, 2) || moveString.length === ROWS * COLS;
 }
 
@@ -100,46 +58,9 @@ function copyBoard(board) {
 // immediate_threat/forced_block/double_threat — single hint cell
 function computeLowCategoryHighlight(moveString, correctCols) {
   if (correctCols.length === 0) return [];
-  const heights = getHeights(moveString);
+  const heights = new Board(moveString).colHeights;
   const col = correctCols[0];
   return [{ column: col, row: heights[col], role: 'hint' }];
-}
-
-// Returns the single forced-block column for the current player, or null if not strictly forced.
-// "Forced" means exactly one legal col is safe (opponent cannot win immediately after playing
-// there) and at least one other col gives the opponent an immediate win.
-// Uses direct board checks instead of score thresholds to avoid floor/ceil scoring ambiguity.
-function getForcedBlock(moveString) {
-  const board = buildBoard(moveString);
-  if (!board) return null;
-  const heights = getHeights(moveString);
-  const player = (moveString.length % 2 === 0) ? 1 : 2;
-  const opponent = 3 - player;
-
-  const safeCols = [];
-  let hasImmediateThreat = false;
-  for (let c = 0; c < COLS; c++) {
-    if (heights[c] >= ROWS) continue;
-    board[heights[c]][c] = player;
-    heights[c]++;
-    let oppWins = false;
-    for (let oc = 0; oc < COLS && !oppWins; oc++) {
-      if (heights[oc] >= ROWS) continue;
-      board[heights[oc]][oc] = opponent;
-      if (hasWon(board, opponent)) oppWins = true;
-      board[heights[oc]][oc] = 0;
-    }
-    heights[c]--;
-    board[heights[c]][c] = 0;
-    if (oppWins) {
-      hasImmediateThreat = true;
-    } else {
-      safeCols.push(c);
-    }
-  }
-
-  if (!hasImmediateThreat || safeCols.length !== 1) return null;
-  return safeCols[0];
 }
 
 // Recursively trace a forced-win sequence starting with Red playing redCol on ms.
@@ -164,7 +85,7 @@ async function traceForcedWin(ms, redCol, depth, solver) {
   try { scores1 = await solver.query(ms1); } catch { console.log(`${indent}  → solver error, return null`); return null; }
 
   const oiw1 = -Math.floor((41 - ms1.length) / 2);
-  const heights1 = getHeights(ms1);
+  const heights1 = new Board(ms1).colHeights;
   console.log(`${indent}  ms1="${ms1}" oiw1=${oiw1} scores1=[${scores1.join(', ')}]`);
 
   // Classify each legal opponent col.
@@ -186,7 +107,7 @@ async function traceForcedWin(ms, redCol, depth, solver) {
   // play into that column, and the initiator wins by playing there next (one row higher).
   if (allForced) {
     console.log(`${indent}  → Case A`);
-    const board1 = buildBoard(ms1);
+    const board1 = new Board(ms1).board;
     const redPlayer = ms.length % 2 === 0 ? 1 : 2;
     for (let wc = 0; wc < COLS; wc++) {
       if (heights1[wc] >= ROWS) continue;
@@ -214,7 +135,7 @@ async function traceForcedWin(ms, redCol, depth, solver) {
   if (isGameOver(ms2)) { console.log(`${indent}  → game over after forced block, return null`); return null; }
   if (depth >= 4) { console.log(`${indent}  → max depth, return null`); return null; }
 
-  const heights2 = getHeights(ms2);
+  const heights2 = new Board(ms2).colHeights;
   for (let c = 0; c < COLS; c++) {
     if (heights2[c] >= ROWS) continue;
     const subTrace = await traceForcedWin(ms2, c, depth + 1, solver);
@@ -226,17 +147,21 @@ async function traceForcedWin(ms, redCol, depth, solver) {
 
 // forced_win predicate: exactly one column initiates a valid forced-win sequence.
 export async function checkForcedWinPredicate(ms, solver) {
-  const heights = getHeights(ms);
+  const heights = new Board(ms).colHeights;
   const redPlayer = ms.length % 2 === 0 ? 1 : 2;
   const correctCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] >= ROWS) continue;
     const trace = await traceForcedWin(ms, c, 1, solver);
     if (trace === null) continue;
+    // Require at least 5-ply sequence: [R1, Y1, R2, Y2, R3].
+    // A 3-element trace means Case A fired at depth 1 — the first move already creates
+    // an immediate double threat, making the puzzle trivially easy.
+    if (trace.length < 5) continue;
     let msEnd = ms;
     for (const col of trace) msEnd += col;
-    const boardEnd = buildBoard(msEnd);
-    if (boardEnd && hasWon(boardEnd, redPlayer)) correctCols.push(c);
+    const boardEnd = new Board(msEnd).board;
+    if (hasWon(boardEnd, redPlayer)) correctCols.push(c);
   }
   return { passes: correctCols.length === 1, correctCols };
 }
@@ -244,9 +169,7 @@ export async function checkForcedWinPredicate(ms, solver) {
 // Forbidden columns predicate: a column is forbidden if Red plays there (without winning),
 // and then Yellow plays in that same column one row above and wins.
 export function checkForbiddenColumnsPredicate(ms) {
-  const board = buildBoard(ms);
-  if (!board) return { passes: false, correctCols: [] };
-  const heights = getHeights(ms);
+  const { board, colHeights: heights } = new Board(ms);
   const red = ms.length % 2 === 0 ? 1 : 2;
   const yellow = 3 - red;
 
@@ -286,7 +209,7 @@ export async function computeForcedWinHighlight(solver, moveString, correctCols)
 
   for (let i = 0; i < trace.length; i++) {
     const col = trace[i];
-    const h = getHeights(ms);
+    const h = new Board(ms).colHeights;
     if (h[col] >= ROWS) break;
 
     const isLast = (i === trace.length - 1);
@@ -308,7 +231,7 @@ export async function computeForcedWinHighlight(solver, moveString, correctCols)
 
 // Forbidden columns highlight — mark each forbidden column with role 'loser'.
 function computeForbiddenColumnsHighlight(moveString, correctCols) {
-  const heights = getHeights(moveString);
+  const heights = new Board(moveString).colHeights;
   const legalCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] < ROWS) legalCols.push(c);
@@ -375,7 +298,7 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 // T011 — check* functions for the 6 new tactical categories
 
 export function checkZThreatPredicate(ms, scores) {
-  const result = detectZThreat(ms, scores);
+  const result = detectZThreat(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   const correctCol = result.highlightMetadata.column;
   return {
@@ -388,7 +311,7 @@ export function checkZThreatPredicate(ms, scores) {
 }
 
 export async function checkClaimevenPredicate(ms, scores, solver) {
-  const result = await detectClaimeven(ms, solver);
+  const result = await detectClaimeven(new Board(ms), solver);
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
@@ -400,14 +323,14 @@ export async function checkClaimevenPredicate(ms, scores, solver) {
 }
 
 export function checkUndercutPredicate(ms, scores) {
-  const result = detectUndercut(ms, scores);
+  const b = new Board(ms);
+  const result = detectUndercut(b, scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   // For undercut, "correct" = any column except the killing_threat column
   const killingCol = result.highlightMetadata.cells.find(c => c.role === 'killing_threat').column;
-  const heights = getHeights(ms);
   const correctCols = [];
   for (let c = 0; c < COLS; c++) {
-    if (heights[c] < ROWS && c !== killingCol) correctCols.push(c);
+    if (b.colHeights[c] < ROWS && c !== killingCol) correctCols.push(c);
   }
   return {
     passes: correctCols.length >= 1,
@@ -419,7 +342,7 @@ export function checkUndercutPredicate(ms, scores) {
 }
 
 export function checkOvercutPredicate(ms, scores) {
-  const result = detectOvercut(ms, scores);
+  const result = detectOvercut(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   const majorCol = result.highlightMetadata.cells.find(c => c.role === 'major_threat').column;
   return {
@@ -432,7 +355,7 @@ export function checkOvercutPredicate(ms, scores) {
 }
 
 export function checkFigure7Predicate(ms, scores) {
-  const result = detectFigure7(ms, scores);
+  const result = detectFigure7(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
@@ -444,7 +367,7 @@ export function checkFigure7Predicate(ms, scores) {
 }
 
 export function checkJShapePredicate(ms, scores) {
-  const result = detectJShape(ms, scores);
+  const result = detectJShape(new Board(ms), scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
@@ -470,7 +393,7 @@ async function checkPredicate(category, moveString, scores, solver) {
   if (category === 'j_shape') return checkJShapePredicate(moveString, scores);
 
   const puzzle = { category, moveString };
-  const heights = getHeights(moveString);
+  const heights = new Board(moveString).colHeights;
   const legalCols = [];
   for (let c = 0; c < COLS; c++) {
     if (heights[c] < ROWS) legalCols.push(c);
@@ -485,12 +408,35 @@ async function checkPredicate(category, moveString, scores, solver) {
   return { passes: correctCols.length === 1, correctCols };
 }
 
-// For non-immediate_threat categories: reject if any column would be an immediate win (distractor).
+// Reject positions that violate per-category board-quality constraints.
 function isClean(category, ms) {
-  if (category === 'immediate_threat') return true;
   const { board, colHeights } = parseBoardState(ms);
   const player = (ms.length % 2 === 0) ? 1 : 2;
-  return countWinningThreats(board, colHeights, player) === 0;
+  const playerThreats = getImmediateThreats(board, colHeights, player).length;
+
+  if (category === 'immediate_threat') {
+    // Exactly one winning column, and no stacked double-threat structure
+    return playerThreats === 1 && !hasActiveDoubleThreat(board, colHeights, player);
+  }
+
+  // All other categories: current player must not already be able to win immediately
+  if (playerThreats > 0) return false;
+
+  if (category === 'forced_block') {
+    // Opponent must have exactly one immediate threat → uniquely blockable
+    // and no active double threat for the opponent (which would make blocking futile)
+    const opponent = 3 - player;
+    return getImmediateThreats(board, colHeights, opponent).length === 1 &&
+      !hasActiveDoubleThreat(board, colHeights, opponent);
+  }
+
+  if (category === 'forbidden_columns') {
+    // Current player must not be in a position where the opponent already has a double threat
+    const opponent = 3 - player;
+    return !hasActiveDoubleThreat(board, colHeights, opponent);
+  }
+
+  return true;
 }
 
 /**

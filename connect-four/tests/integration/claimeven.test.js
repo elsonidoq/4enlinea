@@ -2,7 +2,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
-import { detectClaimeven } from '../../server/classifier.js';
+import { detectClaimeven, Board } from '../../server/classifier.js';
 import { checkClaimevenPredicate } from '../../server/candidate-generator.js';
 import { evaluatePredicate } from '../../server/predicates.js';
 
@@ -19,7 +19,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
   test('detects subtype B on spec fixture 4344444667', async () => {
     const ms = '3233333556';
     const scores = await solver.query(ms);
-    const result = await detectClaimeven(ms, scores, solver);
+    const result = await detectClaimeven(new Board(ms), solver);
 
     if (result.matched) {
       assert.equal(result.categoryEvidence.subtype, 'B', 'should be subtype B');
@@ -33,7 +33,7 @@ describe('detectClaimeven — subtype B (spec fixture)', () => {
   test('correctCol comes from the non-last-move odd column', async () => {
     const ms = '3233333556';
     const scores = await solver.query(ms);
-    const result = await detectClaimeven(ms, scores, solver);
+    const result = await detectClaimeven(new Board(ms), solver);
 
     if (result.matched) {
       // Last move was col6 (digit 7); correct must be col2 (digit 3)
@@ -46,7 +46,7 @@ describe('detectClaimeven — subtype A', () => {
   test('returns matched=false for empty board (no odd columns)', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = await detectClaimeven(ms, scores, solver);
+    const result = await detectClaimeven(new Board(ms), solver);
     assert.equal(result.matched, false, 'empty board has no odd-height columns → no claimeven');
   }, { timeout: 10_000 });
 
@@ -56,7 +56,7 @@ describe('detectClaimeven — subtype A', () => {
     // '012' → col0,col1,col2 each at height 1 → 3 odd cols
     const ms = '012';
     const scores = await solver.query(ms);
-    const result = await detectClaimeven(ms, scores, solver);
+    const result = await detectClaimeven(new Board(ms), solver);
     // 3 odd columns should not match (spec says 1 or 2 odd cols only)
     assert.equal(result.matched, false, '>2 odd columns should not match claimeven');
   }, { timeout: 10_000 });

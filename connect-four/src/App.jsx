@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProfileStoreProvider } from './store/ProfileStore.jsx';
+import { DebugProvider } from './context/DebugContext.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import './i18n/index.js';
 
@@ -64,6 +65,7 @@ function AppHeader() {
 
 function App() {
   return (
+    <DebugProvider>
     <ProfileStoreProvider>
       <BrowserRouter>
         <ErrorBoundary>
@@ -83,6 +85,7 @@ function App() {
         </ErrorBoundary>
       </BrowserRouter>
     </ProfileStoreProvider>
+    </DebugProvider>
   );
 }
 

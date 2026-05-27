@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin } from './classifier.js';
+import { classify, checkWin, classifyAll, Board } from './classifier.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
@@ -854,6 +854,46 @@ app.post('/api/stripe/portal', async (req, res) => {
     });
     res.json({ portalUrl: session.url });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Debug endpoints (localhost-only) ──────────────────────────────────────────
+
+app.post('/api/debug/classify-all', async (req, res) => {
+  const ip = req.ip || req.socket?.remoteAddress || '';
+  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+    return res.status(403).json({ error: 'Debug endpoints are localhost-only' });
+  }
+  const { moves = '' } = req.body;
+  try {
+    const scores = moves.length > 0 ? await solver.query(moves) : EMPTY_BOARD_SCORES;
+    const detectors = await classifyAll(moves, scores, solver);
+    const board = new Board(moves);
+
+    const reachableRed = board.reachableThreats(1);
+    const reachableYellow = board.reachableThreats(2);
+    const formatReachable = (map) => {
+      const entries = [];
+      for (const [col, rows] of map) entries.push(`col${col}:rows[${rows.join(',')}]`);
+      return entries.length ? entries.join('  ') : 'none';
+    };
+
+    const boardState = {
+      moveCount: moves.length,
+      currentPlayer: board.currentPlayer === 1 ? 'Red' : 'Yellow',
+      colHeights: board.colHeights,
+      immediateThreatsRed: board.immediateThreats(1),
+      immediateThreatsYellow: board.immediateThreats(2),
+      reachableThreatsRed: formatReachable(reachableRed),
+      reachableThreatsYellow: formatReachable(reachableYellow),
+      doubleThreatsRed: board.hasActiveDoubleThreat(1),
+      doubleThreatsYellow: board.hasActiveDoubleThreat(2),
+    };
+
+    res.json({ detectors, boardState, scores });
+  } catch (err) {
+    console.error('[debug/classify-all]', err);
     res.status(500).json({ error: err.message });
   }
 });
