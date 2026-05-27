@@ -82,6 +82,46 @@ classifier and detectors. Construct it once per position; pass it to all consume
 `checkWin` never reads `board[row][col]` itself — only neighbor cells. This means threat
 scanning functions can call `checkWin` on an empty cell without placing the piece first.
 
+## Forward Simulation (`explainSimulate`)
+
+`explainSimulate(movestring, numPlies, anchorCell, perspective, solver)` in `explainSimulate.js`
+plays out optimal continuations and aggregates which tactical patterns appear at the leaves.
+It answers "what does this move set up?" for the coach LLM.
+
+**Key design decisions**:
+
+- **classifyAllNoClaimeven**: a local sync helper that runs all 10 sync detectors but skips
+  `detectClaimeven`. Claimeven issues ~20 solver queries per call via `runClaimevenSimulation`,
+  which multiplies leaf cost by 21× and makes numPlies ≥ 3 prohibitive. Use `classifyAll()`
+  directly if claimeven data is needed.
+
+- **Leaf filtering**: only leaves where `currentPlayer === perspective` contribute to `frequency`
+  and histograms. All leaves count toward `total`. This ensures patterns are attributed to the
+  correct player without special-casing the recursion logic.
+
+- **Solver score cache**: a `Map<movestring, scores>` allocated per `explainSimulate()` call
+  and threaded through `collectLeaves`. Avoids redundant queries when the same position is
+  reached via different paths. Cache key is the literal movestring — transpositions via
+  different column orderings are not detected as the same entry.
+
+- **Won-position safety**: if `board.hasWon(1) || board.hasWon(2)`, the solver is not queried
+  (it rejects positions reached through winning moves). Zero scores are used; detectors run
+  safely and return `matched: false` for solver-dependent patterns.
+
+- **anchorCell**: fixed for the entire recursion tree. The caller computes it as
+  `{ col, row: new Board(movesBeforePlay).colHeights[col] }` before calling `explainSimulate`.
+  Disc-involvement tracking (`withAnchorDisc`) checks whether the anchor cell appears in
+  each matched pattern's active cells. For patterns without cell-level geometry
+  (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns — these return
+  `cols` arrays only), involvement is determined by column match alone (noted as column proxy).
+
+**Cost estimate** (branching factor b ≈ 3, claimeven excluded):
+
+| numPlies | Leaves | Solver calls |
+|---|---|---|
+| 2 | ~9 | ~21 |
+| 4 | ~81 | ~120 |
+
 ## Solver Score Semantics (Critical Invariant)
 
 At forced-win terminal positions, all opponent columns score identically — the solver cannot identify which column blocks. Use direct `checkWin` board detection instead.
@@ -94,6 +134,31 @@ Pattern detectors (`detectFigure7`, `detectJShape`) count threats at any reachab
 The gravity-top restriction (only `row === colHeights[col]`) applies exclusively to `immediate_threat` and `forced_block` detection, which reason about the current player's single immediate move.
 
 `getImmediateThreats` / `board.immediateThreats(player)` uses the gravity-top restriction and is reserved for immediate-move semantics (`detectClaimeven`, forced-block checks). Do not use it in pattern detectors.
+
+## LLM Explanation Scripts
+
+CLI scripts that call an LLM must load `connect-four/server/.env` via Node's built-in
+`--env-file` flag (Node 20.6+). The shell wrapper at the project root is the single
+call site for this flag (e.g. `explain_move.sh`). Scripts themselves read
+`process.env.OPENAI_API_KEY` and `process.env.OPENAI_MODEL` directly — no `dotenv`
+package needed.
+
+**LLM prompt structure contract** for move explanations (`explain_move.mjs`):
+
+1. `## Role` — coach persona and move quality framing (strong / weak)
+2. `## Board position` — `visualize_board.mjs` output (annotated board, par row, solver scores)
+3. `## Solver scores` — pre-move scores relative to the user, with best/user labels (all 1-indexed for display)
+4. `## Pattern comparison` — delta table from two `explainSimulate` calls (user move vs contrast move), sorted by |Δratio|, showing top-2 histogram entries per row
+5. `## Task` — grounding instruction targeting 2–4 sentence response
+
+When all pattern ratios are zero for both compared moves, `insufficient_tactical_data` is set and section 4 includes an explicit "No tactical patterns detected" notice rather than silently omitting the section (Principle VI: validate signal before use). The LLM is still called but told it has no pattern data.
+
+**Contrast move selection**: if the user's move was suboptimal, the contrast is the best legal move; if optimal, the contrast is the second-best. Center column (col 3) breaks ties. If all legal scores are equal, the script exits without calling the LLM.
+
+**Key files**:
+- `connect-four/server/scripts/explain_move.mjs` — full PoC logic (no server required)
+- `explain_move.sh` — shell wrapper at project root (`./explain_move.sh <movestring> <col> [rounds=1]`)
+- `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)
 
 ## Environment Variables
 

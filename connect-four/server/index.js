@@ -7,6 +7,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, classifyAll, Board } from './classifier.js';
+import { explainSimulate } from './explainSimulate.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
@@ -743,6 +744,27 @@ app.post('/api/coach/queue/:blunderId/resolve', requirePaid, async (req, res) =>
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(204).end();
+});
+
+// POST /api/coach/explain-simulate
+app.post('/api/coach/explain-simulate', async (req, res) => {
+  const { moves, numPlies = 2, anchorCell, perspective } = req.body;
+  if (typeof moves !== 'string') return res.status(400).json({ error: 'moves must be a string' });
+  if (!anchorCell || typeof anchorCell.col !== 'number' || typeof anchorCell.row !== 'number') {
+    return res.status(400).json({ error: 'anchorCell must be { col: number, row: number }' });
+  }
+  if (perspective !== 1 && perspective !== 2) {
+    return res.status(400).json({ error: 'perspective must be 1 or 2' });
+  }
+  if (!Number.isInteger(numPlies) || numPlies < 0 || numPlies > 6) {
+    return res.status(400).json({ error: 'numPlies must be an integer 0–6' });
+  }
+  try {
+    const result = await explainSimulate(moves, numPlies, anchorCell, perspective, solver);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────

@@ -78,6 +78,44 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 - `/api/stripe/create-checkout`: 10 req/min
 - All other `/api/` routes: 120 req/min
 
+## Coach Endpoint: explain-simulate
+
+`POST /api/coach/explain-simulate` — plays out optimal continuations and aggregates which tactical patterns appear at the leaves, answering "what does this move set up?"
+
+**Request body**:
+```json
+{
+  "moves":       "<movestring including the candidate move>",
+  "anchorCell":  { "col": 3, "row": 2 },
+  "perspective": 1,
+  "numPlies":    2
+}
+```
+- `moves`: 0-indexed move string that already includes the candidate move being explained.
+- `anchorCell`: 0-indexed cell where the candidate disc landed. Caller computes as `new Board(movesBeforePlay).colHeights[col]`.
+- `perspective`: `1` (Red) or `2` (Yellow) — whose patterns to aggregate.
+- `numPlies`: optional, default `2`, integer `0–6`. Practical range: 2–4.
+
+**Response** (`200 OK`):
+```json
+{
+  "totalLeaves": 9,
+  "anchorCell":  { "col": 3, "row": 2 },
+  "perspective": 1,
+  "patterns": {
+    "figure_7":      { "frequency": 7, "total": 9, "ratio": 0.78, "withAnchorDisc": 5, "withoutAnchorDisc": 2, "cellHistogram": { "col3,row2": 6 } },
+    "z_threat":      { "frequency": 0, "total": 9, "ratio": 0.00, "withAnchorDisc": 0, "withoutAnchorDisc": 0, "cellHistogram": {} },
+    "double_threat": { "frequency": 4, "total": 9, "ratio": 0.44, "withAnchorDisc": 3, "withoutAnchorDisc": 1, "colHistogram": { "3": 3 } },
+    "claimeven":     { "frequency": 0, "total": 9, "ratio": 0.00, "withAnchorDisc": 0, "withoutAnchorDisc": 0 }
+  }
+}
+```
+- All 11 pattern names are present in `patterns` (claimeven is always `frequency: 0` — excluded from simulation due to cost).
+- `withAnchorDisc + withoutAnchorDisc = frequency` for every pattern.
+- Coordinate patterns (`z_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`) include `cellHistogram`; directional patterns include `colHistogram`; boolean patterns have neither.
+
+**Errors**: 400 for invalid/missing params, 500 for solver errors.
+
 ## Sequence-Mode Puzzle Endpoint
 
 `POST /api/puzzles/:id/sequence/move` handles per-move validation for `interaction_mode = 'sequence'` puzzles.

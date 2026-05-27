@@ -1,4 +1,4 @@
-import { parseBoardState, checkWin, buildThreatMap } from '../classifier.js';
+import { parseBoardState, checkWin, getMajorThreatCells } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 
 const ROWS = 6;
@@ -48,7 +48,7 @@ async function main() {
     tmpH[col]++;
   }
 
-  const threatMap = buildThreatMap(board);
+  const threatMap = getMajorThreatCells(board);
 
   // Detect game over (solver hangs on won positions)
   let gameOver = false;
