@@ -11,6 +11,18 @@ The Coach Avatar is the single voice across all surfaces. It speaks in short phr
 
 ---
 
+## Visual Style
+
+**Aesthetic:** light, playful, and casual. Bright backgrounds, rounded corners, friendly typography. Not austere or chess-app-serious.
+
+**Disc colors:** the two players use **green** and **dark gray** discs (not the classic red/yellow). This frees red, orange, and yellow for the evaluation/feedback system exclusively.
+
+**Coach Avatar:** use a standard placeholder character for now (friendly cartoon figure). Visual identity to be defined in a later design pass.
+
+**Board:** custom style consistent with the green/dark-gray palette. The classic blue board is not used.
+
+---
+
 ## Explanation System: Two Tiers
 
 Every piece of feedback has two layers. This affects what the Coach says and what UI states exist:
@@ -172,7 +184,8 @@ The Coach introduces the pattern. Most lessons have 1–2 concept slides before 
 ```
 
 **Coach Avatar Dialog:**
-- Portrait (left) + speech bubble (right)
+- Portrait (left) + chat feed (right)
+- The chat feed works like a messenger: new messages appear at the bottom, pushing older ones up. The board never moves — the Coach dialog area is fixed height.
 - Short phrases — 1–2 sentences max
 - Conversational, not academic
 
@@ -183,6 +196,12 @@ The Coach introduces the pattern. Most lessons have 1–2 concept slides before 
 
 **Navigation:**
 - Continue → next concept slide, or Socratic Board (if lesson includes one), or first Confirmation Challenge
+
+---
+
+### Confirmation Challenges (inside Lessons)
+
+The 2–3 confirmation puzzles at the end of each lesson reuse Challenge Board screens 6 and 7 exactly. The only difference is the header: instead of "← Challenges" it shows the lesson name (e.g., "← Claimeven — Practice"). This tells the user they are completing a lesson, not free-roaming. When all confirmation puzzles are done, the user is returned to the Saga Map with the lesson marked complete.
 
 ---
 
@@ -442,7 +461,7 @@ The Coach is **always present and always speaking** — but in a compact form th
 - After the user plays a mistake: *"Hmm."* / *"I'll take that."*
 - Neutral acknowledgement: *"Interesting."* / *"Let's see."*
 
-The Coach dialog area is fixed height — it never expands or shifts the board. If there is nothing notable to say, the Coach is silent (empty bubble or no bubble).
+The Coach dialog area is a fixed-height chat feed — it never shifts the board. When the Coach has nothing to say, the last message stays on screen unchanged. When the Coach says something new, the new message slides in and the previous one scrolls up within the fixed area. The board never moves.
 
 **Optional hint heatmap:** user-initiated only. Tapping Hint shows column scores as an overlay. Dismissed on next move.
 
@@ -556,16 +575,18 @@ The user has tapped a mistake on the timeline. The board shows the position at t
 
 ## Semantic Color System
 
+**Disc colors are decoupled from the feedback system.** Green and dark gray are used for pieces only; red, orange, and yellow are reserved exclusively for evaluation feedback.
+
 | Role | Color | Applied to |
 |---|---|---|
-| Optimal / best move | Green | Badges, timeline nodes, board overlays |
+| Player 1 discs | Green (solid) | Board pieces |
+| Player 2 discs | Dark gray (solid) | Board pieces |
+| Optimal / best move | Bright green | Badges, timeline nodes, board overlays |
 | Suboptimal / small miss | Orange | Badges, timeline nodes, Coach tip accent |
 | Blunder / critical failure | Red | Badges, timeline nodes, board overlays |
-| User's discs (Red player) | Red (solid) | Board pieces |
-| Opponent's discs (Yellow player) | Yellow (solid) | Board pieces |
-| User threat highlight | Translucent red | Cell overlay |
-| Opponent threat highlight | Translucent yellow | Cell overlay |
-| Locked / unavailable | Gray + padlock | Feature cards, Saga nodes |
+| Player 1 threat highlight | Translucent green | Cell overlay |
+| Player 2 threat highlight | Translucent gray | Cell overlay |
+| Locked / unavailable | Light gray + padlock | Feature cards, Saga nodes |
 
 ---
 
@@ -574,6 +595,6 @@ The user has tapped a mistake on the timeline. The board shows the position at t
 1. **Mobile-first, vertical stack.** Top: Coach Avatar (fixed height). Center: 7×6 grid (fixed aspect ratio, never compressed). Bottom: Action Toolbar / Progress Bar.
 2. **The board is never cluttered during play.** Overlays and badges only appear after a move is committed or in lesson/review mode.
 3. **Two explanation tiers, always.** Tier 1 (instant, rule-based) is always shown. Tier 2 (Deep Reveal, LLM) is always available on tap. The design must show both states.
-4. **The Coach is always visible, always brief.** Fixed-height dialog above the board. 5–10 words during play, silence when nothing is notable. Never expands or shifts the board.
+4. **The Coach dialog is a fixed-height chat feed.** New messages slide in at the bottom; old ones scroll up. When the Coach has nothing new to say, the last message stays. The board never moves regardless of Coach activity.
 5. **Progressive disclosure.** Tier 1 summary = default. Deep Reveal = opt-in. Post-game review = always available, not forced.
 6. **Socratic move is named explicitly.** When the Coach makes a deliberate mistake in lessons or sparring, it says so in the speech bubble. The board does not highlight the mistake — the user must find it.
