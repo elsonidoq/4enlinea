@@ -30,6 +30,7 @@ import {
 
 const ROWS = 6;
 const COLS = 7;
+const MAX_EXAMPLES = 2;
 // Solver rejects the empty board; use the known-correct scores instead.
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
@@ -182,7 +183,7 @@ async function getScores(ms, solver, cache, stats) {
  * @param {Map<string, Array>}    classCache  classification result cache (dedup)
  * @param {DetectorEntry[]}       registry    active detector list
  * @param {{calls: number, hits: number}} stats  solver call counter
- * @returns {Promise<Array<{leafType: string, patterns: Array|null, currentPlayer: number}>>}
+ * @returns {Promise<Array<{leafType: string, patterns: Array|null, currentPlayer: number, ms?: string}>>}
  */
 async function collectLeaves(ms, numPlies, perspective, solver, cache, classCache, registry, stats) {
   const board = new Board(ms);
@@ -212,7 +213,7 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
     const scores = await getScores(ms, solver, cache, stats);
     const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
-    return [{ leafType: 'depth_limit', patterns, currentPlayer: board.currentPlayer }];
+    return [{ leafType: 'depth_limit', patterns, currentPlayer: board.currentPlayer, ms }];
   }
 
   const scores = await getScores(ms, solver, cache, stats);
@@ -231,7 +232,7 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
   if (board.currentPlayer === perspective && !classCache.has(ms)) {
     const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
-    leaves.push({ leafType: 'intermediate', patterns, currentPlayer: board.currentPlayer });
+    leaves.push({ leafType: 'intermediate', patterns, currentPlayer: board.currentPlayer, ms });
   }
 
   for (const col of optimalCols) {
@@ -278,6 +279,7 @@ function aggregateLeaves(leaves, anchorCell, perspective, registry) {
       ratio: 0,
       withAnchorDisc: 0,
       withoutAnchorDisc: 0,
+      examples: [],
       ...(histType === 'cell' ? { cellHistogram: {} } : {}),
       ...(histType === 'col'  ? { colHistogram: {} }  : {}),
     };
@@ -299,6 +301,7 @@ function aggregateLeaves(leaves, anchorCell, perspective, registry) {
       if (!entry) continue;
 
       entry.frequency++;
+      if (leaf.ms && entry.examples.length < MAX_EXAMPLES) entry.examples.push(leaf.ms);
       const activeCells = extractActiveCells(detectorName, result);
       if (anchorInCells(anchorCell, activeCells)) entry.withAnchorDisc++;
       else entry.withoutAnchorDisc++;

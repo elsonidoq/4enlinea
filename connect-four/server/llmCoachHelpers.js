@@ -49,7 +49,7 @@ export const PATTERN_KB = {
   undercut:       { id: 'allen-t2' },
   overcut:        { id: 'community-overcut' },
   z_threat:       { id: 'community-z-threat' },
-  forced_win:     { inline: 'A forced_win leaf in the simulation means that at this position the player to move is already in a losing situation — all legal moves allow the opponent to maintain a forced winning advantage. Its high ratio for a column indicates that move leads into positions where the opponent has already secured a decisive structural advantage.' },
+  forced_win:     { id: 'derived-lost-position' },
 };
 
 /**
@@ -386,23 +386,55 @@ export function getPositionTier(scores, board) {
 }
 
 /**
+ * Returns the movestring after the opponent plays their best response to postMovestring,
+ * or null if the game is already over or the board is full.
+ *
+ * - If the player who just moved has won: no response (returns null).
+ * - If the opponent has an immediate win (blunder): plays the first winning col.
+ * - Otherwise: queries the solver and picks the opponent's highest-scored legal col,
+ *   tie-breaking toward the center (col 3).
+ *
+ * @param {string}   postMovestring   movestring after the user's move
+ * @param {Board}    postBoard        Board object for postMovestring
+ * @param {number[]} opponentWinCols  0-indexed cols where opponent wins immediately (may be empty)
+ * @param {number}   perspective      1 or 2 — the player who just moved
+ * @param {object}   solver           c4solver wrapper with .query()
+ * @returns {Promise<string|null>}
+ */
+export async function getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver) {
+  if (postBoard.hasWon(perspective)) return null;
+  if (postBoard.colHeights.every(h => h >= 6)) return null;
+  if (opponentWinCols.length > 0) return postMovestring + opponentWinCols[0];
+  const scores = await solver.query(postMovestring);
+  const legalCols = [0, 1, 2, 3, 4, 5, 6].filter(c => postBoard.colHeights[c] < 6);
+  const bestScore = Math.max(...legalCols.map(c => scores[c]));
+  const bestCols = legalCols.filter(c => scores[c] === bestScore);
+  const opponentBestCol = [...bestCols].sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3))[0];
+  return postMovestring + opponentBestCol;
+}
+
+/**
  * Builds the full LLM prompt string for the explain-move endpoint.
  *
  * All column references shown to the LLM are 1-indexed (col+1).
  * Solver scores are intentionally excluded — the LLM reasons from
  * tactical patterns and KB definitions only.
  *
- * boardViz     — board BEFORE the user's move
- * postBoardViz — board AFTER the user's move
- * playerName   — 'Red' or 'Yellow' (the player who just moved)
- * positionTier — 'WINNING' | 'DRAWING' | 'LOSING' (derived from pre-move scores)
+ * boardViz              — board BEFORE the user's move
+ * postBoardViz          — board AFTER the user's move
+ * afterOpponentBoardViz — board after opponent's best response (null if game over)
+ * opponentResponseCol   — 0-indexed col the opponent played (null if game over)
+ * playerName            — 'Red' or 'Yellow' (the player who just moved)
+ * positionTier          — 'WINNING' | 'DRAWING' | 'LOSING' (derived from pre-move scores)
  */
 export function buildExplainPrompt({
-  boardViz, postBoardViz, userCol, contrastCol, isOptimal,
+  boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
+  userCol, contrastCol, isOptimal,
   deltaRows, insufficientTacticalData, allLinesDecided,
   rounds, totalLeaves, userOutcomes, contrastOutcomes,
   kbSection, playerName, positionTier,
   forcedBlockNote, blunderNote,
+  userExamplesByPattern,
 }) {
   const opponentName = playerName === 'Red' ? 'Yellow' : 'Red';
 
@@ -465,24 +497,42 @@ export function buildExplainPrompt({
     roleGoal = `explain what this move does in an already losing position — do NOT call any move strong`;
   }
 
+  const forcedWinExamples = userExamplesByPattern?.forced_win ?? [];
+  let exampleBoardsSection = '';
+  if (forcedWinExamples.length > 0) {
+    const boards = forcedWinExamples.map((ms, i) => {
+      const viz = getBoardVisualization(ms);
+      return `### Leaf board ${i + 1} (movestring: ${ms})\n${viz}`;
+    });
+    exampleBoardsSection =
+      `\n## Example boards — forced_win\n` +
+      `The simulation reached these positions where ${playerName} faced a forced-win (losing) situation:\n\n` +
+      boards.join('\n\n') +
+      `\n\nLook at these boards: identify the concrete threats (columns, rows, directions) that leave ${playerName} without a defense. Name them in your explanation.\n`;
+  }
+
+  const afterOpponentSection = afterOpponentBoardViz
+    ? `\n## Board position (AFTER ${opponentName} responds col ${opponentResponseCol + 1})\n${afterOpponentBoardViz}\n`
+    : '';
+
   return `## Role
 You are an expert Connect Four coach. Your goal is to ${roleGoal}.
 
 ## Move context
-**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before and after this move; it is now ${opponentName}'s turn. All pattern data and your explanation must be from **${playerName}'s perspective**.
+**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before the move, after the move, and after ${opponentName}'s best response. All pattern data and your explanation must be from **${playerName}'s perspective**.
 ${forcedBlockNote ? `\n⚠️ ${forcedBlockNote}\n` : ''}${blunderNote ? `\n${blunderNote}\n` : ''}
 ## Board position (BEFORE ${playerName} plays col ${userCol + 1})
 ${boardViz}
 
 ## Board position (AFTER ${playerName} plays col ${userCol + 1})
 ${postBoardViz}
-
+${afterOpponentSection}
 ## Pattern comparison (${rounds} round${rounds !== 1 ? 's' : ''} of optimal play, ${totalLeaves} total leaves / ${userOutcomes.perspectiveLeaves} perspective-to-move samples)
 ${patternSection}
-${kbSection ? '\n' + kbSection + '\n' : ''}
+${kbSection ? '\n' + kbSection + '\n' : ''}${exampleBoardsSection}
 ## Task
 Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.
-Ground your explanation in the tactical patterns and their definitions above. If no pattern data is available, say so honestly and give only a high-level observation from the board position.`;
+Ground your explanation first in the concrete board positions shown above — name specific columns and rows where decisive threats exist. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself. If no pattern data is available, say so honestly and give only a high-level observation from the board position.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

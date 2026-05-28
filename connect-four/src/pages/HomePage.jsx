@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
+import { BadgeRow } from '../components/BadgeRow.jsx';
+import { RecommendCoach } from '../components/RecommendCoach.jsx';
 import { ExplainMoveButton } from '../components/ExplainMoveButton.jsx';
 import { ClassifyAllPanel } from '../components/ClassifyAllPanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -76,6 +78,7 @@ export default function HomePage() {
   const [pendingMove, setPendingMove] = useState(null);
   const [postReveal, setPostReveal] = useState(null);
   const [aiThinking, setAiThinking] = useState(false);
+  const [recommendBadges, setRecommendBadges] = useState(null);
 
   useEffect(() => {
     track('session_start', { mode: 'sparring' });
@@ -95,6 +98,17 @@ export default function HomePage() {
   // ai: board right after AI's last move (even-length slice, empty until AI has moved once)
   const aiMovestring = moveHistory.length < 2 ? '' : buildMovesString(
     moveHistory.slice(0, moveHistory.length % 2 === 0 ? moveHistory.length : moveHistory.length - 1)
+  );
+
+  // Pre-move movestring and column for the human's most recent move (for "Why?" button).
+  // humanMovestring always ends with the human's last move digit when non-empty.
+  const lastHumanMovestring = useMemo(
+    () => humanMovestring.length > 0 ? humanMovestring.slice(0, -1) : null,
+    [humanMovestring]
+  );
+  const lastHumanCol = useMemo(
+    () => humanMovestring.length > 0 ? parseInt(humanMovestring[humanMovestring.length - 1], 10) : null,
+    [humanMovestring]
   );
 
   async function getAiColumn(moves) {
@@ -155,6 +169,7 @@ export default function HomePage() {
   async function commitMove(col) {
     const movesBeforeCommit = buildMovesString(moveHistory);
     setPendingMove(null);
+    setRecommendBadges(null);
     applyMove(col, 'red');
 
     if (commitFirst) {
@@ -203,6 +218,7 @@ export default function HomePage() {
     setGameOver(null);
     setPendingMove(null);
     setPostReveal(null);
+    setRecommendBadges(null);
     track('session_start', { mode: 'sparring' });
   }
 
@@ -216,6 +232,7 @@ export default function HomePage() {
     setTurn('red');
     setGameOver(null);
     setPostReveal(null);
+    setRecommendBadges(null);
   }
 
   const moveCount = moveHistory.length;
@@ -270,6 +287,7 @@ export default function HomePage() {
 
       {/* Board */}
       <div style={{ padding: '0 16px' }}>
+        <BadgeRow colRankings={recommendBadges} />
         <Board
           board={board}
           onColumnClick={handleColumnClick}
@@ -298,6 +316,16 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Recommend + Why coach */}
+      <div style={{ marginTop: 10 }}>
+        <RecommendCoach
+          moves={moveString}
+          gameOver={gameOver !== null}
+          aiThinking={aiThinking}
+          onBadgesChange={setRecommendBadges}
+        />
+      </div>
+
       {/* Post-reveal */}
       {postReveal && (
         <div style={revealCard}>
@@ -307,7 +335,7 @@ export default function HomePage() {
           </div>
 
           {postReveal.bestScore !== undefined && (
-            postReveal.col === postReveal.bestCol ? (
+            postReveal.playedScore === postReveal.bestScore ? (
               <div style={{ ...scoreRow, borderLeftColor: 'var(--green)' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--green)', marginBottom: 4 }}>
                   ✓ Best move played

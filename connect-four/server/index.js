@@ -14,7 +14,7 @@ import {
   getBoardVisualization, buildKBSection,
   buildFlatTable, buildRecommendPrompt, callLLM,
   selectContrastMove, computeDeltaTable, buildExplainPrompt,
-  getPositionTier,
+  getPositionTier, getOpponentResponseMs,
 } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
@@ -553,7 +553,14 @@ app.post('/api/recommend-move', async (req, res) => {
     });
 
     const recommendation = await callLLM(prompt);
-    res.json({ recommendation, prompt });
+    res.json({
+      recommendation,
+      prompt,
+      colRankings: (() => {
+        const bestTier = colData[0]?.tier;
+        return colData.filter(({ tier }) => tier === bestTier).map(({ col, tier }) => ({ col, tier }));
+      })(),
+    });
 
   } catch (err) {
     console.error('[recommend-move] error:', err.message);
@@ -643,14 +650,33 @@ app.post('/api/explain-move-llm', async (req, res) => {
       ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
       : null;
 
+    // ── 6b. Board after opponent's best response ──────────────────────────────
+    const opponentResponseMovestring = await getOpponentResponseMs(
+      postMovestring, postBoard, opponentWinCols, perspective, solver,
+    );
+    const afterOpponentBoardViz = opponentResponseMovestring
+      ? getBoardVisualization(opponentResponseMovestring)
+      : null;
+    const opponentResponseCol = opponentResponseMovestring != null
+      ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
+      : null;
+
     // ── 7. KB section for active patterns ────────────────────────────────────
     const activePatterns = deltaRows.map(row => row.name);
     const kbSection = buildKBSection(activePatterns);
+
+    // ── 7b. Collect example movestrings per pattern from userResult ───────────
+    const userExamplesByPattern = {};
+    for (const [name, entry] of Object.entries(userResult.patterns)) {
+      if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+    }
 
     // ── 8. Build prompt and call LLM ─────────────────────────────────────────
     const prompt = buildExplainPrompt({
       boardViz,
       postBoardViz,
+      afterOpponentBoardViz,
+      opponentResponseCol,
       userCol: col,
       contrastCol,
       isOptimal,
@@ -666,6 +692,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       playerName,
       forcedBlockNote,
       blunderNote,
+      userExamplesByPattern,
     });
 
     const explanation = await callLLM(prompt);
@@ -685,7 +712,7 @@ app.post('/api/llm-feedback', async (req, res) => {
 
   const { movestring, llm_prompt, llm_response, human_note, feature } = req.body;
 
-  for (const [field, value] of Object.entries({ movestring, llm_prompt, llm_response, human_note, feature })) {
+  for (const [field, value] of Object.entries({ movestring, llm_prompt, llm_response, feature })) {
     if (typeof value !== 'string' || value.trim() === '') {
       return res.status(400).json({ error: `${field} must be a non-empty string` });
     }
@@ -766,7 +793,7 @@ app.get('/api/puzzles/:id', async (req, res) => {
 
   const { data: puzzle, error } = await supabase
     .from('puzzles')
-    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty, interaction_mode, highlight_metadata, correct_col')
+    .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, difficulty, interaction_mode, highlight_metadata, correct_col, user_player, simulation_trace')
     .eq('id', id)
     .eq('is_active', true)
     .single();
@@ -787,6 +814,8 @@ app.get('/api/puzzles/:id', async (req, res) => {
     interactionMode: puzzle.interaction_mode ?? 'single_move',
     highlightMetadata: puzzle.highlight_metadata ?? null,
     correctCol: puzzle.correct_col ?? null,
+    userPlayer: puzzle.user_player ?? 1,
+    simulationTrace: puzzle.simulation_trace ?? [],
   });
 });
 
@@ -876,6 +905,8 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     result: evaluation.result,
     correctCol: evaluation.correctCol ?? null,
     tiedWith: evaluation.tiedWith ?? null,
+    threatCells: evaluation.threatCells ?? null,
+    forbiddenCols: evaluation.forbiddenCols ?? null,
   });
 });
 
@@ -1420,7 +1451,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
     .eq('id', id)
     .single();
 
@@ -1452,6 +1483,8 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
       interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
       highlight_metadata: candidate.highlight_metadata ?? null,
       correct_col: candidate.correct_col ?? null,
+      user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
+      simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
     })
     .select('id')
     .single();
@@ -1479,7 +1512,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
   const { data: candidates, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
     .eq('category', category)
     .eq('status', 'pending');
 
@@ -1515,6 +1548,8 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
         interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
         highlight_metadata: candidate.highlight_metadata ?? null,
         correct_col: candidate.correct_col ?? null,
+        user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
+        simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
       });
 
     if (insertErr) { errors.push({ id: candidate.id, error: insertErr.message }); continue; }

@@ -24,7 +24,7 @@ import {
   getBoardVisualization, callLLM, buildKBSection,
   isMajorThreatForPlayer,
   selectContrastMove, computeDeltaTable, buildExplainPrompt,
-  getPositionTier,
+  getPositionTier, getOpponentResponseMs,
 } from '../llmCoachHelpers.js';
 
 const ROWS = 6;
@@ -117,10 +117,6 @@ async function main() {
       computeDeltaTable(userResult.patterns, contrastResult.patterns);
     const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
 
-    // 5. Board visualizations (pre-move and post-move)
-    const boardViz = getBoardVisualization(rawMoves || '');
-    const postBoardViz = getBoardVisualization(postMove);
-
     // Detect forced block: did the played cell carry a major threat for the opponent?
     const opponentPlayer = perspective === 1 ? 2 : 1;
     const playedRow = board.colHeights[userCol]; // row where the disc lands (0-indexed)
@@ -137,13 +133,33 @@ async function main() {
       ? `⚠️ After ${playerName} plays col ${userCol + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
       : null;
 
+    // 5. Board visualizations (pre-move, post-move, and after opponent's best response)
+    const boardViz = getBoardVisualization(rawMoves || '');
+    const postBoardViz = getBoardVisualization(postMove);
+    const opponentResponseMovestring = await getOpponentResponseMs(
+      postMove, postBoard, opponentWinCols, perspective, solver,
+    );
+    const afterOpponentBoardViz = opponentResponseMovestring
+      ? getBoardVisualization(opponentResponseMovestring)
+      : null;
+    const opponentResponseCol = opponentResponseMovestring != null
+      ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
+      : null;
+
     // 6. Build prompt (solver scores intentionally excluded — see buildExplainPrompt)
     const activePatterns = deltaRows.map(r => r.name);
     const kbSection = buildKBSection(activePatterns);
 
+    const userExamplesByPattern = {};
+    for (const [name, entry] of Object.entries(userResult.patterns)) {
+      if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+    }
+
     const prompt = buildExplainPrompt({
       boardViz,
       postBoardViz,
+      afterOpponentBoardViz,
+      opponentResponseCol,
       userCol,
       contrastCol,
       isOptimal,
@@ -159,6 +175,7 @@ async function main() {
       playerName,
       forcedBlockNote,
       blunderNote,
+      userExamplesByPattern,
     });
 
     // 7. Print board summary, prompt, and call LLM

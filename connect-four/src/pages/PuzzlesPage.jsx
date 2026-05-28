@@ -130,6 +130,25 @@ function CategoryList({ categories, onSelect }) {
   );
 }
 
+function PlayerContext({ puzzle }) {
+  if (!puzzle) return null;
+  const userIsRed = puzzle.userPlayer !== 2;
+  const userMovesFirst = (puzzle.moveString.length % 2 === 0) === userIsRed;
+  const color = userIsRed ? 'var(--red)' : 'var(--yellow)';
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '0 20px 8px', flexWrap: 'wrap' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-sub)' }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        {userIsRed ? 'Playing as Red' : 'Playing as Yellow'}
+      </span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>·</span>
+      <span style={{ fontSize: 12, color: 'var(--text-sub)' }}>
+        {userMovesFirst ? 'You move first' : 'You move second'}
+      </span>
+    </div>
+  );
+}
+
 export default function PuzzlesPage() {
   const { t } = useTranslation();
   const { session, store } = useStore();
@@ -145,8 +164,15 @@ export default function PuzzlesPage() {
   const [prevSessionStats, setPrevSessionStats] = useState(null);
   const [startTime, setStartTime] = useState(null);
   const [correctCol, setCorrectCol] = useState(null);
-  // Stable puzzle selection per category within a session (Issue 3)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [placedHighlights, setPlacedHighlights] = useState([]); // [{row, col, role}]
+  const [threatCells, setThreatCells] = useState([]); // double_threat reveal cells
+  const [selectedForbiddenCols, setSelectedForbiddenCols] = useState(new Set()); // forbidden_columns multi-select
+  const [showClaimSequence, setShowClaimSequence] = useState(false); // claimeven overlay
+  // Stable puzzle selection per category within a session
   const categoryPuzzleRef = useRef({});
+  // Board snapshot before the last optimistic placement (used to undo a wrong move on retry)
+  const preMoveStateRef = useRef(null);
 
   useEffect(() => {
     fetchCategories();
@@ -216,10 +242,51 @@ export default function PuzzlesPage() {
     setHeights(state.heights);
     setMoves(puzzleData.moveString);
     setStartTime(Date.now());
+    setPlacedHighlights([]);
+    setThreatCells([]);
+    setIsSubmitting(false);
+    setSelectedForbiddenCols(new Set());
+    setShowClaimSequence(false);
+    preMoveStateRef.current = null;
   }
 
   async function handleColumnClick(col) {
-    if (!puzzle || feedback === 'correct' || feedback === 'tied' || feedback === 'revealed') return;
+    if (!puzzle || feedback === 'correct_first' || feedback === 'correct_retry' || feedback === 'tied' || feedback === 'revealed') return;
+    if (isSubmitting) return;
+    if (!heights || heights[col] >= ROWS) return;
+
+    // Forbidden columns: toggle column selection, defer submission to submit button
+    if (puzzle.category === 'forbidden_columns') {
+      setSelectedForbiddenCols(prev => {
+        const next = new Set(prev);
+        if (next.has(col)) next.delete(col); else next.add(col);
+        return next;
+      });
+      return;
+    }
+
+    // Undo the previous wrong disk before placing a new one
+    let currentBoard = board;
+    let currentHeights = heights;
+    if (feedback === 'wrong' && preMoveStateRef.current) {
+      currentBoard = preMoveStateRef.current.board;
+      currentHeights = preMoveStateRef.current.heights;
+      setPlacedHighlights([]);
+      setFeedback(null);
+    }
+
+    // Optimistic disk placement
+    const placedRow = currentHeights[col];
+    const diskColor = puzzle.userPlayer === 2 ? 'yellow' : 'red';
+    const newHeights = currentHeights.map((h, i) => i === col ? h + 1 : h);
+    preMoveStateRef.current = { board: currentBoard, heights: currentHeights };
+    setBoard(() => {
+      const next = currentBoard.map(r => [...r]);
+      next[placedRow][col] = diskColor;
+      return next;
+    });
+    setHeights(newHeights);
+    setIsSubmitting(true);
 
     const headers = {
       'Content-Type': 'application/json',
@@ -232,6 +299,7 @@ export default function PuzzlesPage() {
       body: JSON.stringify({ candidateCol: col, moveHistory: [], attemptNumber: attemptCount + 1 }),
     });
     const data = await res.json();
+    setIsSubmitting(false);
 
     const newAttemptCount = attemptCount + 1;
     setAttemptCount(newAttemptCount);
@@ -239,6 +307,10 @@ export default function PuzzlesPage() {
 
     if (data.result === 'correct' || data.result === 'tied') {
       const outcome = newAttemptCount === 1 ? 'correct_first' : 'correct_retry';
+      setPlacedHighlights(prev => [...prev, { row: placedRow, col, role: 'winning' }]);
+      if (puzzle.category === 'double_threat' && data.threatCells?.length) {
+        setThreatCells(data.threatCells);
+      }
       setFeedback(data.result === 'tied' ? 'tied' : outcome);
       setCorrectCol(col);
       track('puzzle_solved_correct', { puzzleId: puzzle.id, category: selectedCategory, firstAttempt: newAttemptCount === 1 });
@@ -253,15 +325,111 @@ export default function PuzzlesPage() {
     } else if (data.result === 'wrong') {
       if (newAttemptCount === 1) {
         updateStats(selectedCategory, false);
-      }
-      if (newAttemptCount >= 2) {
-        setFeedback('revealed');
-        setCorrectCol(data.correctCol ?? null);
-        track('puzzle_solved_wrong', { puzzleId: puzzle.id, category: selectedCategory, attemptNumber: newAttemptCount });
-      } else {
+        setPlacedHighlights(prev => [...prev, { row: placedRow, col, role: 'wrong_move' }]);
         setFeedback('wrong');
+      } else {
+        // Reveal: remove the wrong disk, then place only the correct disk
+        const preMove = preMoveStateRef.current;
+        const revCol = data.correctCol ?? null;
+        if (revCol !== null) {
+          const baseBoard = preMove ? preMove.board : board;
+          const baseHeights = preMove ? preMove.heights : heights;
+          const revRow = baseHeights[revCol];
+          setBoard(() => {
+            const next = baseBoard.map(r => [...r]);
+            next[revRow][revCol] = diskColor;
+            return next;
+          });
+          setPlacedHighlights([{ row: revRow, col: revCol, role: 'correct_reveal' }]);
+        } else {
+          // No correct col to reveal — just remove the wrong disk
+          if (preMove) {
+            setBoard(() => preMove.board.map(r => [...r]));
+            setHeights(preMove.heights);
+          }
+          setPlacedHighlights([]);
+        }
+        if (puzzle.category === 'double_threat' && data.threatCells?.length) {
+          setThreatCells(data.threatCells);
+        }
+        setFeedback('revealed');
+        setCorrectCol(revCol);
+        track('puzzle_solved_wrong', { puzzleId: puzzle.id, category: selectedCategory, attemptNumber: newAttemptCount });
       }
     }
+  }
+
+  async function handleForbiddenSubmit() {
+    if (!puzzle || feedback || isSubmitting || selectedForbiddenCols.size === 0) return;
+    setIsSubmitting(true);
+    const cols = Array.from(selectedForbiddenCols);
+    const diskColor = puzzle.userPlayer === 2 ? 'yellow' : 'red';
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    };
+
+    // Evaluate all selected columns in parallel
+    const results = await Promise.all(cols.map(col =>
+      fetch(`${API}/api/puzzles/${puzzle.id}/check`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ candidateCol: col, moveHistory: [], attemptNumber: 1 }),
+      }).then(r => r.json()).then(data => ({ col, data }))
+    ));
+
+    setIsSubmitting(false);
+    setSelectedForbiddenCols(new Set());
+
+    // All responses share the same forbiddenCols set
+    const forbiddenCols = results[0]?.data?.forbiddenCols ?? [];
+
+    const newHighlights = [];
+    let newBoard = board.map(r => [...r]);
+    let newHeights = [...heights];
+
+    // Place disks for selected columns: correct (IS forbidden) or wrong (NOT forbidden)
+    for (const { col } of results) {
+      const row = newHeights[col];
+      newBoard[row][col] = diskColor;
+      newHeights[col]++;
+      newHighlights.push({ row, col, role: forbiddenCols.includes(col) ? 'winning' : 'wrong_move' });
+    }
+
+    // Reveal missed forbidden cols (forbidden but user didn't select them)
+    const missedForbidden = forbiddenCols.filter(c => !cols.includes(c));
+    for (const col of missedForbidden) {
+      const row = newHeights[col];
+      newBoard[row][col] = diskColor;
+      newHeights[col]++;
+      newHighlights.push({ row, col, role: 'correct_reveal' });
+    }
+
+    // Show opponent's winning cell above each forbidden column (empty cell, purple threat)
+    for (const col of forbiddenCols) {
+      const threatRow = newHeights[col]; // row above the Red disk just placed
+      if (threatRow < ROWS) {
+        newHighlights.push({ row: threatRow, col, role: 'threat' });
+      }
+    }
+
+    setBoard(newBoard);
+    setHeights(newHeights);
+    setPlacedHighlights(newHighlights);
+
+    const allCorrect = cols.every(c => forbiddenCols.includes(c)) && missedForbidden.length === 0;
+    setFeedback(allCorrect ? 'correct_first' : 'revealed');
+    if (allCorrect) {
+      updateStats(selectedCategory, true);
+    } else {
+      updateStats(selectedCategory, false);
+    }
+    if (store) await store.recordPuzzleAttempt({
+      puzzle_id: puzzle.id, device_uuid: 'local', moves_tried: cols,
+      outcome: allCorrect ? 'correct_first' : 'wrong',
+      first_attempt_correct: allCorrect,
+      time_ms: Date.now() - startTime,
+    });
+    track('puzzle_attempted', { puzzleId: puzzle.id, category: selectedCategory, outcome: allCorrect ? 'correct' : 'wrong' });
   }
 
   function updateStats(category, wasCorrect) {
@@ -279,7 +447,7 @@ export default function PuzzlesPage() {
   const isCorrect = feedback === 'correct_first' || feedback === 'correct_retry' || feedback === 'tied';
   const isWrong = feedback === 'wrong';
   const isRevealed = feedback === 'revealed';
-  const canPlay = !feedback || feedback === 'wrong';
+  const canPlay = (!feedback || feedback === 'wrong') && !isSubmitting;
 
   if (!selectedCategory) {
     return (
@@ -340,7 +508,7 @@ export default function PuzzlesPage() {
         <SequenceHandler
           key={puzzle.id}
           puzzle={puzzle}
-          onNext={() => loadPuzzle(selectedCategory)}
+          onNext={() => { delete categoryPuzzleRef.current[selectedCategory]; loadPuzzle(selectedCategory); }}
         />
       ) : (
         <>
@@ -354,16 +522,58 @@ export default function PuzzlesPage() {
             )}
           </div>
 
+          {/* Player context: color + move order */}
+          <PlayerContext puzzle={puzzle} />
+
           {/* Board */}
-          <div style={{ padding: '0 16px' }}>
-            <Board
-              board={board}
-              onColumnClick={handleColumnClick}
-              canPlay={canPlay}
-              highlightedCells={correctCol !== null ? [[heights?.[correctCol] - 1 ?? 0, correctCol, 'winning']] : []}
-              highlightMetadata={puzzle?.highlightMetadata ?? null}
-            />
-          </div>
+          {(() => {
+            // When showing claimeven trace, apply trace moves to a copy of the board
+            const trace = (showClaimSequence && puzzle?.category === 'claimeven' && puzzle?.simulationTrace?.length > 0)
+              ? puzzle.simulationTrace : null;
+            const displayBoard = trace
+              ? (() => {
+                  const b = board.map(r => [...r]);
+                  for (const { col, row, player } of trace) b[row][col] = player === 1 ? 'red' : 'yellow';
+                  return b;
+                })()
+              : board;
+            const traceHighlights = trace
+              ? trace.map(({ col, row }, i) => [row, col, null, i + 1])
+              : [];
+            return (
+              <div style={{ padding: '0 16px' }}>
+                <Board
+                  board={displayBoard}
+                  onColumnClick={handleColumnClick}
+                  canPlay={canPlay}
+                  highlightedCells={[
+                    ...placedHighlights.map(({ row, col, role }) => [row, col, role]),
+                    ...(threatCells.length > 0 && (isCorrect || isRevealed)
+                      ? threatCells.map(({ col, row }) => [row, col, 'major_threat'])
+                      : []),
+                    ...(puzzle?.category === 'forbidden_columns' && !feedback && heights
+                      ? Array.from(selectedForbiddenCols).map(col => [heights[col], col, 'selected'])
+                      : []),
+                    ...traceHighlights,
+                  ]}
+                  highlightMetadata={
+                    ['figure_7', 'j_shape'].includes(puzzle?.category) && !(isCorrect || isRevealed)
+                      ? null
+                      : puzzle?.highlightMetadata ?? null
+                  }
+                />
+              </div>
+            );
+          })()}
+
+          {/* Forbidden columns submit button */}
+          {puzzle?.category === 'forbidden_columns' && !feedback && selectedForbiddenCols.size > 0 && (
+            <div style={{ padding: '0 16px 8px' }}>
+              <button onClick={handleForbiddenSubmit} style={{ ...btnPrimary, background: 'var(--text)', color: 'var(--bg)' }} disabled={isSubmitting}>
+                {isSubmitting ? 'Checking…' : `Submit ${selectedForbiddenCols.size} column${selectedForbiddenCols.size > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          )}
 
           {/* Feedback */}
           {feedback && (
@@ -381,7 +591,7 @@ export default function PuzzlesPage() {
               }}>
                 {isCorrect && '✓ Correct Move'}
                 {isWrong && '✗ Not the best move'}
-                {isRevealed && `Best move: Col ${(correctCol ?? 0) + 1}`}
+                {isRevealed && (puzzle?.category === 'forbidden_columns' ? 'Forbidden columns revealed' : `Best move: Col ${(correctCol ?? 0) + 1}`)}
               </div>
               <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }}>
                 {isCorrect && (feedback === 'correct_first' ? t('puzzle.correctFirst') : feedback === 'tied' ? t('puzzle.tied', { col: (correctCol ?? 0) + 1 }) : t('puzzle.correctRetry'))}
@@ -391,15 +601,33 @@ export default function PuzzlesPage() {
             </div>
           )}
 
-          {(isCorrect || isRevealed) && correctCol !== null && (
+          {(isCorrect || isRevealed) && correctCol !== null && puzzle?.category !== 'forbidden_columns' && (
             <div style={{ padding: '0 16px 8px' }}>
               <DeepRevealButton moves={moves} candidateCol={correctCol} />
             </div>
           )}
 
+          {/* Claimeven sequence overlay toggle */}
+          {puzzle?.category === 'claimeven' && (isCorrect || isRevealed) && correctCol !== null && (
+            <div style={{ padding: '0 16px 4px' }}>
+              <button
+                onClick={() => setShowClaimSequence(v => !v)}
+                style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 14px', fontSize: 13, color: 'var(--text-sub)', cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}
+              >
+                {showClaimSequence ? 'Hide sequence ▴' : 'Show how it plays out ▾'}
+              </button>
+              {showClaimSequence && (
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Red plays solver-optimal. Yellow mirrors each Red move in the same column (claimeven), claiming the even row above.
+                  Numbers show move order.
+                </div>
+              )}
+            </div>
+          )}
+
           {feedback && (
             <div style={{ padding: '0 16px 12px' }}>
-              <button onClick={() => loadPuzzle(selectedCategory)} style={btnPrimary}>
+              <button onClick={() => { delete categoryPuzzleRef.current[selectedCategory]; loadPuzzle(selectedCategory); }} style={btnPrimary}>
                 Next puzzle →
               </button>
             </div>

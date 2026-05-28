@@ -116,6 +116,70 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 
 **Errors**: 400 for invalid/missing params, 500 for solver errors.
 
+## LLM Coach Endpoints
+
+### `POST /api/recommend-move`
+
+Provides a pre-move recommendation for the current board position.
+
+**Request body**: `{ movestring: string, rounds: 1 | 2 }`
+- `movestring`: 0–42 digits `0–6` (current position before the player's move)
+- `rounds`: depth of LLM reflection (1 = single-pass)
+
+**Response**:
+```json
+{
+  "recommendation": "<LLM text>",
+  "prompt": "<raw prompt sent to LLM>",
+  "colRankings": [{ "col": 4, "tier": "winning" }, { "col": 3, "tier": "drawing" }]
+}
+```
+- `colRankings`: top-2 columns sorted best-first by tier; `col` is 0-indexed; `tier` is the classification tier string.
+- No solver scores are included — constitution Principle IV prohibits surfacing numerical evaluations.
+
+**Rate limit**: 5 req/min (LLM cost guard). Returns 503 if `OPENAI_API_KEY` or `OPENAI_MODEL` env vars are absent.
+
+### `POST /api/explain-move-llm`
+
+Explains a specific move the human just played (post-move reflection).
+
+**Request body**: `{ movestring: string, col: number, rounds: number }`
+- `movestring`: position **before** the human's move
+- `col`: 0-indexed column the human played
+- `rounds`: 1–5
+
+**Response**: `{ "explanation": "<LLM text>", "prompt": "<raw prompt>" }`
+
+**Rate limit**: 5 req/min.
+
+## Puzzle Check Endpoint
+
+`POST /api/puzzles/:id/check` evaluates one candidate column against the puzzle's goal predicate.
+
+**Request body**: `{ candidateCol: 0-6, moveHistory?: number[], attemptNumber?: number, timeMs?: number }`
+
+**Response**:
+```json
+{
+  "result": "correct" | "wrong" | "tied",
+  "correctCol": number | null,
+  "tiedWith": number[] | null,
+  "threatCells": [{"col": 0-6, "row": 0-5}] | null,
+  "forbiddenCols": number[] | null
+}
+```
+
+- `threatCells`: populated for `double_threat` puzzles when `result` is `correct` or `tied`. Contains the two (or more) major threat cells created by the correct move. Frontend uses these to render `major_threat` highlights after reveal.
+- `forbiddenCols`: populated for `forbidden_columns` puzzles on every response. Contains the full set of 0-indexed columns that are forbidden in the position. Frontend uses this to reveal missed forbidden columns after multi-select submit.
+- `correctCol`: the canonical correct column for categories that have a single answer; `null` for categories where any non-forbidden column is correct (e.g. `forbidden_columns`).
+
+Returns 400 for `interaction_mode = 'sequence'` puzzles — use `/sequence/move` instead.
+
+## Puzzle GET Endpoint
+
+`GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
+Frontend uses `userPlayer` to determine which color disc to place on click and to display the "Playing as Red/Yellow" context chip.
+
 ## Sequence-Mode Puzzle Endpoint
 
 `POST /api/puzzles/:id/sequence/move` handles per-move validation for `interaction_mode = 'sequence'` puzzles.

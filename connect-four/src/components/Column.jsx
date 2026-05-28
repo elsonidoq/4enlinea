@@ -18,6 +18,8 @@ export function Column({ col, cells, onClick, isHovered, canPlay, highlightedCel
         gap: GAP,
         padding: `${COL_PAD_V}px ${COL_PAD_H}px`,
         cursor: canPlay ? 'pointer' : 'default',
+        WebkitTapHighlightColor: 'transparent',
+        userSelect: 'none',
         background: isHovered && canPlay ? 'rgba(245, 184, 32, .08)' : 'transparent',
         borderRadius: 6,
         transition: 'background .15s',

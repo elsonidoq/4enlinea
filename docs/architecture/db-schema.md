@@ -171,6 +171,22 @@ FK: `user_id` → `users.id`
 
 ---
 
+## `llm_feedback`
+
+PK: `id`
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| id | uuid | NO | `gen_random_uuid()` |
+| movestring | text | NO | |
+| llm_prompt | text | NO | |
+| llm_response | text | NO | |
+| human_note | text | NO | |
+| feature | text | NO | |
+| created_at | timestamptz | NO | `now()` |
+
+---
+
 ## `stripe_events`
 
 PK: `id`  

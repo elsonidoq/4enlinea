@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Link } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProfileStoreProvider } from './store/ProfileStore.jsx';
@@ -55,9 +55,11 @@ function BottomNav() {
 function AppHeader() {
   return (
     <div style={appHeader}>
-      <div style={appName}>
-        Decode<span style={{ color: 'var(--red)' }}>C4</span>
-      </div>
+      <Link to="/" style={{ textDecoration: 'none', WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}>
+        <div style={appName}>
+          Decode<span style={{ color: 'var(--red)' }}>C4</span>
+        </div>
+      </Link>
       <div style={appTagline}>Train like you mean it</div>
     </div>
   );

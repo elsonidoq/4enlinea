@@ -62,6 +62,35 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
   - `{ type: 'cells', cells: [{ column, row, role }] }` — merged into `highlightedCells`
   - `{ type: 'capsule', column, fromRow, toRow, badgeCount }` — vertical capsule overlay on one column
 
+### Piece highlight roles
+
+All valid `role` values for `highlightedCells` / `highlightMetadata.cells[].role`, defined in `src/components/Piece.jsx`:
+
+| Role | Applies to | Color | Purpose |
+|---|---|---|---|
+| `winning` | any color | green glow | Correct answer disc or winning move |
+| `wrong_move` | red / yellow disc | red glow | User's incorrect placed disc (puzzle feedback) |
+| `correct_reveal` | red / yellow disc | gold ring | Correct answer disc shown after reveal |
+| `hint` | empty | green fill | Pre-move hint cell |
+| `selected` | empty | yellow outline | Column hover / multi-select marker |
+| `threat` | empty | purple fill | Immediate threat cell |
+| `support` | empty | purple dashed | Supporting threat cell |
+| `loser` | empty | red fill | Losing candidate cell |
+| `winner` | empty | yellow fill | Winning candidate cell |
+| `killing_threat` | empty | orange fill | Threat that kills opponent's line |
+| `neutralised_threat` | empty | orange fill | Neutralised threat cell |
+| `dead_threat` | empty | purple fill | Dead threat cell |
+| `major_threat` | empty | purple fill | Major threat (3-in-row + 1 empty) |
+| `pattern_piece` | any color | teal ring | Piece that is part of a named pattern |
+| `figure7_threat` | empty | amber fill | Figure-7 shape threat cell |
+| `z_range` | empty | yellow dashed | Z-threat column range |
+| `ghost_mirror` | empty | yellow semi-transparent dashed | Claimeven mirror preview (Yellow mirrors Red in same column) |
+
+**Rules**:
+- `wrong_move` and `correct_reveal` are puzzle-only roles — they apply to **placed discs** (red/yellow), not empty cells. Both are set client-side by `PuzzlesPage` after a check response; they are never stored in `highlight_metadata`.
+- `highlightMetadata` from the DB is suppressed before the answer is revealed for `figure_7` and `j_shape` puzzles (the shape must not spoil the puzzle). Other categories show `highlightMetadata` unconditionally.
+- No new color roles may be added without updating this table first (Constitution §IV).
+
 ## Category Constants
 
 **MUST**: Frontend category constants are defined in `src/lib/categories.js` and MUST be kept in sync with `server/categories.js` whenever categories are added or renamed. Both files define `CATEGORY_ORDER`, `CATEGORY_NAMES`, and `PAID_CATEGORIES`.
@@ -82,6 +111,29 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 Pages live in `src/pages/`. Current pages: `PuzzlesPage` (main puzzle flow).
 Components shared across pages live in `src/components/`.
+
+## RecommendCoach + BadgeRow Pattern
+
+`RecommendCoach` (`src/components/RecommendCoach.jsx`) manages all LLM coach UI state for the sparring page: the "✦ Recommend" and "💡 Why?" pill buttons, the inline coach card, and the flag button.
+
+**State ownership**: `RecommendCoach` owns `mode`, `loading`, `text`, `colRankings`, and `prompt` internally. It does NOT own the badge state — it delegates badge updates upward via `onBadgesChange(colRankings | null)`.
+
+**Props**:
+- `moves`: current movestring (for Recommend)
+- `lastHumanMovestring`: movestring before human's last move; `null` if no human move yet (disables Why)
+- `lastHumanCol`: column human last played; `null` if no human move yet
+- `gameOver`: boolean — disables Recommend when true
+- `onBadgesChange(colRankings | null)`: callback so the parent can render `BadgeRow`
+
+`BadgeRow` (`src/components/BadgeRow.jsx`) renders star badges above board columns. It is a stateless presentational component.
+
+**Props**: `colRankings: Array<{col: number, tier: string}> | null`
+
+**Placement**: `BadgeRow` renders immediately above `<Board>` inside the same `padding: '0 16px'` wrapper, using `display: flex, justifyContent: center, padding: '0 8px 3px'` so its cells align with Board's columns. Each cell is `48px` wide (= `CELL_SIZE(40) + 2 * COL_PAD_H(4)` from `Column.jsx`).
+
+**Column display convention**: Column rank pills show `Col X` where X is 1-indexed (`col + 1`). No solver scores are surfaced (constitution Principle IV).
+
+**Reset rule**: The parent (`HomePage`) must call `setRecommendBadges(null)` on every move commit, undo, and game reset. `RecommendCoach` calls `onBadgesChange(null)` at the start of each fetch, before the response arrives.
 
 ## Debug Panel (`ClassifyAllPanel`)
 

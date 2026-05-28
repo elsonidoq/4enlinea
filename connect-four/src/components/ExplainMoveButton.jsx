@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Markdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import { track } from '../lib/track.js';
 
@@ -75,7 +76,7 @@ export function ExplainMoveButton({ moves, col }) {
     return (
       <div style={revealBox}>
         <div style={revealLabel}>Move explanation</div>
-        <p style={revealText}>{explanation}</p>
+        <div style={revealText}><Markdown>{explanation}</Markdown></div>
 
         {!showFlagForm && flagStatus !== 'success' && (
           <button
@@ -130,7 +131,7 @@ export function ExplainMoveButton({ moves, col }) {
       disabled={loading}
       style={loading ? { ...btn, opacity: 0.6 } : btn}
     >
-      {loading ? '…' : t('puzzle.seeWhy')}
+      {loading ? '…' : `✦ ${t('puzzle.seeWhy')}`}
     </button>
   );
 }

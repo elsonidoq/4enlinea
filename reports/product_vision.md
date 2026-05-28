@@ -7,7 +7,21 @@
 
 A Connect Four mastery app built around one principle: **explanation before repetition**. Every surface teaches the *why* behind a move — through a Coach that speaks to you, through targeted prompts that name the task, and through retrospective review that anchors learning to moments that actually mattered in your game.
 
-The Coach Avatar is the single voice across all surfaces. It speaks in short phrases — compliments, reactions, narration — and occasionally makes a deliberate mistake to let the user exploit it (Socratic move). It never gives walls of text during play.
+The Coach Avatar is the single voice across all surfaces. It speaks in short phrases — compliments, reactions, narration — and occasionally makes a deliberate mistake to let the user exploit it (Socratic move). It never produces walls of text during play.
+
+---
+
+## Explanation System: Two Tiers
+
+Every piece of feedback has two layers. This affects what the Coach says and what UI states exist:
+
+**Tier 1 — Instant Feedback (always shown)**
+Rule-based classifier + solver scores. Fires immediately after every move. Powers the Coach's short reaction phrase and the evaluation badge. No loading state. Example: *"Good block. You stopped an immediate win."*
+
+**Tier 2 — Deep Reveal (on demand)**
+LLM explanation grounded in the classifier output and KB patterns. Richer, 2–4 sentences, with an annotated board. Triggered by tapping "Learn more" in Challenges, or by tapping a move in the post-game review. May have a brief loading state (1–2 seconds).
+
+Both tiers always exist. The design must account for the Instant Feedback state as the default and the Deep Reveal as a secondary, expandable state.
 
 ---
 
@@ -20,20 +34,20 @@ Home (Hub)
 ├── Lessons
 │   ├── Saga Map
 │   └── Lesson [N]
-│       ├── Concept screen
+│       ├── Concept screen (one or more slides)
 │       ├── Socratic board (optional, in some lessons)
 │       └── Confirmation challenges (2–3 puzzles)
 │
 ├── Challenges
-│   ├── Set picker
-│   ├── Challenge board
-│   └── Post-set summary
+│   ├── Set Picker
+│   ├── Challenge Board
+│   └── Post-Set Summary
 │
 └── Sparring
-    ├── Difficulty picker
-    ├── Game board
-    └── Post-game review
-        └── Position explorer (rewind + try alternative)
+    ├── Difficulty Picker
+    ├── Game Board (Coach present throughout)
+    └── Post-Game Review
+        └── Position Explorer (rewind + try alternative → new game)
 ```
 
 ---
@@ -44,7 +58,7 @@ Home (Hub)
 
 ### Screen 1 — Home (Hub)
 
-The entry point. Three feature cards in a 2+1 grid layout. Secondary stats access at the bottom or top bar.
+The entry point. Three feature cards in a 2+1 grid layout. Secondary stats at the bottom.
 
 **Layout:**
 ```
@@ -56,11 +70,15 @@ The entry point. Three feature cards in a 2+1 grid layout. Secondary stats acces
 │  │ Lessons  │ │ Challenges│  │
 │  │          │ │           │  │
 │  │ [icon]   │ │  [icon]   │  │
+│  │Learn why │ │Find the   │  │
+│  │patterns  │ │best move  │  │
+│  │win       │ │           │  │
 │  └──────────┘ └───────────┘  │
 │                              │
 │       ┌────────────┐         │
 │       │  Sparring  │         │
 │       │  [icon]    │         │
+│       │ Play a bot │         │
 │       └────────────┘         │
 │                              │
 │     [Progress & Stats →]     │
@@ -69,21 +87,20 @@ The entry point. Three feature cards in a 2+1 grid layout. Secondary stats acces
 
 **Components:**
 - Top bar: app name (left), profile/account icon (right)
-- Three feature cards: each has an icon, a title, and a one-line subtitle (e.g., *"Learn why patterns win"* / *"Find the best move"* / *"Play a bot, review your game"*)
-- Small "Progress & Stats" text link or icon row at the bottom
-- Locked feature cards show a padlock badge for paid patterns (if applicable)
+- Three feature cards: icon + title + one-line subtitle
+- Small "Progress & Stats" text link at the bottom
 
 **Navigation:**
 - Tap Lessons → Saga Map
 - Tap Challenges → Set Picker
 - Tap Sparring → Difficulty Picker
-- Tap Progress → Stats screen (secondary, not MVP-critical)
+- Tap Progress → Stats screen
 
 ---
 
 ### Screen 2 — Saga Map (inside Lessons)
 
-A vertical, winding path of numbered lesson nodes. This is the Lessons home screen.
+A vertical, winding path of lesson nodes. This is the Lessons home screen. Reflects the 11 MVP lessons in curriculum order.
 
 **Layout:**
 ```
@@ -91,15 +108,27 @@ A vertical, winding path of numbered lesson nodes. This is the Lessons home scre
 │  ← Lessons                   │
 ├──────────────────────────────┤
 │                              │
-│         ●  1. Immediate Threat  ✓  │
-│        /                     │
-│       ●  2. Forced Block  ✓   │
-│        \                     │
-│         ●  3. Double Threat  ← current (pulsing) │
-│        /                     │
-│       ●  4. Fork Setup  🔒    │
-│        \                     │
-│         ●  5. Claimeven  🔒   │
+│    ● 1. Spot the Win      ✓  │
+│   /                          │
+│  ● 2. Block Before You Build ✓│
+│   \                          │
+│    ● 3. The Fork          ✓  │
+│   /                          │
+│  ● 4. Odd Rows Belong to Red ✓│
+│   \                          │
+│    ● 5. Claimeven         ← current (pulse) │
+│   /                          │
+│  ● 6. Z-Threats           🔒 │
+│   \                          │
+│    ● 7. Claimodd          🔒 │
+│   /                          │
+│  ● 8. The Undercut        🔒 │
+│   \                          │
+│    ● 9. The Overcut       🔒 │
+│   /                          │
+│  ● 10. The Figure-7 Trap  🔒 │
+│   \                          │
+│    ● 11. The J-Shape      🔒 │
 │                              │
 └──────────────────────────────┘
 ```
@@ -107,32 +136,36 @@ A vertical, winding path of numbered lesson nodes. This is the Lessons home scre
 **Node states:**
 - Completed: filled circle + checkmark
 - Current: filled circle + animated pulse ring
-- Locked (free user): grayed circle + padlock icon
+- Next (unlocked but not started): outlined circle
+- Locked (paid tier): grayed circle + padlock icon
+
+**Lesson unlocking rule:** each lesson unlocks after the previous one is completed. Lessons 1–7 are free tier. Lessons 8–11 require paid tier (or show a locked card with upgrade prompt).
 
 **Navigation:**
 - Tap completed or current node → Lesson Concept screen
-- Tap locked node → Paywall / upgrade prompt
+- Tap locked node → upgrade prompt modal
 
 ---
 
 ### Screen 3 — Lesson: Concept Screen
 
-The Coach introduces the pattern before the user touches the board.
+The Coach introduces the pattern. Most lessons have 1–2 concept slides before the interactive portion.
 
 **Layout:**
 ```
 ┌──────────────────────────────┐
-│  ← Double Threat             │
+│  ← Claimeven            2/3  │  ← slide progress (top right)
 ├──────────────────────────────┤
 │  ┌──────┐                    │
-│  │Coach │ "Two threats at    │  ← Coach Avatar Dialog
-│  │Avatar│  once. Your         │
-│  └──────┘  opponent can only  │
-│            block one."        │
+│  │Coach │ "Yellow's secret:  │  ← Coach Avatar Dialog
+│  │Avatar│  always respond    │
+│  └──────┘  above Red. Every  │
+│            time."            │
 │                              │
-│  [Annotated board diagram]   │  ← static board with
-│  — threat cells glow red/yel │    colored overlays on
-│  — decisive column has arrow │    the critical cells
+│  [Annotated board diagram]   │  ← static, illustrative
+│  — claimeven cells glow      │    colored overlays on
+│    yellow                    │    the critical cells
+│  — response arrows shown     │
 │                              │
 │         [Continue →]         │
 └──────────────────────────────┘
@@ -140,49 +173,56 @@ The Coach introduces the pattern before the user touches the board.
 
 **Coach Avatar Dialog:**
 - Portrait (left) + speech bubble (right)
-- Short phrases only — 1–2 sentences max
-- Tone is conversational, not academic
+- Short phrases — 1–2 sentences max
+- Conversational, not academic
 
 **Board diagram:**
-- Non-interactive, illustrative
+- Non-interactive
 - Threat cells: translucent colored overlay in the relevant player's color
-- Decisive column: subtle downward arrow or badge above the column
+- Arrows or badges highlighting the key move or response
 
 **Navigation:**
-- Continue → next concept screen (if multi-step) or Socratic Board (if lesson includes one) or first Confirmation Challenge
+- Continue → next concept slide, or Socratic Board (if lesson includes one), or first Confirmation Challenge
 
 ---
 
-### Screen 4 — Lesson: Socratic Board (optional, some lessons)
+### Screen 4 — Lesson: Socratic Board (some lessons)
 
-The Coach deliberately plays a bad move and tells the user. The user's job is to exploit it.
+The Coach makes a deliberate mistake and names it. The user exploits it.
 
-**Layout:** identical to the Challenge Board (Screen 6), with one addition:
-
+**Layout:**
 ```
 ┌──────────────────────────────┐
+│  ← Claimeven                 │
+├──────────────────────────────┤
 │  ┌──────┐                    │
-│  │Coach │ "I'm going to      │
-│  │Avatar│  make a mistake —  │
-│  └──────┘  find the punish." │
+│  │Coach │ "I'm going to make │
+│  │Avatar│  a mistake here —  │
+│  └──────┘  see if you can    │
+│            punish it."       │
 │                              │
 │  [Interactive board]         │
+│  — Coach has just played     │
 │                              │
 │  [Action Toolbar]            │
 └──────────────────────────────┘
 ```
 
-After the user plays the correct punishing move, the Coach reacts:
-- Correct: *"Exactly. That's the fork."*
-- Wrong: *"Not quite — Yellow still has time to defend. Try again."*
+**After the user plays:**
+- Correct: *"Exactly. You saw the pairing."*
+- Wrong (first attempt): Coach reacts briefly, user tries again
+- Wrong (second attempt): the correct column is briefly highlighted before moving on
 
-The board briefly highlights the correct column before moving on (only on second failed attempt).
+**Navigation:**
+- Correct move → next slide or first Confirmation Challenge
 
 ---
 
 ### Screen 5 — Challenge: Set Picker
 
-Entry to the Challenges surface. The user selects a themed set or mixed drill.
+Entry to the Challenges surface. The user chooses a themed set or mixed drill.
+
+**Why the picker exists:** knowing you're in a "Forced Block" set tells you *someone is about to win*, but you still have to scan the board to find which column to block — the recognition task is intact. The picker also creates a direct loop from lesson to targeted drill: after completing Lesson 5 (Claimeven), the user can immediately practice that specific pattern. The "Mixed" set preserves full blind recognition for users who want no orientation at all.
 
 **Layout:**
 ```
@@ -192,51 +232,57 @@ Entry to the Challenges surface. The user selects a themed set or mixed drill.
 │  Choose a set                │
 │                              │
 │  ┌──────────────────────┐    │
-│  │ Mixed (all patterns) │    │
+│  │ Mixed — all patterns │    │
 │  │ ★★★  8 positions    │    │
 │  └──────────────────────┘    │
 │  ┌──────────────────────┐    │
-│  │ Immediate Threats    │    │
+│  │ Spot the Win         │    │
 │  │ ★☆☆  8 positions    │    │
 │  └──────────────────────┘    │
 │  ┌──────────────────────┐    │
-│  │ Forced Block         │    │
+│  │ Block Before You Build│   │
 │  │ ★☆☆  8 positions    │    │
 │  └──────────────────────┘    │
 │  ┌──────────────────────┐    │
-│  │ Fork Setup  🔒        │    │
+│  │ The Fork             │    │
+│  │ ★★☆  8 positions    │    │
+│  └──────────────────────┘    │
+│  ┌──────────────────────┐    │
+│  │ … more sets …        │    │
+│  └──────────────────────┘    │
+│  ┌──────────────────────┐    │
+│  │ The Undercut  🔒      │    │
 │  └──────────────────────┘    │
 │                              │
 └──────────────────────────────┘
 ```
 
-**Components:**
-- Set cards: title, difficulty stars, position count
-- Locked cards: grayed out with padlock, tappable to show upgrade prompt
+**Set cards:** title, difficulty stars, position count. Locked sets: grayed + padlock.
 
 **Navigation:**
 - Tap unlocked set → Challenge Board (first position in set)
+- Tap locked set → upgrade prompt
 
 ---
 
 ### Screen 6 — Challenge Board
 
-The core training loop. A board position is shown with a targeted prompt. No category label is visible.
+The core training loop. A board position with a targeted prompt. No category label.
 
 **Layout:**
 ```
 ┌──────────────────────────────┐
 │  ┌──────┐                    │
 │  │Coach │ "You can win right │  ← targeted prompt,
-│  │Avatar│  now. Find it."    │    never generic
+│  │Avatar│  now. Find it."    │    no category label
 │  └──────┘                    │
 │                              │
-│  [Progress bar  ███░░░░░ ]   │  ← position N of M in set
+│  [Progress bar  ███░░░░░ ]   │  ← position N of M
 │                              │
 │  [Interactive board]         │
 │                              │
 │  [Action Toolbar]            │
-│  Hint   Undo                 │
+│  Hint        Undo            │
 └──────────────────────────────┘
 ```
 
@@ -249,44 +295,51 @@ The core training loop. A board position is shown with a targeted prompt. No cat
 | Forbidden column | *"One column here is a trap. Don't touch it."* |
 | Double threat | *"Set up two threats at once."* |
 | Fork (figure-7 / j-shape) | *"Create a fork your opponent can't answer."* |
+| Claimeven | *"Yellow can control the endgame here. How?"* |
+| Z-Threat | *"Own a column. Find the odd threat."* |
 | Compound / mixed | *"This position is complex. Play your best move."* |
 
-**After the user plays a move — inline feedback:**
+---
 
+### Screen 7 — Challenge Board: Post-Move Feedback
+
+Immediately after the user plays a move.
+
+**Layout:**
 ```
 ┌──────────────────────────────┐
 │  ┌──────┐                    │
-│  │Coach │ "Nice. You saw the │  ← 1-line coach reaction
-│  │Avatar│  diagonal threat." │
+│  │Coach │ "Nice. You saw the │  ← Tier 1: instant,
+│  │Avatar│  diagonal threat." │    rule-based reaction
 │  └──────┘                    │
 │                              │
 │  [Board with badge on played │  ← evaluation badge on
-│   column: green ✓ / orange ? │    the column played
-│   / red ✗]                   │
-│                              │
-│  [Expandable explanation]    │  ← collapsed by default
-│  "Optimal. Builds a fork ... │    tap to expand Deep Reveal
-│   [Learn more ▼]"            │
+│   column]                    │    the played column:
+│                              │    green ✓ / orange ? / red ✗
+│  ┌──────────────────────┐    │
+│  │ Optimal move.        │    │  ← Tier 1 summary line
+│  │ Builds a fork...     │    │    (always shown)
+│  │ Learn more ▼         │    │  ← expands to Tier 2
+│  └──────────────────────┘    │
 │                              │
 │         [Next →]             │
 └──────────────────────────────┘
 ```
 
-**Coach short-phrase register:**
-- Optimal move: *"Nice! You saw that fork."* / *"Exactly right."* / *"Perfect."*
-- Suboptimal: *"Close — there was something better."* / *"Good instinct, not quite optimal."*
+**Coach short-phrase register (Tier 1, instant):**
+- Optimal: *"Nice! You saw that fork."* / *"Exactly right."* / *"Perfect."*
+- Suboptimal: *"Close — there was something better."* / *"Good instinct, not quite there."*
 - Blunder: *"Hmm. Yellow's going to like that."* / *"That opens the door."*
 
 **Navigation:**
-- Tap column → move committed, inline feedback shown
-- Tap "Learn more" → Deep Reveal panel slides up
-- Tap "Next" → next position in set, or Post-Set Summary if last
+- Tap "Learn more" → Deep Reveal Panel (Screen 8) slides up
+- Tap "Next" → next position, or Post-Set Summary if last
 
 ---
 
-### Screen 7 — Challenge: Deep Reveal Panel
+### Screen 8 — Deep Reveal Panel (Tier 2)
 
-Slides up over the board on tap. Full explanation of the position.
+Slides up over the board on tap. Full LLM explanation. Brief loading state possible.
 
 **Layout:**
 ```
@@ -296,35 +349,36 @@ Slides up over the board on tap. Full explanation of the position.
 │  Pattern: Double Threat      │  ← pattern tag(s)
 │  Your move: col 4  ✓ Optimal │
 │                              │
-│  [Board with threat overlays]│  ← annotated, non-interactive
+│  [Annotated board]           │  ← non-interactive, overlays
+│  — threat cells highlighted  │    show winning threats
 │                              │
 │  "Playing col 4 creates two  │  ← LLM explanation
 │   simultaneous threats on    │    (2–4 sentences)
 │   row 3 and the diagonal.    │
 │   Yellow can only block one."│
 │                              │
-│  Best continuation:          │
-│  Col 4 → Col 2 → Col 6 ...   │  ← optional line preview
+│  Best line:                  │
+│  Col 4 → Col 2 → Col 6 …    │  ← optional continuation
 └──────────────────────────────┘
 ```
 
 ---
 
-### Screen 8 — Post-Set Summary
+### Screen 9 — Post-Set Summary
 
-Shown after the last position in a challenge set.
+After the last position in a challenge set.
 
 **Layout:**
 ```
 ┌──────────────────────────────┐
 │  Set complete!               │
 │                              │
-│  6 / 8 optimal moves         │
-│  ████████░░  75%             │
+│  6 / 8 optimal moves  75%    │
+│  ████████░░                  │
 │                              │
 │  By pattern:                 │
-│  Immediate threat   5/5  ✓   │
-│  Forced block       1/3  ⚠   │
+│  Immediate win     5/5   ✓   │
+│  Forced block      1/3   ⚠   │
 │                              │
 │  ┌──────┐                    │
 │  │Coach │ "Forced blocks are │
@@ -338,7 +392,7 @@ Shown after the last position in a challenge set.
 
 ---
 
-### Screen 9 — Sparring: Difficulty Picker
+### Screen 10 — Sparring: Difficulty Picker
 
 ```
 ┌──────────────────────────────┐
@@ -347,11 +401,11 @@ Shown after the last position in a challenge set.
 │  Choose difficulty           │
 │                              │
 │  ○ Easy                      │
-│  ● Medium          ← default │
+│  ● Medium           ← default│
 │  ○ Hard                      │
 │  ○ Perfect                   │
 │                              │
-│  [Play as Red / Yellow]      │
+│  Play as:  [Red]  [Yellow]   │
 │                              │
 │         [Start game →]       │
 └──────────────────────────────┘
@@ -359,36 +413,48 @@ Shown after the last position in a challenge set.
 
 ---
 
-### Screen 10 — Sparring: Game Board
+### Screen 11 — Sparring: Game Board
 
-Clean during play. No automatic post-move coaching. Optional overlays only if user turns them on.
+The Coach is **always present and always speaking** — but in a compact form that never touches the board. Short phrases only. The Coach makes deliberate mistakes and says so; it also reacts to the user's every move.
 
 **Layout:**
 ```
 ┌──────────────────────────────┐
-│  ← Game     Move 14    [⚙]  │
+│  ← Game       Move 14  [⚙]  │
 ├──────────────────────────────┤
+│  ┌──────┐                    │
+│  │Coach │ "I'm not sure      │  ← compact Coach dialog,
+│  │Avatar│  about that        │    always visible, always
+│  └──────┘  last move…"       │    short (5–10 words)
 │                              │
-│  [Interactive board]         │
-│  — no overlays by default    │
+│  [Interactive board]         │  ← board is completely
+│  — no automatic overlays     │    uncluttered during play
 │                              │
 │  [Action Toolbar]            │
-│  Hint(opt)  Resign           │
+│  Hint(opt)     Resign        │
 └──────────────────────────────┘
 ```
 
-**No Coach Avatar during play.** The board is uncluttered. The user develops board vision without the app playing for them.
+**Coach phrase types during sparring:**
+- After the AI plays a normal move: *"Your turn."* / *"Think carefully."*
+- After the AI makes a deliberate mistake: *"Oops. Did I just give you something?"* / *"I'm going to regret that."*
+- After the user plays a good move: *"Nice move."* / *"You saw it."*
+- After the user plays a mistake: *"Hmm."* / *"I'll take that."*
+- Neutral acknowledgement: *"Interesting."* / *"Let's see."*
+
+The Coach dialog area is fixed height — it never expands or shifts the board. If there is nothing notable to say, the Coach is silent (empty bubble or no bubble).
+
+**Optional hint heatmap:** user-initiated only. Tapping Hint shows column scores as an overlay. Dismissed on next move.
 
 **Navigation:**
-- Tap column → move committed, AI responds
-- Tap Hint → optional heatmap overlay (user-initiated only)
-- Game ends (win/loss/draw) → Post-Game Review
+- Tap column → move committed, AI responds, Coach reacts
+- Game ends → Post-Game Review (Screen 12)
 
 ---
 
-### Screen 11 — Sparring: Post-Game Review
+### Screen 12 — Sparring: Post-Game Review
 
-The depth layer. Fires after game ends. This is where the Coach speaks.
+The depth layer. Fires automatically when the game ends.
 
 **Layout:**
 ```
@@ -403,12 +469,12 @@ The depth layer. Fires after game ends. This is where the Coach speaks.
 │  [Board — frozen at game end]│
 │                              │
 │  Accuracy: 82%               │
-│  ●●●○  Optimal  ●●○  Good   │
-│  ○  Suboptimal  ✗  Blunder  │
+│  Optimal ●●●  Good ●●        │
+│  Suboptimal ○   Blunder ✗    │
 │                              │
 │  [Move timeline]             │
-│  ← 1 2 3 4 5 6 7✗ 8 9 →   │
-│  color-coded by quality      │
+│  ◀ 1 2 3 4 5 6 7✗ 8 9 … ▶  │
+│    color-coded by quality    │
 └──────────────────────────────┘
 ```
 
@@ -416,22 +482,22 @@ The depth layer. Fires after game ends. This is where the Coach speaks.
 - Green = optimal
 - Orange = suboptimal
 - Red = blunder
-- Tap any node → board rewinds to that position (Screen 12)
+- Tap any node → board rewinds, Position Explorer activates (Screen 13)
 
 **Navigation:**
 - Tap timeline node → Position Explorer
-- Tap "Back" → Home
+- Tap Back → Home
 
 ---
 
-### Screen 12 — Post-Game: Position Explorer
+### Screen 13 — Post-Game: Position Explorer
 
-User rewound to a specific mistake. They can try a different move.
+The user has tapped a mistake on the timeline. The board shows the position at that moment.
 
 **Layout:**
 ```
 ┌──────────────────────────────┐
-│  ← Review   Move 7           │
+│  ← Review        Move 7 / 22 │
 ├──────────────────────────────┤
 │  ┌──────┐                    │
 │  │Coach │ "You played col 3. │
@@ -440,21 +506,32 @@ User rewound to a specific mistake. They can try a different move.
 │            can't stop."      │
 │                              │
 │  [Board at move 7]           │
-│  — blunder column highlighted│
-│    in red overlay            │
-│  — opponent threat shown in  │
-│    translucent yellow        │
+│  — your move: red overlay    │
+│    on the column you played  │
+│  — opponent threat: translucent yellow │
+│    on the threat cell        │
 │                              │
 │  Try a different move:       │
 │  [Interactive board]         │
 │                              │
+│  [Start new game from here]  │
 │  [← Prev mistake] [Next mistake →] │
 └──────────────────────────────┘
 ```
 
-After the user plays an alternative move, the engine responds and the Coach reacts:
-- *"Better — that neutralizes the threat."*
-- *"Still not enough — Yellow has another path."*
+**After the user tries an alternative move:**
+- The engine responds; the Coach reacts with a short phrase
+- The user can continue exploring from that position
+
+**"Start new game from here":**
+- Creates a new sparring game in the DB whose opening is the first N moves of the current game (moves 1 through the rewound point)
+- The user continues from that exact position against the bot at the same difficulty level
+- The original reviewed game is preserved in history
+
+**Navigation:**
+- "Start new game from here" → Sparring Game Board (Screen 11), pre-loaded with opening moves
+- Prev / Next mistake → navigate between flagged nodes on the timeline
+- Back → Post-Game Review (Screen 12)
 
 ---
 
@@ -462,17 +539,18 @@ After the user plays an alternative move, the engine responds and the Coach reac
 
 | Component | Description | Surfaces |
 |---|---|---|
-| **Coach Avatar Dialog** | Portrait (left) + speech bubble (right). Short phrases only — 5–10 words during play, 1–2 sentences for explanations. | All |
+| **Coach Avatar Dialog** | Portrait (left) + speech bubble (right). Fixed height. Short phrases during play; 1–2 sentences in lesson/review contexts. | All |
 | **Interactive Grid Canvas** | 7×6 board. Base: board + discs. Secondary: translucent colored cell overlays. Tertiary: evaluation badges on columns. | All |
 | **Evaluation Badge** | Small circular icon on the played column. Green ✓ = optimal, orange ? = suboptimal, red ✗ = blunder. | Challenges, Post-game |
-| **Saga Map** | Vertical winding path of lesson nodes. States: completed (checkmark), current (pulse), locked (padlock). | Lessons |
-| **Progress Bar** | Horizontal strip, fills left-to-right. Shows position N of M in a challenge set. | Challenges |
-| **Move Timeline** | Horizontal scrollable tape of move nodes, color-coded by quality. Directional arrows for step-back/forward. | Post-game review |
-| **Action Toolbar** | Fixed bottom row. Context-sensitive buttons per surface. | All |
-| **Deep Reveal Panel** | Slides up from bottom. Pattern tags, annotated board, LLM explanation, optional continuation line. | Challenges |
-| **Post-Session Modal / Summary Screen** | Accuracy %, quality breakdown, Coach summary phrase, recommended next action. | Challenges, Sparring |
-| **Set Card** | Title, difficulty stars, position count. Locked variant: grayed + padlock. | Challenge set picker |
-| **Locked Feature Card** | Blurred/grayed card with padlock badge. Tappable to show upgrade prompt. | Saga Map, Set Picker |
+| **Saga Map** | Vertical winding path. Node states: completed (checkmark), current (pulse), unlocked (outlined), locked (padlock). | Lessons |
+| **Progress Bar** | Horizontal strip, fills left-to-right. Position N of M in a set or lesson. | Challenges, Lessons |
+| **Move Timeline** | Horizontal scrollable tape of move nodes, color-coded by quality. Tap to rewind. | Post-game review |
+| **Action Toolbar** | Fixed bottom row. Context-sensitive: Hint / Undo / Resign in sparring; Next / Skip in challenges. | All |
+| **Tier 1 Feedback Strip** | Single-line summary below the board after a move. Always shown, instant. Expands to Deep Reveal on tap. | Challenges |
+| **Deep Reveal Panel** | Slides up from bottom. Pattern tags, annotated board, LLM explanation, optional continuation. | Challenges, Post-game |
+| **Post-Session Modal / Summary Screen** | Accuracy %, quality breakdown, Coach phrase, recommended next action. | Challenges, Sparring |
+| **Set Card** | Title, difficulty stars, position count. Locked variant: grayed + padlock. | Challenge Set Picker |
+| **Locked Feature Card** | Grayed card with padlock badge. Tappable to show upgrade prompt. | Saga Map, Set Picker |
 
 ---
 
@@ -493,8 +571,9 @@ After the user plays an alternative move, the engine responds and the Coach reac
 
 ## Layout Principles
 
-1. **Mobile-first, vertical stack.** Top: Coach Avatar. Center: 7×6 grid (fixed aspect ratio, never compressed). Bottom: Action Toolbar / Progress Bar.
+1. **Mobile-first, vertical stack.** Top: Coach Avatar (fixed height). Center: 7×6 grid (fixed aspect ratio, never compressed). Bottom: Action Toolbar / Progress Bar.
 2. **The board is never cluttered during play.** Overlays and badges only appear after a move is committed or in lesson/review mode.
-3. **Progressive disclosure.** Coach dialog = 1-line summary by default. Full Deep Reveal on tap.
-4. **The Coach is always the voice.** Every piece of feedback — lesson explanation, post-move reaction, post-game summary — comes through the Avatar dialog. Never a toast, never a system alert.
-5. **Short phrases during play, depth after.** The Coach speaks in 5–10 word phrases while the user is playing. Longer explanations only appear in the Deep Reveal panel or post-game review.
+3. **Two explanation tiers, always.** Tier 1 (instant, rule-based) is always shown. Tier 2 (Deep Reveal, LLM) is always available on tap. The design must show both states.
+4. **The Coach is always visible, always brief.** Fixed-height dialog above the board. 5–10 words during play, silence when nothing is notable. Never expands or shifts the board.
+5. **Progressive disclosure.** Tier 1 summary = default. Deep Reveal = opt-in. Post-game review = always available, not forced.
+6. **Socratic move is named explicitly.** When the Coach makes a deliberate mistake in lessons or sparring, it says so in the speech bubble. The board does not highlight the mistake — the user must find it.

@@ -36,9 +36,10 @@ Every feature that exposes a move or board position to the user MUST route throu
 Explanation Engine. No feature may produce move evaluations, pattern labels, or natural-language
 annotations independently.
 
-The engine operates in exactly three layers — solver scores, rule-based pattern classifier,
-LLM annotation — in that order. The LLM layer MUST NOT speculate beyond what the classifier
-found; annotations must be grounded in classifier output only.
+The engine operates in exactly three layers — solver scores, rule-based pattern classifier 
+and classifier statistics from simulations, LLM annotation — in that order. The LLM layer 
+MUST NOT speculate beyond what the classifier found; annotations must be grounded in classifier 
+output only.
 
 All user-facing explanations MUST include:
 - At minimum a one-line summary (always visible).

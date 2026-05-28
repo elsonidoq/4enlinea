@@ -29,6 +29,14 @@ The script prints two boards followed by analysis rows:
 4. **`scr` row** — c4solver score for each column (`--` = full column).
 5. **Major threats list** — explicit enumeration of every `[R]`/`[Y]`/`[*]` cell as `colC rowR (player)`, sorted by column then row.
 
+## When you need a concrete movestring
+  - Never construct a movestring from random column placements.
+  - Do not generate movestrings by hand unless it is a quick smoke test.
+  - Prefer fetching from the DB or using existing code for candidate generation to produce one that satisfies the required predicate.
+  - Tests and the knowledge base are also good sources.
+  - If none of the above works, ask the user before spending more time on it.
+
+
 ## Row/column coordinate convention
 
 All internal coordinates are **0-indexed**: row 0 = bottom, row 5 = top; col 0 = leftmost. This is a project-wide invariant. The only two translation boundaries are:

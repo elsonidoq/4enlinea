@@ -121,10 +121,10 @@ function evalDoubleThreat(candidateCol, scores, moveString) {
   const moveCount = moveString.length;
   const player = currentPlayer(moveCount);
 
-  function countThreats(b, h, p) {
-    // Bug 3 fix: skip threats where the opponent would win first by playing there.
+  function getThreatCells(b, h, p) {
+    // Returns cells where p has an immediate winning threat (not pre-empted by opponent).
     const opp = 3 - p;
-    let threats = 0;
+    const cells = [];
     for (let col = 0; col < COLS; col++) {
       const row = h[col];
       if (row >= ROWS) continue;
@@ -135,32 +135,31 @@ function evalDoubleThreat(candidateCol, scores, moveString) {
       b[row][col] = opp;
       const oppWins = checkWin(b, row, col, opp);
       b[row][col] = 0;
-      if (!oppWins) threats++;
+      if (!oppWins) cells.push({ col, row });
     }
-    return threats;
+    return cells;
   }
 
-  function threatsAfterMove(col) {
+  function threatCellsAfterMove(col) {
     const row = heights[col];
-    if (row >= ROWS) return 0;
+    if (row >= ROWS) return [];
     const b = board.map(r => [...r]);
     const h = [...heights];
     b[row][col] = player;
     h[col]++;
-    return countThreats(b, h, player);
+    return getThreatCells(b, h, player);
   }
 
   // Find all columns that create ≥2 threats
   const doubleThreatCols = [];
   for (let col = 0; col < COLS; col++) {
-    if (scores[col] > 0 && threatsAfterMove(col) >= 2) {
+    if (scores[col] > 0 && threatCellsAfterMove(col).length >= 2) {
       doubleThreatCols.push(col);
     }
   }
 
   if (doubleThreatCols.length === 0) {
     // Fallback: positive score moves
-    const posCols = scores.reduce((acc, s, i) => { if (s > 0) acc.push(i); return acc; }, []);
     const bestScore = Math.max(...scores.filter(s => s > 0));
     const bestCols = scores.reduce((acc, s, i) => { if (s === bestScore) acc.push(i); return acc; }, []);
     if (bestCols.includes(candidateCol)) {
@@ -171,11 +170,13 @@ function evalDoubleThreat(candidateCol, scores, moveString) {
 
   if (doubleThreatCols.includes(candidateCol)) {
     const others = doubleThreatCols.filter(c => c !== candidateCol);
+    const threatCells = threatCellsAfterMove(candidateCol);
     return others.length > 0
-      ? { result: 'tied', tiedWith: others, correctCol: doubleThreatCols[0] }
-      : { result: 'correct', correctCol: candidateCol };
+      ? { result: 'tied', tiedWith: others, correctCol: doubleThreatCols[0], threatCells }
+      : { result: 'correct', correctCol: candidateCol, threatCells };
   }
-  return { result: 'wrong', correctCol: doubleThreatCols[0] };
+  const threatCells = threatCellsAfterMove(doubleThreatCols[0]);
+  return { result: 'wrong', correctCol: doubleThreatCols[0], threatCells };
 }
 
 // forced_win: Choose the initiating move in a forced-win sequence (all moves losing, pick the one that forces the win).

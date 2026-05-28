@@ -19,11 +19,6 @@ Also for
 
 
 
-# Puzzle generation issues
-1. Immediate threat and forced block should not generate boards with double threats
-2. Forced win should not create boards with an immediate double threat: The total number of moves in the sequence should be more than 3 (3 moves involve placing a disk, the oponent places another and then in the last disk the player wins)
-
-
 # Experience issues
 - If I go the solve one puzzle, for instance forced win, and then go back to the dashboard and go back to the puzzles section, another puzzle appears. This should be deterministic, I should see the same puzzle again
 - I see sometimes the same puzzle that I already solved
