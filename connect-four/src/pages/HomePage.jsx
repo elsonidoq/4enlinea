@@ -129,7 +129,10 @@ export default function HomePage() {
     setAiThinking(true);
     try {
       const moves = buildMovesString(moveHistory);
-      const col = await getAiColumn(moves);
+      const [col] = await Promise.all([
+        getAiColumn(moves),
+        new Promise(r => setTimeout(r, 800)),
+      ]);
       applyMove(col, 'yellow');
     } catch {
       // solver error

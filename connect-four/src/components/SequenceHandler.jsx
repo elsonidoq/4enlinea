@@ -84,7 +84,8 @@ export function SequenceHandler({ puzzle, onNext }) {
           board={board}
           onColumnClick={handleColumnClick}
           canPlay={canPlay}
-          highlightedCells={[]}
+          overlays={[]}
+          interactionMode="sequence"
         />
       </div>
 

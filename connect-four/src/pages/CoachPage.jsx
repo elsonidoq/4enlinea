@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
-import { PaywallModal } from '../components/PaywallModal.jsx';
+import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { Board } from '../components/Board.jsx';
 import { track } from '../lib/track.js';
@@ -193,7 +193,7 @@ export default function CoachPage() {
             Upgrade
           </button>
         </div>
-        <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} trigger="coach_gate" session={session} />
+        {showPaywall && <UpgradeModal onDismiss={() => setShowPaywall(false)} onNotify={() => {}} />}
       </div>
     );
   }

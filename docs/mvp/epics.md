@@ -1,36 +1,35 @@
-# DecodeC4 — Implementation Epic Breakdown (Revised)
+# DecodeC4 — Implementation Epic Breakdown (Revised v4)
 
-*Based on the mockup prototype (`docs/mvp/mockup/project/`), the existing codebase audit, product_vision.md, product_decisions.md, and lesson-curriculum.md.*
+*Based on the mockup prototype (`docs/mvp/mockup/project/`), existing codebase audit, product_vision.md, product_decisions.md, lesson-curriculum.md, db-schema.md, and product decisions from the planning session.*
 
 ---
 
-## Critique of the original proposal
+## Cross-cutting concerns (apply to every epic)
 
-Before the revised breakdown, here is what the first draft got wrong:
+**Analytics (`tracks` table):** Already in the DB schema. Every epic that adds a user-facing action must instrument it with a `track(event, data)` call. The `tracks` table records `uid` (device hash, always present), `user_id` (Supabase ID when signed in, nullable), `path` (feature area), `event`, `event_data` (JSON), `created_at`. **Reuse, do not rebuild:** the shared `track()` utility (`src/lib/track.js`) and the `POST /api/track` endpoint **already exist** and are already called across pages. Epic 1b *modifies* `track.js` (it currently sends `path: window.location.pathname`, which becomes a constant `/` once the router is removed — change it to send the active screen key); it does not create either from scratch.
 
-### 1. Epic 1 (Design System) was too large and under-scoped simultaneously
+Core events to instrument across all epics: `session_start`, `screen_viewed`, `puzzle_attempted`, `puzzle_solved_correct`, `puzzle_solved_wrong`, `set_completed`, `deep_reveal_viewed`, `deep_reveal_flagged`, `signup_initiated`, `signup_completed`, `waitlist_submitted`, `lesson_started`, `lesson_completed`, `game_started`, `game_ended`, `game_reviewed`, `mistake_reviewed`. (Matches Gap 28 exactly.)
 
-It listed the Board and CoachDialog as simple primitives alongside CSS tokens, but missed the most disruptive fact: the existing `App.jsx` uses `BrowserRouter` + `BottomNav` + `AppHeader` with `react-router-dom` and emoji icons. The mockup uses a flat state-based navigator with no BottomNav, no persistent AppHeader, and per-surface background tints. Swapping the routing architecture is a separate engineering task from building component primitives. Bundled together, the spec would exceed 300 lines and 25 tasks. Split into 1a (primitives) and 1b (shell + migration).
+**i18n:** react-i18next stays wired throughout. All user-facing strings go through translation keys (English at launch). Spanish is post-MVP content work — the infrastructure must support it from day one. No epic removes i18n.
 
-### 2. Epic 7 (Auth/Progress) is not MVP
+**Key-namespace convention (locked here so keys don't get refactored mid-build — first strings appear in Epic 1a):** dot-separated, lowercase, snake_case segments. Top-level namespaces:
+- `common.*` — shared labels (`common.back`, `common.next`, `common.continue`)
+- `nav.*` — screen titles, keyed by screen key (`nav.home`, `nav.setpicker`)
+- `coach.<category>.<quality>.<n>` — Coach phrases, a **pool** of numbered variants (`coach.immediate_threat.optimal.0`, `.1`, …); the client picks one at random per move (Gap 29 — pooled). `category` matches the `categories.js` slugs, `quality` ∈ `optimal|suboptimal|blunder`
+- `eval.*` / `board.badge.*` — evaluation labels and badge text (`eval.optimal`, `board.badge.good`)
+- `stats.*`, `setpicker.*`, `summary.*`, `upgrade.*`, `mistakes.*` — per-surface strings
+- `lesson.<id>.slide.<n>.*` — lesson content (`lesson.lesson-05-claimeven.slide.1.text`)
 
-`product_decisions.md` Gap 2 is explicit: *"No anonymous server rows are created for unauthenticated users. All data is lost when localStorage is cleared."* Every data type (lesson progress, challenge history, sparring record, streak) is localStorage for MVP. Account creation and server migration are post-MVP. Epic 7 was wrong to claim "without this, nothing persists across sessions." Removed from MVP scope.
+**Coach phrase library is pooled keys, not English.** Epic 2a's "Coach phrase library" maps each quality bucket to an **array** of i18n keys — `{ [category]: { optimal: key[], suboptimal: key[], blunder: key[] } }` — and the `/api/evaluate-move` response carries the `category` + `quality` (or a single randomly-chosen key); the client resolves the chosen key with `t()` and varies wording by picking one variant at random per move (Gap 29). No raw English strings cross the API or live in the phrase object.
 
-### 3. Epic 3 (Sparring) was too large
+**Prompt caching (`explanation_cache` table):** Already in DB (`position_hash`, `one_liner`, `deep_reveal_json`). Every endpoint that calls the LLM for a Deep Reveal must check this cache first and write on miss. Cache key: `SHA256(movestring + ":" + col)`. Wired in Epic 2b; reused in Epics 3b and 3c.
 
-Game Board + Difficulty Picker are one unit. Post-Game Review + Position Explorer are an entirely separate experience: new backend endpoints (`/api/games/analyze`, `/api/games/from-position`), lazy per-move analysis, timeline rewind logic, and try-alternative interactive board. These alone would produce 25+ tasks. Split into 3a and 3b.
+**User flag for bad LLM answers:** A "Flag this explanation" button on every Deep Reveal panel writes a row to the `llm_feedback` table (already in DB). No moderation UI in MVP — just capture.
 
-### 4. Epic 5 (Lessons) was far too large
-
-Entirely greenfield — no DB tables (lesson content lives in JSON files per Gap 5), no server routes, no UI screens. It conflated: infrastructure (saga map, concept/socratic screens, lesson routing), content authoring (11 lesson JSON files with positions and slides), and several minor backend additions (detectClaimodd, PATTERN_KB entries, narration templates). Each of those is a distinct work stream. Split into Epic 4 (infrastructure) and Epic 5 (content).
-
-### 5. Epic 4 (Explanation Engine) conflated UI wiring with backend gaps
-
-The proposed ordering (`Epic 1 → Epic 4 → Epic 2 → ...`) front-loaded backend detector work before any surface existed. But the existing `/api/explain-move-llm` already works for Tier 2. The detector gaps (detectClaimodd, overcut reason field, narration templates) are only needed when the corresponding lessons (7, 9, 10, 11) go live. These belong inside Epic 5 (Lesson Content), not in a standalone pre-requisite epic. What Epic 2 (Challenges) actually needs is a new `POST /api/evaluate-move` Tier 1 endpoint (badge + coach phrase + summary line) — that work belongs in Epic 2.
-
-### 6. Dependency order was inverted
-
-The proposed ship order put the Explanation Engine before Challenges, but Challenges can wire directly to the existing `/api/explain-move-llm` for Tier 2. The first deployable surface should be Challenges, not the explanation engine.
+**Hints never show raw scores.** No surface displays raw solver score values to the user. Hints derive from the solver + `classify()` internally, but present pattern-based guidance only:
+- **Sparring** (Epic 3a): the Coach highlights the **best move(s)** on the board — every column whose solver score ties the maximum — and names the reason. Second-best moves are never surfaced (they matter only to the AI's internal deliberate-mistake mechanic).
+- **Challenges** (Epic 2a): the Coach gives a **contextual nudge** that names the task/threat **without revealing the column**, preserving the recognition task.
+- The 7-column numeric/colored score row shown on Hint in the Sparring mockup (`screens_sparring.jsx`) is **not** built — mockup divergence.
 
 ---
 
@@ -40,346 +39,486 @@ The proposed ship order put the Explanation Engine before Challenges, but Challe
 
 ### Epic 1a — Design Tokens & Component Library
 
-All shared primitives. Nothing surface-specific. Pure build artifacts; no API calls.
+All shared primitives. Nothing surface-specific. No API calls.
+
+**Visual + prop ground truth:** the mockup files are authoritative for layout and prop shapes — `primitives.jsx` (TopBar/ProgressBar/Stars/Toolbar), `board.jsx`, `coach.jsx`, `styles.css`. Match them; introduce no colors outside the established token set.
 
 **Scope:**
 
-*CSS design tokens (`styles.css` or equivalent):*
-- Semantic color variables: `--disc-green`, `--disc-gray`, `--eval-good`, `--eval-mid`, `--eval-bad`, `--eval-good-bg`; surface tints for Lessons / Challenges / Sparring / Home; `--lock`, `--lock-bg`, `--claim`
-- Typography: Baloo 2 (display) + Nunito (body); size + weight scale
+*CSS design tokens:*
+- Semantic color variables: `--disc-green`, `--disc-gray`, `--eval-good`, `--eval-mid`, `--eval-bad`, `--eval-good-bg`; surface tints `--bg-lessons`, `--bg-challenges`, `--bg-sparring`, `--bg-home`; `--lock`, `--lock-bg`, `--claim`, `--threat-gray`
+- Typography: Baloo 2 (display/headings) + Nunito (body); size + weight scale
 - Spacing, border-radius, shadow scale
-- `@keyframes` for disc drop, pulse ring, bubble slide-in, spinner
+- `@keyframes`: disc drop, pulse ring, bubble slide-in, spinner
 
-*Shared primitive components:*
-- `Icon` — SVG stroke icon set (back, chevR/L/D, gear, user, bulb, undo, flag, lock, check, star, arrowUp, play, search, retry, grad, target, swords, chart)
-- `StatusBar` — top status row (time + signal + battery)
-- `TopBar` — title, back button, meta slot, right icon buttons
-- `ProgressBar` — horizontal fill strip with value/max or pct prop
+*Shared primitives:*
+- `Icon` — SVG stroke icon set: back, chevR/L/D, gear, user, bulb, undo, flag, lock, check, star, arrowUp, play, search, retry, grad, target, swords, chart
+- `StatusBar` — time + signal + battery
+- `TopBar` — title, back button, meta slot, right icon slots
+- `ProgressBar` — horizontal fill strip (value/max or pct prop)
 - `Stars` — N of total filled stars
 - `Toolbar` + `ToolButton` — fixed bottom action row
 
 *Coach components:*
-- `CoachAvatar` — SVG cartoon figure, 3 moods (happy / think / oops), size prop
-- `CoachDialog` — fixed-height chat feed; avatar left + bubble stack right; newest bubble slides in; `faded` + `lead` bubble props; `fixed` prop for sparring mode
+- `CoachAvatar` — SVG cartoon figure (bearded, glasses), 3 moods: happy / think / oops; size prop
+- `CoachDialog` — fixed-height chat feed; avatar left + bubble stack right; `faded` + `lead` bubble props; `fixed` prop for sparring compact mode; new bubble slides in, old scrolls up
 
-*Board component (complete redesign):*
-- 7×6 grid, column-major; green + dark-gray discs (replace existing red/yellow)
+*Board component (complete redesign of existing `Board.jsx`):*
+- 7×6 grid, column-major; green + dark-gray discs (replacing current red/yellow)
 - Column tap handler + hover arrow (chevD)
-- Drop animation (`lastDrop` prop)
-- Overlay system: `tg` (green translucent threat), `td` (gray translucent threat), `claim` (claimeven cell), `win` (win line)
-- Column badge (`good` ✓ / `mid` ? / `bad` ✕)
+- Drop animation via `lastDrop` prop
+- Overlay system: `tg` (green translucent threat), `td` (gray translucent threat), `tr` (red "your move" — Position Explorer), `claim` (claimeven cell), `win` (win-line flash). **Locked cross-epic enum — consumed by Epics 2a/2b/3b/3c/4.**
+- Column badge: `good` ✓ / `mid` ? / `bad` ✕. **Locked cross-epic enum.**
+- **Column multi-select mode**: columns toggled as "forbidden" (red tint + ✕ badge); used by Forbidden Columns puzzle type; `selectedCols` prop + `onColToggle` handler
 - Compact mode (shrinks for post-game review)
 - `fullCols` prop to block tapping full columns
+- **Sequence-mode support**: the `forced_win` category is multi-move (`interaction_mode === 'sequence'`, driven by `completionStrategies.js`) and is **kept as-is** — an explicit exception to Gap 8's single-move rule. The redesigned `Board` must preserve the existing sequence-play interaction already in `PuzzlesPage.jsx:507` (`interactionMode === 'sequence'`): the user plays through a forcing line, the engine plays the best response between moves. Port this branch; do not collapse it to single-move.
 
 *Other shared components:*
-- `FeatureCard` — icon + title + subtitle + optional badge; two size variants (square 2-up and wide 1-up)
+- `FeatureCard` — icon + title + subtitle + optional badge; square and wide variants
 - `SetCard` — title + difficulty stars + position count; locked variant (grayed + padlock)
-- `UpgradeModal` — sheet overlay: icon + heading + "join the waitlist" email input + dismiss; no payment
+- `UpgradeModal` — sheet overlay: icon + heading + waitlist email input + "Notify me" + dismiss (no Stripe for MVP). **Replaces the existing `PaywallModal.jsx`**, which still calls `POST /api/stripe/create-checkout` and redirects. This epic must retire `PaywallModal` and update **all three** importers (`PuzzlesPage.jsx`, `CoachPage.jsx`, and `DeepRevealButton.jsx`) so no Stripe-redirect path survives behind a locked feature (Gap 19). **Note:** `DeepRevealButton.jsx` is reused as the Deep Reveal foundation in Epic 2b, so leaving its `PaywallModal` import in place would keep a live Stripe path on the Challenges surface — swap it to `UpgradeModal` here.
 
-**NOT included:** routing, screens, API calls, per-surface background application.
+**Reuse from existing code (do not rebuild):**
+- The Forbidden-Columns **multi-select interaction** is already fully implemented in `PuzzlesPage.jsx` (`handleForbiddenSubmit`: toggle set, parallel per-column check, exact-match scoring, missed-column reveal, opponent-threat overlay). Port this logic into the redesigned `Board` rather than writing it fresh.
+- `DeepRevealButton.jsx` and `ExplainMoveButton.jsx` already render LLM explanations with flag flows — usable foundations for the Deep Reveal panel (Epic 2b).
 
-**Estimated spec:** 150–170 lines. **Estimated tasks:** 14–16.
+**NOT included:** routing, screens, API calls, per-surface background application. `CurationWorkspace.jsx` Board migration — it uses ~12 curation-specific highlight roles (`z_range`, `hint`, `ghost_mirror`, etc.) with no equivalent in the locked overlay enum; `Board` retains `highlightedCells` as a deprecated shim prop for this caller only, to be removed in a future curation epic.
+
+**Estimated spec:** 160–180 lines. **Estimated tasks:** 15–17.
 
 ---
 
 ### Epic 1b — App Shell & Navigation Migration
 
-Replace the existing routing architecture with the prototype's state-based navigator. Wire Home Hub and Stats screens with localStorage data.
+Replace the existing routing architecture. Wire Home Hub, Stats, analytics utility, and i18n.
 
 **Scope:**
 
 *Routing migration:*
-- Remove `BrowserRouter`, `react-router-dom` routes, `BottomNav`, old `AppHeader`
-- Replace with a single `App` state variable (current screen key) and a `go(screen)` dispatcher
-- Screen registry mapping key → component (mirrors `app.jsx` in the mockup)
-- Per-surface background tint: apply `--bg-lessons` / `--bg-challenges` / `--bg-sparring` / `--bg-home` based on active screen group
+- Remove `BrowserRouter`, `react-router-dom` routes, `BottomNav`, `AppHeader`
+- **Keep** react-i18next and `ProfileStoreProvider` — do not remove
+- Replace routing with a single `screen` state variable and `go(screenKey)` dispatcher
+- Screen registry mapping key → component (mockup ground truth: `app.jsx` `SCREENS` map). Keys: `home`, `stats` (`screens_home.jsx`); `saga`, `concept`, `socratic`, `clchallenge` (`screens_lessons.jsx`); `setpicker`, `challenge`, `summary` (`screens_challenges.jsx`); `difficulty`, `game`, `review`, `explorer` (`screens_sparring.jsx`); `mistakes`, `mistakeDetail` (`screens_mistakes.jsx`)
+- Per-surface background tint applied based on active screen group
+- Keep `/admin/curate` accessible: detect `window.location.pathname.startsWith('/admin')` at app boot and render admin shell separately, bypassing the state navigator
+- **Retire the `/coach` route and `CoachPage.jsx`.** Its blunder-review UI and the `coach/queue` endpoints it uses are *reused* by Epic 3c (Past Mistakes) — see Epic 3c. Note that `DashboardPage.jsx` uses `useNavigate` and will break on router removal; this is expected, as the new Home Hub replaces it.
+
+*Analytics utility (cross-cutting foundation):*
+- **Reuse the existing `track()` (`src/lib/track.js`) and `POST /api/track` endpoint — both already exist.** The only change here is *modifying* `track.js` to send the active screen key instead of `window.location.pathname` (which becomes a constant `/` once the router is removed). The endpoint already resolves `uid` from the authenticated profile / request body and `user_id` from the bearer token.
+- Call `track('session_start', { screen })` on app mount
+- Call `track('screen_viewed', { screen })` on every `go()` navigation
 
 *Home Hub screen:*
-- Top bar: app name left (DecodeC4), profile icon right (→ Stats)
-- 2+1 feature card grid: Lessons (blue), Challenges (peach), Sparring (lavender)
-- Daily Coach nudge: static Coach dialog with hardcoded placeholder phrase (dynamic nudge is Epic 6)
+- TopBar: "DecodeC4" left, profile icon right (→ auth modal if unauthenticated, → Stats if authenticated)
+- 2+1 feature card grid: Lessons (blue tint), Challenges (peach tint), Sparring (lavender tint)
+- Daily Coach nudge: static `CoachDialog` with placeholder phrase
 - "Progress & Stats" ghost button → Stats screen
 
-*Stats screen (all values from localStorage):*
-- Top stats card: avg accuracy, lessons done (N / 11), day streak
-- "Accuracy by pattern" bar list — one row per classifier category that has any attempts, colored by quality threshold
-- Sparring record: W / L / D
-- Coach recommendation phrase + CTA to weakest lesson
-- Empty state: show zeros, no gate (Gap 6c)
-- localStorage read helpers: `getStats()`, `getLessonProgress()`, `getSparringRecord()`
+*Stats screen:*
+- **Unauthenticated**: session-only accuracy from most recent challenge session (or `--` if none), lessons done count, sparring record W/L/D. Shows "Sign up to track your progress over time" prompt.
+- **Authenticated**: full all-time accuracy, total puzzles solved, lessons complete, sparring record, day streak (from `getStreak()`, Epic 7), accuracy-by-pattern bars, Coach recommendation + CTA to weakest lesson, "Review past mistakes" link → Past Mistakes screen (Epic 3c)
+  - **Weakest-lesson recommendation logic:** reuse the Gap 15 rule (lowest per-pattern accuracy, tie-break by earliest lesson order; locked lesson → `UpgradeModal`), applied here to **all-time** per-pattern accuracy instead of a single session.
+- Empty state: zeros, no gate (Gap 6c)
 
-*Shell cleanup:*
-- Remove i18n / `useTranslation` usage
-- Remove `ProfileStore` if unused by new screens
-- Remove `DebugProvider` / `DebugContext` if unused
-- Preserve existing admin/curation pages at `/admin/curate` (keep their BrowserRouter route separately or behind a hidden path)
+*i18n:*
+- All user-facing strings in this epic go through `t('key')` translation keys
+- English strings defined in `en.json`; `es.json` stub created but empty (Spanish is post-MVP content)
 
-**NOT included:** actual surface screens (Challenges, Lessons, Sparring), any API calls, auth.
+**NOT included:** actual surface screens, auth flow (Epic 7), deep data writes.
 
-**Estimated spec:** 120–140 lines. **Estimated tasks:** 10–13.
+**Estimated spec:** 130–150 lines. **Estimated tasks:** 11–14.
 
 **Depends on:** Epic 1a.
 
 ---
 
-### Epic 2 — Challenges Surface
+### Epic 7 — Auth & Progress Persistence
 
-The highest standalone value. First fully interactive surface. Redesigns the existing `PuzzlesPage.jsx` (708 lines); the new design adds Set Picker, 3 feedback layout variants, Deep Reveal panel, and Post-Set Summary which do not exist today.
+Ship early so every subsequent surface writes to the right store from day one.
+
+**Scope:**
+
+*Auth UI reskin:*
+- Redesign `AuthModal` to match new visual style: remove dark theme, apply new typography and tokens; keep magic-link OTP flow and i18n keys
+- Profile icon on Hub TopBar: unauthenticated → `AuthModal`; authenticated → Stats screen
+- On sign-in: existing `switchToSupabase` migration flow runs (IndexedDB → Supabase); already implemented in `ProfileStore.jsx`
+- `track('signup_initiated', ...)` and `track('signup_completed', ...)` already in existing code; verify they fire correctly
+
+*Persistence medium note:* Gap 2 says device-local data lives in "localStorage," but the existing store layer uses **IndexedDB** (`IndexedDBStore`). Keep IndexedDB (already built and wired); treat the Gap 2 wording as a medium-agnostic requirement, not a mandate to switch.
+
+*Extend `IndexedDBStore` for new data types:*
+- `saveLessonProgress(lessonId, status)` / `getLessonProgress()`
+- `saveSparringRecord(result)` / `getSparringRecord()` → `{ W, L, D }`
+- `saveChallengeSession(session)` / `getLastChallengeSession()`
+- `recordActivityDay()` / `getStreak()` — daily streak (Gap 13): persist a `last_active_date` + `streak_count`; on any puzzle attempt or sparring game, bump the count if the last active day was yesterday, reset to 1 if a calendar day was skipped, no-op if same day. Stats (Epic 1b) only reads `getStreak()`.
+- `incrementDeepRevealCount()` / `getDeepRevealCount()` / `resetDeepRevealCountIfNeeded()` — weekly counter reset Monday 00:00 UTC
+- Update `migrateToSupabase` to also migrate lesson progress, sparring record, challenge session history, and streak state (`last_active_date` + `streak_count`)
+
+*Extend `SupabaseStore` for new data types:*
+- Same interface as IndexedDBStore above
+- Fix `saveSessionStats`: it currently early-returns on `if (profile.tier !== 'paid') return;` (`SupabaseStore.js`) — drop that paid-only guard so stats save for any authenticated user
+- `getAllSessionStats()` for Stats screen aggregation, including **per-pattern accuracy** (consumed by the authenticated Stats "accuracy by pattern" bars in Epic 1b)
+- Lesson progress stored in `session_stats` jsonb (decide during spec)
+
+*Deep Reveal weekly limit (Gap 3):*
+- Applies to **all users** including anonymous: anonymous tracked via IndexedDB counter; authenticated tracked server-side on `users.deep_reveal_count` + `users.deep_reveal_reset_at`
+- No separate "zero Deep Reveals for anonymous" lockout — all users share the same weekly cap
+- When limit reached: hide "Learn more" button; tap → `UpgradeModal` (waitlist capture)
+- Pro users (`tier === 'paid'`): no limit (future-proofed; the codebase keys all gating on the `'paid'` slug — `checkAndDecrementQuota`, `requirePaid`, `saveSessionStats` — so the doc uses `'paid'`, not `'pro'`. `tier` stays `'free'` for all users until the payment epic ships)
+
+  **⚠️ Existing quota code must be changed, not extended as-is:**
+  - `checkAndDecrementQuota` in `server/index.js` currently enforces **`count >= 3` per day**, reset at the **next UTC midnight** (`setUTCHours(24,…)`). This must become **20 per week, reset Monday 00:00 UTC** (Gap 3). The magic `3` and the daily reset are wrong for MVP.
+  - The existing guard rejects anonymous users: `/api/explain-move` returns `403` when `requestDeepReveal && !req.user`, and `checkAndDecrementQuota` returns `{ allowed: false, reason: 'anonymous' }` for any non-`paid`/`free` tier. **These anonymous lockouts must be removed** so anonymous users get the shared weekly cap (Gap 20).
+  - **The cap is currently enforced on the wrong endpoint.** MVP Deep Reveal calls `/api/explain-move-llm` (Epics 2b, 3b, 3c), which has **no quota enforcement today**. Move the weekly-cap check onto `/api/explain-move-llm`: server-side decrement for authenticated users, and accept/trust the IndexedDB counter for anonymous users (the client hides "Learn more" once its local counter is exhausted).
+
+*Payments (deferred):*
+- Existing Stripe routes left untouched; `UpgradeModal` shows waitlist email capture only
+- `track('waitlist_submitted', { feature })` on "Notify me" submit
+
+**NOT included:** Stripe checkout, subscription management, tier upgrades.
+
+**Estimated spec:** 130–150 lines. **Estimated tasks:** 12–15.
+
+**Depends on:** Epic 1b.
+
+---
+
+### Epic 2a — Challenges: Set Picker, Single-Move Board & Tier-1 Feedback
+
+First fully interactive surface. Redesigns `PuzzlesPage.jsx` (708 lines). **Reuse, don't rewrite:** `PuzzlesPage` already implements category listing, session accuracy, optimistic placement, solved-puzzle exclusion, stable per-category selection, and the claimeven trace overlay — port these into the new screens.
 
 **Frontend screens:**
 
 *Set Picker (`setpicker` screen):*
-- Scrollable list of `SetCard` components with category metadata
+- Scrollable list of `SetCard` components with category metadata from server config
+- Dynamic position count per set: fetch approved puzzle count per category; hide set if count is 0 (Gap 6a)
 - Free sets unlocked; locked sets grayed + padlock; tap locked → `UpgradeModal`
-- Back → Home Hub
+- **Mockup divergence:** the mockup lock sheets (`screens_challenges.jsx`, `screens_lessons.jsx`) show Stripe-style "Upgrade to Pro" / "Maybe later" copy; the build uses `UpgradeModal` (waitlist email + "Notify me", no Stripe — Gap 19). Same applies to the Saga Map lock modal (Epic 4). Gap 19 governs.
+- `track('screen_viewed', { screen: 'set_picker' })`
 
-*Challenge Board — pre-move (`challenge` screen):*
-- TopBar (back → Set Picker, gear icon)
-- Coach dialog: category-specific prompt (no label — "You can win right now. Find it." etc.)
-- Progress indicator: "N / M" label + ProgressBar
-- Interactive Board (no overlays until move committed)
-- Toolbar: Hint (toggle column score heatmap) + spacer + Undo (disabled per Gap 8)
-- Back-navigation dialog: "Leave this set? Your progress won't be saved." (Gap 14)
+*Challenge Board — pre-move, single-move type (`challenge` screen):*
+- `CoachDialog`: category-specific prompt (no category label shown)
+- Progress indicator: "N / M" + `ProgressBar`
+- Interactive `Board` (no overlays until move committed)
+- Toolbar: Hint only — **no Undo** (Gap 8). The Hint is a **contextual nudge** (see cross-cutting *Hints*): the Coach names the task/threat for the position (from the solver + `classify()`) **without revealing the column** and **without any numeric scores** — e.g. *"There's an immediate win on the bottom row — find the column."* *Note: the mockup `ChallengeBoard` shows an Undo/Retry button; the mockup is wrong here — Gap 8 governs.*
+- Back-navigation confirmation dialog (Gap 14)
+- `track('puzzle_attempted', { puzzleId, category })`
+- `ChallengeBoard` accepts a `lessonMode` flag (consumed by Epic 4 Confirmation Challenges): swaps the header to the lesson name and returns to the Saga Map instead of Post-Set Summary on completion.
 
-*Challenge Board — post-move (Tier 1 feedback, 3 layout variants):*
-- Variant A (default): Tier 1 feedback strip below board (tag + lead + body + "Learn more ▼")
-- Variant B (compact inline): badge + lead + body inside coach area, slim strip
-- Variant C (docked card): white rounded card consolidating Coach + Tier 1 + "Learn more ▼"
-- Evaluation badge on played column (✓ / ? / ✕)
-- Coach phrase + mood derived from badge type
-- Next → button advances to next position or Post-Set Summary
+*Challenge Board — post-move feedback (Tier 1):*
+- **Variant A only** (Tier 1 strip below board); Variants B/C deferred to post-MVP
+- Evaluation badge on played column (✓ / ? / ✕); quality = Optimal/Suboptimal/Blunder (Gap 1)
+- `CoachDialog` updates with phrase + mood
+- Tier 1 strip: quality tag + summary line + "Learn more ▼" + "Flag" icon
+- "Learn more ▼": if weekly limit reached → `UpgradeModal`; otherwise → Deep Reveal Panel (Epic 2b)
+- `track('puzzle_solved_correct', ...)` or `track('puzzle_solved_wrong', ...)`
+
+**Backend / API (new):**
+- **Shared move-quality scorer (Gap 1) — NEW module.** The Optimal/Suboptimal/Blunder classification (sign-of-score comparison: `score(played)=score(best)` → Optimal; same sign but slower → Suboptimal; outcome-category drop → Blunder; losing-position rule) does **not** exist today — the predicate engine only returns `correct`/`wrong`/`tied`. Build a single shared scorer module consumed by `POST /api/evaluate-move` (this epic) **and** `POST /api/games/analyze` (Epic 3b). This is the spine of all feedback and timeline coloring.
+- `POST /api/evaluate-move` — `{ movestring, col }` → `{ badge, quality, coachPhrase, coachMood, summaryLine, patternTag }`. Uses the shared scorer + existing `classify()` + c4solver. **New endpoint.**
+- `GET /api/puzzles/draw?category=<cat>&n=8` — random draw without replacement from approved puzzles (Gap 9). **New endpoint.** Must support `category=mixed` (see below).
+- Challenge-set metadata: `server/challengeSets.js` — `category → { displayName, stars, description, free: bool }`. **New module.**
+
+  **Free / Pro mapping — follows Gap 3 (authoritative over the current code):**
+  - **Free:** `immediate_threat`, `forced_block`, `double_threat`, `claimeven`, `z_threat`, `odd_even_threat` (the Lesson-1–7 content sets).
+  - **Pro:** `mixed`, `undercut`, `overcut`, `figure_7`, `j_shape`.
+  - `forbidden_columns` and `forced_win` are not mapped to a lesson by Gap 3; both default to **free** core-tactic sets.
+  - **`forced_win` is sequence-mode (multi-move), not single-move.** It is already implemented (`completionStrategies.js`, `interaction_mode === 'sequence'`) and is kept as a deliberate exception to Gap 8 ("all challenge puzzles are single-move"). The single-move Tier-1 flow in this epic is the default path; `forced_win` puzzles route to the sequence interaction ported in Epic 1a's Board. The `/api/evaluate-move` scorer applies per move within the sequence; "Next" advances only after the full forcing line is completed. Coach prompt: *"Force the win — play the line that leaves your opponent no escape."* **Mockup/vision note:** the Set Picker mockup and the `product_vision` prompt table both omit `forced_win`; the decision is to **include** it as a free sequence set. (`forbidden_columns` is the multi-select exception, handled in Epic 2b.)
+  - **`server/categories.js` `PAID_CATEGORIES` must be remapped:** remove `claimeven` and `z_threat` (they are now free); they are currently incorrectly paid. Add the `mixed` pseudo-category to the paid set.
+  - **`mixed` pseudo-category:** not a stored puzzle category. `GET /api/puzzles/draw?category=mixed` samples without replacement across all approved puzzles of all *free-or-owned* categories. Add handling in the draw endpoint and a `mixed` entry in `challengeSets.js` (Pro-gated).
+- Coach phrase library: `{ [category]: { optimal: key[], suboptimal: key[], blunder: key[] } }` — each quality bucket is a **pool** of i18n keys, client picks one at random per move (Gap 29). Free/stable categories here; Pro-category pools added in Epic 5.
+
+**NOT included:** Deep Reveal / Tier 2, Forbidden Columns multi-select, Post-Set Summary (all Epic 2b); lesson confirmation mode (Epic 4); detector improvements (Epic 5).
+
+**Estimated spec:** 150–175 lines. **Estimated tasks:** 14–17.
+
+**Depends on:** Epic 1a, Epic 1b, Epic 7.
+
+---
+
+### Epic 2b — Challenges: Deep Reveal, Forbidden Columns & Post-Set Summary
+
+Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type, and the set-end summary.
+
+**Frontend screens:**
+
+*Challenge Board — pre-move, Forbidden Columns type:*
+- `CoachDialog`: "Mark every column where playing immediately hands your opponent a win."
+- Board in **multi-select mode**: user taps columns to toggle forbidden (red tint + ✕ badge); tap again to untoggle
+- **Reuse:** the scoring + reveal logic already exists in `PuzzlesPage.handleForbiddenSubmit` — port it
+- "Submit" button in Toolbar (replaces Next); disabled until ≥1 column selected
+- On submit: correct columns flash green, incorrect tags + missed columns revealed simultaneously
+- Feedback strip shows how many were correct ("3 / 4 forbidden columns found")
+- Both false positives and false negatives count as wrong (exact-match predicate)
+- `track('puzzle_attempted', { puzzleId, category: 'forbidden_columns', submittedCols, correctCols })`
+- **Mockup note:** the Set Picker mockup lists no Forbidden Columns set; the type exists per Gap 30 and gets a **free** entry in `challengeSets.js`. Each Forbidden Columns puzzle counts as **one scored item** in session accuracy and the by-pattern breakdown.
 
 *Deep Reveal Panel (Tier 2):*
-- Slide-up sheet over board (backdrop tap to dismiss)
-- Loading state: spinner + "Reading the position…" (1–1.5s mock delay until API responds)
-- Loaded: pattern tag(s), badge + quality label, compact annotated Board with overlays, LLM explanation text (2–4 sentences), "Best line" chip row with continuation moves
-- On LLM timeout (>6s): show Tier 1 text + "Detailed explanation unavailable." (Gap 6b)
+- Check `explanation_cache` first (key: `SHA256(movestring + ":" + col)`); serve cached if hit
+- On cache miss: call `/api/explain-move-llm`; write result to `explanation_cache` on response
+- **Reuse:** `DeepRevealButton.jsx` / `ExplainMoveButton.jsx` already do most of this
+- Loading spinner until response (cache hit = no spinner)
+- Loaded: pattern tag(s), badge + quality label, compact annotated `Board`, LLM explanation, "Best line" chips, "Flag this explanation" button
+- LLM timeout >6s: show Tier 1 text + "Detailed explanation unavailable." (Gap 6b)
+- On open: weekly-cap decrement (see Epic 7 — enforced on `/api/explain-move-llm`); `track('deep_reveal_viewed', { puzzleId, cached })`
+- On flag: write to `llm_feedback` table; `track('deep_reveal_flagged', { puzzleId })`
 
-*Post-Set Summary:*
-- Checkmark icon + "Set complete!" heading
-- Optimal count + accuracy %; ProgressBar
-- By-pattern breakdown rows (pattern name + score + quality dot)
-- Coach phrase recommending weakest pattern's lesson (Gap 15 tie-break logic)
-- CTA: "Go to [lesson name]" → navigate to lesson; disabled / shows upgrade if lesson is Pro-gated
-- Secondary CTA: "Back to Challenges"
-- Session data written to localStorage on summary screen load
+*Post-Set Summary (`summary` screen):*
+- Accuracy %, by-pattern breakdown, Coach recommendation (Gap 15 tie-break)
+- CTA to recommended lesson; "Back to Challenges"
+- `store.saveChallengeSession(...)` on load
+- `track('set_completed', { category, accuracy, optimalCount, blunderCount })`
 
-**Backend / API (new work):**
+**NOT included:** lesson confirmation challenge mode (Epic 4), detector improvements (Epic 5), game history.
 
-- `POST /api/evaluate-move` — Tier 1 endpoint: `{ movestring, col }` → `{ badge, coachPhrase, coachMood, summaryLine, patternTag }`. Uses existing `classify()` + `c4solver` scores; phrase selected from phrase library. **This endpoint does not exist today.**
-- Coach phrase library: JSON or in-memory map of `{ category × quality → string[] }` (3–5 variants each to avoid repetition); included with this epic's backend work
-- Challenge-set metadata config: JS/JSON object mapping category key → `{ displayName, stars, description, free: bool }`; no DB table needed
+**Estimated spec:** 130–150 lines. **Estimated tasks:** 12–15.
 
-**Data / localStorage:**
-- Session state: current set category, current puzzle index, per-puzzle result (`{ puzzleId, playedCol, badge }`)
-- Session written to `challenge_history[]` in localStorage on Post-Set Summary load
-- Per-set accuracy computed client-side from session array
-
-**NOT included:** actual detector improvements (those are Epic 5), lesson confirmation challenge mode (Epic 4), game history, auth.
-
-**Estimated spec:** 200–220 lines. **Estimated tasks:** 18–21.
-
-**Depends on:** Epic 1a, Epic 1b.
+**Depends on:** Epic 2a (Set Picker, single-move board, scorer, draw endpoint).
 
 ---
 
 ### Epic 3a — Sparring: Difficulty Picker & Game Board
 
-Live game experience. Redesigns `HomePage.jsx` (560 lines, current sparring board) to match the new design: compact fixed-height Coach dialog, no overlays during play, difficulty-aware AI, deliberate mistake mechanic.
+Redesigns `HomePage.jsx` (560 lines). Saves game record on completion.
 
 **Frontend screens:**
 
 *Difficulty Picker (`difficulty` screen):*
-- TopBar (back → Home Hub)
-- Radio-row list: Easy / Medium (default) / Hard / Perfect, each with description subtitle
-- "Play as" toggle: Green disc (moves first) vs Gray disc (moves second)
-- Start game CTA → Game Board
-- Difficulty and side stored in component state, passed as props to Game Board
+- Radio-row list: Easy / Medium (default) / Hard / Perfect with description subtitles (Gap 11)
+- "Play as" toggle: Green (first) vs Gray (second)
+- Start → Game Board
+- `track('game_started', { difficulty, side })`
 
 *Game Board (`game` screen):*
-- TopBar: "Game" title left, "Move N" center, gear icon right
-- `CoachDialog` with `fixed` prop — always visible, never moves board
-- Interactive Board: no automatic overlays during play; column drop animation
-- Optional Hint heatmap: column scores as `heat-row` above board (user-triggered; dismissed on next move)
-- Toolbar: Hint (toggle) + spacer + Resign (→ Post-Game Review)
-- AI responds after user move with ~720ms delay; Coach reacts to every move (user good / user blunder / AI normal / AI deliberate mistake)
-- Game-end detection: 4-in-a-row (win/loss) or board full (draw) → navigate to Post-Game Review
-- Current game record written to localStorage: `{ movestring, difficulty, side, result, timestamp }`
+- `CoachDialog` with `fixed` prop
+- Interactive `Board`: no overlays during play
+- Optional Hint (toggle; dismissed on next move — Gap 10): the Coach **highlights the best move(s)** on the board — every column whose solver score ties the maximum — and names the reason from `classify()`; **no numeric scores shown** (see cross-cutting *Hints*). **Mockup divergence:** `screens_sparring.jsx` renders a numeric column-score row on Hint; the build does not.
+- When the user plays as **Gray** (second), the AI auto-plays move 1 on game start. **Verify move-perspective correctness when the AI opens** (`project_parity_bug_ai_first`: human/AI evaluation was historically swapped in AI-first games).
+- Toolbar: Hint + Resign (→ Post-Game Review, records Loss — Gap 17)
+- Game end: 4-in-a-row detection (win/loss) or board full (draw) → save game → Post-Game Review
+- `track('game_ended', { result, moveCount, difficulty })`
 
-**AI move logic (backend):**
-- Difficulty → deliberate mistake rate (Gap 11): Easy ~every 4 moves, Medium ~every 7, Hard ~every 15, Perfect never
-- When deliberate mistake fires: AI plays second-best move + emits Coach phrase "Oops. Did I just give you something?"
-- Temperature-based sampling applies between deliberate mistakes
-- Verify existing AI move endpoint supports difficulty param; add deliberate-mistake trigger logic if missing
+*Game record persistence:*
+- On game end: `POST /api/games` saves record to new `games` table: `{ id, user_id (nullable), device_uuid, moves (movestring), difficulty, side, result, created_at }`
+- **New DB migration required**: `games` table
+- Game ID returned from API; passed to Post-Game Review for analysis
 
-**Coach phrase dispatch:**
-- After user move: classify move quality via Tier 1 endpoint → select phrase from quality register
-- After AI normal move: neutral phrase ("Your turn." / "Think carefully.")
-- After AI deliberate mistake: "Oops. Did I just give you something?" (fixed)
-- After user blunder: "Hmm. I'll take that."
-- Coach mood updates on each phrase
+**Client-side AI logic (extending `aiDifficulty.js`):**
+- Deliberate mistake rate per difficulty (Gap 11): Easy ~every 4, Medium ~every 7, Hard ~every 15, Perfect never
+- Deliberate mistake: select second-best move by `/api/scores`; emit Coach phrase "Oops. Did I just give you something?"
+- `POST /api/evaluate-move` for real-time Coach phrase after user moves
+- Win detection: `checkWin(board)` client-side; verify reusability from existing codebase first
 
 **NOT included:** post-game analysis, timeline, Position Explorer.
 
-**Estimated spec:** 150–170 lines. **Estimated tasks:** 14–16.
+**Estimated spec:** 160–180 lines. **Estimated tasks:** 15–17.
 
-**Depends on:** Epic 1a, Epic 1b, Epic 2 (reuses `POST /api/evaluate-move` for real-time coach phrase).
+**Depends on:** Epic 1a, Epic 1b, Epic 7, Epic 2a (reuses `POST /api/evaluate-move`).
 
 ---
 
-### Epic 3b — Sparring: Post-Game Review & Position Explorer
+### Epic 3b — Post-Game Review & Position Explorer
 
-Heavy analysis surface. Two new screens with new backend endpoints. Lazy analysis, timeline rewind, try-alternative mechanic.
+Lazy analysis, timeline, position rewind, blunder capture.
 
 **Frontend screens:**
 
 *Post-Game Review (`review` screen):*
-- TopBar: "Game Review" + search icon (Deepreveal shortcut) + gear
-- Coach summary phrase at top (rendered once analysis completes)
-- Compact Board (frozen at game end)
-- Accuracy card: accuracy %, quality dot legend (optimal N / suboptimal N / blunder N)
-- Move timeline: horizontal scrollable tape of nodes, color-coded by quality; `?` nodes for timed-out moves; "Move N and move M were the blunders." hint text
-- Timeline nodes initially gray ("pending"); update to color as each move's score resolves (lazy streaming pattern)
+- `CoachDialog` summary phrase (once analysis completes)
+- Compact `Board` frozen at game end
+- Accuracy card: accuracy % + quality dot legend
+- Move timeline: nodes start gray "pending"; update as scores arrive; `?` for timeouts (Gap 4). **Mockup divergence:** the mockup timeline (`screens_sparring.jsx`) renders *every* move including the AI's, numbered 1–N; the build shows **only the user's moves** numbered in user-move order (Gap 12). Gap 12 governs — do not follow the mockup here.
 - Tap non-optimal node → Position Explorer
+- "Clean game" Coach phrase + disabled Prev/Next if no mistakes (Gap 12)
 
-*Analysis triggering (lazy — fires when review screen opens, Gap 4):*
-- Client calls `POST /api/games/analyze` with full move sequence + difficulty
-- Streams (or polls) results; update timeline nodes one by one as scores arrive
-- Timeout per move: 8s → mark node `?`, excluded from accuracy denominator
-- Accuracy display: round to nearest int; show `--` if `scored_moves === 0`
+*Lazy analysis + blunder capture:*
+- On review screen open: `POST /api/games/analyze` with game ID (fetches movestring from `games` table)
+- Per-move quality resolved as scores stream in; timeline updates node by node
+- 8s timeout per move → `?`, excluded from accuracy (Gap 4)
+- **On analysis complete**: for each move with `quality === 'blunder'`, write to the **existing** `blunders` table (created in migration `001`/`005`: `{ id (uuid), user_id, puzzle_id, board_state, move_played, correct_move, pattern_category, resolved_at, created_at }`). **No migration needed** — only the *write trigger* is new (today blunders are written by `/api/puzzles/:id/check`; here they come from game analysis, so `puzzle_id` is null). Writes are fire-and-forget (don't block UI).
+- `track('game_reviewed', { gameId, accuracy, blunderCount })`
 
 *Position Explorer (`explorer` screen):*
-- TopBar: "Review" + "Move N / M"
-- Coach dialog: explains the mistake (LLM via existing `/api/explain-move-llm`)
-- Board rewound to mistake position: overlay user's played column in red (`tr`), opponent threat cells in gray (`td`)
-- Legend row: "your move" (red swatch) + "opponent threat" (gray swatch)
-- Interactive board below with prompt "Try a different move — tap any column."
-- After user plays alternative: AI responds at same difficulty; Coach reacts; user can continue exploring
-- "Start new game from here": calls `POST /api/games/from-position` → new game state; navigates to Game Board pre-loaded with opening moves
-- Toolbar: Prev mistake / Next mistake navigation (skip optimal nodes; disabled if no more mistakes in direction)
-- Back → Post-Game Review
+- `Board` rewound to mistake position: `tr` overlay on played column, `td` on threat cells
+- Interactive "try alternative" board; AI responds at same difficulty (Gap 16)
+- Deep Reveal on tap: check `explanation_cache` first; call `/api/explain-move-llm` on miss; write to cache
+- "Flag this explanation" → `llm_feedback` table
+- "Start new game from here" → `POST /api/games/from-position`
+- Prev / Next mistake navigation (Gap 12)
+- `track('mistake_reviewed', { gameId, moveIndex, category })`
+- `track('deep_reveal_viewed', { context: 'position_explorer', cached })`
+
+*Deep Reveal on `?` nodes:*
+- Show Tier 1 classifier phrase inline + "Detailed explanation unavailable." (no LLM call — Gap 4)
 
 **Backend / API (new):**
+- `POST /api/games/analyze` — `{ gameId }` → fetches movestring from `games` table; returns per-move `{ moveIndex, col, quality, score, bestScore }` array + `accuracy` + `summaryPhrase`. 8s timeout per move.
+- `POST /api/games/from-position` — `{ gameId, N, difficulty, side }` → game init payload for Game Board. Handles turn parity: N moves played → `(N % 2 === 0) ? firstPlayer : secondPlayer`.
 
-- `POST /api/games/analyze` — accepts `{ moves: string, difficulty }`, returns array of per-move analysis: `{ moveIndex, col, quality: 'optimal'|'suboptimal'|'blunder'|'unknown', score, bestScore }`. Runs c4solver on each user move (skips forced moves). 8s timeout per move → `quality: 'unknown'`. Also returns `accuracy` and `summary` phrase.
-- `POST /api/games/from-position` — accepts `{ moves: string, N: int, difficulty, side }` → returns a game init payload (first N moves of `moves`) that the Game Board can use to pre-populate state.
+**NOT included:** server-side async job (dropped); blunder review surface (Epic 3c).
 
-**NOT included:** server-side game history persistence (localStorage covers MVP per Gap 2), auth, Deep Reveal integration on `?` nodes (Tier 1 fallback text shown inline — no LLM call).
+**Estimated spec:** 185–205 lines. **Estimated tasks:** 16–19.
 
-**Estimated spec:** 180–200 lines. **Estimated tasks:** 16–19.
+**Depends on:** Epic 3a, Epic 2a (shared move-quality scorer), Epic 2b (Deep Reveal panel component).
 
-**Depends on:** Epic 3a (needs game record), Epic 2 (shares Deep Reveal panel).
+---
+
+### Epic 3c — Past Mistakes Review
+
+Lets authenticated users revisit blunders captured during post-game analysis and ask the Coach what the better move was.
+
+**Frontend screens — mockup `screens_mistakes.jsx`** (`MistakesList` → `mistakes` screen, list-state variants `in`/`empty`/`out`(anonymous); `MistakeDetail` → `mistakeDetail` screen; the Stats "Review past mistakes" link is already wired in `screens_home.jsx`).
+
+*Past Mistakes list (`mistakes` screen, accessible from Stats):*
+- List of blunder cards: board thumbnail (compact Board, non-interactive), pattern category tag, date, "Reviewed" badge if `resolved_at` is set
+- Filter tabs: All / Unreviewed / Reviewed
+- Tap a card → Mistake Detail view
+- Empty state: "No mistakes captured yet — play a game and review it after."
+- `track('screen_viewed', { screen: 'mistakes' })`
+
+*Mistake Detail view (`mistakeDetail` screen):*
+- `CoachDialog`: "You played col N here. Let me show you what worked better."
+- `Board` at the mistake position with `tr` overlay on the move played + `td` on opponent threat
+- "What should I have played?" CTA → Deep Reveal for the best move
+  - Check `explanation_cache` first; call `/api/explain-move-llm` on miss; write to cache on response
+  - "Flag this explanation" → `llm_feedback` table
+- "Mark as reviewed" button → sets `resolved_at` on `blunders` row; updates card badge
+- Prev / Next navigation through blunder list
+- `track('mistake_reviewed', { blunderId, category })`
+- `track('deep_reveal_viewed', { context: 'past_mistakes', cached })`
+
+**Backend / API — REUSE existing endpoints (do not build `/api/blunders`):**
+The server already has a blunder-review API and `CoachPage.jsx` already implements a review-mode UI. This epic is a *reskin + small extension* of that, not a new backend.
+- **Reuse `GET /api/coach/queue`** — already returns the user's unresolved blunders ordered, with the next puzzle. Extend it to: (a) drop the `requirePaid` gate (Past Mistakes is free for any authenticated user, Gap 24); (b) accept a `?status=all|unreviewed|reviewed` filter and pagination (20/page) for the list view; (c) return enough fields per blunder for the card (board thumbnail, category, date, `resolved_at`).
+- **Reuse `POST /api/coach/queue/:blunderId/resolve`** for "Mark as reviewed" (sets `resolved_at`). **Fix the pre-existing bug:** it calls `parseInt(blunderId)` but `blunders.id` is a `uuid` — use the raw string id.
+- Deep Reveal still uses `/api/explain-move-llm` + `explanation_cache` (cross-cutting).
+- The existing `CoachPage` review UI and `/coach` route are retired in Epic 1b; its review logic moves into the new `mistakes` screen.
+
+**NOT included:** spaced-repetition scheduling (out of scope), weakness map / prescriptive drills (Gap 22), anonymous blunder history (blunders require `user_id`; anonymous users see "Sign up to save your mistakes" prompt).
+
+**Estimated spec:** 100–120 lines. **Estimated tasks:** 8–11. *(Smaller than first drafted because the queue + resolve endpoints already exist.)*
+
+**Depends on:** Epic 3b (blunders written there), Epic 7 (requires authenticated user).
 
 ---
 
 ### Epic 4 — Lesson Infrastructure & Saga Map
 
-Entirely greenfield. No DB tables exist for lessons. Per Gap 5, content lives in JSON files in the repo; server loads them at startup; progress lives in localStorage.
+Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in IndexedDB/Supabase via store.
 
 **Frontend screens:**
 
-*Saga Map (`saga` screen):*
-- TopBar: "Lessons" + back → Home Hub
-- Three visual variants (Variant C = clean list is minimum; A = winding path and B = meadow stones are polish — implement all three, toggle in prototype)
-- Node states: done (green filled + checkmark), current (pulse ring), unlocked (outlined), locked (padlock + grayed)
-- Pro badge on Lessons 8–11
-- Tap done/current/unlocked → Concept Screen; tap locked → `UpgradeModal`
+*Saga Map (`saga` screen) — Variant C only for MVP:*
+- Clean list spine (Variant C); Variants A/B deferred to post-MVP
+- Node states: done, current (pulse ring), unlocked (dashed outline), locked (padlock)
+- Pro badge on Lessons 8–11; tap locked → `UpgradeModal`
+- `track('screen_viewed', { screen: 'saga_map' })`
 
 *Concept Screen (`concept` screen):*
-- TopBar: lesson name + back → Saga Map; slide counter "N / M" in meta slot
-- `CoachDialog`: multi-message feed (preceding messages faded, new message slides in)
-- Static annotated Board: non-interactive; overlays from lesson JSON; legend row below board
-- Info card below board for additional prose
-- Continue → next slide, or Socratic Board (if lesson has one), or first Confirmation Challenge
+- TopBar: lesson name + slide counter "N / M"
+- `CoachDialog` multi-message feed
+- Static annotated `Board` with overlays from lesson JSON; legend row; info card
+- Continue → next slide / Socratic / first Confirmation Challenge
+- `track('lesson_started', { lessonId })` on first slide
 
 *Socratic Board (`socratic` screen):*
-- TopBar: lesson name + back → Concept
-- Coach phrase: "I'm going to make a mistake here. See if you can punish it."
-- Interactive Board at lesson's Socratic position
-- States: `ask` → `wrong` (first attempt, Coach reacts, user tries again) → `correct` (Coach affirms) or 2nd wrong (correct column briefly highlighted as `win` overlay → auto-advance)
-- Toolbar: Hint button (static; no server call in Socratic) + Continue button (appears on correct)
+- Interactive `Board` at lesson's Socratic position
+- States: `ask` → `correct` (Coach affirms) / `wrong` (retry) / 2nd wrong (correct column highlighted → auto-advance) — Gap 7
+- Toolbar: Hint (static)
 
 *Confirmation Challenges (`clchallenge` screen):*
-- Reuses the existing Challenge Board component with a `lessonMode` flag
-- Header shows lesson name ("← Claimeven — Practice") instead of "← Challenges"
-- Progress tracks confirmation challenges (2–3 per lesson)
-- "Next" on last challenge → return to Saga Map
-- Lesson marked complete in localStorage (Gap 7 completion definition: past all slides + ≥ 1 correct answer)
-- Replay behavior: completed node remains checked on replay
+- Reuses `ChallengeBoard` from Epic 2a with `lessonMode` flag
+- Header: "← [Lesson Name] — Practice"
+- Last challenge complete → return to Saga Map; lesson marked done
+- Completion: past all slides + ≥1 correct answer; Lesson 4 completes on last slide only (Gap 7)
+- `store.saveLessonProgress(lessonId, 'complete')` written immediately on last step
+- `track('lesson_completed', { lessonId })`
 
 **Backend / API:**
+- Server loads all `lessons/lesson-NN-*.json` at startup; validates schema
+- `GET /api/lessons` — `[{ id, title, order, free: bool }]`
+- `GET /api/lessons/:id` — full lesson JSON
 
-- `GET /api/lessons` — returns array of `{ id, title, status }` where status is derived from localStorage on client (not server-computed for MVP); server just returns static lesson list
-- `GET /api/lessons/:id` — returns lesson JSON: `{ id, title, slides: [{ coachMessages, boardSpec, overlays, legendItems, infoProse }], socratic: { boardSpec, correctCol } | null, confirmationCategory }`
-- Server loads all lesson JSON files from `lessons/` directory at startup
+**Lesson JSON schema:**
+```json
+{
+  "id": "lesson-05-claimeven",
+  "title": "Claimeven",
+  "free": true,
+  "slides": [{
+    "coachMessages": [{ "text": "...", "lead": "...", "faded": false }],
+    "boardSpec": ["dg", "g", "dgd", "gdg", "dg", "d", ""],
+    "overlays": [{ "c": 2, "r": 3, "type": "claim" }],
+    "legendItems": [{ "type": "claim", "label": "Even square Yellow should own" }],
+    "infoProse": "By answering above each Red disc..."
+  }],
+  "socratic": { "boardSpec": ["d", "g", "dg", "gd", "d", "", ""], "correctCol": 4 },
+  "confirmationCategory": "claimeven"
+}
+```
 
-**localStorage helpers:**
-- `getLessonProgress()` → `{ [lessonId]: 'not_started' | 'in_progress' | 'complete' }`
-- `setLessonComplete(id)` — writes immediately when last step submitted (Gap 7)
-- `setLessonInProgress(id)` — writes when lesson is entered
+**NOT included:** actual lesson content (Epic 5), puzzle data (Epic 6).
 
-**NOT included:** actual lesson JSON content (Epic 5), puzzle data population (Epic 6), auth.
+**Estimated spec:** 195–220 lines. **Estimated tasks:** 17–20.
 
-**Estimated spec:** 200–230 lines. **Estimated tasks:** 17–20.
-
-**Depends on:** Epic 1a, Epic 1b. (Can be developed in parallel with Epics 2 and 3a.)
+**Depends on:** Epic 1a, Epic 1b, Epic 7, Epic 2a (Confirmation Challenges reuse `ChallengeBoard`).
 
 ---
 
 ### Epic 5 — Lesson Content (11 Lessons)
 
-Content authoring + minor backend additions. One task per lesson JSON file, plus backend gaps from lesson-curriculum.md. The 11 lesson files are the primary deliverable.
+Content authoring + targeted backend additions per lesson-curriculum.md.
 
-**Content work (one JSON file per lesson):**
+| Lesson | Socratic? | Backend addition |
+|--------|-----------|-----------------|
+| 1: Spot the Win | Yes | Add `immediate_threat` to `PATTERN_KB` in `llmCoachHelpers.js` |
+| 2: Block Before You Build | Yes | Add `forced_block` to `PATTERN_KB` |
+| 3: The Fork | Yes | None (already complete) |
+| 4: Odd Rows Belong to Red | No | None (reading-only) |
+| 5: Claimeven | Yes | Basic narration prose for simulation trace |
+| 6: Z-Threats | Yes | Narration template in `buildPromptContext` citing `badgeCount` from `highlightMetadata` |
+| 7: Claimodd | Yes | New `detectClaimodd` (~25 lines sync) + `PATTERN_KB.claimodd` |
+| 8: Undercut | Yes | Generation-time query: `detectUndercut` fires on non-`correct_col` column |
+| 9: Overcut | Yes | Add `reason: string` (~10 lines) to `detectOvercut` result |
+| 10: Figure-7 Trap | Yes | Narration template citing both threat rows from `categoryEvidence.threat_cells` |
+| 11: J-Shape | Yes | Narration template citing triple-threat directions |
 
-Each file: `lessons/lesson-NN-<slug>.json` containing slides array, optional Socratic position, confirmation challenge category. Board positions may be derived from the puzzle DB or hand-authored.
+**Additional:**
+- Extend `server/challengeSets.js` (Epic 2a) with Pro-category entries: undercut, overcut, figure_7, j_shape
+- Add Pro-category Coach phrase **pools** (arrays of i18n keys) to the phrase library (Epic 2a)
+- All new user-facing strings go through i18n translation keys
 
-| Lesson | Main gap per curriculum | Backend addition |
-|--------|------------------------|------------------|
-| 1: Spot the Win | None | Add `immediate_threat` entry to `PATTERN_KB` in `llmCoachHelpers.js` |
-| 2: Block Before You Build | None | Add `forced_block` entry to `PATTERN_KB` |
-| 3: The Fork | None (already complete) | None |
-| 4: Odd Rows Belong to Red | Reading-only, no Socratic | None |
-| 5: Claimeven | Parity pre-filter for puzzle selection | Add narration prose for simulation trace |
-| 6: Z-Threats | Narration template citing odd count | Template citing `badgeCount` from `highlightMetadata` |
-| 7: Claimodd | **New detector** | Add `detectClaimodd` (~25 lines sync); add `PATTERN_KB.claimodd` entry |
-| 8: Undercut | Generation-time query tweak | Puzzle filter: `detectUndercut` fires on non-`correct_col` column |
-| 9: Overcut | Add `reason` field | Add `reason: string` (~10 lines) to `detectOvercut` result object |
-| 10: Figure-7 | Narration template | Template citing both threat rows from `categoryEvidence.threat_cells` |
-| 11: J-Shape | Narration template | Template citing triple-threat directions from `PATTERN_KB` |
+**NOT included:** puzzle DB population (Epic 6).
 
-**Challenge-set metadata:**
-- `server/challengeSets.js` (or equivalent): maps category key → `{ displayName, stars, description, free: bool }` for all 8 sets
-- Free sets: Spot the Win, Block Before You Build, The Fork, Claimeven, Z-Threats
-- Pro-gated: Mixed, Undercut, Overcut, Figure-7, J-Shape
+**Estimated spec:** 175–200 lines. **Estimated tasks:** 18–22.
 
-**NOT included:** puzzle DB population (Epic 6), infrastructure routing (Epic 4), auth.
-
-**Estimated spec:** 180–200 lines (heavily table-driven). **Estimated tasks:** 18–22.
-
-**Depends on:** Epic 4 (infrastructure must exist to serve the JSON files).
+**Depends on:** Epic 4.
 
 ---
 
 ### Epic 6 — Data Pipeline & Puzzle Counts
 
-Ensure the puzzle DB has sufficient approved positions for each active challenge set and each lesson's confirmation challenges.
+Ensure puzzle DB has sufficient approved positions for all active sets and lessons.
 
 **Scope:**
+- Audit per-category approved counts; target ≥ 8 per active set
+- Run puzzle factory for under-populated categories
+- Claimeven: pre-filter by `colHeights` parity count ≤ 2 odd columns before expensive simulation
+- Claimodd generation predicate (blocked on Epic 5's `detectClaimodd`): all-even parity + Red's turn + center col not full + `scores[3]` is max and positive
+- Undercut framing (blocked on Epic 5): `detectUndercut` fires on non-`correct_col` column
+- Forbidden Columns puzzle set: generate positions where ≥1 column is forbidden (opponent wins immediately on that column) and ≥1 safe column exists
+- **New `odd_even_threat` category (drill for the Lesson 4 "Odd Rows" concept).** The mockup's "Odd & Even Threats" set needs a puzzle source, but Lesson 4 is reading-only with no detector today. Add a new category + generation predicate: **positions where the player has (at least) two distinct moves that each create a major threat — one landing on an odd row, one on an even row — and exactly one is the player's natural parity row** (odd for Red, even for Yellow). `correct_col` = the parity-aligned choice; the off-parity threat is the distractor ("which threat do you prefer?"). Requires:
+  - adding `odd_even_threat` to `VALID_CATEGORIES` / `CATEGORY_ORDER` (free per Gap 3) and a new generation predicate (sync; parity check + immediate-threat enumeration, no extra solver work beyond existing scores);
+  - a one-line `PATTERN_KB.odd_even_threat` (or reuse `derived-parity-formula`) for the Deep Reveal — coordinate with Epic 5.
+  - This is a free-standing challenge set; Lesson 4 itself still has **no confirmation challenges** (Gap 7), so the set is not wired as a lesson confirmation category.
+- Hand-select Socratic positions for applicable lessons; document movestrings in lesson JSON. **Source all movestrings from the DB/KB (project rule) — never hand-construct positions.**
+- Define `challengeSets.js` **star ratings** for sets absent from the mockup (`forbidden_columns`, `double_threat`, `forced_win`, `odd_even_threat`) — author's choice; the mockup rates only 8 sets.
+- Validation script: assert all `confirmationCategory` puzzles exist as approved with correct category
 
-- Audit: run per-category count query; target ≥ 8 approved clean positions per active set
-- Fill gaps: run puzzle factory for under-populated categories; submit for auto-approval where classifier confidence is high
-- Claimeven pre-filter: at generation time, filter candidates by `colHeights` parity count ≤ 2 odd columns before running the expensive `detectClaimeven` simulation
-- Claimodd puzzle generation predicate: all columns have `colHeight % 2 === 0` AND Red's turn AND center column not full AND `scores[3] === max(legal_scores)` AND `scores[3] > 0`
-- Undercut puzzle framing query: filter for positions where `detectUndercut` fires on a non-`correct_col` column
-- Hand-select lesson Socratic positions (one exploitable position per applicable lesson): document selected movestrings in lesson JSON files
-- Validation script: for each lesson JSON, assert that all confirmation puzzle IDs exist in the DB as approved and have the correct category
+**Estimated spec:** 120–145 lines. **Estimated tasks:** 12–15.
 
-**NOT included:** new detector code (that's Epic 5), auth, schema changes.
-
-**Estimated spec:** 100–120 lines. **Estimated tasks:** 10–12.
-
-**Depends on:** Epic 5 (needs final category list + detectClaimodd); can run partially in parallel from Epic 1b onward for categories that are already stable.
+**Depends on:** Epic 5 for claimodd/undercut predicates. Stable categories can start from Epic 1b onward.
 
 ---
 
@@ -387,60 +526,73 @@ Ensure the puzzle DB has sufficient approved positions for each active challenge
 
 ```
 Epic 1a (Design Tokens & Component Library)
-  └─► Epic 1b (App Shell & Navigation Migration)
-        ├─► Epic 2 (Challenges Surface)
-        │     └─► Epic 3a (Sparring: Game Board)  [reuses /api/evaluate-move]
-        │               └─► Epic 3b (Sparring: Post-Game Review & Explorer)
-        ├─► Epic 4 (Lesson Infrastructure & Saga Map)
-        │     └─► Epic 5 (Lesson Content — 11 Lessons)
-        │               └─► Epic 6 (Data Pipeline)  [can also start earlier for stable categories]
-        └─► Epic 3a (also depends on 1b directly)
+  └─► Epic 1b (App Shell, Navigation, Analytics, i18n)
+        └─► Epic 7 (Auth & Progress Persistence)
+              ├─► Epic 2a (Challenges: Set Picker, single-move board, Tier-1, scorer)
+              │     ├─► Epic 2b (Challenges: Deep Reveal, Forbidden Columns, Summary)
+              │     ├─► Epic 3a (Sparring: Game Board)
+              │     │         └─► Epic 3b (Post-Game Review & Explorer)
+              │     │                   └─► Epic 3c (Past Mistakes Review)
+              │     └─► Epic 4 (Lesson Infrastructure & Saga Map)
+              │               └─► Epic 5 (Lesson Content)
+              │                         └─► Epic 6 (Data Pipeline)
+              └─► Epic 3a (also depends on 7 for store writes)
 
-Epic 6 can begin partial runs (immediate_win, forced_block, double_threat) as soon as the existing
-puzzle factory is reachable (Epic 1b not required). Full validation requires Epic 5 to be complete.
+Note: Epic 3a needs only Epic 2a (the shared move-quality scorer + `/api/evaluate-move`); it does not depend on Epic 2b.
+Epic 6 stable-category work can start from Epic 1b onward.
 ```
-
-**Parallelism opportunities:**
-- Epic 2 (Challenges) and Epic 3a (Sparring Game) can be built in parallel once Epic 1b is done — they share only the `POST /api/evaluate-move` endpoint (which is small and can be done once)
-- Epic 4 (Lesson Infra) can be started alongside Epic 2; it has no dependency on Challenges or Sparring
-- Epic 6 data pipeline tasks for stable categories (Lessons 1–3) can run as soon as a developer is available, independently of UI work
-- Backend detector work in Epic 5 (detectClaimodd, overcut reason) can be done while Epic 4 UI is in review
 
 ---
 
 ## Suggested Ship Order
 
 ```
-Epic 1a → Epic 1b → Epic 2 → Epic 3a → Epic 3b
-                  → Epic 4 → Epic 5 → Epic 6
+Epic 1a → Epic 1b → Epic 7 → Epic 2a → Epic 2b → Epic 3a → Epic 3b → Epic 3c
+                            → Epic 4 → Epic 5 → Epic 6
 ```
 
-First milestone (first deployable loop): **Epic 1a + 1b + 2** — Home Hub, Stats screen, full Challenges surface with Tier 1 + Tier 2 feedback.
+**Milestone 1** — first deployable loop: 1a + 1b + 7 + 2a + 2b  
+Home Hub, Stats (session-only for anon), auth, analytics, full Challenges (including Forbidden Columns multi-select), Tier 1 + Tier 2 with caching and flagging.
 
-Second milestone: **+ Epic 3a** — Sparring game board with Coach commentary.
+**Milestone 2:** + 3a — Sparring game board with Coach commentary and game persistence.
 
-Third milestone: **+ Epic 3b** — Post-Game Review and Position Explorer.
+**Milestone 3:** + 3b — Post-Game Review, Position Explorer, blunder capture.
 
-Fourth milestone: **+ Epic 4 + Epic 5 + Epic 6** — Full Lessons surface with all 11 lessons.
+**Milestone 4:** + 3c — Past Mistakes review surface.
+
+**Milestone 5:** + 4 + 5 + 6 — Full Lessons surface with all 11 lessons.
 
 ---
 
 ## Summary Table
 
-| Epic | Surfaces / screens | New backend work | Spec (lines) | Tasks |
-|------|-------------------|-----------------|-------------|-------|
-| 1a. Design Tokens & Components | Shared primitives | None | 150–170 | 14–16 |
-| 1b. App Shell & Navigation | Home Hub, Stats | None | 120–140 | 10–13 |
-| 2. Challenges | Set Picker, Challenge Board (3 variants), Deep Reveal, Post-Set Summary | `POST /api/evaluate-move`, phrase library, set metadata | 200–220 | 18–21 |
-| 3a. Sparring: Game Board | Difficulty Picker, Game Board | AI difficulty + deliberate mistake logic (extend existing) | 150–170 | 14–16 |
-| 3b. Sparring: Post-Game Review + Explorer | Post-Game Review, Position Explorer | `POST /api/games/analyze`, `POST /api/games/from-position` | 180–200 | 16–19 |
-| 4. Lesson Infrastructure & Saga Map | Saga Map (3 variants), Concept, Socratic, Confirmation Challenges | `GET /api/lessons`, `GET /api/lessons/:id`, localStorage helpers | 200–230 | 17–20 |
-| 5. Lesson Content | — (content + backend additions) | detectClaimodd, PATTERN_KB entries, narration templates, overcut reason | 180–200 | 18–22 |
-| 6. Data Pipeline | — (data work) | Puzzle factory runs, filter predicates, validation script | 100–120 | 10–12 |
-| **Total** | | | **1280–1450** | **117–139** |
+| Epic | Screens / work | New backend | Spec (lines) | Tasks |
+|------|---------------|-------------|-------------|-------|
+| 1a. Design Tokens & Components | Shared primitives | None | 160–180 | 15–17 |
+| 1b. App Shell, Navigation, Analytics, i18n | Home Hub, Stats; retire `/coach` route + `CoachPage` | `track()` + `POST /api/track` already exist — modify, not build | 130–150 | 11–14 |
+| 7. Auth & Progress Persistence | Auth reskin, store extensions, Deep Reveal limit (rework existing quota: 20/wk Mon reset, move to `/api/explain-move-llm`, drop anon lockout) | None (server auth already wired) | 130–150 | 12–15 |
+| 2a. Challenges: Picker + Single-Move + Tier-1 | Set Picker, single-move Challenge Board, Tier-1 feedback | shared move-quality scorer (Gap 1, NEW), `POST /api/evaluate-move`, `GET /api/puzzles/draw` (+`mixed`), `challengeSets.js`, phrase library, `PAID_CATEGORIES` remap | 150–175 | 14–17 |
+| 2b. Challenges: Deep Reveal + Forbidden + Summary | Forbidden Columns multi-select, Deep Reveal (cached + flaggable), Post-Set Summary | reuses `/api/explain-move-llm` + `explanation_cache` | 130–150 | 12–15 |
+| 3a. Sparring: Game Board | Difficulty Picker, Game Board | `POST /api/games` (new `games` table migration), extend `aiDifficulty.js` | 160–180 | 15–17 |
+| 3b. Post-Game Review + Explorer | Post-Game Review, Position Explorer, blunder writes (table already exists) | `POST /api/games/analyze` (uses 2a scorer), `POST /api/games/from-position` | 185–205 | 16–19 |
+| 3c. Past Mistakes Review | Past Mistakes list + detail | **reuses** `GET /api/coach/queue` + `POST /api/coach/queue/:id/resolve` (extend + fix uuid bug) | 100–120 | 8–11 |
+| 4. Lesson Infrastructure & Saga Map | Saga Map (C only), Concept, Socratic, Confirmation Challenges | `GET /api/lessons`, `GET /api/lessons/:id` | 195–220 | 17–20 |
+| 5. Lesson Content | 11 lesson JSON files + backend additions | detectClaimodd, PATTERN_KB entries, narration templates, overcut reason | 175–200 | 18–22 |
+| 6. Data Pipeline | Puzzle counts, generation, `odd_even_threat` category, Socratic selection, validation | Puzzle factory, filter predicates (incl. `odd_even_threat`), validation script | 120–145 | 12–15 |
+| **Total** | | | **1605–1825** | **149–178** |
 
-**Post-MVP (not in this breakdown):**
-- Epic 7: User Auth & Server-Side Progress Persistence (Supabase auth, server rows, localStorage migration)
-- Lesson 12: Zugzwang Basics (new multi-column Z-Threat aggregation predicate)
-- Lesson 13: Ghost Threats (new async detector)
-- Saga Map variant A and B polish (clean-list variant C ships first)
+---
+
+## Post-MVP (not in this breakdown)
+
+- Payments epic (Stripe or alternative; provider TBD)
+- Papergames.io integration
+- Spanish language content (`es.json` population)
+- Saga Map variants A and B
+- Lessons 12–13: Zugzwang Basics, Ghost Threats
+- Full all-time Stats for unauthenticated users
+- Dynamic daily Coach nudge on Home Hub
+- Weakness map / prescriptive drills based on blunder patterns
+- Advanced Training Paths
+- **Settings screen** — the `[⚙]` gear shown on the Sparring Game Board (product_vision Screen 11) and the `gear` icon in Epic 1a's icon set are a non-functional placeholder for MVP; no Settings screen is specced. Wire it post-MVP.
+- Premium Analytics (win rate by opening, ELO estimate, error trend over time)

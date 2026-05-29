@@ -463,7 +463,7 @@ The Coach is **always present and always speaking** — but in a compact form th
 
 The Coach dialog area is a fixed-height chat feed — it never shifts the board. When the Coach has nothing to say, the last message stays on screen unchanged. When the Coach says something new, the new message slides in and the previous one scrolls up within the fixed area. The board never moves.
 
-**Optional hint heatmap:** user-initiated only. Tapping Hint shows column scores as an overlay. Dismissed on next move.
+**Optional hint:** user-initiated only. Tapping Hint has the Coach highlight the best move(s) on the board and name the reason — no raw scores shown. Dismissed on next move.
 
 **Navigation:**
 - Tap column → move committed, AI responds, Coach reacts

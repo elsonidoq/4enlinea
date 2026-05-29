@@ -4,6 +4,9 @@
 
 ## Feedback — behavioral rules
 
+- [Spec redesigns: audit existing APIs first](feedback_spec_existing_apis.md) — read current component props before writing spec prop shapes; only change what is strictly necessary; preserve existing handler/encoding names with an explicit note
+- [Run a critical subagent review after speckit-specify](feedback_spec_review_before_plan.md) — Sonnet subagent vs best_practices_spec_driven_development.md catches blocking contract/scope issues before they propagate to plan and tasks
+
 - [Prefer empirical testing over theoretical analysis](feedback_empirical_first.md) — run code early, don't spend many rounds on mental analysis before testing
 - [Answer questions before editing](feedback_answer_before_editing.md) — always answer the question in text first, then proceed with any file edits or tool calls
 - [Never generate random boards](feedback_no_random_boards.md) — random movestrings are not valid game positions; always source candidates from DB, git history, or KB examples
@@ -20,6 +23,8 @@
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons; no abstract Allis rules (except Claimeven + Claimodd which are concrete and visual)
 - [Opus for critique, Sonnet for applying decisions](feedback_agent_model_selection.md) — use Opus for independent gap analysis; Sonnet for mechanical document updates
 - [Epic vs speckit scope](feedback_epic_vs_speckit_scope.md) — when auditing an epic doc that feeds speckit, only fix factual errors / cross-epic contracts / mockup-vs-Gap conflicts at the epic level; leave the rest to specify→plan→tasks
+- [Don't mix slash commands in a single handoff prompt](feedback_handoff_no_mixed_commands.md) — a handoff prompt for `/speckit-specify` can't also tell the agent to run `/speckit-clarify`; pre-answer clarifications inline instead
+- ["Heatmap" is ambiguous terminology](feedback_heatmap_terminology.md) — a PoC feature used "heatmap" for something different from the Sparring column-score overlay; use "column-score overlay" to be precise
 
 ## References — solver and board mechanics
 

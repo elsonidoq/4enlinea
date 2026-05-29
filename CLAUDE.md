@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/009-classifier-board-refactor/plan.md
+specs/010-design-tokens-component-library/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index
@@ -53,3 +53,6 @@ If the user asks a question, answer the question first before editing any files 
 
 ## The knowledge-base
 The knowledge base's goal is to provide expertise knowledge to a coding agent, structured in a AI friendly way, so that a coding agent has the right context to make expert based decisions
+
+## When writing specs for existing components
+Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See memory: feedback_spec_existing_apis.md

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthModal } from './AuthModal.jsx';
-import { PaywallModal } from './PaywallModal.jsx';
+import { UpgradeModal } from './UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 
@@ -74,12 +74,7 @@ export function DeepRevealButton({ moves, candidateCol, onReveal }) {
         onClose={() => setShowAuth(false)}
         reason={t('auth.deepRevealGate')}
       />
-      <PaywallModal
-        isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        trigger="quota_exceeded"
-        session={session}
-      />
+      {showPaywall && <UpgradeModal onDismiss={() => setShowPaywall(false)} onNotify={() => {}} />}
     </>
   );
 }

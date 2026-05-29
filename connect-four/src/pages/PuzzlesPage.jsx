@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
-import { PaywallModal } from '../components/PaywallModal.jsx';
+import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { SequenceHandler } from '../components/SequenceHandler.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
@@ -82,8 +82,7 @@ function SessionAccuracy({ stats, prevStats }) {
 
 function CategoryList({ categories, onSelect }) {
   const { t } = useTranslation();
-  const { session } = useStore();
-  const [showPaywall, setShowPaywall] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   return (
     <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -93,7 +92,7 @@ function CategoryList({ categories, onSelect }) {
           onClick={() => {
             if (cat.locked) {
               track('paywall_viewed', { trigger: 'category_lock', category: cat.id });
-              setShowPaywall(true);
+              setShowUpgrade(true);
             } else {
               onSelect(cat.id);
             }
@@ -120,12 +119,7 @@ function CategoryList({ categories, onSelect }) {
           <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 16 }}>→</div>
         </div>
       ))}
-      <PaywallModal
-        isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        trigger="category_lock"
-        session={session}
-      />
+      {showUpgrade && <UpgradeModal onDismiss={() => setShowUpgrade(false)} onNotify={() => {}} />}
     </div>
   );
 }
@@ -165,8 +159,8 @@ export default function PuzzlesPage() {
   const [startTime, setStartTime] = useState(null);
   const [correctCol, setCorrectCol] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [placedHighlights, setPlacedHighlights] = useState([]); // [{row, col, role}]
-  const [threatCells, setThreatCells] = useState([]); // double_threat reveal cells
+  const [placedOverlays, setPlacedOverlays] = useState([]); // [{c, r, type}]
+  const [threatOverlays, setThreatOverlays] = useState([]); // double_threat reveal cells
   const [selectedForbiddenCols, setSelectedForbiddenCols] = useState(new Set()); // forbidden_columns multi-select
   const [showClaimSequence, setShowClaimSequence] = useState(false); // claimeven overlay
   // Stable puzzle selection per category within a session
@@ -242,12 +236,21 @@ export default function PuzzlesPage() {
     setHeights(state.heights);
     setMoves(puzzleData.moveString);
     setStartTime(Date.now());
-    setPlacedHighlights([]);
-    setThreatCells([]);
+    setPlacedOverlays([]);
+    setThreatOverlays([]);
     setIsSubmitting(false);
     setSelectedForbiddenCols(new Set());
     setShowClaimSequence(false);
     preMoveStateRef.current = null;
+  }
+
+  function handleColToggle(col) {
+    if (!puzzle || feedback || isSubmitting) return;
+    setSelectedForbiddenCols(prev => {
+      const next = new Set(prev);
+      if (next.has(col)) next.delete(col); else next.add(col);
+      return next;
+    });
   }
 
   async function handleColumnClick(col) {
@@ -255,23 +258,13 @@ export default function PuzzlesPage() {
     if (isSubmitting) return;
     if (!heights || heights[col] >= ROWS) return;
 
-    // Forbidden columns: toggle column selection, defer submission to submit button
-    if (puzzle.category === 'forbidden_columns') {
-      setSelectedForbiddenCols(prev => {
-        const next = new Set(prev);
-        if (next.has(col)) next.delete(col); else next.add(col);
-        return next;
-      });
-      return;
-    }
-
     // Undo the previous wrong disk before placing a new one
     let currentBoard = board;
     let currentHeights = heights;
     if (feedback === 'wrong' && preMoveStateRef.current) {
       currentBoard = preMoveStateRef.current.board;
       currentHeights = preMoveStateRef.current.heights;
-      setPlacedHighlights([]);
+      setPlacedOverlays([]);
       setFeedback(null);
     }
 
@@ -307,9 +300,9 @@ export default function PuzzlesPage() {
 
     if (data.result === 'correct' || data.result === 'tied') {
       const outcome = newAttemptCount === 1 ? 'correct_first' : 'correct_retry';
-      setPlacedHighlights(prev => [...prev, { row: placedRow, col, role: 'winning' }]);
+      setPlacedOverlays(prev => [...prev, { c: col, r: placedRow, type: 'win' }]);
       if (puzzle.category === 'double_threat' && data.threatCells?.length) {
-        setThreatCells(data.threatCells);
+        setThreatOverlays(data.threatCells.map(({ col: c, row: r }) => ({ c, r, type: 'tg' })));
       }
       setFeedback(data.result === 'tied' ? 'tied' : outcome);
       setCorrectCol(col);
@@ -325,7 +318,7 @@ export default function PuzzlesPage() {
     } else if (data.result === 'wrong') {
       if (newAttemptCount === 1) {
         updateStats(selectedCategory, false);
-        setPlacedHighlights(prev => [...prev, { row: placedRow, col, role: 'wrong_move' }]);
+        setPlacedOverlays(prev => [...prev, { c: col, r: placedRow, type: 'tr' }]);
         setFeedback('wrong');
       } else {
         // Reveal: remove the wrong disk, then place only the correct disk
@@ -340,17 +333,17 @@ export default function PuzzlesPage() {
             next[revRow][revCol] = diskColor;
             return next;
           });
-          setPlacedHighlights([{ row: revRow, col: revCol, role: 'correct_reveal' }]);
+          setPlacedOverlays([{ c: revCol, r: revRow, type: 'win' }]);
         } else {
           // No correct col to reveal — just remove the wrong disk
           if (preMove) {
             setBoard(() => preMove.board.map(r => [...r]));
             setHeights(preMove.heights);
           }
-          setPlacedHighlights([]);
+          setPlacedOverlays([]);
         }
         if (puzzle.category === 'double_threat' && data.threatCells?.length) {
-          setThreatCells(data.threatCells);
+          setThreatOverlays(data.threatCells.map(({ col: c, row: r }) => ({ c, r, type: 'tg' })));
         }
         setFeedback('revealed');
         setCorrectCol(revCol);
@@ -383,7 +376,7 @@ export default function PuzzlesPage() {
     // All responses share the same forbiddenCols set
     const forbiddenCols = results[0]?.data?.forbiddenCols ?? [];
 
-    const newHighlights = [];
+    const newOverlays = [];
     let newBoard = board.map(r => [...r]);
     let newHeights = [...heights];
 
@@ -392,7 +385,7 @@ export default function PuzzlesPage() {
       const row = newHeights[col];
       newBoard[row][col] = diskColor;
       newHeights[col]++;
-      newHighlights.push({ row, col, role: forbiddenCols.includes(col) ? 'winning' : 'wrong_move' });
+      newOverlays.push({ c: col, r: row, type: forbiddenCols.includes(col) ? 'win' : 'tr' });
     }
 
     // Reveal missed forbidden cols (forbidden but user didn't select them)
@@ -401,20 +394,20 @@ export default function PuzzlesPage() {
       const row = newHeights[col];
       newBoard[row][col] = diskColor;
       newHeights[col]++;
-      newHighlights.push({ row, col, role: 'correct_reveal' });
+      newOverlays.push({ c: col, r: row, type: 'win' });
     }
 
-    // Show opponent's winning cell above each forbidden column (empty cell, purple threat)
+    // Show opponent's winning cell above each forbidden column (empty cell, opponent threat)
     for (const col of forbiddenCols) {
       const threatRow = newHeights[col]; // row above the Red disk just placed
       if (threatRow < ROWS) {
-        newHighlights.push({ row: threatRow, col, role: 'threat' });
+        newOverlays.push({ c: col, r: threatRow, type: 'td' });
       }
     }
 
     setBoard(newBoard);
     setHeights(newHeights);
-    setPlacedHighlights(newHighlights);
+    setPlacedOverlays(newOverlays);
 
     const allCorrect = cols.every(c => forbiddenCols.includes(c)) && missedForbidden.length === 0;
     setFeedback(allCorrect ? 'correct_first' : 'revealed');
@@ -537,30 +530,24 @@ export default function PuzzlesPage() {
                   return b;
                 })()
               : board;
-            const traceHighlights = trace
-              ? trace.map(({ col, row }, i) => [row, col, null, i + 1])
-              : [];
+
+            const isForbiddenMode = puzzle?.category === 'forbidden_columns' && !feedback;
+
             return (
               <div style={{ padding: '0 16px' }}>
                 <Board
                   board={displayBoard}
                   onColumnClick={handleColumnClick}
                   canPlay={canPlay}
-                  highlightedCells={[
-                    ...placedHighlights.map(({ row, col, role }) => [row, col, role]),
-                    ...(threatCells.length > 0 && (isCorrect || isRevealed)
-                      ? threatCells.map(({ col, row }) => [row, col, 'major_threat'])
+                  overlays={[
+                    ...placedOverlays,
+                    ...(threatOverlays.length > 0 && (isCorrect || isRevealed) ? threatOverlays : []),
+                    ...(puzzle?.highlightMetadata?.type === 'cells' && (isCorrect || isRevealed)
+                      ? (puzzle.highlightMetadata.cells ?? []).map(({ column, row }) => ({ c: column, r: row, type: 'tg' }))
                       : []),
-                    ...(puzzle?.category === 'forbidden_columns' && !feedback && heights
-                      ? Array.from(selectedForbiddenCols).map(col => [heights[col], col, 'selected'])
-                      : []),
-                    ...traceHighlights,
                   ]}
-                  highlightMetadata={
-                    ['figure_7', 'j_shape'].includes(puzzle?.category) && !(isCorrect || isRevealed)
-                      ? null
-                      : puzzle?.highlightMetadata ?? null
-                  }
+                  selectedCols={isForbiddenMode ? Array.from(selectedForbiddenCols) : []}
+                  onColToggle={isForbiddenMode ? handleColToggle : undefined}
                 />
               </div>
             );

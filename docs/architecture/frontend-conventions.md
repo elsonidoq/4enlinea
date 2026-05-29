@@ -53,43 +53,47 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 ## Board Component API
 
-`Board` accepts:
-- `board`: 2D array (default: empty 6×7 board of `'empty'`)
-- `onColumnClick`: callback receiving 0-indexed column
-- `canPlay`: boolean — controls whether columns are interactive
-- `highlightedCells`: `[row, col, role]` tuples
-- `highlightMetadata`: structured object from the server — two formats:
-  - `{ type: 'cells', cells: [{ column, row, role }] }` — merged into `highlightedCells`
-  - `{ type: 'capsule', column, fromRow, toRow, badgeCount }` — vertical capsule overlay on one column
+`Board` accepts the following props (defined in `src/components/Board.jsx`; cross-epic contract in `specs/010-design-tokens-component-library/contracts/board-api.md`):
 
-### Piece highlight roles
-
-All valid `role` values for `highlightedCells` / `highlightMetadata.cells[].role`, defined in `src/components/Piece.jsx`:
-
-| Role | Applies to | Color | Purpose |
+| Prop | Type | Default | Description |
 |---|---|---|---|
-| `winning` | any color | green glow | Correct answer disc or winning move |
-| `wrong_move` | red / yellow disc | red glow | User's incorrect placed disc (puzzle feedback) |
-| `correct_reveal` | red / yellow disc | gold ring | Correct answer disc shown after reveal |
-| `hint` | empty | green fill | Pre-move hint cell |
-| `selected` | empty | yellow outline | Column hover / multi-select marker |
-| `threat` | empty | purple fill | Immediate threat cell |
-| `support` | empty | purple dashed | Supporting threat cell |
-| `loser` | empty | red fill | Losing candidate cell |
-| `winner` | empty | yellow fill | Winning candidate cell |
-| `killing_threat` | empty | orange fill | Threat that kills opponent's line |
-| `neutralised_threat` | empty | orange fill | Neutralised threat cell |
-| `dead_threat` | empty | purple fill | Dead threat cell |
-| `major_threat` | empty | purple fill | Major threat (3-in-row + 1 empty) |
-| `pattern_piece` | any color | teal ring | Piece that is part of a named pattern |
-| `figure7_threat` | empty | amber fill | Figure-7 shape threat cell |
-| `z_range` | empty | yellow dashed | Z-threat column range |
-| `ghost_mirror` | empty | yellow semi-transparent dashed | Claimeven mirror preview (Yellow mirrors Red in same column) |
+| `board` | `board[row][col]` 2D array | 6×7 `'empty'` | Cell values: `'red'` → green disc, `'yellow'` → gray disc |
+| `onColumnClick` | `(col: number) => void` | — | Tap handler (0-indexed). Not called when `canPlay=false`, column full, or `onColToggle` provided. |
+| `canPlay` | boolean | `false` | Global interactivity gate |
+| `overlays` | `Array<{c, r, type: OverlayType}>` | `[]` | Cell overlays. Replaces retired `highlightedCells` + `highlightMetadata`. |
+| `badge` | `{col, type: BadgeType, label}` | — | Single column evaluation badge |
+| `lastDrop` | `{c, r}` | — | Triggers `drop` CSS animation on that disc |
+| `compact` | boolean | `false` | 9px/6px padding/gap instead of 11px/7px |
+| `fullCols` | `Array<number>` | `[]` | Columns treated as full regardless of board state |
+| `selectedCols` | `Array<number>` | `[]` | Multi-select mode: columns show red tint + ✕ badge |
+| `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
+| `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 
-**Rules**:
-- `wrong_move` and `correct_reveal` are puzzle-only roles — they apply to **placed discs** (red/yellow), not empty cells. Both are set client-side by `PuzzlesPage` after a check response; they are never stored in `highlight_metadata`.
-- `highlightMetadata` from the DB is suppressed before the answer is revealed for `figure_7` and `j_shape` puzzles (the shape must not spoil the puzzle). Other categories show `highlightMetadata` unconditionally.
-- No new color roles may be added without updating this table first (Constitution §IV).
+### OverlayType enum (LOCKED — cross-epic contract)
+
+| Value | Visual | Usage |
+|---|---|---|
+| `tg` | green translucent ring | current-player threat highlight |
+| `td` | gray translucent ring | opponent threat highlight |
+| `tr` | red translucent ring | user's last committed column / wrong-move indicator |
+| `claim` | amber translucent fill | claimeven cell |
+| `win` | pulsing green outline | winning-line flash |
+
+### BadgeType enum (LOCKED — cross-epic contract)
+
+| Value | Background | Default glyph |
+|---|---|---|
+| `good` | `--eval-good` (green) | ✓ |
+| `mid` | `--eval-mid` (amber) | ? |
+| `bad` | `--eval-bad` (red) | ✕ |
+
+### Deprecated prop (curation shim — do not use in game surfaces)
+
+`highlightedCells: Array<[row, col, role, step?]>` — retained solely to keep `CurationWorkspace.jsx` functional without migration. Accepts the old tuple format from `Piece.jsx` and renders curation-specific roles (`z_range`, `hint`, `ghost_mirror`, `wrong_move`, `correct_reveal`, `pattern_piece`, `figure7_threat`, etc.).
+
+**Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
+
+`highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` and `SequenceHandler.jsx` used it; both are now on `overlays`.
 
 ## Category Constants
 
