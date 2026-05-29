@@ -16,6 +16,8 @@ const SCREENS = {
   game:       (p) => <GameBoard {...p} />,
   review:     (p) => <PostGameReview {...p} />,
   explorer:   (p) => <PositionExplorer {...p} />,
+  mistakes:      (p) => <MistakesList {...p} />,
+  mistakeDetail: (p) => <MistakeDetail {...p} />,
 };
 
 const NAV_GROUPS = [
@@ -23,6 +25,7 @@ const NAV_GROUPS = [
   { label: "Lessons", items: [["saga", "Saga Map", "2"], ["concept", "Lesson Concept", "3"], ["socratic", "Socratic Board", "4"], ["clchallenge", "Confirmation Challenge", "6·7"]] },
   { label: "Challenges", items: [["setpicker", "Set Picker", "5"], ["challenge", "Challenge Board + Feedback", "6·7"], ["summary", "Post-Set Summary", "9"]] },
   { label: "Sparring", items: [["difficulty", "Difficulty Picker", "10"], ["game", "Game Board", "11"], ["review", "Post-Game Review", "12"], ["explorer", "Position Explorer", "13"]] },
+  { label: "Past Mistakes", items: [["mistakes", "Mistakes List", "14"], ["mistakeDetail", "Mistake Detail", "15"]] },
 ];
 
 function Seg({ value, options, onChange }) {
@@ -39,19 +42,24 @@ function App() {
   const [screen, setScreen] = useState("home");
   const [sagaVariant, setSagaVariant] = useState("A");
   const [fbVariant, setFbVariant] = useState("A");
+  const [mistakesVariant, setMistakesVariant] = useState("in");
+  const [selMistake, setSelMistake] = useState(0);
+  const [reviewed, setReviewedMap] = useState({ 3: true });
+  const setReviewed = (id, v) => setReviewedMap(m => ({ ...m, [id]: v }));
   const go = (s) => setScreen(s);
 
-  const props = { go, sagaVariant, fbVariant };
+  const props = { go, sagaVariant, fbVariant, mistakesVariant, selMistake, setSelMistake, reviewed, setReviewed };
 
   const sagaNames = { A: "Winding path", B: "Meadow stones", C: "Clean list" };
   const fbNames = { A: "Strip below", B: "Compact inline", C: "Docked card" };
+  const mNames = { in: "Signed in", empty: "Empty", out: "Signed out" };
 
   return (
     <div className="stage">
       {/* ---- navigator rail ---- */}
       <div className="rail">
         <h1>Decode<span className="dot4">C4</span></h1>
-        <div className="tagline">Interactive prototype · all 13 screens. Tap a name to jump, or navigate inside the phone.</div>
+        <div className="tagline">Interactive prototype · all 15 screens. Tap a name to jump, or navigate inside the phone.</div>
 
         {NAV_GROUPS.map(g => (
           <div className="rail-group" key={g.label}>
@@ -73,6 +81,13 @@ function App() {
                 <div className="vlabel">Feedback layout · {fbNames[fbVariant]}</div>
                 <Seg value={fbVariant} options={["A", "B", "C"]} onChange={(v) => { setFbVariant(v); go("challenge"); }} />
                 <div style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 700, marginTop: 6, lineHeight: 1.3 }}>Play a move on the board to see the feedback layout.</div>
+              </div>
+            )}
+            {g.label === "Past Mistakes" && (
+              <div className="variant-box">
+                <div className="vlabel">List state · {mNames[mistakesVariant]}</div>
+                <Seg value={mistakesVariant} options={["in", "empty", "out"]} onChange={(v) => { setMistakesVariant(v); go("mistakes"); }} />
+                <div style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 700, marginTop: 6, lineHeight: 1.3 }}>Signed-in list, empty state, or signed-out gate.</div>
               </div>
             )}
           </div>

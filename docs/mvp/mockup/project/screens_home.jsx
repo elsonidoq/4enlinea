@@ -102,6 +102,11 @@ function StatsScreen({ go }) {
           ))}
         </div>
 
+        <button className="btn btn-ghost" onClick={() => go("mistakes")} style={{ marginTop: 14, justifyContent: "space-between", fontSize: 15 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><Icon name="flag" size={18} /> Review past mistakes</span>
+          <Icon name="chevR" size={18} color="var(--ink-faint)" />
+        </button>
+
         <div style={{ marginTop: 18 }}>
           <CoachDialog size={50} messages={[{ text: "Claimeven is holding you back. Lesson 5 is unlocked — let's fix it.", mood: "think" }]} />
         </div>

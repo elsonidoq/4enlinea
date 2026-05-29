@@ -210,14 +210,26 @@ function ChallengeBoard({ go, variant, lessonMode }) {
   );
 }
 
-/* ---------- Deep Reveal Panel (Tier 2) ---------- */
-function DeepReveal({ onClose, type }) {
-  const [loading, setLoading] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 1100); return () => clearTimeout(t); }, []);
-  const cols = mkCols(CH_COLS);
-  const ov = [
+/* ---------- Deep Reveal Panel (Tier 2) ----------
+   Reusable bottom sheet. Pass `data` to retarget it at any
+   position (e.g. a Past Mistake); omit for the default
+   challenge-board reveal. */
+const DEEP_DEFAULT = {
+  cols: CH_COLS,
+  overlays: [
     { c: 1, r: 0, type: "tg" }, { c: 2, r: 0, type: "tg" }, { c: 3, r: 0, type: "tg" }, { c: 4, r: 0, type: "tg" },
-  ];
+  ],
+  tags: [{ cls: "pat", label: "Pattern · Double Threat" }, { cls: "good", label: "✓ Optimal · column 5" }],
+  explanation: "Playing column 5 completes four on the bottom row immediately. Even if it were blocked, the same drop builds a second threat on the rising diagonal — Yellow could only answer one.",
+  bestLine: ["Col 5", "Col 2", "Col 6"],
+};
+
+function DeepReveal({ onClose, data }) {
+  const d = data || DEEP_DEFAULT;
+  const [loading, setLoading] = useState(true);
+  const [flagged, setFlagged] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 1100); return () => clearTimeout(t); }, []);
+  const cols = mkCols(d.cols);
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose}></div>
@@ -233,23 +245,32 @@ function DeepReveal({ onClose, type }) {
         ) : (
           <div style={{ paddingTop: 4 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-              <span className="tag pat">Pattern · Double Threat</span>
-              <span className="tag good">✓ Optimal · column 5</span>
+              {d.tags.map((t, i) => <span key={i} className={"tag " + t.cls}>{t.label}</span>)}
             </div>
             <div className="board-wrap" style={{ padding: "10px 0" }}>
-              <Board cols={cols} overlays={ov} compact />
+              <Board cols={cols} overlays={d.overlays} compact />
             </div>
             <p style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)", lineHeight: 1.45 }}>
-              Playing column 5 completes four on the bottom row immediately. Even if it were blocked, the same drop builds a second threat on the rising diagonal — Yellow could only answer one.
+              {d.explanation}
             </p>
             <div style={{ marginTop: 14, background: "#f6f4ee", borderRadius: 14, padding: "12px 14px" }}>
               <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 13, color: "var(--ink-soft)", marginBottom: 6 }}>BEST LINE</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15 }}>
-                <span className="chip-move">Col 5</span><Icon name="chevR" size={14} color="var(--ink-faint)" />
-                <span className="chip-move">Col 2</span><Icon name="chevR" size={14} color="var(--ink-faint)" />
-                <span className="chip-move">Col 6</span>
+                {d.bestLine.map((m, i) => (
+                  <React.Fragment key={i}>
+                    <span className="chip-move">{m}</span>
+                    {i < d.bestLine.length - 1 && <Icon name="chevR" size={14} color="var(--ink-faint)" />}
+                  </React.Fragment>
+                ))}
                 <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>…</span>
               </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+              {flagged ? (
+                <span className="flag-link done"><Icon name="check" size={15} color="var(--eval-good)" /> Thanks — flagged</span>
+              ) : (
+                <button className="flag-link" onClick={() => setFlagged(true)}><Icon name="flag" size={15} /> Flag this explanation</button>
+              )}
             </div>
           </div>
         )}

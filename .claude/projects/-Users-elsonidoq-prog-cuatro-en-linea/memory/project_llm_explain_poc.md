@@ -1,58 +1,52 @@
 ---
 name: project_llm_explain_poc
-description: LLM move explanation PoC — design decisions finalised 2026-05-26, agent prompt written, not yet implemented
-metadata:
+description: "explain_move.sh PoC — implementation state, data flow, and key design decisions"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 653e898a-f710-48ce-abdf-a19e2db4c6c5
 ---
 
-A CLI script (`explain_move.sh` → `connect-four/server/scripts/explain_move.mjs`) that receives a movestring + user col, then produces a grounded LLM explanation of why the move is good or bad.
+CLI PoC that explains a Connect Four move in natural language, grounded in solver scores + forward-simulation pattern data + KB articles.
 
-**Status**: Design complete, agent prompt written, NOT yet implemented. Agent prompt lives in the conversation history of 2026-05-26.
+**Entry point:** `./explain_move.sh <movestring> <col> [rounds=1]`  
+**Main script:** `connect-four/server/scripts/explain_move.mjs`  
+**Shell wrapper:** `explain_move.sh` (project root) — loads `.env` via `--env-file`
 
-## Finalised design decisions
+## Data flow
 
-**numPlies formula**: `numPlies = 2 * rounds + 1` where `rounds` is a CLI param (default 1).
-Always odd → leaves always land on the user's turn regardless of which player the user is. See [[project_explain_simulate]] for the parity proof.
+1. `perspective = movestring.length % 2 === 0 ? 1 : 2` (user's player)
+2. Pre-move solver scores → `selectContrastMove` (suboptimal → best; optimal → second-best; all-equal → exit)
+3. `explainSimulate(postMove, 2*rounds+1, anchorCell, perspective, solver)` run concurrently for user move and contrast move
+4. `computeDeltaTable` — keeps patterns where `max(userRatio, contrastRatio) > 0`, sorted by |Δratio|
+5. `getBoardVisualization` called for **both pre-move and post-move** boards via spawnSync; **`scr` row stripped** from both (LLM must not see solver scores)
+6. `buildKBSection(activePatterns)` — loads `statement:` from KB frontmatter for patterns in delta table only
+7. `buildPrompt` → `callLLM` (native fetch, `max_completion_tokens`)
 
-**Contrast move**:
-- User played suboptimally (score < max): contrast = best-scoring legal move (center-most if tied)
-- User played optimally (score = max): contrast = second-best (highest score strictly below max; center-most if tied)
-- All legal scores equal: print error, exit — do not call LLM
+## Prompt sections (in order)
 
-**LLM**: OpenAI. Load `OPENAI_API_KEY` and `OPENAI_MODEL` from `connect-four/server/.env`.
-
-**Output** (stdout in order):
-1. Board + scores summary (from `visualize_board.mjs` output — fix the broken import first; see [[bug_visualize_board_broken]])
-2. Full prompt sent to LLM (clearly delimited)
-3. LLM response
-
-**Delta table** (the core of the prompt):
-- For each of 11 pattern names, compute `user_ratio` and `contrast_ratio`
-- Retain only rows where `max(user_ratio, contrast_ratio) > 0`
-- Sort by `|user_ratio - contrast_ratio|` descending
-- Include top-2 histogram entries per move per row
-- If zero rows retained: set `insufficient_tactical_data = true`; still call LLM but tell it explicitly
-
-**Prompt structure**:
 ```
 ## Role
-Expert Connect Four coach. Explain why a move is [strong | weak].
-
-## Board position
-<visualize_board output>
-
-## Solver scores
-Col: 0..6 / scores / best moves / user move label
-
-## Pattern comparison (<rounds> rounds, <N> leaves)
-<delta table or "No tactical patterns detected">
-
+## Move context        ← "Red just played col N" + ⚠️ forced-block / blunder notes if applicable
+## Board position (BEFORE ...)   ← pre-move board, scr row stripped
+## Board position (AFTER ...)    ← post-move board, scr row stripped
+## Pattern comparison  ← outcome line + delta table (or "all lines decided" message)
+## Pattern definitions ← KB statements for active patterns only
 ## Task
-Explain in 2–4 sentences. Ground in pattern data. If none available, say so.
 ```
 
-**No new API endpoint, no DB changes, no test file** (PoC; manual verification only).
-**No new npm packages** unless unavoidable; check `connect-four/package.json` first.
+## Key design decisions
 
-[[project_explain_simulate]]
-[[bug_visualize_board_broken]]
+- **Pre-move board in prompt** — LLM sees both before and after; critical for detecting forced blocks (opponent's `[Y]` threat visible before the move)
+- **Forced-block note** (`isMajorThreatForPlayer`) — explicit `⚠️` warning when the played cell was the opponent's major threat; computed in `explain_move.mjs` by checking all 4-windows through the played cell against `board.board[r][c]`
+- **Blunder note** (`getImmediateThreats` from classifier.js) — explicit `⚠️` warning when the move hands the opponent an immediate win on the very next move
+- **No solver scores in prompt** — LLM must reason from tactical patterns, not numbers
+- **`## Move context` section** — names the player explicitly; fixes LLM perspective confusion caused by "Next: Yellow" in the board header (see [[feedback_llm_perspective_bug]])
+- **KB articles loaded at runtime** — only for patterns that appear in the delta table
+- **`--env-file` not dotenv** — Node 20.6+ built-in; shell wrapper is the single call site
+
+## Pattern → KB mapping
+
+`double_threat` → inline | `j_shape` → allen-j-configuration | `figure_7` → community-figure-7 | `claimeven` → allis-claimeven | `baseclaim` → allis-baseclaim | `before` → allis-before | `specialbefore` → allis-specialbefore | `undercut` → allen-t2 | `overcut` → community-overcut | `z_threat` → community-z-threat | `forced_win` → inline
+
+See [[project_explain_simulate]] for explainSimulate.js design decisions.

@@ -1,35 +1,72 @@
 ---
 name: project_explain_simulate
-description: explainSimulate feature — forward-looking pattern aggregation for the coach LLM; implementation status and key design contracts
-metadata:
+description: "explainSimulate.js design — pluggable detector registry, claimeven included, timing output"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 5521e723-b304-4e1e-8057-4c823e60f521
 ---
 
-`explainSimulate(movestring, numPlies, anchorCell, perspective, solver)` is implemented in `connect-four/server/explainSimulate.js` (exported). CLI at `connect-four/server/scripts/explain_simulate.mjs`, shell wrapper `explain_simulate.sh` at project root.
+## Current signature (2026-05-27)
 
-**Contract**:
-- `movestring` already includes the candidate move (caller appends col before calling)
-- `anchorCell = { col, row: new Board(movesBeforePlay).colHeights[col] }`
-- `perspective` (1=Red, 2=Yellow): only leaves where `currentPlayer === perspective` contribute to `frequency`; all leaves count toward `total`
-- Returns `{ totalLeaves, anchorCell, perspective, patterns }` where `patterns` has all 11 detector names. `claimeven` is always `frequency: 0` (excluded — ~20 solver calls/leaf)
+```js
+explainSimulate(movestring, numPlies, anchorCell, perspective, solver, options = {})
+```
 
-**numPlies / perspective parity rule** (load-bearing):
-`explainSimulate` receives the post-move string. For the perspective player's patterns to appear at leaves, numPlies must be **odd** in all cases:
-- User is Red (post-move string length odd): odd + odd = even → Red's turn at leaf ✓
-- User is Yellow (post-move string length even): even + odd = odd → Yellow's turn at leaf ✓
+Returns `{ totalLeaves, anchorCell, perspective, patterns, outcomes, timing }`.
 
-CLI auto perspective = `(movestring.length + numPlies) % 2 === 0 ? 1 : 2` (player to move at leaves).
+Each entry in `patterns` now includes `examples: string[]` — up to 2 leaf movestrings where that pattern fired (collected in `aggregateLeaves`; `MAX_EXAMPLES = 2`). Callers extract like:
+```js
+const userExamplesByPattern = {};
+for (const [name, entry] of Object.entries(userResult.patterns)) {
+  if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+}
+```
+The `ms` field is set on `depth_limit` and `intermediate` leaf objects (not on won/draw terminals whose `patterns` is null).
 
-**Pattern types in output**:
-- Coordinate (cellHistogram): `z_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`
-- Directional (colHistogram): `immediate_threat`, `double_threat`, `forced_block`, `forced_win`, `forbidden_columns`
-- Boolean (neither): `claimeven`
+- `options.detectors` — string[] of detector names to enable. Default: all 11 in `DETECTOR_REGISTRY` (including `'claimeven'`). Filter to exclude: `DETECTOR_REGISTRY.map(d=>d.name).filter(n=>n!=='claimeven')`.
+- `timing` — `{ totalMs, solverCalls, solverCacheHits }`. `solverCalls` = cache misses only.
 
-**Cost** (claimeven excluded): numPlies=3 (rounds=1) ~40 solver calls; numPlies=5 ~120 solver calls.
+## Detector registry
 
-Integration tests: `connect-four/tests/integration/explain_simulate.test.js` (12 tests, all passing, uses real solver binary).
+`DETECTOR_REGISTRY` is exported from `explainSimulate.js`. Each entry:
+```js
+{ name: string, fn: Function, isAsync: boolean, histType: 'col'|'cell'|null }
+```
+Sync detectors called as `fn(board, scores)`; async (`claimeven`) as `fn(board, solver)`.
+**Adding a new detector = one entry in DETECTOR_REGISTRY; no other code changes required.**
 
-**Why**: feeds the coach LLM context: "this move sets up figure_7 in 7/9 optimal continuations."
+`histType` controls the histogram field on each pattern entry:
+- `'col'`  → `colHistogram` keyed by column index string
+- `'cell'` → `cellHistogram` keyed by `"colC,rowR"`
+- `null`   → no histogram
 
-[[project_llm_explain_poc]]
-[[reference_c4solver_behavior]]
+Only patterns in the active registry appear as keys in the output `patterns` object.
+
+## Claimeven cost
+
+`detectClaimeven` is async, ~20 solver queries per call. At `numPlies=3` (b≈3) this adds ~260 extra queries on top of ~40 for the tree walk. Check `result.timing.solverCalls` to measure actual cost per position.
+
+## Leaf taxonomy
+
+- `'won_by_perspective'` / `'won_by_opponent'` / `'draw'` — terminal; `patterns: null`
+- `'depth_limit'` — `numPlies === 0`, game live; classified only if `currentPlayer === perspective`
+- `'intermediate'` — perspective-to-move non-terminal node emitted while recursing
+
+### Pattern ratio denominator
+
+`perspectiveLeaves` = depth_limit + intermediate leaves where `currentPlayer === perspective`. Used as denominator so ratios are stable across depth and not diluted by won/draw branches.
+
+### Intermediate-node accumulation
+
+At every non-terminal perspective-to-move node, an `'intermediate'` sample is emitted **and** recursion continues into children. Patterns visible at shallow depth (resolved by later plies) are captured and not washed out.
+
+### Transposition deduplication (classCache)
+
+A `Map<movestring, patterns>` deduplicates classification work. A position reached via multiple optimal paths is classified once and emitted once. This underweights frequently-reached transpositions (counts once, not proportionally), but avoids redundant solver queries for the expensive async detectors.
+
+## Outcomes (separate from patterns)
+
+`{ total, wonByPerspective, wonByOpponent, draws, perspectiveLeaves, winRate, lossRate, drawRate }`
+
+`winRate = wonByPerspective / total` — uses `total` as denominator, not `perspectiveLeaves`. Do not mix these denominators when comparing outcome rates to pattern ratios.
