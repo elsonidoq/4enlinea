@@ -2,7 +2,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
-import { detectUndercut, detectOvercut } from '../../server/classifier.js';
+import { detectUndercut, detectOvercut, Board } from '../../server/classifier.js';
 import { checkUndercutPredicate, checkOvercutPredicate } from '../../server/candidate-generator.js';
 import { evaluatePredicate } from '../../server/predicates.js';
 
@@ -14,7 +14,7 @@ describe('detectUndercut — structure and eval', () => {
   test('returns matched=false for empty board', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = detectUndercut(ms, scores);
+    const result = detectUndercut(new Board(ms), scores);
     assert.equal(result.matched, false, 'empty board has no undercut');
   }, { timeout: 10_000 });
 
@@ -22,7 +22,7 @@ describe('detectUndercut — structure and eval', () => {
     const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
-      const result = detectUndercut(ms, scores);
+      const result = detectUndercut(new Board(ms), scores);
       if (result.matched) {
         const hm = result.highlightMetadata;
         assert.equal(hm.type, 'cells');
@@ -48,7 +48,7 @@ describe('detectOvercut — structure and eval', () => {
   test('returns matched=false for empty board', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = detectOvercut(ms, scores);
+    const result = detectOvercut(new Board(ms), scores);
     assert.equal(result.matched, false, 'empty board has no overcut');
   }, { timeout: 10_000 });
 
@@ -56,7 +56,7 @@ describe('detectOvercut — structure and eval', () => {
     const positions = ['654321065432', '01234560123456', '33443322'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
-      const result = detectOvercut(ms, scores);
+      const result = detectOvercut(new Board(ms), scores);
       if (result.matched) {
         const hm = result.highlightMetadata;
         assert.equal(hm.type, 'cells');

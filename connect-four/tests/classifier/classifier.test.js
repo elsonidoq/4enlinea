@@ -1,9 +1,17 @@
-import { test, describe } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { classify } from '../../server/classifier.js';
+import {
+  classify, parseBoardState, hasActiveDoubleThreat,
+  classifyAll, Board,
+  detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
+  detectForcedWin, detectForbiddenColumns,
+  detectZThreat, detectUndercut, detectOvercut,
+  detectFigure7, detectJShape, detectClaimeven,
+} from '../../server/classifier.js';
+import { createSolverProcess } from '../../server/c4solver-wrapper.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(
@@ -143,11 +151,131 @@ describe('classify() edge cases', () => {
   test('never throws on any input', () => {
     const edgeCases = [
       { moves: '', col: 0, scores: [0, 0, 0, 0, 0, 0, 0] },
-      { moves: '4', col: 3, scores: [0, 0, 0, -1, 0, 0, 0] },
+      { moves: '4', col: 3, scores: [0, 0, 0, -1, 0, 0, 0] }, // eslint-disable-line
       { moves: '1234567', col: 0, scores: [0, 2, 2, 2, 2, 2, 0] },
     ];
     for (const { moves, col, scores } of edgeCases) {
       assert.doesNotThrow(() => classify(moves, col, scores));
     }
+  });
+});
+
+// SC-002: classify() constructs Board exactly once (no direct parseBoardState calls)
+describe('SC-002: classify() single Board construction', () => {
+  test('classify() body contains zero parseBoardState calls', () => {
+    const src = classify.toString();
+    const directCalls = (src.match(/parseBoardState\s*\(/g) || []).length;
+    assert.equal(directCalls, 0, 'classify() must not call parseBoardState directly');
+  });
+
+  test('classify() body contains exactly one new Board( call', () => {
+    const src = classify.toString();
+    const boardConstructions = (src.match(/new Board\s*\(/g) || []).length;
+    assert.equal(boardConstructions, 1, 'classify() must construct Board exactly once');
+  });
+});
+
+// SC-008: classifyAll returns results matching individual detectors for representative positions
+describe('classifyAll()', () => {
+  let solver;
+  before(() => { solver = createSolverProcess(); });
+  after(() => { solver.destroy(); });
+
+  const DETECTOR_MAP = [
+    { name: 'immediate_threat',  fn: (b, s, sv) => detectImmediateThreat(b) },
+    { name: 'double_threat',     fn: (b, s, sv) => detectDoubleThreat(b) },
+    { name: 'forced_block',      fn: (b, s, sv) => detectForcedBlock(b, s) },
+    { name: 'forced_win',        fn: (b, s, sv) => detectForcedWin(b, s) },
+    { name: 'forbidden_columns', fn: (b, s, sv) => detectForbiddenColumns(b, s) },
+    { name: 'z_threat',          fn: (b, s, sv) => detectZThreat(b, s) },
+    { name: 'undercut',          fn: (b, s, sv) => detectUndercut(b, s) },
+    { name: 'overcut',           fn: (b, s, sv) => detectOvercut(b, s) },
+    { name: 'figure_7',          fn: (b, s, sv) => detectFigure7(b, s) },
+    { name: 'j_shape',           fn: (b, s, sv) => detectJShape(b, s) },
+    { name: 'claimeven',         fn: (b, s, sv) => detectClaimeven(b, sv) },
+  ];
+
+  async function assertClassifyAllMatchesDetectors(ms, scores, solverInstance) {
+    const allResults = await classifyAll(ms, scores, solverInstance);
+    assert.equal(allResults.length, 11, 'classifyAll must return 11 entries');
+
+    for (let i = 0; i < DETECTOR_MAP.length; i++) {
+      const { name, fn } = DETECTOR_MAP[i];
+      const entry = allResults[i];
+      assert.equal(entry.detectorName, name, `entry[${i}].detectorName must be "${name}"`);
+
+      const expected = await fn(new Board(ms), scores, solverInstance);
+      assert.deepEqual(entry.result, expected, `classifyAll entry "${name}" must match standalone detector`);
+    }
+  }
+
+  test('empty board: all entries match standalone detectors', async () => {
+    const ms = '';
+    const scores = await solver.query(ms);
+    await assertClassifyAllMatchesDetectors(ms, scores, solver);
+  }, { timeout: 30_000 });
+
+  test('simple opening (001122): all entries match standalone detectors', async () => {
+    // z_threat detector type
+    const ms = '001122';
+    const scores = await solver.query(ms);
+    await assertClassifyAllMatchesDetectors(ms, scores, solver);
+  }, { timeout: 30_000 });
+
+  test('claimeven position (3233333556): all entries match standalone detectors', async () => {
+    // claimeven detector type — subtype B known fixture
+    const ms = '3233333556';
+    const scores = await solver.query(ms);
+    await assertClassifyAllMatchesDetectors(ms, scores, solver);
+  }, { timeout: 120_000 });
+
+  test('figure-7 position (021353342445): all entries match standalone detectors', async () => {
+    // figure_7 detector type
+    const ms = '021353342445';
+    const scores = await solver.query(ms);
+    await assertClassifyAllMatchesDetectors(ms, scores, solver);
+  }, { timeout: 30_000 });
+
+  test('j-shape position (30321143442): all entries match standalone detectors', async () => {
+    // j_shape detector type
+    const ms = '30321143442';
+    const scores = await solver.query(ms);
+    await assertClassifyAllMatchesDetectors(ms, scores, solver);
+  }, { timeout: 30_000 });
+
+  test('returns array of objects with detectorName and result keys', async () => {
+    const ms = '3344';
+    const scores = await solver.query(ms);
+    const allResults = await classifyAll(ms, scores, solver);
+    assert.ok(Array.isArray(allResults));
+    for (const entry of allResults) {
+      assert.ok('detectorName' in entry, 'each entry must have detectorName');
+      assert.ok('result' in entry, 'each entry must have result');
+      assert.ok('matched' in entry.result, 'each result must have matched field');
+    }
+  }, { timeout: 30_000 });
+});
+
+describe('hasActiveDoubleThreat()', () => {
+  // col5(viz)/col4(code) carries two stacked Yellow wins:
+  //   row1(viz)/row0(code) — diagonal win (immediately playable)
+  //   row2(viz)/row1(code) — horizontal win (gravity-accessible after filling row0)
+  // isClean('immediate_threat') must reject this position.
+  test('stacked double threat: 03630015223512113 is detected as active double threat for Yellow', () => {
+    const ms = '03630015223512113';
+    const { board, colHeights } = parseBoardState(ms);
+    const player = ms.length % 2 === 0 ? 1 : 2; // Yellow (2)
+    assert.equal(hasActiveDoubleThreat(board, colHeights, player), true);
+  });
+
+  // A clean immediate-threat position: Red has exactly one winning column,
+  // with no stacked second winning window above it.
+  // R plays cols 0,1,2; Y plays cols 4,5,6 — alternating: 0,4,1,5,2,6
+  // Red has three in a row at row 0, plays col 3 to win. No stacked threat above.
+  test('clean immediate threat: single win with no stacked threat is not flagged', () => {
+    const ms = '041526';
+    const { board, colHeights } = parseBoardState(ms);
+    const player = ms.length % 2 === 0 ? 1 : 2; // Red (1)
+    assert.equal(hasActiveDoubleThreat(board, colHeights, player), false);
   });
 });

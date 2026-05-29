@@ -40,9 +40,15 @@ const COLS = 7;
 const TOTAL_CELLS = ROWS * COLS; // 42
 
 
-// Build a board grid from a move string (1-indexed columns).
-// Returns board[row][col] where row 0 is bottom, row 5 is top.
-// Values: 0 = empty, 1 = player 1 (first mover), 2 = player 2
+/**
+ * Builds a board grid from a move string (0-indexed columns).
+ * Returns board[row][col] where row 0 is bottom, row 5 is top.
+ * Values: 0 = empty, 1 = player 1 (first mover), 2 = player 2.
+ * @param {string} moves  move string of 0-indexed column digits
+ * @returns {{ board: number[][], colHeights: number[] }}
+ * @complexity O(n) where n = moves.length
+ * @cache not cached
+ */
 export function parseBoardState(moves) {
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const colHeights = Array(COLS).fill(0);
@@ -57,7 +63,17 @@ export function parseBoardState(moves) {
   return { board, colHeights };
 }
 
-// Check if player has won with the last piece placed at (row, col).
+/**
+ * Checks if player has won with the last piece placed at (row, col).
+ * Scans all 4 directions from the given cell; does not read board[row][col] itself.
+ * @param {number[][]} board
+ * @param {number} row   0-indexed
+ * @param {number} col   0-indexed
+ * @param {number} player  1 or 2
+ * @returns {boolean}
+ * @complexity O(1)  (constant 4 directions × up to 6 cells each)
+ * @cache not cached
+ */
 export function checkWin(board, row, col, player) {
   const directions = [[0,1],[1,0],[1,1],[1,-1]];
   for (const [dr, dc] of directions) {
@@ -77,110 +93,366 @@ export function checkWin(board, row, col, player) {
   return false;
 }
 
-// Count distinct winning threats for a player on the current board.
-// Only checks gravity-top cells (the next immediately playable row per column).
-// Use this for immediate-move reasoning (forced_block, claimeven). For pattern
-// detectors that need all reachable threats, use countAllReachableThreats.
-export function countWinningThreats(board, colHeights, player) {
-  let threats = 0;
-  for (let col = 0; col < COLS; col++) {
-    const row = colHeights[col];
-    if (row >= ROWS) continue; // full column
-    // Temporarily place the piece
-    board[row][col] = player;
-    if (checkWin(board, row, col, player)) threats++;
-    board[row][col] = 0;
+/**
+ * Returns true if player already has four-in-a-row anywhere on the board.
+ * @param {number[][]} board
+ * @param {number} player  1 or 2
+ * @returns {boolean}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function hasWon(board, player) {
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      if (board[row][col] === player && checkWin(board, row, col, player)) return true;
+    }
   }
-  return threats;
+  return false;
 }
 
-// Classify a position given the move string, candidate column (0-indexed),
-// and the solver scores for all 7 columns.
-// Returns { tag } — never throws.
+/**
+ * Returns a Map from column to the rows in that column where placing player would win.
+ * Only considers cells at or above colHeights[col] (empty cells reachable by gravity).
+ * Calls checkWin without mutation — checkWin never reads board[row][col] itself.
+ * @param {number[][]} board
+ * @param {number[]} colHeights
+ * @param {number} player  1 or 2
+ * @returns {Map<number, number[]>}  Map<col, row[]>, rows in ascending order
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function getReachableThreats(board, colHeights, player) {
+  const result = new Map();
+  for (let col = 0; col < COLS; col++) {
+    const rows = [];
+    for (let row = colHeights[col]; row < ROWS; row++) {
+      if (checkWin(board, row, col, player)) rows.push(row);
+    }
+    if (rows.length > 0) result.set(col, rows);
+  }
+  return result;
+}
+
+/**
+ * Returns an object keyed by "row,col" with { rm, rn, ym, yn } flags for each empty cell.
+ * rm/ym = major threat (3 discs + 1 empty in a 4-window) for red/yellow.
+ * rn/yn = minor threat (2 discs + 2 empty) for red/yellow.
+ * @param {number[][]} board
+ * @returns {Object.<string, {rm: boolean, rn: boolean, ym: boolean, yn: boolean}>}
+ * @complexity O(672)  (42 cells × 4 directions × 4 offsets)
+ * @cache not cached
+ */
+export function getMajorThreatCells(board) {
+  const map = {};
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c] !== 0) continue;
+      let rm = false, rn = false, ym = false, yn = false;
+      for (const [dr, dc] of dirs) {
+        for (let off = 0; off <= 3; off++) {
+          const sr = r - dr*off, sc = c - dc*off;
+          let red = 0, yel = 0, valid = true;
+          for (let i = 0; i < 4; i++) {
+            const nr = sr + dr*i, nc = sc + dc*i;
+            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+            if (board[nr][nc] === 1) red++;
+            else if (board[nr][nc] === 2) yel++;
+          }
+          if (!valid || (red > 0 && yel > 0)) continue;
+          const empty = 4 - red - yel;
+          if (red === 3 && empty === 1) rm = true;
+          else if (red === 2 && empty === 2) rn = true;
+          if (yel === 3 && empty === 1) ym = true;
+          else if (yel === 2 && empty === 2) yn = true;
+        }
+      }
+      if (rm || rn || ym || yn) map[`${r},${c}`] = { rm, rn, ym, yn };
+    }
+  }
+  return map;
+}
+
+/**
+ * Returns true when two same-column threats have the same row parity.
+ * T4: same parity → no interaction between threats, regardless of player.
+ * 0-indexed rows: even ↔ Allen 1-indexed odd; odd ↔ Allen 1-indexed even.
+ * @param {number} R   current player's threat row (0-indexed)
+ * @param {number} Rp  opponent's threat row (0-indexed)
+ * @returns {boolean}
+ * @complexity O(1)
+ * @cache not cached
+ * @see allen-t4
+ */
+export function isT4SameParity(R, Rp) {
+  return R % 2 === Rp % 2;
+}
+
+/**
+ * Returns true for the specific row pair (0-indexed 5, 2) = Allen rows (6, 3).
+ * T5 overrides T2 for this pair: threats at Allen rows 3 and 6 in the same column
+ * do NOT interact despite opposite parity. Rows 5+2 (0-indexed) = rows 6+3 (Allen).
+ * @param {number} R   (0-indexed row)
+ * @param {number} Rp  (0-indexed row)
+ * @returns {boolean}
+ * @complexity O(1)
+ * @cache not cached
+ * @see allen-t5
+ */
+export function isT5Exception(R, Rp) {
+  return (R === 5 && Rp === 2) || (R === 2 && Rp === 5);
+}
+
+/**
+ * Returns true if a current-player threat at Rpp < Rp neutralizes the opponent's threat at Rp via T2.
+ * Sub-case 2: CP threat at even 0-indexed row below opponent's odd 0-indexed row, any distance.
+ * Sub-case 3: CP threat at odd 0-indexed row immediately below opp even 0-indexed row (adjacent only).
+ * @param {number[]} colThreats  Current-player threat rows in this column (0-indexed)
+ * @param {number}   Rp          Opponent's threat row (0-indexed)
+ * @returns {boolean}
+ * @complexity O(|colThreats|)
+ * @cache not cached
+ * @see allen-t2
+ */
+export function isT2Blocking(colThreats, Rp) {
+  return colThreats.some(Rpp => {
+    if (Rpp >= Rp) return false;
+    if (Rpp % 2 === 0 && Rp % 2 === 1) return true; // sub-case 2: CP even, opp odd, any distance
+    if (Rpp % 2 === 1 && Rp % 2 === 0 && Rpp + 1 === Rp) return true; // sub-case 3: adjacent
+    return false;
+  });
+}
+
+/**
+ * Returns true if the current player already has an active double threat —
+ * either ≥2 immediate winning columns, or a single winning column with a
+ * major threat stacked directly above it (same column, one row higher).
+ * Use this to filter puzzle candidates that are won before the puzzle starts.
+ * @param {number[][]} board
+ * @param {number[]} colHeights
+ * @param {number} player  1 or 2
+ * @returns {boolean}
+ * @complexity O(7) + O(672)  (getImmediateThreats + getMajorThreatCells)
+ * @cache not cached
+ */
+export function hasActiveDoubleThreat(board, colHeights, player) {
+  const winCols = getImmediateThreats(board, colHeights, player);
+  if (winCols.length >= 2) return true;
+  if (winCols.length === 1) {
+    const c = winCols[0];
+    const r = colHeights[c];
+    if (r + 1 < ROWS) {
+      const t = getMajorThreatCells(board)[`${r+1},${c}`];
+      if (t && (player === 1 ? t.rm : t.ym)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns columns where player can win immediately (gravity-top cells only).
+ * Mutation-free: checkWin never reads board[row][col], so no placement needed.
+ * @param {number[][]} board
+ * @param {number[]} colHeights
+ * @param {number} player  1 or 2
+ * @returns {number[]}  array of column indices
+ * @complexity O(7)
+ * @cache not cached
+ */
+export function getImmediateThreats(board, colHeights, player) {
+  const cols = [];
+  for (let col = 0; col < COLS; col++) {
+    const row = colHeights[col];
+    if (row >= ROWS) continue;
+    if (checkWin(board, row, col, player)) cols.push(col);
+  }
+  return cols;
+}
+
+/**
+ * Immutable board snapshot. Parses movestring once; all derived state is lazily cached.
+ * Use `new Board(movestring)` in `classify()` and all `detect*` functions.
+ * Use `board.withMove(col)` instead of the mutation+undo pattern.
+ */
+export class Board {
+  /**
+   * Parses movestring once; all subsequent accesses read the cached state.
+   * @param {string} movestring
+   * @complexity O(42)
+   * @cache not cached (constructor)
+   */
+  constructor(movestring) {
+    const { board, colHeights } = parseBoardState(movestring);
+    this.movestring    = movestring;
+    this.board         = board;
+    this.colHeights    = colHeights;
+    this.currentPlayer = movestring.length % 2 === 0 ? 1 : 2;
+    this.opponent      = 3 - this.currentPlayer;
+    this._cache        = new Map();
+  }
+
+  /**
+   * Returns true if placing player at (row,col) completes four-in-a-row.
+   * Delegates to free checkWin; does not read board[row][col].
+   * @param {number} row
+   * @param {number} col
+   * @param {number} player  1 or 2
+   * @returns {boolean}
+   * @complexity O(1)
+   * @cache not cached
+   */
+  checkWin(row, col, player) { return checkWin(this.board, row, col, player); }
+
+  /**
+   * Returns true if player already has four-in-a-row anywhere on the board.
+   * @param {number} player  1 or 2
+   * @returns {boolean}
+   * @complexity O(42)
+   * @cache cached per player
+   */
+  hasWon(player) {
+    const key = `hasWon_${player}`;
+    if (!this._cache.has(key)) this._cache.set(key, hasWon(this.board, player));
+    return this._cache.get(key);
+  }
+
+  /**
+   * Returns columns where player can win immediately (gravity-top cells only).
+   * @param {number} player  1 or 2
+   * @returns {number[]}
+   * @complexity O(7)
+   * @cache cached per player
+   */
+  immediateThreats(player) {
+    const key = `immediateThreats_${player}`;
+    if (!this._cache.has(key)) this._cache.set(key, getImmediateThreats(this.board, this.colHeights, player));
+    return this._cache.get(key);
+  }
+
+  /**
+   * Returns Map<col, row[]> of all empty cells at or above colHeight where player wins.
+   * @param {number} player  1 or 2
+   * @returns {Map<number, number[]>}
+   * @complexity O(42)
+   * @cache cached per player
+   */
+  reachableThreats(player) {
+    const key = `reachableThreats_${player}`;
+    if (!this._cache.has(key)) this._cache.set(key, getReachableThreats(this.board, this.colHeights, player));
+    return this._cache.get(key);
+  }
+
+  /**
+   * Returns all 4-cell windows completed by placing player at (row,col).
+   * @param {number} row
+   * @param {number} col
+   * @param {number} player  1 or 2
+   * @returns {Array<Array<{row: number, col: number}>>}
+   * @complexity O(16)
+   * @cache not cached (varies by row/col)
+   */
+  winningWindows(row, col, player) { return getWinningWindows(this.board, row, col, player); }
+
+  /**
+   * Returns the full major-threat map for all empty cells on the board.
+   * @returns {Object}
+   * @complexity O(672)
+   * @cache cached (player-independent)
+   */
+  majorThreatCells() {
+    if (!this._cache.has('majorThreatCells')) this._cache.set('majorThreatCells', getMajorThreatCells(this.board));
+    return this._cache.get('majorThreatCells');
+  }
+
+  /**
+   * Returns true if player has an active double threat.
+   * @param {number} player  1 or 2
+   * @returns {boolean}
+   * @complexity O(7) + O(672) on first call
+   * @cache cached per player
+   */
+  hasActiveDoubleThreat(player) {
+    const key = `hasActiveDoubleThreat_${player}`;
+    if (!this._cache.has(key)) this._cache.set(key, hasActiveDoubleThreat(this.board, this.colHeights, player));
+    return this._cache.get(key);
+  }
+
+  /**
+   * Returns a new Board for the position after placing in col. Starts with empty cache.
+   * @param {number} col
+   * @returns {Board}
+   * @complexity O(42)
+   * @cache not cached
+   * @throws {RangeError} if col is out of range or the column is full
+   */
+  withMove(col) {
+    if (col < 0 || col >= COLS || this.colHeights[col] >= ROWS) {
+      throw new RangeError(`withMove: column ${col} is full or out of range`);
+    }
+    return new Board(this.movestring + col.toString());
+  }
+}
+
+/**
+ * Classifies a position given the move string, candidate column (0-indexed),
+ * and the solver scores for all 7 columns.
+ * Constructs a single Board instance and delegates to all category checks.
+ * @param {string} moves
+ * @param {number} candidateCol  0-indexed column
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ tag: string }}  never throws
+ * @complexity O(42)
+ * @cache not cached
+ */
 export function classify(moves, candidateCol, scores) {
-  const moveCount = moves.length;
+  const board = new Board(moves);
   const score = scores[candidateCol];
 
   // ── Category 1: Immediate Threat ─────────────────────────────────────────
-  {
-    const { board, colHeights } = parseBoardState(moves);
-    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-    const row = colHeights[candidateCol];
-    if (row < ROWS) {
-      board[row][candidateCol] = currentPlayer;
-      if (checkWin(board, row, candidateCol, currentPlayer)) {
-        return { tag: 'immediate_threat' };
-      }
-      board[row][candidateCol] = 0;
+  if (board.colHeights[candidateCol] < ROWS) {
+    const row = board.colHeights[candidateCol];
+    if (board.withMove(candidateCol).checkWin(row, candidateCol, board.currentPlayer)) {
+      return { tag: 'immediate_threat' };
     }
   }
 
   // ── Category 3: Double Threat ─────────────────────────────────────────────
-  {
-    const { board, colHeights } = parseBoardState(moves);
-    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-    const row = colHeights[candidateCol];
-    if (row < ROWS) {
-      board[row][candidateCol] = currentPlayer;
-      colHeights[candidateCol]++;
+  if (board.colHeights[candidateCol] < ROWS) {
+    const nextBoard = board.withMove(candidateCol);
+    const threatCells = [];
+    for (const [col, rows] of nextBoard.reachableThreats(board.currentPlayer)) {
+      for (const row of rows) threatCells.push({ col, row });
+    }
 
-      const threatCells = [];
-      for (let c = 0; c < COLS; c++) {
-        for (let r = colHeights[c]; r < ROWS; r++) {
-          board[r][c] = currentPlayer;
-          if (checkWin(board, r, c, currentPlayer)) threatCells.push({ col: c, row: r });
-          board[r][c] = 0;
-        }
-      }
+    // Case A: two or more distinct columns each have a threat at their gravity-top
+    const gravityTopCols = new Set(
+      threatCells.filter(t => t.row === nextBoard.colHeights[t.col]).map(t => t.col)
+    );
+    if (gravityTopCols.size >= 2) return { tag: 'double_threat' };
 
-      // Case A: two or more distinct columns each have a threat at their gravity-top
-      const gravityTopCols = new Set(threatCells.filter(t => t.row === colHeights[t.col]).map(t => t.col));
-      if (gravityTopCols.size >= 2) {
-        board[row][candidateCol] = 0;
-        colHeights[candidateCol]--;
-        return { tag: 'double_threat' };
+    // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
+    const byCol = {};
+    for (const t of threatCells) {
+      if (!byCol[t.col]) byCol[t.col] = [];
+      byCol[t.col].push(t.row);
+    }
+    for (const rows of Object.values(byCol)) {
+      const sorted = rows.sort((a, b) => a - b);
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i + 1] === sorted[i] + 1) return { tag: 'double_threat' };
       }
-
-      // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
-      const byCol = {};
-      for (const t of threatCells) {
-        if (!byCol[t.col]) byCol[t.col] = [];
-        byCol[t.col].push(t.row);
-      }
-      for (const col of Object.keys(byCol)) {
-        const rows = byCol[col].sort((a, b) => a - b);
-        for (let i = 0; i < rows.length - 1; i++) {
-          if (rows[i + 1] === rows[i] + 1) {
-            board[row][candidateCol] = 0;
-            colHeights[candidateCol]--;
-            return { tag: 'double_threat' };
-          }
-        }
-      }
-
-      board[row][candidateCol] = 0;
-      colHeights[candidateCol]--;
     }
   }
 
   // ── Category 2: Forced Block ──────────────────────────────────────────────
   if (score >= 0) {
-    const { board, colHeights } = parseBoardState(moves);
-    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-    const opponent = 3 - currentPlayer;
-    if (countWinningThreats(board, colHeights, opponent) > 0) {
-      board[colHeights[candidateCol]][candidateCol] = currentPlayer;
-      colHeights[candidateCol]++;
-      const threatsAfter = countWinningThreats(board, colHeights, opponent);
-      board[--colHeights[candidateCol]][candidateCol] = 0;
-      if (threatsAfter === 0) {
+    const opponent = board.opponent;
+    if (board.immediateThreats(opponent).length > 0) {
+      const nextBoard = board.withMove(candidateCol);
+      if (nextBoard.immediateThreats(opponent).length === 0) {
         const someOtherFails = scores.some((_, i) => {
-          if (i === candidateCol || colHeights[i] >= ROWS) return false;
-          board[colHeights[i]][i] = currentPlayer;
-          colHeights[i]++;
-          const t = countWinningThreats(board, colHeights, opponent);
-          board[--colHeights[i]][i] = 0;
-          return t > 0;
+          if (i === candidateCol || board.colHeights[i] >= ROWS) return false;
+          return board.withMove(i).immediateThreats(opponent).length > 0;
         });
         if (someOtherFails) return { tag: 'forced_block' };
       }
@@ -197,17 +469,9 @@ export function classify(moves, candidateCol, scores) {
   }
 
   // ── Category 5: Forbidden Column ─────────────────────────────────────────
-  if (scores.every(s => s <= 0)) {
-    const { board, colHeights } = parseBoardState(moves);
-    const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-    const opponent = 3 - currentPlayer;
-    const row = colHeights[candidateCol];
-    if (row < ROWS) {
-      board[row][candidateCol] = currentPlayer;
-      colHeights[candidateCol]++;
-      const givesOpponentWin = countWinningThreats(board, colHeights, opponent) > 0;
-      board[--colHeights[candidateCol]][candidateCol] = 0;
-      if (givesOpponentWin) return { tag: 'forbidden_columns' };
+  if (scores.every(s => s <= 0) && board.colHeights[candidateCol] < ROWS) {
+    if (board.withMove(candidateCol).immediateThreats(board.opponent).length > 0) {
+      return { tag: 'forbidden_columns' };
     }
   }
 
@@ -219,31 +483,31 @@ export function classify(moves, candidateCol, scores) {
 
 // ── New category detection functions (T005–T010) ──────────────────────────────
 
-// T005 — Z-Threat detection
-// Finds the unique column where odd-count empty-to-threat cells confirms a solver win.
-export function detectZThreat(moves, scores) {
-  const moveCount = moves.length;
-  const { board, colHeights } = parseBoardState(moves);
-  const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-
+/**
+ * T005 — Z-Threat detection.
+ * Finds the unique column where odd-count empty-to-threat cells confirms a solver win.
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectZThreat(board, scores) {
   const candidates = [];
   for (let col = 0; col < COLS; col++) {
-    if (colHeights[col] >= ROWS) continue;
+    if (board.colHeights[col] >= ROWS) continue;
     if (scores[col] <= 0) continue;
 
-    // Find lowest threat row: first empty cell where placing wins
+    // Find lowest threat row: first empty cell where placing wins (checkWin is mutation-free)
     let threatRow = -1;
-    for (let row = colHeights[col]; row < ROWS; row++) {
-      board[row][col] = currentPlayer;
-      const wins = checkWin(board, row, col, currentPlayer);
-      board[row][col] = 0;
-      if (wins) { threatRow = row; break; }
+    for (let row = board.colHeights[col]; row < ROWS; row++) {
+      if (checkWin(board.board, row, col, board.currentPlayer)) { threatRow = row; break; }
     }
     if (threatRow === -1) continue;
 
-    const count = threatRow - colHeights[col] + 1; // inclusive cell count
+    const count = threatRow - board.colHeights[col] + 1; // inclusive cell count
     if (count % 2 === 1) {
-      candidates.push({ col, fromRow: colHeights[col], toRow: threatRow, badgeCount: count });
+      candidates.push({ col, fromRow: board.colHeights[col], toRow: threatRow, badgeCount: count });
     }
   }
 
@@ -256,49 +520,41 @@ export function detectZThreat(moves, scores) {
   };
 }
 
-// T007 — Undercut detection
-// Finds column C where current player has a threat at R and opponent has a threat at R' < R
-// in the same column (opponent's lower threat kills current player's upper threat).
-// Returns matched only when scores[C] < 0 (playing in C is losing — avoid it).
-export function detectUndercut(moves, scores) {
-  const moveCount = moves.length;
-  const { board, colHeights } = parseBoardState(moves);
-  const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-  const opponent = 3 - currentPlayer;
-
-  // Collect all threats per column for each player
-  const currentThreats = {}; // col → [row, ...]
-  const opponentThreats = {};
-  for (let col = 0; col < COLS; col++) {
-    currentThreats[col] = [];
-    opponentThreats[col] = [];
-    for (let row = 0; row < ROWS; row++) {
-      if (board[row][col] !== 0) continue; // must be empty
-      board[row][col] = currentPlayer;
-      if (checkWin(board, row, col, currentPlayer)) currentThreats[col].push(row);
-      board[row][col] = 0;
-      board[row][col] = opponent;
-      if (checkWin(board, row, col, opponent)) opponentThreats[col].push(row);
-      board[row][col] = 0;
-    }
-  }
+/**
+ * T007 — Undercut detection.
+ * Finds column C where current player has a threat at R and opponent has a threat at R' < R
+ * in the same column (opponent's lower threat kills current player's upper threat).
+ * Returns matched only when scores[C] < 0 (playing in C is losing — avoid it).
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectUndercut(board, scores) {
+  // @see allen-t4, allen-t5, allen-t2
+  const threats    = board.reachableThreats(board.currentPlayer); // Map<col, row[]>
+  const oppThreats = board.reachableThreats(board.opponent);
 
   for (let col = 0; col < COLS; col++) {
-    if (colHeights[col] >= ROWS) continue;
+    if (board.colHeights[col] >= ROWS) continue;
     if (!scores || scores[col] >= 0) continue; // undercut requires playing C to be losing
-    for (const R of currentThreats[col]) {
-      const kill = opponentThreats[col].find(rp => rp < R);
+    const colRows    = threats.get(col) ?? [];
+    const oppColRows = oppThreats.get(col) ?? [];
+
+    for (const R of colRows) {
+      const kill = oppColRows.find(rp => rp < R);
       if (kill === undefined) continue;
-      if (R % 2 === kill % 2) continue; // U1: T2 requires opposite parity (same parity = T4, no interaction)
-      if (R === 5 && kill === 2) continue; // U2: T5 exception — rows 5+2 (0-indexed) = rows 6+3 (1-indexed), no interaction
-      if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue; // U3: T2 sub-case 3 requires adjacent rows
+      if (isT4SameParity(R, kill)) continue;                            // U1 @see allen-t4
+      if (isT5Exception(R, kill)) continue;                             // U2 @see allen-t5
+      if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue;   // U3 @see allen-t2 sub-case 3
       return {
         matched: true,
         highlightMetadata: {
           type: 'cells',
           cells: [
             { column: col, row: kill, role: 'killing_threat' },
-            { column: col, row: R, role: 'dead_threat' },
+            { column: col, row: R,    role: 'dead_threat' },
           ],
         },
         categoryEvidence: {},
@@ -308,54 +564,41 @@ export function detectUndercut(moves, scores) {
   return { matched: false };
 }
 
-// T008 — Overcut detection
-// Same structural pattern as undercut but playing in C is WINNING (scores[C] > 0).
-// Opponent's lower threat is neutralised by current player's upper threat.
-export function detectOvercut(moves, scores) {
-  const moveCount = moves.length;
-  const { board, colHeights } = parseBoardState(moves);
-  const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-  const opponent = 3 - currentPlayer;
-
-  const currentThreats = {};
-  const opponentThreats = {};
-  for (let col = 0; col < COLS; col++) {
-    currentThreats[col] = [];
-    opponentThreats[col] = [];
-    for (let row = 0; row < ROWS; row++) {
-      if (board[row][col] !== 0) continue;
-      board[row][col] = currentPlayer;
-      if (checkWin(board, row, col, currentPlayer)) currentThreats[col].push(row);
-      board[row][col] = 0;
-      board[row][col] = opponent;
-      if (checkWin(board, row, col, opponent)) opponentThreats[col].push(row);
-      board[row][col] = 0;
-    }
-  }
+/**
+ * T008 — Overcut detection.
+ * Same structural pattern as undercut but playing in C is WINNING (scores[C] > 0).
+ * Opponent's lower threat is neutralised by current player's upper threat.
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectOvercut(board, scores) {
+  // @see allen-t4, allen-t5, allen-t2
+  const threats    = board.reachableThreats(board.currentPlayer);
+  const oppThreats = board.reachableThreats(board.opponent);
 
   for (let col = 0; col < COLS; col++) {
-    if (colHeights[col] >= ROWS) continue;
+    if (board.colHeights[col] >= ROWS) continue;
     if (!scores || scores[col] <= 0) continue; // overcut requires playing C to be winning
-    for (const R of currentThreats[col]) {
-      const neutralised = opponentThreats[col].find(rp => rp < R);
+    const colRows    = threats.get(col) ?? [];
+    const oppColRows = oppThreats.get(col) ?? [];
+
+    for (const R of colRows) {
+      const neutralised = oppColRows.find(rp => rp < R);
       if (neutralised === undefined) continue;
-      // O1: verify at least one T2-blocking mechanism — if none hold, T2 fires normally (undercut, not overcut)
-      const sameParity = R % 2 === neutralised % 2; // T4: same parity, no interaction
-      const t5Exception = (R === 5 && neutralised === 2) || (R === 2 && neutralised === 5); // T5: rows 6+3 (1-indexed)
-      const chainT2 = currentThreats[col].some(Rpp => {
-        if (Rpp >= neutralised) return false;
-        if (Rpp % 2 === 0 && neutralised % 2 === 1) return true; // T2 sub-case 2: CP even below opp odd (any distance)
-        if (Rpp % 2 === 1 && neutralised % 2 === 0 && Rpp + 1 === neutralised) return true; // T2 sub-case 3: adjacent
-        return false;
-      });
-      if (!sameParity && !t5Exception && !chainT2) continue;
+      // O1: match only if at least one T-rule neutralization holds @see allen-t2, allen-t4, allen-t5
+      if (!isT4SameParity(R, neutralised) &&
+          !isT5Exception(R, neutralised) &&
+          !isT2Blocking(colRows, neutralised)) continue;
       return {
         matched: true,
         highlightMetadata: {
           type: 'cells',
           cells: [
             { column: col, row: neutralised, role: 'neutralised_threat' },
-            { column: col, row: R, role: 'major_threat' },
+            { column: col, row: R,           role: 'major_threat' },
           ],
         },
         categoryEvidence: {},
@@ -365,9 +608,18 @@ export function detectOvercut(moves, scores) {
   return { matched: false };
 }
 
-// Returns all 4-cell windows that would be completed by placing `player` at (threatRow, threatCol).
-// Board must not already have a piece at that cell.
-function getWinningWindows(board, threatRow, threatCol, player) {
+/**
+ * Returns all 4-cell windows completed by placing player at (threatRow, threatCol).
+ * Board must not already have a piece at that cell.
+ * @param {number[][]} board
+ * @param {number} threatRow
+ * @param {number} threatCol
+ * @param {number} player  1 or 2
+ * @returns {Array<Array<{row: number, col: number}>>}
+ * @complexity O(16)
+ * @cache not cached
+ */
+export function getWinningWindows(board, threatRow, threatCol, player) {
   const directions = [[0,1],[1,0],[1,1],[1,-1]];
   const windows = [];
   for (const [dr, dc] of directions) {
@@ -389,16 +641,21 @@ function getWinningWindows(board, threatRow, threatCol, player) {
   return windows;
 }
 
-// T009 — Figure-7 detection
-// Checks all four structural variants; current player occupies 4 of 5 template cells,
-// the 5th is empty and playable, and scores confirm a win.
-// Threats are counted at any reachable empty cell in the column (row >= colHeight),
-// not only the gravity-top. Gravity-top restriction applies only to immediate_threat
-// and forced_block which act on the current move.
-export function detectFigure7(moves, scores) {
-  const moveCount = moves.length;
-  const { board, colHeights } = parseBoardState(moves);
-  const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
+/**
+ * T009 — Figure-7 detection.
+ * Checks all four structural variants; current player occupies 4 of 5 template cells,
+ * the 5th is empty and playable, and scores confirm a win.
+ * Threats are counted at any reachable empty cell in the column (row >= colHeight),
+ * not only the gravity-top. Gravity-top restriction applies only to immediate_threat
+ * and forced_block which act on the current move.
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectFigure7(board, scores) {
+  const currentPlayer = board.currentPlayer;
 
   // Enumerate all Figure-7 templates (4 variants × all valid anchor positions)
   for (let x = 0; x < COLS; x++) {
@@ -450,37 +707,33 @@ export function detectFigure7(moves, scores) {
         const comp = template[2];
         const placed = template.filter((_, i) => i !== 2);
 
-        if (!placed.every(c => board[c.row][c.col] === currentPlayer)) continue;
-        if (board[comp.row][comp.col] !== 0) continue;
-        if (colHeights[comp.col] !== comp.row) continue;
+        if (!placed.every(c => board.board[c.row][c.col] === currentPlayer)) continue;
+        if (board.board[comp.row][comp.col] !== 0) continue;
+        if (board.colHeights[comp.col] !== comp.row) continue;
         if (!scores || scores[comp.col] <= 0) continue;
 
+        // withMove replaces outer mutation+undo; colHeights guard above ensures no throw.
+        const nextBoard = board.withMove(comp.col);
         // The double threat must be generated by the figure-7 shape itself:
         // after placing comp, count threats whose winning 4-in-a-row shares ≥3 cells
         // with the template (the connect-4 is the 7-shape + 1 extra disk).
         const templateSet = new Set([...placed, comp].map(c => `${c.row},${c.col}`));
-        board[comp.row][comp.col] = currentPlayer;
-        colHeights[comp.col]++;
+
         const threatCells = [];
-        for (let col = 0; col < COLS; col++) {
-          for (let row = colHeights[col]; row < ROWS; row++) {
-            board[row][col] = currentPlayer;
-            const wins = checkWin(board, row, col, currentPlayer);
-            board[row][col] = 0;
-            if (!wins) continue;
-            const windows = getWinningWindows(board, row, col, currentPlayer);
+        // nextBoard.reachableThreats replaces the inner mutation loop.
+        for (const [col, rows] of nextBoard.reachableThreats(currentPlayer)) {
+          for (const row of rows) {
+            const windows = nextBoard.winningWindows(row, col, currentPlayer);
             if (windows.some(w => w.filter(cell => templateSet.has(`${cell.row},${cell.col}`)).length >= 3)) {
               threatCells.push({ column: col, row });
             }
           }
         }
-        // gravityTopCount uses incremented colHeights (comp already placed) for accuracy.
+        // gravityTopCount uses nextBoard.colHeights (comp already placed) for accuracy.
         // A figure-7 zugzwang has at most 1 gravity-top threat (the forcing move). Two or
         // more gravity-top threats means the position is a direct fork, not a figure-7.
-        const gravityTopCount = threatCells.filter(t => t.row === colHeights[t.column]).length;
-        const hasAboveGravity = threatCells.some(t => t.row > colHeights[t.column]);
-        board[comp.row][comp.col] = 0;
-        colHeights[comp.col]--;
+        const gravityTopCount = threatCells.filter(t => t.row === nextBoard.colHeights[t.column]).length;
+        const hasAboveGravity = threatCells.some(t => t.row > nextBoard.colHeights[t.column]);
         if (threatCells.length < 2) continue;
         if (gravityTopCount >= 2) continue; // F1: two gravity-top threats = direct fork, not figure-7 zugzwang
         if (!hasAboveGravity) continue; // F2: zugzwang requires at least one above-gravity threat
@@ -493,7 +746,7 @@ export function detectFigure7(moves, scores) {
           threatCells.some(t2 =>
             t2.column === t1.column &&
             t2.row === t1.row + 1 &&
-            t1.row <= colHeights[t1.column] + 1
+            t1.row <= nextBoard.colHeights[t1.column] + 1
           )
         );
         if (!hasConsecutivePair) continue;
@@ -516,24 +769,26 @@ export function detectFigure7(moves, scores) {
   return { matched: false };
 }
 
-// T010 — J-Shape detection
-// Canonical: {(c,r),(c,r+2),(c+1,r+1)} with (c+1,r+2) completing.
-// Mirror: {(c,r),(c,r+2),(c-1,r+1)} with (c-1,r+2) completing.
-// Threats are counted at any reachable empty cell in the column (row >= colHeight),
-// not only the gravity-top. Gravity-top restriction applies only to immediate_threat
-// and forced_block which act on the current move.
-export function detectJShape(moves, scores) {
-  const moveCount = moves.length;
-  const { board, colHeights } = parseBoardState(moves);
-  const currentPlayer = (moveCount % 2 === 0) ? 1 : 2;
-  const opponent = 3 - currentPlayer;
-
+/**
+ * T010 — J-Shape detection.
+ * Canonical: {(c,r),(c,r+2),(c+1,r+1)} with (c+1,r+2) completing.
+ * Mirror: {(c,r),(c,r+2),(c-1,r+1)} with (c-1,r+2) completing.
+ * Threats are counted at any reachable empty cell in the column (row >= colHeight),
+ * not only the gravity-top. Gravity-top restriction applies only to immediate_threat
+ * and forced_block which act on the current move.
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectJShape(board, scores) {
   function tryTemplate(placed, completing, farCol) {
-    if (!placed.every(cell => board[cell.row][cell.col] === currentPlayer)) return false;
-    if (board[completing.row][completing.col] !== 0) return false;
-    if (colHeights[completing.col] !== completing.row) return false;
+    if (!placed.every(cell => board.board[cell.row][cell.col] === board.currentPlayer)) return false;
+    if (board.board[completing.row][completing.col] !== 0) return false;
+    if (board.colHeights[completing.col] !== completing.row) return false;
     // J4: opponent must not occupy the far column at the completing row
-    if (board[completing.row][farCol] === opponent) return false;
+    if (board.board[completing.row][farCol] === board.opponent) return false;
     if (!scores || scores[completing.col] <= 0) return false;
     return true;
   }
@@ -547,12 +802,11 @@ export function detectJShape(moves, scores) {
       const farCol = c + 2;
       if (tryTemplate(placed, completing, farCol)) {
         // J3: parity cancellation — reject if opponent has an odd-1-indexed threat in farCol
+        // checkWin is mutation-free (never reads board[row][col]) — no placement needed
         let oppOddInFarCol = false;
         for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
-          if (board[row][farCol] !== 0 || row % 2 !== 0) continue; // even 0-indexed = odd 1-indexed
-          board[row][farCol] = opponent;
-          if (checkWin(board, row, farCol, opponent)) oppOddInFarCol = true;
-          board[row][farCol] = 0;
+          if (board.board[row][farCol] !== 0 || row % 2 !== 0) continue; // even 0-indexed = odd 1-indexed
+          if (checkWin(board.board, row, farCol, board.opponent)) oppOddInFarCol = true;
         }
         if (oppOddInFarCol) continue;
         return {
@@ -578,13 +832,11 @@ export function detectJShape(moves, scores) {
       const completing = { col: c-1, row: r+2 };
       const farCol = c - 2;
       if (tryTemplate(placed, completing, farCol)) {
-        // J3: parity cancellation
+        // J3: parity cancellation (mutation-free checkWin)
         let oppOddInFarCol = false;
         for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
-          if (board[row][farCol] !== 0 || row % 2 !== 0) continue;
-          board[row][farCol] = opponent;
-          if (checkWin(board, row, farCol, opponent)) oppOddInFarCol = true;
-          board[row][farCol] = 0;
+          if (board.board[row][farCol] !== 0 || row % 2 !== 0) continue;
+          if (checkWin(board.board, row, farCol, board.opponent)) oppOddInFarCol = true;
         }
         if (oppOddInFarCol) continue;
         return {
@@ -605,18 +857,23 @@ export function detectJShape(moves, scores) {
   return { matched: false };
 }
 
-// T006 — Claimeven detection (async — runs solver simulation)
-// Subtype A: exactly 1 odd column → unique equalising move.
-// Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
-export async function detectClaimeven(moves, solver) {
-  const moveCount = moves.length;
-  if (moveCount === 0 || moveCount % 2 === 0) return { matched: false };
-  const { colHeights } = parseBoardState(moves);
+/**
+ * T006 — Claimeven detection (async — runs solver simulation).
+ * Subtype A: exactly 1 odd column → unique equalising move.
+ * Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
+ * @param {Board} board
+ * @param {object} solver  c4solver wrapper instance
+ * @returns {Promise<{ matched: boolean, col?: number, metadata?: HighlightMetadata }>}
+ * @complexity O(42) + solver queries
+ * @cache not cached
+ */
+export async function detectClaimeven(board, solver) {
+  if (board.movestring.length === 0 || board.movestring.length % 2 === 0) return { matched: false };
 
   // Identify odd-height columns (odd empty-space count)
   const oddCols = [];
   for (let col = 0; col < COLS; col++) {
-    if (colHeights[col] < ROWS && colHeights[col] % 2 === 1) oddCols.push(col);
+    if (board.colHeights[col] < ROWS && board.colHeights[col] % 2 === 1) oddCols.push(col);
   }
 
   let subtype, correctCol, baseinversePair;
@@ -627,7 +884,7 @@ export async function detectClaimeven(moves, solver) {
     baseinversePair = [correctCol];
   } else if (oddCols.length === 2) {
     // Subtype B: opponent's last move made one of these columns odd
-    const lastCol = parseInt(moves[moveCount - 1], 10);
+    const lastCol = parseInt(board.movestring[board.movestring.length - 1], 10);
     if (!oddCols.includes(lastCol)) return { matched: false };
     subtype = 'B';
     baseinversePair = [...oddCols];
@@ -637,7 +894,7 @@ export async function detectClaimeven(moves, solver) {
   }
 
   // Run simulation from position after correct move
-  const newMoves = moves + correctCol.toString();
+  const newMoves = board.movestring + correctCol.toString();
   const simResult = await runClaimevenSimulation(newMoves, solver);
   if (!simResult.yellowWins) return { matched: false };
 
@@ -719,7 +976,165 @@ async function runClaimevenSimulation(ms, solver) {
   return { yellowWins: false, trace };
 }
 
-// Classify the best available move (ignoring candidateCol, find the strongest pattern).
+/**
+ * Detects columns where the current player can win immediately (gravity-top only).
+ * @param {Board} board
+ * @returns {{ matched: boolean, cols?: number[] }}
+ * @complexity O(7)
+ * @cache not cached
+ */
+export function detectImmediateThreat(board) {
+  const cols = board.immediateThreats(board.currentPlayer);
+  if (cols.length === 0) return { matched: false };
+  return { matched: true, cols };
+}
+
+/**
+ * Detects columns where playing creates a double threat: ≥2 gravity-top threats (Case A)
+ * or two consecutive-row threats in the same column (Case B).
+ * @param {Board} board
+ * @returns {{ matched: boolean, cols?: number[] }}
+ * @complexity O(7 × 42)
+ * @cache not cached
+ */
+export function detectDoubleThreat(board) {
+  const matchedCols = [];
+  for (let col = 0; col < COLS; col++) {
+    if (board.colHeights[col] >= ROWS) continue;
+    const nextBoard = board.withMove(col);
+    const threatCells = [];
+    for (const [c, rows] of nextBoard.reachableThreats(board.currentPlayer)) {
+      for (const row of rows) threatCells.push({ col: c, row });
+    }
+    const gravityTopCols = new Set(
+      threatCells.filter(t => t.row === nextBoard.colHeights[t.col]).map(t => t.col)
+    );
+    if (gravityTopCols.size >= 2) { matchedCols.push(col); continue; }
+    const byCol = {};
+    for (const t of threatCells) {
+      if (!byCol[t.col]) byCol[t.col] = [];
+      byCol[t.col].push(t.row);
+    }
+    let found = false;
+    for (const rows of Object.values(byCol)) {
+      const sorted = rows.sort((a, b) => a - b);
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i + 1] === sorted[i] + 1) { found = true; break; }
+      }
+      if (found) break;
+    }
+    if (found) matchedCols.push(col);
+  }
+  if (matchedCols.length === 0) return { matched: false };
+  return { matched: true, cols: matchedCols };
+}
+
+/**
+ * Detects forced-block columns: opponent has immediate threats and only specific columns
+ * (with non-negative score) neutralise them while other columns fail to.
+ * @param {Board} board
+ * @param {number[]} scores
+ * @returns {{ matched: boolean, cols?: number[] }}
+ * @complexity O(7²)
+ * @cache not cached
+ */
+export function detectForcedBlock(board, scores) {
+  if (board.immediateThreats(board.opponent).length === 0) return { matched: false };
+  const matchedCols = [];
+  for (let col = 0; col < COLS; col++) {
+    if (board.colHeights[col] >= ROWS) continue;
+    if (scores[col] < 0) continue;
+    const nextBoard = board.withMove(col);
+    if (nextBoard.immediateThreats(board.opponent).length > 0) continue;
+    const someOtherFails = scores.some((_, i) => {
+      if (i === col || board.colHeights[i] >= ROWS) return false;
+      return board.withMove(i).immediateThreats(board.opponent).length > 0;
+    });
+    if (someOtherFails) matchedCols.push(col);
+  }
+  if (matchedCols.length === 0) return { matched: false };
+  return { matched: true, cols: matchedCols };
+}
+
+/**
+ * Detects forced-win (opponent is winning) columns: all scores ≤ 0 and the column
+ * has the best (least-negative) score while strictly worse alternatives exist.
+ * @param {Board} board
+ * @param {number[]} scores
+ * @returns {{ matched: boolean, cols?: number[] }}
+ * @complexity O(7)
+ * @cache not cached
+ */
+export function detectForcedWin(board, scores) {
+  if (!scores.every(s => s <= 0)) return { matched: false };
+  const matchedCols = [];
+  for (let col = 0; col < COLS; col++) {
+    if (board.colHeights[col] >= ROWS) continue;
+    const score = scores[col];
+    if (score >= 0) continue;
+    const isBestBadMove = scores.every(s => s <= score || s === 0);
+    if (isBestBadMove && scores.some(s => s < score)) matchedCols.push(col);
+  }
+  if (matchedCols.length === 0) return { matched: false };
+  return { matched: true, cols: matchedCols };
+}
+
+/**
+ * Detects forbidden columns: in a losing position (all scores ≤ 0), columns whose play
+ * immediately hands the opponent a winning move.
+ * @param {Board} board
+ * @param {number[]} scores
+ * @returns {{ matched: boolean, cols?: number[] }}
+ * @complexity O(7)
+ * @cache not cached
+ */
+export function detectForbiddenColumns(board, scores) {
+  if (!scores.every(s => s <= 0)) return { matched: false };
+  const matchedCols = [];
+  for (let col = 0; col < COLS; col++) {
+    if (board.colHeights[col] >= ROWS) continue;
+    if (board.withMove(col).immediateThreats(board.opponent).length > 0) matchedCols.push(col);
+  }
+  if (matchedCols.length === 0) return { matched: false };
+  return { matched: true, cols: matchedCols };
+}
+
+/**
+ * Runs all detectors against a single Board, returning one result per detector.
+ * Caches (reachableThreats, etc.) are shared across all detectors via the Board instance.
+ * @param {string} moves
+ * @param {number[]} scores
+ * @param {object} [solver]  Required only for detectClaimeven
+ * @returns {Promise<Array<{detectorName: string, result: object}>>}
+ * @complexity O(42) board parse + per-detector cost (all reachableThreats() cached after first)
+ * @cache not cached
+ */
+export async function classifyAll(moves, scores, solver) {
+  const board = new Board(moves);
+  return [
+    { detectorName: 'immediate_threat',  result: detectImmediateThreat(board) },
+    { detectorName: 'double_threat',     result: detectDoubleThreat(board) },
+    { detectorName: 'forced_block',      result: detectForcedBlock(board, scores) },
+    { detectorName: 'forced_win',        result: detectForcedWin(board, scores) },
+    { detectorName: 'forbidden_columns', result: detectForbiddenColumns(board, scores) },
+    { detectorName: 'z_threat',          result: detectZThreat(board, scores) },
+    { detectorName: 'undercut',          result: detectUndercut(board, scores) },
+    { detectorName: 'overcut',           result: detectOvercut(board, scores) },
+    { detectorName: 'figure_7',          result: detectFigure7(board, scores) },
+    { detectorName: 'j_shape',           result: detectJShape(board, scores) },
+    { detectorName: 'claimeven',         result: await detectClaimeven(board, solver) },
+  ];
+}
+
+/**
+ * Classifies the best available move (ignoring candidateCol, finds the strongest pattern).
+ * Delegates to classify() using the column with the highest solver score.
+ * @param {string} moves
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {object}  classification result from classify()
+ * @complexity O(42)
+ * @cache not cached
+ */
 export function classifyBestMove(moves, scores) {
   const maxScore = Math.max(...scores);
   const bestCol = scores.indexOf(maxScore);

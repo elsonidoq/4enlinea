@@ -78,6 +78,108 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 - `/api/stripe/create-checkout`: 10 req/min
 - All other `/api/` routes: 120 req/min
 
+## Coach Endpoint: explain-simulate
+
+`POST /api/coach/explain-simulate` — plays out optimal continuations and aggregates which tactical patterns appear at the leaves, answering "what does this move set up?"
+
+**Request body**:
+```json
+{
+  "moves":       "<movestring including the candidate move>",
+  "anchorCell":  { "col": 3, "row": 2 },
+  "perspective": 1,
+  "numPlies":    2
+}
+```
+- `moves`: 0-indexed move string that already includes the candidate move being explained.
+- `anchorCell`: 0-indexed cell where the candidate disc landed. Caller computes as `new Board(movesBeforePlay).colHeights[col]`.
+- `perspective`: `1` (Red) or `2` (Yellow) — whose patterns to aggregate.
+- `numPlies`: optional, default `2`, integer `0–6`. Practical range: 2–4.
+
+**Response** (`200 OK`):
+```json
+{
+  "totalLeaves": 9,
+  "anchorCell":  { "col": 3, "row": 2 },
+  "perspective": 1,
+  "patterns": {
+    "figure_7":      { "frequency": 7, "total": 9, "ratio": 0.78, "withAnchorDisc": 5, "withoutAnchorDisc": 2, "cellHistogram": { "col3,row2": 6 } },
+    "z_threat":      { "frequency": 0, "total": 9, "ratio": 0.00, "withAnchorDisc": 0, "withoutAnchorDisc": 0, "cellHistogram": {} },
+    "double_threat": { "frequency": 4, "total": 9, "ratio": 0.44, "withAnchorDisc": 3, "withoutAnchorDisc": 1, "colHistogram": { "3": 3 } },
+    "claimeven":     { "frequency": 0, "total": 9, "ratio": 0.00, "withAnchorDisc": 0, "withoutAnchorDisc": 0 }
+  }
+}
+```
+- All 11 pattern names are present in `patterns` (claimeven is always `frequency: 0` — excluded from simulation due to cost).
+- `withAnchorDisc + withoutAnchorDisc = frequency` for every pattern.
+- Coordinate patterns (`z_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`) include `cellHistogram`; directional patterns include `colHistogram`; boolean patterns have neither.
+
+**Errors**: 400 for invalid/missing params, 500 for solver errors.
+
+## LLM Coach Endpoints
+
+### `POST /api/recommend-move`
+
+Provides a pre-move recommendation for the current board position.
+
+**Request body**: `{ movestring: string, rounds: 1 | 2 }`
+- `movestring`: 0–42 digits `0–6` (current position before the player's move)
+- `rounds`: depth of LLM reflection (1 = single-pass)
+
+**Response**:
+```json
+{
+  "recommendation": "<LLM text>",
+  "prompt": "<raw prompt sent to LLM>",
+  "colRankings": [{ "col": 4, "tier": "winning" }, { "col": 3, "tier": "drawing" }]
+}
+```
+- `colRankings`: top-2 columns sorted best-first by tier; `col` is 0-indexed; `tier` is the classification tier string.
+- No solver scores are included — constitution Principle IV prohibits surfacing numerical evaluations.
+
+**Rate limit**: 5 req/min (LLM cost guard). Returns 503 if `OPENAI_API_KEY` or `OPENAI_MODEL` env vars are absent.
+
+### `POST /api/explain-move-llm`
+
+Explains a specific move the human just played (post-move reflection).
+
+**Request body**: `{ movestring: string, col: number, rounds: number }`
+- `movestring`: position **before** the human's move
+- `col`: 0-indexed column the human played
+- `rounds`: 1–5
+
+**Response**: `{ "explanation": "<LLM text>", "prompt": "<raw prompt>" }`
+
+**Rate limit**: 5 req/min.
+
+## Puzzle Check Endpoint
+
+`POST /api/puzzles/:id/check` evaluates one candidate column against the puzzle's goal predicate.
+
+**Request body**: `{ candidateCol: 0-6, moveHistory?: number[], attemptNumber?: number, timeMs?: number }`
+
+**Response**:
+```json
+{
+  "result": "correct" | "wrong" | "tied",
+  "correctCol": number | null,
+  "tiedWith": number[] | null,
+  "threatCells": [{"col": 0-6, "row": 0-5}] | null,
+  "forbiddenCols": number[] | null
+}
+```
+
+- `threatCells`: populated for `double_threat` puzzles when `result` is `correct` or `tied`. Contains the two (or more) major threat cells created by the correct move. Frontend uses these to render `major_threat` highlights after reveal.
+- `forbiddenCols`: populated for `forbidden_columns` puzzles on every response. Contains the full set of 0-indexed columns that are forbidden in the position. Frontend uses this to reveal missed forbidden columns after multi-select submit.
+- `correctCol`: the canonical correct column for categories that have a single answer; `null` for categories where any non-forbidden column is correct (e.g. `forbidden_columns`).
+
+Returns 400 for `interaction_mode = 'sequence'` puzzles — use `/sequence/move` instead.
+
+## Puzzle GET Endpoint
+
+`GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
+Frontend uses `userPlayer` to determine which color disc to place on click and to display the "Playing as Red/Yellow" context chip.
+
 ## Sequence-Mode Puzzle Endpoint
 
 `POST /api/puzzles/:id/sequence/move` handles per-move validation for `interaction_mode = 'sequence'` puzzles.

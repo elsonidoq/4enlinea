@@ -91,13 +91,30 @@ export function Piece({ color = 'empty', highlight = null, heatValue = 0, step =
     shadow = 'none';
   }
 
+  // ghost_mirror: semi-transparent yellow disc on empty cell — claimeven mirror preview
+  if (highlight === 'ghost_mirror' && color === 'empty') {
+    bg = 'rgba(245,184,32,.35)';
+    border = '1.5px dashed var(--yellow)';
+    shadow = '0 0 6px rgba(245,184,32,.3)';
+  }
+
+  // wrong_move: red glow on a placed disc — the user's incorrect answer
+  if (highlight === 'wrong_move' && (color === 'red' || color === 'yellow')) {
+    shadow = '0 0 14px rgba(239,68,68,.7), 0 0 0 2px var(--red)';
+  }
+
+  // correct_reveal: gold ring on a placed disc — the answer shown after reveal
+  if (highlight === 'correct_reveal' && (color === 'red' || color === 'yellow')) {
+    shadow = '0 0 14px rgba(251,191,36,.7), 0 0 0 2px #fbbf24';
+  }
+
   if (heatValue > 0 && color === 'empty') {
     bg = `rgba(232, 57, 46, ${Math.min(heatValue, 0.85)})`;
     border = '1px solid rgba(232, 57, 46, .4)';
     shadow = 'none';
   }
 
-  const stepColor = highlight === 'winner' ? 'var(--yellow)' : 'var(--red)';
+  const stepColor = (color === 'red' || color === 'yellow') ? 'rgba(255,255,255,0.9)' : (highlight === 'winner' ? 'var(--yellow)' : 'var(--red)');
 
   return (
     <div

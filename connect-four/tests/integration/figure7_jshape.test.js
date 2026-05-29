@@ -2,7 +2,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
-import { detectFigure7, detectJShape } from '../../server/classifier.js';
+import { detectFigure7, detectJShape, Board } from '../../server/classifier.js';
 import { checkFigure7Predicate, checkJShapePredicate } from '../../server/candidate-generator.js';
 import { evaluatePredicate } from '../../server/predicates.js';
 
@@ -25,7 +25,7 @@ describe('detectJShape — structural and solver validation', () => {
   test('returns matched=false for empty board', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = detectJShape(ms, scores);
+    const result = detectJShape(new Board(ms), scores);
     assert.equal(result.matched, false, 'empty board has no j_shape');
   }, { timeout: 10_000 });
 
@@ -34,7 +34,7 @@ describe('detectJShape — structural and solver validation', () => {
     const positions = ['233221', '01234566543210', '330022'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
-      const result = detectJShape(ms, scores);
+      const result = detectJShape(new Board(ms), scores);
       if (result.matched) {
         const hm = result.highlightMetadata;
         assert.equal(hm.type, 'cells');
@@ -57,7 +57,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('returns matched=false for empty board', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.equal(result.matched, false, 'empty board has no figure_7');
   }, { timeout: 10_000 });
 
@@ -78,7 +78,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('non-corner completing cell (arm extension) is not a figure_7', async () => {
     const ms = '021353342445';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.equal(result.matched, false, 'extending a horizontal arm is not a figure_7 completing move');
   }, { timeout: 10_000 });
 
@@ -90,7 +90,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('41432254553 does not match figure_7', async () => {
     const ms = '30321143442';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.equal(result.matched, false, '41432254553 is not a figure_7');
   }, { timeout: 10_000 });
 
@@ -111,7 +111,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('detects figure-7 from movestring 44444425765662 (threats not immediately accessible)', async () => {
     const ms = '33333314654551';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.ok(result.matched, 'figure-7 must be detected even when post-placement threats are not gravity-accessible');
     assert.equal(result.correctCol, 4, 'completing cell is col4 (0-indexed)');
     assert.equal(result.highlightMetadata.cells.length, 4);
@@ -127,7 +127,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('462324415632426356 does not match figure_7 (threats in different columns)', async () => {
     const ms = '351213304521315245';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.equal(result.matched, false,
       '462324415632426356: threats land in different columns — not a figure_7 zugzwang');
   }, { timeout: 10_000 });
@@ -143,7 +143,7 @@ describe('detectFigure7 — structural and solver validation', () => {
   test('444335255542677244273277571253 does not match figure_7 (threats not consecutive rows)', async () => {
     const ms = '333224144431566133162166460142';
     const scores = await solver.query(ms);
-    const result = detectFigure7(ms, scores);
+    const result = detectFigure7(new Board(ms), scores);
     assert.equal(result.matched, false,
       '444335255542677244273277571253: same-column threats 3 rows apart — not a figure_7 zugzwang');
   }, { timeout: 10_000 });
@@ -152,7 +152,7 @@ describe('detectFigure7 — structural and solver validation', () => {
     const positions = ['01234566543210', '654321065432', '330022'];
     for (const ms of positions) {
       const scores = await solver.query(ms);
-      const result = detectFigure7(ms, scores);
+      const result = detectFigure7(new Board(ms), scores);
       if (result.matched) {
         const hm = result.highlightMetadata;
         assert.equal(hm.type, 'cells');

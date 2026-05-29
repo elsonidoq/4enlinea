@@ -2,7 +2,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
-import { detectZThreat } from '../../server/classifier.js';
+import { detectZThreat, Board } from '../../server/classifier.js';
 import { checkZThreatPredicate } from '../../server/candidate-generator.js';
 import { evaluatePredicate } from '../../server/predicates.js';
 
@@ -14,7 +14,7 @@ describe('detectZThreat — structure and eval', () => {
   test('returns matched=false for an empty board position', async () => {
     const ms = '';
     const scores = await solver.query(ms);
-    const result = detectZThreat(ms, scores);
+    const result = detectZThreat(new Board(ms), scores);
     assert.equal(result.matched, false, 'empty board should not have a z_threat');
   }, { timeout: 10_000 });
 
@@ -23,7 +23,7 @@ describe('detectZThreat — structure and eval', () => {
     // detectZThreat may or may not fire; if it does, badgeCount must be odd and column winning.
     const ms = '001122';
     const scores = await solver.query(ms);
-    const result = detectZThreat(ms, scores);
+    const result = detectZThreat(new Board(ms), scores);
     if (result.matched) {
       assert.equal(result.highlightMetadata.type, 'capsule');
       assert.ok(result.highlightMetadata.badgeCount % 2 === 1, 'badgeCount must be odd');
@@ -36,7 +36,7 @@ describe('detectZThreat — structure and eval', () => {
     // Mid-game position with some complexity
     const ms = '654321065432';
     const scores = await solver.query(ms);
-    const result = detectZThreat(ms, scores);
+    const result = detectZThreat(new Board(ms), scores);
     if (result.matched) {
       const hm = result.highlightMetadata;
       assert.equal(hm.type, 'capsule');

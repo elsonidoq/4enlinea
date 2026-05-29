@@ -1,4 +1,4 @@
-import { parseBoardState, checkWin } from '../classifier.js';
+import { parseBoardState, checkWin, getMajorThreatCells } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 
 const ROWS = 6;
@@ -7,38 +7,6 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
 const moves = process.argv[2] ?? '';
 
-// Returns map "r,c" -> { rm, rn, ym, yn } for all empty cells with any threat.
-// rm = red major (3 discs), rn = red minor (2 discs), ym/yn = same for yellow.
-function buildThreatMap(board) {
-  const map = {};
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (board[r][c] !== 0) continue;
-      let rm = false, rn = false, ym = false, yn = false;
-      for (const [dr, dc] of dirs) {
-        for (let off = 0; off <= 3; off++) {
-          const sr = r - dr*off, sc = c - dc*off;
-          let red = 0, yel = 0, valid = true;
-          for (let i = 0; i < 4; i++) {
-            const nr = sr + dr*i, nc = sc + dc*i;
-            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
-            if (board[nr][nc] === 1) red++;
-            else if (board[nr][nc] === 2) yel++;
-          }
-          if (!valid || (red > 0 && yel > 0)) continue;
-          const empty = 4 - red - yel;
-          if (red === 3 && empty === 1) rm = true;
-          else if (red === 2 && empty === 2) rn = true;
-          if (yel === 3 && empty === 1) ym = true;
-          else if (yel === 2 && empty === 2) yn = true;
-        }
-      }
-      if (rm || rn || ym || yn) map[`${r},${c}`] = { rm, rn, ym, yn };
-    }
-  }
-  return map;
-}
 
 // Raw board: 3-char cell (space-padded symbol).
 function rawCell(v) {
@@ -80,7 +48,7 @@ async function main() {
     tmpH[col]++;
   }
 
-  const threatMap = buildThreatMap(board);
+  const threatMap = getMajorThreatCells(board);
 
   // Detect game over (solver hangs on won positions)
   let gameOver = false;

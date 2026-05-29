@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/008-new-puzzle-categories/plan.md
+specs/009-classifier-board-refactor/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index
@@ -28,6 +28,22 @@ The script prints two boards followed by analysis rows:
 3. **`par` row** — empty-cell count per column with parity: `O` = odd, `E` = even (key for zugzwang reasoning).
 4. **`scr` row** — c4solver score for each column (`--` = full column).
 5. **Major threats list** — explicit enumeration of every `[R]`/`[Y]`/`[*]` cell as `colC rowR (player)`, sorted by column then row.
+
+## When you need a concrete movestring
+  - Never construct a movestring from random column placements.
+  - Do not generate movestrings by hand unless it is a quick smoke test.
+  - Prefer fetching from the DB or using existing code for candidate generation to produce one that satisfies the required predicate.
+  - Tests and the knowledge base are also good sources.
+  - If none of the above works, ask the user before spending more time on it.
+
+
+## Row/column coordinate convention
+
+All internal coordinates are **0-indexed**: row 0 = bottom, row 5 = top; col 0 = leftmost. This is a project-wide invariant. The only two translation boundaries are:
+- **Frontend display** — converts to 1-based for the user.
+- **c4solver calls** — `c4solver-wrapper.js` translates internally; all callers pass 0-indexed values.
+
+Never use 1-indexed coordinates in server code, tests, or specs.
 
 ## When Asked to Write a Prompt
 If the user asks you to 'write a prompt' or 'draft a prompt' for use in another context, produce the prompt text directly. Do NOT begin exploring code, running tools, or solving the underlying problem yourself unless explicitly asked.

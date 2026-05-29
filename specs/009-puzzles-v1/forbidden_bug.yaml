@@ -1,0 +1,40 @@
+puzzle_id: 76e375d3-6f6d-437f-a328-03704b22bcd3
+move_string: "330145344315"
+forbidden_cols_0indexed: [2, 6]  # col 3 and col 7 in 1-indexed display
+
+root_cause: |
+  Semantic inversion between goal prompt and predicate evaluation direction.
+
+  Goal prompt: "Identify which columns you must avoid — playing there would
+  hand your opponent an immediate win."
+
+  The user interprets this as: click the forbidden columns to identify them.
+  But evalForbiddenColumns returns result='correct' only when candidateCol is
+  NOT in forbiddenCols (i.e. the user clicks a safe column).
+
+  So clicking col 2 (forbidden) → result='wrong', even though it is the
+  correct answer per the goal prompt. The user is always wrong because they
+  are following the goal prompt exactly.
+
+  Predicate code path (predicates.js line 221):
+    if (forbiddenCols.includes(candidateCol)) return { result: 'wrong', ... };
+    return { result: 'correct', ... };  // only safe columns are "correct"
+
+empirical_tests:
+  - col: 0   # safe column, NOT forbidden
+    expected_per_prompt: wrong (user thinks this is not forbidden, but prompt asks to click forbidden ones)
+    actual_predicate: correct
+    note: predicate and prompt are inverted
+
+  - col: 2   # forbidden column
+    expected_per_prompt: correct (user correctly identifies a forbidden column)
+    actual_predicate: wrong
+    note: this is the "always wrong" bug
+
+fix_approach: |
+  Replace single-click with multi-select UX (T008):
+  - User selects all columns they believe are forbidden
+  - Each selected column: correct if it IS in forbiddenCols, wrong if it is NOT
+  - Missed forbidden columns (not selected) are revealed after submit
+  - evalForbiddenColumns predicate semantics unchanged; evaluation direction
+    is inverted at the UI aggregation layer in T008

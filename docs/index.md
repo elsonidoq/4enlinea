@@ -46,6 +46,8 @@
 
 [architecture/server-conventions.md](architecture/server-conventions.md) — solver IPC modes (persistent vs one-shot), move string format, board representation — touching c4solver integration or board-level server code
 
+[architecture/llm-coach-endpoints.md](architecture/llm-coach-endpoints.md) — `explain_move` and `recommend_next_move` PoC architecture: shared infrastructure, data flows, prompt structures, flat table format, server endpoint conversion guide — adding LLM coaching features or converting CLI scripts to server routes
+
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 
 [architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields

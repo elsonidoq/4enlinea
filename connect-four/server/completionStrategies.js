@@ -1,7 +1,7 @@
 // CompletionStrategy interface and implementations for sequence-mode puzzles.
 // All validation is bitboard-only — no solver calls.
 
-import { checkWin, countWinningThreats } from './classifier.js';
+import { checkWin, getImmediateThreats } from './classifier.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -28,7 +28,7 @@ export class ForcedWinStrategy {
     // (a) No immediate threat for learner before the move (FR-006a).
     const boardCopy = board.map(r => [...r]);
     const heightsCopy = [...colHeights];
-    if (countWinningThreats(boardCopy, heightsCopy, learner) > 0) {
+    if (getImmediateThreats(boardCopy, heightsCopy, learner).length > 0) {
       return {
         valid: false,
         reason: 'You had an immediate win available — play through the forcing sequence instead.',
@@ -43,7 +43,7 @@ export class ForcedWinStrategy {
     heightsAfter[col]++;
 
     // (b) At least one immediate threat after the move.
-    if (countWinningThreats(boardAfter, heightsAfter, learner) === 0) {
+    if (getImmediateThreats(boardAfter, heightsAfter, learner).length === 0) {
       return {
         valid: false,
         reason: 'Move was not forcing: no new immediate threat created.',
@@ -80,5 +80,5 @@ export function countThreatsAfterMove(position, col) {
   const heightsAfter = [...colHeights];
   boardAfter[row][col] = learner;
   heightsAfter[col]++;
-  return countWinningThreats(boardAfter, heightsAfter, learner);
+  return getImmediateThreats(boardAfter, heightsAfter, learner).length;
 }
