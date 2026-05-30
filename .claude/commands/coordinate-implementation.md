@@ -64,7 +64,9 @@ For each batch, spawn a sub-agent using the Agent tool with:
 
 **Wait for the sub-agent to finish before spawning the next one.** Do not run batches in parallel.
 
-After each sub-agent completes, read `tasks.md` and mark completed tasks using TaskUpdate. Base completions on what the sub-agent reports having built.
+After each sub-agent completes:
+1. Parse its output for the `## Handoff context` section and save it — this becomes the `[handoff from previous batch]` in the next prompt.
+2. Read `tasks.md` and mark completed tasks using TaskUpdate. Base completions on what the sub-agent reports having built.
 
 ### Sub-agent prompt format
 
@@ -75,8 +77,9 @@ Each sub-agent prompt must be fully self-contained — the sub-agent has no memo
 
 You are implementing part of the feature described in [spec path].
 
-### What has already been built (by prior agents in this run)
-[List files created/modified by prior batches, or "nothing yet" for the first batch]
+### Handoff from previous batch
+[Paste the ## Handoff context section from the prior sub-agent's output verbatim,
+or "This is the first batch — nothing has been built yet." for batch 1]
 
 ### Architecture rules to follow
 Read the following before writing any code:
@@ -116,6 +119,17 @@ Implement the following user stories from the spec:
 - All acceptance scenarios above pass (verify manually or via tests)
 - No TypeScript/lint errors on touched files
 - Tasks marked complete in tasks.md: [list task IDs from tasks.md that this batch covers]
+
+---
+
+## Handoff context (required)
+
+At the very end of your response, output a section titled "## Handoff context".
+Include:
+- Every file you created or modified, with a one-line description of what it contains
+- Key decisions or patterns you established that the next batch must follow (naming, structure, APIs)
+- Anything incomplete, deferred, or left as a stub for the next batch to finish
+- Non-obvious constraints the next agent will hit if it doesn't know about them
 ```
 
 ---
@@ -126,5 +140,5 @@ After all batches have run, output a summary with:
 
 1. **What was built** — for each batch: files created/modified and which user stories they satisfy
 2. **Tasks completed** — list of task IDs marked done
-3. **Open items** — anything a sub-agent flagged as incomplete, skipped, or needing follow-up
+3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually

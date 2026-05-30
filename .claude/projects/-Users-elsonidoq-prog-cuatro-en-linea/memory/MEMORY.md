@@ -46,7 +46,8 @@
 
 ## References — tooling
 
-- [Custom slash commands](reference_custom_commands.md) — project commands at `/Users/elsonidoq/prog/cuatro_en_linea/.claude/commands/`; `/coordinator-prompt` for multi-agent spec implementation
+- [Custom slash commands](reference_custom_commands.md) — project commands at `/Users/elsonidoq/prog/cuatro_en_linea/.claude/commands/`; `/mvp-manager` and `/coordinate-implementation`
+- [Multi-agent orchestration patterns](reference_multiagent_orchestration_patterns.md) — handoff context pattern, AskUserQuestion gate, Opus-for-critique/Sonnet-for-create, state persistence
 
 ## References — infrastructure
 
