@@ -17,7 +17,7 @@ Core events to instrument across all epics: `session_start`, `screen_viewed`, `p
 - `nav.*` — screen titles, keyed by screen key (`nav.home`, `nav.setpicker`)
 - `coach.<category>.<quality>.<n>` — Coach phrases, a **pool** of numbered variants (`coach.immediate_threat.optimal.0`, `.1`, …); the client picks one at random per move (Gap 29 — pooled). `category` matches the `categories.js` slugs, `quality` ∈ `optimal|suboptimal|blunder`
 - `eval.*` / `board.badge.*` — evaluation labels and badge text (`eval.optimal`, `board.badge.good`)
-- `stats.*`, `setpicker.*`, `summary.*`, `upgrade.*`, `mistakes.*` — per-surface strings
+- `home.*`, `stats.*`, `setpicker.*`, `summary.*`, `upgrade.*`, `mistakes.*` — per-surface strings (`home.*` added by Epic 1b)
 - `lesson.<id>.slide.<n>.*` — lesson content (`lesson.lesson-05-claimeven.slide.1.text`)
 
 **Coach phrase library is pooled keys, not English.** Epic 2a's "Coach phrase library" maps each quality bucket to an **array** of i18n keys — `{ [category]: { optimal: key[], suboptimal: key[], blunder: key[] } }` — and the `/api/evaluate-move` response carries the `category` + `quality` (or a single randomly-chosen key); the client resolves the chosen key with `t()` and varies wording by picking one variant at random per move (Gap 29). No raw English strings cross the API or live in the phrase object.
@@ -98,11 +98,21 @@ Replace the existing routing architecture. Wire Home Hub, Stats, analytics utili
 *Routing migration:*
 - Remove `BrowserRouter`, `react-router-dom` routes, `BottomNav`, `AppHeader`
 - **Keep** react-i18next and `ProfileStoreProvider` — do not remove
-- Replace routing with a single `screen` state variable and `go(screenKey)` dispatcher
+- Replace routing with a single `screen` state variable and `go(screenKey, params = {})` dispatcher. `params` is an opaque object stored alongside the current screen key (e.g., `go('challenge', { category: 'immediate_threat' })`); later epics read it to pass context between screens. Back-stack is not required for MVP — `go()` always replaces the current screen with no history.
 - Screen registry mapping key → component (mockup ground truth: `app.jsx` `SCREENS` map). Keys: `home`, `stats` (`screens_home.jsx`); `saga`, `concept`, `socratic`, `clchallenge` (`screens_lessons.jsx`); `setpicker`, `challenge`, `summary` (`screens_challenges.jsx`); `difficulty`, `game`, `review`, `explorer` (`screens_sparring.jsx`); `mistakes`, `mistakeDetail` (`screens_mistakes.jsx`)
-- Per-surface background tint applied based on active screen group
+- **Screen → surface group → background tint mapping (cross-epic contract with Epic 1a tokens):**
+
+  | Screen keys | Surface group | Token |
+  |---|---|---|
+  | `home`, `stats` | home | `--bg-home` |
+  | `saga`, `concept`, `socratic`, `clchallenge` | lessons | `--bg-lessons` |
+  | `setpicker`, `challenge`, `summary` | challenges | `--bg-challenges` |
+  | `difficulty`, `game`, `review`, `explorer` | sparring | `--bg-sparring` |
+  | `mistakes`, `mistakeDetail` | home (accessed from Stats) | `--bg-home` |
+
 - Keep `/admin/curate` accessible: detect `window.location.pathname.startsWith('/admin')` at app boot and render admin shell separately, bypassing the state navigator
-- **Retire the `/coach` route and `CoachPage.jsx`.** Its blunder-review UI and the `coach/queue` endpoints it uses are *reused* by Epic 3c (Past Mistakes) — see Epic 3c. Note that `DashboardPage.jsx` uses `useNavigate` and will break on router removal; this is expected, as the new Home Hub replaces it.
+- **Retire the `/coach` route and `CoachPage.jsx`:** delete both files. Its blunder-review UI and `coach/queue` endpoints are *reused* by Epic 3c (Past Mistakes) — see Epic 3c. Because `BrowserRouter` is removed entirely, no redirect from `/coach` is needed; the URL simply ceases to exist.
+- **Delete `DashboardPage.jsx`:** it uses `useNavigate` which breaks on router removal; the new Home Hub screen is its full replacement. No redirect needed.
 
 *Analytics utility (cross-cutting foundation):*
 - **Reuse the existing `track()` (`src/lib/track.js`) and `POST /api/track` endpoint — both already exist.** The only change here is *modifying* `track.js` to send the active screen key instead of `window.location.pathname` (which becomes a constant `/` once the router is removed). The endpoint already resolves `uid` from the authenticated profile / request body and `user_id` from the bearer token.
@@ -112,18 +122,37 @@ Replace the existing routing architecture. Wire Home Hub, Stats, analytics utili
 *Home Hub screen:*
 - TopBar: "DecodeC4" left, profile icon right (→ auth modal if unauthenticated, → Stats if authenticated)
 - 2+1 feature card grid: Lessons (blue tint), Challenges (peach tint), Sparring (lavender tint)
-- Daily Coach nudge: static `CoachDialog` with placeholder phrase
+- Daily Coach nudge: static `CoachDialog` with placeholder phrase; i18n key `coach.home.welcome.0`, English text "Let's sharpen your Connect Four tactics."; mood: `happy`
 - "Progress & Stats" ghost button → Stats screen
 
 *Stats screen:*
-- **Unauthenticated**: session-only accuracy from most recent challenge session (or `--` if none), lessons done count, sparring record W/L/D. Shows "Sign up to track your progress over time" prompt.
-- **Authenticated**: full all-time accuracy, total puzzles solved, lessons complete, sparring record, day streak (from `getStreak()`, Epic 7), accuracy-by-pattern bars, Coach recommendation + CTA to weakest lesson, "Review past mistakes" link → Past Mistakes screen (Epic 3c)
-  - **Weakest-lesson recommendation logic:** reuse the Gap 15 rule (lowest per-pattern accuracy, tie-break by earliest lesson order; locked lesson → `UpgradeModal`), applied here to **all-time** per-pattern accuracy instead of a single session.
-- Empty state: zeros, no gate (Gap 6c)
+- **Unauthenticated data sources (all from `IndexedDBStore`, set by Epic 7):**
+  - Session accuracy: `getLastChallengeSession()` → `session.accuracy` (or `--` if null)
+  - Lessons done: `getLessonProgress()` → count of entries with `status === 'complete'`
+  - Sparring record: `getSparringRecord()` → `{ W, L, D }`
+  - Shows "Sign up to track your progress over time" prompt.
+- **Authenticated data sources (all from `SupabaseStore`, set by Epic 7):**
+  - All-time accuracy + total puzzles solved + per-pattern accuracy: `getAllSessionStats()` → aggregated across all rows
+  - Lessons complete: `getLessonProgress()` → count of `status === 'complete'` rows
+  - Sparring record: `getSparringRecord()` → `{ W, L, D }`
+  - Day streak: `getStreak()` → `{ streak_count, last_active_date }`
+  - Accuracy-by-pattern bars: per-pattern accuracy from `getAllSessionStats()`
+  - Weakest-lesson recommendation: lowest per-pattern accuracy across all-time stats, tie-break by earliest lesson order (`lesson.order` from `GET /api/lessons`); locked lesson → `UpgradeModal`
+  - "Review past mistakes" link → `go('mistakes')`
+- **Empty state:** show zeros for all numeric fields; no paywall gate (Stats is free and always visible, even with no activity recorded yet)
 
 *i18n:*
 - All user-facing strings in this epic go through `t('key')` translation keys
 - English strings defined in `en.json`; `es.json` stub created but empty (Spanish is post-MVP content)
+
+**Acceptance criteria:**
+- No `react-router-dom` import survives outside the `/admin` branch
+- Every `go()` call fires `track('screen_viewed', { screen: screenKey })` before the component mounts
+- `track('session_start', ...)` fires exactly once on app mount
+- Background tint changes correctly when switching between surface groups
+- Home Hub renders without any authenticated state (anonymous user sees all three feature cards)
+- Stats screen shows `--` for accuracy when no challenge session exists (not `0%` or empty)
+- Stats screen's "Review past mistakes" link is absent for unauthenticated users
 
 **NOT included:** actual surface screens, auth flow (Epic 7), deep data writes.
 

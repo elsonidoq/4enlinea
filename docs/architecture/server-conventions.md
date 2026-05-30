@@ -52,6 +52,15 @@ validateMove(position, col) → { valid: boolean, reason?: string }
 **MUST**: All valid category slugs are defined once in `server/categories.js` as `VALID_CATEGORIES`, `PAID_CATEGORIES`, `CATEGORY_ORDER`, and `CATEGORY_NAMES`.
 **MUST NOT**: Hard-code category slug lists anywhere else in server code — always import from `categories.js`.
 
+## Classifier vs Predicate Evaluator — Explicit Separation
+
+**MUST NOT** conflate these two systems — they are independent:
+
+- `classifier.js` → **labeling only**: determines which tactical pattern a position exhibits. Output: a category slug and evidence tags. Used for puzzle curation, candidate generation, and coach explanations.
+- `predicates.js` → **correctness scoring only**: determines whether the learner's move satisfies the puzzle goal. Output: `'correct' | 'wrong' | 'tied'`. A classifier tag does NOT imply predicate correctness, and a correct move does not require a matching classifier tag.
+
+A puzzle's `category` field is set by the classifier at generation time. The predicate evaluator reads `category` to dispatch to the right evaluator, but the classifier is never called during puzzle-check requests.
+
 ## Predicate Evaluator
 
 `evaluatePredicate(puzzle, candidateCol, scores)` in `predicates.js` dispatches on `puzzle.category`.
@@ -77,6 +86,7 @@ classifier and detectors. Construct it once per position; pass it to all consume
 `board.withMove(col)` returns a new immutable `Board` for the position after placing in
 `col`. Use it instead of the mutation+undo pattern (`board[r][c] = player; ...; board[r][c] = 0`).  
 **The mutation+undo pattern MUST NOT appear in `classify()` or any `detect*` function.**
+**`withMove(col)` throws `RangeError` if `col` is out of range (`0–6`) or the column is full.** Always guard with `board.colHeights[col] < 6` before calling if the column's availability is not already guaranteed by the caller.
 
 `getReachableThreats(board, colHeights, player)` is O(42) and mutation-free because
 `checkWin` never reads `board[row][col]` itself — only neighbor cells. This means threat

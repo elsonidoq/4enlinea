@@ -44,6 +44,10 @@
 - [Allis rule example movestrings](reference_allis_rule_examples.md) — all 9/9 rules verified 2026-05-18; baseclaim=`263223362`, specialbefore=`2365555`; KB files updated
 - [External reference PDFs](reference_external_pdfs.md) — Allis (91p), Bagan (30p, Poset games), Allen (276p); pdfminer.six for extraction; key page ranges and canonical facts recorded
 
+## References — tooling
+
+- [Custom slash commands](reference_custom_commands.md) — project commands at `/Users/elsonidoq/prog/cuatro_en_linea/.claude/commands/`; `/coordinator-prompt` for multi-agent spec implementation
+
 ## References — infrastructure
 
 - [Supabase connection details](reference_supabase_connection.md) — new key format (sb_publishable/sb_secret); direct DB host fails, use pooler at aws-1-us-west-2.pooler.supabase.com

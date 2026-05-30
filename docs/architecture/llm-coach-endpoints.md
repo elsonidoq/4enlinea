@@ -1,24 +1,26 @@
 # LLM Coach Endpoints
 
-Two CLI scripts implement LLM-grounded Connect Four coaching. Both are PoCs today; this document covers their architecture and the path to converting them into server endpoints.
+Two LLM-grounded coaching features are live as server endpoints. CLI scripts in `connect-four/server/scripts/` serve as standalone test harnesses and share the same logic via `llmCoachHelpers.js`.
 
 ---
 
-## Scripts overview
+## Endpoints and CLI scripts
 
-| Script | Entry point | Question answered |
-|--------|-------------|-------------------|
-| `explain_move.sh` | `explain_move.mjs` | "Why was the move I just played strong or weak?" |
-| `recommend_next_move.sh` | `recommend_next_move.mjs` | "What should I play next and why?" |
+| Feature | Server endpoint | CLI script |
+|---------|----------------|------------|
+| Move explanation | `POST /api/explain-move-llm` | `explain_move.sh` → `explain_move.mjs` |
+| Move recommendation | `POST /api/recommend-move` | `recommend_next_move.sh` → `recommend_next_move.mjs` |
 
-Both live in `connect-four/server/scripts/`. Shell wrappers at project root load `.env` via `node --env-file`.
+Server endpoints share the solver singleton managed at startup. CLI scripts in `connect-four/server/scripts/` each spawn their own solver process. Shell wrappers at project root load `.env` via `node --env-file`.
 
 ---
 
 ## Shared infrastructure
 
+All shared helpers live in `connect-four/server/llmCoachHelpers.js`. See `server-conventions.md` → "LLM Coach Helpers" for the full export list.
+
 ### Solver integration
-`createSolverProcess()` from `c4solver-wrapper.js` — spawns c4solver as a persistent child process. One process per invocation today; a server endpoint should create it once at startup and reuse it across requests.
+`createSolverProcess()` from `c4solver-wrapper.js` — spawns c4solver as a persistent child process. Server endpoints reuse the singleton created at startup. CLI scripts spawn their own process per invocation.
 
 ### explainSimulate
 `explainSimulate(movestring, numPlies, anchorCell, perspective, solver)` from `explainSimulate.js`.  
@@ -136,45 +138,14 @@ COL  TIER           OUTCOMES                 PATTERN             RATIO  TOP2
 
 ---
 
-## Converting to server endpoints
-
-### Recommended signatures
-
-```
-POST /api/explain-move
-Body: { movestring: string, col: number, rounds?: number }
-→ { prompt: string, explanation: string }
-
-POST /api/recommend-move
-Body: { movestring: string, rounds?: number }
-→ { prompt: string, recommendation: string }
-```
-
-### Refactoring steps
-
-1. **Extract shared module** `connect-four/server/llmCoachHelpers.js`:
-   - `loadKBStatement`, `buildKBSection`, `PATTERN_KB`
-   - `getBoardVisualization` (replace `spawnSync` with a direct import of the board renderer if possible, to avoid subprocess overhead per request)
-   - `callLLM` (or inject an LLM client)
-
-2. **Solver lifecycle** — replace `createSolverProcess()` per-call with a module-level singleton managed by the server (created at startup, destroyed on shutdown). The solver process is stateless between queries; one instance handles concurrent requests via the `c4solver-wrapper.js` queue.
-
-3. **Extract pure functions** from each script — `buildPrompt` / `buildRecommendPrompt`, `selectContrastMove`, `buildFlatTable`, `getScoreTier`, etc. are already self-contained and require no changes.
-
-4. **Replace `process.argv` parsing** with route handler parameter extraction. The validation logic (movestring regex, col range) becomes input sanitization middleware.
-
-5. **Streaming (optional)** — `callLLM` can stream the LLM response. For the endpoint, pipe through SSE or return the full string synchronously.
-
-6. **Timeout/cost guard** — `explainSimulate` at `rounds=2` (numPlies=5) can take several seconds for a full board. Enforce a max rounds value (e.g., `rounds ≤ 2`) and add a request timeout.
-
-### Environment variables required
+## Environment variables required
 
 ```
 OPENAI_API_KEY=...
 OPENAI_MODEL=...  # e.g. gpt-4o-mini
 ```
 
-Already loaded via `--env-file` in the CLI wrappers; move to standard dotenv or server config for the endpoint.
+Both server endpoints return 503 if these are absent. CLI scripts read them via `--env-file connect-four/server/.env`.
 
 ---
 

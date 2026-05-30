@@ -33,6 +33,7 @@
 - **`requirePaid`**: Middleware for coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`.
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
 - **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
+  Threat model: the server is expected to run behind a firewall or on a private network without port forwarding. `requireLocalhost` is the sole access control layer — there is no API key, session token, or other authentication for admin routes. If the deployment model changes (e.g. cloud-hosted server with a remote admin UI), admin routes must be migrated to token-based auth before deployment.
 
 ## Supabase Usage Pattern
 
@@ -74,9 +75,65 @@ The solver hangs on empty input. The server returns `EMPTY_BOARD_SCORES = [0, 0,
 
 Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 - `/api/explain-move`: 30 req/min
+- `/api/recommend-move`, `/api/explain-move-llm`: 5 req/min
+- `/api/llm-feedback`: 10 req/min
 - `/api/scores`, `/api/explain`: 60 req/min
 - `/api/stripe/create-checkout`: 10 req/min
 - All other `/api/` routes: 120 req/min
+
+## Explanation Engine Endpoint
+
+`POST /api/explain-move` — returns a one-liner explanation of a candidate move. Optionally returns a full deep-reveal if the user has quota.
+
+**Request body**: `{ moves: string, candidateCol: number, humanFirst?: boolean, requestDeepReveal?: boolean }`
+- `moves`: 0-indexed move string for the current position (before the candidate move).
+- `candidateCol`: 0-indexed column being evaluated.
+- `requestDeepReveal`: if `true` and the user is authenticated, decrements the daily Deep Reveal quota and returns full explanation text.
+
+**Response**:
+```json
+{
+  "oneLiner": "<short explanation string>",
+  "patternTag": "<classifier tag slug>",
+  "deepReveal": { "patternTag": "...", "fullText": "...", "continuationLine": [], "boardAnnotation": [] } | null,
+  "quotaRemaining": number | null
+}
+```
+- `deepReveal` is `null` unless `requestDeepReveal: true` and the user has remaining quota.
+- `quotaRemaining` reflects the user's remaining Deep Reveal count after this request; `null` for anonymous requests.
+- Anonymous users receive `oneLiner` only; `requestDeepReveal: true` from an anonymous user returns 403.
+- Results are cached in `explanation_cache` keyed by `sha256(moves:candidateCol)`; cache hits skip the solver and classifier.
+
+**Errors**: 400 for invalid params, 403 if anon requests deep reveal or quota exhausted with `{ quotaRemaining: 0 }`, 429 when rate limit hit.
+
+**Rate limit**: 30 req/min.
+
+## Coach Endpoints: weakness-map, queue, resolve
+
+All three require `requirePaid` (403 if `req.user?.tier !== 'paid'`).
+
+### `GET /api/coach/weakness-map`
+
+Returns per-category miss rates for the authenticated user.
+
+**Response**: `{ "weaknessMap": [{ "category": string, "attempted": number, "missRate": number }] }`
+- Sorted by `missRate` descending. Empty array if the user has no attempts.
+
+### `GET /api/coach/queue`
+
+Returns the next unresolved blunder in the user's coach queue.
+
+**Response**: `{ "queueCount": number, "puzzle": { "blunderId": uuid, "puzzleId": uuid, "category": string, "moveString": string, "goalPrompt": string } | null }`
+- `puzzle` is `null` if the queue is empty.
+- Queue is ordered oldest-first; max 50 returned.
+
+### `POST /api/coach/queue/:blunderId/resolve`
+
+Marks a blunder as resolved. Ownership-checked: the blunder must belong to the authenticated user.
+
+**Response**: `204 No Content`
+
+**Errors**: 400 for non-integer `blunderId`, 500 for DB errors.
 
 ## Coach Endpoint: explain-simulate
 
@@ -187,3 +244,14 @@ Accepts `{ position, col }` where `position` is the current move string (before 
 Returns `{ outcome: 'success' | 'fail' | 'continue', aiCol?, reason? }`.
 All validation is bitboard-only — no solver calls.
 `POST /api/puzzles/:id/check` returns 400 for sequence-mode puzzles; callers must use the `/sequence/move` endpoint instead.
+
+## LLM Feedback Endpoint
+
+`POST /api/llm-feedback` — records a flagged LLM response for human review. No auth required.
+
+**Request body**: `{ movestring, llm_prompt, llm_response, human_note, feature }`
+- `feature`: string identifying which LLM feature produced the response (e.g. `"explain-move-llm"`).
+
+**Response**: `204 No Content` on success.
+
+**Rate limit**: 10 req/min.

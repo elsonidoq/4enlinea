@@ -61,14 +61,39 @@
     "dismiss": "Dismiss",
     "confirm": "Confirm"
   },
+  "home": {
+    "stats_button": "Progress & Stats",
+    "lessons_title": "Lessons",
+    "lessons_subtitle": "Learn why patterns win",
+    "challenges_title": "Challenges",
+    "challenges_subtitle": "Find the best move",
+    "sparring_title": "Sparring",
+    "sparring_subtitle": "Play a bot that teaches as you go"
+  },
   "coach": {
     "title": "Personal AI Coach",
+    "home": {
+      "welcome": {
+        "0": "Let's sharpen your Connect Four tactics."
+      }
+    },
     "weaknessMap": "Weakness map",
     "queueCount_one": "{{count}} position to review",
     "queueCount_other": "{{count}} positions to review",
     "startReview": "Start review",
     "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
     "missRate": "miss rate"
+  },
+  "stats": {
+    "title": "Progress & Stats",
+    "avg_accuracy": "Avg accuracy",
+    "lessons_done": "Lessons done",
+    "day_streak": "Day streak",
+    "accuracy_by_pattern": "Accuracy by pattern",
+    "review_mistakes": "Review past mistakes",
+    "signup_prompt": "Sign up to track your progress over time",
+    "coach_recommendation_cta": "Go to {{lessonTitle}} lesson",
+    "sparring_record": "{{W}}W / {{L}}L / {{D}}D"
   },
   "error": {
     "generic": "Something went wrong. Please refresh and try again.",

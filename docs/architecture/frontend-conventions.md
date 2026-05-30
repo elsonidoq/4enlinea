@@ -113,7 +113,17 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 ## Pages Structure
 
-Pages live in `src/pages/`. Current pages: `PuzzlesPage` (main puzzle flow).
+Pages live in `src/pages/`. Router is defined in `src/App.jsx` using `react-router-dom` with lazy imports.
+
+| Route | File | Purpose |
+|---|---|---|
+| `/` | `DashboardPage.jsx` | Home / stats overview |
+| `/sparring` | `HomePage.jsx` | Sparring (lazy-imported as `SparringPage`) |
+| `/puzzles` | `PuzzlesPage.jsx` | Puzzle training flow |
+| `/coach` | `CoachPage.jsx` | Coach queue + weakness map (paid) |
+| `/admin/curate` | `AdminCuratePage.jsx` | Candidate curation (localhost-only) |
+
+**MUST**: Add new routes in `App.jsx` alongside the existing `<Routes>` block.
 Components shared across pages live in `src/components/`.
 
 ## RecommendCoach + BadgeRow Pattern
@@ -181,3 +191,22 @@ const aiMovestring = moveHistory.length < 2 ? '' : buildMovesString(
 ```
 
 For pages where only one perspective exists (e.g. Puzzles, where the position is fixed), pass the same string for both props or pass `''` for whichever is not applicable.
+
+## Screen Navigation
+
+**Sole navigation mechanism**: `go(screenKey, params)` is the only way to navigate between screens. Do not call any router API (no `BrowserRouter`, `navigate()`, `Link`, etc.).
+
+**`setActiveScreen` ordering**: `setActiveScreen(key)` (from `src/lib/track.js`) MUST be called before `track()` on every navigation so the correct `path` is recorded in analytics. The Navigator mount effect calls `setActiveScreen('home')` and then `track('session_start', ...)` in that exact sequential order.
+
+**Surface group → background token mapping**: Each screen key maps to a CSS custom property token via `SURFACE_BG` in `src/lib/surfaceGroups.js`:
+
+| Surface group | Token | Screens |
+|---|---|---|
+| Home | `--bg-home` | home, stats, mistakes, mistakeDetail |
+| Lessons | `--bg-lessons` | saga, concept, socratic, clchallenge |
+| Challenges | `--bg-challenges` | setpicker, challenge, summary |
+| Sparring | `--bg-sparring` | difficulty, game, review, explorer |
+
+**Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 15 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
+
+**Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.

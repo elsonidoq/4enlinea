@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/010-design-tokens-component-library/plan.md
+specs/011-app-shell-navigation/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index
@@ -11,6 +11,20 @@ specs/010-design-tokens-component-library/plan.md
 - `docs/knowledge-base/README.md` — strategy KB: schema, entry list, and how the KB relates to `classifier.js`
 
 Read the relevant index before starting any task that touches architecture, data model, API contracts, or product decisions.
+
+## Architecture docs — mandatory reads
+
+Before touching **server code, API endpoints, data model, or frontend architecture**, read the relevant file(s) in `docs/architecture/`:
+
+- `api-conventions.md` — before adding or changing any endpoint
+- `server-conventions.md` — before touching `server/`
+- `frontend-conventions.md` — before touching `src/`
+- `data-model.md` — before changing schema, queries, or data shapes
+- `db-schema.md` — before writing migrations or SQL
+- `testing-conventions.md` — before writing tests
+- `index-conventions.md` — before adding imports or changing module structure
+
+Do not rely solely on memory summaries — those can be stale. Read the actual doc.
 
 ## Working with movestrings
 

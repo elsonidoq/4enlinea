@@ -1,125 +1,70 @@
-import { BrowserRouter, Routes, Route, NavLink, Link } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import { ProfileStoreProvider } from './store/ProfileStore.jsx';
 import { DebugProvider } from './context/DebugContext.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import { SCREENS } from './lib/screenRegistry.jsx';
+import { SURFACE_BG } from './lib/surfaceGroups.js';
+import { setActiveScreen, track } from './lib/track.js';
 import './i18n/index.js';
 
-const DashboardPage   = lazy(() => import('./pages/DashboardPage.jsx'));
-const SparringPage    = lazy(() => import('./pages/HomePage.jsx'));
-const PuzzlesPage     = lazy(() => import('./pages/PuzzlesPage.jsx'));
-const CoachPage       = lazy(() => import('./pages/CoachPage.jsx'));
 const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
 
-function BottomNav() {
-  const itemStyle = ({ isActive }) => ({
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 3,
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: '.3px',
-    textTransform: 'uppercase',
-    padding: '6px 0 4px',
-    color: isActive ? 'var(--red)' : 'var(--text-muted)',
-    textDecoration: 'none',
-    cursor: 'pointer',
-    transition: 'color .15s',
-  });
+function Navigator() {
+  const [screen, setScreen] = useState('home');
+  const [params, setParams] = useState({});
+  const [prevScreen, setPrevScreen] = useState(null);
+
+  useEffect(() => {
+    setActiveScreen('home');
+    track('session_start', { screen: 'home' });
+  }, []);
+
+  const go = useCallback((key, newParams = {}) => {
+    if (!SCREENS[key]) {
+      console.warn(`[navigator] unknown screen key: ${key}`);
+      return;
+    }
+    setActiveScreen(key);
+    track('screen_viewed', { screen: key });
+    setPrevScreen(screen);
+    setParams(newParams);
+    setScreen(key);
+  }, [screen]);
+
+  const goBack = useCallback(() => {
+    if (prevScreen) {
+      setActiveScreen(prevScreen);
+      track('screen_viewed', { screen: prevScreen });
+      setScreen(prevScreen);
+      setParams({});
+      setPrevScreen(null);
+    }
+  }, [prevScreen]);
+
+  const bgToken = SURFACE_BG[screen] ?? '--bg-home';
+  const ScreenComponent = SCREENS[screen];
 
   return (
-    <nav style={bottomNav}>
-      <NavLink to="/" end style={itemStyle}>
-        <span style={{ fontSize: 20, lineHeight: 1 }}>🏠</span>
-        <span>Home</span>
-      </NavLink>
-      <NavLink to="/puzzles" style={itemStyle}>
-        <span style={{ fontSize: 20, lineHeight: 1 }}>🎯</span>
-        <span>Puzzles</span>
-      </NavLink>
-      <NavLink to="/sparring" style={itemStyle}>
-        <span style={{ fontSize: 20, lineHeight: 1 }}>⚔️</span>
-        <span>Sparring</span>
-      </NavLink>
-      <NavLink to="/coach" style={itemStyle}>
-        <span style={{ fontSize: 20, lineHeight: 1 }}>📋</span>
-        <span>Coach</span>
-      </NavLink>
-    </nav>
-  );
-}
-
-function AppHeader() {
-  return (
-    <div style={appHeader}>
-      <Link to="/" style={{ textDecoration: 'none', WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}>
-        <div style={appName}>
-          Decode<span style={{ color: 'var(--red)' }}>C4</span>
-        </div>
-      </Link>
-      <div style={appTagline}>Train like you mean it</div>
+    <div style={{ minHeight: '100vh', background: `var(${bgToken})`, transition: 'background 0.2s' }}>
+      {ScreenComponent && <ScreenComponent go={go} goBack={goBack} {...params} />}
     </div>
   );
 }
 
 function App() {
+  if (window.location.pathname.startsWith('/admin')) {
+    return <Suspense fallback={null}><AdminCuratePage /></Suspense>;
+  }
+
   return (
     <DebugProvider>
-    <ProfileStoreProvider>
-      <BrowserRouter>
+      <ProfileStoreProvider>
         <ErrorBoundary>
-          <AppHeader />
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <Suspense fallback={<div style={{ color: 'var(--text-muted)', padding: 24, textAlign: 'center' }}>Loading…</div>}>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/sparring" element={<SparringPage />} />
-                <Route path="/puzzles" element={<PuzzlesPage />} />
-                <Route path="/coach" element={<CoachPage />} />
-                <Route path="/admin/curate" element={<AdminCuratePage />} />
-              </Routes>
-            </Suspense>
-          </div>
-          <BottomNav />
+          <Navigator />
         </ErrorBoundary>
-      </BrowserRouter>
-    </ProfileStoreProvider>
+      </ProfileStoreProvider>
     </DebugProvider>
   );
 }
 
 export default App;
-
-const bottomNav = {
-  background: 'var(--bg)',
-  borderTop: '1px solid var(--border)',
-  display: 'flex',
-  padding: '0 0 8px',
-  flexShrink: 0,
-};
-
-const appHeader = {
-  padding: '16px 20px 10px',
-  flexShrink: 0,
-  borderBottom: '1px solid var(--border-dim)',
-};
-
-const appName = {
-  fontSize: 26,
-  fontWeight: 900,
-  letterSpacing: '-1px',
-  color: 'var(--text)',
-  lineHeight: 1,
-};
-
-const appTagline = {
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  letterSpacing: '1.5px',
-  textTransform: 'uppercase',
-  marginTop: 3,
-  fontWeight: 500,
-};

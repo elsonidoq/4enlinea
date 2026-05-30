@@ -27,7 +27,7 @@ Rationale: Puzzle deactivation must remain reversible; a boolean is simpler to q
 
 ## jsonb vs Normalized Columns
 
-**MUST** use `jsonb` for: solver scores per candidate (`solver_scores`), classifier tag lists (`classifier_tags`), goal predicate parameters (`goal_predicate_params`), highlight metadata (`highlight_metadata`), category evidence (`category_evidence`), analytics event data (`event_data`), Stripe webhook payloads (`payload`), and explanation cache content (`deep_reveal_json`).
+**MUST** use `jsonb` for: solver scores per candidate (`solver_scores`), classifier tag lists (`classifier_tags`), goal predicate parameters (`goal_predicate_params`), highlight metadata (`highlight_metadata`), category evidence (`category_evidence`), simulation trace (`simulation_trace`), analytics event data (`event_data`), Stripe webhook payloads (`payload`), and explanation cache content (`deep_reveal_json`).
 **MUST** use typed columns for: all scalar values (enums, integers, booleans, timestamps).
 Rationale: jsonb for variable-shape structured data; typed columns for values used in queries/indexes.
 

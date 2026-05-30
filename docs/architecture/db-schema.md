@@ -43,6 +43,7 @@ PK: `id`
 | interaction_mode | text | NO | `'single_move'` |
 | highlight_metadata | jsonb | YES | |
 | correct_col | integer | YES | |
+| simulation_trace | jsonb | NO | `'[]'` |
 | created_at | timestamptz | NO | `now()` |
 
 ---
