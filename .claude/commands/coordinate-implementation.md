@@ -142,3 +142,97 @@ After all batches have run, output a summary with:
 2. **Tasks completed** — list of task IDs marked done
 3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually
+
+---
+
+## Step 5 — QA and Bug Fix
+
+After the summary, spawn a QA sub-agent to perform a browser-driven review and fix any bugs found.
+
+**Wait for the user to confirm they want to proceed with QA before spawning this agent.**
+
+Spawn a sub-agent using the Agent tool with:
+- `subagent_type`: omit (general-purpose)
+- `model`: `"sonnet"`
+- `prompt`: a self-contained QA brief using the format below
+
+### QA sub-agent prompt format
+
+```
+## Context
+
+You are a QA agent performing a final browser-driven review of a newly implemented feature.
+
+### Feature being reviewed
+Spec: [spec path]
+
+### Product context
+Read the following documents before starting your review:
+- [spec path]/spec.md — user stories, acceptance scenarios, functional requirements
+- [spec path]/plan.md — design decisions (if it exists)
+- [spec path]/tasks.md — task list (if it exists)
+- docs/mvp/epics.md — cross-epic contracts and feature dependencies
+- docs/mvp/product_decisions.md — product decisions and constraints (if it exists)
+
+Read ALL of these before opening the browser.
+
+### What was just built
+[Paste the full ## What was built section from the Step 4 summary verbatim]
+
+### Open items flagged by implementers
+[Paste the ## Open items section from the Step 4 summary verbatim, or "None reported." if empty]
+
+---
+
+## Your task
+
+1. **Open the browser** using the chrome-devtools MCP tools. Navigate to the app's local dev URL (typically http://localhost:5173 or check package.json for the dev port).
+
+2. **Exercise every user story and acceptance scenario** listed in spec.md. For each one:
+   - Describe what you tested
+   - Record the outcome: PASS / FAIL / PARTIAL
+   - If FAIL or PARTIAL, note the exact symptom
+
+3. **Look for regressions** beyond the spec:
+   - Broken navigation or layout shifts on pages adjacent to the new feature
+   - Console errors or network failures unrelated to the spec
+   - Mobile/responsive breakage if the feature has any UI
+
+4. **Fix every bug you find.** For each fix:
+   - State the root cause in one sentence
+   - Apply the fix directly to the source files
+   - Re-test in the browser to confirm the fix resolves the issue
+
+5. **Iterate** — after fixing, re-run the full acceptance scenario checklist once more to make sure fixes didn't introduce new issues. Repeat until all scenarios pass.
+
+---
+
+## Done when
+
+- Every acceptance scenario in spec.md is PASS
+- No console errors caused by the new feature
+- All fixes have been re-verified in the browser
+
+---
+
+## Report (required)
+
+At the very end of your response, output a section titled "## QA Report".
+
+Structure it as:
+
+### Acceptance scenarios
+| Story | Scenario | Result |
+|-------|----------|--------|
+[one row per acceptance scenario tested]
+
+### Bugs found and fixed
+For each bug:
+- **Bug**: [one-sentence description of the symptom]
+- **Root cause**: [one-sentence explanation]
+- **Fix**: [files changed and what was changed]
+- **Verified**: yes / no
+
+### Remaining issues
+[Any issues that could not be fixed, with a reason. "None." if everything is clean.]
+```

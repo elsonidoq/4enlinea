@@ -19,17 +19,25 @@ On first sign-in, `IndexedDBStore.migrateToSupabase(supabaseStore, supabaseClien
 **Required store interface** (both implementations must provide):
 | Method | Returns |
 |---|---|
-| `getProfile()` | `{ device_uuid, tier, deep_reveal_count, deep_reveal_reset_at }` |
+| `getProfile()` | `{ device_uuid, tier }` (IndexedDB only — does NOT return `deep_reveal_count` or `deep_reveal_reset_at`; `SupabaseStore.getProfile()` still returns those fields from the `users` table) |
 | `saveSessionStats(stats)` | `void` |
 | `getSessionStats(date)` | stats object or `null` |
 | `recordPuzzleAttempt(attempt)` | `void` |
+| `saveLessonProgress(lessonId, status)` | `void` |
+| `getLessonProgress()` | `Array<{lessonId, status}>` |
+| `saveSparringRecord(result)` | `void` |
+| `getSparringRecord()` | `{W, L, D}` |
+| `saveChallengeSession(session)` | `void` |
+| `getLastChallengeSession()` | session object or `null` |
+| `recordActivityDay()` | `void` |
+| `getStreak()` | `{streak_count, last_active_date}` |
 
 `IndexedDBStore` additionally provides `getAllPuzzleAttempts()` (used only during migration) and `migrateToSupabase(supabaseStore, supabaseClient)`. `SupabaseStore.migrateToSupabase()` exists but throws — it is not part of the shared interface and must never be called on a `SupabaseStore` instance.
 
 ## IndexedDB Schema
 
-Database name: `decodec4`, version 1.
-Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrement), `session_stats` (keyPath: `date`).
+Database name: `decodec4`, version 2.
+Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrement), `session_stats` (keyPath: `date`), `lesson_progress` (keyPath: `lessonId`), `sparring_record` (keyPath: `id`), `streak` (keyPath: `id`).
 
 ## Auth Integration
 
@@ -94,6 +102,28 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 **Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
 
 `highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` and `SequenceHandler.jsx` used it; both are now on `overlays`.
+
+## Shared Board Utility
+
+`src/lib/board.js` is the canonical location for `buildBoard(moves)`. Do not inline this function in individual screens or pages — import it instead:
+```js
+import { buildBoard } from '../lib/board.js';
+```
+`buildBoard(moves)` accepts a 0-indexed move string and returns a `board[row][col]` 2D array using `'empty'`/`'red'`/`'yellow'` cell values (matching the Board component's expected format).
+
+## Challenge Session State Machine
+
+Multi-puzzle challenge sessions (`ChallengeScreen`) follow a three-phase state machine driven by a `phase` string:
+
+| Phase | Description |
+|---|---|
+| `'loading'` | Fetching puzzles from `GET /api/puzzles/draw`. Board and controls not yet visible. |
+| `'pre-move'` | Puzzle displayed, board interactive. CoachDialog shows a prompt. |
+| `'post-move'` | Move committed (commit-first: disc placed before server responds). Board locked. Evaluation arrives asynchronously; Tier-1 strip renders once it arrives. |
+
+Transitions: `loading → pre-move` (on draw response), `pre-move → post-move` (on column tap, immediately — no confirmation step), `post-move → pre-move` (on "Next →", advance `currentIdx`) or `post-move → summary` (on "Next →" when all puzzles exhausted).
+
+New challenge-type screens MUST follow this phase machine. Do not add a `'confirm'` phase — the project uses commit-first with no confirmation step (see project memory `project_commit_first_no_confirm.md`).
 
 ## Category Constants
 

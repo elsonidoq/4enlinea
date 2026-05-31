@@ -520,3 +520,89 @@ Done — **Past Mistakes** is built and wired into the prototype.
 - New file `screens_mistakes.jsx`; edits to `screens_home.jsx`, `app.jsx`, `screens_challenges.jsx` (DeepReveal made data-driven), and `styles.css` (filter pills, blunder card, reviewed chip, flag link). No new colors — discs stay green/gray, red/orange/yellow stay evaluation-only.
 - "Mark as reviewed" persists for the session via lifted state; it resets on full reload (no backend in the mockup).
 
+## User
+
+Save as standalone HTML: index.html
+
+## Assistant
+
+_[tool: copy_files]_
+
+I'll prepare a standalone copy. The app has no JS-string-referenced assets (all visuals are inline SVG/CSS; fonts + React/Babel are standard `<link>`/`<script src>` the bundler handles), so I only need to add the required thumbnail template.
+
+_[tool: str_replace_edit]_
+
+_[tool: super_inline_html]_
+
+All assets bundled cleanly. Let me verify it works offline:
+
+_[tool: show_html]_
+
+_[tool: get_webview_logs]_
+
+_[tool: show_html]_
+
+_[tool: get_webview_logs]_
+
+Clean — only the harmless Babel dev warning, all fonts and scripts inlined. Let me confirm it rendered, then deliver.
+
+_[tool: save_screenshot]_
+
+_[tool: view_image]_
+
+Renders perfectly offline — fonts, Coach avatar, and all surfaces intact. Delivering the file:
+
+_[tool: present_fs_item_for_download]_
+
+Your standalone file is ready to download above — **DecodeC4 (standalone).html**, a single self-contained file (~1.8 MB) with all fonts, React, and Babel inlined. It works fully offline: open it in any browser, no internet needed. All 15 screens, variant toggles, and interactions are intact.
+
+## User
+
+Save as standalone HTML: index.html
+
+## User
+
+Save as standalone HTML: index.html
+
+## Assistant
+
+_[tool: super_inline_html]_
+
+The standalone export already exists from the prep I did — `DecodeC4.html` has the thumbnail template and no code-referenced assets (all visuals are inline SVG/CSS). Let me re-run the bundler to ensure it's current, then deliver.
+
+_[tool: show_html]_
+
+_[tool: get_webview_logs]_
+
+_[tool: show_html]_
+
+_[tool: get_webview_logs]_
+
+Clean — only the harmless Babel dev notice. The standalone file is current and works offline. Delivering:
+
+_[tool: present_fs_item_for_download]_
+
+Ready to download above — a single self-contained file (~1.8 MB) with all 15 screens, fonts, and scripts inlined. Works fully offline in any browser.
+
+## User
+
+Save as standalone HTML: index.html
+
+## Assistant
+
+_[tool: present_fs_item_for_download]_
+
+The standalone export is already current — `DecodeC4.html` has the thumbnail and no code-referenced assets, and I bundled it moments ago with no errors. Delivering it for download:Ready above — single self-contained file (~1.8 MB), all 15 screens, works fully offline.
+
+## User
+
+Save as standalone HTML: index.html
+
+## Assistant
+
+The bundle is already prepared and current — the prep work (thumbnail template, no code-referenced assets to lift) was done and the file was just rebuilt cleanly. Delivering for download:
+
+_[tool: present_fs_item_for_download]_
+
+Ready to download above — single self-contained file (~1.8 MB), all 15 screens, works fully offline.
+

@@ -67,6 +67,37 @@ Rationale: Constitution §V — analytics writes MUST NOT block user-facing oper
 **MUST**: Validate `category` against `VALID_CATEGORIES` (Set from `server/categories.js`).
 All validation happens at the route handler, before any solver or DB call.
 
+## i18n Key Selection Pattern (`pickFromPool`)
+
+**MUST**: When a server endpoint needs to return a localizable string to the client, it MUST return an i18n **key string** (e.g. `"coach.immediate_threat.optimal.0"`), never resolved English text. The client calls `t(key)` to resolve it.
+
+The `pickFromPool(translations, prefix)` helper (defined in `server/index.js`) navigates the imported `en.json` object by dot-path, collects leaf keys, and returns a randomly selected full key string. Returns `null` if the prefix resolves to nothing.
+
+Example usage in `POST /api/evaluate-move`:
+```js
+const coachPhraseKey = pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`);
+// → "coach.immediate_threat.optimal.0"
+```
+
+The `eval.*` i18n namespace is the canonical location for Tier-1 summary lines:
+`eval.<category>.<quality>.summary.<index>` (e.g. `eval.immediate_threat.optimal.summary.0`).
+
+## Route Registration Ordering Constraint
+
+Express uses first-match routing for parameterized path segments. Any new `/api/puzzles/<literal-path>` route (e.g. `/counts`, `/draw`) MUST be registered **before** `GET /api/puzzles/:id` in `server/index.js`. If registered after, Express silently treats the literal path as the `:id` parameter.
+
+Add a comment at the registration point as a guard:
+```js
+// NOTE: /counts and /draw MUST remain above /:id — Express first-match ordering
+```
+
+## Pseudo-Category Pre-Check Pattern
+
+Pseudo-categories not in `VALID_CATEGORIES` (e.g. `mixed`) MUST be checked **before** the `VALID_CATEGORIES.has(category)` guard in route handlers. If the order is reversed, any pseudo-category always falls through to the 400 branch. Add a comment at the branch:
+```js
+// mixed is not in VALID_CATEGORIES — must be checked first
+```
+
 ## Empty Board Special Case
 
 The solver hangs on empty input. The server returns `EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0]` (center-favoring, approximate) for empty-board queries without invoking the solver.

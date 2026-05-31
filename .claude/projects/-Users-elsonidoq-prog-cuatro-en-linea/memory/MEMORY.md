@@ -5,6 +5,7 @@
 ## Feedback — behavioral rules
 
 - [Spec redesigns: audit existing APIs first](feedback_spec_existing_apis.md) — read current component props before writing spec prop shapes; only change what is strictly necessary; preserve existing handler/encoding names with an explicit note
+- [AskUserQuestion requires min 2 options](feedback_ask_user_question_min_options.md) — single-option questions throw InputValidationError; always provide at least 2 distinct options per question
 - [Run a critical subagent review after speckit-specify](feedback_spec_review_before_plan.md) — Sonnet subagent vs best_practices_spec_driven_development.md catches blocking contract/scope issues before they propagate to plan and tasks
 - [Prefer empirical testing over theoretical analysis](feedback_empirical_first.md) — run code early, don't spend many rounds on mental analysis before testing
 - [Answer questions before editing](feedback_answer_before_editing.md) — always answer the question in text first, then proceed with any file edits or tool calls
@@ -69,6 +70,7 @@
 - [New puzzle categories — spec locked](project_new_puzzle_categories.md) — z_threat, claimeven, undercut, overcut, figure_7, j_shape design decisions; highlight_metadata schema
 - [Lesson curriculum scope — MVP](project_lesson_curriculum.md) — 11 MVP + 2 post-MVP lessons; parity chain L4→L5→L6→L7; what was cut and why
 - [Auth mostly built; payments deferred](project_auth_payments_state.md) — ProfileStore/IndexedDBStore/SupabaseStore/AuthModal exist; Epic 7 is reskin + store extension; Stripe deferred
+- [Epic 2a implementation state](project_epic2a_implementation.md) — live endpoints, new screens, stubs for Epic 2b, known CSS token bug (`--bg-chal` vs `--bg-challenges` in surfaceGroups.js)
 - [forced_win refactor — done](project_forced_win_refactor.md) — CompletionStrategy interface; bitboard-only AI response; interaction_mode='sequence' on puzzles
 - [Commit-first: click = immediate commit](project_commit_first_no_confirm.md) — no confirmation step; pendingMove state dead; confirm/cancel buttons removed 2026-05-27
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category; don't reuse the slug
@@ -94,7 +96,12 @@
 - [Supabase explicit grants — migration 012](project_supabase_grants.md) — new frontend tables need explicit GRANTs or PostgREST returns 42501 (enforced Oct 30 2026)
 - [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs 10+ min; likely solver IPC deadlock; classifier tests fast (22/22, ~56ms)
 
+## References — board rendering
+
+- [Board disc color inversion](reference_board_color_inversion.md) — `'red'` value renders as GREEN disc, `'yellow'` as GRAY; even move_string length → green; odd → gray
+
 ## Project — open bugs
 
 - [Server parity bug — AI-first games](project_parity_bug_ai_first.md) — human/ai heatmaps swapped when AI opens the game; not yet fixed
 - [visualize_board.mjs broken import](bug_visualize_board_broken.md) — imports `buildThreatMap` (renamed to `getMajorThreatCells` in 009 refactor); crashes on startup
+- [Magic link email broken — emailRedirectTo not allowlisted](bug_auth_magic_link_redirect.md) — Supabase silently rejects unlisted redirect URLs; catch block swallows error; needs Supabase dashboard fix

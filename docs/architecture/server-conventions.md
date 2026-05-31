@@ -190,6 +190,16 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 
 The CLI scripts (`scripts/recommend_next_move.mjs`, `scripts/explain_move.mjs`) import from this module. Server endpoints (`/api/recommend-move`, `/api/explain-move-llm`) also import from it and reuse the server-managed solver singleton rather than spawning their own.
 
+## Static Cross-Directory JSON Import
+
+`server/index.js` imports the frontend i18n file directly:
+```js
+import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+```
+This is acceptable in this monorepo because `en.json` is a build artifact that the server reads at startup (for `pickFromPool` key selection). Requires **Node 20.10+** for the `with { type: 'json' }` import-attributes syntax. If the Node version constraint cannot be met, fall back to `JSON.parse(fs.readFileSync(...))`.
+
+Do not add more server→frontend imports. This single cross-boundary import is intentional and documented here so future maintainers don't generalise the pattern.
+
 ## LLM Explanation Scripts
 
 CLI scripts that call an LLM must load `connect-four/server/.env` via Node's built-in
@@ -218,6 +228,17 @@ When all pattern ratios are zero for both compared moves, `insufficient_tactical
 - `connect-four/server/scripts/explain_move.mjs` — full PoC logic (no server required)
 - `explain_move.sh` — shell wrapper at project root (`./explain_move.sh <movestring> <col> [rounds=1]`)
 - `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)
+
+## Deep Reveal Quota
+
+The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users.
+
+- **Authentication**: Unauthenticated requests (no valid `Authorization` header) return `401 Unauthorized`. No quota logic is reached.
+- **Cap**: 20 Deep Reveals per week for free-tier users.
+- **Reset**: Monday 00:00 UTC. The `deep_reveal_reset_at` column stores the next reset timestamp. A `null` value is treated as "already expired" — the quota resets to next Monday and the request is allowed.
+- **Paid-tier**: No quota check; all requests are allowed unconditionally.
+- **429 response shape**: `{ error: 'quota_exceeded', resetsAt: <ISO string> }`.
+- **Endpoint scope**: Quota is enforced on `/api/explain-move-llm` only. The old `/api/explain-move` endpoint does NOT decrement quota.
 
 ## Environment Variables
 

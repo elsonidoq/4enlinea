@@ -69,11 +69,10 @@ export function DeepRevealButton({ moves, candidateCol, onReveal }) {
       <button onClick={handleClick} disabled={loading} style={loading ? { ...btn, opacity: 0.6 } : btn}>
         {loading ? '…' : t('puzzle.seeWhy')}
       </button>
-      <AuthModal
-        isOpen={showAuth}
+      {showAuth && <AuthModal
         onClose={() => setShowAuth(false)}
         reason={t('auth.deepRevealGate')}
-      />
+      />}
       {showPaywall && <UpgradeModal onDismiss={() => setShowPaywall(false)} onNotify={() => {}} />}
     </>
   );

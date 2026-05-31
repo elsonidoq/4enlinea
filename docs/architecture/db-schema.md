@@ -17,8 +17,11 @@ Unique: `device_uuid`, `stripe_customer_id`
 | device_uuid | text | YES | |
 | tier | text | NO | `'free'` |
 | deep_reveal_count | integer | NO | `0` |
-| deep_reveal_reset_at | timestamptz | NO | next UTC midnight |
+| deep_reveal_reset_at | timestamptz | YES | (nullable, no default — null treated as "already expired") |
 | stripe_customer_id | text | YES | |
+| streak_count | integer | NO | `0` |
+| last_active_date | date | YES | |
+| sparring_record | jsonb | NO | `'{"W":0,"L":0,"D":0}'` |
 | created_at | timestamptz | NO | `now()` |
 | updated_at | timestamptz | NO | `now()` |
 
@@ -88,6 +91,25 @@ FK: `candidate_id` → `candidates.id`
 | solver_scores | jsonb | NO | |
 | annotator_note | text | YES | |
 | created_at | timestamptz | NO | `now()` |
+
+---
+
+## `lesson_progress`
+
+PK: `id`  
+FK: `user_id` → `users(id) ON DELETE CASCADE`  
+Unique: `(user_id, lesson_id)`
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| id | uuid | NO | `gen_random_uuid()` |
+| user_id | uuid | NO | |
+| lesson_id | text | NO | |
+| completed_at | timestamptz | YES | |
+
+RLS: `auth.uid() = user_id` for SELECT/INSERT/UPDATE/DELETE.  
+GRANT: `SELECT, INSERT, UPDATE, DELETE` to `authenticated` only (not `anon`).  
+Note: no `status` column — completion state is derived at read time: `completed_at != null → 'complete'`.
 
 ---
 

@@ -16,7 +16,8 @@ Schema:
   "stage": "epic_critique",
   "pending_critique": null,
   "pending_answers": null,
-  "pending_handoff": null
+  "pending_handoff": null,
+  "pending_deferrals": []
 }
 ```
 
@@ -90,12 +91,18 @@ After each critique sub-agent returns, convert its output into multiple-choice q
 - **If no discussion signals**: immediately advance — save answers to `pending_answers` in state and proceed to the fix stage without ending your turn.
 - **If any discussion signal is found**: engage in the discussion inline. When the conversation reaches a conclusion, incorporate it into the answers and proceed to the fix stage.
 
+**Deferral detection:**
+- Scan every answer for deferral signals: phrases like "defer", "later", "next epic", "post-MVP", "out of scope", "future epic".
+- If any answer defers something, extract: (a) what is being deferred, (b) the target epic or milestone if named (e.g. "epic 9", "post-MVP"). Record these as a list in `pending_deferrals` in state. This list is consumed by the following fix agent.
+
 **Passing answers to the fix agent:**
 Format collected answers as a list:
 ```
 ## [Issue/question summary]
 Answer: [selected option label] — [Other text if provided]
 ```
+
+If `pending_deferrals` is non-empty, append a `## Deferrals` section listing each item and its target.
 
 ---
 
@@ -166,6 +173,12 @@ Edit epic $ARGUMENTS in docs/mvp/epics.md to resolve the issues listed below.
 
 Apply all resolutions directly to the file. Do not introduce new content beyond what is needed to address the issues. Output a brief bullet-point summary of what you changed.
 
+## Deferral rule
+If the answers include a `## Deferrals` section, also edit `docs/mvp/epics.md`:
+- In epic $ARGUMENTS, add a `### Deferred to later epics` subsection (or append to it if it exists) listing each deferred item with a one-sentence rationale.
+- If a target epic is named, find that epic's entry and add a `### Deferred from epic $ARGUMENTS` note listing the item so it is not forgotten.
+- Do this for every deferred item before writing the handoff.
+
 ## Handoff context (required)
 At the very end of your response, output a section titled "## Handoff context".
 Include:
@@ -179,7 +192,7 @@ Capture the `## Handoff context` section from the sub-agent's output.
 
 Show the sub-agent's summary to the user with: "Epic updated. Creating spec now…"
 
-Save state: `{ "stage": "spec_create", "pending_critique": null, "pending_answers": null, "pending_handoff": "<handoff context>" }`.
+Save state: `{ "stage": "spec_create", "pending_critique": null, "pending_answers": null, "pending_deferrals": [], "pending_handoff": "<handoff context>" }`.
 
 **Immediately advance to `spec_create`.**
 
@@ -291,6 +304,12 @@ Edit <spec_dir>/spec.md to resolve the issues listed below.
 
 Apply all resolutions to the file. Output a brief bullet-point summary of what you changed.
 
+## Deferral rule
+If the answers include a `## Deferrals` section, also edit `docs/mvp/epics.md`:
+- In epic $ARGUMENTS, add a `### Deferred to later epics` subsection (or append to it if it exists) listing each deferred item with a one-sentence rationale.
+- If a target epic is named, find that epic's entry and add a `### Deferred from epic $ARGUMENTS` note listing the item so it is not forgotten.
+- Do this for every deferred item before writing the handoff.
+
 ## Handoff context (required)
 At the very end of your response, output a section titled "## Handoff context".
 Include:
@@ -304,7 +323,7 @@ Capture the `## Handoff context` section.
 
 Show summary with: "Spec updated. Creating plan now…"
 
-Save state: `{ "stage": "plan_create", "pending_critique": null, "pending_answers": null, "pending_handoff": "<handoff context>" }`.
+Save state: `{ "stage": "plan_create", "pending_critique": null, "pending_answers": null, "pending_deferrals": [], "pending_handoff": "<handoff context>" }`.
 
 **Immediately advance to `plan_create`.**
 
@@ -410,6 +429,12 @@ Edit <spec_dir>/plan.md to resolve the issues listed below. Also edit <spec_dir>
 
 Apply all resolutions. Output a brief bullet-point summary of what you changed.
 
+## Deferral rule
+If the answers include a `## Deferrals` section, also edit `docs/mvp/epics.md`:
+- In epic $ARGUMENTS, add a `### Deferred to later epics` subsection (or append to it if it exists) listing each deferred item with a one-sentence rationale.
+- If a target epic is named, find that epic's entry and add a `### Deferred from epic $ARGUMENTS` note listing the item so it is not forgotten.
+- Do this for every deferred item before writing the handoff.
+
 ## Handoff context (required)
 At the very end of your response, output a section titled "## Handoff context".
 Include:
@@ -423,7 +448,7 @@ Capture the `## Handoff context` section.
 
 Show summary with: "Plan updated. Generating tasks now…"
 
-Save state: `{ "stage": "tasks_create", "pending_critique": null, "pending_answers": null, "pending_handoff": "<handoff context>" }`.
+Save state: `{ "stage": "tasks_create", "pending_critique": null, "pending_answers": null, "pending_deferrals": [], "pending_handoff": "<handoff context>" }`.
 
 **Immediately advance to `tasks_create`.**
 
@@ -532,11 +557,17 @@ Edit <spec_dir>/tasks.md to resolve the issues listed below. Also edit spec.md o
 [paste pending_answers verbatim]
 
 Apply all resolutions. Output a brief bullet-point summary of what you changed.
+
+## Deferral rule
+If the answers include a `## Deferrals` section, also edit `docs/mvp/epics.md`:
+- In epic $ARGUMENTS, add a `### Deferred to later epics` subsection (or append to it if it exists) listing each deferred item with a one-sentence rationale.
+- If a target epic is named, find that epic's entry and add a `### Deferred from epic $ARGUMENTS` note listing the item so it is not forgotten.
+- Do this for every deferred item before writing the handoff.
 ```
 
 Show summary to the user.
 
-Save state: `{ "stage": "done", "pending_critique": null, "pending_answers": null, "pending_handoff": null }`.
+Save state: `{ "stage": "done", "pending_critique": null, "pending_answers": null, "pending_deferrals": [], "pending_handoff": null }`.
 
 Output:
 

@@ -32,7 +32,7 @@ export function UpgradeModal({ onDismiss, onNotify }) {
       {/* Bottom sheet */}
       <div style={{
         position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 51,
-        background: '#fff', borderRadius: '28px 28px 0 0',
+        background: '#fff', colorScheme: 'light', borderRadius: '28px 28px 0 0',
         padding: '8px 20px 36px',
         boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
         animation: 'slideUp .34s cubic-bezier(.2,.9,.3,1.05)',

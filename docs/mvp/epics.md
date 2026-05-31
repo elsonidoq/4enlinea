@@ -169,8 +169,8 @@ Ship early so every subsequent surface writes to the right store from day one.
 **Scope:**
 
 *Auth UI reskin:*
-- Redesign `AuthModal` to match new visual style: remove dark theme, apply new typography and tokens; keep magic-link OTP flow and i18n keys
-- Profile icon on Hub TopBar: unauthenticated → `AuthModal`; authenticated → Stats screen
+- Redesign `AuthModal` to match new visual style using the mockup (`docs/mvp/mockup/project/`) as the visual source of truth. The mockup auth screen uses the `modal-card` + `sheet-backdrop` pattern (same as the challenges screen). Fields: email input, "Continue with email" primary button, "Maybe later" ghost button. Confirmation state ("sent"): check-icon, "Check your inbox" heading, "We sent a magic link to your email" copy, "Back" ghost button. Keep magic-link OTP flow and i18n keys.
+- Profile icon on Hub TopBar: **conditional** — unauthenticated → `AuthModal`; authenticated → Stats screen. The mockup `isAuthed` prop controls this routing.
 - On sign-in: existing `switchToSupabase` migration flow runs (IndexedDB → Supabase); already implemented in `ProfileStore.jsx`
 - `track('signup_initiated', ...)` and `track('signup_completed', ...)` already in existing code; verify they fire correctly
 
@@ -181,25 +181,27 @@ Ship early so every subsequent surface writes to the right store from day one.
 - `saveSparringRecord(result)` / `getSparringRecord()` → `{ W, L, D }`
 - `saveChallengeSession(session)` / `getLastChallengeSession()`
 - `recordActivityDay()` / `getStreak()` — daily streak (Gap 13): persist a `last_active_date` + `streak_count`; on any puzzle attempt or sparring game, bump the count if the last active day was yesterday, reset to 1 if a calendar day was skipped, no-op if same day. Stats (Epic 1b) only reads `getStreak()`.
-- `incrementDeepRevealCount()` / `getDeepRevealCount()` / `resetDeepRevealCountIfNeeded()` — weekly counter reset Monday 00:00 UTC
 - Update `migrateToSupabase` to also migrate lesson progress, sparring record, challenge session history, and streak state (`last_active_date` + `streak_count`)
 
 *Extend `SupabaseStore` for new data types:*
 - Same interface as IndexedDBStore above
 - Fix `saveSessionStats`: it currently early-returns on `if (profile.tier !== 'paid') return;` (`SupabaseStore.js`) — drop that paid-only guard so stats save for any authenticated user
-- `getAllSessionStats()` for Stats screen aggregation, including **per-pattern accuracy** (consumed by the authenticated Stats "accuracy by pattern" bars in Epic 1b)
-- Lesson progress stored in `session_stats` jsonb (decide during spec)
+- `getAllSessionStats()` for Stats screen aggregation; **per-pattern all-time accuracy** is computed as a GROUP BY over `session_stats.stats` (no dedicated column needed)
+- **New columns on `users` table** (add via migration): `streak_count INTEGER DEFAULT 0`, `last_active_date DATE`, `sparring_record JSONB DEFAULT '{}'` (stores W/L/D counts)
+- **New `lesson_progress` table** (add via migration): keyed by `(user_id, lesson_id)` with a `completed_at TIMESTAMPTZ` column; replaces the "decide during spec" note
+- `session_stats` table (migration 006) is kept as-is for per-date accuracy; the new columns/table handle the singleton user-scoped state that doesn't fit the per-date shape
 
 *Deep Reveal weekly limit (Gap 3):*
-- Applies to **all users** including anonymous: anonymous tracked via IndexedDB counter; authenticated tracked server-side on `users.deep_reveal_count` + `users.deep_reveal_reset_at`
-- No separate "zero Deep Reveals for anonymous" lockout — all users share the same weekly cap
-- When limit reached: hide "Learn more" button; tap → `UpgradeModal` (waitlist capture)
-- Pro users (`tier === 'paid'`): no limit (future-proofed; the codebase keys all gating on the `'paid'` slug — `checkAndDecrementQuota`, `requirePaid`, `saveSessionStats` — so the doc uses `'paid'`, not `'pro'`. `tier` stays `'free'` for all users until the payment epic ships)
+- **Anonymous users have no access to Deep Reveal.** Tapping "Learn more" while unauthenticated shows the `AuthModal` (sign-up prompt) — no quota counter, no cap to exhaust.
+- Authenticated users: weekly cap of **20 per week**, enforced server-side on `users.deep_reveal_count` + `users.deep_reveal_reset_at`; reset Monday 00:00 UTC.
+- When weekly limit reached (authenticated): hide "Learn more" button; tap → `UpgradeModal` (waitlist capture).
+- Pro users (`tier === 'paid'`): no limit (future-proofed; the codebase keys all gating on the `'paid'` slug — `checkAndDecrementQuota`, `requirePaid`, `saveSessionStats` — so the doc uses `'paid'`, not `'pro'`. `tier` stays `'free'` for all users until the payment epic ships).
 
   **⚠️ Existing quota code must be changed, not extended as-is:**
   - `checkAndDecrementQuota` in `server/index.js` currently enforces **`count >= 3` per day**, reset at the **next UTC midnight** (`setUTCHours(24,…)`). This must become **20 per week, reset Monday 00:00 UTC** (Gap 3). The magic `3` and the daily reset are wrong for MVP.
-  - The existing guard rejects anonymous users: `/api/explain-move` returns `403` when `requestDeepReveal && !req.user`, and `checkAndDecrementQuota` returns `{ allowed: false, reason: 'anonymous' }` for any non-`paid`/`free` tier. **These anonymous lockouts must be removed** so anonymous users get the shared weekly cap (Gap 20).
-  - **The cap is currently enforced on the wrong endpoint.** MVP Deep Reveal calls `/api/explain-move-llm` (Epics 2b, 3b, 3c), which has **no quota enforcement today**. Move the weekly-cap check onto `/api/explain-move-llm`: server-side decrement for authenticated users, and accept/trust the IndexedDB counter for anonymous users (the client hides "Learn more" once its local counter is exhausted).
+  - Write a migration to update the `deep_reveal_reset_at` column default from next-UTC-midnight semantics to next-Monday 00:00 UTC semantics. Do not backfill existing rows.
+  - The existing guard rejects anonymous users: `/api/explain-move` returns `403` when `requestDeepReveal && !req.user`, and `checkAndDecrementQuota` returns `{ allowed: false, reason: 'anonymous' }` for any non-`paid`/`free` tier. Keep and reinforce this: anonymous users must not reach the quota check at all — the client gate (AuthModal prompt) is the first line of defense, and the server continues to reject unauthenticated Deep Reveal requests.
+  - **The cap is currently enforced on the wrong endpoint.** MVP Deep Reveal calls `/api/explain-move-llm` (Epics 2b, 3b, 3c), which has **no quota enforcement today**. Move the weekly-cap check onto `/api/explain-move-llm`: server-side decrement for authenticated `free`-tier users; reject with `401` for unauthenticated requests. Remove any IndexedDB counter paths from this flow.
 
 *Payments (deferred):*
 - Existing Stripe routes left untouched; `UpgradeModal` shows waitlist email capture only
@@ -227,38 +229,41 @@ First fully interactive surface. Redesigns `PuzzlesPage.jsx` (708 lines). **Reus
 - `track('screen_viewed', { screen: 'set_picker' })`
 
 *Challenge Board — pre-move, single-move type (`challenge` screen):*
-- `CoachDialog`: category-specific prompt (no category label shown)
+- `CoachDialog`: category-specific prompt (no category label shown). **Prompt source:** resolved client-side from per-category i18n key pools — `coach.<category>.prompt.*` (e.g. `coach.immediate_threat.prompt.0`, `.1`, …); the client picks one at random per puzzle. **Never use `goal_prompt` from the puzzle row.** This key pool is defined in `en.json` alongside the existing `coach.<category>.<quality>.*` pools and follows the same pooled-key convention (cross-cutting i18n rule).
+- **Hint text source:** resolved client-side from `coach.<category>.hint.*` key pool (e.g. `coach.immediate_threat.hint.0`); client picks one at random. Hint text names the task/threat without revealing the column — see cross-cutting *Hints* for the constraint. These keys are authored in `en.json` for each free category delivered in this epic.
 - Progress indicator: "N / M" + `ProgressBar`
 - Interactive `Board` (no overlays until move committed)
 - Toolbar: Hint only — **no Undo** (Gap 8). The Hint is a **contextual nudge** (see cross-cutting *Hints*): the Coach names the task/threat for the position (from the solver + `classify()`) **without revealing the column** and **without any numeric scores** — e.g. *"There's an immediate win on the bottom row — find the column."* *Note: the mockup `ChallengeBoard` shows an Undo/Retry button; the mockup is wrong here — Gap 8 governs.*
 - Back-navigation confirmation dialog (Gap 14)
 - `track('puzzle_attempted', { puzzleId, category })`
-- `ChallengeBoard` accepts a `lessonMode` flag (consumed by Epic 4 Confirmation Challenges): swaps the header to the lesson name and returns to the Saga Map instead of Post-Set Summary on completion.
 
 *Challenge Board — post-move feedback (Tier 1):*
 - **Variant A only** (Tier 1 strip below board); Variants B/C deferred to post-MVP
 - Evaluation badge on played column (✓ / ? / ✕); quality = Optimal/Suboptimal/Blunder (Gap 1)
 - `CoachDialog` updates with phrase + mood
-- Tier 1 strip: quality tag + summary line + "Learn more ▼" + "Flag" icon
+- Tier 1 strip: quality tag + summary line + "Learn more ▼" (no Flag icon — deferred to Epic 2b where an actual LLM response exists to flag)
 - "Learn more ▼": if weekly limit reached → `UpgradeModal`; otherwise → Deep Reveal Panel (Epic 2b)
 - `track('puzzle_solved_correct', ...)` or `track('puzzle_solved_wrong', ...)`
 
 **Backend / API (new):**
 - **Shared move-quality scorer (Gap 1) — NEW module.** The Optimal/Suboptimal/Blunder classification (sign-of-score comparison: `score(played)=score(best)` → Optimal; same sign but slower → Suboptimal; outcome-category drop → Blunder; losing-position rule) does **not** exist today — the predicate engine only returns `correct`/`wrong`/`tied`. Build a single shared scorer module consumed by `POST /api/evaluate-move` (this epic) **and** `POST /api/games/analyze` (Epic 3b). This is the spine of all feedback and timeline coloring.
-- `POST /api/evaluate-move` — `{ movestring, col }` → `{ badge, quality, coachPhrase, coachMood, summaryLine, patternTag }`. Uses the shared scorer + existing `classify()` + c4solver. **New endpoint.**
+- `POST /api/evaluate-move` — `{ movestring, col, category?: string }` → `{ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag }`. The optional `category` field, when present, drives the phrase-pool key (pedagogical intent of the challenge puzzle); when absent the server falls back to `classify()` output — covering Sparring (Epic 3a) reuse. The server picks one i18n key from the appropriate quality-bucket pool (e.g. `coach.immediate_threat.optimal.2`) and returns it as `coachPhraseKey`; similarly `summaryLineKey` is one key from the summary pool. **The server never returns resolved English strings for these fields** — the client resolves them with `t(coachPhraseKey)` and `t(summaryLineKey)`. Uses the shared scorer + existing `classify()` + c4solver. **New endpoint.**
 - `GET /api/puzzles/draw?category=<cat>&n=8` — random draw without replacement from approved puzzles (Gap 9). **New endpoint.** Must support `category=mixed` (see below).
+- `GET /api/puzzles/counts` — returns `{ [category]: approvedCount }` for all categories. **New endpoint.** The Set Picker calls this on mount to determine approved puzzle counts per category; sets with count = 0 are hidden (Gap 6a). Lightweight: a single GROUP BY query over approved puzzles, no per-puzzle data.
 - Challenge-set metadata: `server/challengeSets.js` — `category → { displayName, stars, description, free: bool }`. **New module.**
 
   **Free / Pro mapping — follows Gap 3 (authoritative over the current code):**
-  - **Free:** `immediate_threat`, `forced_block`, `double_threat`, `claimeven`, `z_threat`, `odd_even_threat` (the Lesson-1–7 content sets).
+  - **Free (single-move, this epic):** `immediate_threat`, `forced_block`, `double_threat`, `claimeven`, `z_threat` (the Lesson-1–7 content sets). `forbidden_columns` (multi-select, Epic 2b) is also free.
+  - **Free (sequence-mode, Epic 2b):** `forced_win` — moved to Epic 2b because it is multi-move (`interaction_mode === 'sequence'`). See Epic 2b for its full scope.
+  - **Free (Epic 6):** `odd_even_threat` — the category does not exist yet; its detector, `challengeSets.js` entry, i18n key pools, and count-hiding behavior (hide if approved count = 0) are all specified and built in Epic 6. **Do not include `odd_even_threat` in Epic 2a's free set list.**
   - **Pro:** `mixed`, `undercut`, `overcut`, `figure_7`, `j_shape`.
-  - `forbidden_columns` and `forced_win` are not mapped to a lesson by Gap 3; both default to **free** core-tactic sets.
-  - **`forced_win` is sequence-mode (multi-move), not single-move.** It is already implemented (`completionStrategies.js`, `interaction_mode === 'sequence'`) and is kept as a deliberate exception to Gap 8 ("all challenge puzzles are single-move"). The single-move Tier-1 flow in this epic is the default path; `forced_win` puzzles route to the sequence interaction ported in Epic 1a's Board. The `/api/evaluate-move` scorer applies per move within the sequence; "Next" advances only after the full forcing line is completed. Coach prompt: *"Force the win — play the line that leaves your opponent no escape."* **Mockup/vision note:** the Set Picker mockup and the `product_vision` prompt table both omit `forced_win`; the decision is to **include** it as a free sequence set. (`forbidden_columns` is the multi-select exception, handled in Epic 2b.)
   - **`server/categories.js` `PAID_CATEGORIES` must be remapped:** remove `claimeven` and `z_threat` (they are now free); they are currently incorrectly paid. Add the `mixed` pseudo-category to the paid set.
   - **`mixed` pseudo-category:** not a stored puzzle category. `GET /api/puzzles/draw?category=mixed` samples without replacement across all approved puzzles of all *free-or-owned* categories. Add handling in the draw endpoint and a `mixed` entry in `challengeSets.js` (Pro-gated).
-- Coach phrase library: `{ [category]: { optimal: key[], suboptimal: key[], blunder: key[] } }` — each quality bucket is a **pool** of i18n keys, client picks one at random per move (Gap 29). Free/stable categories here; Pro-category pools added in Epic 5.
+  - **Provisional star ratings in `challengeSets.js`:** `double_threat=2`, `forbidden_columns=2`. These are provisional values; Epic 6 confirms final ratings for all deferred categories (`double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`) once puzzle quality is assessed.
+  - **Mockup `CHAL_SETS` disclaimer:** the mockup `CHAL_SETS` array (`screens_challenges.jsx`) is **illustrative only** — its contents, order, star ratings, and locked flags do not match the authoritative free/Pro mapping above. The build is driven by `challengeSets.js` + dynamic approved counts from `GET /api/puzzles/counts`, not the mockup array. Gap 3 (as amended in this epic) governs.
+- Coach phrase library: `{ [category]: { optimal: key[], suboptimal: key[], blunder: key[] } }` — each quality bucket is a **pool** of i18n keys, client picks one at random per move (Gap 29). Free/stable categories here (excluding `odd_even_threat`, added in Epic 6); Pro-category pools added in Epic 5.
 
-**NOT included:** Deep Reveal / Tier 2, Forbidden Columns multi-select, Post-Set Summary (all Epic 2b); lesson confirmation mode (Epic 4); detector improvements (Epic 5).
+**NOT included:** Deep Reveal / Tier 2, Forbidden Columns multi-select, `forced_win` sequence set (all Epic 2b); `odd_even_threat` category (Epic 6); `lessonMode` prop on `ChallengeBoard` (Epic 4 — defined and consumed there); Post-Set Summary (Epic 2b); lesson confirmation mode (Epic 4); detector improvements (Epic 5).
 
 **Estimated spec:** 150–175 lines. **Estimated tasks:** 14–17.
 
@@ -266,11 +271,18 @@ First fully interactive surface. Redesigns `PuzzlesPage.jsx` (708 lines). **Reus
 
 ---
 
-### Epic 2b — Challenges: Deep Reveal, Forbidden Columns & Post-Set Summary
+### Epic 2b — Challenges: Deep Reveal, Forbidden Columns, Forced Win & Post-Set Summary
 
-Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type, and the set-end summary.
+Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type, the `forced_win` sequence set, and the set-end summary.
 
 **Frontend screens:**
+
+*Challenge Board — pre-move, `forced_win` (sequence-mode) type:*
+- **`forced_win` is sequence-mode (multi-move), not single-move.** It is already implemented (`completionStrategies.js`, `interaction_mode === 'sequence'`) and is kept as a deliberate exception to Gap 8. The sequence interaction was ported in Epic 1a's Board; this epic wires it to a challenge set entry.
+- `CoachDialog`: *"Force the win — play the line that leaves your opponent no escape."*
+- **Scoring is whole-line pass/fail via `SequenceHandler` completion result.** `/api/evaluate-move` is NOT called per move within the sequence; the existing `SequenceHandler`/`completionStrategies.js` path handles evaluation end-to-end. "Next" advances only after the full forcing line is completed.
+- `forced_win` is a **free** set. Its `challengeSets.js` entry gets a **provisional star rating of 3** (hardest free pattern; multi-move recognition) to be confirmed in Epic 6.
+- **Mockup/vision note:** the Set Picker mockup and the `product_vision` prompt table both omit `forced_win`; the decision is to include it as a free sequence set in Epic 2b.
 
 *Challenge Board — pre-move, Forbidden Columns type:*
 - `CoachDialog`: "Mark every column where playing immediately hands your opponent a win."
@@ -284,26 +296,28 @@ Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type
 - **Mockup note:** the Set Picker mockup lists no Forbidden Columns set; the type exists per Gap 30 and gets a **free** entry in `challengeSets.js`. Each Forbidden Columns puzzle counts as **one scored item** in session accuracy and the by-pattern breakdown.
 
 *Deep Reveal Panel (Tier 2):*
-- Check `explanation_cache` first (key: `SHA256(movestring + ":" + col)`); serve cached if hit
-- On cache miss: call `/api/explain-move-llm`; write result to `explanation_cache` on response
+- **Data contract:** `patternTag`, `quality`, and `badge` come from the already-held `/api/evaluate-move` response (Epic 2a client state) — no duplicate classifier call. The panel calls `/api/explain-move-llm`, which Epic 2b extends to return `{ explanation, bestLine }` (solver principal variation as a column array). No other fields are added to the endpoint response.
+- **Cache wiring (added this epic):** `/api/explain-move-llm` reads `explanation_cache` first (key: `SHA256(movestring + ":" + col)`). On hit, return `deep_reveal_json` immediately. On miss, call LLM, then write result to `explanation_cache.deep_reveal_json`.
+- **Quota enforcement:** weekly-cap decrement runs **only on cache miss**, after the cache check. Cache hits do not consume quota. This is a correction to the current handler, which decrements before the cache check.
 - **Reuse:** `DeepRevealButton.jsx` / `ExplainMoveButton.jsx` already do most of this
 - Loading spinner until response (cache hit = no spinner)
-- Loaded: pattern tag(s), badge + quality label, compact annotated `Board`, LLM explanation, "Best line" chips, "Flag this explanation" button
+- Loaded: pattern tag(s) and badge/quality (from evaluate-move state), LLM explanation, "Best line" chips (solver PV from endpoint), "Flag this explanation" button
 - LLM timeout >6s: show Tier 1 text + "Detailed explanation unavailable." (Gap 6b)
-- On open: weekly-cap decrement (see Epic 7 — enforced on `/api/explain-move-llm`); `track('deep_reveal_viewed', { puzzleId, cached })`
+- On open: `track('deep_reveal_viewed', { puzzleId, cached })`
 - On flag: write to `llm_feedback` table; `track('deep_reveal_flagged', { puzzleId })`
 
 *Post-Set Summary (`summary` screen):*
 - Accuracy %, by-pattern breakdown, Coach recommendation (Gap 15 tie-break)
 - CTA to recommended lesson; "Back to Challenges"
 - `store.saveChallengeSession(...)` on load
-- `track('set_completed', { category, accuracy, optimalCount, blunderCount })`
+- `track('set_completed', { category, accuracy, optimalCount, blunderCount, byPattern })` — `category` is `'mixed'` for Mixed sets; `byPattern` object carries per-pattern data so it is not lost from analytics.
+- **Single-category vs. Mixed distinction:** for a single-category set, the by-pattern breakdown shows one row. If accuracy < threshold, recommend re-doing that category's lesson. If 100%, show a congratulatory CTA instead of a lesson link. This behavior must be called out explicitly in the spec to avoid ambiguity when there is only one pattern row.
 
-**NOT included:** lesson confirmation challenge mode (Epic 4), detector improvements (Epic 5), game history.
+**NOT included:** lesson confirmation challenge mode (Epic 4), detector improvements (Epic 5), game history, `odd_even_threat` category (Epic 6).
 
 **Estimated spec:** 130–150 lines. **Estimated tasks:** 12–15.
 
-**Depends on:** Epic 2a (Set Picker, single-move board, scorer, draw endpoint).
+**Depends on:** Epic 2a (Set Picker, single-move board, scorer, draw endpoint, `GET /api/puzzles/counts`).
 
 ---
 
@@ -457,7 +471,7 @@ Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in In
 - Toolbar: Hint (static)
 
 *Confirmation Challenges (`clchallenge` screen):*
-- Reuses `ChallengeBoard` from Epic 2a with `lessonMode` flag
+- Reuses `ChallengeBoard` from Epic 2a with `lessonMode` flag. **`lessonMode` prop contract (defined here, consumed here):** when `lessonMode={true}`, `ChallengeBoard` swaps the header to the lesson name (i18n key from the lesson JSON `title`) and on set completion navigates to the Saga Map screen instead of the Post-Set Summary screen. The `lessonMode` prop is added to `ChallengeBoard` in Epic 4's implementation — it is not part of Epic 2a's deliverables.
 - Header: "← [Lesson Name] — Practice"
 - Last challenge complete → return to Saga Map; lesson marked done
 - Completion: past all slides + ≥1 correct answer; Lesson 4 completes on last slide only (Gap 7)
@@ -539,10 +553,13 @@ Ensure puzzle DB has sufficient approved positions for all active sets and lesso
 - Forbidden Columns puzzle set: generate positions where ≥1 column is forbidden (opponent wins immediately on that column) and ≥1 safe column exists
 - **New `odd_even_threat` category (drill for the Lesson 4 "Odd Rows" concept).** The mockup's "Odd & Even Threats" set needs a puzzle source, but Lesson 4 is reading-only with no detector today. Add a new category + generation predicate: **positions where the player has (at least) two distinct moves that each create a major threat — one landing on an odd row, one on an even row — and exactly one is the player's natural parity row** (odd for Red, even for Yellow). `correct_col` = the parity-aligned choice; the off-parity threat is the distractor ("which threat do you prefer?"). Requires:
   - adding `odd_even_threat` to `VALID_CATEGORIES` / `CATEGORY_ORDER` (free per Gap 3) and a new generation predicate (sync; parity check + immediate-threat enumeration, no extra solver work beyond existing scores);
-  - a one-line `PATTERN_KB.odd_even_threat` (or reuse `derived-parity-formula`) for the Deep Reveal — coordinate with Epic 5.
+  - a one-line `PATTERN_KB.odd_even_threat` (or reuse `derived-parity-formula`) for the Deep Reveal — coordinate with Epic 5;
+  - a `challengeSets.js` entry for `odd_even_threat` (free, with a provisional star rating — author's choice, confirmed here in Epic 6);
+  - i18n key pools in `en.json`: `coach.odd_even_threat.prompt.*`, `coach.odd_even_threat.hint.*`, `coach.odd_even_threat.optimal.*`, `coach.odd_even_threat.suboptimal.*`, `coach.odd_even_threat.blunder.*` — following the same pooled-key convention as all other categories;
+  - **count-hiding behavior:** the Set Picker calls `GET /api/puzzles/counts` on mount; if the approved count for `odd_even_threat` is 0, the set is hidden from the picker. This uses the same mechanism as all other categories (Gap 6a) and requires no special-casing beyond having an entry in `challengeSets.js`.
   - This is a free-standing challenge set; Lesson 4 itself still has **no confirmation challenges** (Gap 7), so the set is not wired as a lesson confirmation category.
 - Hand-select Socratic positions for applicable lessons; document movestrings in lesson JSON. **Source all movestrings from the DB/KB (project rule) — never hand-construct positions.**
-- Define `challengeSets.js` **star ratings** for sets absent from the mockup (`forbidden_columns`, `double_threat`, `forced_win`, `odd_even_threat`) — author's choice; the mockup rates only 8 sets.
+- **Confirm and finalize star ratings** for sets absent from the mockup: `forbidden_columns`, `double_threat` (both assigned provisional values of `2` in Epic 2a), `forced_win` (provisional in Epic 2b), and `odd_even_threat` (provisional value set in this epic). Epic 6 performs post-generation quality assessment and updates these values in `challengeSets.js` if warranted. The mockup rates only 8 sets; the provisional values are the build defaults until this epic runs.
 - Validation script: assert all `confirmationCategory` puzzles exist as approved with correct category
 
 **Estimated spec:** 120–145 lines. **Estimated tasks:** 12–15.
@@ -600,8 +617,8 @@ Home Hub, Stats (session-only for anon), auth, analytics, full Challenges (inclu
 | 1a. Design Tokens & Components | Shared primitives | None | 160–180 | 15–17 |
 | 1b. App Shell, Navigation, Analytics, i18n | Home Hub, Stats; retire `/coach` route + `CoachPage` | `track()` + `POST /api/track` already exist — modify, not build | 130–150 | 11–14 |
 | 7. Auth & Progress Persistence | Auth reskin, store extensions, Deep Reveal limit (rework existing quota: 20/wk Mon reset, move to `/api/explain-move-llm`, drop anon lockout) | None (server auth already wired) | 130–150 | 12–15 |
-| 2a. Challenges: Picker + Single-Move + Tier-1 | Set Picker, single-move Challenge Board, Tier-1 feedback | shared move-quality scorer (Gap 1, NEW), `POST /api/evaluate-move`, `GET /api/puzzles/draw` (+`mixed`), `challengeSets.js`, phrase library, `PAID_CATEGORIES` remap | 150–175 | 14–17 |
-| 2b. Challenges: Deep Reveal + Forbidden + Summary | Forbidden Columns multi-select, Deep Reveal (cached + flaggable), Post-Set Summary | reuses `/api/explain-move-llm` + `explanation_cache` | 130–150 | 12–15 |
+| 2a. Challenges: Picker + Single-Move + Tier-1 | Set Picker, single-move Challenge Board, Tier-1 feedback | shared move-quality scorer (Gap 1, NEW), `POST /api/evaluate-move` (returns keys not strings), `GET /api/puzzles/draw` (+`mixed`), `GET /api/puzzles/counts`, `challengeSets.js`, phrase library + prompt/hint pools, `PAID_CATEGORIES` remap | 150–175 | 14–17 |
+| 2b. Challenges: Deep Reveal + Forbidden + Forced Win + Summary | Forbidden Columns multi-select, `forced_win` sequence set, Deep Reveal (cached + flaggable), Post-Set Summary | reuses `/api/explain-move-llm` + `explanation_cache`; `forced_win` entry in `challengeSets.js` | 130–150 | 12–15 |
 | 3a. Sparring: Game Board | Difficulty Picker, Game Board | `POST /api/games` (new `games` table migration), extend `aiDifficulty.js` | 160–180 | 15–17 |
 | 3b. Post-Game Review + Explorer | Post-Game Review, Position Explorer, blunder writes (table already exists) | `POST /api/games/analyze` (uses 2a scorer), `POST /api/games/from-position` | 185–205 | 16–19 |
 | 3c. Past Mistakes Review | Past Mistakes list + detail | **reuses** `GET /api/coach/queue` + `POST /api/coach/queue/:id/resolve` (extend + fix uuid bug) | 100–120 | 8–11 |

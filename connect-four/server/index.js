@@ -20,7 +20,10 @@ import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { CHALLENGE_SETS } from './challengeSets.js';
+import { scoreMove } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
+import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -167,34 +170,51 @@ app.use(loadUser);
 
 // ── Deep Reveal quota helper ──────────────────────────────────────────────────
 
+/** Returns the strictly next future Monday 00:00:00 UTC as a Date.
+ * If now is exactly Monday 00:00:00 UTC, returns the Monday 7 days later. */
+function nextMondayUtcMidnight(now) {
+  const dayOfWeek = now.getUTCDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+  const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+  const next = new Date(now);
+  next.setUTCDate(now.getUTCDate() + daysUntilMonday);
+  next.setUTCHours(0, 0, 0, 0);
+  return next;
+}
+
 async function checkAndDecrementQuota(user) {
   if (!user) return { allowed: false, reason: 'anonymous' };
   if (user.tier === 'paid') return { allowed: true };
   if (user.tier !== 'free') return { allowed: false, reason: 'anonymous' };
 
   const now = new Date();
-  const resetAt = new Date(user.deep_reveal_reset_at);
 
-  // Reset quota if past midnight UTC
-  let count = user.deep_reveal_count;
+  // Treat null deep_reveal_reset_at as already expired
+  const resetAtRaw = user.deep_reveal_reset_at;
+  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+
+  // Reset quota if past the weekly reset time (or null)
+  let count = user.deep_reveal_count ?? 0;
+  let resetsAt;
   if (now > resetAt) {
     count = 0;
-    const nextMidnight = new Date(now);
-    nextMidnight.setUTCHours(24, 0, 0, 0);
+    const nextMonday = nextMondayUtcMidnight(now);
+    resetsAt = nextMonday.toISOString();
     await supabase
       .from('users')
-      .update({ deep_reveal_count: 0, deep_reveal_reset_at: nextMidnight.toISOString() })
+      .update({ deep_reveal_count: 0, deep_reveal_reset_at: resetsAt })
       .eq('id', user.id);
+  } else {
+    resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 3) return { allowed: false, reason: 'quota_exceeded', quotaRemaining: 0 };
+  if (count >= 20) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
     .update({ deep_reveal_count: count + 1 })
     .eq('id', user.id);
 
-  return { allowed: true, quotaRemaining: 3 - count - 1 };
+  return { allowed: true, resetsAt };
 }
 
 // ── LLM explanation composer ──────────────────────────────────────────────────
@@ -409,23 +429,14 @@ app.post('/api/explain-move', async (req, res) => {
     }
   }
 
-  // Handle Deep Reveal quota
+  // Handle Deep Reveal — no quota gate on this endpoint (quota is on /api/explain-move-llm)
   let deepReveal = null;
-  let quotaRemaining = null;
 
   if (requestDeepReveal && req.user) {
-    const quota = await checkAndDecrementQuota(req.user);
-    if (!quota.allowed) {
-      return res.status(429).json({
-        error: quota.reason === 'anonymous' ? 'Deep Reveals require a free account' : 'Daily Deep Reveal limit reached',
-        quotaRemaining: 0,
-      });
-    }
     deepReveal = deepRevealData;
-    quotaRemaining = quota.quotaRemaining ?? null;
   }
 
-  res.json({ oneLiner, patternTag, deepReveal, quotaRemaining });
+  res.json({ oneLiner, patternTag, deepReveal });
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
@@ -570,8 +581,18 @@ app.post('/api/recommend-move', async (req, res) => {
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, prompt: string }.
-// No auth required. Rate-limited to 5 req/min (LLM cost guard).
+// Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
+// Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (req.user.tier === 'free') {
+    const quota = await checkAndDecrementQuota(req.user);
+    if (!quota.allowed) {
+      return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
+    }
+  }
+
   const { movestring, col, rounds } = req.body;
 
   if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
@@ -779,6 +800,169 @@ app.get('/api/puzzles', async (req, res) => {
     }));
 
     res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// NOTE: /api/puzzles/counts, /api/puzzles/draw, and /api/evaluate-move MUST remain
+// above /api/puzzles/:id — Express first-match ordering swallows 'counts' and 'draw'
+// as /:id params if registered after.
+
+// GET /api/puzzles/counts — return per-category puzzle counts and challenge set metadata
+app.get('/api/puzzles/counts', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  try {
+    const { data, error } = await supabase
+      .from('puzzles')
+      .select('category')
+      .eq('is_active', true);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Build counts map starting from CATEGORY_ORDER (all categories default to 0)
+    const counts = {};
+    for (const slug of CATEGORY_ORDER) {
+      counts[slug] = 0;
+    }
+    for (const row of (data || [])) {
+      if (row.category in counts) {
+        counts[row.category] += 1;
+      }
+    }
+
+    res.json({ counts, sets: CHALLENGE_SETS });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/puzzles/draw — draw N random puzzles from a category
+app.get('/api/puzzles/draw', async (req, res) => {
+  const { category } = req.query;
+  let n = req.query.n !== undefined ? parseInt(req.query.n, 10) : 8;
+
+  // mixed is not in VALID_CATEGORIES — must be checked first
+  if (category === 'mixed') {
+    if (req.user?.tier !== 'paid') {
+      return res.status(403).json({ error: 'Pro subscription required' });
+    }
+  } else if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
+  } else if (PAID_CATEGORIES.has(category) && req.user?.tier !== 'paid') {
+    return res.status(403).json({ error: 'Pro subscription required' });
+  }
+
+  // Validate n
+  if (req.query.n !== undefined && (isNaN(n) || n < 1 || n > 8)) {
+    return res.status(400).json({ error: 'invalid n' });
+  }
+  if (isNaN(n) || n < 1 || n > 8) n = 8;
+
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  try {
+    let puzzles;
+    if (category === 'mixed') {
+      // Sample across all CATEGORY_ORDER categories (all accessible to Pro users)
+      const { data, error } = await supabase
+        .from('puzzles')
+        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .in('category', CATEGORY_ORDER)
+        .eq('is_active', true)
+        .limit(n * 4); // oversample then pick
+      if (error) return res.status(500).json({ error: error.message });
+      // Shuffle and take n
+      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
+      puzzles = shuffled;
+    } else {
+      const { data, error } = await supabase
+        .from('puzzles')
+        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .eq('category', category)
+        .eq('is_active', true)
+        .limit(n * 4); // oversample, shuffle in JS since Supabase JS client doesn't support ORDER BY RANDOM()
+      if (error) return res.status(500).json({ error: error.message });
+      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
+      puzzles = shuffled;
+    }
+
+    res.json({ puzzles });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── i18n pool helper ──────────────────────────────────────────────────────────
+
+/**
+ * Navigate a nested translations object by dot-separated prefix and return
+ * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * Returns null if the prefix resolves to a non-object or empty object.
+ */
+function pickFromPool(translations, prefix) {
+  const parts = prefix.split('.');
+  let node = translations;
+  for (const part of parts) {
+    if (!node || typeof node !== 'object') return null;
+    node = node[part];
+  }
+  if (!node || typeof node !== 'object') return null;
+  const keys = Object.keys(node);
+  if (keys.length === 0) return null;
+  const idx = Math.floor(Math.random() * keys.length);
+  return `${prefix}.${keys[idx]}`;
+}
+
+// POST /api/evaluate-move — score a played move and return coach phrase keys
+app.post('/api/evaluate-move', async (req, res) => {
+  const { movestring, col, category } = req.body;
+
+  // Validate movestring
+  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
+    return res.status(400).json({ error: 'invalid movestring' });
+  }
+
+  // Validate col
+  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
+  if (!isValidCol0(colInt)) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+
+  try {
+    // Get solver scores
+    let scores;
+    if (movestring === '' || movestring.length === 0) {
+      scores = EMPTY_BOARD_SCORES;
+    } else {
+      scores = await solver.query(movestring);
+    }
+
+    // Score the move
+    const { badge, quality, bestCol } = scoreMove(scores, colInt);
+
+    // Classify for pattern tag
+    const classifyResult = classify(movestring, colInt, scores);
+    const patternTag = classifyResult?.tag ?? null;
+
+    // Determine phrase pool key (request category takes priority)
+    const phrasePoolKey = category || patternTag;
+
+    // Pick i18n keys from pools
+    const coachPhraseKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      : null;
+
+    const summaryLineKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+      : null;
+
+    // Determine coach mood
+    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+    const coachMood = coachMoodMap[quality] ?? 'think';
+
+    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

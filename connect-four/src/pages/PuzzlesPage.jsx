@@ -7,21 +7,11 @@ import { SequenceHandler } from '../components/SequenceHandler.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_NAMES, CATEGORY_CHIPS, CATEGORY_ORDER } from '../lib/categories.js';
+import { buildBoard } from '../lib/board.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const COLS = 7;
 const ROWS = 6;
-
-function buildBoard(moves) {
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill('empty'));
-  const heights = Array(COLS).fill(0);
-  for (let i = 0; i < moves.length; i++) {
-    const col = parseInt(moves[i], 10);
-    board[heights[col]][col] = i % 2 === 0 ? 'red' : 'yellow';
-    heights[col]++;
-  }
-  return { board, heights };
-}
 
 function Chip({ catId }) {
   const chip = CATEGORY_CHIPS[catId];

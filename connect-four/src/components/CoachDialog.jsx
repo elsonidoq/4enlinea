@@ -52,6 +52,23 @@ export function CoachDialog({ messages, size = 58, fixed = false }) {
                 {m.evalNum}
               </span>
             )}
+            {m.disc && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                <span style={{
+                  width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                  background: m.disc === 'green' ? 'var(--disc-green)' : 'var(--disc-gray)',
+                  boxShadow: m.disc === 'green'
+                    ? '0 2px 0 #228245'
+                    : '0 2px 0 #25293a',
+                }} />
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
+                  color: m.disc === 'green' ? 'var(--disc-green)' : 'var(--disc-gray)',
+                }}>
+                  {m.discLabel}
+                </span>
+              </span>
+            )}
             {m.lead && (
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, display: 'block', marginBottom: 2 }}>
                 {m.lead}

@@ -40,6 +40,7 @@ function Seg({ value, options, onChange }) {
 
 function App() {
   const [screen, setScreen] = useState("home");
+  const [isAuthed, setIsAuthed] = useState(false);
   const [sagaVariant, setSagaVariant] = useState("A");
   const [fbVariant, setFbVariant] = useState("A");
   const [mistakesVariant, setMistakesVariant] = useState("in");
@@ -48,7 +49,7 @@ function App() {
   const setReviewed = (id, v) => setReviewedMap(m => ({ ...m, [id]: v }));
   const go = (s) => setScreen(s);
 
-  const props = { go, sagaVariant, fbVariant, mistakesVariant, selMistake, setSelMistake, reviewed, setReviewed };
+  const props = { go, isAuthed, sagaVariant, fbVariant, mistakesVariant, selMistake, setSelMistake, reviewed, setReviewed };
 
   const sagaNames = { A: "Winding path", B: "Meadow stones", C: "Clean list" };
   const fbNames = { A: "Strip below", B: "Compact inline", C: "Docked card" };
@@ -70,6 +71,14 @@ function App() {
               </button>
             ))}
 
+            {g.label === "Home" && (
+              <div className="variant-box">
+                <div className="vlabel">Profile state · {isAuthed ? "Signed in" : "Anonymous"}</div>
+                <Seg value={isAuthed ? "in" : "out"} options={["out", "in"]}
+                     onChange={v => { setIsAuthed(v === "in"); go("home"); }} />
+                <div style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 700, marginTop: 6, lineHeight: 1.3 }}>Anonymous taps the profile icon to see the sign-in modal.</div>
+              </div>
+            )}
             {g.label === "Lessons" && (
               <div className="variant-box">
                 <div className="vlabel">Saga Map style · {sagaNames[sagaVariant]}</div>

@@ -2,7 +2,8 @@
    DecodeC4 — Home (Hub) + Progress & Stats
    ============================================================ */
 
-function HomeScreen({ go }) {
+function HomeScreen({ go, isAuthed = false }) {
+  const [showAuth, setShowAuth] = useState(false);
   return (
     <div className="screen s-home">
       <div className="topbar" style={{ padding: "8px 22px 6px" }}>
@@ -10,7 +11,7 @@ function HomeScreen({ go }) {
           Decode<span style={{ color: "var(--disc-green)" }}>C4</span>
         </div>
         <div className="tb-spacer"></div>
-        <button className="icon-btn" onClick={() => go("stats")} style={{ borderRadius: "50%" }}>
+        <button className="icon-btn" onClick={() => isAuthed ? go("stats") : setShowAuth(true)} style={{ borderRadius: "50%" }}>
           <Icon name="user" size={21} />
         </button>
       </div>
@@ -53,8 +54,45 @@ function HomeScreen({ go }) {
           <Icon name="chart" size={18} /> Progress &amp; Stats
         </button>
       </div>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       <div className="home-indicator"></div>
     </div>
+  );
+}
+
+function AuthModal({ onClose }) {
+  const [stage, setStage] = useState("email");
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose}></div>
+      <div className="modal-card">
+        {stage === "email" ? (
+          <>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--disc-green)", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
+              <Icon name="user" size={24} color="#fff" />
+            </div>
+            <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 21 }}>Sign in to DecodeC4</h3>
+            <p style={{ color: "var(--ink-soft)", fontWeight: 600, fontSize: 14, margin: "8px 0 18px" }}>Save your progress, streaks, and stats across devices.</p>
+            <input
+              type="email"
+              placeholder="your@email.com"
+              style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "12px 14px", fontSize: 15, fontFamily: "var(--font-body)", outline: "none", width: "100%", marginBottom: 14 }}
+            />
+            <button className="btn btn-primary" onClick={() => setStage("sent")} style={{ width: "100%" }}>Continue with email</button>
+            <button className="btn btn-ghost" onClick={onClose} style={{ marginTop: 8, width: "100%" }}>Maybe later</button>
+          </>
+        ) : (
+          <>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--eval-good-bg)", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
+              <Icon name="check" size={28} color="var(--eval-good)" />
+            </div>
+            <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 21 }}>Check your inbox</h3>
+            <p style={{ color: "var(--ink-soft)", fontWeight: 600, fontSize: 14, margin: "8px 0 18px" }}>We sent a magic link to your email. Tap it to sign in.</p>
+            <button className="btn btn-ghost" onClick={() => setStage("email")} style={{ width: "100%" }}>Back</button>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -117,4 +155,4 @@ function StatsScreen({ go }) {
   );
 }
 
-Object.assign(window, { HomeScreen, StatsScreen });
+Object.assign(window, { HomeScreen, StatsScreen, AuthModal });

@@ -251,13 +251,13 @@ A "Sign up to track your progress over time" prompt is shown below the stats.
 
 ### Deep Reveal access for anonymous users
 
-Anonymous users receive Deep Reveals. The same weekly cap (Gap 3: 20 calls/week, reset Monday 00:00 UTC) applies to all users regardless of auth state:
+Anonymous users have **no access** to Deep Reveals. Tapping "Learn more" while unauthenticated shows the `AuthModal` — there is no anonymous quota, no anonymous counter, and no IndexedDB quota fields.
 
-- **Anonymous**: counter tracked in IndexedDB (`deep_reveal_count` + `deep_reveal_reset_at` on the local profile)
-- **Authenticated free**: counter tracked server-side on `users.deep_reveal_count` + `users.deep_reveal_reset_at`
+- **Anonymous**: no Deep Reveal access; `AuthModal` is the gate (client-side); server returns 401 for unauthenticated requests to `/api/explain-move-llm`
+- **Authenticated free**: 20 Deep Reveals per week, counter tracked server-side on `users.deep_reveal_count` + `users.deep_reveal_reset_at`; resets Monday 00:00 UTC
 - **Pro**: no limit (future-proofed; `tier` stays `'free'` until payments epic ships)
 
-There is no separate "zero Deep Reveals for anonymous" lockout. The weekly cap is the only gate. When the cap is reached, "Learn more" is hidden and tapping shows `UpgradeModal` (waitlist capture).
+When the weekly cap is reached for free users, tapping "Learn more" shows `UpgradeModal` (waitlist capture).
 
 ---
 

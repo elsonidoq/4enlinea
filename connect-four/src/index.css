@@ -58,3 +58,37 @@ h1, h2, h3 {
 p {
   margin: 0;
 }
+
+/* ===================== BUTTONS ===================== */
+.btn {
+  font-family: var(--font-display); font-weight: 700; font-size: 16px;
+  border: none; cursor: pointer; border-radius: 16px; padding: 15px 22px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .08s, filter .15s; width: 100%;
+}
+.btn:active { transform: translateY(1px) scale(0.995); }
+.btn-primary { background: var(--disc-green); color: #fff; box-shadow: 0 6px 0 #228245; }
+.btn-primary:active { box-shadow: 0 2px 0 #228245; transform: translateY(4px); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 6px 0 #228245; }
+.btn-ghost { background: rgba(0,0,0,0.05); color: var(--ink); }
+.btn-ghost:hover { background: rgba(0,0,0,0.08); }
+.btn-dark { background: var(--ink); color: #fff; box-shadow: 0 6px 0 #100f0e; }
+.btn-dark:active { box-shadow: 0 2px 0 #100f0e; transform: translateY(4px); }
+
+/* ===================== MODAL / SHEET ===================== */
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(30,26,20,0.5); z-index: 50;
+  animation: backdropFade .25s;
+}
+@keyframes backdropFade { from { opacity: 0; } to { opacity: 1; } }
+
+.modal-card {
+  position: fixed; left: 24px; right: 24px; top: 50%; transform: translateY(-50%);
+  background: #fff; border-radius: 24px; padding: 26px 22px; z-index: 55;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center;
+  animation: modalPopIn .3s cubic-bezier(.2,.9,.3,1.2);
+  color-scheme: light;
+}
+.modal-card h1, .modal-card h2, .modal-card h3 { color: var(--ink); }
+.modal-card input { background: #fff; color: var(--ink); }
+@keyframes modalPopIn { from { transform: translateY(-50%) scale(.92); } to { transform: translateY(-50%) scale(1); } }

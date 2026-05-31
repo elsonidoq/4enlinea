@@ -45,8 +45,14 @@
     "email": "Email address",
     "sendLink": "Send magic link",
     "checkEmail": "Check your email for the sign-in link.",
-    "deepRevealGate": "Create a free account to unlock 3 Deep Reveals per day.",
-    "signOut": "Sign out"
+    "deepRevealGate": "Create a free account to unlock 20 Deep Reveals per week.",
+    "signOut": "Sign out",
+    "dismiss": "Maybe later",
+    "subtitle": "Save your progress, streaks, and stats across devices.",
+    "checkInbox": "Check your inbox",
+    "magicLinkSent": "We sent a magic link to your email. Tap it to sign in.",
+    "continueWithEmail": "Continue with email",
+    "sendError": "Something went wrong. Please try again."
   },
   "upgrade": {
     "heading": "Join the waitlist",
@@ -82,7 +88,107 @@
     "queueCount_other": "{{count}} positions to review",
     "startReview": "Start review",
     "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
-    "missRate": "miss rate"
+    "missRate": "miss rate",
+    "immediate_threat": {
+      "prompt": {
+        "0": "You can win right now — find the column.",
+        "1": "There's an immediate winning move on the board. Can you spot it?",
+        "2": "One move ends the game in your favor. Where do you play?"
+      },
+      "hint": {
+        "0": "Look for a row where you're one move from four in a row.",
+        "1": "Check each of your existing groups of three — is any of them one away from connecting?"
+      },
+      "optimal": {
+        "0": "Nice — you spotted the winning move."
+      },
+      "suboptimal": {
+        "0": "Close — there was a faster win available."
+      },
+      "blunder": {
+        "0": "That misses your winning opportunity."
+      }
+    },
+    "forced_block": {
+      "prompt": {
+        "0": "Your opponent is about to win — stop them.",
+        "1": "There's a forced block you must make. Find it.",
+        "2": "One column is the only safe move. Which is it?"
+      },
+      "hint": {
+        "0": "Look for a row where your opponent is one move from four in a row.",
+        "1": "Check each of your opponent's groups of three — is any of them one away from connecting?"
+      },
+      "optimal": {
+        "0": "Well defended — you blocked the threat."
+      },
+      "suboptimal": {
+        "0": "You blocked, but there was a cleaner defensive move."
+      },
+      "blunder": {
+        "0": "That leaves your opponent's winning threat wide open."
+      }
+    },
+    "double_threat": {
+      "prompt": {
+        "0": "Find the move that creates two winning threats at once.",
+        "1": "One column sets up two simultaneous threats your opponent can't both stop.",
+        "2": "Look for a fork — a move that threatens in two directions."
+      },
+      "hint": {
+        "0": "Think about moves that add to two different groups at once.",
+        "1": "A double threat wins because your opponent can only block one."
+      },
+      "optimal": {
+        "0": "Perfect — you created the double threat."
+      },
+      "suboptimal": {
+        "0": "Good move, but a different column creates two threats at once."
+      },
+      "blunder": {
+        "0": "That misses the chance to create two simultaneous threats."
+      }
+    },
+    "claimeven": {
+      "prompt": {
+        "0": "As Yellow, you can secure a draw — find the Claimeven move.",
+        "1": "Yellow has a drawing strategy here. Which column keeps it alive?",
+        "2": "Use Claimeven: Yellow plays below every Red even-row threat."
+      },
+      "hint": {
+        "0": "Look for an even row where Red has a threat — Yellow should mirror below it.",
+        "1": "Claimeven works by ensuring Yellow always gets the square directly below Red's even-row threats."
+      },
+      "optimal": {
+        "0": "Exactly — that's the Claimeven move that secures the draw."
+      },
+      "suboptimal": {
+        "0": "You're still in the draw zone, but the Claimeven key column was stronger."
+      },
+      "blunder": {
+        "0": "That column gives up Yellow's Claimeven drawing advantage."
+      }
+    },
+    "z_threat": {
+      "prompt": {
+        "0": "A Z-threat gives you unstoppable parity control — find it.",
+        "1": "Use the Z-threat pattern to guarantee you get the winning odd-row square.",
+        "2": "One column sets up Z-threat parity so your opponent can't stop you."
+      },
+      "hint": {
+        "0": "Look for a column where your odd-row threat can't be claimed by your opponent.",
+        "1": "Z-threats work by creating a parity chain your opponent is forced to follow."
+      },
+      "optimal": {
+        "0": "Spot on — you activated the Z-threat."
+      },
+      "suboptimal": {
+        "0": "Reasonable move, but the Z-threat column creates stronger parity control."
+      },
+      "blunder": {
+        "0": "That move hands away your Z-threat parity advantage."
+      }
+    }
   },
   "stats": {
     "title": "Progress & Stats",
@@ -98,5 +204,112 @@
   "error": {
     "generic": "Something went wrong. Please refresh and try again.",
     "solverUnavailable": "Solver temporarily unavailable. Hints disabled."
+  },
+  "setpicker": {
+    "title": "Challenges",
+    "subtitle": "Pick a set to train",
+    "positions_count": "{{count}} positions"
+  },
+  "challenge": {
+    "playing_gray": "You're playing Gray",
+    "playing_green": "You're playing Green",
+    "progress": "{{current}} / {{total}}",
+    "leave_confirm_title": "Leave this set?",
+    "leave_confirm_body": "Your progress won't be saved.",
+    "leave_keep": "Keep going",
+    "leave_leave": "Leave",
+    "next": "Next →",
+    "quality": {
+      "optimal": "Optimal",
+      "suboptimal": "Suboptimal",
+      "blunder": "Blunder"
+    }
+  },
+  "eval": {
+    "immediate_threat": {
+      "optimal": {
+        "summary": {
+          "0": "You found the immediate win."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "You played safely but missed the immediate win."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move missed the immediate winning threat."
+        }
+      }
+    },
+    "forced_block": {
+      "optimal": {
+        "summary": {
+          "0": "You blocked the threat correctly."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "You defended, but the forced block was a different column."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move left your opponent's winning threat unblocked."
+        }
+      }
+    },
+    "double_threat": {
+      "optimal": {
+        "summary": {
+          "0": "You created two simultaneous threats your opponent can't both stop."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Reasonable, but a different column creates the double threat."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move missed the double-threat opportunity entirely."
+        }
+      }
+    },
+    "claimeven": {
+      "optimal": {
+        "summary": {
+          "0": "That's the Claimeven column that secures Yellow's draw."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Still drawing, but the Claimeven key column was stronger."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That column gives up Yellow's Claimeven drawing strategy."
+        }
+      }
+    },
+    "z_threat": {
+      "optimal": {
+        "summary": {
+          "0": "You activated the Z-threat and secured parity control."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "Playable, but the Z-threat column gives stronger parity control."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "That move gives away your Z-threat parity advantage."
+        }
+      }
+    }
   }
 }
