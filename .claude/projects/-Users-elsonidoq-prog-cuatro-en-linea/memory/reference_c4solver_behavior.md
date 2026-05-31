@@ -39,3 +39,9 @@ These differ by 1 when `moveCount` is odd. The JS formula underestimates by 1 in
 ## Scores at forced-win terminals are flat
 
 When the opponent faces a forced-win position (all moves lose at the same speed), all opponent column scores are identical. Do not use scores to pick which column to highlight — use direct board threat detection instead. See `reference_cat5_forced_block_detection.md`.
+
+## Never use score threshold to detect immediate wins
+
+`immediateWinScore` was deleted from `predicates.js` and `candidate-generator.js` (2026-05-21) because the formula `Math.floor((42 - moveCount) / 2)` produces the same integer for an immediate win and a win-in-2 when `moveCount` is odd.
+
+**Rule**: always use `checkWin` at the gravity-top cell to detect immediate wins — never infer immediacy from a score value. This applies everywhere: `classifier.js`, `predicates.js`, `candidate-generator.js`.
