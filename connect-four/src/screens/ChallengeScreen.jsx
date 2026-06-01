@@ -9,20 +9,9 @@ import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
-import { SequenceHandler } from '../components/SequenceHandler.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard } from '../lib/board.js';
-
-// Adapter — map /draw snake_case row to SequenceHandler's expected camelCase shape.
-// SequenceHandler reads: puzzle.id, puzzle.moveString, puzzle.goalPrompt
-function toSequenceHandlerShape(drawRow) {
-  return {
-    id: drawRow.id,
-    moveString: drawRow.move_string ?? '',
-    goalPrompt: drawRow.goal_prompt ?? '',
-  };
-}
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -64,6 +53,7 @@ export function ChallengeScreen({ go, goBack, category }) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedCols, setSelectedCols] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [seqPosition, setSeqPosition] = useState('');
 
   // Deep Reveal state
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
@@ -93,6 +83,7 @@ export function ChallengeScreen({ go, goBack, category }) {
     setDeepRevealData(null);
     setDeepRevealFlagged(false);
     setDeepRevealTimedOut(false);
+    setSeqPosition(puzzle.move_string ?? '');
 
     // Pick a random prompt key from coach.<category>.prompt.*
     const candidateKeys = [0, 1, 2].map(i => `coach.${category}.prompt.${i}`);
@@ -379,7 +370,7 @@ export function ChallengeScreen({ go, goBack, category }) {
 
     // Update coach
     const coachKey = `coach.forbidden_columns.${quality}.0`;
-    setCoachMessages(prev => [...prev, { text: t(coachKey), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
+    setCoachMessages(prev => [...prev, { text: t(coachKey, { missed: missedForbidden.length }), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
 
     store?.recordPuzzleAttempt({
       puzzle_id: current.id,
@@ -396,37 +387,60 @@ export function ChallengeScreen({ go, goBack, category }) {
     setPhase('post-move');
   }
 
-  function handleSequenceComplete(passed) {
-    const quality = passed ? 'optimal' : 'blunder';
+  async function handleSequenceClick(col) {
+    if (phase !== 'pre-move' || isSubmitting) return;
     const current = puzzles[currentIdx];
+    if (!current) return;
 
-    store?.recordPuzzleAttempt({
-      puzzle_id: current.id,
-      device_uuid: 'local',
-      moves_tried: 1,
-      outcome: passed ? 'correct_first' : 'wrong',
-      first_attempt_correct: passed,
-      time_ms: Date.now() - startTimeRef.current,
-      ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
-    });
+    setIsSubmitting(true);
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      };
+      const res = await fetch(`${API}/api/puzzles/${current.id}/sequence/move`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ position: seqPosition, col }),
+      });
+      const data = await res.json();
 
-    track('puzzle_solved_correct', { puzzleId: current.id, category });
-
-    const newResults = [...results, {
-      puzzleId: current?.id,
-      quality,
-      category,
-    }];
-    setResults(newResults);
-    advanceSession();
-
-    const nextIdx = currentIdx + 1;
-    if (nextIdx < puzzles.length) {
-      setCurrentIdx(nextIdx);
-      initPuzzle(puzzles[nextIdx]);
-      setPhase('pre-move');
-    } else {
-      go('summary', { results: newResults, category });
+      if (data.outcome === 'continue') {
+        const newPos = seqPosition + String(col) + String(data.aiCol);
+        setSeqPosition(newPos);
+        const { board: b, heights: h } = buildBoard(newPos);
+        setBoard(b);
+        setHeights(h);
+      } else if (data.outcome === 'success') {
+        const newPos = seqPosition + String(col);
+        setSeqPosition(newPos);
+        const { board: b, heights: h } = buildBoard(newPos);
+        setBoard(b);
+        setHeights(h);
+        setLastDrop({ c: col, r: heights[col] });
+        setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.forced_win.optimal.0' });
+        setCoachMessages(prev => [...prev, { text: t('coach.forced_win.optimal.0'), mood: 'happy' }]);
+        store?.recordPuzzleAttempt({
+          puzzle_id: current.id,
+          device_uuid: 'local',
+          moves_tried: 1,
+          outcome: 'correct_first',
+          first_attempt_correct: true,
+          time_ms: Date.now() - startTimeRef.current,
+          ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
+        });
+        track('puzzle_solved_correct', { puzzleId: current.id, category });
+        setPhase('post-move');
+      } else {
+        setCoachMessages(prev => [...prev, {
+          text: data.reason ?? t('coach.forced_win.blunder.0'),
+          mood: 'oops',
+        }]);
+      }
+    } catch {
+      setCoachMessages(prev => [...prev, { text: t('error.generic'), mood: 'oops' }]);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -479,15 +493,7 @@ export function ChallengeScreen({ go, goBack, category }) {
         </div>
       )}
 
-      {/* Detect sequence mode — SequenceHandler owns its full UI */}
-      {puzzles[currentIdx]?.interaction_mode === 'sequence' ? (
-        <SequenceHandler
-          key={puzzles[currentIdx].id}
-          puzzle={toSequenceHandlerShape(puzzles[currentIdx])}
-          onNext={() => handleSequenceComplete(true)}
-        />
-      ) : (
-        <>
+      <>
           {/* Coach dialog */}
           <CoachDialog messages={coachMessages} size={58} />
 
@@ -496,17 +502,21 @@ export function ChallengeScreen({ go, goBack, category }) {
             <div style={{ padding: '0 8px', flex: '0 0 auto' }}>
               <Board
                 board={board}
-                onColumnClick={category === 'forbidden_columns' ? undefined : handleColumnClick}
+                onColumnClick={
+                  category === 'forbidden_columns' ? undefined
+                  : puzzles[currentIdx]?.interaction_mode === 'sequence' ? handleSequenceClick
+                  : handleColumnClick
+                }
                 onColToggle={category === 'forbidden_columns' && phase === 'pre-move'
                   ? (col) => setSelectedCols(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
                   : undefined}
                 selectedCols={category === 'forbidden_columns' ? selectedCols : undefined}
-                canPlay={phase === 'pre-move'}
+                canPlay={phase === 'pre-move' && !isSubmitting}
                 overlays={overlays}
                 badge={badge}
                 lastDrop={lastDrop}
                 fullCols={fullCols}
-                interactionMode="single_move"
+                interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
               />
             </div>
           )}
@@ -544,8 +554,8 @@ export function ChallengeScreen({ go, goBack, category }) {
                 {evaluation.summaryLine ?? t(evaluation.summaryLineKey)}
               </p>
 
-              {/* Learn more button — hidden for forbidden_columns */}
-              {category !== 'forbidden_columns' && (
+              {/* Learn more button — hidden for forbidden_columns and sequence mode */}
+              {category !== 'forbidden_columns' && puzzles[currentIdx]?.interaction_mode !== 'sequence' && (
                 <button
                   onClick={handleLearnMore}
                   style={{
@@ -614,8 +624,7 @@ export function ChallengeScreen({ go, goBack, category }) {
               </button>
             )}
           </Toolbar>
-        </>
-      )}
+      </>
 
       {/* Modals */}
       {authOpen && (
