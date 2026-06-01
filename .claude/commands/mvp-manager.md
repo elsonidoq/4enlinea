@@ -6,7 +6,8 @@ You are the MVP Manager — an orchestrator that drives an epic through the full
 
 ## State management
 
-State file path: `.claude/mvp-workflow-$ARGUMENTS.json`
+State file path: `.claude/mvp-workflow-<sanitized-id>.json`  
+Sanitize `$ARGUMENTS` for the filename: replace every space and slash with `-` (e.g. `epic 2b` → `mvp-workflow-epic-2b.json`).
 
 Schema:
 ```json
@@ -23,10 +24,17 @@ Schema:
 
 **On every invocation:**
 1. Read the state file if it exists; otherwise initialize with the schema above and write it.
-2. Execute the current stage.
-3. Write updated state before ending your turn.
+2. After loading, merge the file contents with the full schema defaults — any key present in the schema but missing from the file gets its default value. This keeps old state files from breaking when new fields are added.
+3. Execute the current stage.
+4. Write updated state before ending your turn.
 
 If the state file is corrupted, ask whether to restart or pick a stage manually.
+
+**Interrupted-critique recovery:**
+If the loaded stage is a `*_fix` stage (e.g. `epic_fix`, `spec_fix`) **and** `pending_answers` is null, the previous session ended after the critique was saved but before the Q&A completed. Recover:
+1. Tell the user: "Resuming from an interrupted critique — re-presenting questions."
+2. Re-run the **Critique Q&A protocol** using the existing `pending_critique` (do not re-spawn the critique agent).
+3. Once answers are collected, proceed normally to the fix stage.
 
 ---
 
@@ -60,6 +68,7 @@ If `pending_handoff` is non-null, prepend it to the sub-agent's prompt:
 ```
 
 The handoff chain:
+- `epic_critique` → produces handoff → consumed by `epic_fix`
 - `epic_fix` → produces handoff → consumed by `spec_create`
 - `spec_create` → produces handoff → consumed by `spec_critique` and `spec_fix`
 - `spec_fix` → produces handoff → consumed by `plan_create`
@@ -145,10 +154,20 @@ incomplete spec if left unresolved. For each: describe the issue, then give your
 Product or scope choices the owner must make that are not answerable from the current epic text.
 For each: state the question, list the options, and state your recommended default.
 
-Be direct and opinionated. Limit to the highest-impact items — no nitpicks.
+Be direct and opinionated. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
+
+## Handoff context (required)
+At the very end of your response, output a section titled "## Handoff context".
+Include:
+- Systemic issues you noticed that affect the whole epic (e.g. wrong path prefix, wrong player convention)
+- The reviewer frame you used — what sources of truth you weighed most heavily and why
+- Anything non-obvious about the epic's intent that a fix agent should know before editing
+- What you did NOT flag and why (to prevent the fix agent from over-correcting)
 ```
 
-Save state: `{ "stage": "epic_fix", "pending_critique": "<sub-agent output>" }`.
+Capture the `## Handoff context` section from the sub-agent's output.
+
+Save state: `{ "stage": "epic_fix", "pending_critique": "<sub-agent output>", "pending_handoff": "<handoff context>" }`.
 
 Apply the **Critique Q&A protocol** to collect answers for every item in the report.
 
@@ -160,9 +179,13 @@ Save: `{ "pending_answers": "<formatted Q&A>" }`.
 
 ### `epic_fix`
 
-Spawn a **Sonnet** sub-agent:
+Spawn a **Sonnet** sub-agent. Include handoff context if `pending_handoff` is non-null:
 
 ```
+[## Context from previous step
+[paste pending_handoff verbatim]
+---]
+
 Edit epic $ARGUMENTS in docs/mvp/epics.md to resolve the issues listed below.
 
 ## Critique that was raised
@@ -272,7 +295,7 @@ missing entirely. For each: describe the issue and give your recommended fix.
 Underspecified areas where a product owner choice is needed before a developer can implement.
 For each: state the question, list the options, and state your recommended default.
 
-Be direct. Limit to highest-impact items only.
+Be direct. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
 ```
 
 Save state: `{ "stage": "spec_fix", "pending_critique": "<sub-agent output>" }`.
@@ -397,7 +420,7 @@ mockup, or described at a level too vague to implement. For each: describe the i
 Technical or architectural choices the developer must make before implementation can begin.
 For each: state the question, list the options, and state your recommended default.
 
-Be direct. No nitpicks.
+Be direct. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
 ```
 
 Save state: `{ "stage": "plan_fix", "pending_critique": "<sub-agent output>" }`.
@@ -527,6 +550,8 @@ leave the epic's stated outcomes undelivered. For each: describe the issue and r
 ## Decisions required
 Scope or priority choices a product owner must make before implementation can begin.
 For each: state the question, list the options, and state your recommended default.
+
+Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
 ```
 
 Save state: `{ "stage": "tasks_fix", "pending_critique": "<sub-agent output>" }`.

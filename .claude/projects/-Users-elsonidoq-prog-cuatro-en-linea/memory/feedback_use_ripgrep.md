@@ -1,14 +1,19 @@
 ---
 name: feedback-use-ripgrep
-description: Use rg (ripgrep) for code search instead of find | xargs grep; LSP tool available for semantic search
+description: Preferred search tools: rg for text, fd for files, ast-grep for structural patterns, LSP for semantic search
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: 0146edf4-e56e-4708-b0a5-b2bfa95a4da8
 ---
 
-Use `rg` (ripgrep) for all text/regex searches instead of `find | xargs grep` or `grep -r`. Ripgrep is installed (v14.1.1), faster, respects `.gitignore`, and has better defaults.
+Use the right tool for each search type — all four are installed:
 
-**Why:** User asked for better search tooling; `rg` is already available and is the clear upgrade.
+- **Text/regex search:** `rg <pattern>` or `rg <pattern> --type js` — never `grep -r` or `find | xargs grep`.
+- **File finding:** `fd <name>` — never `find . -name ...`.
+- **Structural/AST patterns:** `sg <pattern>` (ast-grep) — for finding call sites, argument shapes, or syntactic constructs regardless of formatting; more precise than regex for refactoring audits.
+- **Semantic search:** LSP tool — go-to-definition, find-references, type-aware navigation; requires a running language server.
 
-**How to apply:** Replace every `find ... | xargs grep` or `grep -r` with `rg <pattern>` or `rg <pattern> --type js`, etc. For semantic search (find all references, go to definition, call graph), use the LSP tool — it requires a language server running for the file type (not always available).
+**Why:** User installed ast-grep and fd specifically to improve code browsing beyond text grep.
+
+**How to apply:** Default to `rg` for text; reach for `sg` when the search is about code structure (e.g., "all calls to X with a null second arg"); use `fd` instead of `find`; use LSP for cross-file symbol resolution when available.

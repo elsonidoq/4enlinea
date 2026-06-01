@@ -12,7 +12,7 @@
 - [Never generate random boards](feedback_no_random_boards.md) — random movestrings are not valid game positions; always source candidates from DB, git history, or KB examples
 - [Never run git stash to check baselines](feedback_no_git_stash.md) — git stash failed mid-write on 2026-05-18, corrupted index; use code reasoning instead
 - [Mark tasks completed promptly](feedback_update_tasks_promptly.md) — update task status immediately when work is done, not in batches at end of session
-- [Use ripgrep for code search](feedback_use_ripgrep.md) — prefer `rg` over `find | xargs grep`; LSP tool available for semantic search
+- [Preferred search tools](feedback_use_ripgrep.md) — `rg` for text, `fd` for files, `sg` (ast-grep) for structural patterns, LSP for semantic; never use `grep -r` or `find -name`
 - [Pre-populate reviewed data — fetch all related fields upfront](feedback_prepopulate_pattern.md) — always trace every UI field to its source table before writing the API select
 - [Keep hard-derived algorithms in spec](feedback_hard_derived_algorithms_in_spec.md) — don't move costly-to-derive algorithms to plan.md; their presence in spec is a deliberate lock
 - [Migration constraint order](feedback_migration_constraint_order.md) — drop constraints before updating data, not after; learned from broken migration 013
@@ -99,6 +99,12 @@
 ## References — board rendering
 
 - [Board disc color inversion](reference_board_color_inversion.md) — `'red'` value renders as GREEN disc, `'yellow'` as GRAY; even move_string length → green; odd → gray
+
+- [recordPuzzleAttempt canonical shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case: puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms; wrong shape silently corrupts stats
+- [SequenceHandler owns its entire UI](project_sequence_handler_ui.md) — self-contained Board/prompt/banners/Next; hardcoded English banners; onNext has no args (success-only); use takeover mode or refactor
+- [PAID_CATEGORIES in two files](project_paid_categories_two_files.md) — server/categories.js (gates /draw 403) AND src/lib/categories.js (gates SetPicker lock icon); update both atomically
+- [/draw returns snake_case fields](project_draw_endpoint_snake_case.md) — move_string, interaction_mode etc.; components expecting camelCase need a callsite adapter
+- [challengeSets.js is server-side only](project_challenge_sets_server_only.md) — connect-four/server/challengeSets.js only; no frontend mirror; SetPickerScreen reads from API response; entries use displayNameKey/descriptionKey (i18n)
 
 ## Project — open bugs
 
