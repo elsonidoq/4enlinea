@@ -36,11 +36,11 @@ accuracy = optimal_moves / scored_moves
 |---|---|---|
 | Lesson progress (node states) | Device-local (localStorage) | Key per lesson ID |
 | Challenge attempt history | Device-local (localStorage) | Per-session accuracy only; no cross-session aggregation for MVP |
-| Sparring game record (W/L/D) | Device-local (localStorage) | |
+| Sparring game record (W/L/D) | **Server (`games` table, keyed by `device_uuid`)** | **Stale note:** earlier versions of this table said device-local. Superseded — see "Game persistence and blunder capture" section. A server row is required for Epic 3b's `/api/games/analyze` to fetch the movestring by game ID. |
 | Daily streak | Device-local (localStorage) | Reset if no attempt recorded for the current calendar day |
 | Post-game review data | Device-local, current session only | Discarded on app close without login |
 
-No anonymous server rows are created for unauthenticated users. All data is lost when localStorage is cleared. Account creation migrates device-local data to the server (schema TBD, not MVP-blocking). The profile icon on the Hub opens a sign-up prompt for unauthenticated users.
+**Anonymous server rows for `games`:** An anonymous user's completed sparring game does create a server-side `games` row (keyed by `device_uuid`, `user_id` nullable). This is the sole exception to the rule below; all other data types in this table remain device-local for anonymous users. All non-game data is lost when localStorage is cleared. Account creation migrates device-local data to the server (schema TBD, not MVP-blocking). The profile icon on the Hub opens a sign-up prompt for unauthenticated users.
 
 ---
 

@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/014-challenges-deep-reveal/plan.md
+specs/015-sparring-game-board/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

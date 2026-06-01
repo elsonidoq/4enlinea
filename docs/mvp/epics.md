@@ -359,31 +359,39 @@ Gap identified after Epic 2b shipped: entering a challenge set always drew 8 fre
 
 Redesigns `HomePage.jsx` (560 lines). Saves game record on completion.
 
+**`side` canonical enum:** The `side` field stored in the `games` table and passed via analytics uses `'first'`/`'second'` (not color words). Display mapping: Green disc = first-mover = `side='first'`; Gray disc = second-mover = `side='second'`. **Mockup divergence:** `product_decisions.md` and `screens_sparring.jsx` historically used Red/Yellow color labels — treat those as stale; Green/Gray is authoritative for display. The disc-color inversion quirk (internal `'red'` value renders as a Green disc) is handled at the rendering layer; the `side` enum is independent of it.
+
 **Frontend screens:**
 
 *Difficulty Picker (`difficulty` screen):*
 - Radio-row list: Easy / Medium (default) / Hard / Perfect with description subtitles (Gap 11)
-- "Play as" toggle: Green (first) vs Gray (second)
+- "Play as" toggle: Green (first, `side='first'`) vs Gray (second, `side='second'`)
 - Start → Game Board
-- `track('game_started', { difficulty, side })`
+- `track('game_started', { difficulty, side })` — `side` is `'first'` or `'second'`
 
 *Game Board (`game` screen):*
 - `CoachDialog` with `fixed` prop
 - Interactive `Board`: no overlays during play
-- Optional Hint (toggle; dismissed on next move — Gap 10): the Coach **highlights the best move(s)** on the board — every column whose solver score ties the maximum — and names the reason from `classify()`; **no numeric scores shown** (see cross-cutting *Hints*). **Mockup divergence:** `screens_sparring.jsx` renders a numeric column-score row on Hint; the build does not.
-- When the user plays as **Gray** (second), the AI auto-plays move 1 on game start. **Verify move-perspective correctness when the AI opens** (`project_parity_bug_ai_first`: human/AI evaluation was historically swapped in AI-first games).
+- Optional Hint (toggle; dismissed on next move — Gap 10): the Coach **highlights the best move(s)** on the board — every column whose solver score ties the maximum — and names the reason from `classify()`; **no numeric scores shown** (see cross-cutting *Hints*). When `classify()` detects no named pattern, show a phrase from the `coach.sparring.hint.generic.*` i18n key pool instead. **Mockup divergence:** `screens_sparring.jsx` renders a numeric column-score row on Hint; the build does not.
+- When the user plays as **Gray** (`side='second'`), the AI auto-plays move 1 on game start. **Verify move-perspective correctness when the AI opens** (`project_parity_bug_ai_first`: human/AI evaluation was historically swapped in AI-first games).
 - Toolbar: Hint + Resign (→ Post-Game Review, records Loss — Gap 17)
 - Game end: 4-in-a-row detection (win/loss) or board full (draw) → save game → Post-Game Review
 - `track('game_ended', { result, moveCount, difficulty })`
 
 *Game record persistence:*
-- On game end: `POST /api/games` saves record to new `games` table: `{ id, user_id (nullable), device_uuid, moves (movestring), difficulty, side, result, created_at }`
+- On game end: `POST /api/games` saves record to new `games` table: `{ id, user_id (nullable), device_uuid, moves (movestring), difficulty, side, result, created_at }`. `side` stores `'first'` or `'second'`.
+- **Anonymous persistence note:** Anonymous users (no `user_id`) do create a server-side `games` row keyed by `device_uuid`. This supersedes the "device-local only" note that appeared in the *Persistence without login* table in `product_decisions.md`; see that doc for the reconciling note. The server row is required because Epic 3b's `/api/games/analyze` fetches the movestring from the `games` table by game ID.
 - **New DB migration required**: `games` table
 - Game ID returned from API; passed to Post-Game Review for analysis
 
 **Client-side AI logic (extending `aiDifficulty.js`):**
 - Deliberate mistake rate per difficulty (Gap 11): Easy ~every 4, Medium ~every 7, Hard ~every 15, Perfect never
-- Deliberate mistake: select second-best move by `/api/scores`; emit Coach phrase "Oops. Did I just give you something?"
+- **Deliberate mistake mechanic (layered):** Normal AI moves use temperature sampling (existing `aiDifficulty.js` softmax). On a deliberate-mistake trigger, override the sampled move with the explicit second-best move fetched from `/api/scores`; the two mechanisms coexist — temperature sampling governs all other moves. Announce the deliberate mistake with a phrase from the `coach.sparring.deliberate_mistake.*` i18n key pool (authored in `en.json`). The mockup's hardcoded English string "Oops. Did I just give you something?" is a placeholder, not a contract.
+- **Coach phrase i18n key pools** (all keys authored in `en.json`):
+  - `coach.sparring.deliberate_mistake.*` — used when AI plays a deliberate mistake
+  - `coach.sparring.ai_move.*` — used for normal AI move reactions
+  - `coach.sparring.hint.generic.*` — fallback pool when `classify()` detects no named pattern on a Hint request
+  - User-move reactions: reuse `/api/evaluate-move`'s `coachPhraseKey` response field (existing contract from Epic 2a)
 - `POST /api/evaluate-move` for real-time Coach phrase after user moves
 - Win detection: `checkWin(board)` client-side; verify reusability from existing codebase first
 

@@ -34,6 +34,7 @@
 - [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
 - [c4solver behavioral quirks](reference_c4solver_behavior.md) — hangs on strings through winning moves; flat scores at forced-win terminals; JS score formula off-by-1 on odd moveCount; never use score threshold to detect immediate wins
 - [Cat 4 forced_win forced-block detection](reference_cat5_forced_block_detection.md) — solver scores can't identify forced block in forced-win terminal; use direct board checkWin instead
+- [POST /api/scores contract](reference_api_scores_endpoint.md) — POST (not GET); body {moves}; response {scores: number[7]}; INVALID_MOVE=-1000 sentinel; filter strictly before ranking
 
 ## References — tactical patterns and examples
 
@@ -109,6 +110,9 @@
 - [/draw returns snake_case fields](project_draw_endpoint_snake_case.md) — move_string, interaction_mode etc.; components expecting camelCase need a callsite adapter
 - [challengeSets.js is server-side only](project_challenge_sets_server_only.md) — connect-four/server/challengeSets.js only; no frontend mirror; SetPickerScreen reads from API response; entries use displayNameKey/descriptionKey (i18n)
 - [ChallengeScreen evaluation shape — polymorphic](project_challenge_evaluation_shape.md) — standard categories: summaryLineKey; forbidden_columns: summaryLine (pre-rendered); always render `evaluation.summaryLine ?? t(evaluation.summaryLineKey)`
+
+- [Sparring games table design](project_sparring_games_table.md) — side='first'/'second' enum; anonymous users DO write server rows; Epic 3b dependency on game_id; GRANT required
+- [checkWin extraction needed](project_checkwin_extraction.md) — private fn in HomePage.jsx line 39; signature (board,row,col,color); must extract to src/lib/board.js before GameScreen
 
 ## Project — open bugs
 
