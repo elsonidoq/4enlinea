@@ -17,7 +17,6 @@ export function StatsScreen({ go, goBack }) {
   const isAuthenticated = !!session;
 
   const [accuracy, setAccuracy] = useState('--');
-  const [allTimeAccuracy, setAllTimeAccuracy] = useState('--');
   const [lessonsCount, setLessonsCount] = useState(0);
   const [sparringRecord, setSparringRecord] = useState({ W: 0, L: 0, D: 0 });
   const [streak, setStreak] = useState(0);
@@ -25,15 +24,22 @@ export function StatsScreen({ go, goBack }) {
   const [recommendedLesson, setRecommendedLesson] = useState(null);
 
   useEffect(() => {
-    store?.getLastChallengeSession?.()
-      ?.then(s => { if (s?.accuracy != null) setAccuracy(`${Math.round(s.accuracy)}%`); })
-      .catch(() => {}); // store method absent until Epic 7
-  }, [store]);
-
-  useEffect(() => {
-    store?.getAllSessionStats?.()
-      ?.then(s => { if (s?.accuracy != null) setAllTimeAccuracy(`${Math.round(s.accuracy)}%`); })
-      .catch(() => {}); // store method absent until Epic 7
+    if (!store) return;
+    if (store.getStats) {
+      // Authenticated: pull live stats aggregated from puzzle_attempts on the server
+      store.getStats()
+        .then(s => {
+          if (!s) return;
+          if (s.accuracy != null) setAccuracy(`${s.accuracy}%`);
+          if (s.byPattern && Object.keys(s.byPattern).length > 0) setPatternAccuracy(s.byPattern);
+        })
+        .catch(() => {});
+    } else {
+      // Anonymous: fall back to last saved challenge session in IndexedDB
+      store.getLastChallengeSession?.()
+        ?.then(s => { if (s?.accuracy != null) setAccuracy(`${Math.round(s.accuracy)}%`); })
+        .catch(() => {});
+    }
   }, [store]);
 
   useEffect(() => {
@@ -55,12 +61,6 @@ export function StatsScreen({ go, goBack }) {
   }, [store]);
 
   useEffect(() => {
-    store?.getAllSessionStats?.()
-      ?.then(s => { if (s?.byPattern) setPatternAccuracy(s.byPattern); })
-      .catch(() => {}); // store method absent until Epic 7
-  }, [store]);
-
-  useEffect(() => {
     if (!isAuthenticated || !patternAccuracy) return;
     fetch(`${API}/api/lessons`)
       .then(r => r.ok ? r.json() : null)
@@ -68,7 +68,8 @@ export function StatsScreen({ go, goBack }) {
         if (!lessons || !lessons.length) return;
         const entries = Object.entries(patternAccuracy);
         if (!entries.length) return;
-        entries.sort((a, b) => a[1] - b[1] || 0);
+        // byPattern values are { accuracy, attempted } objects
+        entries.sort((a, b) => a[1].accuracy - b[1].accuracy);
         const worstPattern = entries[0][0];
         const match = lessons
           .filter(l => l.pattern === worstPattern)
@@ -105,14 +106,17 @@ export function StatsScreen({ go, goBack }) {
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink-soft)', marginBottom: 10 }}>
                   {t('stats.accuracy_by_pattern')}
                 </div>
-                {Object.entries(patternAccuracy).map(([pattern, pct]) => (
-                  <div key={pattern} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 13, color: 'var(--ink)', marginBottom: 4, fontWeight: 600 }}>{pattern}</div>
-                    <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor(pct), borderRadius: 4 }} />
+                {Object.entries(patternAccuracy).map(([pattern, entry]) => {
+                  const pct = entry.accuracy ?? 0;
+                  return (
+                    <div key={pattern} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 13, color: 'var(--ink)', marginBottom: 4, fontWeight: 600 }}>{pattern}</div>
+                      <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor(pct), borderRadius: 4 }} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

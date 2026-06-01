@@ -1,77 +1,19 @@
 // Challenge set definitions — ordered display list and O(1) lookup map.
-// Do NOT include forced_win or forbidden_columns — those are Epic 2b scope.
+// All display names and descriptions are i18n keys resolved via t() on the frontend.
 
 export const CHALLENGE_SETS = [
-  {
-    slug: 'immediate_threat',
-    displayName: 'Immediate Threat',
-    stars: 1,
-    description: 'Find the move that wins right now.',
-    free: true,
-  },
-  {
-    slug: 'forced_block',
-    displayName: 'Forced Block',
-    stars: 1,
-    description: "Block your opponent's immediate winning threat.",
-    free: true,
-  },
-  {
-    slug: 'double_threat',
-    displayName: 'Double Threat',
-    stars: 2,
-    description: 'Create two simultaneous winning threats.',
-    free: true,
-  },
-  {
-    slug: 'claimeven',
-    displayName: 'Claimeven',
-    stars: 3,
-    description: "Use Yellow's Claimeven strategy to secure a draw.",
-    free: true,
-  },
-  {
-    slug: 'z_threat',
-    displayName: 'Z-Threat',
-    stars: 3,
-    description: 'Exploit Z-threat parity to guarantee the win.',
-    free: true,
-  },
-  {
-    slug: 'mixed',
-    displayName: 'Mixed',
-    stars: 3,
-    description: 'A mix of all challenge types.',
-    free: false,
-  },
-  {
-    slug: 'undercut',
-    displayName: 'Undercut',
-    stars: 4,
-    description: 'Take the square below your opponent\'s threat.',
-    free: false,
-  },
-  {
-    slug: 'overcut',
-    displayName: 'Overcut',
-    stars: 4,
-    description: "Play above your opponent's intended threat.",
-    free: false,
-  },
-  {
-    slug: 'figure_7',
-    displayName: 'Figure 7',
-    stars: 4,
-    description: 'Exploit the Figure-7 pattern.',
-    free: false,
-  },
-  {
-    slug: 'j_shape',
-    displayName: 'J-Shape',
-    stars: 4,
-    description: 'Exploit the J-Shape pattern.',
-    free: false,
-  },
+  { slug: 'immediate_threat',  displayNameKey: 'challengeSet.immediate_threat.displayName',  descriptionKey: 'challengeSet.immediate_threat.description',  stars: 1, free: true  },
+  { slug: 'forced_block',      displayNameKey: 'challengeSet.forced_block.displayName',      descriptionKey: 'challengeSet.forced_block.description',      stars: 1, free: true  },
+  { slug: 'double_threat',     displayNameKey: 'challengeSet.double_threat.displayName',     descriptionKey: 'challengeSet.double_threat.description',     stars: 2, free: true  },
+  { slug: 'claimeven',         displayNameKey: 'challengeSet.claimeven.displayName',         descriptionKey: 'challengeSet.claimeven.description',         stars: 3, free: true  },
+  { slug: 'z_threat',          displayNameKey: 'challengeSet.z_threat.displayName',          descriptionKey: 'challengeSet.z_threat.description',          stars: 3, free: true  },
+  { slug: 'forbidden_columns', displayNameKey: 'challengeSet.forbidden_columns.displayName', descriptionKey: 'challengeSet.forbidden_columns.description', stars: 2, free: true  },
+  { slug: 'forced_win',        displayNameKey: 'challengeSet.forced_win.displayName',        descriptionKey: 'challengeSet.forced_win.description',        stars: 3, free: true  },
+  { slug: 'mixed',             displayNameKey: 'challengeSet.mixed.displayName',             descriptionKey: 'challengeSet.mixed.description',             stars: 3, free: false },
+  { slug: 'undercut',          displayNameKey: 'challengeSet.undercut.displayName',          descriptionKey: 'challengeSet.undercut.description',          stars: 4, free: false },
+  { slug: 'overcut',           displayNameKey: 'challengeSet.overcut.displayName',           descriptionKey: 'challengeSet.overcut.description',           stars: 4, free: false },
+  { slug: 'figure_7',          displayNameKey: 'challengeSet.figure_7.displayName',          descriptionKey: 'challengeSet.figure_7.description',          stars: 4, free: false },
+  { slug: 'j_shape',           displayNameKey: 'challengeSet.j_shape.displayName',           descriptionKey: 'challengeSet.j_shape.description',           stars: 4, free: false },
 ];
 
 export const CHALLENGE_SET_MAP = Object.fromEntries(

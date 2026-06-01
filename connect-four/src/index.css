@@ -92,3 +92,4 @@ p {
 .modal-card h1, .modal-card h2, .modal-card h3 { color: var(--ink); }
 .modal-card input { background: #fff; color: var(--ink); }
 @keyframes modalPopIn { from { transform: translateY(-50%) scale(.92); } to { transform: translateY(-50%) scale(1); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

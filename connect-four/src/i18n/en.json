@@ -65,7 +65,8 @@
   },
   "common": {
     "dismiss": "Dismiss",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "collapse": "Collapse"
   },
   "home": {
     "stats_button": "Progress & Stats",
@@ -187,6 +188,38 @@
       },
       "blunder": {
         "0": "That move hands away your Z-threat parity advantage."
+      }
+    },
+    "forbidden_columns": {
+      "prompt": {
+        "0": "Mark every column that would hand your opponent an immediate win.",
+        "1": "Which columns are forbidden? Tag them all before submitting.",
+        "2": "Find every column where you would lose instantly — mark them all."
+      },
+      "hint": {
+        "0": "Look for columns where your opponent already has three in a row — playing there hands them a win.",
+        "1": "Check each column: would your opponent win immediately if you played there?"
+      },
+      "optimal": { "0": "Perfect — you identified every forbidden column." },
+      "suboptimal": { "0": "You found some but missed {{missed}} forbidden column(s)." },
+      "blunder": {
+        "0": "You tagged a safe column — that counts as a mistake.",
+        "1": "At least one of your tagged columns was safe to play."
+      }
+    },
+    "forced_win": {
+      "prompt": {
+        "0": "Force the win — play the line that leaves your opponent no escape.",
+        "1": "There's a forcing sequence here. Play it move by move.",
+        "2": "Every move must threaten your opponent. Find the forcing line."
+      },
+      "optimal": { "0": "You forced the win — well played.", "1": "Perfect sequence — your opponent had no escape." },
+      "blunder": { "0": "That move breaks the forcing line.", "1": "The sequence fails here — your opponent can escape." }
+    },
+    "summary": {
+      "perfect": {
+        "0": "Perfect set. Try a harder one.",
+        "1": "Clean sweep — excellent work!"
       }
     }
   },
@@ -310,6 +343,45 @@
           "0": "That move gives away your Z-threat parity advantage."
         }
       }
+    },
+    "forbidden_columns": {
+      "optimal":    { "summary": { "0": "You found every forbidden column." } },
+      "suboptimal": { "summary": { "0": "{{found}} / {{total}} forbidden columns found." } },
+      "blunder":    { "summary": { "0": "At least one of your tagged columns was safe to play." } }
+    }
+  },
+  "deepReveal": {
+    "loading": "Reading the position…",
+    "unavailable": "Detailed explanation unavailable.",
+    "flag": "Flag this explanation",
+    "flagged": "Thanks — flagged"
+  },
+  "summary": {
+    "hero": "Set complete!",
+    "count": "{{optimalCount}} / {{total}} optimal",
+    "by_pattern": "BY PATTERN",
+    "cta_lesson": "Go to {{lessonName}} lesson",
+    "cta_back": "Back to Challenges",
+    "coach_recommend": "Work on {{pattern}} next."
+  },
+  "challengeSet": {
+    "immediate_threat": { "displayName": "Immediate Threat", "description": "Find the move that wins right now." },
+    "forced_block":     { "displayName": "Forced Block", "description": "Block your opponent's immediate winning threat." },
+    "double_threat":    { "displayName": "Double Threat", "description": "Create two simultaneous winning threats." },
+    "claimeven":        { "displayName": "Claimeven", "description": "Use Yellow's Claimeven strategy to secure a draw." },
+    "z_threat":         { "displayName": "Z-Threat", "description": "Exploit Z-threat parity to guarantee the win." },
+    "mixed":            { "displayName": "Mixed", "description": "A mix of all challenge types." },
+    "undercut":         { "displayName": "Undercut", "description": "Take the square below your opponent's threat." },
+    "overcut":          { "displayName": "Overcut", "description": "Play above your opponent's intended threat." },
+    "figure_7":         { "displayName": "Figure 7", "description": "Exploit the Figure-7 pattern." },
+    "j_shape":          { "displayName": "J-Shape", "description": "Exploit the J-Shape pattern." },
+    "forbidden_columns": {
+      "displayName": "Forbidden Columns",
+      "description": "Mark every column where playing immediately hands your opponent a win."
+    },
+    "forced_win": {
+      "displayName": "Forced Win",
+      "description": "Play the forcing line that leaves your opponent no escape."
     }
   }
 }

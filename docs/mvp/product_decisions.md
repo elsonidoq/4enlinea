@@ -119,7 +119,11 @@ All challenge puzzles are **single-move**. The user plays one column and sees fe
 
 Puzzles within a set are drawn **randomly without replacement** from the pool of approved puzzles for that category. Each session draws exactly 8 (or all available if fewer than 8). The same puzzle will not appear twice in a single session.
 
-Across sessions (re-playing a set), a new random draw is made — puzzles may repeat. No "spaced repetition" or recency weighting for MVP.
+**Session resume (authenticated users):** entering a set checks for an open session (started but not completed) for that category. If one exists, the user resumes from the next unplayed puzzle and the progress bar reflects how many have already been played. Open sessions never expire — they remain resumable indefinitely until the full set is completed. Only when no open session exists is a fresh draw made.
+
+**Anonymous users:** no session is persisted. Every visit draws fresh. Puzzles may repeat across visits.
+
+Across sessions where a fresh draw occurs, puzzles may repeat. No "spaced repetition" or recency weighting for MVP.
 
 The puzzle draw happens server-side at the moment the user enters the set (not pre-fetched at Set Picker load time).
 
@@ -178,9 +182,11 @@ For unauthenticated users, all values are read from device-local storage. Displa
 
 ### Back-navigation from a mid-set challenge
 
-Tapping the back arrow during an active challenge set (before the Post-Set Summary) shows a confirmation dialog: *"Leave this set? Your progress won't be saved."* Two options: **Keep going** and **Leave**.
+Tapping the back arrow during an active challenge set (before the Post-Set Summary) shows a confirmation dialog. Two options: **Keep going** and **Leave**.
 
-If the user leaves, they return to the Set Picker. No partial session is saved. Accuracy for the abandoned session is discarded.
+**Authenticated users:** no confirmation dialog is shown — they can navigate away freely because their session is persisted and resumable. Returning to the same category resumes from where they left off.
+
+**Anonymous users:** the dialog reads *"Leave this set? Your progress won't be saved."* If they leave, they return to the Set Picker and the in-progress draw is discarded.
 
 ---
 

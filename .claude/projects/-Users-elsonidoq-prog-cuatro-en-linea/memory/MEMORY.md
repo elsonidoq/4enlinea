@@ -22,10 +22,11 @@
 - [Mobile tap highlight fix](feedback_mobile_tap_highlight.md) — tappable non-button elements need `WebkitTapHighlightColor: transparent` + `userSelect: none`; native `<button>` exempt
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons; no abstract Allis rules (except Claimeven + Claimodd which are concrete and visual)
 - [Opus for critique, Sonnet for applying decisions](feedback_agent_model_selection.md) — use Opus for independent gap analysis; Sonnet for mechanical document updates
-- [Check CSS exists before using mockup class names](feedback_check_css_before_using_mockup_classes.md) — grep in src/styles/tokens.css + src/index.css before using any class from mockup styles.css; many are not yet ported
+- [Check CSS exists before using mockup class/token names](feedback_check_css_before_using_mockup_classes.md) — grep in src/styles/tokens.css + src/index.css before using any class or `--token` from mockup; `--bg-chal` not `--bg-challenges`
 - [Epic vs speckit scope](feedback_epic_vs_speckit_scope.md) — when auditing an epic doc that feeds speckit, only fix factual errors / cross-epic contracts / mockup-vs-Gap conflicts at the epic level
 - [Don't mix slash commands in a single handoff prompt](feedback_handoff_no_mixed_commands.md) — a handoff prompt for `/speckit-specify` can't also tell the agent to run `/speckit-clarify`; pre-answer clarifications inline instead
 - ["Heatmap" is ambiguous terminology](feedback_heatmap_terminology.md) — use "column-score overlay" instead; "heatmap" was used for something different in a PoC feature
+- [Auth header required on upgraded fetches](feedback_auth_header_on_fetch.md) — when adding req.user checks server-side, also add Authorization header at the fetch call site; loadUser only reads the header
 
 ## References — solver and board mechanics
 
@@ -70,6 +71,7 @@
 - [New puzzle categories — spec locked](project_new_puzzle_categories.md) — z_threat, claimeven, undercut, overcut, figure_7, j_shape design decisions; highlight_metadata schema
 - [Lesson curriculum scope — MVP](project_lesson_curriculum.md) — 11 MVP + 2 post-MVP lessons; parity chain L4→L5→L6→L7; what was cut and why
 - [Auth mostly built; payments deferred](project_auth_payments_state.md) — ProfileStore/IndexedDBStore/SupabaseStore/AuthModal exist; Epic 7 is reskin + store extension; Stripe deferred
+- [Stats from puzzle_attempts, not session_stats](project_stats_architecture.md) — GET /api/stats aggregates puzzle_attempts JOIN puzzles; session_stats table orphaned for challenge data; SupabaseStore.getStats() calls the endpoint
 - [Epic 2a implementation state](project_epic2a_implementation.md) — live endpoints, new screens, stubs for Epic 2b, known CSS token bug (`--bg-chal` vs `--bg-challenges` in surfaceGroups.js)
 - [forced_win refactor — done](project_forced_win_refactor.md) — CompletionStrategy interface; bitboard-only AI response; interaction_mode='sequence' on puzzles
 - [Commit-first: click = immediate commit](project_commit_first_no_confirm.md) — no confirmation step; pendingMove state dead; confirm/cancel buttons removed 2026-05-27
@@ -80,6 +82,7 @@
 - [Classifier current state + T037–T048 pending](project_classifier_current_state.md) — Cat1–Cat5 score-proxy fixes done; J/U/O/F pattern detector bugs NOT yet fixed; FP rates from v2 review
 - [Knowledge base status](project_kb_status.md) — 30 entries done; 9 fact-check errors fixed; 58 gaps in knowledge-base-gaps.md; worked_examples PENDING
 - [LLM explain system](project_explain_system.md) — POST /api/explain-move-llm; data flow, prompt structure, getPositionTier, forced_win leaf boards; review_feedback.sh
+- [explanation_cache stores prompt; buildExplainContext helper](project_explain_cache_schema.md) — deep_reveal_json={explanation,bestLine,prompt}; flag endpoint rebuilds prompt from cache or simulation if empty; migration 023 makes llm_prompt nullable
 - [explainSimulate — implementation](project_explain_simulate.md) — DETECTOR_REGISTRY; leaf taxonomy; pattern ratio denominator; transposition dedup; numPlies must be odd for user's perspective
 - [LLM recommend next move](project_recommend_next_move.md) — POST /api/recommend-move; RecommendCoach.jsx + BadgeRow.jsx; colRankings; sparring footer
 - [explain endpoint — best-moves filtering](project_explain_best_moves.md) — explainSearch uses book.get() O(1); explain loads book (`['-x']` not `-nb`); timing results
@@ -105,6 +108,7 @@
 - [PAID_CATEGORIES in two files](project_paid_categories_two_files.md) — server/categories.js (gates /draw 403) AND src/lib/categories.js (gates SetPicker lock icon); update both atomically
 - [/draw returns snake_case fields](project_draw_endpoint_snake_case.md) — move_string, interaction_mode etc.; components expecting camelCase need a callsite adapter
 - [challengeSets.js is server-side only](project_challenge_sets_server_only.md) — connect-four/server/challengeSets.js only; no frontend mirror; SetPickerScreen reads from API response; entries use displayNameKey/descriptionKey (i18n)
+- [ChallengeScreen evaluation shape — polymorphic](project_challenge_evaluation_shape.md) — standard categories: summaryLineKey; forbidden_columns: summaryLine (pre-rendered); always render `evaluation.summaryLine ?? t(evaluation.summaryLineKey)`
 
 ## Project — open bugs
 

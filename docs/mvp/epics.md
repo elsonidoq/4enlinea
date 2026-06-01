@@ -321,6 +321,40 @@ Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type
 
 ---
 
+### Epic 2c — Challenge Session Continuity (retroactive gap fix)
+
+Gap identified after Epic 2b shipped: entering a challenge set always drew 8 fresh puzzles, making mid-session navigation away lose all progress. This epic introduces a server-side session record so authenticated users can resume where they left off.
+
+**Scope:**
+
+*DB migrations:*
+- New `challenge_sessions` table: `{ id uuid PK, user_id uuid nullable FK users, device_uuid text, category text, puzzle_ids uuid[], started_at timestamptz, completed_at timestamptz nullable }`
+- Add `session_id uuid nullable FK challenge_sessions` to `puzzle_attempts`
+
+*Backend:*
+- Modify `GET /api/puzzles/draw`: before drawing, check for an open session (`completed_at IS NULL`) for the requesting user + category. On hit, return the existing session's remaining puzzle_ids. On miss, draw fresh and create a new `challenge_sessions` row. Response includes `session_id`.
+
+*Store layer:*
+- `SupabaseStore`: no new methods needed — `recordPuzzleAttempt` already spreads the attempt object; callers add `session_id` to the payload
+- `IndexedDBStore`: no session tracking for anonymous users; method stubs for interface parity only
+
+*Frontend — `ChallengeScreen`:*
+- On mount, pass `session_id` returned from `/api/puzzles/draw` into state
+- Pass `session_id` in every `recordPuzzleAttempt` call
+- On set completion, call server to mark `completed_at` on the session row
+- Progress bar initialises at N (already-played puzzles in a resumed session), not 0
+- Back-navigation: authenticated users navigate away without a confirmation dialog; anonymous users still see the warning
+
+*`PostSetSummaryScreen`:* no changes — continues computing from the in-memory `results` prop. The `session_id` on `puzzle_attempts` enables future cross-session aggregation but is not consumed here.
+
+**NOT included:** cross-session accuracy aggregation by session_id (future stats work), anonymous session persistence.
+
+**Estimated tasks:** 6–8.
+
+**Depends on:** Epic 2b.
+
+---
+
 ### Epic 3a — Sparring: Difficulty Picker & Game Board
 
 Redesigns `HomePage.jsx` (560 lines). Saves game record on completion.

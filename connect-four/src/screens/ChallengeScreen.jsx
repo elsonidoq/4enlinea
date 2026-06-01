@@ -2,15 +2,27 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
+import { Icon } from '../components/Icon.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { ToolButton } from '../components/ToolButton.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
+import { SequenceHandler } from '../components/SequenceHandler.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard } from '../lib/board.js';
+
+// Adapter — map /draw snake_case row to SequenceHandler's expected camelCase shape.
+// SequenceHandler reads: puzzle.id, puzzle.moveString, puzzle.goalPrompt
+function toSequenceHandlerShape(drawRow) {
+  return {
+    id: drawRow.id,
+    moveString: drawRow.move_string ?? '',
+    goalPrompt: drawRow.goal_prompt ?? '',
+  };
+}
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -50,9 +62,21 @@ export function ChallengeScreen({ go, goBack, category }) {
   const [coachMessages, setCoachMessages] = useState([]);
   const [authOpen, setAuthOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [selectedCols, setSelectedCols] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Deep Reveal state
+  const [deepRevealOpen, setDeepRevealOpen] = useState(false);
+  const [deepRevealLoading, setDeepRevealLoading] = useState(false);
+  const [deepRevealData, setDeepRevealData] = useState(null);
+  const [deepRevealFlagged, setDeepRevealFlagged] = useState(false);
+  const [deepRevealFlagOpen, setDeepRevealFlagOpen] = useState(false);
+  const [deepRevealFlagNote, setDeepRevealFlagNote] = useState('');
+  const [deepRevealTimedOut, setDeepRevealTimedOut] = useState(false);
 
   const promptKeyRef = useRef(null);
   const startTimeRef = useRef(null);
+  const sessionIdRef = useRef(null);
 
   function initPuzzle(puzzle) {
     if (!puzzle) return;
@@ -62,6 +86,13 @@ export function ChallengeScreen({ go, goBack, category }) {
     setLastDrop(null);
     setOverlays([]);
     setEvaluation(null);
+    setSelectedCols([]);
+    setIsSubmitting(false);
+    setDeepRevealOpen(false);
+    setDeepRevealLoading(false);
+    setDeepRevealData(null);
+    setDeepRevealFlagged(false);
+    setDeepRevealTimedOut(false);
 
     // Pick a random prompt key from coach.<category>.prompt.*
     const candidateKeys = [0, 1, 2].map(i => `coach.${category}.prompt.${i}`);
@@ -80,12 +111,16 @@ export function ChallengeScreen({ go, goBack, category }) {
   useEffect(() => {
     async function loadPuzzles() {
       try {
-        const res = await fetch(`${API}/api/puzzles/draw?category=${category}&n=8`);
+        const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
+        const res = await fetch(`${API}/api/puzzles/draw?category=${category}&n=8`, { headers });
         const data = await res.json();
         const loaded = data.puzzles || [];
+        sessionIdRef.current = data.session_id ?? null;
+        const resumeIdx = data.resume_idx ?? 0;
         setPuzzles(loaded);
-        if (loaded.length > 0) {
-          initPuzzle(loaded[0]);
+        setCurrentIdx(resumeIdx);
+        if (loaded.length > resumeIdx) {
+          initPuzzle(loaded[resumeIdx]);
           setPhase('pre-move');
         } else {
           setPhase('pre-move'); // empty set — will render gracefully
@@ -157,6 +192,7 @@ export function ChallengeScreen({ go, goBack, category }) {
           outcome: data.quality === 'optimal' ? 'correct_first' : 'wrong',
           first_attempt_correct: data.quality === 'optimal',
           time_ms: Date.now() - startTimeRef.current,
+          ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
 
         // Analytics
@@ -177,8 +213,16 @@ export function ChallengeScreen({ go, goBack, category }) {
     setCoachMessages(prev => [...prev, { text: t(key), mood: 'think' }]);
   }
 
+  function advanceSession() {
+    if (!sessionIdRef.current || !session) return;
+    fetch(`${API}/api/challenge-sessions/${sessionIdRef.current}/advance`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).catch(() => {});
+  }
+
   function handleBack() {
-    if (window.confirm(t('challenge.leave_confirm_body', "Your progress won't be saved."))) {
+    if (session || window.confirm(t('challenge.leave_confirm_body', "Your progress won't be saved."))) {
       go('setpicker');
     }
   }
@@ -191,6 +235,7 @@ export function ChallengeScreen({ go, goBack, category }) {
       category,
     }];
     setResults(newResults);
+    advanceSession();
 
     const nextIdx = currentIdx + 1;
     if (nextIdx < puzzles.length) {
@@ -202,12 +247,187 @@ export function ChallengeScreen({ go, goBack, category }) {
     }
   }
 
-  function handleLearnMore() {
+  async function handleLearnMore() {
     if (!session) { setAuthOpen(true); return; }
-    // TODO Epic 2b: implement real weekly limit check
-    const quotaExhausted = false; // stub for Epic 2a
-    if (quotaExhausted) { setUpgradeOpen(true); return; }
-    console.log('[Epic 2b] Deep Reveal would open here');
+    // No client-side quota pre-flight — server 429 is the sole quota gate
+    setDeepRevealOpen(true);
+    setDeepRevealLoading(true);
+    setDeepRevealData(null);
+    setDeepRevealFlagged(false);
+    setDeepRevealFlagOpen(false);
+    setDeepRevealFlagNote('');
+    setDeepRevealTimedOut(false);
+
+    const current = puzzles[currentIdx];
+    const timeoutId = setTimeout(() => {
+      setDeepRevealLoading(false);
+      setDeepRevealTimedOut(true);
+    }, 6000);
+
+    try {
+      const res = await fetch(`${API}/api/explain-move-llm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ movestring: current.move_string, col: lastDrop?.c }),
+      });
+      clearTimeout(timeoutId);
+      if (res.status === 401) { setDeepRevealOpen(false); setAuthOpen(true); return; }
+      if (res.status === 429) { setDeepRevealOpen(false); setUpgradeOpen(true); return; }
+      const data = await res.json();
+      setDeepRevealData(data);
+      setDeepRevealLoading(false);
+      track('deep_reveal_viewed', { puzzleId: current?.id, cached: data.cached ?? false });
+    } catch {
+      clearTimeout(timeoutId);
+      setDeepRevealLoading(false);
+      setDeepRevealTimedOut(true);
+    }
+  }
+
+  async function handleFlag(note = '') {
+    if (deepRevealFlagged) return;
+    setDeepRevealFlagged(true);
+    setDeepRevealFlagOpen(false);
+    const current = puzzles[currentIdx];
+    fetch(`${API}/api/llm-feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        movestring: current.move_string,
+        col: lastDrop?.c,
+        llm_prompt: deepRevealData?.prompt ?? '',
+        llm_response: deepRevealData?.explanation ?? '',
+        human_note: note,
+        feature: 'challenges',
+      }),
+    }).catch(() => {});
+    track('deep_reveal_flagged', { puzzleId: current?.id });
+  }
+
+  async function handleForbiddenSubmit() {
+    if (phase !== 'pre-move' || selectedCols.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    const current = puzzles[currentIdx];
+    const cols = [...selectedCols];
+    const diskColor = (current.move_string || '').length % 2 === 0 ? 'red' : 'yellow';
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    };
+
+    // Evaluate all selected columns in parallel
+    const checkResults = await Promise.all(cols.map(col =>
+      fetch(`${API}/api/puzzles/${current.id}/check`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ candidateCol: col, moveHistory: [], attemptNumber: 1 }),
+      }).then(r => r.json()).then(data => ({ col, data }))
+    ));
+
+    setIsSubmitting(false);
+
+    // All responses share the same forbiddenCols set
+    const forbiddenCols = checkResults[0]?.data?.forbiddenCols ?? [];
+
+    const newOverlays = [];
+    let newBoard = board.map(r => [...r]);
+    let newHeights = [...heights];
+
+    // Place discs for selected columns with appropriate overlays
+    for (const { col } of checkResults) {
+      const row = newHeights[col];
+      newBoard[row][col] = diskColor;
+      newHeights[col]++;
+      newOverlays.push({ c: col, r: row, type: forbiddenCols.includes(col) ? 'win' : 'tr' });
+    }
+
+    // Reveal missed forbidden columns
+    const missedForbidden = forbiddenCols.filter(c => !cols.includes(c));
+    for (const col of missedForbidden) {
+      const row = newHeights[col];
+      newBoard[row][col] = diskColor;
+      newHeights[col]++;
+      newOverlays.push({ c: col, r: row, type: 'win' });
+    }
+
+    // Show opponent threat overlay above each forbidden column
+    for (const col of forbiddenCols) {
+      const threatRow = newHeights[col];
+      if (threatRow < 6) {
+        newOverlays.push({ c: col, r: threatRow, type: 'td' });
+      }
+    }
+
+    setBoard(newBoard);
+    setHeights(newHeights);
+    setOverlays(newOverlays);
+    setSelectedCols([]);
+
+    const allCorrect = cols.every(c => forbiddenCols.includes(c)) && missedForbidden.length === 0;
+    const noFalsePositives = cols.every(c => forbiddenCols.includes(c));
+    const quality = allCorrect ? 'optimal' : noFalsePositives ? 'suboptimal' : 'blunder';
+    const badge = quality === 'optimal' ? 'good' : quality === 'suboptimal' ? 'mid' : 'bad';
+
+    const correctFound = cols.filter(c => forbiddenCols.includes(c));
+    const summaryLine = quality === 'suboptimal'
+      ? t('eval.forbidden_columns.suboptimal.summary.0', { found: correctFound.length, total: forbiddenCols.length })
+      : t(`eval.forbidden_columns.${quality}.summary.0`);
+
+    setEvaluation({ quality, badge, summaryLine });
+
+    // Update coach
+    const coachKey = `coach.forbidden_columns.${quality}.0`;
+    setCoachMessages(prev => [...prev, { text: t(coachKey), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
+
+    store?.recordPuzzleAttempt({
+      puzzle_id: current.id,
+      device_uuid: 'local',
+      moves_tried: cols.length,
+      outcome: quality === 'optimal' ? 'correct_first' : 'wrong',
+      first_attempt_correct: quality === 'optimal',
+      time_ms: Date.now() - startTimeRef.current,
+      ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
+    });
+
+    track('puzzle_attempted', { puzzleId: current.id, category: 'forbidden_columns', submittedCols: cols, correctCols: forbiddenCols });
+
+    setPhase('post-move');
+  }
+
+  function handleSequenceComplete(passed) {
+    const quality = passed ? 'optimal' : 'blunder';
+    const current = puzzles[currentIdx];
+
+    store?.recordPuzzleAttempt({
+      puzzle_id: current.id,
+      device_uuid: 'local',
+      moves_tried: 1,
+      outcome: passed ? 'correct_first' : 'wrong',
+      first_attempt_correct: passed,
+      time_ms: Date.now() - startTimeRef.current,
+      ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
+    });
+
+    track('puzzle_solved_correct', { puzzleId: current.id, category });
+
+    const newResults = [...results, {
+      puzzleId: current?.id,
+      quality,
+      category,
+    }];
+    setResults(newResults);
+    advanceSession();
+
+    const nextIdx = currentIdx + 1;
+    if (nextIdx < puzzles.length) {
+      setCurrentIdx(nextIdx);
+      initPuzzle(puzzles[nextIdx]);
+      setPhase('pre-move');
+    } else {
+      go('summary', { results: newResults, category });
+    }
   }
 
   // Derive full columns
@@ -259,108 +479,143 @@ export function ChallengeScreen({ go, goBack, category }) {
         </div>
       )}
 
-      {/* Coach dialog */}
-      <CoachDialog messages={coachMessages} size={58} />
+      {/* Detect sequence mode — SequenceHandler owns its full UI */}
+      {puzzles[currentIdx]?.interaction_mode === 'sequence' ? (
+        <SequenceHandler
+          key={puzzles[currentIdx].id}
+          puzzle={toSequenceHandlerShape(puzzles[currentIdx])}
+          onNext={() => handleSequenceComplete(true)}
+        />
+      ) : (
+        <>
+          {/* Coach dialog */}
+          <CoachDialog messages={coachMessages} size={58} />
 
-      {/* Board */}
-      {board && (
-        <div style={{ padding: '0 8px', flex: '0 0 auto' }}>
-          <Board
-            board={board}
-            onColumnClick={handleColumnClick}
-            canPlay={phase === 'pre-move'}
-            overlays={overlays}
-            badge={badge}
-            lastDrop={lastDrop}
-            fullCols={fullCols}
-            interactionMode="single_move"
-          />
-        </div>
-      )}
+          {/* Board */}
+          {board && (
+            <div style={{ padding: '0 8px', flex: '0 0 auto' }}>
+              <Board
+                board={board}
+                onColumnClick={category === 'forbidden_columns' ? undefined : handleColumnClick}
+                onColToggle={category === 'forbidden_columns' && phase === 'pre-move'
+                  ? (col) => setSelectedCols(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])
+                  : undefined}
+                selectedCols={category === 'forbidden_columns' ? selectedCols : undefined}
+                canPlay={phase === 'pre-move'}
+                overlays={overlays}
+                badge={badge}
+                lastDrop={lastDrop}
+                fullCols={fullCols}
+                interactionMode="single_move"
+              />
+            </div>
+          )}
 
-      {/* Tier-1 evaluation strip — shown after move is evaluated */}
-      {phase === 'post-move' && evaluation && (
-        <div style={{
-          margin: '10px 18px 0',
-          background: '#fff',
-          borderRadius: 16,
-          padding: '14px 16px',
-          boxShadow: 'var(--shadow-sm)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}>
-          {/* Quality tag */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-          }}>
-            <span style={{
-              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 15,
-              color: qualityColor,
-            }}>
-              {QUALITY_GLYPH[evaluation.quality]} {t('challenge.quality.' + evaluation.quality)}
-            </span>
-          </div>
-
-          {/* Summary line */}
-          <p style={{
-            margin: 0,
-            fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14,
-            color: 'var(--ink)', lineHeight: 1.4,
-          }}>
-            {t(evaluation.summaryLineKey)}
-          </p>
-
-          {/* Learn more button */}
-          <button
-            onClick={handleLearnMore}
-            style={{
-              marginTop: 4,
-              background: 'transparent', border: '1.5px solid var(--line, #e2ddd2)',
-              borderRadius: 10, padding: '8px 14px',
-              fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 13,
-              color: 'var(--ink-soft)', cursor: 'pointer', alignSelf: 'flex-start',
-            }}
-          >
-            Learn more ▼
-          </button>
-        </div>
-      )}
-
-      {/* Spacer to push toolbar to bottom */}
-      <div style={{ flex: 1 }} />
-
-      {/* Toolbar */}
-      <Toolbar>
-        {phase === 'pre-move' ? (
-          <ToolButton
-            icon="bulb"
-            label="Hint"
-            onClick={handleHint}
-          />
-        ) : (
-          <button
-            onClick={handleNext}
-            disabled={!evaluation}
-            style={{
-              flex: 1,
-              padding: '14px 22px',
+          {/* Tier-1 evaluation strip — shown after move is evaluated */}
+          {phase === 'post-move' && evaluation && (
+            <div style={{
+              margin: '10px 18px 0',
+              background: '#fff',
               borderRadius: 16,
-              border: 'none',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: 16,
-              cursor: evaluation ? 'pointer' : 'not-allowed',
-              background: evaluation ? 'var(--disc-green)' : '#c7c2b8',
-              color: '#fff',
-              boxShadow: evaluation ? '0 6px 0 #228245' : 'none',
-              transition: 'background .15s',
-            }}
-          >
-            {t('challenge.next', 'Next →')}
-          </button>
-        )}
-      </Toolbar>
+              padding: '14px 16px',
+              boxShadow: 'var(--shadow-sm)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}>
+              {/* Quality tag */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 15,
+                  color: qualityColor,
+                }}>
+                  {QUALITY_GLYPH[evaluation.quality]} {t('challenge.quality.' + evaluation.quality)}
+                </span>
+              </div>
+
+              {/* Summary line */}
+              <p style={{
+                margin: 0,
+                fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14,
+                color: 'var(--ink)', lineHeight: 1.4,
+              }}>
+                {evaluation.summaryLine ?? t(evaluation.summaryLineKey)}
+              </p>
+
+              {/* Learn more button — hidden for forbidden_columns */}
+              {category !== 'forbidden_columns' && (
+                <button
+                  onClick={handleLearnMore}
+                  style={{
+                    marginTop: 4,
+                    background: 'transparent', border: '1.5px solid var(--line, #e2ddd2)',
+                    borderRadius: 10, padding: '8px 14px',
+                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 13,
+                    color: 'var(--ink-soft)', cursor: 'pointer', alignSelf: 'flex-start',
+                  }}
+                >
+                  Learn more ▼
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Spacer to push toolbar to bottom */}
+          <div style={{ flex: 1 }} />
+
+          {/* Toolbar */}
+          <Toolbar>
+            {phase === 'pre-move' ? (
+              category === 'forbidden_columns' ? (
+                <button
+                  onClick={handleForbiddenSubmit}
+                  disabled={selectedCols.length === 0 || isSubmitting}
+                  style={{
+                    flex: 1, padding: '14px 22px', borderRadius: 16, border: 'none',
+                    fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
+                    cursor: selectedCols.length > 0 && !isSubmitting ? 'pointer' : 'not-allowed',
+                    background: selectedCols.length > 0 && !isSubmitting ? 'var(--disc-green)' : '#c7c2b8',
+                    color: '#fff',
+                    boxShadow: selectedCols.length > 0 && !isSubmitting ? '0 6px 0 #228245' : 'none',
+                    transition: 'background .15s',
+                  }}
+                >
+                  Submit
+                </button>
+              ) : (
+                <ToolButton
+                  icon="bulb"
+                  label="Hint"
+                  onClick={handleHint}
+                />
+              )
+            ) : (
+              <button
+                onClick={handleNext}
+                disabled={!evaluation}
+                style={{
+                  flex: 1,
+                  padding: '14px 22px',
+                  borderRadius: 16,
+                  border: 'none',
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 700,
+                  fontSize: 16,
+                  cursor: evaluation ? 'pointer' : 'not-allowed',
+                  background: evaluation ? 'var(--disc-green)' : '#c7c2b8',
+                  color: '#fff',
+                  boxShadow: evaluation ? '0 6px 0 #228245' : 'none',
+                  transition: 'background .15s',
+                }}
+              >
+                {t('challenge.next', 'Next →')}
+              </button>
+            )}
+          </Toolbar>
+        </>
+      )}
 
       {/* Modals */}
       {authOpen && (
@@ -374,6 +629,210 @@ export function ChallengeScreen({ go, goBack, category }) {
           onDismiss={() => setUpgradeOpen(false)}
           onNotify={() => setUpgradeOpen(false)}
         />
+      )}
+
+      {/* Deep Reveal bottom-sheet panel */}
+      {deepRevealOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setDeepRevealOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200,
+            }}
+          />
+          {/* Sheet */}
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 201,
+            background: '#fff', borderRadius: '20px 20px 0 0',
+            padding: '14px 20px 32px',
+            maxHeight: '80vh', overflowY: 'auto',
+            boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
+          }}>
+            {/* Grab handle */}
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e2ddd2', margin: '0 auto 12px' }} />
+
+            {/* Collapse button */}
+            <button
+              onClick={() => setDeepRevealOpen(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 13,
+                color: 'var(--ink-soft)', marginBottom: 14,
+              }}
+            >
+              <Icon name="chevD" size={16} /> {t('common.collapse', 'Collapse')}
+            </button>
+
+            {deepRevealLoading && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  border: '3px solid #e2ddd2', borderTopColor: 'var(--disc-green)',
+                  animation: 'spin 0.7s linear infinite',
+                }} />
+                <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
+                  {t('deepReveal.loading', 'Reading the position…')}
+                </p>
+              </div>
+            )}
+
+            {!deepRevealLoading && deepRevealTimedOut && (
+              <div style={{ padding: '8px 0' }}>
+                <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+                  {evaluation?.summaryLine ?? (evaluation?.summaryLineKey ? t(evaluation.summaryLineKey) : '')}
+                </p>
+                <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
+                  {t('deepReveal.unavailable', 'Detailed explanation unavailable.')}
+                </p>
+              </div>
+            )}
+
+            {!deepRevealLoading && !deepRevealTimedOut && deepRevealData && (
+              <div>
+                {/* (a) Pattern tag + quality badge from evaluation state */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {evaluation?.patternTag && (
+                    <span style={{
+                      background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
+                    }}>
+                      {evaluation.patternTag.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                  {evaluation?.badge && (
+                    <span style={{
+                      background: evaluation.badge === 'good' ? 'var(--eval-good-bg,#dcfce7)' : evaluation.badge === 'mid' ? 'var(--eval-mid-bg,#fef9c3)' : 'var(--eval-bad-bg,#fee2e2)',
+                      color: evaluation.badge === 'good' ? 'var(--eval-good,#16a34a)' : evaluation.badge === 'mid' ? 'var(--eval-mid,#ca8a04)' : 'var(--eval-bad,#dc2626)',
+                      borderRadius: 8, padding: '4px 10px',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12,
+                    }}>
+                      {QUALITY_GLYPH[evaluation.quality]} {t('challenge.quality.' + evaluation.quality)}
+                    </span>
+                  )}
+                </div>
+
+                {/* (b) Non-interactive compact Board with overlays from evaluation */}
+                {board && (
+                  <div style={{ padding: '6px 0 10px' }}>
+                    <Board
+                      board={board}
+                      compact
+                      canPlay={false}
+                      overlays={overlays}
+                      badge={badge}
+                    />
+                  </div>
+                )}
+
+                {/* (c) LLM explanation */}
+                <p style={{
+                  margin: '0 0 14px',
+                  fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
+                  color: 'var(--ink)',
+                }}>
+                  {deepRevealData.explanation}
+                </p>
+
+                {/* (d) Best line chips — omit if null/empty (legacy cache rows) */}
+                {deepRevealData.bestLine?.length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{
+                      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
+                      letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
+                    }}>
+                      BEST LINE
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      {deepRevealData.bestLine.map((move, i) => (
+                        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{
+                            background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8,
+                            padding: '4px 10px',
+                            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
+                            color: 'var(--ink)',
+                          }}>
+                            {move}
+                          </span>
+                          {i < deepRevealData.bestLine.length - 1 && (
+                            <Icon name="chevR" size={14} color="var(--ink-soft)" />
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Flag button */}
+                <div style={{ marginTop: 6 }}>
+                  {deepRevealFlagged ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                      }}>
+                        <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
+                        {t('deepReveal.flagged', 'Thanks — flagged')}
+                      </span>
+                    </div>
+                  ) : deepRevealFlagOpen ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <textarea
+                        autoFocus
+                        value={deepRevealFlagNote}
+                        onChange={e => setDeepRevealFlagNote(e.target.value)}
+                        placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
+                        rows={3}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', resize: 'none',
+                          fontFamily: 'var(--font-body)', fontSize: 13,
+                          border: '1px solid var(--border-dim)', borderRadius: 8,
+                          padding: '6px 8px', colorScheme: 'light',
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => { setDeepRevealFlagOpen(false); setDeepRevealFlagNote(''); }}
+                          style={{
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                          }}
+                        >
+                          {t('deepReveal.flagCancel', 'Cancel')}
+                        </button>
+                        <button
+                          onClick={() => handleFlag(deepRevealFlagNote.trim())}
+                          style={{
+                            background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
+                            borderRadius: 6, padding: '4px 12px',
+                          }}
+                        >
+                          {t('deepReveal.flagSend', 'Send')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <button
+                        onClick={() => setDeepRevealFlagOpen(true)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          background: 'transparent', border: 'none', cursor: 'pointer',
+                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                        }}
+                      >
+                        <Icon name="flag" size={15} />
+                        {t('deepReveal.flag', 'Flag this explanation')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

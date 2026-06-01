@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
-import { explainSimulate } from './explainSimulate.js';
+import { explainSimulate, computeBestLine } from './explainSimulate.js';
 import {
   TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
   isMajorThreatForPlayer, getScoreTier,
@@ -92,7 +92,7 @@ const MOVES_RE = /^[0-6]{0,42}$/;
 
 function validateMoves(moves) {
   if (typeof moves !== 'string') return 'moves must be a string';
-  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 1–7';
+  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 0–6';
   return null;
 }
 
@@ -579,19 +579,94 @@ app.post('/api/recommend-move', async (req, res) => {
   }
 });
 
+// Shared: build the LLM prompt for a given (movestring, col) without calling the LLM.
+// Returns { prompt, bestLine } or null if contrast move is unavailable.
+async function buildExplainContext(movestring, col, rounds = 1) {
+  const board = new Board(movestring);
+  const r = rounds;
+  const numPlies = 2 * r + 1;
+  const perspective = movestring.length % 2 === 0 ? 1 : 2;
+  const playerName = perspective === 1 ? 'Red' : 'Yellow';
+  const opponentPlayer = perspective === 1 ? 2 : 1;
+  const postMovestring = movestring + col;
+
+  const bestLine = await computeBestLine(movestring, col, solver);
+
+  const preScores = movestring.length > 0
+    ? await solver.query(movestring)
+    : EMPTY_BOARD_SCORES;
+
+  const positionTier = getPositionTier(preScores, board);
+  const contrast = selectContrastMove(preScores, col, board);
+  if (contrast === null) return null;
+  const { contrastCol, isOptimal } = contrast;
+
+  const anchorRow = board.colHeights[col];
+  const contrastAnchorRow = board.colHeights[contrastCol];
+
+  const [userResult, contrastResult] = await Promise.all([
+    explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
+    explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
+  ]);
+
+  const { rows: deltaRows, insufficientTacticalData } =
+    computeDeltaTable(userResult.patterns, contrastResult.patterns);
+  const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
+
+  const [boardViz, postBoardViz] = await Promise.all([
+    getBoardVisualization(movestring || ''),
+    getBoardVisualization(postMovestring),
+  ]);
+
+  const opponentName = perspective === 1 ? 'Yellow' : 'Red';
+  const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
+  const forcedBlockNote = forcedBlock
+    ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
+    : null;
+
+  const postBoard = new Board(postMovestring);
+  const opponentWinCols = getImmediateThreats(postBoard.board, postBoard.colHeights, opponentPlayer);
+  const blunderNote = opponentWinCols.length > 0
+    ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
+    : null;
+
+  const opponentResponseMovestring = await getOpponentResponseMs(
+    postMovestring, postBoard, opponentWinCols, perspective, solver,
+  );
+  const afterOpponentBoardViz = opponentResponseMovestring
+    ? getBoardVisualization(opponentResponseMovestring)
+    : null;
+  const opponentResponseCol = opponentResponseMovestring != null
+    ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
+    : null;
+
+  const activePatterns = deltaRows.map(row => row.name);
+  const kbSection = buildKBSection(activePatterns);
+
+  const userExamplesByPattern = {};
+  for (const [name, entry] of Object.entries(userResult.patterns)) {
+    if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+  }
+
+  const prompt = buildExplainPrompt({
+    boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
+    userCol: col, contrastCol, isOptimal, positionTier, deltaRows,
+    insufficientTacticalData, allLinesDecided, rounds: r,
+    totalLeaves: userResult.totalLeaves,
+    userOutcomes: userResult.outcomes,
+    contrastOutcomes: contrastResult.outcomes,
+    kbSection, playerName, forcedBlockNote, blunderNote, userExamplesByPattern,
+  });
+
+  return { prompt, bestLine };
+}
+
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
-// Returns { explanation: string, prompt: string }.
+// Returns { explanation: string, bestLine: string[], cached?: boolean }.
 // Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
-// Rate-limited to 5 req/min (LLM cost guard).
+// Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-
-  if (req.user.tier === 'free') {
-    const quota = await checkAndDecrementQuota(req.user);
-    if (!quota.allowed) {
-      return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
-    }
-  }
 
   const { movestring, col, rounds } = req.body;
 
@@ -615,109 +690,55 @@ app.post('/api/explain-move-llm', async (req, res) => {
   if (board.colHeights[col] >= 6)
     return res.status(400).json({ error: 'column is full' });
 
-  const numPlies = 2 * r + 1;
-  const perspective = movestring.length % 2 === 0 ? 1 : 2;
-  const playerName  = perspective === 1 ? 'Red' : 'Yellow';
-  const opponentPlayer = perspective === 1 ? 2 : 1;
-  const postMovestring = movestring + col;
-
-  try {
-    // ── 1. Pre-move solver scores for contrast selection ──────────────────────
-    const preScores = movestring.length > 0
-      ? await solver.query(movestring)
-      : EMPTY_BOARD_SCORES;
-
-    // ── 2. Derive position tier and select contrast move ─────────────────────
-    const positionTier = getPositionTier(preScores, board);
-    const contrast = selectContrastMove(preScores, col, board);
-    if (contrast === null) {
+  // ── 1. Cache check (before quota decrement) ──────────────────────────────
+  const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
+  if (supabase) {
+    const { data: cached } = await supabase
+      .from('explanation_cache')
+      .select('deep_reveal_json')
+      .eq('position_hash', positionHash)
+      .single();
+    if (cached?.deep_reveal_json) {
       return res.json({
-        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
-        prompt: null,
+        explanation: cached.deep_reveal_json.explanation,
+        bestLine: cached.deep_reveal_json.bestLine ?? [],
+        prompt: cached.deep_reveal_json.prompt ?? '',
+        cached: true,
       });
     }
-    const { contrastCol, isOptimal } = contrast;
+  }
 
-    // ── 3. Run explainSimulate concurrently ───────────────────────────────────
-    const anchorRow        = board.colHeights[col];
-    const contrastAnchorRow = board.colHeights[contrastCol];
+  // ── 2. Quota decrement (cache miss only) ─────────────────────────────────
+  if (req.user.tier === 'free') {
+    const quota = await checkAndDecrementQuota(req.user);
+    if (!quota.allowed) {
+      return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
+    }
+  }
 
-    const [userResult, contrastResult] = await Promise.all([
-      explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
-      explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
-    ]);
-
-    // ── 4. Compute delta table ────────────────────────────────────────────────
-    const { rows: deltaRows, insufficientTacticalData } =
-      computeDeltaTable(userResult.patterns, contrastResult.patterns);
-    const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
-
-    // ── 5. Board visualizations ───────────────────────────────────────────────
-    const [boardViz, postBoardViz] = await Promise.all([
-      getBoardVisualization(movestring || ''),
-      getBoardVisualization(postMovestring),
-    ]);
-
-    // ── 6. Forced-block and blunder detection ─────────────────────────────────
-    const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
-    const opponentName = perspective === 1 ? 'Yellow' : 'Red';
-    const forcedBlockNote = forcedBlock
-      ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
-      : null;
-
-    const postBoard = new Board(postMovestring);
-    const opponentWinCols = getImmediateThreats(postBoard.board, postBoard.colHeights, opponentPlayer);
-    const blunderNote = opponentWinCols.length > 0
-      ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
-      : null;
-
-    // ── 6b. Board after opponent's best response ──────────────────────────────
-    const opponentResponseMovestring = await getOpponentResponseMs(
-      postMovestring, postBoard, opponentWinCols, perspective, solver,
-    );
-    const afterOpponentBoardViz = opponentResponseMovestring
-      ? getBoardVisualization(opponentResponseMovestring)
-      : null;
-    const opponentResponseCol = opponentResponseMovestring != null
-      ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
-      : null;
-
-    // ── 7. KB section for active patterns ────────────────────────────────────
-    const activePatterns = deltaRows.map(row => row.name);
-    const kbSection = buildKBSection(activePatterns);
-
-    // ── 7b. Collect example movestrings per pattern from userResult ───────────
-    const userExamplesByPattern = {};
-    for (const [name, entry] of Object.entries(userResult.patterns)) {
-      if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+  try {
+    const context = await buildExplainContext(movestring, col, r);
+    if (!context) {
+      const bestLine = await computeBestLine(movestring, col, solver);
+      return res.json({
+        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
+        bestLine,
+        prompt: '',
+      });
     }
 
-    // ── 8. Build prompt and call LLM ─────────────────────────────────────────
-    const prompt = buildExplainPrompt({
-      boardViz,
-      postBoardViz,
-      afterOpponentBoardViz,
-      opponentResponseCol,
-      userCol: col,
-      contrastCol,
-      isOptimal,
-      positionTier,
-      deltaRows,
-      insufficientTacticalData,
-      allLinesDecided,
-      rounds: r,
-      totalLeaves: userResult.totalLeaves,
-      userOutcomes: userResult.outcomes,
-      contrastOutcomes: contrastResult.outcomes,
-      kbSection,
-      playerName,
-      forcedBlockNote,
-      blunderNote,
-      userExamplesByPattern,
-    });
-
+    const { prompt, bestLine } = context;
     const explanation = await callLLM(prompt);
-    res.json({ explanation, prompt });
+
+    if (supabase) {
+      supabase.from('explanation_cache').insert({
+        position_hash: positionHash,
+        one_liner: '',
+        deep_reveal_json: { explanation, bestLine, prompt },
+      }).then(() => {}).catch(err => console.error('[cache write]', err.message));
+    }
+
+    res.json({ explanation, bestLine, prompt });
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -728,21 +749,56 @@ app.post('/api/explain-move-llm', async (req, res) => {
 // POST /api/llm-feedback — record a flagged LLM response.
 // Returns { id: string }.
 // No auth required.
+// col (integer) is optional — when provided and llm_prompt is empty, the prompt is rebuilt
+// from the simulation pipeline so the full context is always captured.
 app.post('/api/llm-feedback', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
-  const { movestring, llm_prompt, llm_response, human_note, feature } = req.body;
+  const { movestring, col, llm_prompt, llm_response, human_note, feature } = req.body;
 
-  for (const [field, value] of Object.entries({ movestring, llm_prompt, llm_response, feature })) {
+  for (const [field, value] of Object.entries({ movestring, llm_response, feature })) {
     if (typeof value !== 'string' || value.trim() === '') {
       return res.status(400).json({ error: `${field} must be a non-empty string` });
+    }
+  }
+
+  // Resolve prompt: use what the client sent; if empty and col is available, rebuild it.
+  let resolvedPrompt = typeof llm_prompt === 'string' ? llm_prompt : '';
+  if (!resolvedPrompt && typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6) {
+    try {
+      // Check cache first (fast path — entry must exist since the user just saw the explanation)
+      const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
+      const { data: cached } = await supabase
+        .from('explanation_cache')
+        .select('deep_reveal_json')
+        .eq('position_hash', positionHash)
+        .single();
+
+      if (cached?.deep_reveal_json?.prompt) {
+        resolvedPrompt = cached.deep_reveal_json.prompt;
+      } else {
+        // Cache entry predates prompt storage — rebuild from simulation pipeline
+        const context = await buildExplainContext(movestring, col);
+        if (context?.prompt) {
+          resolvedPrompt = context.prompt;
+          // Backfill cache entry with prompt so future flags don't need to rebuild
+          if (cached?.deep_reveal_json) {
+            supabase.from('explanation_cache')
+              .update({ deep_reveal_json: { ...cached.deep_reveal_json, prompt: resolvedPrompt } })
+              .eq('position_hash', positionHash)
+              .then(() => {}).catch(() => {});
+          }
+        }
+      }
+    } catch {
+      // Non-fatal — proceed with whatever prompt we have
     }
   }
 
   try {
     const { data, error } = await supabase
       .from('llm_feedback')
-      .insert({ movestring, llm_prompt, llm_response, human_note, feature })
+      .insert({ movestring, llm_prompt: resolvedPrompt, llm_response, human_note, feature })
       .select('id')
       .single();
 
@@ -759,6 +815,47 @@ function userCanAccessCategory(user, categoryId) {
   if (!PAID_CATEGORIES.has(categoryId)) return true;
   return user?.tier === 'paid';
 }
+
+// GET /api/stats — per-user accuracy stats aggregated from puzzle_attempts
+app.get('/api/stats', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { data, error } = await supabase
+    .from('puzzle_attempts')
+    .select('first_attempt_correct, puzzles!inner(category)')
+    .eq('user_id', req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const byPattern = {};
+  let totalCorrect = 0;
+  for (const row of data) {
+    const category = row.puzzles?.category;
+    if (!category) continue;
+    if (!byPattern[category]) byPattern[category] = { correct: 0, attempted: 0 };
+    byPattern[category].attempted++;
+    if (row.first_attempt_correct) {
+      byPattern[category].correct++;
+      totalCorrect++;
+    }
+  }
+
+  const totalPuzzles = data.length;
+  for (const cat of Object.keys(byPattern)) {
+    const e = byPattern[cat];
+    byPattern[cat] = {
+      accuracy: e.attempted > 0 ? Math.round((e.correct / e.attempted) * 100) : 0,
+      attempted: e.attempted,
+    };
+  }
+
+  res.json({
+    accuracy: totalPuzzles > 0 ? Math.round((totalCorrect / totalPuzzles) * 100) : 0,
+    totalPuzzles,
+    byPattern,
+  });
+});
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
 app.get('/api/puzzles', async (req, res) => {
@@ -888,7 +985,70 @@ app.get('/api/puzzles/draw', async (req, res) => {
       puzzles = shuffled;
     }
 
+    // Session handling for authenticated users
+    if (req.user) {
+      const { data: existing } = await supabase
+        .from('challenge_sessions')
+        .select('id, puzzle_ids, completed_count')
+        .eq('user_id', req.user.id)
+        .eq('category', category)
+        .is('completed_at', null)
+        .maybeSingle();
+
+      if (existing) {
+        // Resume — re-fetch puzzles in original draw order
+        const { data: rows } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+          .in('id', existing.puzzle_ids)
+          .eq('is_active', true);
+        const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
+        const ordered = existing.puzzle_ids.map(id => map[id]).filter(Boolean);
+        return res.json({ puzzles: ordered, session_id: existing.id, resume_idx: existing.completed_count });
+      }
+
+      // New session
+      const { data: newSess, error: sessErr } = await supabase
+        .from('challenge_sessions')
+        .insert({ user_id: req.user.id, category, puzzle_ids: puzzles.map(p => p.id) })
+        .select('id')
+        .single();
+
+      if (sessErr) {
+        console.error('[challenge-sessions] insert error', sessErr.message);
+        return res.json({ puzzles }); // degrade gracefully — still playable, no resume
+      }
+      return res.json({ puzzles, session_id: newSess.id, resume_idx: 0 });
+    }
+
+    // Anonymous — unchanged
     res.json({ puzzles });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/challenge-sessions/:id/advance — increment completed_count; mark done when all finished
+app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  const { id } = req.params;
+  try {
+    const { data: sess } = await supabase
+      .from('challenge_sessions')
+      .select('id, user_id, puzzle_ids, completed_count, completed_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (!sess) return res.status(404).json({ error: 'session not found' });
+    if (sess.user_id !== req.user.id) return res.status(403).json({ error: 'forbidden' });
+    if (sess.completed_at) return res.status(204).send(); // idempotent — already complete
+    const newCount = sess.completed_count + 1;
+    const isComplete = newCount >= sess.puzzle_ids.length;
+    await supabase.from('challenge_sessions').update({
+      completed_count: newCount,
+      ...(isComplete ? { completed_at: new Date().toISOString() } : {}),
+    }).eq('id', id);
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

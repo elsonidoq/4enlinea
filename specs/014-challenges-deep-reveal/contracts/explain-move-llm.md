@@ -83,6 +83,7 @@ HTTP 200. `cached: true`. Quota is NOT decremented.
 - All legal scores are equal (no meaningful contrast — the prompt itself returns early and no PV is computed)
 - Solver error during PV walk
 - Position is already a terminal (win/draw)
+- Legacy cache rows pre-dating Epic 2b: `deep_reveal_json.bestLine` is `null` in the DB; the server coalesces to `[]` via `?? []` before returning
 
 The client MUST treat an empty `bestLine` by omitting the "BEST LINE" section entirely (not rendering an empty chip row).
 

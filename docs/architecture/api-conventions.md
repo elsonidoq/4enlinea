@@ -231,14 +231,70 @@ Provides a pre-move recommendation for the current board position.
 
 Explains a specific move the human just played (post-move reflection).
 
-**Request body**: `{ movestring: string, col: number, rounds: number }`
+**Request body**: `{ movestring: string, col: number, rounds?: number }`
 - `movestring`: position **before** the human's move
 - `col`: 0-indexed column the human played
-- `rounds`: 1–5
+- `rounds`: optional integer 1–5 (default 1)
 
-**Response**: `{ "explanation": "<LLM text>", "prompt": "<raw prompt>" }`
+**Response**:
+```json
+{
+  "explanation": "<LLM-generated explanation paragraph>",
+  "bestLine": ["Col 5", "Col 2", "Col 6"],
+  "cached": true
+}
+```
+- `bestLine`: array of 1-indexed column label strings (e.g. `["Col 5", "Col 2", "Col 6"]`). Always present. The first element is always the user's played move (`col + 1`). Legacy cache rows pre-dating Epic 2b have no `bestLine` stored — these return `[]` (coalesced from `null` via `?? []`). Empty array when all legal scores are equal, solver error, or terminal position.
+- `cached`: `true` when served from `explanation_cache`. Absent (undefined) on cache miss.
+- `prompt` field: **not returned** (was present in pre-Epic-2b implementation; removed).
+
+**Processing order**:
+1. Auth gate: 401 for unauthenticated
+2. Input validation: 400 for invalid movestring/col/rounds
+3. LLM service check: 503 if `OPENAI_API_KEY`/`OPENAI_MODEL` absent
+4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, bestLine, cached: true }` on hit (quota NOT decremented)
+5. Quota decrement (cache miss only): 429 when free-tier quota exhausted; paid tier skips
+6. `computeBestLine(movestring, col, solver)` → `bestLine` array
+7. LLM call → `explanation` string
+8. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation, bestLine } }`
+9. Response: `{ explanation, bestLine }`
+
+**Quota note**: Cache hits do NOT decrement quota. A user with 0 quota remaining can still receive a cached explanation.
+
+**Errors**: 400 for invalid params, 401 (unauthenticated), 429 (quota exceeded), 503 (LLM not configured), 500 (internal error).
 
 **Rate limit**: 5 req/min.
+
+## Move Evaluation Endpoint
+
+`POST /api/evaluate-move` — scores a move the user just played and returns i18n keys for the Coach dialog and Tier-1 strip.
+
+**Request body**: `{ movestring: string, col: number, category?: string }`
+- `movestring`: position **before** the user's move (0-indexed, 0–42 chars).
+- `col`: 0-indexed column the user played.
+- `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position.
+
+**Response**:
+```json
+{
+  "badge": "good" | "mid" | "bad",
+  "quality": "optimal" | "suboptimal" | "blunder",
+  "coachPhraseKey": "coach.immediate_threat.optimal.0" | null,
+  "coachMood": "happy" | "think" | "oops",
+  "summaryLineKey": "eval.immediate_threat.optimal.summary.0" | null,
+  "patternTag": "<category slug>" | null
+}
+```
+- `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
+- `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
+- `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
+- No auth required; anonymous calls are accepted.
+
+**Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.
+
+**Rate limit**: 120 req/min (default).
+
+**Routing note**: registered before `GET /api/puzzles/:id` — see Route Registration Ordering Constraint above.
 
 ## Puzzle Check Endpoint
 

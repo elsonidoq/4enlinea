@@ -7,7 +7,6 @@ export const VALID_CATEGORIES = new Set([
 ]);
 
 export const PAID_CATEGORIES = new Set([
-  'forced_win', 'forbidden_columns',
   'mixed', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ]);
 

@@ -125,6 +125,31 @@ Transitions: `loading → pre-move` (on draw response), `pre-move → post-move`
 
 New challenge-type screens MUST follow this phase machine. Do not add a `'confirm'` phase — the project uses commit-first with no confirmation step (see project memory `project_commit_first_no_confirm.md`).
 
+### Forbidden Columns branch (`category === 'forbidden_columns'`)
+
+When the drawn puzzle has `category === 'forbidden_columns'`, the `'pre-move'` phase uses multi-select mode instead of single-column commit:
+
+- The Board is rendered with `onColToggle` (not `onColumnClick`) and `selectedCols` state.
+- The Toolbar shows a "Submit" button (disabled when `selectedCols.length === 0`) in place of the Hint button.
+- After submit, `handleForbiddenSubmit()` calls `POST /api/puzzles/:id/check` with the selected columns and transitions to `'post-move'`.
+- The "Learn more ▼" Tier-1 strip button is suppressed for this category.
+
+### Forced Win / sequence branch (`puzzle.interaction_mode === 'sequence'`)
+
+When the drawn puzzle has `interaction_mode === 'sequence'`, `ChallengeScreen` renders `<SequenceHandler>` in place of the standard Board + CoachDialog + Toolbar + Tier-1 strip:
+
+- `SequenceHandler` owns its own Board, banners, and "Next" button (see `project_sequence_handler_ui.md`).
+- `SequenceHandler.onNext` is wired as `() => handleSequenceComplete(true)` (success-only in MVP).
+- The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzles.
+
+### Deep Reveal bottom-sheet panel
+
+After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the explanation + `bestLine` chip row inside the sheet.
+
+### `challengeSets.js` i18n-key shape convention
+
+All entries in `connect-four/server/challengeSets.js` use `displayNameKey` and `descriptionKey` fields (i18n key strings, e.g. `'challengeSet.immediate_threat.displayName'`). No literal `displayName`/`description` strings are stored. `SetPickerScreen` resolves display names via `t(set.displayNameKey) ?? set.slug`.
+
 ## Category Constants
 
 **MUST**: Frontend category constants are defined in `src/lib/categories.js` and MUST be kept in sync with `server/categories.js` whenever categories are added or renamed. Both files define `CATEGORY_ORDER`, `CATEGORY_NAMES`, and `PAID_CATEGORIES`.

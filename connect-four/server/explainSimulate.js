@@ -397,3 +397,60 @@ export async function explainSimulate(movestring, numPlies, anchorCell, perspect
     },
   };
 }
+
+/**
+ * Computes the principal variation (PV) for a played move by walking optimal
+ * continuations via the solver, up to `maxPlies` moves deep.
+ *
+ * Note: explainSimulate() is NOT reused here because it aggregates pattern statistics
+ * across all optimal-play leaves without exposing the move sequence taken. The PV walk
+ * requires a concrete ordered sequence, not an aggregate.
+ *
+ * @param {string} movestring - position BEFORE the user's move (0-indexed digits 0-6)
+ * @param {number} col        - 0-indexed column the user played
+ * @param {object} solver     - the shared persistent solver process (has .query(ms) → Promise<number[]>)
+ * @param {number} [maxPlies=5] - maximum PV length to return
+ * @returns {Promise<string[]>} - array of 1-indexed column label strings, e.g. ["Col 5", "Col 2"]
+ */
+export async function computeBestLine(movestring, col, solver, maxPlies = 5) {
+  const pvCols = [col]; // always include the played move first
+  let currentMs = movestring + col;
+
+  for (let ply = 1; ply < maxPlies; ply++) {
+    const b = new Board(currentMs);
+
+    // Stop if the last move won the game (solver hangs on won positions)
+    if (b.hasWon(1) || b.hasWon(2)) break;
+
+    // Build legal column list
+    const legalCols = [];
+    for (let c = 0; c < COLS; c++) {
+      if (b.colHeights[c] < ROWS) legalCols.push(c);
+    }
+    if (legalCols.length === 0) break; // draw — board full
+
+    // Query solver for current position
+    let scores;
+    try {
+      scores = currentMs.length === 0 ? EMPTY_BOARD_SCORES : await solver.query(currentMs);
+    } catch {
+      break; // solver error — return what we have so far
+    }
+
+    // Pick the best legal column (first of ties, by index)
+    let bestScore = -Infinity;
+    let bestCol = legalCols[0];
+    for (const c of legalCols) {
+      if (scores[c] > bestScore) {
+        bestScore = scores[c];
+        bestCol = c;
+      }
+    }
+
+    pvCols.push(bestCol);
+    currentMs += bestCol;
+  }
+
+  // Convert 0-indexed columns to 1-indexed label strings
+  return pvCols.map(c => `Col ${c + 1}`);
+}

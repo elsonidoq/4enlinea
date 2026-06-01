@@ -56,7 +56,7 @@ export function SetPickerScreen({ go, goBack }) {
           sets.map(set => (
             <SetCard
               key={set.slug}
-              title={set.displayName ?? set.slug}
+              title={t(set.displayNameKey) ?? set.slug}
               stars={set.stars}
               positionCount={counts[set.slug] ?? 0}
               locked={!set.free}

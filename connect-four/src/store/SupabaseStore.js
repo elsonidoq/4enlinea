@@ -146,6 +146,19 @@ export class SupabaseStore {
       .eq('id', this._userId);
   }
 
+  // Aggregate accuracy stats from puzzle_attempts via server endpoint
+  async getStats() {
+    const { data: { session } } = await this._supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
+    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+    const res = await fetch(`${apiBase}/api/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }
+
   // T018 — getAllSessionStats with count-weighted accuracy aggregation
   async getAllSessionStats() {
     const { data } = await this._supabase

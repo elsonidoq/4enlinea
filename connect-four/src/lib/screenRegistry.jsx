@@ -2,6 +2,7 @@ import { HomeScreen } from '../screens/HomeScreen.jsx';
 import { StatsScreen } from '../screens/StatsScreen.jsx';
 import { SetPickerScreen } from '../screens/SetPickerScreen.jsx';
 import { ChallengeScreen } from '../screens/ChallengeScreen.jsx';
+import { PostSetSummaryScreen } from '../screens/PostSetSummaryScreen.jsx';
 import { PlaceholderScreen } from '../screens/PlaceholderScreen.jsx';
 
 export const SCREENS = {
@@ -13,7 +14,7 @@ export const SCREENS = {
   clchallenge: (props) => <PlaceholderScreen {...props} screenKey="clchallenge" />,
   setpicker: SetPickerScreen,
   challenge: ChallengeScreen,
-  summary: (props) => <PlaceholderScreen {...props} screenKey="summary" />,
+  summary: PostSetSummaryScreen,
   difficulty: (props) => <PlaceholderScreen {...props} screenKey="difficulty" />,
   game: (props) => <PlaceholderScreen {...props} screenKey="game" />,
   review: (props) => <PlaceholderScreen {...props} screenKey="review" />,

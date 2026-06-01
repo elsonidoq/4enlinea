@@ -145,16 +145,16 @@ export function Board({
               </span>
             )}
 
-            {/* Selected column ✕ badge */}
+            {/* Selected column flag badge */}
             {isSelected && (
               <span style={{
                 position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)',
                 width: 28, height: 28, borderRadius: '50%',
                 display: 'grid', placeItems: 'center',
-                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: '#fff',
-                zIndex: 8, background: 'var(--eval-bad)', border: '2px solid #fff',
+                color: '#fff',
+                zIndex: 8, background: 'var(--eval-mid)', border: '2px solid #fff',
               }}>
-                ✕
+                <Icon name="flag" size={14} color="#fff" strokeWidth={2.5} />
               </span>
             )}
 
