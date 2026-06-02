@@ -111,7 +111,7 @@ Replace the existing routing architecture. Wire Home Hub, Stats, analytics utili
   | `mistakes`, `mistakeDetail` | home (accessed from Stats) | `--bg-home` |
 
 - Keep `/admin/curate` accessible: detect `window.location.pathname.startsWith('/admin')` at app boot and render admin shell separately, bypassing the state navigator
-- **Retire the `/coach` route and `CoachPage.jsx`:** delete both files. Its blunder-review UI and `coach/queue` endpoints are *reused* by Epic 3c (Past Mistakes) — see Epic 3c. Because `BrowserRouter` is removed entirely, no redirect from `/coach` is needed; the URL simply ceases to exist.
+- **Retire the `/coach` route and `CoachPage.jsx`:** delete both files. The backend `coach/queue` endpoints are *reused* by Epic 3c (Past Mistakes); the frontend for that surface is built new in Epic 3c from `screens_mistakes.jsx`. Because `BrowserRouter` is removed entirely, no redirect from `/coach` is needed; the URL simply ceases to exist.
 - **Delete `DashboardPage.jsx`:** it uses `useNavigate` which breaks on router removal; the new Home Hub screen is its full replacement. No redirect needed.
 
 *Analytics utility (cross-cutting foundation):*
@@ -475,16 +475,16 @@ Lets authenticated users revisit blunders captured during post-game analysis and
 - `track('mistake_reviewed', { blunderId, category })`
 - `track('deep_reveal_viewed', { context: 'past_mistakes', cached })`
 
-**Backend / API — REUSE existing endpoints (do not build `/api/blunders`):**
-The server already has a blunder-review API and `CoachPage.jsx` already implements a review-mode UI. This epic is a *reskin + small extension* of that, not a new backend.
-- **Reuse `GET /api/coach/queue`** — already returns the user's unresolved blunders ordered, with the next puzzle. Extend it to: (a) drop the `requirePaid` gate (Past Mistakes is free for any authenticated user, Gap 24); (b) accept a `?status=all|unreviewed|reviewed` filter and pagination (20/page) for the list view; (c) return enough fields per blunder for the card (board thumbnail, category, date, `resolved_at`).
+**Backend — REUSE existing endpoints (do not build `/api/blunders`):**
+The two backend endpoints already exist in `server/index.js`. There is **no `CoachPage.jsx`** in the frontend (it was retired in Epic 1b before being built); the entire frontend for this epic is **built new** from `screens_mistakes.jsx`.
+- **Reuse `GET /api/coach/queue`** — already queries the `blunders` table for the authenticated user. Extend it to: (a) drop the `requirePaid` gate (Past Mistakes is free for any authenticated user, Gap 24); (b) accept a `?status=all|unreviewed|reviewed` filter (cap response at 50 rows — no pagination); (c) return the per-blunder response shape drawn from the `blunders` row: `{ id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at }`. **Note:** the current endpoint joins `puzzles` for `move_string` / `goal_prompt`, but for game-captured blunders (Epic 3b) `puzzle_id` is null and the puzzle join is empty — the blunder row itself is the authoritative data source.
 - **Reuse `POST /api/coach/queue/:blunderId/resolve`** for "Mark as reviewed" (sets `resolved_at`). **Fix the pre-existing bug:** it calls `parseInt(blunderId)` but `blunders.id` is a `uuid` — use the raw string id.
-- Deep Reveal still uses `/api/explain-move-llm` + `explanation_cache` (cross-cutting).
-- The existing `CoachPage` review UI and `/coach` route are retired in Epic 1b; its review logic moves into the new `mistakes` screen.
+- Deep Reveal: pass `blunders.correct_move` as the `col` argument to `/api/explain-move-llm`; check `explanation_cache` first (cache key: `SHA256(board_state + ":" + correct_move)`); write on miss. Cache is shareable with Explorer at the same position.
+- **`pattern_category` display:** the column stores slugs from the canonical set (`immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape`, `unknown`). Card tags resolve via i18n key per slug (consistent with the rest of the app). `'unknown'` is a valid DB value but has no tag shown on the card for MVP (hide it).
 
 **NOT included:** spaced-repetition scheduling (out of scope), weakness map / prescriptive drills (Gap 22), anonymous blunder history (blunders require `user_id`; anonymous users see "Sign up to save your mistakes" prompt).
 
-**Estimated spec:** 100–120 lines. **Estimated tasks:** 8–11. *(Smaller than first drafted because the queue + resolve endpoints already exist.)*
+**Estimated spec:** 100–120 lines. **Estimated tasks:** 8–11. *(The two backend endpoints already exist; all frontend screens are built new from `screens_mistakes.jsx`.)*
 
 **Depends on:** Epic 3b (blunders written there), Epic 7 (requires authenticated user).
 
@@ -665,7 +665,7 @@ Home Hub, Stats (session-only for anon), auth, analytics, full Challenges (inclu
 | 2b. Challenges: Deep Reveal + Forbidden + Forced Win + Summary | Forbidden Columns multi-select, `forced_win` sequence set, Deep Reveal (cached + flaggable), Post-Set Summary | reuses `/api/explain-move-llm` + `explanation_cache`; `forced_win` entry in `challengeSets.js` | 130–150 | 12–15 |
 | 3a. Sparring: Game Board | Difficulty Picker, Game Board | `POST /api/games` (new `games` table migration), extend `aiDifficulty.js` | 160–180 | 15–17 |
 | 3b. Post-Game Review + Explorer | Post-Game Review, Position Explorer, blunder writes (table already exists) | `POST /api/games/analyze` (uses 2a scorer), `POST /api/games/from-position` | 185–205 | 16–19 |
-| 3c. Past Mistakes Review | Past Mistakes list + detail | **reuses** `GET /api/coach/queue` + `POST /api/coach/queue/:id/resolve` (extend + fix uuid bug) | 100–120 | 8–11 |
+| 3c. Past Mistakes Review | Past Mistakes list + detail (built new from `screens_mistakes.jsx`) | backend **reuses** `GET /api/coach/queue` + `POST /api/coach/queue/:id/resolve` (extend + fix uuid bug); frontend entirely new | 100–120 | 8–11 |
 | 4. Lesson Infrastructure & Saga Map | Saga Map (C only), Concept, Socratic, Confirmation Challenges | `GET /api/lessons`, `GET /api/lessons/:id` | 195–220 | 17–20 |
 | 5. Lesson Content | 11 lesson JSON files + backend additions | detectClaimodd, PATTERN_KB entries, narration templates, overcut reason | 175–200 | 18–22 |
 | 6. Data Pipeline | Puzzle counts, generation, `odd_even_threat` category, Socratic selection, validation | Puzzle factory, filter predicates (incl. `odd_even_threat`), validation script | 120–145 | 12–15 |

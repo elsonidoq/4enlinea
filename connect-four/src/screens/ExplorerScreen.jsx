@@ -139,6 +139,8 @@ export function ExplorerScreen({
   const [deepRevealCached, setDeepRevealCached] = useState(false);
   const [deepRevealError, setDeepRevealError] = useState(null);
   const [flagged, setFlagged] = useState(false);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagNote, setFlagNote] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   async function handleDeepReveal() {
@@ -147,6 +149,8 @@ export function ExplorerScreen({
     setDeepRevealExplanation(null);
     setDeepRevealError(null);
     setFlagged(false);
+    setFlagOpen(false);
+    setFlagNote('');
 
     if (!session?.access_token) {
       setDeepRevealOpen(false);
@@ -195,7 +199,10 @@ export function ExplorerScreen({
     }
   }
 
-  async function handleFlagExplanation() {
+  async function handleFlag(note = '') {
+    if (flagged) return;
+    setFlagged(true);
+    setFlagOpen(false);
     try {
       await fetch(`${API}/api/llm-feedback`, {
         method: 'POST',
@@ -204,11 +211,10 @@ export function ExplorerScreen({
           movestring: currentRewindedMoves,
           llm_prompt: '',
           llm_response: deepRevealExplanation || '',
-          human_note: '',
+          human_note: note,
           feature: 'position_explorer',
         }),
       });
-      setFlagged(true);
     } catch {
       // silent
     }
@@ -457,27 +463,68 @@ export function ExplorerScreen({
                 )}
 
                 {/* Flag button */}
-                <div style={{ marginTop: 6, textAlign: 'center' }}>
+                <div style={{ marginTop: 6 }}>
                   {flagged ? (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                    }}>
-                      <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
-                      {t('sparring.explanationFlagged')}
-                    </span>
-                  ) : (
-                    <button
-                      onClick={handleFlagExplanation}
-                      style={{
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
-                        background: 'transparent', border: 'none', cursor: 'pointer',
                         fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                      }}
-                    >
-                      <Icon name="flag" size={15} />
-                      {t('sparring.flagExplanation')}
-                    </button>
+                      }}>
+                        <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
+                        {t('sparring.explanationFlagged')}
+                      </span>
+                    </div>
+                  ) : flagOpen ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <textarea
+                        autoFocus
+                        value={flagNote}
+                        onChange={e => setFlagNote(e.target.value)}
+                        placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
+                        rows={3}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', resize: 'none',
+                          fontFamily: 'var(--font-body)', fontSize: 13,
+                          border: '1px solid var(--border-dim)', borderRadius: 8,
+                          padding: '6px 8px', colorScheme: 'light',
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => { setFlagOpen(false); setFlagNote(''); }}
+                          style={{
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                          }}
+                        >
+                          {t('deepReveal.flagCancel', 'Cancel')}
+                        </button>
+                        <button
+                          onClick={() => handleFlag(flagNote.trim())}
+                          style={{
+                            background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
+                            borderRadius: 6, padding: '4px 12px',
+                          }}
+                        >
+                          {t('deepReveal.flagSend', 'Send')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <button
+                        onClick={() => setFlagOpen(true)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          background: 'transparent', border: 'none', cursor: 'pointer',
+                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                        }}
+                      >
+                        <Icon name="flag" size={15} />
+                        {t('sparring.flagExplanation')}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

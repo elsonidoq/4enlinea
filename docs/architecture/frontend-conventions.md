@@ -1,5 +1,24 @@
 # Frontend Conventions
 
+## CSS Token Systems
+
+The codebase has **two separate CSS custom property systems** defined in different files. They MUST be paired with the correct background color.
+
+| File | Surface type | Background tokens | Text tokens |
+|---|---|---|---|
+| `src/index.css` | Dark surfaces | `--surface`, `--surface-2`, `--surface-3` | `--text`, `--text-sub`, `--text-muted` |
+| `src/styles/tokens.css` | Light surfaces | `--card` (#fff) | `--ink`, `--ink-soft`, `--ink-faint` |
+
+**Pairing rule:** Dark background → dark-theme text. Light background → light-theme text. Never mix across systems.
+- `var(--surface)` (dark) + `var(--ink)` (dark) = invisible text
+- `#fff` (light) + `var(--text)` (light) = invisible text
+
+**Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
+
+**White cards on dark pages:** When placing a white card inside the dark-themed app, set `color: var(--ink)` on the card container so all children inherit dark text. The global `:root` sets `color: var(--text)` (light), so without an explicit override, text on white cards will be invisible.
+
+See also: [[reference_token_pairing]], [[project_dark_global_theme]]
+
 ## State Management
 
 **MUST**: App-level state lives in `ProfileStore` (React Context, `src/store/ProfileStore.jsx`).

@@ -1,3 +1,6 @@
+/* ⚠️ Dark-theme tokens: pair with --text / --text-sub / --text-muted for text.
+   For white/light surfaces use --ink / --ink-faint from tokens.css instead.
+   Mixing systems = invisible text. See docs/architecture/frontend-conventions.md */
 :root {
   --bg: #0d1520;
   --surface: #162032;

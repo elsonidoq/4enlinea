@@ -16,3 +16,5 @@
     disk hitted the bottom of the board
 
 - when you go to the next board in a challenge set, the pieces that are shared between the previous board and the next board just appear, but the new ones introduced by the next board fall using the animation like if you were dropping them. In the first board all pieces fall. The pieces that are already in the board should not perform any effect, just appear in the board
+
+- el deep reveal se tiene que poder leer mientras se ve el board. Todas las referencias a columnas en el texto, cuando se hace tap / mouse over se tienen que highlightear

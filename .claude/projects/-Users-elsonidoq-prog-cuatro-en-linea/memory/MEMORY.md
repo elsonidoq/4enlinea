@@ -90,6 +90,7 @@
 - [LLM recommend next move](project_recommend_next_move.md) — POST /api/recommend-move; RecommendCoach.jsx + BadgeRow.jsx; colRankings; sparring footer
 - [explain endpoint — best-moves filtering](project_explain_best_moves.md) — explainSearch uses book.get() O(1); explain loads book (`['-x']` not `-nb`); timing results
 - [Dark global theme — light component overrides](project_dark_global_theme.md) — index.css sets dark color-scheme globally; light-bg cards need color-scheme:light + scoped h/input overrides
+- [CSS token pairing — dark vs light surfaces](reference_token_pairing.md) — two token systems; never cross dark-surface tokens with light-text tokens; mockup-first rule
 - [Board class refactor — spec 009](project_board_refactor_009.md) — done; isT2Blocking(colThreats, Rp) drops R (spec listed it but dead); getMajorThreatCells is O(672)
 - [Puzzle quality + nav fixes](project_puzzle_quality_nav_fixes.md) — isClean() guards per category; forced_win min 5-ply; stable puzzle selection via useRef; solved-puzzle exclusion
 - [Overcut KB entry](project_overcut_kb.md) — community-overcut.md; 4 worked examples; 3 sub-cases: same-parity (T4), active-forcing, chain-T2

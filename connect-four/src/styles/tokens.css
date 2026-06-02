@@ -1,6 +1,15 @@
 /* ============================================================
    DecodeC4 — Design tokens (FR-001–FR-008)
    CSS custom properties + @keyframes
+
+   ⚠️  TWO TOKEN SYSTEMS — never mix across surfaces:
+   - THIS FILE (light surfaces): --ink, --ink-soft, --ink-faint, --card
+     → pair with white/light backgrounds (#fff or --card)
+   - index.css (dark surfaces): --surface, --surface-2, --text, --text-sub
+     → pair with dark backgrounds (--surface / --surface-2)
+
+   Rule: dark bg → --text family.  light bg → --ink family.
+   Mixing them = invisible text.  See docs/architecture/frontend-conventions.md
    ============================================================ */
 
 :root {

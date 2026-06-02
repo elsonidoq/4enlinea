@@ -203,37 +203,39 @@ export function ReviewScreen({ go, goBack, id }) {
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Accuracy Card */}
           <div style={{
-            background: 'var(--surface)',
-            borderRadius: 16,
-            padding: '16px',
+            background: '#fff',
+            color: 'var(--ink)',
+            borderRadius: 18,
+            padding: '15px 18px',
+            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'baseline',
-              gap: 8,
+              justifyContent: 'space-between',
+              marginBottom: 12,
             }}>
-              <span style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--ink)' }}>
-                {accuracyDisplay}
-              </span>
-              <span style={{ fontSize: 14, color: 'var(--ink-faint)', fontWeight: 600 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16 }}>
                 {t('sparring.accuracy')}
               </span>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, color: 'var(--disc-green)' }}>
+                {accuracyDisplay}
+              </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--eval-good)', flexShrink: 0 }} />
-                <span style={{ color: 'var(--ink)' }}>{t('sparring.optimal')} {analysis.optimalCount}</span>
+                <span>{t('sparring.optimal')} {analysis.optimalCount}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--eval-mid)', flexShrink: 0 }} />
-                <span style={{ color: 'var(--ink)' }}>{t('sparring.suboptimal')} {analysis.suboptimalCount}</span>
+                <span>{t('sparring.suboptimal')} {analysis.suboptimalCount}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--eval-bad)', flexShrink: 0 }} />
-                <span style={{ color: 'var(--ink)' }}>{t('sparring.blunder')} {analysis.blunderCount}</span>
+                <span>{t('sparring.blunder')} {analysis.blunderCount}</span>
               </div>
             </div>
           </div>
