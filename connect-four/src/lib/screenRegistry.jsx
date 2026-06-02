@@ -8,6 +8,8 @@ import { GameScreen } from '../screens/GameScreen.jsx';
 import { PlaceholderScreen } from '../screens/PlaceholderScreen.jsx';
 import { ReviewScreen } from '../screens/ReviewScreen.jsx';
 import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
+import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
+import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -23,6 +25,6 @@ export const SCREENS = {
   game: GameScreen,
   review: ReviewScreen,
   explorer: ExplorerScreen,
-  mistakes: (props) => <PlaceholderScreen {...props} screenKey="mistakes" />,
-  mistakeDetail: (props) => <PlaceholderScreen {...props} screenKey="mistakeDetail" />,
+  mistakes: MistakesListScreen,
+  mistakeDetail: MistakeDetailScreen,
 };

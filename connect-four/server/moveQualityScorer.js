@@ -1,4 +1,3 @@
-// Pure function — no imports, no side effects.
 // FR-032 / FR-033: classify a played column against solver scores.
 
 /**
@@ -55,4 +54,67 @@ export function scoreMove(scores, playedCol) {
 
   const badge = quality === 'optimal' ? 'good' : quality === 'blunder' ? 'bad' : 'mid';
   return { badge, quality, bestCol };
+}
+
+const INVALID_MOVE = -1000;
+
+/**
+ * Complete depth-D scan of the game tree starting from the post-blunder position.
+ *
+ * At each internal node every playable column is explored (no pruning), so the
+ * leaf count is exactly the product of playable-column counts at each ply
+ * (≤ 7^depth, typically ~343 for depth=3 in mid-game).
+ *
+ * The "opponent" is whoever is to move at postBlunderMoveString — i.e. the
+ * player who benefits from the blunder.
+ *
+ * @param {object} solver  - solver process from createSolverProcess()
+ * @param {string} postBlunderMoveString - movestring after the blunder move (0-indexed cols)
+ * @param {number} depth   - ply depth to scan (default 3)
+ * @returns {Promise<{opponentWins:number, draws:number, userWins:number, total:number, severity:number}>}
+ *   severity = opponentWins / total
+ */
+export async function computeBlunderSeverity(solver, postBlunderMoveString, depth = 3) {
+  // opponentTurn=true when the opponent (beneficiary of blunder) is to move.
+  // scores[col] from solver.query() is always from the current mover's POV,
+  // so we flip sign when the user is moving to normalise to opponent's POV.
+  async function scan(moveString, remainingDepth, opponentTurn) {
+    let scores;
+    try {
+      scores = await solver.query(moveString);
+    } catch {
+      // Position is game-over: the previous mover won.
+      // opponentTurn=true  → user just moved and won  → userWin
+      // opponentTurn=false → opponent just moved and won → opponentWin
+      return opponentTurn
+        ? { opponentWins: 0, draws: 0, userWins: 1 }
+        : { opponentWins: 1, draws: 0, userWins: 0 };
+    }
+
+    if (remainingDepth === 1) {
+      let opponentWins = 0, draws = 0, userWins = 0;
+      for (const s of scores) {
+        if (s === INVALID_MOVE) continue;
+        const forOpponent = opponentTurn ? s : -s;
+        if (forOpponent > 0) opponentWins++;
+        else if (forOpponent === 0) draws++;
+        else userWins++;
+      }
+      return { opponentWins, draws, userWins };
+    }
+
+    let opponentWins = 0, draws = 0, userWins = 0;
+    for (let col = 0; col < 7; col++) {
+      if (scores[col] === INVALID_MOVE) continue;
+      const sub = await scan(moveString + String(col), remainingDepth - 1, !opponentTurn);
+      opponentWins += sub.opponentWins;
+      draws += sub.draws;
+      userWins += sub.userWins;
+    }
+    return { opponentWins, draws, userWins };
+  }
+
+  const result = await scan(postBlunderMoveString, depth, true);
+  const total = result.opponentWins + result.draws + result.userWins;
+  return { ...result, total, severity: total > 0 ? result.opponentWins / total : 0 };
 }

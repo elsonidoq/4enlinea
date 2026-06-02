@@ -30,7 +30,7 @@
 
 ## Access Guards
 
-- **`requirePaid`**: Middleware for coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`.
+- **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
 - **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
   Threat model: the server is expected to run behind a firewall or on a private network without port forwarding. `requireLocalhost` is the sole access control layer — there is no API key, session token, or other authentication for admin routes. If the deployment model changes (e.g. cloud-hosted server with a remote admin UI), admin routes must be migrated to token-based auth before deployment.
@@ -141,7 +141,7 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 
 ## Coach Endpoints: weakness-map, queue, resolve
 
-All three require `requirePaid` (403 if `req.user?.tier !== 'paid'`).
+`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue and resolve endpoints now use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
 
 ### `GET /api/coach/weakness-map`
 
@@ -152,19 +152,44 @@ Returns per-category miss rates for the authenticated user.
 
 ### `GET /api/coach/queue`
 
-Returns the next unresolved blunder in the user's coach queue.
+Returns the authenticated user's blunders with server-computed threat cell locations.
 
-**Response**: `{ "queueCount": number, "puzzle": { "blunderId": uuid, "puzzleId": uuid, "category": string, "moveString": string, "goalPrompt": string } | null }`
-- `puzzle` is `null` if the queue is empty.
-- Queue is ordered oldest-first; max 50 returned.
+**Query params**:
+- `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
+
+**Response**: `{ "blunders": [...], "total": number }`
+
+Each blunder object:
+```json
+{
+  "id": "uuid",
+  "board_state": "<movestring>",
+  "move_played": 3,
+  "correct_move": 4,
+  "pattern_category": "immediate_threat",
+  "created_at": "2026-05-01T12:00:00Z",
+  "resolved_at": null,
+  "severity": 12,
+  "threat_cells": [{ "col": 4, "row": 2 }]
+}
+```
+
+- `threat_cells` is computed server-side via `Board.majorThreatCells()`, filtering for the opponent's major threats after the played move.
+- `severity` is `round((best_score − score) / 36 * 10)`, an integer in [0, 10]. Normalized by 36 (max possible spread on a 7×6 board) and scaled to 10. Stored at insert time; 0 for legacy rows. UI buckets: Minor=1, Moderate=2–3, Critical=4–10 (chosen from empirical simulation data — ~58% / 28% / 14% of non-zero blunders).
+- Capped at 50 rows, ordered by `severity DESC, created_at ASC` (worst mistakes first; ties broken by oldest-first).
+- Auth: inline `requireAuth` (401).
 
 ### `POST /api/coach/queue/:blunderId/resolve`
 
 Marks a blunder as resolved. Ownership-checked: the blunder must belong to the authenticated user.
 
-**Response**: `204 No Content`
+**Path param**: `blunderId` is a UUID string (not integer).
 
-**Errors**: 400 for non-integer `blunderId`, 500 for DB errors.
+**Response**: `204 No Content` on success.
+
+**Errors**: 400 for missing/invalid `blunderId`, 401 (unauthenticated), 500 for DB errors.
+
+**Auth**: inline `requireAuth` (401).
 
 ## Coach Endpoint: explain-simulate
 
@@ -431,10 +456,15 @@ Records a blunder detected during post-game review. Fire-and-forget from the cli
   "board_state": "<movestring at the point of the blunder>",
   "move_played": 3,
   "correct_move": 4,
-  "pattern_category": "<slug>"
+  "pattern_category": "<slug>",
+  "score": -4,
+  "best_score": 8
 }
 ```
 - `pattern_category`: must be one of the valid slugs (see Data Model — `blunders` constraint). Use `"unknown"` when the classifier returns no pattern.
+- `score`: c4solver score of the column actually played (current-player perspective, range ±18). Optional; defaults to 0.
+- `best_score`: c4solver score of the optimal column. Optional; defaults to 0.
+- The server computes `severity = best_score − score` and stores it. Do not send `severity` directly.
 - Auth: **Required** (401 if `req.user` is null).
 
 **Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key.

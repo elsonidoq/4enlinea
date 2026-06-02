@@ -27,6 +27,7 @@
 - [Don't mix slash commands in a single handoff prompt](feedback_handoff_no_mixed_commands.md) — a handoff prompt for `/speckit-specify` can't also tell the agent to run `/speckit-clarify`; pre-answer clarifications inline instead
 - ["Heatmap" is ambiguous terminology](feedback_heatmap_terminology.md) — use "column-score overlay" instead; "heatmap" was used for something different in a PoC feature
 - [Auth header required on upgraded fetches](feedback_auth_header_on_fetch.md) — when adding req.user checks server-side, also add Authorization header at the fetch call site; loadUser only reads the header
+- [Navigator spreads params as direct props](feedback_navigator_params_spread.md) — don't destructure a `params` object in screens; navigation params are spread as individual props
 
 ## References — solver and board mechanics
 
@@ -101,7 +102,7 @@
 - [Candidates table — FK dependency](project_candidates_fk.md) — false_positive_records has FK to candidates; delete it first before bulk-deleting candidates
 - [correct_col migration gap](project_correct_col_migration.md) — column added by 016_correct_col.sql; needed by claimeven/figure_7/j_shape; confirm applied before querying
 - [Supabase explicit grants — migration 012](project_supabase_grants.md) — new frontend tables need explicit GRANTs or PostgREST returns 42501 (enforced Oct 30 2026)
-- [Integration test slowness](project_integration_test_slowness.md) — candidate-generator.test.js hangs 10+ min; likely solver IPC deadlock; classifier tests fast (22/22, ~56ms)
+- [Integration test slowness — use test:fast](project_integration_test_slowness.md) — use `npm run test:fast` (omits candidate-generator.test.js); `npm test` hangs 10+ min due to solver IPC deadlock
 
 ## References — board rendering
 

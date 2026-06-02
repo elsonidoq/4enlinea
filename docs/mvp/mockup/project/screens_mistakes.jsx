@@ -8,7 +8,7 @@
    the data the Deep Reveal sheet needs for the better move. */
 const MISTAKES = [
   {
-    id: 0, pattern: "Claimeven", date: "May 24", move: 7, total: 22,
+    id: 0, pattern: "Claimeven", date: "May 24", move: 7, total: 22, severity: 2,
     cols: ["gd", "dg", "gd", "ggd", "d", "", ""],
     playedCell: { c: 3, r: 2 }, threat: [{ c: 5, r: 0 }, { c: 5, r: 1 }],
     coachCol: 4,
@@ -21,7 +21,7 @@ const MISTAKES = [
     },
   },
   {
-    id: 1, pattern: "Forced block", date: "May 24", move: 14, total: 22,
+    id: 1, pattern: "Forced block", date: "May 24", move: 14, total: 22, severity: 3,
     cols: ["dgd", "gd", "ggg", "d", "dg", "", ""],
     playedCell: { c: 0, r: 2 }, threat: [{ c: 3, r: 0 }],
     coachCol: 1,
@@ -34,7 +34,7 @@ const MISTAKES = [
     },
   },
   {
-    id: 2, pattern: "The Fork", date: "May 19", move: 11, total: 19,
+    id: 2, pattern: "The Fork", date: "May 19", move: 11, total: 19, severity: 2,
     cols: ["g", "dgd", "gd", "dg", "d", "g", ""],
     playedCell: { c: 5, r: 0 }, threat: [{ c: 2, r: 2 }, { c: 4, r: 1 }],
     coachCol: 3,
@@ -47,7 +47,7 @@ const MISTAKES = [
     },
   },
   {
-    id: 3, pattern: "Odd threat", date: "May 12", move: 9, total: 24,
+    id: 3, pattern: "Odd threat", date: "May 12", move: 9, total: 24, severity: 1,
     cols: ["d", "gd", "dgg", "gd", "dg", "d", ""],
     playedCell: { c: 4, r: 1 }, threat: [{ c: 0, r: 1 }],
     coachCol: 0,
@@ -60,6 +60,23 @@ const MISTAKES = [
     },
   },
 ];
+
+/* ---------- Severity chip — bars + explicit label, no numbers ---------- */
+function SeverityMeter({ level }) {
+  const labels = { 1: "Minor", 2: "Moderate", 3: "Critical" };
+  const cls = level >= 3 ? "bad" : level === 2 ? "mid" : "good";
+  const heights = [7, 10, 13];
+  return (
+    <span className={"tag " + cls} style={{ gap: 6 }} title={"Severity · " + labels[level]}>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "flex-end", gap: 2, height: 13 }}>
+        {heights.map((h, i) => (
+          <span key={i} style={{ width: 3.5, height: h, borderRadius: 1.5, background: "currentColor", opacity: i < level ? 1 : 0.28 }}></span>
+        ))}
+      </span>
+      {labels[level]}
+    </span>
+  );
+}
 
 /* ---------- Past Mistakes — list ---------- */
 function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
@@ -110,13 +127,13 @@ function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
     );
   }
 
-  /* signed-in list */
+  /* signed-in list — sorted by severity, most serious first */
   const list = MISTAKES.filter(m => {
     const r = !!reviewed[m.id];
     if (filter === "Reviewed") return r;
     if (filter === "Unreviewed") return !r;
     return true;
-  });
+  }).sort((a, b) => b.severity - a.severity);
 
   return (
     <div className="screen s-spar">
@@ -142,7 +159,10 @@ function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
                     <Board cols={mkCols(m.cols)} overlays={[{ ...m.playedCell, type: "tr" }]} compact />
                   </div>
                   <div className="blunder-body">
-                    <span className="tag pat">{m.pattern}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span className="tag pat">{m.pattern}</span>
+                      <SeverityMeter level={m.severity} />
+                    </div>
                     <div className="bc-meta">
                       <span className="bc-date">{m.date}</span>
                       {isR && <span className="reviewed-chip"><Icon name="check" size={12} color="#1c8a4a" /> Reviewed</span>}

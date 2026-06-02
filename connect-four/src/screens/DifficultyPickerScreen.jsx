@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
+import { Icon } from '../components/Icon.jsx';
 import { track } from '../lib/track.js';
 
 const DIFFICULTIES = [
@@ -11,8 +12,8 @@ const DIFFICULTIES = [
 ];
 
 const SIDES = [
-  { value: 'first', discColor: 'var(--disc-green)', labelKey: 'sparring.sideFirst' },
-  { value: 'second', discColor: 'var(--disc-gray)', labelKey: 'sparring.sideSecond' },
+  { value: 'first', discColor: 'var(--disc-green)', nameKey: 'sparring.sideGreen', labelKey: 'sparring.sideFirst' },
+  { value: 'second', discColor: 'var(--disc-gray)', nameKey: 'sparring.sideGray', labelKey: 'sparring.sideSecond' },
 ];
 
 export function DifficultyPickerScreen({ go, goBack }) {
@@ -42,7 +43,7 @@ export function DifficultyPickerScreen({ go, goBack }) {
           marginBottom: 10,
           marginTop: 4,
         }}>
-          {t('sparring.difficulty')}
+          {t('sparring.chooseDifficulty')}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -58,7 +59,7 @@ export function DifficultyPickerScreen({ go, goBack }) {
                   gap: 14,
                   padding: '16px 18px',
                   borderRadius: 'var(--radius-sm)',
-                  background: selected ? 'var(--card)' : 'var(--card)',
+                  background: 'var(--card)',
                   border: '2px solid',
                   borderColor: selected ? 'var(--disc-green)' : 'var(--line)',
                   cursor: 'pointer',
@@ -88,12 +89,12 @@ export function DifficultyPickerScreen({ go, goBack }) {
                     {d.isDefault && (
                       <span style={{
                         fontSize: 11,
-                        fontWeight: 700,
+                        fontWeight: 800,
                         fontFamily: 'var(--font-display)',
-                        padding: '2px 9px',
-                        borderRadius: 999,
-                        background: 'var(--eval-mid-bg)',
-                        color: '#1c8a4a',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        background: 'var(--eval-good-bg)',
+                        color: 'var(--disc-green)',
                         letterSpacing: 0.3,
                       }}>
                         DEFAULT
@@ -161,32 +162,39 @@ export function DifficultyPickerScreen({ go, goBack }) {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: 10,
-                  padding: '20px 12px 18px',
-                  borderRadius: 'var(--radius-sm)',
+                  gap: 8,
+                  padding: '14px 12px',
+                  borderRadius: 16,
                   background: 'var(--card)',
-                  border: '2px solid',
-                  borderColor: selected ? 'var(--disc-green)' : 'var(--line)',
+                  border: '2.5px solid',
+                  borderColor: selected ? 'var(--ink)' : 'transparent',
                   cursor: 'pointer',
                   textAlign: 'center',
                   fontFamily: 'inherit',
                   transition: 'border-color .12s, box-shadow .12s',
-                  boxShadow: selected ? 'var(--shadow-sm)' : 'none',
+                  boxShadow: 'var(--shadow-sm)',
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >
                 <div style={{
-                  width: 36,
-                  height: 36,
+                  width: 38,
+                  height: 38,
                   borderRadius: '50%',
                   background: s.discColor,
                   flexShrink: 0,
                 }} />
                 <span style={{
-                  fontFamily: 'var(--font-body)',
-                  fontWeight: 600,
-                  fontSize: 14,
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 800,
+                  fontSize: 15,
                   color: 'var(--ink)',
+                }}>
+                  {t(s.nameKey)}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--ink-faint)',
                 }}>
                   {t(s.labelKey)}
                 </span>
@@ -204,7 +212,7 @@ export function DifficultyPickerScreen({ go, goBack }) {
           onClick={handleStart}
           style={{ marginTop: 16 }}
         >
-          {t('sparring.startGame')}
+          {t('sparring.startGame')} <Icon name="play" size={16} color="#fff" />
         </button>
       </div>
     </div>

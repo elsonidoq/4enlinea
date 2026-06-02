@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -27,6 +27,12 @@ export function ReviewScreen({ go, goBack, id }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMistakeIdx, setSelectedMistakeIdx] = useState(0);
+  const blundersWrittenRef = useRef(false);
+
+  useEffect(() => {
+    // Reset the guard when id changes
+    blundersWrittenRef.current = false;
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -63,8 +69,10 @@ export function ReviewScreen({ go, goBack, id }) {
         setSelectedMistakeIdx(0);
         setLoading(false);
 
-        // Fire blunder writes (fire-and-forget) for authenticated users with blunders
-        if (session?.user_id && data.blunderCount > 0) {
+        // Fire blunder writes (fire-and-forget) for authenticated users with blunders.
+        // Guard with a ref to avoid duplicates from double-mounts (Strict Mode, re-navigation).
+        if (session?.user?.id && data.blunderCount > 0 && !blundersWrittenRef.current) {
+          blundersWrittenRef.current = true;
           const blunderMoves = (data.moves || []).filter(m => m.quality === 'blunder');
           for (const move of blunderMoves) {
             const plyIndex = data.side === 'first'
@@ -85,6 +93,8 @@ export function ReviewScreen({ go, goBack, id }) {
                 move_played: move.col,
                 correct_move: move.bestCol,
                 pattern_category: category,
+                score: move.score,
+                best_score: move.bestScore,
               }),
             }).catch(() => {});
           }

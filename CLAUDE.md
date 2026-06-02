@@ -68,5 +68,9 @@ If the user asks a question, answer the question first before editing any files 
 ## The knowledge-base
 The knowledge base's goal is to provide expertise knowledge to a coding agent, structured in a AI friendly way, so that a coding agent has the right context to make expert based decisions
 
+## Running tests
+
+Use `npm run test:fast` (inside `connect-four/`) for all regular development and CI checks. It omits `candidate-generator.test.js`, which calls the real c4solver up to 400 times per test and frequently hangs for 10+ minutes due to solver IPC deadlock. Only run `npm test` when explicitly testing candidate generation.
+
 ## When writing specs for existing components
 Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See memory: feedback_spec_existing_apis.md

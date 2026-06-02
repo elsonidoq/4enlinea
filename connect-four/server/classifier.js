@@ -470,7 +470,11 @@ export function classify(moves, candidateCol, scores) {
 
   // ── Category 5: Forbidden Column ─────────────────────────────────────────
   if (scores.every(s => s <= 0) && board.colHeights[candidateCol] < ROWS) {
-    if (board.withMove(candidateCol).immediateThreats(board.opponent).length > 0) {
+    // Only tag as forbidden_columns if the opponent had NO immediate threat
+    // before the move but gains one after — otherwise it's a failed forced_block,
+    // not a forbidden column.
+    if (board.immediateThreats(board.opponent).length === 0 &&
+        board.withMove(candidateCol).immediateThreats(board.opponent).length > 0) {
       return { tag: 'forbidden_columns' };
     }
   }
@@ -1090,6 +1094,9 @@ export function detectForcedWin(board, scores) {
  */
 export function detectForbiddenColumns(board, scores) {
   if (!scores.every(s => s <= 0)) return { matched: false };
+  // Only count columns where the opponent had NO immediate threat before but gains one after.
+  // If the opponent already had a threat, failing to block it is a forced_block, not forbidden_columns.
+  if (board.immediateThreats(board.opponent).length > 0) return { matched: false };
   const matchedCols = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;

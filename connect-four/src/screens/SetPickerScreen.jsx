@@ -39,7 +39,10 @@ export function SetPickerScreen({ go, goBack }) {
         onBack={() => go('home')}
       />
 
-      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+      <div style={{ padding: '2px 18px 26px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+        <p style={{ fontWeight: 700, color: 'var(--ink-soft)', fontSize: 14.5, margin: '0 2px 2px', lineHeight: 1.4 }}>
+          {t('setpicker.subtitle')}
+        </p>
         {loading ? (
           <div style={{
             flex: 1,

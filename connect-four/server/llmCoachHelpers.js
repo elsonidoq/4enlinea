@@ -35,6 +35,16 @@ export const IMMEDIATE_WIN_OUTCOMES = {
   perspectiveLeaves: 0, winRate: 1, lossRate: 0, drawRate: 0,
 };
 
+// User-facing display names for internal pattern labels.
+// Internal names are used for KB lookups; display names appear in LLM prompts.
+const PATTERN_DISPLAY = {
+  forced_win: 'losing_position',
+};
+
+function displayName(name) {
+  return PATTERN_DISPLAY[name] ?? name;
+}
+
 // Maps each pattern name to a KB article slug under docs/knowledge-base/,
 // or to an inline string for patterns that have no dedicated KB entry.
 // Only entries for patterns with ratio > 0 in any column are loaded at runtime.
@@ -95,7 +105,7 @@ export function buildKBSection(patternNames) {
       statement = loadKBStatement(kb.id);
       if (!statement) continue;
     }
-    entries.push(`### ${name}\n${statement}`);
+    entries.push(`### ${displayName(name)}\n${statement}`);
   }
   if (entries.length === 0) return '';
   return `## Pattern definitions\n\n${entries.join('\n\n')}`;
@@ -264,13 +274,13 @@ export function buildFlatTable(colData, rounds) {
     const [firstName, firstEntry] = nonZero[0];
     rows.push(
       `${colStr} ${tierStr} ${outStr}` +
-      `${firstName.padEnd(PATTERN_W)} ${firstEntry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(firstEntry)}`
+      `${displayName(firstName).padEnd(PATTERN_W)} ${firstEntry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(firstEntry)}`
     );
 
     for (let i = 1; i < nonZero.length; i++) {
       const [name, entry] = nonZero[i];
       rows.push(
-        `${blankPrefix}${name.padEnd(PATTERN_W)} ${entry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(entry)}`
+        `${blankPrefix}${displayName(name).padEnd(PATTERN_W)} ${entry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(entry)}`
       );
     }
   }
@@ -367,6 +377,97 @@ export function computeDeltaTable(userPatterns, contrastPatterns) {
 }
 
 /**
+ * Builds a natural-language summary of the pattern comparison between the
+ * user's move and the contrast (better) move.  Replaces the raw PATTERN /
+ * USER / CONTRAST / ΔRATIO table that the LLM used to misinterpret.
+ *
+ * Every sentence names the specific player and column so the LLM cannot
+ * invert direction or attribute a pattern to the wrong side.
+ */
+export function buildPatternNarrative({
+  deltaRows, playerName, opponentName,
+  userCol, contrastCol, userOutcomes, contrastOutcomes,
+  isOptimal, rounds, totalLeaves,
+}) {
+  const lines = [];
+
+  // ── Outcome overview ──────────────────────────────────────────────────────
+  function outcomeLabel(outcomes) {
+    const parts = [];
+    if (outcomes.winRate  > 0) parts.push(`wins ${(outcomes.winRate * 100).toFixed(0)}%`);
+    if (outcomes.lossRate > 0) parts.push(`loses ${(outcomes.lossRate * 100).toFixed(0)}%`);
+    if (outcomes.drawRate > 0) parts.push(`draws ${(outcomes.drawRate * 100).toFixed(0)}%`);
+    return parts.length > 0 ? parts.join(', ') : 'no decisive lines';
+  }
+
+  const blunderCol = isOptimal ? contrastCol : userCol;
+  const betterCol = isOptimal ? userCol : contrastCol;
+
+  lines.push(`After **${playerName}** plays **col ${userCol + 1}** (the move in question): ${outcomeLabel(userOutcomes)}.`);
+  lines.push(`After **${playerName}** plays **col ${contrastCol + 1}** (the alternative): ${outcomeLabel(contrastOutcomes)}.`);
+  lines.push('');
+
+  // ── Per-pattern details ───────────────────────────────────────────────────
+  const significant = deltaRows.filter(r =>
+    r.userRatio > 0 || r.contrastRatio > 0,
+  );
+
+  if (significant.length === 0) {
+    lines.push('No tactical patterns with meaningful differences were found.');
+  } else {
+    for (const r of significant) {
+      const display = displayName(r.name);
+      const userPct = (r.userRatio * 100).toFixed(0);
+      const contrastPct = (r.contrastRatio * 100).toFixed(0);
+
+      if (r.userRatio > 0 && r.contrastRatio > 0) {
+        // Both moves produce this pattern
+        if (Math.abs(r.userRatio - r.contrastRatio) < 0.02) {
+          lines.push(
+            `**${display}**: both col ${userCol + 1} and col ${contrastCol + 1} ` +
+            `lead to this in about ${userPct}% of continuations (negligible difference).`,
+          );
+        } else if (r.userRatio > r.contrastRatio) {
+          lines.push(
+            `**${display}**: col ${userCol + 1} leads to this in ${userPct}% of continuations ` +
+            `vs only ${contrastPct}% for col ${contrastCol + 1}.`,
+          );
+        } else {
+          lines.push(
+            `**${display}**: col ${contrastCol + 1} (the better move) leads to this in ${contrastPct}% ` +
+            `of continuations vs ${userPct}% for col ${userCol + 1}.`,
+          );
+        }
+      } else if (r.userRatio > 0) {
+        lines.push(
+          `**${display}**: only col ${userCol + 1} leads to this (${userPct}% of continuations); ` +
+          `col ${contrastCol + 1} avoids it entirely.`,
+        );
+      } else {
+        // only contrastRatio > 0
+        lines.push(
+          `**${display}**: only col ${contrastCol + 1} (the better move) leads to this ` +
+          `(${contrastPct}% of continuations); col ${userCol + 1} does not.`,
+        );
+      }
+
+      // Add top-2 location hints
+      if (r.userTop2 || r.contrastTop2) {
+        const hints = [];
+        if (r.userTop2) hints.push(`col ${userCol + 1}: ${r.userTop2}`);
+        if (r.contrastTop2) hints.push(`col ${contrastCol + 1}: ${r.contrastTop2}`);
+        if (hints.length > 0) lines.push(`  (top locations: ${hints.join('; ')})`);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push(`(${rounds} round${rounds !== 1 ? 's' : ''} of optimal play, ${totalLeaves} positions analyzed.)`);
+
+  return lines.join('\n');
+}
+
+/**
  * Derives the game-theoretic tier of a position from the pre-move solver scores.
  *
  * Returns 'WINNING' if any legal score > 0, 'DRAWING' if best is 0, 'LOSING' if all < 0.
@@ -429,49 +530,49 @@ export async function getOpponentResponseMs(postMovestring, postBoard, opponentW
  */
 export function buildExplainPrompt({
   boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
-  userCol, contrastCol, isOptimal,
+  userCol, contrastCol, isOptimal, isImmediateWin,
   deltaRows, insufficientTacticalData, allLinesDecided,
   rounds, totalLeaves, userOutcomes, contrastOutcomes,
   kbSection, playerName, positionTier,
   forcedBlockNote, blunderNote,
   userExamplesByPattern,
 }) {
-  const opponentName = playerName === 'Red' ? 'Yellow' : 'Red';
+  const opponentName = playerName === 'Green' ? 'Grey' : 'Green';
 
-  function outcomeStr(outcomes) {
-    const parts = [];
-    if (outcomes.winRate  > 0) parts.push(`wins ${(outcomes.winRate  * 100).toFixed(0)}%`);
-    if (outcomes.lossRate > 0) parts.push(`loses ${(outcomes.lossRate * 100).toFixed(0)}%`);
-    if (outcomes.drawRate > 0) parts.push(`draws ${(outcomes.drawRate * 100).toFixed(0)}%`);
-    return parts.length > 0 ? parts.join(', ') : 'no decisive lines';
+  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+
+  // Short-circuit: move wins the game immediately.
+  if (isImmediateWin) {
+    return `## Role
+You are an expert Connect Four coach.
+
+${LANGUAGE_RULE}
+
+## Move context
+**${playerName}** just played **col ${userCol + 1}**.
+Note: In the board diagrams, **R** always denotes Green discs and **Y** always denotes Grey discs, regardless of whose turn it is. "Next: Red" means it is Green's turn; "Next: Yellow" means it is Grey's turn.
+
+## Board position (AFTER ${playerName} plays col ${userCol + 1})
+${postBoardViz}
+
+## Task
+This move ends the game — ${playerName} wins immediately. Explain this in one sentence, naming the specific column and row of the winning connection.`;
   }
-  const outcomeLine =
-    `${playerName} (user move col ${userCol + 1}): ${outcomeStr(userOutcomes)} | ` +
-    `${playerName} (contrast col ${contrastCol + 1}): ${outcomeStr(contrastOutcomes)}`;
 
   let patternSection;
   if (allLinesDecided) {
     patternSection =
-      `All ${totalLeaves} simulated lines are decided before the depth limit — ` +
-      `no open positions remain for ${playerName} to analyze tactically.\n` +
-      outcomeLine;
+      `All continuations are decided before the depth limit — ` +
+      `no open positions remain for ${playerName} to analyze tactically.`;
   } else if (insufficientTacticalData) {
     patternSection =
-      `No tactical patterns detected across ${userOutcomes.perspectiveLeaves} open leaf positions.\n` +
-      outcomeLine;
+      `No tactical patterns detected across ${userOutcomes.perspectiveLeaves} open positions.`;
   } else {
-    const header = `${'PATTERN'.padEnd(18)} ${'USER'.padStart(6)} ${'CONTRAST'.padStart(9)} ${'ΔRATIO'.padStart(8)}  USER_TOP2           CONTRAST_TOP2`;
-    const sep = '-'.repeat(header.length);
-    const tableRows = deltaRows.map(r => {
-      const n  = r.name.padEnd(18);
-      const ur = r.userRatio.toFixed(2).padStart(6);
-      const cr = r.contrastRatio.toFixed(2).padStart(9);
-      const d  = r.delta.toFixed(2).padStart(8);
-      const u2 = (r.userTop2 || '—').padEnd(20);
-      const c2 = r.contrastTop2 || '—';
-      return `${n} ${ur} ${cr} ${d}  ${u2} ${c2}`;
+    patternSection = buildPatternNarrative({
+      deltaRows, playerName, opponentName,
+      userCol, contrastCol, userOutcomes, contrastOutcomes,
+      isOptimal, rounds, totalLeaves,
     });
-    patternSection = [outcomeLine, header, sep, ...tableRows].join('\n');
   }
 
   // Move quality label depends on both optimality and game-theoretic position tier.
@@ -502,11 +603,11 @@ export function buildExplainPrompt({
   if (forcedWinExamples.length > 0) {
     const boards = forcedWinExamples.map((ms, i) => {
       const viz = getBoardVisualization(ms);
-      return `### Leaf board ${i + 1} (movestring: ${ms})\n${viz}`;
+      return `### Critical position ${i + 1} (movestring: ${ms})\n${viz}`;
     });
     exampleBoardsSection =
-      `\n## Example boards — forced_win\n` +
-      `The simulation reached these positions where ${playerName} faced a forced-win (losing) situation:\n\n` +
+      `\n## Critical positions — no defense available\n` +
+      `In these positions ${playerName} faces threats they cannot all block:\n\n` +
       boards.join('\n\n') +
       `\n\nLook at these boards: identify the concrete threats (columns, rows, directions) that leave ${playerName} without a defense. Name them in your explanation.\n`;
   }
@@ -518,8 +619,11 @@ export function buildExplainPrompt({
   return `## Role
 You are an expert Connect Four coach. Your goal is to ${roleGoal}.
 
+${LANGUAGE_RULE}
+
 ## Move context
-**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before the move, after the move, and after ${opponentName}'s best response. All pattern data and your explanation must be from **${playerName}'s perspective**.
+**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before the move, after the move, and after ${opponentName}'s best response. All analysis is from **${playerName}'s perspective**.
+Note: In the board diagrams, **R** always denotes Green discs and **Y** always denotes Grey discs, regardless of whose turn it is. "Next: Red" means it is Green's turn; "Next: Yellow" means it is Grey's turn.
 ${forcedBlockNote ? `\n⚠️ ${forcedBlockNote}\n` : ''}${blunderNote ? `\n${blunderNote}\n` : ''}
 ## Board position (BEFORE ${playerName} plays col ${userCol + 1})
 ${boardViz}
@@ -527,12 +631,16 @@ ${boardViz}
 ## Board position (AFTER ${playerName} plays col ${userCol + 1})
 ${postBoardViz}
 ${afterOpponentSection}
-## Pattern comparison (${rounds} round${rounds !== 1 ? 's' : ''} of optimal play, ${totalLeaves} total leaves / ${userOutcomes.perspectiveLeaves} perspective-to-move samples)
+## What the analysis found
 ${patternSection}
 ${kbSection ? '\n' + kbSection + '\n' : ''}${exampleBoardsSection}
 ## Task
-Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.
-Ground your explanation first in the concrete board positions shown above — name specific columns and rows where decisive threats exist. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself. If no pattern data is available, say so honestly and give only a high-level observation from the board position.`;
+${isOptimal
+  ? `Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.
+Ground your explanation first in the concrete board positions shown above — name specific columns and rows where decisive threats exist. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself. If no analysis is available, say so honestly and give only a high-level observation from the board position.`
+  : `Explain in 2–4 sentences why **col ${contrastCol + 1}** would have been a better move than col ${userCol + 1} for **${playerName}**.
+Lead with what col ${contrastCol + 1} achieves or avoids — that is the move to highlight for the player. Then explain what col ${userCol + 1} gives away. Name specific columns and rows from the board positions above. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself.`}
+Important: col ${contrastCol + 1} may appear both as ${opponentName}'s response move and as the hypothetical alternative for ${playerName}. Never conflate the two — always make clear whether you are describing ${opponentName}'s reply or a hypothetical move by ${playerName}.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -573,10 +681,12 @@ export function buildRecommendPrompt({
 
   const tableStr = buildFlatTable(colData, rounds);
 
+  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, numerical evaluation. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+
   return `## Role
 You are an expert Connect Four coach. Your goal is to recommend which column(s) to play next and explain the strategic reasoning to the player.
 
-Do not mention solver scores or numerical evaluations — reason purely from tactical patterns, score tiers, and the board position.
+${LANGUAGE_RULE}
 
 ## Move context
 - Current player: **${playerName}**

@@ -10,7 +10,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/predicates/forbidden_columns.test.js tests/classifier/classifier.test.js tests/integration/candidate-generator.test.js tests/integration/forced_win.test.js tests/integration/sequence_check.test.js tests/integration/z_threat.test.js tests/integration/claimeven.test.js tests/integration/figure7_jshape.test.js tests/integration/undercut_overcut.test.js tests/unit/aiDifficulty.test.js"
+    "test": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/predicates/forbidden_columns.test.js tests/classifier/classifier.test.js tests/integration/candidate-generator.test.js tests/integration/forced_win.test.js tests/integration/sequence_check.test.js tests/integration/z_threat.test.js tests/integration/claimeven.test.js tests/integration/figure7_jshape.test.js tests/integration/undercut_overcut.test.js tests/unit/aiDifficulty.test.js",
+    "test:fast": "node --test server/test_explain_parity.js tests/predicates/predicates.test.js tests/predicates/forbidden_columns.test.js tests/classifier/classifier.test.js tests/integration/forced_win.test.js tests/integration/sequence_check.test.js tests/integration/z_threat.test.js tests/integration/claimeven.test.js tests/integration/figure7_jshape.test.js tests/integration/undercut_overcut.test.js tests/unit/aiDifficulty.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

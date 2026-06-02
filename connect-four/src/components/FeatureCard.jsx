@@ -1,16 +1,20 @@
-export function FeatureCard({ icon, title, subtitle, onClick, badge, wide = false }) {
+import { Icon } from './Icon.jsx';
+
+export function FeatureCard({ icon, iconBg, iconColor, background, title, subtitle, onClick, badge, wide = false }) {
+  const horizontal = wide;
   return (
     <button
       onClick={onClick}
       style={{
-        background: 'var(--card)',
+        background: background ?? 'var(--card)',
         borderRadius: 'var(--radius)',
         padding: '20px 18px',
         boxShadow: 'var(--shadow)',
         cursor: 'pointer',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
+        flexDirection: horizontal ? 'row' : 'column',
+        alignItems: horizontal ? 'center' : undefined,
+        gap: horizontal ? 16 : 10,
         position: 'relative',
         overflow: 'hidden',
         textAlign: 'left',
@@ -31,19 +35,30 @@ export function FeatureCard({ icon, title, subtitle, onClick, badge, wide = fals
         </span>
       )}
       {icon && (
-        <div style={{ width: 52, height: 52, borderRadius: 15, display: 'grid', placeItems: 'center' }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 15,
+          display: 'grid', placeItems: 'center',
+          background: iconBg ?? undefined,
+          color: iconColor ?? undefined,
+          flexShrink: 0,
+        }}>
           {icon}
         </div>
       )}
-      {title && (
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, color: 'var(--ink)' }}>
-          {title}
-        </div>
-      )}
-      {subtitle && (
-        <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.35, fontWeight: 600 }}>
-          {subtitle}
-        </div>
+      <div style={{ flex: horizontal ? 1 : undefined, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {title && (
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, color: 'var(--ink)' }}>
+            {title}
+          </div>
+        )}
+        {subtitle && (
+          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.35, fontWeight: 600 }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      {horizontal && (
+        <Icon name="chevR" size={22} color="var(--ink-faint)" />
       )}
     </button>
   );

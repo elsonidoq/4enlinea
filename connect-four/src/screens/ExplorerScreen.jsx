@@ -201,20 +201,23 @@ export function ExplorerScreen({
 
   async function handleFlag(note = '') {
     if (flagged) return;
-    setFlagged(true);
     setFlagOpen(false);
     try {
-      await fetch(`${API}/api/llm-feedback`, {
+      const res = await fetch(`${API}/api/llm-feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           movestring: currentRewindedMoves,
+          col: currentSelectedMove?.col,
           llm_prompt: '',
           llm_response: deepRevealExplanation || '',
           human_note: note,
           feature: 'position_explorer',
         }),
       });
+      if (res.ok) {
+        setFlagged(true);
+      }
     } catch {
       // silent
     }

@@ -176,6 +176,17 @@ Read the following documents before starting your review:
 
 Read ALL of these before opening the browser.
 
+### Authentication — skip auth button
+In dev mode (`npm run dev`), the AuthModal has a hidden dev-only button labeled **"🛠 Dev: skip auth"** that calls `supabase.auth.signInAnonymously()`.
+It only appears when `import.meta.env.DEV` is true (Vite dev server).
+
+**When you encounter an auth wall during review:**
+1. Look for the "🛠 Dev: skip auth" button at the bottom of the auth modal — it's styled with a dashed border and may be easy to miss below the "Continue with email" / "Dismiss" buttons.
+2. Click it to sign in anonymously and close the modal.
+3. If the button isn't visible, verify you're on the Vite dev server (`localhost:5173`) and not the production build.
+
+This is the intended developer bypass. Do NOT try to work around auth by editing code — use this button.
+
 ### What was just built
 [Paste the full ## What was built section from the Step 4 summary verbatim]
 

@@ -21,6 +21,17 @@ export function SetCard({ title, stars, positionCount, locked, onClick }) {
         WebkitTapHighlightColor: 'transparent',
       }}
     >
+      <div style={{
+        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+        display: 'grid', placeItems: 'center',
+        background: locked ? '#e6e2d9' : '#fff2e2',
+      }}>
+        <Icon
+          name={locked ? 'lock' : 'target'}
+          size={locked ? 20 : 22}
+          color={locked ? 'var(--lock)' : '#d6892a'}
+        />
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
@@ -33,9 +44,7 @@ export function SetCard({ title, stars, positionCount, locked, onClick }) {
           {positionCount != null && <span>· {positionCount} positions</span>}
         </div>
       </div>
-      {locked
-        ? <Icon name="lock" size={20} color="var(--lock)" />
-        : <Icon name="chevR" size={18} color="var(--ink-faint)" />}
+      {!locked && <Icon name="chevR" size={18} color="var(--ink-faint)" />}
     </button>
   );
 }

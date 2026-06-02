@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { FeatureCard } from '../components/FeatureCard.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
+import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 
 export function HomeScreen({ go }) {
@@ -22,21 +23,35 @@ export function HomeScreen({ go }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
-        title="DecodeC4"
+        title={<>Decode<span style={{ color: 'var(--disc-green)' }}>C4</span></>}
         rightIcon="user"
         onRight={handleProfile}
       />
 
-      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+      <div style={{ padding: '0 18px 16px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+        <p style={{ fontWeight: 700, color: 'var(--ink-soft)', fontSize: 15, margin: '0 2px 4px', lineHeight: 1.4 }}>
+          {t('home.tagline_prefix')}
+          <span style={{ color: 'var(--disc-green)' }}>{t('home.tagline_why')}</span>
+          {t('home.tagline_suffix')}
+        </p>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <FeatureCard
             title={t('home.lessons_title')}
             subtitle={t('home.lessons_subtitle')}
+            background="linear-gradient(170deg,#fff,#f3f8ff)"
+            icon={<Icon name="grad" size={28} color="#3b6fc4" />}
+            iconBg="#e3eefc"
+            iconColor="#3b6fc4"
             onClick={() => go('saga')}
           />
           <FeatureCard
             title={t('home.challenges_title')}
             subtitle={t('home.challenges_subtitle')}
+            background="linear-gradient(170deg,#fff,#fff3e8)"
+            icon={<Icon name="target" size={28} color="#d6892a" />}
+            iconBg="#fce6cf"
+            iconColor="#d6892a"
             onClick={() => go('setpicker')}
           />
         </div>
@@ -44,6 +59,10 @@ export function HomeScreen({ go }) {
         <FeatureCard
           title={t('home.sparring_title')}
           subtitle={t('home.sparring_subtitle')}
+          background="linear-gradient(170deg,#fff,#f4f0fd)"
+          icon={<Icon name="swords" size={28} color="#7a5bd0" />}
+          iconBg="#e9e1fb"
+          iconColor="#7a5bd0"
           onClick={() => go('difficulty')}
           wide
         />
@@ -51,21 +70,11 @@ export function HomeScreen({ go }) {
         <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />
 
         <button
+          className="btn btn-ghost"
           onClick={() => go('stats')}
-          style={{
-            background: 'transparent',
-            border: '1.5px solid var(--ink-soft)',
-            borderRadius: 'var(--radius)',
-            padding: '13px 20px',
-            fontSize: 15,
-            fontWeight: 700,
-            color: 'var(--ink)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-display)',
-            WebkitTapHighlightColor: 'transparent',
-          }}
+          style={{ fontSize: 15 }}
         >
-          {t('home.stats_button')}
+          <Icon name="chart" size={18} /> {t('home.stats_button')}
         </button>
       </div>
 

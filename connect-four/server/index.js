@@ -21,7 +21,7 @@ import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
-import { scoreMove } from './moveQualityScorer.js';
+import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 
@@ -475,8 +475,8 @@ app.post('/api/recommend-move', async (req, res) => {
 
   const perspective  = movestring.length % 2 === 0 ? 1 : 2;
   const opponent     = perspective === 1 ? 2 : 1;
-  const playerName   = perspective === 1 ? 'Red' : 'Yellow';
-  const opponentName = perspective === 1 ? 'Yellow' : 'Red';
+  const playerName   = perspective === 1 ? 'Green' : 'Grey';
+  const opponentName = perspective === 1 ? 'Grey' : 'Green';
 
   try {
     // ── 1. Solver scores (for tier labeling of non-immediate columns) ──────────
@@ -586,7 +586,7 @@ async function buildExplainContext(movestring, col, rounds = 1) {
   const r = rounds;
   const numPlies = 2 * r + 1;
   const perspective = movestring.length % 2 === 0 ? 1 : 2;
-  const playerName = perspective === 1 ? 'Red' : 'Yellow';
+  const playerName = perspective === 1 ? 'Green' : 'Grey';
   const opponentPlayer = perspective === 1 ? 2 : 1;
   const postMovestring = movestring + col;
 
@@ -618,7 +618,7 @@ async function buildExplainContext(movestring, col, rounds = 1) {
     getBoardVisualization(postMovestring),
   ]);
 
-  const opponentName = perspective === 1 ? 'Yellow' : 'Red';
+  const opponentName = perspective === 1 ? 'Grey' : 'Green';
   const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
   const forcedBlockNote = forcedBlock
     ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
@@ -648,9 +648,11 @@ async function buildExplainContext(movestring, col, rounds = 1) {
     if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
   }
 
+  const isImmediateWin = postBoard.hasWon(perspective);
+
   const prompt = buildExplainPrompt({
     boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
-    userCol: col, contrastCol, isOptimal, positionTier, deltaRows,
+    userCol: col, contrastCol, isOptimal, isImmediateWin, positionTier, deltaRows,
     insufficientTacticalData, allLinesDecided, rounds: r,
     totalLeaves: userResult.totalLeaves,
     userOutcomes: userResult.outcomes,
@@ -809,14 +811,30 @@ app.post('/api/llm-feedback', async (req, res) => {
   }
 });
 
+/**
+ * Severity of a blunder on a 0–10 scale.
+ * Raw diff (best_score − score) is normalized by 36 (the maximum possible spread on a 7×6
+ * board, from +18 to −18) and scaled to 10, then rounded to the nearest integer.
+ * Both scores use the c4solver convention (current-player perspective, range ±18).
+ * Stored at write time so the queue endpoint never needs to re-run the solver.
+ * Returns 0 when solver data is unavailable.
+ * @param {number} bestScore - solver score of the optimal column
+ * @param {number} score - solver score of the column actually played
+ * @returns {number} integer in [0, 10]
+ */
+function computeSeverity(bestScore, score) {
+  if (typeof bestScore !== 'number' || typeof score !== 'number') return 0;
+  return Math.round((bestScore - score) / 36 * 10);
+}
+
 // POST /api/blunders — record a sparring blunder for the authenticated user
 // Auth required: returns 401 silently if no user (client fire-and-forgets this call).
 app.post('/api/blunders', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
-  const { board_state, move_played, correct_move, pattern_category } = req.body;
+  const { board_state, move_played, correct_move, pattern_category, score, best_score } = req.body;
 
-  // Validate all 4 fields are present
+  // Validate required fields are present
   if (board_state === undefined || move_played === undefined || correct_move === undefined || pattern_category === undefined) {
     return res.status(400).json({ error: 'board_state, move_played, correct_move, and pattern_category are required' });
   }
@@ -842,7 +860,25 @@ app.post('/api/blunders', async (req, res) => {
   // Auth required
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
+  // Skip positions that were already lost before this move — the real blunder happened earlier.
+  if (typeof best_score === 'number' && best_score < 0) {
+    return res.status(200).json({ skipped: true, reason: 'already_losing' });
+  }
+
   try {
+    // Deduplicate: same user, same board position, same wrong move → skip.
+    // Uses IS NOT DISTINCT FROM so puzzle_id=NULL matches puzzle_id=NULL (game blunders).
+    const { data: existing } = await supabase
+      .from('blunders')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('board_state', board_state)
+      .eq('move_played', move_played)
+      .is('puzzle_id', null)
+      .maybeSingle();
+
+    if (existing) return res.status(200).json({ id: existing.id, deduplicated: true });
+
     const { data, error } = await supabase
       .from('blunders')
       .insert({
@@ -852,6 +888,8 @@ app.post('/api/blunders', async (req, res) => {
         move_played,
         correct_move,
         pattern_category,
+        // Pre-computed at write time; avoids solver queries on queue reads.
+        severity: computeSeverity(best_score, score),
       })
       .select('id')
       .single();
@@ -1332,6 +1370,19 @@ app.post('/api/games/analyze', async (req, res) => {
         patternTag = null;
       }
 
+      // For blunders in non-losing positions, scan 3 plies of the post-blunder
+      // tree to compute what fraction of continuations end in an opponent win.
+      let blunderSeverity = null;
+      if (quality === 'blunder' && bestScore >= 0) {
+        const postBlunderMs = movesBeforeThisPly + String(col);
+        try {
+          const sv = await computeBlunderSeverity(solver, postBlunderMs, 3);
+          blunderSeverity = sv.severity;
+        } catch (_e) {
+          // non-fatal: leave null
+        }
+      }
+
       analyzedMoves.push({
         moveIndex: userMoveOrdinal,
         col,
@@ -1340,6 +1391,7 @@ app.post('/api/games/analyze', async (req, res) => {
         bestScore,
         bestCol,
         patternTag,
+        blunderSeverity,
       });
 
       // Only count non-forced moves toward accuracy
@@ -1482,13 +1534,15 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     // Insert blunder for signed-in users on first-attempt failure only
     const attemptNumber = typeof req.body.attemptNumber === 'number' ? req.body.attemptNumber : 1;
     if (req.user && !isSuccess && attemptNumber === 1) {
+      const correctCol = evaluation.correctCol ?? candidateCol;
       supabase.from('blunders').insert({
         user_id: req.user.id,
         puzzle_id: puzzleId,
         board_state: puzzle.move_string,
         move_played: candidateCol,
-        correct_move: evaluation.correctCol ?? candidateCol,
+        correct_move: correctCol,
         pattern_category: puzzle.category,
+        severity: computeSeverity(scores[correctCol], scores[candidateCol]),
       }).then(() => {}).catch(err => console.error('[blunder]', err.message));
     }
   }
@@ -1616,35 +1670,70 @@ app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
 });
 
 // GET /api/coach/queue
-app.get('/api/coach/queue', requirePaid, async (req, res) => {
+app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
 
-  const { data: blunders, error } = await supabase
+  const status = req.query.status || 'all';
+  if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
+    return res.status(400).json({ error: 'invalid status' });
+  }
+
+  let query = supabase
     .from('blunders')
-    .select('id, puzzle_id, pattern_category, created_at, puzzles(move_string, goal_prompt, category)')
+    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity')
     .eq('user_id', req.user.id)
-    .is('resolved_at', null)
+    // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
+    .order('severity', { ascending: false })
     .order('created_at', { ascending: true })
     .limit(50);
 
+  if (status === 'unreviewed') {
+    query = query.is('resolved_at', null);
+  } else if (status === 'reviewed') {
+    query = query.not('resolved_at', 'is', null);
+  }
+
+  const { data: blunders, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  const queueCount = blunders?.length ?? 0;
-  const nextPuzzle = blunders?.[0] ? {
-    blunderId: blunders[0].id,
-    puzzleId: blunders[0].puzzle_id,
-    category: blunders[0].pattern_category,
-    moveString: blunders[0].puzzles?.move_string,
-    goalPrompt: blunders[0].puzzles?.goal_prompt,
-  } : null;
+  function computeThreatCells(board_state, move_played) {
+    try {
+      const postBoard = new Board(board_state + String(move_played));
+      const opponent = postBoard.currentPlayer;
+      const threatMap = postBoard.majorThreatCells();
+      return Object.entries(threatMap)
+        .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
+        .map(([key]) => {
+          const [row, col] = key.split(',').map(Number);
+          return { col, row };
+        });
+    } catch {
+      return [];
+    }
+  }
 
-  res.json({ queueCount, puzzle: nextPuzzle });
+  const enriched = (blunders || []).map(b => ({
+    id: b.id,
+    board_state: b.board_state,
+    move_played: b.move_played,
+    correct_move: b.correct_move,
+    pattern_category: b.pattern_category,
+    created_at: b.created_at,
+    resolved_at: b.resolved_at,
+    severity: b.severity,
+    blunder_severity: b.blunder_severity ?? null,
+    threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+  }));
+
+  res.json({ blunders: enriched, total: enriched.length });
 });
 
 // POST /api/coach/queue/:blunderId/resolve
-app.post('/api/coach/queue/:blunderId/resolve', requirePaid, async (req, res) => {
-  const blunderId = parseInt(req.params.blunderId, 10);
-  if (isNaN(blunderId)) return res.status(400).json({ error: 'invalid blunder id' });
+app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  const blunderId = req.params.blunderId;
+  if (!blunderId || typeof blunderId !== 'string') return res.status(400).json({ error: 'invalid blunder id' });
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { error } = await supabase
