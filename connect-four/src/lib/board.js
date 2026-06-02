@@ -19,3 +19,36 @@ export function buildBoard(moves) {
   }
   return { board, heights };
 }
+
+/**
+ * Check if a disc placement creates 4-in-a-row.
+ * @param {string[][]} board  2D board array (row 0 = bottom).
+ * @param {number} row  0-indexed row of the placed disc.
+ * @param {number} col  0-indexed column of the placed disc.
+ * @param {string} color  'red' or 'yellow'.
+ * @returns {boolean}
+ */
+export function checkWin(board, row, col, color) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    let cnt = 1;
+    for (let d = 1; d <= 3; d++) {
+      const r = row + dr*d, c = col + dc*d;
+      if (r>=0&&r<ROWS&&c>=0&&c<COLS&&board[r][c]===color) cnt++; else break;
+    }
+    for (let d = 1; d <= 3; d++) {
+      const r = row - dr*d, c = col - dc*d;
+      if (r>=0&&r<ROWS&&c>=0&&c<COLS&&board[r][c]===color) cnt++; else break;
+    }
+    if (cnt >= 4) return true;
+  }
+  return false;
+}
+
+// Dev-mode smoke check: verify checkWin indexing is consistent with buildBoard.
+// buildBoard("0616263") produces a Red horizontal win at row 0 (cols 0,1,2,3).
+const { board: _smokeBoard } = buildBoard("0616263");
+console.assert(
+  checkWin(_smokeBoard, 0, 3, 'red') === true,
+  'checkWin: horizontal 4-in-a-row not detected at (0,3,red) in buildBoard("0616263")'
+);

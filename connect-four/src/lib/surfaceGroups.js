@@ -5,6 +5,6 @@ export const SURFACE_BG = {
   socratic: '--bg-lessons', clchallenge: '--bg-lessons',
   setpicker: '--bg-chal', challenge: '--bg-chal',
   summary: '--bg-chal',
-  difficulty: '--bg-sparring', game: '--bg-sparring',
-  review: '--bg-sparring', explorer: '--bg-sparring',
+  difficulty: '--bg-spar', game: '--bg-spar',
+  review: '--bg-spar', explorer: '--bg-spar',
 };

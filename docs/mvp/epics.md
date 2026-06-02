@@ -410,21 +410,22 @@ Lazy analysis, timeline, position rewind, blunder capture.
 **Frontend screens:**
 
 *Post-Game Review (`review` screen):*
-- `CoachDialog` summary phrase (once analysis completes)
+- `CoachDialog` summary phrase (once analysis completes); client resolves via `t(summaryPhraseKey)` — key is returned from `/api/games/analyze`, never resolved English
 - Compact `Board` frozen at game end
-- Accuracy card: accuracy % + quality dot legend
-- Move timeline: nodes start gray "pending"; update as scores arrive; `?` for timeouts (Gap 4). **Mockup divergence:** the mockup timeline (`screens_sparring.jsx`) renders *every* move including the AI's, numbered 1–N; the build shows **only the user's moves** numbered in user-move order (Gap 12). Gap 12 governs — do not follow the mockup here.
+- Accuracy card: accuracy % + quality dot legend. When `scored === 0` (all moves were forced), suppress the accuracy card or show '—'; do not divide by zero.
+- Move timeline: nodes start gray "pending" and update to quality colors when analysis arrives. **Mockup divergence:** the mockup timeline (`screens_sparring.jsx`) renders *every* move including the AI's, numbered 1–N; the build shows **only the user's moves** numbered in user-move order (Gap 12). Gap 12 governs — do not follow the mockup here.
 - Tap non-optimal node → Position Explorer
 - "Clean game" Coach phrase + disabled Prev/Next if no mistakes (Gap 12)
 
 *Lazy analysis + blunder capture:*
 - On review screen open: `POST /api/games/analyze` with game ID (fetches movestring from `games` table)
-- Per-move quality resolved as scores stream in; timeline updates node by node
-- 8s timeout per move → `?`, excluded from accuracy (Gap 4)
-- **On analysis complete**: for each move with `quality === 'blunder'`, write to the **existing** `blunders` table (created in migration `001`/`005`: `{ id (uuid), user_id, puzzle_id, board_state, move_played, correct_move, pattern_category, resolved_at, created_at }`). **No migration needed** — only the *write trigger* is new (today blunders are written by `/api/puzzles/:id/check`; here they come from game analysis, so `puzzle_id` is null). Writes are fire-and-forget (don't block UI).
+- Analysis is batch: all plies are processed synchronously and returned in a single JSON response
+- All non-forced user moves receive a definitive quality score; there is no timeout null case
+- **On analysis complete**: for each move with `quality === 'blunder'`, write to the **existing** `blunders` table (created in migration `001`/`005`: `{ id (uuid), user_id, puzzle_id, board_state, move_played, correct_move, pattern_category, resolved_at, created_at }`). A new migration (027) IS required to add `'unknown'` to the `blunders.pattern_category` CHECK constraint before this write path is exercised. Writes are fire-and-forget (don't block UI).
 - `track('game_reviewed', { gameId, accuracy, blunderCount })`
 
 *Position Explorer (`explorer` screen):*
+- **Reuse Epic 3a game-loop component** for the interactive board; do not re-derive a parallel interactive-board engine. Verification requirement: confirm move-perspective (user vs AI color) is correct when the user was the second mover (AI opened the game); the AI-first parity bug documented in project memory must be checked for Explorer positions, not just live games.
 - `Board` rewound to mistake position: `tr` overlay on played column, `td` on threat cells
 - Interactive "try alternative" board; AI responds at same difficulty (Gap 16)
 - Deep Reveal on tap: check `explanation_cache` first; call `/api/explain-move-llm` on miss; write to cache
@@ -434,12 +435,13 @@ Lazy analysis, timeline, position rewind, blunder capture.
 - `track('mistake_reviewed', { gameId, moveIndex, category })`
 - `track('deep_reveal_viewed', { context: 'position_explorer', cached })`
 
-*Deep Reveal on `?` nodes:*
-- Show Tier 1 classifier phrase inline + "Detailed explanation unavailable." (no LLM call — Gap 4)
-
 **Backend / API (new):**
-- `POST /api/games/analyze` — `{ gameId }` → fetches movestring from `games` table; returns per-move `{ moveIndex, col, quality, score, bestScore }` array + `accuracy` + `summaryPhrase`. 8s timeout per move.
-- `POST /api/games/from-position` — `{ gameId, N, difficulty, side }` → game init payload for Game Board. Handles turn parity: N moves played → `(N % 2 === 0) ? firstPlayer : secondPlayer`.
+- `POST /api/games/analyze` — `{ gameId }` (client sends only game ID; server fetches `side` and `difficulty` from the `games` row — do not require the client to pass them) → fetches movestring from `games` table; scores **only the user's plies** (AI plies are excluded); returns:
+  - `moves`: array of `{ moveIndex, col, quality, score, bestScore }` where `moveIndex` is **1-based user-move ordinal** (1 = user's first move), array length = number of user's plies
+  - `accuracy`: percentage of non-forced user moves that are Optimal
+  - `scored`: count of user plies that received a score (excludes forced moves); client must suppress accuracy card when `scored === 0`
+  - `summaryPhraseKey`: i18n key from the pool `coach.sparring.review.clean.*` (no blunders) or `coach.sparring.review.mistakes.*` (one or more blunders); server selects based on blunder count; **no raw English string crosses the API**. Add the key pool to `en.json`.
+- `POST /api/games/from-position` — `{ gameId, N, difficulty }` (`side` is fetched server-side from the `games` row) → game init payload for Game Board. Handles turn parity: N moves played → `(N % 2 === 0) ? firstPlayer : secondPlayer`.
 
 **NOT included:** server-side async job (dropped); blunder review surface (Epic 3c).
 

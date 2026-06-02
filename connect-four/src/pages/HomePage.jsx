@@ -8,6 +8,7 @@ import { ClassifyAllPanel } from '../components/ClassifyAllPanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useDebugMode } from '../context/DebugContext.jsx';
 import { track } from '../lib/track.js';
+import { checkWin } from '../lib/board.js';
 import { sampleColumnFromScores, DIFFICULTY_TEMPERATURES } from '../lib/aiDifficulty.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -34,23 +35,6 @@ function placePiece(board, col, color) {
   if (heights[col] >= ROWS) return null;
   next[heights[col]][col] = color;
   return next;
-}
-
-function checkWin(board, row, col, color) {
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr, dc] of dirs) {
-    let cnt = 1;
-    for (let d = 1; d <= 3; d++) {
-      const r = row + dr*d, c = col + dc*d;
-      if (r>=0&&r<ROWS&&c>=0&&c<COLS&&board[r][c]===color) cnt++; else break;
-    }
-    for (let d = 1; d <= 3; d++) {
-      const r = row - dr*d, c = col - dc*d;
-      if (r>=0&&r<ROWS&&c>=0&&c<COLS&&board[r][c]===color) cnt++; else break;
-    }
-    if (cnt >= 4) return true;
-  }
-  return false;
 }
 
 function buildMovesString(history) {

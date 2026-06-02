@@ -17,6 +17,8 @@ Exception: `tracks` uses `bigserial` because it is append-only and never referen
 
 **MUST**: Categories are stored as `text` slugs, not integers (first established by migration 011, which replaced integer category columns; extended to the current 11 slugs by migration 015).
 Valid slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape`.
+Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_category_check` constraint. `'unknown'` is used when the post-game review classifier returns no pattern. The full valid set for the `blunders` table is:
+`'immediate_threat'`, `'forced_block'`, `'double_threat'`, `'forced_win'`, `'forbidden_columns'`, `'z_threat'`, `'claimeven'`, `'undercut'`, `'overcut'`, `'figure_7'`, `'j_shape'`, `'unknown'`.
 Rationale: Slug-keyed constraints are self-documenting; integer IDs required cross-referencing a lookup table.
 
 ## Soft Delete
@@ -68,6 +70,66 @@ Rationale: Supabase enforces explicit grants for all projects (deadline Oct 30 2
 **MUST**: Use sequential 3-digit numeric prefix: `NNN_slug.sql` (e.g., `015_new_puzzle_categories.sql`).
 **MUST**: Each migration file begins with a comment block: migration number, description, and `-- HUMAN REVIEW REQUIRED before applying to production.`
 **MUST NOT**: Skip numbers in the sequence.
+
+## Games (`games`)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK, `DEFAULT gen_random_uuid()` |
+| `user_id` | `uuid` | nullable FK → `auth.users(id)`, `ON DELETE SET NULL` |
+| `device_uuid` | `text` | NOT NULL |
+| `moves` | `text` | NOT NULL, 0-indexed movestring `[0-6]*` |
+| `difficulty` | `text` | NOT NULL, CHECK IN ('easy','medium','hard','perfect') |
+| `side` | `text` | NOT NULL, CHECK IN ('first','second') |
+| `result` | `text` | NOT NULL, CHECK IN ('win','loss','draw') |
+| `created_at` | `timestamptz` | NOT NULL, DEFAULT `now()` |
+
+Index: `(device_uuid, created_at DESC)` for per-device game listing (Epic 3b).
+RLS: Disabled (server accesses via service-role key).
+Grants: `GRANT SELECT, INSERT ON public.games TO anon, authenticated;`
+
+## GameAnalysis (ephemeral — not persisted)
+
+`GameAnalysis` is computed on demand by `POST /api/games/analyze` and never stored. Shape:
+
+| Field | Type | Description |
+|---|---|---|
+| `moves` | `AnalyzedMove[]` | Per-user-ply quality breakdown (see below) |
+| `accuracy` | `number` | % of scored plies that were optimal |
+| `optimalCount` | `number` | Count of optimal plies |
+| `suboptimalCount` | `number` | Count of suboptimal plies |
+| `blunderCount` | `number` | Count of blunder plies |
+| `scored` | `number` | Plies counted toward accuracy (forced plies excluded) |
+| `summaryPhraseKey` | `string` | i18n key for the overall quality phrase |
+| `fullMovestring` | `string` | Complete movestring from the game row |
+| `difficulty` | `string` | Difficulty from the game row |
+| `side` | `'first' \| 'second'` | Side from the game row |
+
+### AnalyzedMove
+
+| Field | Type | Description |
+|---|---|---|
+| `moveIndex` | `number` | 1-based index into the full movestring |
+| `col` | `number` | 0-indexed column played |
+| `quality` | `'optimal' \| 'suboptimal' \| 'blunder'` | Quality label |
+| `score` | `number` | Solver score for the played column |
+| `bestScore` | `number` | Best available solver score at that ply |
+| `bestCol` | `number` | 0-indexed column with the best score |
+| `patternTag` | `string \| null` | Classifier slug, or `null` if no pattern matched |
+
+Forced moves (only 1 legal column) are included in `moves` with a quality label but excluded from `scored`.
+
+## Navigation Params Contracts (screen-to-screen)
+
+Screen navigation passes typed param objects via the screen registry. Contracts for screens introduced in Epic 3b:
+
+| Screen key | Params | Source |
+|---|---|---|
+| `review` | `{ id: string }` — the `gameId` | `GameScreen.saveGame` after game ends |
+| `explorer` | `{ gameId: string, moveIndex: number, moves: string, difficulty: string, side: string, fullMovestring: string }` | `ReviewScreen` on "Explore from here" |
+| `game` | `{ initialMoves?: string, side?: string, difficulty?: string }` (additions) | `ExplorerScreen` on "Start from here"; original params (`difficulty`, `side`) remain supported |
+
+`initialMoves` on the `game` screen is the truncated movestring returned by `POST /api/games/from-position`. The `game` screen passes it to `useGameBoard` as `initialMoves` to pre-seed the board state before the AI/player moves begin.
 
 ## Interaction Mode
 

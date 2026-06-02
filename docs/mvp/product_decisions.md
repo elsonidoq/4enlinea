@@ -62,11 +62,7 @@ Analysis runs **lazily** — it starts when the Post-Game Review screen first op
 
 The timeline renders immediately with all nodes showing a neutral gray "pending" state. Nodes update to their quality color as each move's score resolves. The board stays interactive (the user can already tap completed nodes).
 
-**Timeout rule:** if a single move's solver evaluation takes more than 8 seconds, mark that node `?` (unknown quality, neutral gray) and continue with the remaining moves. The `?` node is excluded from the accuracy denominator.
-
-**Solver error:** same treatment as timeout — node shows `?`, excluded from accuracy. The review screen does not crash or block; the user still sees all correctly analyzed moves.
-
-Deep Reveal on a `?` node shows the Tier 1 fallback text (the rule-based classifier phrase) with no LLM component. No retry button for MVP.
+All non-forced user moves receive a definitive quality score (`optimal`, `suboptimal`, or `blunder`). There is no timeout and no `?` null-quality case — the solver is fast enough that no per-move timeout is required.
 
 ---
 

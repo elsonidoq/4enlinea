@@ -74,6 +74,8 @@
 - [Auth mostly built; payments deferred](project_auth_payments_state.md) — ProfileStore/IndexedDBStore/SupabaseStore/AuthModal exist; Epic 7 is reskin + store extension; Stripe deferred
 - [Stats from puzzle_attempts, not session_stats](project_stats_architecture.md) — GET /api/stats aggregates puzzle_attempts JOIN puzzles; session_stats table orphaned for challenge data; SupabaseStore.getStats() calls the endpoint
 - [Epic 2a implementation state](project_epic2a_implementation.md) — live endpoints, new screens, stubs for Epic 2b, known CSS token bug (`--bg-chal` vs `--bg-challenges` in surfaceGroups.js)
+- [Epic 3a implementation state](project_epic3a_implementation.md) — 18 tasks done, DifficultyPickerScreen + GameScreen, POST /api/games endpoint, 2 QA bug fixes, handoff context for Epic 3b
+- [Epic 3b implementation state](project_epic3b_implementation.md) — ReviewScreen + ExplorerScreen done; useGameBoard hook extracted; 3 new endpoints; react-markdown in Explorer; open: explorerTitle i18n key, td overlays
 - [forced_win refactor — done](project_forced_win_refactor.md) — CompletionStrategy interface; bitboard-only AI response; interaction_mode='sequence' on puzzles
 - [Commit-first: click = immediate commit](project_commit_first_no_confirm.md) — no confirmation step; pendingMove state dead; confirm/cancel buttons removed 2026-05-27
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category; don't reuse the slug

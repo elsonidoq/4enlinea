@@ -809,6 +809,60 @@ app.post('/api/llm-feedback', async (req, res) => {
   }
 });
 
+// POST /api/blunders — record a sparring blunder for the authenticated user
+// Auth required: returns 401 silently if no user (client fire-and-forgets this call).
+app.post('/api/blunders', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  const { board_state, move_played, correct_move, pattern_category } = req.body;
+
+  // Validate all 4 fields are present
+  if (board_state === undefined || move_played === undefined || correct_move === undefined || pattern_category === undefined) {
+    return res.status(400).json({ error: 'board_state, move_played, correct_move, and pattern_category are required' });
+  }
+
+  // board_state must match /^[0-6]{0,42}$/
+  if (typeof board_state !== 'string' || !/^[0-6]{0,42}$/.test(board_state)) {
+    return res.status(400).json({ error: 'board_state must be 0–42 characters of digits 0–6' });
+  }
+
+  // move_played and correct_move must be integers 0–6
+  if (!Number.isInteger(move_played) || move_played < 0 || move_played > 6) {
+    return res.status(400).json({ error: 'move_played must be an integer 0–6' });
+  }
+  if (!Number.isInteger(correct_move) || correct_move < 0 || correct_move > 6) {
+    return res.status(400).json({ error: 'correct_move must be an integer 0–6' });
+  }
+
+  // pattern_category must be a non-empty string
+  if (typeof pattern_category !== 'string' || pattern_category.trim() === '') {
+    return res.status(400).json({ error: 'pattern_category must be a non-empty string' });
+  }
+
+  // Auth required
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const { data, error } = await supabase
+      .from('blunders')
+      .insert({
+        user_id: req.user.id,
+        puzzle_id: null,
+        board_state,
+        move_played,
+        correct_move,
+        pattern_category,
+      })
+      .select('id')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Puzzle endpoints (T035-T037) ───────────────────────────────────────────────
 
 function userCanAccessCategory(user, categoryId) {
@@ -1126,6 +1180,200 @@ app.post('/api/evaluate-move', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Sparring game endpoints (Epic 3a) ───────────────────────────────────────────
+
+// POST /api/games — save a completed sparring game record
+app.post('/api/games', async (req, res) => {
+  const { device_uuid, moves, difficulty, side, result } = req.body;
+
+  // device_uuid may be null for authenticated users; the other fields are required
+  if (!moves || !difficulty || !side || !result) {
+    return res.status(400).json({ error: 'moves, difficulty, side, and result are required' });
+  }
+
+  if (typeof moves !== 'string' || !/^[0-6]{0,42}$/.test(moves)) {
+    return res.status(400).json({ error: 'moves must be 0–42 characters of digits 0–6' });
+  }
+
+  const validDifficulties = ['easy', 'medium', 'hard', 'perfect'];
+  if (!validDifficulties.includes(difficulty)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
+  }
+
+  if (side !== 'first' && side !== 'second') {
+    return res.status(400).json({ error: 'side must be first or second' });
+  }
+
+  if (!['win', 'loss', 'draw'].includes(result)) {
+    return res.status(400).json({ error: 'result must be win, loss, or draw' });
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    const { data, error } = await supabase
+      .from('games')
+      .insert({
+        user_id: req.user?.id ?? null,
+        device_uuid: device_uuid || req.user?.id || 'anonymous',
+        moves,
+        difficulty,
+        side,
+        result,
+      })
+      .select('id')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/games/from-position — spawn a new sparring game from a truncated position
+// Returns { moves, side, difficulty } — does NOT insert a row; GameScreen.saveGame does that when the game ends.
+app.post('/api/games/from-position', async (req, res) => {
+  const { gameId, N, difficulty } = req.body;
+
+  // Validate required fields
+  if (!gameId || typeof gameId !== 'string') {
+    return res.status(400).json({ error: 'gameId must be a non-empty string' });
+  }
+  if (N === undefined || N === null || !Number.isInteger(N) || N < 0 || N > 42) {
+    return res.status(400).json({ error: 'N must be an integer 0–42' });
+  }
+  const validDifficulties = ['easy', 'medium', 'hard', 'perfect'];
+  if (!difficulty || !validDifficulties.includes(difficulty)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    const { data: game, error } = await supabase
+      .from('games')
+      .select('moves, side')
+      .eq('id', gameId)
+      .single();
+
+    if (error || !game) return res.status(404).json({ error: 'game not found' });
+
+    const truncated = game.moves.slice(0, N);
+    res.json({ moves: truncated, side: game.side, difficulty });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/games/analyze — analyze all user plies in a completed game
+// Returns move-by-move quality breakdown, accuracy, and a summary phrase key.
+// No auth required — anonymous users can analyze games.
+app.post('/api/games/analyze', async (req, res) => {
+  const { gameId } = req.body;
+
+  if (!gameId || typeof gameId !== 'string') {
+    return res.status(400).json({ error: 'gameId is required' });
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  // Fetch game row
+  const { data: game, error: gameError } = await supabase
+    .from('games')
+    .select('id, moves, side, difficulty')
+    .eq('id', gameId)
+    .single();
+
+  if (gameError || !game) return res.status(404).json({ error: 'game not found' });
+
+  const { moves, side, difficulty } = game;
+
+  // Counters
+  let scored = 0;
+  let optimalCount = 0;
+  let suboptimalCount = 0;
+  let blunderCount = 0;
+  const analyzedMoves = [];
+  let userMoveOrdinal = 0;
+
+  try {
+    for (let i = 0; i < moves.length; i++) {
+      // Determine if this ply belongs to the user
+      const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
+      if (!isUserPly) continue;
+
+      userMoveOrdinal++;
+      const col = parseInt(moves[i], 10);
+      const movesBeforeThisPly = moves.slice(0, i);
+
+      // Query solver (serialized — one at a time)
+      let scores;
+      if (movesBeforeThisPly === '') {
+        scores = EMPTY_BOARD_SCORES;
+      } else {
+        scores = await solver.query(movesBeforeThisPly);
+      }
+
+      const legalCount = scores.filter(s => s > -1000).length;
+
+      const { quality, bestCol } = scoreMove(scores, col);
+      const score = scores[col];
+      const bestScore = scores[bestCol];
+
+      // Classify the position
+      let patternTag = null;
+      try {
+        const classifyResult = classify(movesBeforeThisPly, col, scores);
+        patternTag = classifyResult?.tag ?? null;
+      } catch (_e) {
+        patternTag = null;
+      }
+
+      analyzedMoves.push({
+        moveIndex: userMoveOrdinal,
+        col,
+        quality,
+        score,
+        bestScore,
+        bestCol,
+        patternTag,
+      });
+
+      // Only count non-forced moves toward accuracy
+      if (legalCount > 1) {
+        scored++;
+        if (quality === 'optimal') optimalCount++;
+        else if (quality === 'suboptimal') suboptimalCount++;
+        else blunderCount++;
+      }
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+
+  const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
+
+  // Pick summary phrase key
+  const phrasePool = blunderCount === 0
+    ? 'coach.sparring.review.clean'
+    : 'coach.sparring.review.mistakes';
+  const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+
+  res.json({
+    moves: analyzedMoves,
+    accuracy,
+    optimalCount,
+    suboptimalCount,
+    blunderCount,
+    scored,
+    summaryPhraseKey,
+    fullMovestring: moves,
+    difficulty,
+    side,
+  });
 });
 
 // GET /api/puzzles/:id — return full puzzle data for solving

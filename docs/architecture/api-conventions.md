@@ -319,6 +319,32 @@ Explains a specific move the human just played (post-move reflection).
 
 Returns 400 for `interaction_mode = 'sequence'` puzzles — use `/sequence/move` instead.
 
+## POST /api/games
+
+Saves a completed sparring game record.
+
+**Request body**:
+```json
+{
+  "device_uuid": "<string>",
+  "moves": "<0-indexed movestring [0-6]>",
+  "difficulty": "easy | medium | hard | perfect",
+  "side": "first | second",
+  "result": "win | loss | draw"
+}
+```
+
+- `moves`: 0-indexed column movestring, validated against `^/^[0-6]{0,42}$/`
+- `side`: `'first'` = user moves first (Green), `'second'` = user moves second (Gray)
+- Auth: Optional. `user_id` = `req.user?.id ?? null`
+
+**Response** (201):
+```json
+{ "id": "<uuid>" }
+```
+
+**Errors**: 400 for validation failures; 503 if Supabase not configured.
+
 ## Puzzle GET Endpoint
 
 `GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
@@ -331,6 +357,91 @@ Accepts `{ position, col }` where `position` is the current move string (before 
 Returns `{ outcome: 'success' | 'fail' | 'continue', aiCol?, reason? }`.
 All validation is bitboard-only — no solver calls.
 `POST /api/puzzles/:id/check` returns 400 for sequence-mode puzzles; callers must use the `/sequence/move` endpoint instead.
+
+## Game Analysis & Explorer Endpoints
+
+### `POST /api/games/analyze`
+
+Scores every user ply in a completed game and returns a quality summary.
+
+**Request body**: `{ gameId: string }`
+
+**Response** (`200 OK`):
+```json
+{
+  "moves": [
+    {
+      "moveIndex": 1,
+      "col": 3,
+      "quality": "optimal" | "suboptimal" | "blunder",
+      "score": 5,
+      "bestScore": 5,
+      "bestCol": 3,
+      "patternTag": "double_threat" | null
+    }
+  ],
+  "accuracy": 82,
+  "optimalCount": 17,
+  "suboptimalCount": 3,
+  "blunderCount": 2,
+  "scored": 22,
+  "summaryPhraseKey": "coach.sparring.review.mistakes.1",
+  "fullMovestring": "334441...",
+  "difficulty": "easy | medium | hard | perfect",
+  "side": "first | second"
+}
+```
+
+- `moves`: all user plies (odd indices if `side = 'first'`, even indices if `side = 'second'`). Forced moves (only 1 legal column) are included in `moves` with a quality label but excluded from `scored`.
+- `patternTag`: classifier slug for the position at that ply; `null` if no pattern matched.
+- `accuracy`: percentage of scored plies that were optimal.
+- `scored`: number of plies that were not forced (i.e., denominator for `accuracy`).
+- `summaryPhraseKey`: i18n key selected from the coach phrase pool based on blunder/suboptimal counts.
+- Auth: Optional (`loadUser` runs; `req.user` may be null).
+
+**Errors**: 400 (missing `gameId`), 404 (game not found), 500 (solver error), 503 (Supabase not configured).
+
+### `POST /api/games/from-position`
+
+Returns a truncated movestring for spawning a new game from a specific position in a past game. Does **not** insert a new `games` row — the caller navigates to the game screen and the row is created by `saveGame` when the spawned game ends.
+
+**Request body**: `{ gameId: string, N: number, difficulty: "easy" | "medium" | "hard" | "perfect" }`
+- `N`: number of plies to keep (must be a positive integer ≤ length of the stored movestring).
+- `difficulty`: difficulty for the new game session.
+
+**Response** (`200 OK`):
+```json
+{ "moves": "<truncated movestring>", "side": "first | second", "difficulty": "easy | medium | hard | perfect" }
+```
+
+- `side`: carried over from the original game row unchanged.
+- Auth: Optional.
+
+**Errors**: 400 (invalid or missing params, `N` out of range), 404 (game not found), 503.
+
+## Blunders Endpoint
+
+### `POST /api/blunders`
+
+Records a blunder detected during post-game review. Fire-and-forget from the client — the response is not awaited before navigation.
+
+**Request body**:
+```json
+{
+  "board_state": "<movestring at the point of the blunder>",
+  "move_played": 3,
+  "correct_move": 4,
+  "pattern_category": "<slug>"
+}
+```
+- `pattern_category`: must be one of the valid slugs (see Data Model — `blunders` constraint). Use `"unknown"` when the classifier returns no pattern.
+- Auth: **Required** (401 if `req.user` is null).
+
+**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key.
+
+**Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
+
+**Errors**: 400 (missing or invalid fields), 401 (not authenticated), 500 (DB error), 503 (Supabase not configured).
 
 ## LLM Feedback Endpoint
 

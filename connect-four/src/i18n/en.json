@@ -37,7 +37,32 @@
     "postMoveReveal": "Move analysis",
     "yourMove": "Your move",
     "bestMove": "Best move",
-    "patternLabel": "Pattern"
+    "patternLabel": "Pattern",
+    "easySub": "Casual play with frequent tips",
+    "mediumSub": "Balanced challenge with occasional mistakes",
+    "hardSub": "Serious opponent with rare slips",
+    "perfectSub": "Flawless — no mistakes, no hints",
+    "playAs": "Play as",
+    "sideFirst": "moves first",
+    "sideSecond": "moves second",
+    "startGame": "Start game",
+    "reviewLoading": "Analyzing your game…",
+    "reviewError": "Analysis could not be loaded.",
+    "reviewNotFound": "Game not found.",
+    "reviewNoGame": "Game not saved — analysis unavailable.",
+    "accuracy": "Accuracy",
+    "optimal": "Optimal",
+    "suboptimal": "Suboptimal",
+    "blunder": "Blunder",
+    "prevMistake": "← Prev",
+    "nextMistake": "Next →",
+    "terminalPosition": "This position is terminal — no moves available.",
+    "startFromHere": "Start new game from here",
+    "deepReveal": "Deep Reveal",
+    "explorerTitle": "Position Explorer",
+    "explanationFlagged": "Explanation flagged. Thank you!",
+    "explanationUnavailable": "Detailed explanation unavailable.",
+    "flagExplanation": "Flag this explanation"
   },
   "auth": {
     "signIn": "Sign in",
@@ -220,6 +245,52 @@
       "perfect": {
         "0": "Perfect set. Try a harder one.",
         "1": "Clean sweep — excellent work!"
+      }
+    },
+    "sparring": {
+      "intro": {
+        "0": "Ready to play? I'll give you a real fight.",
+        "1": "Let's see what you've got. Good luck."
+      },
+      "explorer": {
+        "intro": {
+          "0": "What would you play instead?",
+          "1": "Explore the position. Try a different move."
+        }
+      },
+      "ai_move": {
+        "0": "I'll take that.",
+        "1": "Interesting. Let's see.",
+        "2": "Hmm. My turn."
+      },
+      "deliberate_mistake": {
+        "0": "Oops — did I just give you something?",
+        "1": "I may have slipped there. Can you punish it?"
+      },
+      "hint": {
+        "generic": {
+          "0": "The best move is highlighted — trust the column.",
+          "1": "Look at the highlighted column. What does it set up?"
+        }
+      },
+      "user_move": {
+        "generic": {
+          "0": "Interesting choice. Let's see how it plays out.",
+          "1": "Got it. Now watch how I respond.",
+          "2": "Noted. Your move is on the board."
+        }
+      },
+      "review": {
+        "clean": {
+          "0": "Clean game. Nothing to revisit.",
+          "1": "Excellent — no mistakes to review."
+        },
+        "mistakes": {
+          "0": "Good game. One parity mistake decided it.",
+          "1": "A few moments to learn from — let's look.",
+          "2": "You played well. Let's find the edge.",
+          "3": "Some tactical moments worth revisiting."
+        }
       }
     }
   },

@@ -3,7 +3,11 @@ import { StatsScreen } from '../screens/StatsScreen.jsx';
 import { SetPickerScreen } from '../screens/SetPickerScreen.jsx';
 import { ChallengeScreen } from '../screens/ChallengeScreen.jsx';
 import { PostSetSummaryScreen } from '../screens/PostSetSummaryScreen.jsx';
+import { DifficultyPickerScreen } from '../screens/DifficultyPickerScreen.jsx';
+import { GameScreen } from '../screens/GameScreen.jsx';
 import { PlaceholderScreen } from '../screens/PlaceholderScreen.jsx';
+import { ReviewScreen } from '../screens/ReviewScreen.jsx';
+import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -15,10 +19,10 @@ export const SCREENS = {
   setpicker: SetPickerScreen,
   challenge: ChallengeScreen,
   summary: PostSetSummaryScreen,
-  difficulty: (props) => <PlaceholderScreen {...props} screenKey="difficulty" />,
-  game: (props) => <PlaceholderScreen {...props} screenKey="game" />,
-  review: (props) => <PlaceholderScreen {...props} screenKey="review" />,
-  explorer: (props) => <PlaceholderScreen {...props} screenKey="explorer" />,
+  difficulty: DifficultyPickerScreen,
+  game: GameScreen,
+  review: ReviewScreen,
+  explorer: ExplorerScreen,
   mistakes: (props) => <PlaceholderScreen {...props} screenKey="mistakes" />,
   mistakeDetail: (props) => <PlaceholderScreen {...props} screenKey="mistakeDetail" />,
 };

@@ -114,6 +114,25 @@ export function AuthModal({ onClose, reason }) {
             <button className="btn btn-ghost" onClick={onClose} style={{ marginTop: 8, width: '100%' }}>
               {t('auth.dismiss')}
             </button>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const { error: e } = await supabase.auth.signInAnonymously();
+                  if (!e) onClose();
+                  else setError(e.message);
+                }}
+                style={{
+                  marginTop: 8, width: '100%', padding: '10px 0',
+                  borderRadius: 12, border: '1.5px dashed #aaa',
+                  background: 'transparent', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: 13,
+                  color: 'var(--ink-soft)',
+                }}
+              >
+                🛠 Dev: skip auth
+              </button>
+            )}
           </>
         )}
       </div>
