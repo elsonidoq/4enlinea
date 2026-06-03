@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
-import { explainSimulate, computeBestLine } from './explainSimulate.js';
+import { explainSimulate } from './explainSimulate.js';
 import {
   TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
   isMajorThreatForPlayer, getScoreTier,
@@ -605,7 +605,7 @@ function injectDefaultActiveZone(explanation) {
 }
 
 // Shared: build the LLM prompt for a given (movestring, col) without calling the LLM.
-// Returns { prompt, bestLine } or null if contrast move is unavailable.
+// Returns { prompt } or null if contrast move is unavailable.
 async function buildExplainContext(movestring, col, rounds = 1) {
   const board = new Board(movestring);
   const r = rounds;
@@ -614,8 +614,6 @@ async function buildExplainContext(movestring, col, rounds = 1) {
   const playerName = perspective === 1 ? 'Green' : 'Grey';
   const opponentPlayer = perspective === 1 ? 2 : 1;
   const postMovestring = movestring + col;
-
-  const bestLine = await computeBestLine(movestring, col, solver);
 
   const preScores = movestring.length > 0
     ? await solver.query(movestring)
@@ -685,11 +683,11 @@ async function buildExplainContext(movestring, col, rounds = 1) {
     kbSection, playerName, forcedBlockNote, blunderNote, userExamplesByPattern,
   });
 
-  return { prompt, bestLine };
+  return { prompt };
 }
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
-// Returns { explanation: string, bestLine: string[], cached?: boolean }.
+// Returns { explanation: string, cached?: boolean }.
 // Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
@@ -728,7 +726,6 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (cached?.deep_reveal_json) {
       return res.json({
         explanation: cached.deep_reveal_json.explanation,
-        bestLine: cached.deep_reveal_json.bestLine ?? [],
         prompt: cached.deep_reveal_json.prompt ?? '',
         cached: true,
       });
@@ -746,15 +743,13 @@ app.post('/api/explain-move-llm', async (req, res) => {
   try {
     const context = await buildExplainContext(movestring, col, r);
     if (!context) {
-      const bestLine = await computeBestLine(movestring, col, solver);
       return res.json({
         explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
-        bestLine,
         prompt: '',
       });
     }
 
-    const { prompt, bestLine } = context;
+    const { prompt } = context;
     const rawExplanation = await callLLM(prompt);
     const explanation = injectDefaultActiveZone(rawExplanation);
 
@@ -762,11 +757,11 @@ app.post('/api/explain-move-llm', async (req, res) => {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
         one_liner: '',
-        deep_reveal_json: { explanation, bestLine, prompt },
+        deep_reveal_json: { explanation, prompt },
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, bestLine, prompt });
+    res.json({ explanation, prompt });
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
