@@ -265,11 +265,9 @@ Explains a specific move the human just played (post-move reflection).
 ```json
 {
   "explanation": "<LLM-generated explanation paragraph>",
-  "bestLine": ["Col 5", "Col 2", "Col 6"],
   "cached": true
 }
 ```
-- `bestLine`: array of 1-indexed column label strings (e.g. `["Col 5", "Col 2", "Col 6"]`). Always present. The first element is always the user's played move (`col + 1`). Legacy cache rows pre-dating Epic 2b have no `bestLine` stored — these return `[]` (coalesced from `null` via `?? []`). Empty array when all legal scores are equal, solver error, or terminal position.
 - `cached`: `true` when served from `explanation_cache`. Absent (undefined) on cache miss.
 - `prompt` field: **not returned** (was present in pre-Epic-2b implementation; removed).
 
@@ -277,12 +275,11 @@ Explains a specific move the human just played (post-move reflection).
 1. Auth gate: 401 for unauthenticated
 2. Input validation: 400 for invalid movestring/col/rounds
 3. LLM service check: 503 if `OPENAI_API_KEY`/`OPENAI_MODEL` absent
-4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, bestLine, cached: true }` on hit (quota NOT decremented)
+4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, cached: true }` on hit (quota NOT decremented)
 5. Quota decrement (cache miss only): 429 when free-tier quota exhausted; paid tier skips
-6. `computeBestLine(movestring, col, solver)` → `bestLine` array
-7. LLM call → `explanation` string
-8. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation, bestLine } }`
-9. Response: `{ explanation, bestLine }`
+6. LLM call → `explanation` string
+7. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation } }`
+8. Response: `{ explanation }`
 
 **Quota note**: Cache hits do NOT decrement quota. A user with 0 quota remaining can still receive a cached explanation.
 

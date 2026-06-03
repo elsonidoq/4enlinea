@@ -169,7 +169,7 @@ When the drawn puzzle has `interaction_mode === 'sequence'`, `ChallengeScreen` r
 
 ### Deep Reveal bottom-sheet panel
 
-After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the explanation + `bestLine` chip row inside the sheet.
+After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the LLM explanation inside the sheet.
 
 ### `challengeSets.js` i18n-key shape convention
 
