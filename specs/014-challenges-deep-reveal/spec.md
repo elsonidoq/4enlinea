@@ -12,7 +12,7 @@ An authenticated user with quota remaining plays a move in the Challenges surfac
 
 **Why this priority**: The Deep Reveal panel is the primary educational payoff of the Challenges surface — it is the unique value proposition over bare puzzle checkers. Everything else in this epic depends on this panel existing.
 
-**Independent Test**: Play any single-move puzzle, commit a move, tap "Learn more ▼". Verify: panel opens; if uncached, spinner appears then explanation loads; if cached, no spinner; pattern tag and quality badge from evaluate-move state are correct; explanation and bestLine arrive from the LLM endpoint; "Flag" button exists.
+**Independent Test**: Play any single-move puzzle, commit a move, tap "Learn more ▼". Verify: panel opens; if uncached, spinner appears then explanation loads; if cached, no spinner; pattern tag and quality badge from evaluate-move state are correct; explanation arrives from the LLM endpoint; "Flag" button exists.
 
 **Acceptance Scenarios**:
 
@@ -96,7 +96,6 @@ After playing all puzzles in any challenge set (single-move, Forbidden Columns, 
 - **Empty session (0 puzzles completed)**: Cannot occur — the summary screen is only reached after all puzzles are completed.
 - **Single puzzle in session (n=1)**: Summary accuracy is either 0% or 100%; single by-pattern row; appropriate CTA.
 - **Forced Win puzzle with no forcing line in DB**: Blocked at puzzle generation level (Epic 6); the challenge screen must not crash on malformed `interaction_mode: 'sequence'` data.
-- **`bestLine` is null from server (legacy cache row)**: `bestLine` is always ≥1 element on newly cached rows. Legacy `explanation_cache` rows written before this epic lack the `bestLine` field and return `null`; the Deep Reveal panel omits the "Best line" section for those rows rather than crashing.
 - **Flag already tapped**: Button shows "Thanks — flagged" and cannot be tapped again within the same panel session.
 
 ## Requirements *(mandatory)*
@@ -109,7 +108,7 @@ After playing all puzzles in any challenge set (single-move, Forbidden Columns, 
 - **FR-002**: On open, the panel MUST call `POST /api/explain-move-llm` with `{ movestring, col }` where `movestring` is the position BEFORE the user's move (0-indexed digits 0–6) and `col` is the 0-indexed column played. The panel MUST NOT call `POST /api/evaluate-move` — classifier fields are sourced from the already-held evaluate-move response in client state.
 - **FR-003**: While the LLM response is pending (cache miss path), the panel MUST show a spinner and "Reading the position…" label.
 - **FR-004**: On a cache hit (instant response), the panel MUST render with no spinner and no perceptible loading delay.
-- **FR-005**: Once loaded, the panel MUST display, in order: (a) pattern tag chip(s) and quality badge sourced from the Epic 2a evaluate-move client state, (b) a non-interactive compact `Board` component with `compact` prop set and `overlays` from the evaluate-move state — positioned after the tag row and before the explanation paragraph, matching the mockup layout, (c) the `explanation` string from the endpoint, (d) a "BEST LINE" section with `bestLine` displayed as chip-separated 1-indexed column labels (e.g., "Col 5 › Col 2 › Col 6"). `bestLine` always contains ≥1 element by construction (the played move is always included); the `bestLine?.length > 0` guard in the client render is purely defensive for legacy cached rows that pre-date this epic and lack the `bestLine` field (those rows return `null` for the field). The "BEST LINE" section is omitted only when `bestLine` is `null` or absent (legacy cache rows), not in normal operation.
+- **FR-005**: Once loaded, the panel MUST display, in order: (a) pattern tag chip(s) and quality badge sourced from the Epic 2a evaluate-move client state, (b) a non-interactive compact `Board` component with `compact` prop set and `overlays` from the evaluate-move state — positioned after the tag row and before the explanation paragraph, matching the mockup layout, (c) the `explanation` string from the endpoint.
 - **FR-006**: The panel MUST include a "Flag this explanation" button. On tap: POST to `POST /api/llm-feedback` with `{ movestring, llm_prompt: '', llm_response: explanation, human_note: '', feature: 'challenges' }`, show "Thanks — flagged" confirmation, fire `track('deep_reveal_flagged', { puzzleId })`. The flag action MUST NOT close the panel.
 - **FR-007**: If the LLM response does not arrive within 6 seconds, the panel MUST show the Tier-1 summary line text (already in client state) plus "Detailed explanation unavailable." with no retry button.
 - **FR-008**: `track('deep_reveal_viewed', { puzzleId, cached })` MUST be fired when the panel opens; `cached` is read directly from the `cached` field in the server response. No latency-threshold heuristic is used.
@@ -117,11 +116,10 @@ After playing all puzzles in any challenge set (single-move, Forbidden Columns, 
 
 **Deep Reveal Panel — Server-side modifications to `POST /api/explain-move-llm`**
 
-- **FR-010**: Before calling the LLM, the handler MUST check `explanation_cache` for a row where `position_hash = SHA256(movestring + ":" + col)`. On cache hit, return `{ explanation: cached.deep_reveal_json.explanation, bestLine: cached.deep_reveal_json.bestLine, cached: true }` immediately.
+- **FR-010**: Before calling the LLM, the handler MUST check `explanation_cache` for a row where `position_hash = SHA256(movestring + ":" + col)`. On cache hit, return `{ explanation: cached.deep_reveal_json.explanation, cached: true }` immediately.
 - **FR-011**: Quota decrement (`checkAndDecrementQuota`) MUST run ONLY on cache miss, AFTER the cache check. Cache hits MUST NOT decrement the quota counter.
-- **FR-012**: On cache miss and LLM success, the handler MUST write `{ position_hash, one_liner: '', deep_reveal_json: { explanation, bestLine } }` to `explanation_cache`. The write MUST be fire-and-forget (does not block the response).
-- **FR-013**: The handler MUST compute `bestLine` from the solver principal variation (PV) for the played move using solver simulation (the `explainSimulate` function or a dedicated extension of it), NOT book-only lookup (book coverage is insufficient). The PV is walked move-by-move via the existing solver process in `c4solver-wrapper.js` patterns. The result is returned as an array of 1-indexed column label strings (e.g., `["Col 5", "Col 2", "Col 6"]`). The computation is server-side; no client-side PV logic is added. If `explainSimulate`'s output covers the PV path, reuse it directly; if not, create a dedicated `computeBestLine(movestring, col)` function in the same file and document the reason in a comment.
-- **FR-014**: The endpoint response shape MUST be `{ explanation: string, bestLine: string[], cached?: boolean }`. No other new fields are added.
+- **FR-012**: On cache miss and LLM success, the handler MUST write `{ position_hash, one_liner: '', deep_reveal_json: { explanation } }` to `explanation_cache`. The write MUST be fire-and-forget (does not block the response).
+- **FR-014**: The endpoint response shape MUST be `{ explanation: string, cached?: boolean }`. No other new fields are added.
 - **FR-015**: The 401 gate for unauthenticated users MUST be preserved — anonymous users receive 401 before any cache or quota check.
 
 **Forbidden Columns — Frontend**
@@ -166,7 +164,7 @@ After playing all puzzles in any challenge set (single-move, Forbidden Columns, 
 
 ### Key Entities
 
-- **DeepRevealResult**: `{ explanation: string, bestLine: string[], cached?: boolean }` — returned by `POST /api/explain-move-llm`; `bestLine` entries are 1-indexed column label strings. `bestLine` always has ≥1 element on newly written cache rows; `null` only on legacy cache rows pre-dating this epic.
+- **DeepRevealResult**: `{ explanation: string, cached?: boolean }` — returned by `POST /api/explain-move-llm`.
 - **DeepRevealPanelState**: Composed on the client from (a) the Epic 2a `MoveEvaluation` `{ patternTag, quality, badge }` already in component state, and (b) `DeepRevealResult` from the LLM endpoint.
 - **ForbiddenColumnsResult**: `{ selectedCols: number[], correctCols: number[], quality: 'optimal'|'suboptimal'|'blunder', badge: BadgeType }` — computed on submit by ported scoring logic.
 - **ChallengeSessionResult**: `{ puzzleId, quality, category }` — same shape as Epic 2a; accumulated for all puzzle types and passed to Post-Set Summary via navigation params.
@@ -194,7 +192,6 @@ After playing all puzzles in any challenge set (single-move, Forbidden Columns, 
 - The `explanation_cache` Supabase table already exists with columns `position_hash`, `one_liner`, `deep_reveal_json`, and `created_at`.
 - The `llm_feedback` Supabase table already exists and `POST /api/llm-feedback` already works.
 - `checkAndDecrementQuota` already implements the 20/week Monday-reset logic; only the call site ordering changes in this epic.
-- The solver PV is accessible server-side via the existing solver process; extracting `bestLine` requires querying the solver for the played move and walking the principal variation — this is implementable within the existing `c4solver-wrapper.js` patterns.
 - `GET /api/puzzles/draw?category=forced_win` and `GET /api/puzzles/draw?category=forbidden_columns` will return approved puzzles once puzzle data is present (Epic 6 populates counts); if count = 0 the Set Picker hides these entries via the same `GET /api/puzzles/counts` mechanism already built in Epic 2a.
 - `forbidden_columns` scoring does NOT read a client-side `correct_cols` puzzle field. The authoritative forbidden column set is returned by `POST /api/puzzles/:id/check` as `data.forbiddenCols` (a 0-indexed array). This is the same mechanism already implemented in `PuzzlesPage.handleForbiddenSubmit` and is confirmed by reading that function. No DB schema change is needed for scoring.
 - The lesson order for Coach recommendation tie-breaking follows the same `CATEGORY_ORDER` / `lesson.order` sequence used in Epic 1b Stats screen.

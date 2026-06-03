@@ -17,7 +17,7 @@ This epic adds no migrations. All storage is either:
 
 ### `explanation_cache.deep_reveal_json` (extended)
 
-The existing JSONB column absorbs a new `bestLine` field. No migration needed.
+No migration needed.
 
 **Before this epic** (shape written by `/api/explain-move` old endpoint):
 ```json
@@ -32,12 +32,11 @@ The existing JSONB column absorbs a new `bestLine` field. No migration needed.
 **After this epic** (shape written by extended `/api/explain-move-llm`):
 ```json
 {
-  "explanation": "Playing column 5 completes four...",
-  "bestLine": ["Col 5", "Col 2", "Col 6"]
+  "explanation": "Playing column 5 completes four..."
 }
 ```
 
-Note: existing cached rows from the old `/api/explain-move` endpoint have a different shape. The new endpoint reads `cached.deep_reveal_json.explanation` and `cached.deep_reveal_json.bestLine ?? []`. Rows from the old endpoint lack `explanation` — they will return `undefined` for `explanation`, which the client handles as a timeout fallback. This is acceptable: old cache entries will not serve Deep Reveal responses in the new format; they will fall through to the LLM call path (cache miss behavior) since `explanation` is falsy.
+Note: existing cached rows from the old `/api/explain-move` endpoint have a different shape. The new endpoint reads `cached.deep_reveal_json.explanation`. Rows from the old endpoint lack `explanation` — they will return `undefined` for `explanation`, which the client handles as a timeout fallback. This is acceptable: old cache entries will not serve Deep Reveal responses in the new format; they will fall through to the LLM call path (cache miss behavior) since `explanation` is falsy.
 
 **Cache key**: `SHA256(movestring + ":" + col)` — unchanged from spec FR-010.
 
@@ -65,12 +64,10 @@ Returned by `POST /api/explain-move-llm`:
 ```ts
 {
   explanation: string         // LLM explanation paragraph
-  bestLine: string[]          // 1-indexed column labels, e.g. ["Col 5", "Col 2", "Col 6"]
   cached?: boolean            // true if served from explanation_cache
 }
 ```
 
-`bestLine` is empty `[]` if PV computation fails or all scores are equal.  
 `cached` is `true` on cache hit; absent (undefined) on cache miss.
 
 ### `DeepRevealPanelState` (NEW — client-side composition)
@@ -86,7 +83,6 @@ Assembled in `ChallengeScreen` from two sources:
   
   // From DeepRevealResult (fetched on panel open):
   explanation: string
-  bestLine: string[]
   cached: boolean
 }
 ```

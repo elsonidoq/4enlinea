@@ -41,14 +41,13 @@ Validation errors return `400 Bad Request` with a descriptive `error` field.
 2. **Input validation**: validate `movestring`, `col`, `rounds` → `400` on failure
 3. **LLM service check**: `if (!OPENAI_API_KEY || !OPENAI_MODEL) → 503`
 4. **Cache check**: compute `positionHash = SHA256(movestring + ":" + col)`; query `explanation_cache` for this hash
-   - **Cache hit**: return `{ explanation, bestLine, cached: true }` immediately — no quota decrement
+   - **Cache hit**: return `{ explanation, cached: true }` immediately — no quota decrement
 5. **Quota decrement** (cache miss only): call `checkAndDecrementQuota(user)` for `free`-tier users
    - Quota exceeded: return `429 { error: 'quota_exceeded', resetsAt: <ISO string> }`
    - Paid tier: skip quota check
-6. **`computeBestLine`**: walk solver PV for up to 5 moves starting from `movestring + col`
-7. **LLM call**: build prompt, call OpenAI API, receive `explanation`
-8. **Cache write** (fire-and-forget): write `{ position_hash, one_liner: '', deep_reveal_json: { explanation, bestLine } }` to `explanation_cache`
-9. **Response**: return `{ explanation, bestLine }`
+6. **LLM call**: build prompt, call OpenAI API, receive `explanation`
+7. **Cache write** (fire-and-forget): write `{ position_hash, one_liner: '', deep_reveal_json: { explanation } }` to `explanation_cache`
+8. **Response**: return `{ explanation }`
 
 ---
 
@@ -58,8 +57,7 @@ Validation errors return `400 Bad Request` with a descriptive `error` field.
 
 ```json
 {
-  "explanation": "Playing column 5 completes four across the bottom row immediately...",
-  "bestLine": ["Col 5", "Col 2", "Col 6"]
+  "explanation": "Playing column 5 completes four across the bottom row immediately..."
 }
 ```
 
@@ -70,22 +68,11 @@ HTTP 200. `cached` field is absent (undefined) on cache miss.
 ```json
 {
   "explanation": "Playing column 5 completes four across the bottom row immediately...",
-  "bestLine": ["Col 5", "Col 2", "Col 6"],
   "cached": true
 }
 ```
 
 HTTP 200. `cached: true`. Quota is NOT decremented.
-
-### `bestLine` empty cases
-
-`bestLine` is `[]` (empty array) when:
-- All legal scores are equal (no meaningful contrast — the prompt itself returns early and no PV is computed)
-- Solver error during PV walk
-- Position is already a terminal (win/draw)
-- Legacy cache rows pre-dating Epic 2b: `deep_reveal_json.bestLine` is `null` in the DB; the server coalesces to `[]` via `?? []` before returning
-
-The client MUST treat an empty `bestLine` by omitting the "BEST LINE" section entirely (not rendering an empty chip row).
 
 ---
 
@@ -113,21 +100,6 @@ The client MUST treat an empty `bestLine` by omitting the "BEST LINE" section en
 
 ---
 
-## `computeBestLine` Implementation Notes
-
-The `bestLine` array is computed by walking the solver principal variation:
-
-1. Start from `movestring + col` (post-user-move position).
-2. Query solver for scores; pick highest-scoring legal column (first of ties by 0-indexed col order).
-3. Append that column (as `"Col N"` 1-indexed label) to the array.
-4. Advance position, repeat until: win detected (`board.hasWon()`), board full, or `maxPlies=5` reached.
-
-The first element of `bestLine` is always `"Col N"` where N = col + 1 (the user's own move, 1-indexed).
-
-Example: user plays col 4 (0-indexed) on movestring `"11152"` → `bestLine` might be `["Col 5", "Col 2", "Col 6"]`.
-
-The solver IPC is serialized (promise chain). `computeBestLine` queues behind any concurrent solver requests; it does not run in parallel with other solver queries on the same request.
-
 ---
 
 ## Changes from Pre-Epic-2b Behavior
@@ -136,7 +108,7 @@ The solver IPC is serialized (promise chain). `computeBestLine` queues behind an
 |--------|--------|-------|
 | Cache check | None (endpoint had no cache logic) | Checks `explanation_cache` before quota |
 | Quota ordering | Decrement before any processing | Decrement only on cache miss |
-| Response shape | `{ explanation, prompt }` | `{ explanation, bestLine, cached? }` |
-| `bestLine` field | Not present | Solver PV as 1-indexed label array |
+| Response shape | `{ explanation, prompt }` | `{ explanation, cached? }` |
+| `bestLine` field | Not present | Removed |
 | `cached` field | Not present | `true` on cache hit; absent on miss |
 | `prompt` field | Returned (debug) | Removed from production response |
