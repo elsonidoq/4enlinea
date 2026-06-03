@@ -265,21 +265,22 @@ Explains a specific move the human just played (post-move reflection).
 ```json
 {
   "explanation": "<LLM-generated explanation paragraph>",
+  "prompt": "<LLM prompt used to generate the explanation>",
   "cached": true
 }
 ```
 - `cached`: `true` when served from `explanation_cache`. Absent (undefined) on cache miss.
-- `prompt` field: **not returned** (was present in pre-Epic-2b implementation; removed).
+- `prompt`: the LLM prompt used to generate the explanation. Used by the `POST /api/llm-feedback` flag feature. Empty string `''` on the no-contrast fallback path.
 
 **Processing order**:
 1. Auth gate: 401 for unauthenticated
 2. Input validation: 400 for invalid movestring/col/rounds
 3. LLM service check: 503 if `OPENAI_API_KEY`/`OPENAI_MODEL` absent
-4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, cached: true }` on hit (quota NOT decremented)
+4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, prompt, cached: true }` on hit (quota NOT decremented)
 5. Quota decrement (cache miss only): 429 when free-tier quota exhausted; paid tier skips
 6. LLM call → `explanation` string
-7. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation } }`
-8. Response: `{ explanation }`
+7. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation, prompt } }`
+8. Response: `{ explanation, prompt }`
 
 **Quota note**: Cache hits do NOT decrement quota. A user with 0 quota remaining can still receive a cached explanation.
 
