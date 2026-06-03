@@ -38,6 +38,25 @@ If the loaded stage is a `*_fix` stage (e.g. `epic_fix`, `spec_fix`) **and** `pe
 
 ---
 
+## Stakeholder communication
+
+The user is both a product and technical stakeholder, but is **not immersed in the artifacts** (epic, spec, plan, tasks). They have not memorized what task 28 does, what TBD sits in section 3.2, or which internal reference points where. Every question and explanation must be self-contained.
+
+**When presenting critique questions:**
+- Anchor every question in what the thing IS before asking about it.
+- Bad: "How should the narration template wiring TBD be resolved? The plan says 'determined during implementation' with 3 options — leaving tasks 28-31 un-implementable."
+- Good: "The plan leaves an unresolved decision about how narration text connects to board animations (the plan calls this 'narration template wiring'). Three approaches are listed but none was chosen. This blocks the 4 tasks that build the narration display. Which approach should we take? [options summarized in plain terms]"
+- Replace bare artifact references with descriptions: instead of "tasks 28-31", say "the 4 tasks that build the narration display"; instead of "the TBD in plan §3.2", say "the unresolved decision about [what it concerns]".
+
+**In all communication:**
+- Technical detail is fine — the user understands it.
+- Opaque internal references are not. If you name a task number, a section heading, or a TBD label, briefly say what it's about.
+- When presenting options, include enough context that the user can decide without opening the artifact.
+
+This applies to the Critique Q&A protocol and to any inline discussion with the user.
+
+---
+
 ## Handoff context protocol
 
 Every create and fix sub-agent produces a handoff for the next sub-agent. This is the key mechanism for carrying non-obvious context across stage boundaries — decisions made, trade-offs taken, uncertainties, and things that won't be visible by reading the artifact files alone.
@@ -80,7 +99,7 @@ The handoff chain:
 
 ## Critique Q&A protocol
 
-After each critique sub-agent returns, convert its output into multiple-choice questions using the `AskUserQuestion` tool. Apply this protocol in every `*_critique` stage.
+After each critique sub-agent returns, convert its output into multiple-choice questions using the `AskUserQuestion` tool. Apply this protocol in every `*_critique` stage. Follow the **Stakeholder communication** rules above: every question must be self-contained — explain what each reference points to before asking about it.
 
 **Parsing the critique:**
 - Each item under `## Blocking issues` becomes one question.
@@ -155,6 +174,8 @@ Product or scope choices the owner must make that are not answerable from the cu
 For each: state the question, list the options, and state your recommended default.
 
 Be direct and opinionated. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
+
+**Audience:** The user is a product/technical stakeholder who has not memorized the artifacts. Write every issue and question so it's self-contained: explain what each reference points to (e.g. say "the 4 tasks that build the narration display" not "tasks 28-31").
 
 ## Handoff context (required)
 At the very end of your response, output a section titled "## Handoff context".
@@ -296,6 +317,8 @@ Underspecified areas where a product owner choice is needed before a developer c
 For each: state the question, list the options, and state your recommended default.
 
 Be direct. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
+
+**Audience:** The user is a product/technical stakeholder who has not memorized the artifacts. Write every issue and question so it's self-contained: explain what each reference points to (e.g. say "the user story about puzzle navigation" not "US-3").
 ```
 
 Save state: `{ "stage": "spec_fix", "pending_critique": "<sub-agent output>" }`.
@@ -421,6 +444,8 @@ Technical or architectural choices the developer must make before implementation
 For each: state the question, list the options, and state your recommended default.
 
 Be direct. Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
+
+**Audience:** The user is a product/technical stakeholder who has not memorized the artifacts. Write every issue and question so it's self-contained: explain what each reference points to (e.g. say "the 4 tasks that build the narration display" not "tasks 28-31"; say "the unresolved decision about how narration connects to animations" not "the TBD in §3.2").
 ```
 
 Save state: `{ "stage": "plan_fix", "pending_critique": "<sub-agent output>" }`.
@@ -552,6 +577,8 @@ Scope or priority choices a product owner must make before implementation can be
 For each: state the question, list the options, and state your recommended default.
 
 Limit to the **top 3 blocking issues** and **top 2 decisions** — no nitpicks.
+
+**Audience:** The user is a product/technical stakeholder who has not memorized the artifacts. Write every issue and question so it's self-contained: explain what each reference points to (e.g. say "the 4 tasks that build the narration display" not "tasks 28-31").
 ```
 
 Save state: `{ "stage": "tasks_fix", "pending_critique": "<sub-agent output>" }`.

@@ -257,3 +257,17 @@ The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users
 | `PORT` | Server port (default: 3001) |
 
 All external clients (`supabase`, `anthropic`, `stripe`) are initialized conditionally — the server starts and serves requests even when these are absent, returning 503 for affected endpoints.
+
+## Lesson Loader
+
+`server/lessonLoader.js` is the canonical module for loading lesson content from JSON files at server startup.
+
+**Startup loading pattern**: `fs.readdirSync` + `JSON.parse(fs.readFileSync(..., 'utf8'))` — synchronous, runs once at startup. Results are cached in a module-level array. No I/O occurs at request time.
+
+**In-memory cache**: `getLessons()` and `getLesson(id)` return from the in-memory cache only — no filesystem reads on request.
+
+**Validation and exclusion**: Each file is validated for required fields (`id`, `title`, `free`, `userPerspective`, `slides`, `socratic`, `confirmationCategory`, `confirmationCount`) and `boardSpec` array length (must be 7). Files failing validation are logged via `console.error` and excluded. The server never crashes due to a malformed lesson file.
+
+**`order` derivation**: Extracted from the filename numeric prefix (e.g., `lesson-05-claimeven.json` → `order: 5`). Lessons are sorted ascending by `order` before caching.
+
+**Directory**: `connect-four/lessons/`. Ships empty in Epic 4; content added in Epic 5.

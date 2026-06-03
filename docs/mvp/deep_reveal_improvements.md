@@ -1,5 +1,38 @@
 # Deep Reveal Improvements: Coach Reads Aloud + Board Sync
 
+> ⚠️ **STALENESS NOTICE (verified against branch `101-new-design`, 2026-06-02).**
+> This document reads as a forward-looking plan, but **Phase 1 (interactive
+> tap-to-toggle highlights) is already implemented.** Do not plan it as greenfield —
+> read the current code instead. Concretely, already shipped:
+> - The files listed below as "**New**" exist: `src/lib/annotatedText.js`,
+>   `src/components/AnnotatedExplanation.jsx`, `src/components/AnnotatedText.jsx`.
+> - `Board.jsx` already supports the `zhCells` prop and renders the `zh` overlay
+>   (`Board.jsx:95`, `:122–158`).
+> - Board-sync is already wired on all three product surfaces:
+>   `ChallengeScreen.jsx` (`:763`, `zhCells` state `:67`), `ExplorerScreen.jsx`
+>   (`:455`, `:161`), and `MistakeDetailScreen.jsx` (`<Board … zhCells>` `:128`,
+>   `onZoneHighlightsChange={setZhCells}` `:177`).
+> - `ExplainMoveButton.jsx` also exists with `onZoneHighlightsChange` — i.e. a
+>   "sparring explain" surface exists *in code*, even though it is **out of scope at
+>   the product level** (see `deep_reveal_product.md`).
+>
+> **Therefore the following sections are RETROSPECTIVE, not a plan:** "Phase 1",
+> "Component Architecture / API Contracts", "Integration Points", and the Phase-1 rows
+> of "Files Touched". The section "DeepRevealButton and ExplainMoveButton — Board-less
+> Context" is **wrong for current code** — those components are no longer board-less.
+>
+> **Genuinely forward-looking (not yet built):**
+> 1. **Annotation Integrity enforcement** — the validate-then-cache gate and the
+>    closed-vocabulary check (principles P1–P6 / P4–P5 below). Today validation is
+>    only client-side parse-and-drop in `annotatedText.js`; the server-side guarantee
+>    does not exist yet. **This is the real work.**
+> 2. **Phase 2–3 (TTS read-aloud + audio cache)** — and note `deep_reveal_product.md`
+>    **defers read-aloud out of MVP entirely**; pursue only if that decision changes.
+>
+> The authoritative product description is
+> [`deep_reveal_product.md`](./deep_reveal_product.md). This file is non-binding
+> engineering prior art — trust the current code over its current-state claims.
+
 ## Overview
 
 The coach reads the deep reveal aloud. As the coach mentions rows, columns, cells, or regions, the board highlights the corresponding zone so it's easy to understand what the coach talks about — like a small presentation. In the text, references to rows, columns, cells, and regions are also highlighted when the user taps or hovers over them.

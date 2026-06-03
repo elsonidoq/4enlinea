@@ -101,3 +101,26 @@ export function getMajorThreatCells(board) {
 
   return map;
 }
+
+/**
+ * Convert a boardSpec (compact column-string encoding) to a 6×7 board array.
+ *
+ * boardSpec: Array[7] of strings; char index = row (0=bottom);
+ *   'g' → 'red' (renders as green disc in UI)
+ *   'd' → 'yellow' (renders as gray disc in UI)
+ *
+ * NOTE: 'red' renders GREEN and 'yellow' renders GRAY in the production Board
+ * component. This is intentional — do NOT change the mapping.
+ *
+ * @param {string[]} boardSpec  7-element array of column strings
+ * @returns {string[][]}  board[row][col] 6×7 array with 'empty'/'red'/'yellow' values
+ */
+export function boardSpecToBoard(boardSpec) {
+  const result = Array.from({ length: 6 }, () => Array(7).fill('empty'));
+  boardSpec.forEach((colStr, c) => {
+    for (let r = 0; r < colStr.length; r++) {
+      result[r][c] = colStr[r] === 'g' ? 'red' : 'yellow';
+    }
+  });
+  return result;
+}

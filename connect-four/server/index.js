@@ -24,6 +24,7 @@ import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+import { loadLessons, getLessons, getLesson } from './lessonLoader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -41,6 +42,9 @@ app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
   next();
 });
+
+// ── Lesson loader ──────────────────────────────────────────────────────────────
+loadLessons(join(__dirname, '../lessons'));
 
 // ── Rate limiting (T068) ───────────────────────────────────────────────────────
 
@@ -265,6 +269,14 @@ FULL_TEXT: <text>`;
 // ── Routes (existing — unchanged) ─────────────────────────────────────────────
 
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
+
+// ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
+app.get('/api/lessons', (req, res) => res.json(getLessons()));
+app.get('/api/lessons/:id', (req, res) => {
+  const lesson = getLesson(req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  res.json(lesson);
+});
 
 app.post('/api/scores', async (req, res) => {
   const { moves, depth } = req.body;

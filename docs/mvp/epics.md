@@ -511,16 +511,22 @@ Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in In
 
 *Socratic Board (`socratic` screen):*
 - Interactive `Board` at lesson's Socratic position
-- States: `ask` → `correct` (Coach affirms) / `wrong` (retry) / 2nd wrong (correct column highlighted → auto-advance) — Gap 7
+- **Full 3-outcome state machine (product_decisions line 96 governs; the mockup's Socratic has no attempt counter and is incomplete — do not follow it for this flow):**
+  - `ask`: user selects a column; attempt counter initialised to 0
+  - attempt 1 wrong → state `wrong1`: show "Try again" feedback; attempt counter = 1
+  - attempt 2 wrong → state `wrong2`: briefly highlight the correct column using the existing `win`/`claim` overlay style, then auto-advance after ~1.5 s (no user tap required)
+  - correct on either attempt → state `correct`: Coach affirms; user taps Continue to advance
 - Toolbar: Hint (static)
 
 *Confirmation Challenges (`clchallenge` screen):*
 - Reuses `ChallengeBoard` from Epic 2a with `lessonMode` flag. **`lessonMode` prop contract (defined here, consumed here):** when `lessonMode={true}`, `ChallengeBoard` swaps the header to the lesson name (i18n key from the lesson JSON `title`) and on set completion navigates to the Saga Map screen instead of the Post-Set Summary screen. The `lessonMode` prop is added to `ChallengeBoard` in Epic 4's implementation — it is not part of Epic 2a's deliverables.
 - Header: "← [Lesson Name] — Practice"
 - Last challenge complete → return to Saga Map; lesson marked done
-- Completion: past all slides + ≥1 correct answer; Lesson 4 completes on last slide only (Gap 7)
+- Completion: for lessons with `confirmationCategory != null` — past all slides + ≥1 correct confirmation answer; for lessons with `confirmationCategory == null` (reading-only, e.g. Lesson 4) — completes on last slide only (Gap 7)
 - `store.saveLessonProgress(lessonId, 'complete')` written immediately on last step
 - `track('lesson_completed', { lessonId })`
+
+**Saga Map node-state derivation:** `GET /api/lessons` returns `[{ id, title, order, free }]`. The client derives each node's display state from that list + `store.getLessonProgress(lessonId)` + auth tier — it does not receive node states from the server. The mockup's `LESSONS` array is illustrative only; it is not an API contract.
 
 **Backend / API:**
 - Server loads all `lessons/lesson-NN-*.json` at startup; validates schema
@@ -528,11 +534,17 @@ Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in In
 - `GET /api/lessons/:id` — full lesson JSON
 
 **Lesson JSON schema:**
+
+`boardSpec` is a **display-only** column-height encoding: each entry is a string of `g` (player-1/green) and `d` (player-2/gray) discs from bottom to top. This is not a movestring; it is the visual rendering layer. Boards sourced from DB/KB movestrings must be converted to `boardSpec` at authoring time. Overlay `type` values (`claim`, `win`, etc.) reference the player-1/player-2 convention; the per-lesson `userPerspective` field (see below) states which player is the learner for that lesson (e.g. claimeven and parity lessons fix the learner as Yellow = player-2 per project convention).
+
+`socratic` and `confirmationCategory` are both **nullable** — lessons that are reading-only (e.g. Lesson 4 "Odd Rows") set both to `null`. `confirmationCount` (default 2) states how many puzzles to draw; puzzles are drawn at runtime via the existing `GET /api/puzzles/draw?category=<confirmationCategory>&n=<confirmationCount>` endpoint — they are not hardcoded IDs. (product_decisions line 71 referenced "confirmation challenge puzzle IDs"; that wording is superseded by this draw-by-category approach, which is the authoritative contract for Epic 4.)
+
 ```json
 {
   "id": "lesson-05-claimeven",
   "title": "Claimeven",
   "free": true,
+  "userPerspective": "yellow",
   "slides": [{
     "coachMessages": [{ "text": "...", "lead": "...", "faded": false }],
     "boardSpec": ["dg", "g", "dgd", "gdg", "dg", "d", ""],
@@ -541,7 +553,23 @@ Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in In
     "infoProse": "By answering above each Red disc..."
   }],
   "socratic": { "boardSpec": ["d", "g", "dg", "gd", "d", "", ""], "correctCol": 4 },
-  "confirmationCategory": "claimeven"
+  "confirmationCategory": "claimeven",
+  "confirmationCount": 2
+}
+```
+
+Reading-only lesson (no Socratic, no confirmation challenges):
+
+```json
+{
+  "id": "lesson-04-odd-rows",
+  "title": "Odd Rows Belong to Red",
+  "free": true,
+  "userPerspective": "red",
+  "slides": [{ "..." : "..." }],
+  "socratic": null,
+  "confirmationCategory": null,
+  "confirmationCount": 0
 }
 ```
 
@@ -557,6 +585,8 @@ Entirely greenfield. Lesson content = JSON files in repo (Gap 5); progress in In
 
 Content authoring + targeted backend additions per lesson-curriculum.md.
 
+The Socratic board is a static single-move exercise matching the mockup (`screens_lessons.jsx:212-255`): the AI has already made one mistake, the user finds the winning column. No dynamic AI mirroring. The cooperative AI property of claimeven is taught in the concept slides, not replayed in the Socratic board.
+
 | Lesson | Socratic? | Backend addition |
 |--------|-----------|-----------------|
 | 1: Spot the Win | Yes | Add `immediate_threat` to `PATTERN_KB` in `llmCoachHelpers.js` |
@@ -565,14 +595,14 @@ Content authoring + targeted backend additions per lesson-curriculum.md.
 | 4: Odd Rows Belong to Red | No | None (reading-only) |
 | 5: Claimeven | Yes | Basic narration prose for simulation trace |
 | 6: Z-Threats | Yes | Narration template in `buildPromptContext` citing `badgeCount` from `highlightMetadata` |
-| 7: Claimodd | Yes | New `detectClaimodd` (~25 lines sync) + `PATTERN_KB.claimodd` |
-| 8: Undercut | Yes | Generation-time query: `detectUndercut` fires on non-`correct_col` column |
+| 7: Claimodd | Yes | Add `claimodd` to `VALID_CATEGORIES`, `challengeSets.js` (free, stars ~3), and `en.json` coach phrase pools. Build `detectClaimodd` (~25 lines sync) + `PATTERN_KB.claimodd`. Puzzle population deferred to Epic 6. |
+| 8: Undercut | Yes | Verify approved puzzles exist for `confirmationCategory=undercut` where the undercut trap column is distinct from the correct column; if none exist, flag for Epic 6. |
 | 9: Overcut | Yes | Add `reason: string` (~10 lines) to `detectOvercut` result |
 | 10: Figure-7 Trap | Yes | Narration template citing both threat rows from `categoryEvidence.threat_cells` |
 | 11: J-Shape | Yes | Narration template citing triple-threat directions |
 
 **Additional:**
-- Extend `server/challengeSets.js` (Epic 2a) with Pro-category entries: undercut, overcut, figure_7, j_shape
+- Confirm all four Pro-category entries (undercut, overcut, figure_7, j_shape) are already present in `challengeSets.js` — they were added during Epic 2a. No action needed.
 - Add Pro-category Coach phrase **pools** (arrays of i18n keys) to the phrase library (Epic 2a)
 - All new user-facing strings go through i18n translation keys
 

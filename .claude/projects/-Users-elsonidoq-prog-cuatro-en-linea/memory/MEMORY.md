@@ -28,6 +28,8 @@
 - ["Heatmap" is ambiguous terminology](feedback_heatmap_terminology.md) — use "column-score overlay" instead; "heatmap" was used for something different in a PoC feature
 - [Auth header required on upgraded fetches](feedback_auth_header_on_fetch.md) — when adding req.user checks server-side, also add Authorization header at the fetch call site; loadUser only reads the header
 - [Navigator spreads params as direct props](feedback_navigator_params_spread.md) — don't destructure a `params` object in screens; navigation params are spread as individual props
+- [Product doc authoring](feedback_product_doc_authoring.md) — MVP product docs state requirements not implementation; anchor principles to llm_feedback rows; reconcile against product_vision/product_decisions (latter wins); verify current-state claims against code
+- [ChallengeScreen mode extensions — audit `category` references](feedback_challenge_screen_mode_extensions.md) — any new mode that replaces `category` must replace all bare `category` refs with `effectiveCategory`; silent bug produces `coach.undefined.prompt.0`
 
 ## References — solver and board mechanics
 
@@ -80,6 +82,8 @@
 - [forced_win refactor — done](project_forced_win_refactor.md) — CompletionStrategy interface; bitboard-only AI response; interaction_mode='sequence' on puzzles
 - [Commit-first: click = immediate commit](project_commit_first_no_confirm.md) — no confirmation step; pendingMove state dead; confirm/cancel buttons removed 2026-05-27
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category; don't reuse the slug
+- [Coach + Deep Reveal product docs](project_coach_deep_reveal_docs.md) — coach_explanation_principles.md (content) + deep_reveal_product.md (AUTHORITATIVE annotation layer, P1–P6, read-aloud deferred) + deep_reveal_improvements.md (stale prior-art, Phase 1 already shipped); real new work = server-side validate-then-cache
+- [Epic 4 implementation state](project_epic4_implementation.md) — all 4 lesson screens + API shipped; lessons/ at connect-four/lessons/; ChallengeScreen lessonMode wired; key gotchas documented
 
 ## Project — implementation details
 
@@ -106,7 +110,8 @@
 
 ## References — board rendering
 
-- [Board disc color inversion](reference_board_color_inversion.md) — `'red'` value renders as GREEN disc, `'yellow'` as GRAY; even move_string length → green; odd → gray
+- [Board disc color inversion + production Board API](reference_board_color_inversion.md) — `'red'` renders GREEN, `'yellow'` renders GRAY; production Board takes `board[][]` not `cols`/`mkCols` (mockup-only)
+- [User tier source](reference_tier_source.md) — `session.tier` is always undefined; tier is on the profile, read via `store.getProfile().tier` (see PostSetSummaryScreen.jsx:50)
 
 - [recordPuzzleAttempt canonical shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case: puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms; wrong shape silently corrupts stats
 - [SequenceHandler owns its entire UI](project_sequence_handler_ui.md) — self-contained Board/prompt/banners/Next; hardcoded English banners; onNext has no args (success-only); use takeover mode or refactor

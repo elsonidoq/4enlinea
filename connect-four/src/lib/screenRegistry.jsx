@@ -5,8 +5,11 @@ import { ChallengeScreen } from '../screens/ChallengeScreen.jsx';
 import { PostSetSummaryScreen } from '../screens/PostSetSummaryScreen.jsx';
 import { DifficultyPickerScreen } from '../screens/DifficultyPickerScreen.jsx';
 import { GameScreen } from '../screens/GameScreen.jsx';
-import { PlaceholderScreen } from '../screens/PlaceholderScreen.jsx';
 import { ReviewScreen } from '../screens/ReviewScreen.jsx';
+import { SagaScreen } from '../screens/SagaScreen.jsx';
+import { ConceptScreen } from '../screens/ConceptScreen.jsx';
+import { SocraticScreen } from '../screens/SocraticScreen.jsx';
+import { CLChallengeScreen } from '../screens/CLChallengeScreen.jsx';
 import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
 import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
@@ -14,10 +17,10 @@ import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 export const SCREENS = {
   home: HomeScreen,
   stats: StatsScreen,
-  saga: (props) => <PlaceholderScreen {...props} screenKey="saga" />,
-  concept: (props) => <PlaceholderScreen {...props} screenKey="concept" />,
-  socratic: (props) => <PlaceholderScreen {...props} screenKey="socratic" />,
-  clchallenge: (props) => <PlaceholderScreen {...props} screenKey="clchallenge" />,
+  saga: SagaScreen,
+  concept: ConceptScreen,
+  socratic: SocraticScreen,
+  clchallenge: CLChallengeScreen,
   setpicker: SetPickerScreen,
   challenge: ChallengeScreen,
   summary: PostSetSummaryScreen,

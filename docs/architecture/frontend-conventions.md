@@ -130,6 +130,12 @@ import { buildBoard } from '../lib/board.js';
 ```
 `buildBoard(moves)` accepts a 0-indexed move string and returns a `board[row][col]` 2D array using `'empty'`/`'red'`/`'yellow'` cell values (matching the Board component's expected format).
 
+`boardSpecToBoard(boardSpec)` — converts a lesson `boardSpec` (Array[7] of `'g'`/`'d'` strings,
+bottom→top per column) to the `Board` component's `board` prop format (`board[row][col]` 6×7
+array with `'empty'`/`'red'`/`'yellow'` values). `'g'`→`'red'` (renders green disc),
+`'d'`→`'yellow'` (renders gray disc). Exported from `src/lib/board.js`. Used by ConceptScreen
+and SocraticScreen.
+
 ## Challenge Session State Machine
 
 Multi-puzzle challenge sessions (`ChallengeScreen`) follow a three-phase state machine driven by a `phase` string:

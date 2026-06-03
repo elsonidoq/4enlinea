@@ -36,7 +36,15 @@ function getWinLine(board, row, col, color) {
   return [];
 }
 
-export function ChallengeScreen({ go, goBack, category }) {
+export function ChallengeScreen({
+  go, goBack,
+  category,
+  lessonMode = false,
+  lessonId,
+  lessonTitle,
+  confirmationCategory,
+  confirmationCount,
+}) {
   const { t } = useTranslation();
   const { store, session } = useStore();
 
@@ -104,7 +112,8 @@ export function ChallengeScreen({ go, goBack, category }) {
     setSeqPosition(puzzle.move_string ?? '');
 
     // Pick a random prompt key from coach.<category>.prompt.*
-    const candidateKeys = [0, 1, 2].map(i => `coach.${category}.prompt.${i}`);
+    const effectiveCategory = lessonMode ? confirmationCategory : category;
+    const candidateKeys = [0, 1, 2].map(i => `coach.${effectiveCategory}.prompt.${i}`);
     const validKeys = candidateKeys.filter(k => t(k) !== k);
     const pickedKey = validKeys.length > 0
       ? validKeys[Math.floor(Math.random() * validKeys.length)]
@@ -121,7 +130,9 @@ export function ChallengeScreen({ go, goBack, category }) {
     async function loadPuzzles() {
       try {
         const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
-        const res = await fetch(`${API}/api/puzzles/draw?category=${category}&n=8`, { headers });
+        const drawCategory = lessonMode ? confirmationCategory : category;
+        const drawN        = lessonMode ? confirmationCount    : 8;
+        const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { headers });
         const data = await res.json();
         const loaded = data.puzzles || [];
         sessionIdRef.current = data.session_id ?? null;
@@ -141,7 +152,7 @@ export function ChallengeScreen({ go, goBack, category }) {
     }
     loadPuzzles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
+  }, [category, lessonMode, confirmationCategory, confirmationCount]);
 
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
@@ -231,6 +242,7 @@ export function ChallengeScreen({ go, goBack, category }) {
   }
 
   function handleBack() {
+    if (lessonMode) { go('concept', { lessonId }); return; }
     if (session || window.confirm(t('challenge.leave_confirm_body', "Your progress won't be saved."))) {
       go('setpicker');
     }
@@ -238,10 +250,11 @@ export function ChallengeScreen({ go, goBack, category }) {
 
   function handleNext() {
     const current = puzzles[currentIdx];
+    const effectiveCategory = lessonMode ? confirmationCategory : category;
     const newResults = [...results, {
       puzzleId: current?.id,
       quality: evaluation?.quality ?? 'blunder',
-      category,
+      category: effectiveCategory,
     }];
     setResults(newResults);
     advanceSession();
@@ -251,6 +264,10 @@ export function ChallengeScreen({ go, goBack, category }) {
       setCurrentIdx(nextIdx);
       initPuzzle(puzzles[nextIdx]);
       setPhase('pre-move');
+    } else if (lessonMode) {
+      store.saveLessonProgress(lessonId, 'complete');
+      track('lesson_completed', { lessonId });
+      go('saga');
     } else {
       go('summary', { results: newResults, category });
     }
@@ -472,13 +489,30 @@ export function ChallengeScreen({ go, goBack, category }) {
     ? { col: lastDrop?.c, type: evaluation.badge, label: QUALITY_GLYPH[evaluation.quality] }
     : undefined;
 
+  if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
+        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--text-sub)' }}>
+          <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
+          <button onClick={handleBack} style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid var(--surface-3)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', fontSize: 14 }}>
+            {t('common.back', 'Back')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'loading') {
     return (
       <div style={{
         display: 'flex', flexDirection: 'column', minHeight: '100vh',
         background: 'var(--bg-chal)',
       }}>
-        <TopBar onBack={handleBack} />
+        <TopBar
+          onBack={handleBack}
+          title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
+        />
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--ink-soft)', fontSize: 15, fontFamily: 'var(--font-body)',
@@ -501,6 +535,7 @@ export function ChallengeScreen({ go, goBack, category }) {
       {/* Top bar */}
       <TopBar
         onBack={handleBack}
+        title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
         meta={puzzles.length > 0 ? t('challenge.progress', { current: currentIdx + 1, total: puzzles.length }) : undefined}
       />
 

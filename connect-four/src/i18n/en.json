@@ -558,5 +558,18 @@
       "markReviewed": "Mark as reviewed",
       "markedReviewed": "Marked as reviewed"
     }
+  },
+  "socratic": {
+    "ask":     "I'm going to make a mistake here. See if you can punish it.",
+    "wrong1":  "Not quite — look for the right square. Try again.",
+    "wrong2":  "Let me show you.",
+    "correct": "Exactly! You saw it.",
+    "hint":    "Look for an even square directly above one of my discs."
+  },
+  "lesson": {
+    "confirmation": {
+      "header": "{{title}} — Practice",
+      "empty":  "No practice puzzles available yet."
+    }
   }
 }

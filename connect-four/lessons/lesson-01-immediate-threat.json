@@ -1,0 +1,47 @@
+{
+  "id": "immediate-threat",
+  "title": "Immediate Threats",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "An immediate threat is a move that wins the game on the very next turn.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["", "d", "d", "d", "", "", ""],
+      "overlays": [
+        { "c": 0, "r": 0, "type": "tg" },
+        { "c": 4, "r": 0, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Winning move" }
+      ],
+      "infoProse": "When you have three discs in a row with an open space at either end, you have an immediate threat. Playing in that space wins the game instantly."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Your opponent must block your threat — or you win on the spot!",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["g", "d", "d", "d", "", "", ""],
+      "overlays": [
+        { "c": 4, "r": 0, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Your threat" }
+      ],
+      "infoProse": ""
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["g", "d", "d", "d", "", "", ""],
+    "correctCol": 4
+  },
+  "confirmationCategory": "immediate_threat",
+  "confirmationCount": 2
+}

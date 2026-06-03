@@ -1,7 +1,4 @@
 {
-  "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
       "mcp__chrome-devtools__take_screenshot",
@@ -10,5 +7,9 @@
       "mcp__chrome-devtools__navigate_page",
       "mcp__chrome-devtools__list_pages"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
   }
 }
