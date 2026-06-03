@@ -1,0 +1,46 @@
+{
+  "id": "block-before-build",
+  "title": "Block Before Build",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "When your opponent has an immediate threat, you must block it. There is no better move.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["g", "g", "g", "", "d", "d", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Block here" }
+      ],
+      "infoProse": "Red has three discs in a row at columns 0–2. If you don't play column 3, Red wins on the next turn. Blocking is your only option."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Block before you build — always neutralize your opponent's threat before creating your own.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["g", "g", "g", "", "d", "", "d"],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Block first" }
+      ],
+      "infoProse": "Column 5 is tempting — playing there gives you three in a row (columns 4–6). But Red's threat at column 3 is faster. Block first, then build."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["g", "g", "g", "", "d", "", ""],
+    "correctCol": 3
+  },
+  "confirmationCategory": "forced_block",
+  "confirmationCount": 2
+}

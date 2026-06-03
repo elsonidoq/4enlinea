@@ -50,6 +50,10 @@ validateMove(position, col) → { valid: boolean, reason?: string }
 ## Category Registry
 
 **MUST**: All valid category slugs are defined once in `server/categories.js` as `VALID_CATEGORIES`, `PAID_CATEGORIES`, `CATEGORY_ORDER`, and `CATEGORY_NAMES`.
+
+Current slugs (as of Epic 6): `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `claimodd`, `undercut`, `overcut`, `figure_7`, `j_shape`.
+
+`odd_even_threat` was added in Epic 6 as a free 2-star category. It is Red-only, `single_move` interaction mode, and has no `highlight_metadata`. Detection uses `immediateThreats` not `getMajorThreatCells`.
 **MUST NOT**: Hard-code category slug lists anywhere else in server code — always import from `categories.js`.
 
 ## Classifier vs Predicate Evaluator — Explicit Separation

@@ -1,0 +1,46 @@
+{
+  "id": "z-threats",
+  "title": "Z-Threats",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "The gap above your threat is odd — that means you own it. Your opponent can't block it because they'd need an even number of moves.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Z-Threat cell" }
+      ],
+      "infoProse": "Column 3 has two Yellow discs at rows 0 and 1. Three empty cells sit above the threat at row 2 (rows 3, 4, 5). Because this gap is odd, Yellow reaches the threat before Red can fill past it."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "When your opponent is forced to play elsewhere, the odd gap means the turn order falls in your favor. You get the winning move.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Z-Threat cell" }
+      ],
+      "infoProse": "Even if the opponent tries to block column 3, the odd number of empty cells above means they cannot fill all of them before Yellow plays the winning move. The parity is locked in Yellow's favor."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+    "correctCol": 3
+  },
+  "confirmationCategory": "z_threat",
+  "confirmationCount": 2
+}

@@ -1,0 +1,64 @@
+{
+  "id": "odd-rows-belong-to-red",
+  "title": "Odd Rows Belong to Red",
+  "free": true,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "In Connect Four, odd rows belong to Red, even rows to Yellow. The first piece in any column goes to row 0, the bottom row — Red's row.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["", "", "", "gd", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "claim" },
+        { "c": 3, "r": 1, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Parity row marker" }
+      ],
+      "infoProse": "The bottom row (row 0) belongs to Red because Red always plays first. Yellow gets row 1, Red gets row 2, and so on. This bottom-up alternation is called parity and it never changes."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Gravity means pieces fill from the bottom. Red gets row 0, Yellow row 1, Red row 2 — bottom-up parity is locked.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["", "", "", "gdg", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "claim" },
+        { "c": 3, "r": 1, "type": "claim" },
+        { "c": 3, "r": 2, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Parity row marker" }
+      ],
+      "infoProse": "With three discs stacked in column 3, the alternating parity is clear: Red (bottom), Yellow (middle), Red (top). Every piece obeys this bottom-up rule."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Understanding which rows belong to which player is the foundation for Claimeven, Z-Threats, and all advanced tactics.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["", "", "", "gdg", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "claim" },
+        { "c": 3, "r": 1, "type": "claim" },
+        { "c": 3, "r": 2, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Parity row marker" }
+      ],
+      "infoProse": "Mastering parity is what separates beginners from advanced players. Every fork, threat, and blockade traces back to this one idea."
+    }
+  ],
+  "socratic": null,
+  "confirmationCategory": null,
+  "confirmationCount": 0
+}

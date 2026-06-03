@@ -36,12 +36,6 @@ export function SocraticScreen({ go, goBack, lessonId }) {
       });
   }, [lessonId]);
 
-  // Auto-advance timer on wrong2 phase
-  useEffect(() => {
-    if (phase !== 'wrong2') return;
-    const tid = setTimeout(() => advance(), 1500);
-    return () => clearTimeout(tid); // cleanup prevents post-unmount fire
-  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function advance() {
     if (lesson.confirmationCategory != null && lesson.confirmationCount > 0) {
@@ -131,7 +125,7 @@ export function SocraticScreen({ go, goBack, lessonId }) {
           label={t('common.hint', 'Hint')}
           onClick={() => setShowHint(true)}
         />
-        {phase === 'correct' && (
+        {(phase === 'correct' || phase === 'wrong2') && (
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={advance}>
             {t('common.continue', 'Continue')}
           </button>

@@ -15,12 +15,12 @@ import { useState, useRef, useCallback, useEffect } from 'react';
  * @param {Object} opts
  * @param {number} [opts.minTopPct=30]
  * @param {number} [opts.maxTopPct=80]
- * @param {number} [opts.initialSplitPct=60]
+ * @param {number} [opts.initialSplitPct=40]
  */
 export function useDragSplit({
   minTopPct = 30,
   maxTopPct = 80,
-  initialSplitPct = 60,
+  initialSplitPct = 40,
 } = {}) {
   const [splitPct, setSplitPct] = useState(initialSplitPct);
   const [containerH, setContainerH] = useState(0);

@@ -1,0 +1,52 @@
+{
+  "id": "j-shape",
+  "title": "J-Shape",
+  "free": false,
+  "userPerspective": "yellow",
+  "_sourceMovestringForBoardSpec": "22533013114",
+  "_socraticSourceMovestring": "22533013114",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "The J-Shape: an L-shaped cluster of 4 discs creating three winning continuations. Your opponent can block one, maybe two — but not all three.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+      "overlays": [
+        { "c": 0, "r": 3, "type": "tg" },
+        { "c": 2, "r": 2, "type": "tg" },
+        { "c": 4, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Triple threat" }
+      ],
+      "infoProse": "Five Yellow discs form a compact cluster across columns 0-4. The key cells unlock threats in three directions: a diagonal through the center, and horizontal continuations at either end of row 2. Blocking one or two still leaves the third."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "With threats in three directions (diagonal, horizontal-center, horizontal-right), the opponent needs three moves to block all of them. They only get one.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+      "overlays": [
+        { "c": 0, "r": 3, "type": "tg" },
+        { "c": 2, "r": 2, "type": "tg" },
+        { "c": 4, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Triple threat" }
+      ],
+      "infoProse": "Three winning cells, one move to set them up. The J-Shape is the most powerful attacking formation in Connect Four."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+    "correctCol": 2
+  },
+  "confirmationCategory": "j_shape",
+  "confirmationCount": 2
+}

@@ -16,7 +16,7 @@ Exception: `tracks` uses `bigserial` because it is append-only and never referen
 ## Category Representation
 
 **MUST**: Categories are stored as `text` slugs, not integers (first established by migration 011, which replaced integer category columns; extended to the current 11 slugs by migration 015).
-Valid slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape`.
+Valid slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape`.
 Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_category_check` constraint. `'unknown'` is used when the post-game review classifier returns no pattern. The full valid set for the `blunders` table is:
 `'immediate_threat'`, `'forced_block'`, `'double_threat'`, `'forced_win'`, `'forbidden_columns'`, `'z_threat'`, `'claimeven'`, `'undercut'`, `'overcut'`, `'figure_7'`, `'j_shape'`, `'unknown'`.
 

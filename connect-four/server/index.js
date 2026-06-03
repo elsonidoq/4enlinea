@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
+import { classify, checkWin, classifyAll, Board, getImmediateThreats, detectZThreat, detectFigure7, detectJShape } from './classifier.js';
 import { explainSimulate } from './explainSimulate.js';
 import {
   TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
@@ -666,6 +666,31 @@ async function buildExplainContext(movestring, col, rounds = 1) {
   const activePatterns = deltaRows.map(row => row.name);
   const kbSection = buildKBSection(activePatterns);
 
+  // ── Narration templates for Deep Reveal ──────────────────────────────────
+  // Run sync detectors against pre-move board for metadata-rich narration prose.
+  const zResult = detectZThreat(board, preScores);
+  const fig7Result = detectFigure7(board, preScores);
+  const jResult = detectJShape(board, preScores);
+
+  const claimevenNarration = userResult.patterns.claimeven?.ratio > 0
+    ? 'Yellow wins by always responding above Red. The claimeven strategy guarantees Yellow controls every even-row cell that Red plays into — Red cannot escape the parity lock.'
+    : null;
+
+  const zThreatNarration = zResult.matched && zResult.highlightMetadata?.badgeCount != null
+    ? `The Z-Threat in column ${zResult.highlightMetadata.column + 1} has an odd gap count of ${zResult.highlightMetadata.badgeCount}. This odd count means the opponent cannot block this threat — every move they make in this column fills an odd cell, advancing Yellow toward the winning even row.`
+    : null;
+
+  const figure7Narration = fig7Result.matched && fig7Result.categoryEvidence?.threat_cells
+    ? (() => {
+        const rows = [...new Set(fig7Result.categoryEvidence.threat_cells.map(t => t.row))];
+        return `The Figure-7 creates threats at rows ${rows.map(r => r + 1).join(' and ')} (1-indexed) that cannot both be blocked. Blocking one leaves the other exposed — and turn order guarantees the player wins.`;
+      })()
+    : null;
+
+  const jShapeNarration = jResult.matched
+    ? 'The J-Shape cluster creates three simultaneous winning threats: vertical, horizontal, and diagonal. The opponent would need three moves to block all three — they only get one.'
+    : null;
+
   const userExamplesByPattern = {};
   for (const [name, entry] of Object.entries(userResult.patterns)) {
     if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
@@ -681,6 +706,7 @@ async function buildExplainContext(movestring, col, rounds = 1) {
     userOutcomes: userResult.outcomes,
     contrastOutcomes: contrastResult.outcomes,
     kbSection, playerName, forcedBlockNote, blunderNote, userExamplesByPattern,
+    claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration,
   });
 
   return { prompt };

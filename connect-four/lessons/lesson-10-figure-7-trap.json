@@ -1,0 +1,50 @@
+{
+  "id": "figure-7",
+  "title": "Figure-7 Trap",
+  "free": false,
+  "userPerspective": "yellow",
+  "_sourceMovestringForBoardSpec": "441314453361115",
+  "_socraticSourceMovestring": "441314453361115",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "The Figure-7: an L-shape of 4 discs plus one key cell that creates two threats. The opponent cannot block both.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+      "overlays": [
+        { "c": 2, "r": 2, "type": "tg" },
+        { "c": 2, "r": 3, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Winning cells" }
+      ],
+      "infoProse": "Four Yellow discs form a compact L-shape around columns 3-4. Playing in column 2 creates threats in two different directions: a horizontal 4-in-a-row at row 2, and a diagonal 4-in-a-row through the center. The opponent can only stop one."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Blocking one threat leaves the other exposed. The turn order means you always get the winning move.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+      "overlays": [
+        { "c": 2, "r": 2, "type": "tg" },
+        { "c": 2, "r": 3, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Unblockable threats" }
+      ],
+      "infoProse": "If the opponent blocks one cell, you win through the other. Two threats from one setup — this is why the Figure-7 trap is so powerful."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+    "correctCol": 4
+  },
+  "confirmationCategory": "figure_7",
+  "confirmationCount": 2
+}

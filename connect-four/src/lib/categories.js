@@ -1,7 +1,8 @@
 export const CATEGORY_ORDER = [
   'immediate_threat', 'forced_block', 'double_threat',
   'forced_win', 'forbidden_columns',
-  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
+  'odd_even_threat',
+  'z_threat', 'claimeven', 'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ];
 
 export const CATEGORY_NAMES = {
@@ -10,8 +11,10 @@ export const CATEGORY_NAMES = {
   double_threat:     'Double Threat',
   forced_win:        'Forced Win',
   forbidden_columns: 'Forbidden Columns',
+  odd_even_threat:   'Odd & Even Threats',
   z_threat:          'Z-Threat',
   claimeven:         'Claimeven',
+  claimodd:          'Claimodd',
   undercut:          'Undercut',
   overcut:           'Overcut',
   figure_7:          'Figure 7',
@@ -26,7 +29,9 @@ export const CATEGORY_CHIPS = {
   forced_win:        { label: 'Forced Win', color: '#c084fc', bg: 'rgba(147,51,234,.2)', border: 'rgba(147,51,234,.4)' },
   forbidden_columns: { label: 'Forbidden', color: '#94a3b8', bg: 'rgba(100,116,139,.2)', border: 'rgba(100,116,139,.4)'},
   z_threat:          { label: 'Z-Threat',  color: '#34d399', bg: 'rgba(16,185,129,.2)',  border: 'rgba(16,185,129,.4)' },
+  odd_even_threat:   { label: 'OddEven',   color: '#fff',    bg: '#4A90A4',                border: '#4A90A4'             },
   claimeven:         { label: 'Claimeven', color: '#38bdf8', bg: 'rgba(14,165,233,.2)',  border: 'rgba(14,165,233,.4)' },
+  claimodd:          { label: 'Claimodd',  color: '#2dd4bf', bg: 'rgba(20,184,166,.2)',  border: 'rgba(20,184,166,.4)' },
   undercut:          { label: 'Undercut',  color: '#fb923c', bg: 'rgba(249,115,22,.2)',  border: 'rgba(249,115,22,.4)' },
   overcut:           { label: 'Overcut',   color: '#a78bfa', bg: 'rgba(139,92,246,.2)',  border: 'rgba(139,92,246,.4)' },
   figure_7:          { label: 'Figure 7',  color: '#f472b6', bg: 'rgba(236,72,153,.2)',  border: 'rgba(236,72,153,.4)' },
@@ -42,8 +47,10 @@ export const GOAL_PROMPTS = {
   zugzwang:          'Force your opponent into a losing position with a sequence of moves that leave them no good options.',
   parity_control:    'Control the parity of this column to secure the win.',
   forbidden_columns: 'Identify which columns you must avoid — playing there would hand your opponent an immediate win.',
+  odd_even_threat:   'Red has two threat moves. Which one lands on an odd row?',
   z_threat:          'Identify the column where a Z-threat gives you unstoppable parity control.',
   claimeven:         'Use the Claimeven strategy — identify which columns Yellow can claim to guarantee a draw.',
+  claimodd:          'Break the claimeven lock by creating an odd-row anchor.',
   undercut:          'Find the move that undercuts your opponent, taking the square below their threat.',
   overcut:           'Find the move that overcomes your opponent by playing above their intended threat.',
   figure_7:          'Spot the Figure-7 pattern and play the key move to exploit it.',

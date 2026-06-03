@@ -4,14 +4,10 @@ import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
-import { AuthModal } from '../components/AuthModal.jsx';
-import { Icon } from '../components/Icon.jsx';
-import { useStore } from '../store/ProfileStore.jsx';
 import { useGameBoard } from '../lib/useGameBoard.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { track } from '../lib/track.js';
-import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
-import { SplitReveal } from '../components/SplitReveal.jsx';
+import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -107,7 +103,6 @@ export function ExplorerScreen({
   fullMovestring,
 }) {
   const { t } = useTranslation();
-  const { session } = useStore();
 
   const mistakeIndices = (moves || [])
     .filter(m => m.quality !== 'optimal')
@@ -163,15 +158,6 @@ export function ExplorerScreen({
 
   // ── Deep Reveal state ─────────────────────────────────────────────
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
-  const [deepRevealLoading, setDeepRevealLoading] = useState(false);
-  const [deepRevealExplanation, setDeepRevealExplanation] = useState(null);
-  const [deepRevealBestLine, setDeepRevealBestLine] = useState([]);
-  const [deepRevealCached, setDeepRevealCached] = useState(false);
-  const [deepRevealError, setDeepRevealError] = useState(null);
-  const [flagged, setFlagged] = useState(false);
-  const [flagOpen, setFlagOpen] = useState(false);
-  const [flagNote, setFlagNote] = useState('');
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [zhCells, setZhCells] = useState([]);
   const [coachMessages, setCoachMessages] = useState([]);
 
@@ -180,85 +166,8 @@ export function ExplorerScreen({
     setCoachMessages(msgs);
   }, []);
 
-  async function handleDeepReveal() {
+  function handleDeepReveal() {
     setDeepRevealOpen(true);
-    setDeepRevealLoading(true);
-    setDeepRevealExplanation(null);
-    setDeepRevealError(null);
-    setFlagged(false);
-    setFlagOpen(false);
-    setFlagNote('');
-    setZhCells(new Map());
-
-    if (!session?.access_token) {
-      setDeepRevealOpen(false);
-      setShowAuthModal(true);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-    try {
-      const res = await fetch(`${API}/api/explain-move-llm`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          movestring: currentRewindedMoves,
-          col: currentSelectedMove?.col,
-        }),
-      });
-      clearTimeout(timeoutId);
-
-      if (res.status === 401) {
-        setDeepRevealOpen(false);
-        setShowAuthModal(true);
-        return;
-      }
-
-      const data = await res.json();
-      setDeepRevealExplanation(data.explanation || data.one_liner || '');
-      setDeepRevealBestLine(data.bestLine || []);
-      setDeepRevealCached(data.cached || false);
-      setDeepRevealLoading(false);
-
-      track('deep_reveal_viewed', { context: 'position_explorer', cached: data.cached || false });
-    } catch {
-      clearTimeout(timeoutId);
-      setDeepRevealLoading(false);
-      const fallback = currentSelectedMove?.patternTag
-        ? t(`coach.categories.${currentSelectedMove.patternTag}`, currentSelectedMove.patternTag)
-        : t('coach.sparring.user_move.generic.0', 'Try a different approach.');
-      setDeepRevealError(fallback);
-    }
-  }
-
-  async function handleFlag(note = '') {
-    if (flagged) return;
-    setFlagOpen(false);
-    try {
-      const res = await fetch(`${API}/api/llm-feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          movestring: currentRewindedMoves,
-          col: currentSelectedMove?.col,
-          llm_prompt: '',
-          llm_response: deepRevealExplanation || '',
-          human_note: note,
-          feature: 'position_explorer',
-        }),
-      });
-      if (res.ok) {
-        setFlagged(true);
-      }
-    } catch {
-      // silent
-    }
   }
 
   function handlePrevMistake() {
@@ -285,14 +194,33 @@ export function ExplorerScreen({
       {deepRevealOpen ? (
         <>
           <CoachDialog messages={coachMessages} size={58} />
-          <SplitReveal
+          <DeepRevealPane
             isOpen={deepRevealOpen}
-            onClose={() => {
-              setDeepRevealOpen(false);
-              setZhCells([]);
-            }}
+            onClose={() => setDeepRevealOpen(false)}
             closeLabel={t('common.collapse', 'Collapse')}
-            initialSplitPct={65}
+            moveString={currentRewindedMoves}
+            col={currentSelectedMove?.col}
+            feature="position_explorer"
+            onReveal={d => track('deep_reveal_viewed', { context: 'position_explorer', cached: d.cached ?? false })}
+            onZhCellsChange={setZhCells}
+            userMajorThreats={userMajorThreats}
+            headerContent={currentSelectedMove?.patternTag && (
+              <div style={{ marginBottom: 12 }}>
+                <span style={{
+                  background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
+                  fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
+                }}>
+                  {currentSelectedMove.patternTag.replace(/_/g, ' ')}
+                </span>
+              </div>
+            )}
+            timeoutContent={
+              <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+                {currentSelectedMove?.patternTag
+                  ? t(`coach.categories.${currentSelectedMove.patternTag}`, currentSelectedMove.patternTag)
+                  : t('coach.sparring.user_move.generic.0', 'Try a different approach.')}
+              </p>
+            }
             boardContent={
               <ExplorerBoard
                 key={selectedMistakeIdx}
@@ -308,155 +236,8 @@ export function ExplorerScreen({
                 onCoachMessages={handleCoachMessages}
               />
             }
-            revealContent={
-            <>
-              {deepRevealLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    border: '3px solid #e2ddd2', borderTopColor: 'var(--disc-green)',
-                    animation: 'spin 0.7s linear infinite',
-                  }} />
-                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                    {t('deepReveal.loading', 'Reading the position…')}
-                  </p>
-                </div>
-              )}
-
-              {!deepRevealLoading && deepRevealError && (
-                <div style={{ padding: '8px 0' }}>
-                  <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
-                    {deepRevealError}
-                  </p>
-                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                    {t('sparring.explanationUnavailable')}
-                  </p>
-                </div>
-              )}
-
-              {!deepRevealLoading && !deepRevealError && deepRevealExplanation && (
-                <div>
-                  {currentSelectedMove?.patternTag && (
-                    <div style={{ marginBottom: 12 }}>
-                      <span style={{
-                        background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
-                        fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
-                      }}>
-                        {currentSelectedMove.patternTag.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                  )}
-
-                  <div style={{
-                    margin: '0 0 14px',
-                    fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
-                    color: 'var(--ink)',
-                  }}>
-                    <AnnotatedExplanation
-                      text={deepRevealExplanation}
-                      userMajorThreats={userMajorThreats}
-                      onHighlightsChange={setZhCells}
-                    />
-                  </div>
-
-                  {deepRevealBestLine.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{
-                        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
-                        letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
-                      }}>
-                        BEST LINE
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                        {deepRevealBestLine.map((col, i) => (
-                          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{
-                              background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8,
-                              padding: '4px 10px',
-                              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
-                              color: 'var(--ink)',
-                            }}>
-                              {col}
-                            </span>
-                            {i < deepRevealBestLine.length - 1 && (
-                              <Icon name="chevR" size={14} color="var(--ink-soft)" />
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 6 }}>
-                    {flagged ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                        }}>
-                          <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
-                          {t('sparring.explanationFlagged')}
-                        </span>
-                      </div>
-                    ) : flagOpen ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <textarea
-                          autoFocus
-                          value={flagNote}
-                          onChange={e => setFlagNote(e.target.value)}
-                          placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
-                          rows={3}
-                          style={{
-                            width: '100%', boxSizing: 'border-box', resize: 'none',
-                            fontFamily: 'var(--font-body)', fontSize: 13,
-                            border: '1px solid var(--border-dim)', borderRadius: 8,
-                            padding: '6px 8px', colorScheme: 'light',
-                          }}
-                        />
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => { setFlagOpen(false); setFlagNote(''); }}
-                            style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer',
-                              fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                            }}
-                          >
-                            {t('deepReveal.flagCancel', 'Cancel')}
-                          </button>
-                          <button
-                            onClick={() => handleFlag(flagNote.trim())}
-                            style={{
-                              background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
-                              fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
-                              borderRadius: 6, padding: '4px 12px',
-                            }}
-                          >
-                            {t('deepReveal.flagSend', 'Send')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center' }}>
-                        <button
-                          onClick={() => setFlagOpen(true)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                          }}
-                        >
-                          <Icon name="flag" size={15} />
-                          {t('sparring.flagExplanation')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
-          }
-        />
-          </>
+          />
+        </>
       ) : (
         <ExplorerBoard
           key={selectedMistakeIdx}
@@ -567,13 +348,6 @@ export function ExplorerScreen({
         </button>
       </Toolbar>
 
-      {/* Auth modal */}
-      {showAuthModal && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          reason="deep_reveal"
-        />
-      )}
     </div>
   );
 }

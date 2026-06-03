@@ -598,6 +598,9 @@ export function detectOvercut(board, scores) {
           !isT2Blocking(colRows, neutralised)) continue;
       return {
         matched: true,
+        reason: isT4SameParity(R, neutralised) ? 'same_parity_t4'
+              : isT5Exception(R, neutralised) ? 'active_forcing'
+              : 'chain_t2',
         highlightMetadata: {
           type: 'cells',
           cells: [
@@ -859,6 +862,101 @@ export function detectJShape(board, scores) {
   }
 
   return { matched: false };
+}
+
+/**
+ * T011 — Odd-Even Threat detection (Red-only, FR-009).
+ *
+ * Detects positions where Red (currentPlayer=1) has ≥2 distinct legal moves
+ * each creating a major threat, with one threat landing on an odd row
+ * (0-indexed: 0, 2, 4 — Red's parity) and one on an even row (1, 3, 5).
+ * correctCol = the column whose threat lands on the odd row (FR-007).
+ *
+ * Per-move threat enumeration uses board.immediateThreats() as required by
+ * FR-006 condition 2. getMajorThreatCells MUST NOT be used for this check.
+ *
+ * The `scores` parameter is accepted for signature consistency with other
+ * detectors but never read (FR-008 was removed as unreachable — all odd-row
+ * and even-row threats are both present by FR-006 conditions 3+4, so there is
+ * no tie-break scenario where all threats are odd-row).
+ *
+ * interaction_mode = 'single_move' (R-006). No highlight_metadata needed.
+ */
+export function detectOddEvenThreat(board, scores) {
+  // Red-only predicate (FR-009)
+  if (board.currentPlayer !== 1) return { matched: false };
+
+  const oddRowMoves  = []; // { col, landingRow } where landingRow % 2 === 0 (Red parity)
+  const evenRowMoves = []; // { col, landingRow } where landingRow % 2 === 1 (Yellow parity)
+
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] >= 6) continue;
+    const landingRow = board.colHeights[col];
+    // FR-006 condition 2: use immediateThreats, not getMajorThreatCells
+    const afterBoard = board.withMove(col);
+    if (afterBoard.immediateThreats(board.currentPlayer).length > 0) {
+      if (landingRow % 2 === 0) oddRowMoves.push({ col, landingRow });
+      else                       evenRowMoves.push({ col, landingRow });
+    }
+  }
+
+  // FR-006 conditions 3+4: need at least one odd-row AND one even-row threat
+  if (oddRowMoves.length === 0 || evenRowMoves.length === 0) return { matched: false };
+
+  // FR-008 (both-on-odd-row tie-break) is unreachable: FR-006 condition 4 requires
+  // one even-row threat, so any position where all threats are odd-row is filtered above.
+  // The `scores` parameter is accepted for signature consistency but never read.
+
+  // FR-007: correctCol = the column whose threat lands on the odd row (Red's parity)
+  const correctCol = oddRowMoves[0].col;
+  return {
+    matched: true,
+    correctCol,
+    highlightMetadata: null,
+    categoryEvidence: {
+      oddRowCol: oddRowMoves[0].col,
+      oddRow: oddRowMoves[0].landingRow,
+      evenRowCol: evenRowMoves[0].col,
+      evenRow: evenRowMoves[0].landingRow,
+    },
+  };
+}
+
+/**
+ * Claimodd detection — Red's response to Claimeven (synchronous, no solver needed).
+ * Detection predicate: all columns have even colHeights, it is Red's turn,
+ * the center column (col 3) is not full, and the solver score for col 3
+ * is positive and ties the maximum legal score.
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, correctCol?: number }}
+ * @complexity O(7)
+ * @cache not cached
+ */
+export function detectClaimodd(board, scores) {
+  // Must be Red's turn
+  if (board.currentPlayer !== 1) return { matched: false };
+
+  // All columns must have even heights
+  for (let col = 0; col < board.colHeights.length; col++) {
+    if (board.colHeights[col] % 2 !== 0) return { matched: false };
+  }
+
+  // Center column must not be full
+  if (board.colHeights[3] >= 6) return { matched: false };
+
+  // scores[3] must be positive and tie the maximum legal score
+  if (!scores || scores[3] <= 0) return { matched: false };
+
+  const legalScores = [];
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] < 6) legalScores.push(scores[col]);
+  }
+  const maxLegal = Math.max(...legalScores);
+
+  if (scores[3] !== maxLegal) return { matched: false };
+
+  return { matched: true, correctCol: 3 };
 }
 
 /**
@@ -1125,10 +1223,12 @@ export async function classifyAll(moves, scores, solver) {
     { detectorName: 'forced_win',        result: detectForcedWin(board, scores) },
     { detectorName: 'forbidden_columns', result: detectForbiddenColumns(board, scores) },
     { detectorName: 'z_threat',          result: detectZThreat(board, scores) },
+    { detectorName: 'odd_even_threat',   result: detectOddEvenThreat(board, scores) },
     { detectorName: 'undercut',          result: detectUndercut(board, scores) },
     { detectorName: 'overcut',           result: detectOvercut(board, scores) },
     { detectorName: 'figure_7',          result: detectFigure7(board, scores) },
     { detectorName: 'j_shape',           result: detectJShape(board, scores) },
+    { detectorName: 'claimodd',          result: detectClaimodd(board, scores) },
     { detectorName: 'claimeven',         result: await detectClaimeven(board, solver) },
   ];
 }

@@ -1,0 +1,46 @@
+{
+  "id": "overcut",
+  "title": "The Overcut",
+  "free": false,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "The overcut: when both threats are on the same parity row, the upper threat wins — it reaches the win first.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["gdd", "gdd", "gdd", "", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Upper threat wins" }
+      ],
+      "infoProse": "Red has a three-in-a-row at row 0 (columns 0–2, lower threat) and Yellow at row 2 (columns 0–2, upper threat). Both are even parity rows. Because they share parity, the lower threat does not kill the upper — Yellow's upper threat prevails."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Yellow's upper threat neutralizes Red's lower threat by reaching the winning cell first. Parity advantage flips the column.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["gdd", "gdd", "gdd", "", "", "", "g"],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Winning upper threat" }
+      ],
+      "infoProse": "With an extra Red disc at column 6 to show a more developed game, the overcut remains strong. The same-parity rule means Yellow's upper threat at row 2 wins regardless of the lower threat at row 0."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["gdd", "gdd", "gdd", "", "", "", ""],
+    "correctCol": 3
+  },
+  "confirmationCategory": "overcut",
+  "confirmationCount": 2
+}

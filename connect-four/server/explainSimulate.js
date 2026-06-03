@@ -25,6 +25,7 @@ import {
   detectOvercut,
   detectFigure7,
   detectJShape,
+  detectClaimodd,
   detectClaimeven,
 } from './classifier.js';
 
@@ -58,6 +59,7 @@ export const DETECTOR_REGISTRY = [
   { name: 'overcut',           fn: detectOvercut,          isAsync: false, histType: 'cell' },
   { name: 'figure_7',          fn: detectFigure7,          isAsync: false, histType: 'cell' },
   { name: 'j_shape',           fn: detectJShape,           isAsync: false, histType: 'cell' },
+  { name: 'claimodd',          fn: detectClaimodd,         isAsync: false, histType: 'col'  },
   { name: 'claimeven',         fn: detectClaimeven,        isAsync: true,  histType: 'col'  },
 ];
 

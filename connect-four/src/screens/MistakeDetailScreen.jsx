@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
-import { DeepRevealButton } from '../components/DeepRevealButton.jsx';
+import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -20,6 +20,7 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
   const [resolving, setResolving] = useState(false);
   const [highlightCol, setHighlightCol] = useState(null);
   const [zhCells, setZhCells] = useState([]);
+  const [deepRevealOpen, setDeepRevealOpen] = useState(false);
 
   const blunders = initialBlunders || [];
   const blunder = blunders[index];
@@ -75,11 +76,15 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
 
   function handlePrev() {
     setHighlightCol(null);
+    setDeepRevealOpen(false);
+    setZhCells([]);
     setIndex((index - 1 + blunders.length) % blunders.length);
   }
 
   function handleNext() {
     setHighlightCol(null);
+    setDeepRevealOpen(false);
+    setZhCells([]);
     setIndex((index + 1) % blunders.length);
   }
 
@@ -106,6 +111,11 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
 
   const moveNumber = (blunder.board_state || '').length + 1;
 
+  const coachMessages = [
+    { text: t('mistakes.detail.coach.line1', { n: blunder.move_played + 1 }), mood: 'think' },
+    { text: t('mistakes.detail.coach.line2'), mood: 'think' },
+  ];
+
   return (
     <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar
@@ -114,14 +124,32 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
         meta={t('mistakes.detail.moveLabel', { n: moveNumber })}
       />
 
+      {deepRevealOpen ? (
+        <>
+          <CoachDialog messages={coachMessages} />
+          <DeepRevealPane
+            isOpen={deepRevealOpen}
+            onClose={() => setDeepRevealOpen(false)}
+            moveString={blunder.board_state || ''}
+            col={blunder.move_played}
+            feature="past_mistakes"
+            onReveal={d => {
+              setHighlightCol(blunder.correct_move);
+              track('deep_reveal_viewed', { context: 'past_mistakes', cached: d.cached ?? false });
+            }}
+            onZhCellsChange={setZhCells}
+            userMajorThreats={userMajorThreats}
+            boardContent={
+              <div style={{ width: '100%' }}>
+                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+              </div>
+            }
+          />
+        </>
+      ) : (
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '0 18px 12px' }}>
         {/* Coach dialog */}
-        <CoachDialog
-          messages={[
-            { text: t('mistakes.detail.coach.line1', { n: blunder.move_played + 1 }), mood: 'think' },
-            { text: t('mistakes.detail.coach.line2'), mood: 'think' },
-          ]}
-        />
+        <CoachDialog messages={coachMessages} />
 
         {/* Board */}
         <div style={{ background: '#fff', borderRadius: 'var(--radius)', padding: 12, boxShadow: 'var(--shadow-sm)' }}>
@@ -166,21 +194,27 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
           </div>
         </div>
 
-        {/* Deep reveal */}
-        <div style={{ background: '#fff', borderRadius: 'var(--radius)', padding: 12, boxShadow: 'var(--shadow-sm)' }}>
-          <DeepRevealButton
-            moves={blunder.board_state || ''}
-            candidateCol={blunder.move_played}
-            highlightCol={blunder.correct_move}
-            onReveal={() => setHighlightCol(blunder.correct_move)}
-            onHighlightMove={setHighlightCol}
-            onZoneHighlightsChange={setZhCells}
-            userMajorThreats={userMajorThreats}
-            trackingContext="past_mistakes"
-            buttonLabel={t('mistakes.detail.whatShouldIHave')}
-            feature="past_mistakes"
-          />
-        </div>
+        {/* Deep reveal trigger */}
+        <button
+          onClick={() => setDeepRevealOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            padding: '13px 20px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: 'pointer',
+            border: 'none',
+            background: 'var(--disc-green, #2e9e57)',
+            color: '#fff',
+            fontFamily: 'inherit',
+          }}
+        >
+          {t('mistakes.detail.whatShouldIHave')}
+        </button>
 
         {/* Mark as reviewed */}
         {effectiveReviewed ? (
@@ -227,6 +261,7 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
           </button>
         )}
       </div>
+      )}
 
       {/* Toolbar: Prev / Next */}
       <Toolbar>

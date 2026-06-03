@@ -1,0 +1,46 @@
+{
+  "id": "claimodd",
+  "title": "Claimodd",
+  "free": true,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "When every column has an even height, Yellow's claimeven strategy dominates. Red gets the even rows — which are the wrong rows to win.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["gd", "gd", "gd", "gd", "gd", "gd", "gd"],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Red claims this odd row" }
+      ],
+      "infoProse": "Every column has exactly 2 discs (Red at bottom, Yellow above). This all-even board means Yellow's claimeven response is available everywhere. Red needs to claim an odd-row anchor to break the lock."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Red breaks the claimeven lock: play center column (col 3). This creates an odd-row anchor and sets up for deeper tactics.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["gd", "gd", "gd", "gdg", "gd", "gd", "gd"],
+      "overlays": [
+        { "c": 3, "r": 2, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Odd-row anchor" }
+      ],
+      "infoProse": "By playing column 3, Red gives it odd height (3). The next disc in column 3 would go to an even row (row 3) — but now Red has a foothold in the odd-height territory, breaking the claimeven symmetry."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["gd", "gd", "gd", "gd", "gd", "gd", "gd"],
+    "correctCol": 3
+  },
+  "confirmationCategory": "claimodd",
+  "confirmationCount": 2
+}

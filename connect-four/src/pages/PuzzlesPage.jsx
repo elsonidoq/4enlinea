@@ -408,7 +408,7 @@ export default function PuzzlesPage() {
     }
     if (store) await store.recordPuzzleAttempt({
       puzzle_id: puzzle.id, device_uuid: 'local', moves_tried: cols,
-      outcome: allCorrect ? 'correct_first' : 'wrong',
+      outcome: allCorrect ? 'correct_first' : 'abandoned',
       first_attempt_correct: allCorrect,
       time_ms: Date.now() - startTime,
     });

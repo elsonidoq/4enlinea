@@ -3,7 +3,7 @@ import {
   classify, checkWin, getImmediateThreats, parseBoardState,
   hasActiveDoubleThreat, Board, hasWon,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
-  detectFigure7, detectJShape,
+  detectFigure7, detectJShape, detectOddEvenThreat,
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -249,6 +249,7 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
   if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
   if (category === 'forced_win') return computeForcedWinHighlight(solver, moveString, correctCols);
   if (category === 'forbidden_columns') return computeForbiddenColumnsHighlight(moveString, correctCols);
+  if (category === 'odd_even_threat') return []; // No cell highlights needed
   return [];
 }
 
@@ -378,6 +379,18 @@ export function checkJShapePredicate(ms, scores) {
   };
 }
 
+export function checkOddEvenThreatPredicate(ms, scores) {
+  const result = detectOddEvenThreat(new Board(ms), scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols: [result.correctCol],
+    correct_col: result.correctCol,
+    highlight_metadata: result.highlightMetadata, // null for odd_even_threat
+    category_evidence: result.categoryEvidence,
+  };
+}
+
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
 async function checkPredicate(category, moveString, scores, solver) {
@@ -391,6 +404,7 @@ async function checkPredicate(category, moveString, scores, solver) {
   if (category === 'claimeven') return checkClaimevenPredicate(moveString, scores, solver);
   if (category === 'figure_7') return checkFigure7Predicate(moveString, scores);
   if (category === 'j_shape') return checkJShapePredicate(moveString, scores);
+  if (category === 'odd_even_threat') return checkOddEvenThreatPredicate(moveString, scores);
 
   const puzzle = { category, moveString };
   const heights = new Board(moveString).colHeights;
@@ -434,6 +448,13 @@ function isClean(category, ms) {
     // Current player must not be in a position where the opponent already has a double threat
     const opponent = 3 - player;
     return !hasActiveDoubleThreat(board, colHeights, opponent);
+  }
+
+  if (category === 'odd_even_threat') {
+    // Must be Red's turn (ensured by predicate check). Guard: not already winning.
+    // playerThreats === 0 is already enforced by the early return above.
+    // No additional constraints needed — the predicate handles all FR-006 conditions.
+    return true;
   }
 
   return true;

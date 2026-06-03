@@ -619,24 +619,30 @@ The Socratic board is a static single-move exercise matching the mockup (`screen
 Ensure puzzle DB has sufficient approved positions for all active sets and lessons.
 
 **Scope:**
-- Audit per-category approved counts; target ≥ 8 per active set
+- Audit per-category approved counts; **target ≥ 8 per active set (aspirational goal, not a gate)**. Acceptance criterion is ≥ 1 approved puzzle per active set; a set with 0 approved puzzles is hidden from the picker (Gap 6a). Categories most likely to fall short: `claimodd`, `undercut`, `figure_7`. Shortfalls surface automatically via the real count display — no blocking.
 - Run puzzle factory for under-populated categories
 - Claimeven: pre-filter by `colHeights` parity count ≤ 2 odd columns before expensive simulation
 - Claimodd generation predicate (blocked on Epic 5's `detectClaimodd`): all-even parity + Red's turn + center col not full + `scores[3]` is max and positive
 - Undercut framing (blocked on Epic 5): `detectUndercut` fires on non-`correct_col` column
 - Forbidden Columns puzzle set: generate positions where ≥1 column is forbidden (opponent wins immediately on that column) and ≥1 safe column exists
-- **New `odd_even_threat` category (drill for the Lesson 4 "Odd Rows" concept).** The mockup's "Odd & Even Threats" set needs a puzzle source, but Lesson 4 is reading-only with no detector today. Add a new category + generation predicate: **positions where the player has (at least) two distinct moves that each create a major threat — one landing on an odd row, one on an even row — and exactly one is the player's natural parity row** (odd for Red, even for Yellow). `correct_col` = the parity-aligned choice; the off-parity threat is the distractor ("which threat do you prefer?"). Requires:
+- **New `odd_even_threat` category (drill for the Lesson 4 "Odd Rows" concept).** The mockup's "Odd & Even Threats" set (2 stars, display name "Odd & Even Threats") needs a puzzle source, but Lesson 4 is reading-only with no detector today. Add a new category + generation predicate with the following explicit contract:
+  - **Predicate (IF-THEN):** Red's turn. Red has at least two distinct legal moves that each create a major threat (3-in-a-row + 1 empty in a 4-window). One of those threat-landing cells is on an odd row (Red's natural parity); one is on an even row (Yellow's natural parity). `correct_col` = the column whose threat lands on the odd (parity-aligned) row. The off-parity column is the distractor ("which threat do you prefer?"). Edge case: if both threats happen to land on odd rows, `correct_col` = the column with the higher solver score.
   - adding `odd_even_threat` to `VALID_CATEGORIES` / `CATEGORY_ORDER` (free per Gap 3) and a new generation predicate (sync; parity check + immediate-threat enumeration, no extra solver work beyond existing scores);
   - a one-line `PATTERN_KB.odd_even_threat` (or reuse `derived-parity-formula`) for the Deep Reveal — coordinate with Epic 5;
-  - a `challengeSets.js` entry for `odd_even_threat` (free, with a provisional star rating — author's choice, confirmed here in Epic 6);
+  - a `challengeSets.js` entry for `odd_even_threat` with **2 stars** (mockup-designed value; not provisional) and display name "Odd & Even Threats";
   - i18n key pools in `en.json`: `coach.odd_even_threat.prompt.*`, `coach.odd_even_threat.hint.*`, `coach.odd_even_threat.optimal.*`, `coach.odd_even_threat.suboptimal.*`, `coach.odd_even_threat.blunder.*` — following the same pooled-key convention as all other categories;
   - **count-hiding behavior:** the Set Picker calls `GET /api/puzzles/counts` on mount; if the approved count for `odd_even_threat` is 0, the set is hidden from the picker. This uses the same mechanism as all other categories (Gap 6a) and requires no special-casing beyond having an entry in `challengeSets.js`.
   - This is a free-standing challenge set; Lesson 4 itself still has **no confirmation challenges** (Gap 7), so the set is not wired as a lesson confirmation category.
 - Hand-select Socratic positions for applicable lessons; document movestrings in lesson JSON. **Source all movestrings from the DB/KB (project rule) — never hand-construct positions.**
-- **Confirm and finalize star ratings** for sets absent from the mockup: `forbidden_columns`, `double_threat` (both assigned provisional values of `2` in Epic 2a), `forced_win` (provisional in Epic 2b), and `odd_even_threat` (provisional value set in this epic). Epic 6 performs post-generation quality assessment and updates these values in `challengeSets.js` if warranted. The mockup rates only 8 sets; the provisional values are the build defaults until this epic runs.
+- **Derive concept-slide `boardSpec` arrays from DB-sourced positions for Lessons 10 (Figure-7) and 11 (J-Shape).** These geometrically complex patterns are nearly impossible to encode accurately in hand-authored `boardSpec` format — the gravity-enforced, column-major encoding can't position discs at specific rows without filling everything below them first. Epic 5 shipped approximations; Epic 6 replaces them with faithful diagrams sourced from real positions:
+  1. After the puzzle factory generates approved Figure-7 and J-Shape positions, select one clear, pedagogically clean position per lesson that matches the canonical pattern shape (ascending-diagonal + horizontal-arm for Figure-7; L-cluster with three threat directions for J-Shape).
+  2. Convert each movestring to `boardSpec` format (column-major, bottom-to-top `'g'`/`'d'` strings). Reuse the same movestring→boardSpec pipeline already built for Socratic positions — no new infrastructure needed.
+  3. Replace the concept slide `boardSpec` arrays in `lesson-10-figure-7-trap.json` and `lesson-11-j-shape.json` with the DB-derived ones. Keep the existing coach messages, info prose, and legend items. Adjust overlay `(c, r)` coordinates to match the new board positions.
+  4. Re-verify: load both lessons via `GET /api/lessons/:id` and confirm the ConceptScreen renders the updated diagrams correctly.
+- **Star ratings for non-mockup sets are locked as final:** `forbidden_columns=2`, `double_threat=2` (set in Epic 2a), `forced_win=3` (set in Epic 2b). These are design/pedagogy decisions, not data-pipeline outputs; Epic 6 does not re-rate them. `odd_even_threat` adopts the mockup-designed value of 2 stars (set when its `challengeSets.js` entry is created above).
 - Validation script: assert all `confirmationCategory` puzzles exist as approved with correct category
 
-**Estimated spec:** 120–145 lines. **Estimated tasks:** 12–15.
+**Estimated spec:** 130–155 lines. **Estimated tasks:** 13–17.
 
 **Depends on:** Epic 5 for claimodd/undercut predicates. Stable categories can start from Epic 1b onward.
 
@@ -698,7 +704,7 @@ Home Hub, Stats (session-only for anon), auth, analytics, full Challenges (inclu
 | 3c. Past Mistakes Review | Past Mistakes list + detail (built new from `screens_mistakes.jsx`) | backend **reuses** `GET /api/coach/queue` + `POST /api/coach/queue/:id/resolve` (extend + fix uuid bug); frontend entirely new | 100–120 | 8–11 |
 | 4. Lesson Infrastructure & Saga Map | Saga Map (C only), Concept, Socratic, Confirmation Challenges | `GET /api/lessons`, `GET /api/lessons/:id` | 195–220 | 17–20 |
 | 5. Lesson Content | 11 lesson JSON files + backend additions | detectClaimodd, PATTERN_KB entries, narration templates, overcut reason | 175–200 | 18–22 |
-| 6. Data Pipeline | Puzzle counts, generation, `odd_even_threat` category, Socratic selection, validation | Puzzle factory, filter predicates (incl. `odd_even_threat`), validation script | 120–145 | 12–15 |
+| 6. Data Pipeline | Puzzle counts, generation, `odd_even_threat` category, Socratic selection, concept-slide boardSpec fixes for L10/L11, validation | Puzzle factory, filter predicates (incl. `odd_even_threat`), validation script | 130–155 | 13–17 |
 | **Total** | | | **1605–1825** | **149–178** |
 
 ---

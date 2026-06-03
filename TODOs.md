@@ -1,18 +1,20 @@
-- e-mail design
-- other way to register. password? with gmail? with instagram?
+- e-mail design: The current e-mail is ugly
+- I don't think it is very effective to have only the magic link as a way to sign in. What other ways to register can we implement. password? with gmail? with meta?
 - avoid repeated puzzles in the same session: e.g. three consecutive puzzles of immediate threat, where the immediate threat was a vertical stack of 3 disks. It might make sense to have a function per puzzle, that extracts the "shape" of the puzzle (e.g. for an immediate threat it might be the group of three orientation and coarced grained position, for double threat it might be the union of the involved pieces translated into the top right corner)
-- modify global colorscheme light 
+- modify global colorscheme light. Currently there is a global dark color scheme, and all the components have to override it. 
 - the review blunder screen should specify if the user played green or grey
-- when reviewing a mistake, start a play from there
-- do not leak llm prompt for deep reveal
+- do not leak llm prompt for deep reveal. The API shouldn't expose that as well. 
 - session stats table is not used
-- paths en la navegacion, por que no estan mas? 
+- The app must use different paths for the navigation. Why were they removed in the implementation of docs/mvp/epics.md?
 - each challenge in the challenges view must have: 1. progress bar, 2. if the user already cleared a challenge set, it has to be visually clear
+
+- Only display the "learn more" when the user makes a mistake. It doesn't make sense when the user spotted the optimal move
+
 - in forced_win, when we arrive to the double threat, the two threats must be highlighted in the board
-- no supabase requests should be done client side
-- full vulnerabilities scan: is the app secure?
-- the coach speaks!
-- sounds: 
+- no supabase requests should be done client side, every request from the client must be performed to the server, and the server handles the request to the database
+- We need to perform a full vulnerabilities scan: is the app secure?
+- Make the coach speak. It is very hard for someone to read the coach's messages while they are playing.
+- the app must have sounds: 
     background music
     disk falling
     disk hitted another disk
@@ -32,39 +34,15 @@
 
 - If a blunder is created by a game, the blunder must have a game_id
 
-- coach explanations yellow/red
+- In every part of the project the disks must be refered to as green/gray not yellow/red
+
+- clicking back when we are in a practice session should take you to the saga map
+
+- You can only ask for one hint per practice case. Now you can click hints indefinitelly
+
+- We need a practical way to create the content for the lessons. I need to brainstorm that
 
 - when the coach uses terminology like "major threat", it should be highlighted somehow and on mouseover or tap, it shows a short explanation of the term, points you to a lesson?
 
 - a blunder must have permalink, it's a shared nugget of information! shareable across social network
 
-- This is failing
-
-curl 'https://kxtqwsumojtexokrtlfp.supabase.co/rest/v1/puzzle_attempts?columns=%22puzzle_id%22%2C%22device_uuid%22%2C%22moves_tried%22%2C%22outcome%22%2C%22first_attempt_correct%22%2C%22time_ms%22%2C%22created_at%22' \
-  -H 'accept: */*' \
-  -H 'accept-language: en-US,en;q=0.9' \
-  -H 'apikey: sb_publishable_3KSyUWmg0EcobDV1SUentA_PnalTcSG' \
-  -H 'authorization: Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjkwMGQ5ZGU5LTJkNzgtNDA4NC1hODMwLTA4MTE5MTNlYTk5NyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2t4dHF3c3Vtb2p0ZXhva3J0bGZwLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzMzE0ZDIxYS04NTk0LTQzMWQtODkyNC0wMmU3NTlhZDM1M2YiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgwMzczMDQ3LCJpYXQiOjE3ODAzNjk0NDcsImVtYWlsIjoiIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnt9LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJhbm9ueW1vdXMiLCJ0aW1lc3RhbXAiOjE3ODAzNjk0NDd9XSwic2Vzc2lvbl9pZCI6ImUyMzExOWMwLWE3ZTEtNDdkZC1hYzIwLWI5NzY5MjQzZjQwZSIsImlzX2Fub255bW91cyI6dHJ1ZX0.ioK8WDmUEGVTj77vkK-fk5aZ7-YWkqJqBS4UYvntcc02WtcsEyfFHMS21yV4rlDwYCnwVyEKdVMbmI0iMa8VoQ' \
-  -H 'content-profile: public' \
-  -H 'content-type: application/json' \
-  -H 'origin: http://localhost:5173' \
-  -H 'priority: u=1, i' \
-  -H 'referer: http://localhost:5173/' \
-  -H 'sec-ch-ua: "Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"' \
-  -H 'sec-ch-ua-mobile: ?0' \
-  -H 'sec-ch-ua-platform: "macOS"' \
-  -H 'sec-fetch-dest: empty' \
-  -H 'sec-fetch-mode: cors' \
-  -H 'sec-fetch-site: cross-site' \
-  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36' \
-  -H 'x-client-info: supabase-js-web/2.105.1' \
-  --data-raw '[{"puzzle_id":"52928cca-386d-4b88-b638-711905908170","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[0],"outcome":"correct_first","first_attempt_correct":true,"time_ms":23231,"created_at":"2026-05-01T13:26:30.662Z"},{"puzzle_id":"52928cca-386d-4b88-b638-711905908170","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[0],"outcome":"correct_retry","first_attempt_correct":false,"time_ms":14210,"created_at":"2026-05-01T13:41:35.662Z"},{"puzzle_id":"8ef7dfa0-f65e-4418-a4df-94a06331a421","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[2],"outcome":"correct_first","first_attempt_correct":true,"time_ms":63987,"created_at":"2026-05-28T14:21:17.239Z"},{"puzzle_id":"96137e0a-3e53-40ea-b5c2-f281893107a3","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[3],"outcome":"correct_first","first_attempt_correct":true,"time_ms":1825,"created_at":"2026-05-28T14:49:19.075Z"},{"puzzle_id":"742ac763-86dd-4c00-b558-b93a57217556","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[5],"outcome":"wrong","first_attempt_correct":false,"time_ms":46825,"created_at":"2026-05-31T14:28:11.385Z"},{"puzzle_id":"985e11e3-1a41-405d-ae89-ded3b0b5edff","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[1],"outcome":"correct_first","first_attempt_correct":true,"time_ms":151738,"created_at":"2026-05-31T14:56:09.771Z"},{"puzzle_id":"8601557f-f283-433a-9c82-2273fc9eb474","device_uuid":"9521aca9-7013-4b97-a0a4-beea8120fa1e","moves_tried":[4],"outcome":"correct_first","first_attempt_correct":true,"time_ms":139518,"created_at":"2026-05-31T15:00:57.490Z"}]'
-
-output
-
-{
-    "code": "23514",
-    "details": null,
-    "hint": null,
-    "message": "new row for relation \"puzzle_attempts\" violates check constraint \"puzzle_attempts_outcome_check\""
-}

@@ -221,6 +221,25 @@
         "0": "That move hands away your Z-threat parity advantage."
       }
     },
+    "odd_even_threat": {
+      "prompt": {
+        "0": "Red has two threat moves. One lands on an odd row (Red's home row) — that's the winner. Which column do you choose?",
+        "1": "Both moves create threats, but one lands on an odd row — Red's natural parity. That's the move that gives Red lasting control. Play it."
+      },
+      "hint": {
+        "0": "One of the threat moves lands on an odd row. Odd rows belong to Red — that's the correct target."
+      },
+      "optimal": {
+        "0": "Correct! The odd-row threat gives Red parity control — it can't be neutralised by Yellow's claimeven strategy.",
+        "1": "Exactly right. Playing to the odd row aligns with Red's natural parity advantage."
+      },
+      "suboptimal": {
+        "0": "That move creates a threat, but it lands on an even row — Yellow's parity. The odd-row threat in the other column is stronger."
+      },
+      "blunder": {
+        "0": "That column doesn't create a threat at all. Look for the moves that create an immediate winning window."
+      }
+    },
     "forbidden_columns": {
       "prompt": {
         "0": "Mark every column that would hand your opponent an immediate win.",
@@ -246,6 +265,146 @@
       },
       "optimal": { "0": "You forced the win — well played.", "1": "Perfect sequence — your opponent had no escape." },
       "blunder": { "0": "That move breaks the forcing line.", "1": "The sequence fails here — your opponent can escape." }
+    },
+    "claimodd": {
+      "prompt": {
+        "0": "As Red, break the claimeven lock — find the odd-row anchor.",
+        "1": "Red is stuck on even rows. Create an odd-row threat.",
+        "2": "All columns have even height — Red needs to break the pattern."
+      },
+      "hint": {
+        "0": "Look for a column where playing gives Red an odd-row anchor.",
+        "1": "Check if center column creates a parity shift for Red."
+      },
+      "optimal": {
+        "0": "Perfect — you broke the claimeven lock with that odd-row anchor.",
+        "1": "That odd-row anchor shifts the parity. Yellow's claimeven is broken.",
+        "2": "Well played — Red now has a winning threat Yellow cannot claim.",
+        "3": "Exactly — the center column anchor gives Red the advantage."
+      },
+      "suboptimal": {
+        "0": "You're staying on even rows — try center column for an odd-row anchor.",
+        "1": "Good effort, but an odd-row anchor was the stronger defensive idea.",
+        "2": "That column keeps Red on even rows. Break the pattern instead."
+      },
+      "blunder": {
+        "0": "That keeps Red on even rows — Yellow's claimeven still dominates.",
+        "1": "You need an odd-row anchor — this column doesn't provide one.",
+        "2": "Red stays trapped on even parity. Look for the center column.",
+        "3": "That move doesn't break the claimeven lock. Try center column."
+      }
+    },
+    "figure_7": {
+      "prompt": {
+        "0": "Spot the Figure-7 pattern — find the move that creates two unstoppable threats.",
+        "1": "An L-shaped pattern is forming. Play the key cell to complete it.",
+        "2": "The Figure-7 trap is on the board. One move creates two threats."
+      },
+      "hint": {
+        "0": "Look for an L-shaped cluster of 4 discs — the fifth piece locks in two threats.",
+        "1": "Figure 7 creates two threats the opponent can't both block."
+      },
+      "optimal": {
+        "0": "Figure-7 trap complete — your opponent cannot block both threats.",
+        "1": "That completes the Figure-7 pattern. Two unstoppable threats.",
+        "2": "Perfect — the L-shape locks in. Your opponent is trapped.",
+        "3": "Exactly the right cell — the opponent can block one threat but not both."
+      },
+      "suboptimal": {
+        "0": "Good move, but completing the Figure-7 pattern was stronger.",
+        "1": "Close — the Figure-7 key cell creates two threats at once.",
+        "2": "Solid play, but the Figure-7 completion was the decisive move here."
+      },
+      "blunder": {
+        "0": "That misses the Figure-7 trap. Look for the L-shaped pattern.",
+        "1": "Wrong cell — the Figure-7 pattern needs one specific completing piece.",
+        "2": "That doesn't create the double threat. Find the key cell of the Figure-7.",
+        "3": "You missed the Figure-7. Scan for an L-shape of 4 discs."
+      }
+    },
+    "j_shape": {
+      "prompt": {
+        "0": "The J-Shape creates three winning directions — find the key cell.",
+        "1": "An L-shaped cluster of 4 discs — complete it to create triple threats.",
+        "2": "Find the J-Shape completing cell. Your opponent can't block all three threats."
+      },
+      "hint": {
+        "0": "The J-Shape is an L-cluster. The completing cell unlocks three threat directions.",
+        "1": "Look for 4 discs in an L — the fifth piece creates threats vertically, horizontally, and diagonally."
+      },
+      "optimal": {
+        "0": "J-Shape complete — three threat directions. Unblockable!",
+        "1": "That locks in the J-Shape. Your opponent can block one, maybe two — not all three.",
+        "2": "Perfect — vertical, horizontal, and diagonal threats. Game over.",
+        "3": "Exactly — the triple threat from the J-Shape is unstoppable."
+      },
+      "suboptimal": {
+        "0": "Good, but completing the J-Shape gives you three unblockable threats.",
+        "1": "Solid move, but the J-Shape completing cell was the decisive play.",
+        "2": "Not bad — the J-Shape cell creates threats in three directions at once."
+      },
+      "blunder": {
+        "0": "That doesn't complete the J-Shape. Look for the L-cluster and its key cell.",
+        "1": "Wrong cell — the J-Shape needs one specific completing piece.",
+        "2": "You missed the J-Shape. The L-cluster of 4 discs is the clue.",
+        "3": "That skips the triple threat. Find the J-Shape completing cell."
+      }
+    },
+    "overcut": {
+      "prompt": {
+        "0": "Two threats, same column — the upper one wins. Find the overcut.",
+        "1": "The overcut beats the undercut. Same parity, upper threat wins.",
+        "2": "Play above your opponent's threat to neutralize it — find the overcut."
+      },
+      "hint": {
+        "0": "Look for an upper threat that beats a lower one — same parity row.",
+        "1": "The overcut works when both threats share the same parity."
+      },
+      "optimal": {
+        "0": "Perfect overcut — the upper threat neutralizes the lower one.",
+        "1": "Same parity advantage — your upper threat wins the column.",
+        "2": "Clean overcut. Your opponent's lower threat can't reach first.",
+        "3": "Exactly — playing above the threat gives you the advantage."
+      },
+      "suboptimal": {
+        "0": "Good move, but the overcut column gave you a stronger position.",
+        "1": "Close — there was a column where an upper threat beats a lower one.",
+        "2": "Not bad, but the overcut opportunity was more decisive."
+      },
+      "blunder": {
+        "0": "That column doesn't exploit the overcut — your opponent's threat survives.",
+        "1": "You missed the overcut. The upper threat wins when parity is the same.",
+        "2": "Wrong column — look for same-parity threats where upper beats lower.",
+        "3": "That skips the overcut advantage. Same parity, upper threat wins."
+      }
+    },
+    "undercut": {
+      "prompt": {
+        "0": "Two threats in the same column — the lower one wins. Find the undercut.",
+        "1": "An undercut is waiting — identify the column where a lower threat kills an upper one.",
+        "2": "Gravity works in your favor here. Find the undercut move."
+      },
+      "hint": {
+        "0": "Look for a column with threats at two different rows — the lower one wins.",
+        "1": "Same column, opposite parity rows — the undercut is a gravity exploit."
+      },
+      "optimal": {
+        "0": "That undercut neutralizes the upper threat perfectly.",
+        "1": "Gravity does the work — the lower threat wins the column.",
+        "2": "Clean undercut. Your opponent's upper threat is dead.",
+        "3": "Exactly right — same column, lower threat kills the upper one."
+      },
+      "suboptimal": {
+        "0": "Good thinking, but the undercut column was the killing move here.",
+        "1": "Close — there was a column where a lower threat neutralizes an upper one.",
+        "2": "Not bad, but you missed the undercut opportunity."
+      },
+      "blunder": {
+        "0": "That plays into the wrong parity — the undercut was elsewhere.",
+        "1": "You missed the undercut column. The lower threat wins.",
+        "2": "Wrong column — your opponent's threat is still alive.",
+        "3": "That doesn't exploit the gravity advantage. Look again."
+      }
     },
     "summary": {
       "perfect": {
@@ -328,10 +487,12 @@
       "forbidden_columns": "Forbidden columns",
       "z_threat": "Z-threat",
       "claimeven": "Claimeven",
+      "claimodd": "Claimodd",
       "undercut": "Undercut",
       "overcut": "Overcut",
       "figure_7": "Figure 7",
-      "j_shape": "J-shape"
+      "j_shape": "J-shape",
+      "odd_even_threat": "Odd & Even Threats"
     },
     "detail": {
       "topbarTitle": "Mistake",
@@ -378,6 +539,7 @@
     "leave_keep": "Keep going",
     "leave_leave": "Leave",
     "next": "Next →",
+    "try_again": "Try Again",
     "quality": {
       "optimal": "Optimal",
       "suboptimal": "Suboptimal",
@@ -496,6 +658,8 @@
     "double_threat":    { "displayName": "Double Threat", "description": "Create two simultaneous winning threats." },
     "claimeven":        { "displayName": "Claimeven", "description": "Use Yellow's Claimeven strategy to secure a draw." },
     "z_threat":         { "displayName": "Z-Threat", "description": "Exploit Z-threat parity to guarantee the win." },
+    "odd_even_threat":  { "displayName": "Odd & Even Threats", "description": "Red has two threat moves. Pick the one that lands on an odd row — Red's natural parity — to guarantee control." },
+    "claimodd":         { "displayName": "Claimodd", "description": "Break the parity lock — find Red's odd-row anchor against Claimeven." },
     "mixed":            { "displayName": "Mixed", "description": "A mix of all challenge types." },
     "undercut":         { "displayName": "Undercut", "description": "Take the square below your opponent's threat." },
     "overcut":          { "displayName": "Overcut", "description": "Play above your opponent's intended threat." },
@@ -538,10 +702,12 @@
       "forbidden_columns": "Forbidden columns",
       "z_threat": "Z-threat",
       "claimeven": "Claimeven",
+      "claimodd": "Claimodd",
       "undercut": "Undercut",
       "overcut": "Overcut",
       "figure_7": "Figure 7",
-      "j_shape": "J-shape"
+      "j_shape": "J-shape",
+      "odd_even_threat": "Odd & Even Threats"
     },
     "detail": {
       "topbarTitle": "Mistake",

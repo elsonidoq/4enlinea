@@ -1,0 +1,49 @@
+{
+  "id": "claimeven",
+  "title": "Claimeven",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "When Red plays on an even row, Yellow can 'claim' the cell directly above. Red gets row 0 (even), Yellow gets row 1 (odd).",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["", "", "", "gd", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 1, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Yellow claims this cell" }
+      ],
+      "infoProse": "Red plays column 3 landing on row 0 (an even row). Yellow responds by playing directly above at row 1. The claimeven response ensures Yellow controls the odd row in this column."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "Yellow's claimeven strategy: always respond above Red's even-row move. Yellow controls every odd row that Red reaches on an even row.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["gd", "", "gd", "gd", "gd", "", ""],
+      "overlays": [
+        { "c": 0, "r": 1, "type": "claim" },
+        { "c": 2, "r": 1, "type": "claim" },
+        { "c": 3, "r": 1, "type": "claim" },
+        { "c": 4, "r": 1, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Claimed cells" }
+      ],
+      "infoProse": "After several claimeven responses across the board, Yellow controls the odd row in every column where Red played on an even row. This builds Yellow's positional advantage."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["gd", "", "gd", "g", "gd", "", ""],
+    "correctCol": 3
+  },
+  "confirmationCategory": "claimeven",
+  "confirmationCount": 2
+}

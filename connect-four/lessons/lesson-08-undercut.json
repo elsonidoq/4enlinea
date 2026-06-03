@@ -1,0 +1,49 @@
+{
+  "id": "undercut",
+  "title": "The Undercut",
+  "free": false,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "coachMessages": [
+        {
+          "text": "The undercut: a lower threat kills the upper threat because gravity fills bottom-up.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": ["gd", "gd", "gd", "", "", "", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "td" },
+        { "c": 3, "r": 1, "type": "tg" }
+      ],
+      "legendItems": [
+        { "type": "td", "label": "Lower threat (kills above)" },
+        { "type": "tg", "label": "Upper threat (gets killed)" }
+      ],
+      "infoProse": "Red has a three-in-a-row at row 0 (columns 0–2) and Yellow has one at row 1 (columns 0–2). Both would complete with column 3. The lower threat (Red, row 0) fills first because of gravity, killing Yellow's threat at row 1."
+    },
+    {
+      "coachMessages": [
+        {
+          "text": "The undercut only works when the lower threat is on a different parity row than the upper threat. Same-parity threats coexist (T4 rule).",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": ["gdg", "gdg", "gdg", "", "d", "d", ""],
+      "overlays": [
+        { "c": 3, "r": 0, "type": "td" },
+        { "c": 3, "r": 2, "type": "td" }
+      ],
+      "legendItems": [
+        { "type": "td", "label": "Same-parity threats coexist" }
+      ],
+      "infoProse": "Both threats are at even-indexed rows (0 and 2), which means they're on the same parity. The lower one does not kill the upper one — both must be blocked separately. This is the T4 (same-parity) rule."
+    }
+  ],
+  "socratic": {
+    "boardSpec": ["gd", "gd", "gddd", "", "g", "g", ""],
+    "correctCol": 2
+  },
+  "confirmationCategory": "undercut",
+  "confirmationCount": 2
+}

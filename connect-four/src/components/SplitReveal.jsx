@@ -34,7 +34,7 @@ export function SplitReveal({
   closeLabel = 'Collapse',
   minTopPct = 30,
   maxTopPct = 75,
-  initialSplitPct = 60,
+  initialSplitPct = 40,
 }) {
   const { splitPct, topPx, containerRef, dividerRef, dividerProps, isDragging } = useDragSplit({
     minTopPct,

@@ -9,7 +9,8 @@ import {
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
   detectZThreat, detectUndercut, detectOvercut,
-  detectFigure7, detectJShape, detectClaimeven,
+  detectFigure7, detectJShape, detectClaimodd, detectClaimeven,
+  detectOddEvenThreat,
 } from '../../server/classifier.js';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
 
@@ -188,16 +189,18 @@ describe('classifyAll()', () => {
     { name: 'forced_win',        fn: (b, s, sv) => detectForcedWin(b, s) },
     { name: 'forbidden_columns', fn: (b, s, sv) => detectForbiddenColumns(b, s) },
     { name: 'z_threat',          fn: (b, s, sv) => detectZThreat(b, s) },
+    { name: 'odd_even_threat',   fn: (b, s, sv) => detectOddEvenThreat(b, s) },
     { name: 'undercut',          fn: (b, s, sv) => detectUndercut(b, s) },
     { name: 'overcut',           fn: (b, s, sv) => detectOvercut(b, s) },
     { name: 'figure_7',          fn: (b, s, sv) => detectFigure7(b, s) },
     { name: 'j_shape',           fn: (b, s, sv) => detectJShape(b, s) },
+    { name: 'claimodd',          fn: (b, s, sv) => detectClaimodd(b, s) },
     { name: 'claimeven',         fn: (b, s, sv) => detectClaimeven(b, sv) },
   ];
 
   async function assertClassifyAllMatchesDetectors(ms, scores, solverInstance) {
     const allResults = await classifyAll(ms, scores, solverInstance);
-    assert.equal(allResults.length, 11, 'classifyAll must return 11 entries');
+    assert.equal(allResults.length, 13, 'classifyAll must return 13 entries');
 
     for (let i = 0; i < DETECTOR_MAP.length; i++) {
       const { name, fn } = DETECTOR_MAP[i];
@@ -277,5 +280,41 @@ describe('hasActiveDoubleThreat()', () => {
     const { board, colHeights } = parseBoardState(ms);
     const player = ms.length % 2 === 0 ? 1 : 2; // Red (1)
     assert.equal(hasActiveDoubleThreat(board, colHeights, player), false);
+  });
+});
+
+describe('detectOddEvenThreat()', () => {
+  // Positive fixture: '05061332' (Red's turn, 8 moves).
+  // Red has col0 (row 2, odd) threatening col0 vertically, AND col1 (row 1, even)
+  // threatening col2 via the pattern R at col0,1,3 on row 0.
+  test('positive: Red turn with odd and even threats from distinct columns', () => {
+    const board = new Board('05061332');
+    const result = detectOddEvenThreat(board, []);
+    assert.ok(result.matched, 'should match odd_even_threat');
+    assert.equal(result.correctCol, 0, 'correctCol should be col0 (odd-row landing)');
+    assert.ok(result.categoryEvidence, 'should include categoryEvidence');
+    assert.equal(result.categoryEvidence.oddRowCol, 0);
+    assert.equal(result.categoryEvidence.evenRowCol, 1);
+  });
+
+  // Negative: Yellow's turn (player 2) — must not match per FR-009
+  test('negative: Yellow turn — must not match', () => {
+    const board = new Board('050613325');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match on Yellow turn');
+  });
+
+  // Negative: all threats on odd rows only — evenRowMoves empty -> no match
+  test('negative: all threats on odd rows — must not match', () => {
+    const board = new Board('3344');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match when all threats are on odd rows');
+  });
+
+  // Negative: no candidate columns create a threat
+  test('negative: no threats created by any column — must not match', () => {
+    const board = new Board('');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match on empty board');
   });
 });

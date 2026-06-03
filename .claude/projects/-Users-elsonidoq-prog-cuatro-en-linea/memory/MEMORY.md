@@ -62,6 +62,8 @@
 
 ## Project — architecture
 
+- [New category wiring checklist](project_new_category_wiring_checklist.md) — 8 files that must be touched when adding a puzzle category; missing candidate-generator.js causes silent factory failures
+- [Puzzles table columns](reference_puzzles_table_columns.md) — use `is_active` (boolean) not `approved`; candidates table uses `status` text column instead
 - [Classifier architecture and score convention](project_classifier_architecture.md) — c4solver score encoding, all 6 category detection rules, test fixture locations
 - [Server architecture and endpoint map](project_server_architecture.md) — Express structure, auth middleware, rate limits, full endpoint table, tier access rules
 - [Frontend architecture and component map](project_frontend_architecture.md) — routing, store layer, component hierarchy, i18n, PWA, build notes

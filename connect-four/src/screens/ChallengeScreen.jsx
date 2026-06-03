@@ -2,18 +2,14 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
-import { Icon } from '../components/Icon.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { ToolButton } from '../components/ToolButton.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
-import { AuthModal } from '../components/AuthModal.jsx';
-import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
-import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
-import { SplitReveal } from '../components/SplitReveal.jsx';
+import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -59,20 +55,12 @@ export function ChallengeScreen({
   const [overlays, setOverlays] = useState([]);
   const [evaluation, setEvaluation] = useState(null);
   const [coachMessages, setCoachMessages] = useState([]);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedCols, setSelectedCols] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [seqPosition, setSeqPosition] = useState('');
 
   // Deep Reveal state
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
-  const [deepRevealLoading, setDeepRevealLoading] = useState(false);
-  const [deepRevealData, setDeepRevealData] = useState(null);
-  const [deepRevealFlagged, setDeepRevealFlagged] = useState(false);
-  const [deepRevealFlagOpen, setDeepRevealFlagOpen] = useState(false);
-  const [deepRevealFlagNote, setDeepRevealFlagNote] = useState('');
-  const [deepRevealTimedOut, setDeepRevealTimedOut] = useState(false);
   const [zhCells, setZhCells] = useState([]);
 
   const promptKeyRef = useRef(null);
@@ -105,11 +93,7 @@ export function ChallengeScreen({
     setSelectedCols([]);
     setIsSubmitting(false);
     setDeepRevealOpen(false);
-    setDeepRevealLoading(false);
-    setDeepRevealData(null);
-    setDeepRevealFlagged(false);
-    setDeepRevealTimedOut(false);
-    setZhCells(new Map());
+    setZhCells([]);
     setSeqPosition(puzzle.move_string ?? '');
 
     // Pick a random prompt key from coach.<category>.prompt.*
@@ -210,7 +194,7 @@ export function ChallengeScreen({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],
-          outcome: data.quality === 'optimal' ? 'correct_first' : 'wrong',
+          outcome: data.quality === 'optimal' ? 'correct_first' : 'abandoned',
           first_attempt_correct: data.quality === 'optimal',
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
@@ -227,7 +211,8 @@ export function ChallengeScreen({
   }
 
   function handleHint() {
-    const keys = [`coach.${category}.hint.0`, `coach.${category}.hint.1`];
+    const effectiveCategory = lessonMode ? confirmationCategory : category;
+    const keys = [`coach.${effectiveCategory}.hint.0`, `coach.${effectiveCategory}.hint.1`];
     const valid = keys.filter(k => t(k) !== k);
     if (valid.length === 0) return;
     const key = valid[Math.floor(Math.random() * valid.length)];
@@ -247,6 +232,13 @@ export function ChallengeScreen({
     if (session || window.confirm(t('challenge.leave_confirm_body', "Your progress won't be saved."))) {
       go('setpicker');
     }
+  }
+
+  function handleTryAgain() {
+    const current = puzzles[currentIdx];
+    if (!current) return;
+    initPuzzle(current);
+    setPhase('pre-move');
   }
 
   function handleNext() {
@@ -274,64 +266,8 @@ export function ChallengeScreen({
     }
   }
 
-  async function handleLearnMore() {
-    if (!session) { setAuthOpen(true); return; }
-    // No client-side quota pre-flight — server 429 is the sole quota gate
+  function handleLearnMore() {
     setDeepRevealOpen(true);
-    setDeepRevealLoading(true);
-    setDeepRevealData(null);
-    setDeepRevealFlagged(false);
-    setDeepRevealFlagOpen(false);
-    setDeepRevealFlagNote('');
-    setDeepRevealTimedOut(false);
-
-    const current = puzzles[currentIdx];
-    const timeoutId = setTimeout(() => {
-      setDeepRevealLoading(false);
-      setDeepRevealTimedOut(true);
-    }, 6000);
-
-    try {
-      const res = await fetch(`${API}/api/explain-move-llm`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ movestring: current.move_string, col: lastDrop?.c }),
-      });
-      clearTimeout(timeoutId);
-      if (res.status === 401) { setDeepRevealOpen(false); setAuthOpen(true); return; }
-      if (res.status === 429) { setDeepRevealOpen(false); setUpgradeOpen(true); return; }
-      const data = await res.json();
-      setDeepRevealData(data);
-      setDeepRevealLoading(false);
-      track('deep_reveal_viewed', { puzzleId: current?.id, cached: data.cached ?? false });
-    } catch {
-      clearTimeout(timeoutId);
-      setDeepRevealLoading(false);
-      setDeepRevealTimedOut(true);
-    }
-  }
-
-  async function handleFlag(note = '') {
-    if (deepRevealFlagged) return;
-    setDeepRevealFlagged(true);
-    setDeepRevealFlagOpen(false);
-    const current = puzzles[currentIdx];
-    fetch(`${API}/api/llm-feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        movestring: current.move_string,
-        col: lastDrop?.c,
-        llm_prompt: deepRevealData?.prompt ?? '',
-        llm_response: deepRevealData?.explanation ?? '',
-        human_note: note,
-        feature: 'challenges',
-      }),
-    }).catch(() => {});
-    track('deep_reveal_flagged', { puzzleId: current?.id });
   }
 
   async function handleForbiddenSubmit() {
@@ -412,7 +348,7 @@ export function ChallengeScreen({
       puzzle_id: current.id,
       device_uuid: 'local',
       moves_tried: cols.length,
-      outcome: quality === 'optimal' ? 'correct_first' : 'wrong',
+      outcome: quality === 'optimal' ? 'correct_first' : 'abandoned',
       first_attempt_correct: quality === 'optimal',
       time_ms: Date.now() - startTimeRef.current,
       ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
@@ -551,13 +487,41 @@ export function ChallengeScreen({
       <CoachDialog messages={coachMessages} size={58} />
 
       {deepRevealOpen ? (
-        <SplitReveal
+        <DeepRevealPane
           isOpen={deepRevealOpen}
-          onClose={() => {
-            setDeepRevealOpen(false);
-            setZhCells([]);
-          }}
+          onClose={() => setDeepRevealOpen(false)}
           closeLabel={t('common.collapse', 'Collapse')}
+          moveString={puzzles[currentIdx]?.move_string}
+          col={lastDrop?.c}
+          feature="challenges"
+          onReveal={d => track('deep_reveal_viewed', { puzzleId: puzzles[currentIdx]?.id, cached: d.cached ?? false })}
+          onZhCellsChange={setZhCells}
+          userMajorThreats={userMajorThreats}
+          headerContent={evaluation?.badge && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {evaluation?.patternTag && (
+                <span style={{
+                  background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
+                  fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
+                }}>
+                  {evaluation.patternTag.replace(/_/g, ' ')}
+                </span>
+              )}
+              <span style={{
+                background: evaluation.badge === 'good' ? 'var(--eval-good-bg,#dcfce7)' : evaluation.badge === 'mid' ? 'var(--eval-mid-bg,#fef9c3)' : 'var(--eval-bad-bg,#fee2e2)',
+                color: evaluation.badge === 'good' ? 'var(--eval-good,#16a34a)' : evaluation.badge === 'mid' ? 'var(--eval-mid,#ca8a04)' : 'var(--eval-bad,#dc2626)',
+                borderRadius: 8, padding: '4px 10px',
+                fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12,
+              }}>
+                {QUALITY_GLYPH[evaluation.quality]} {t('challenge.quality.' + evaluation.quality)}
+              </span>
+            </div>
+          )}
+          timeoutContent={evaluation && (
+            <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+              {evaluation.summaryLine ?? (evaluation.summaryLineKey ? t(evaluation.summaryLineKey) : '')}
+            </p>
+          )}
           boardContent={
             board && (
               <div style={{ width: '100%' }}>
@@ -582,167 +546,6 @@ export function ChallengeScreen({
                 />
               </div>
             )
-          }
-          revealContent={
-            <>
-              {deepRevealLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    border: '3px solid #e2ddd2', borderTopColor: 'var(--disc-green)',
-                    animation: 'spin 0.7s linear infinite',
-                  }} />
-                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                    {t('deepReveal.loading', 'Reading the position…')}
-                  </p>
-                </div>
-              )}
-
-              {!deepRevealLoading && deepRevealTimedOut && (
-                <div style={{ padding: '8px 0' }}>
-                  <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
-                    {evaluation?.summaryLine ?? (evaluation?.summaryLineKey ? t(evaluation.summaryLineKey) : '')}
-                  </p>
-                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                    {t('deepReveal.unavailable', 'Detailed explanation unavailable.')}
-                  </p>
-                </div>
-              )}
-
-              {!deepRevealLoading && !deepRevealTimedOut && deepRevealData && (
-                <div>
-                  {/* Pattern tag + quality badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                    {evaluation?.patternTag && (
-                      <span style={{
-                        background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
-                        fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
-                      }}>
-                        {evaluation.patternTag.replace(/_/g, ' ')}
-                      </span>
-                    )}
-                    {evaluation?.badge && (
-                      <span style={{
-                        background: evaluation.badge === 'good' ? 'var(--eval-good-bg,#dcfce7)' : evaluation.badge === 'mid' ? 'var(--eval-mid-bg,#fef9c3)' : 'var(--eval-bad-bg,#fee2e2)',
-                        color: evaluation.badge === 'good' ? 'var(--eval-good,#16a34a)' : evaluation.badge === 'mid' ? 'var(--eval-mid,#ca8a04)' : 'var(--eval-bad,#dc2626)',
-                        borderRadius: 8, padding: '4px 10px',
-                        fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12,
-                      }}>
-                        {QUALITY_GLYPH[evaluation.quality]} {t('challenge.quality.' + evaluation.quality)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* LLM explanation */}
-                  <div style={{
-                    margin: '0 0 14px',
-                    fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
-                    color: 'var(--ink)',
-                  }}>
-                    <AnnotatedExplanation
-                      text={deepRevealData.explanation}
-                      userMajorThreats={userMajorThreats}
-                      onHighlightsChange={setZhCells}
-                    />
-                  </div>
-
-                  {/* Best line chips */}
-                  {deepRevealData.bestLine?.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{
-                        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
-                        letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
-                      }}>
-                        BEST LINE
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                        {deepRevealData.bestLine.map((move, i) => (
-                          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{
-                              background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8,
-                              padding: '4px 10px',
-                              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
-                              color: 'var(--ink)',
-                            }}>
-                              {move}
-                            </span>
-                            {i < deepRevealData.bestLine.length - 1 && (
-                              <Icon name="chevR" size={14} color="var(--ink-soft)" />
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Flag button */}
-                  <div style={{ marginTop: 6 }}>
-                    {deepRevealFlagged ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                        }}>
-                          <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
-                          {t('deepReveal.flagged', 'Thanks — flagged')}
-                        </span>
-                      </div>
-                    ) : deepRevealFlagOpen ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <textarea
-                          autoFocus
-                          value={deepRevealFlagNote}
-                          onChange={e => setDeepRevealFlagNote(e.target.value)}
-                          placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
-                          rows={3}
-                          style={{
-                            width: '100%', boxSizing: 'border-box', resize: 'none',
-                            fontFamily: 'var(--font-body)', fontSize: 13,
-                            border: '1px solid var(--border-dim)', borderRadius: 8,
-                            padding: '6px 8px', colorScheme: 'light',
-                          }}
-                        />
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => { setDeepRevealFlagOpen(false); setDeepRevealFlagNote(''); }}
-                            style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer',
-                              fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                            }}
-                          >
-                            {t('deepReveal.flagCancel', 'Cancel')}
-                          </button>
-                          <button
-                            onClick={() => handleFlag(deepRevealFlagNote.trim())}
-                            style={{
-                              background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
-                              fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
-                              borderRadius: 6, padding: '4px 12px',
-                            }}
-                          >
-                            {t('deepReveal.flagSend', 'Send')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center' }}>
-                        <button
-                          onClick={() => setDeepRevealFlagOpen(true)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                          }}
-                        >
-                          <Icon name="flag" size={15} />
-                          {t('deepReveal.flag', 'Flag this explanation')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
           }
         />
       ) : (
@@ -855,42 +658,51 @@ export function ChallengeScreen({
             />
           )
         ) : (
-          <button
-            onClick={handleNext}
-            disabled={!evaluation}
-            style={{
-              flex: 1,
-              padding: '14px 22px',
-              borderRadius: 16,
-              border: 'none',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: 16,
-              cursor: evaluation ? 'pointer' : 'not-allowed',
-              background: evaluation ? 'var(--disc-green)' : '#c7c2b8',
-              color: '#fff',
-              boxShadow: evaluation ? '0 6px 0 #228245' : 'none',
-              transition: 'background .15s',
-            }}
-          >
-            {t('challenge.next', 'Next →')}
-          </button>
+          lessonMode && evaluation && evaluation.quality !== 'optimal' ? (
+            <button
+              onClick={handleTryAgain}
+              style={{
+                flex: 1,
+                padding: '14px 22px',
+                borderRadius: 16,
+                border: 'none',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 700,
+                fontSize: 16,
+                cursor: 'pointer',
+                background: 'var(--disc-green)',
+                color: '#fff',
+                boxShadow: '0 6px 0 #228245',
+                transition: 'background .15s',
+              }}
+            >
+              {t('challenge.try_again', 'Try Again')}
+            </button>
+          ) : (
+            <button
+              onClick={handleNext}
+              disabled={!evaluation}
+              style={{
+                flex: 1,
+                padding: '14px 22px',
+                borderRadius: 16,
+                border: 'none',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 700,
+                fontSize: 16,
+                cursor: evaluation ? 'pointer' : 'not-allowed',
+                background: evaluation ? 'var(--disc-green)' : '#c7c2b8',
+                color: '#fff',
+                boxShadow: evaluation ? '0 6px 0 #228245' : 'none',
+                transition: 'background .15s',
+              }}
+            >
+              {t('challenge.next', 'Next →')}
+            </button>
+          )
         )}
       </Toolbar>
 
-      {/* Modals */}
-      {authOpen && (
-        <AuthModal
-          onClose={() => setAuthOpen(false)}
-          reason="deep_reveal"
-        />
-      )}
-      {upgradeOpen && (
-        <UpgradeModal
-          onDismiss={() => setUpgradeOpen(false)}
-          onNotify={() => setUpgradeOpen(false)}
-        />
-      )}
     </div>
   );
 }

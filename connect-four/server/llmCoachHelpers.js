@@ -50,9 +50,12 @@ function displayName(name) {
 // Only entries for patterns with ratio > 0 in any column are loaded at runtime.
 export const PATTERN_KB = {
   double_threat:  { inline: 'A double threat (or fork) occurs when a player creates two simultaneous winning threats in a single move that the opponent cannot both block. The two threats may be in different columns (the opponent can only play one column per turn) or in adjacent rows of the same column (T1: adjacent threats win unconditionally). The double-threat move is decisive because it guarantees a win on the very next move.' },
+  immediate_threat: { inline: 'An immediate threat is a move that creates four-in-a-row on the very next turn. When a player has three discs in a row with an open space at either end, that space is their winning cell. Immediate threats are decisive because they end the game before the opponent can respond.' },
   j_shape:        { id: 'allen-j-configuration' },
   figure_7:       { id: 'community-figure-7' },
+  forced_block: { inline: 'A forced block occurs when the opponent has an immediate winning threat and only a specific set of columns can neutralise it. All other legal moves leave the threat unanswered and lose immediately. Blocking a forced threat is the only legal good move.' },
   claimeven:      { id: 'allis-claimeven' },
+  claimodd:       { id: 'community-claimodd' },
   baseclaim:      { id: 'allis-baseclaim' },
   before:         { id: 'allis-before' },
   specialbefore:  { id: 'allis-specialbefore' },
@@ -60,6 +63,7 @@ export const PATTERN_KB = {
   overcut:        { id: 'community-overcut' },
   z_threat:       { id: 'community-z-threat' },
   forced_win:     { id: 'derived-lost-position' },
+  odd_even_threat: { inline: 'An odd-even threat position occurs when Red has two candidate moves each creating an immediate threat, but one lands on an odd row (rows 0, 2, or 4 — Red\'s natural parity) and the other on an even row. The odd-row threat is strategically superior because Yellow\'s claimeven strategy cannot neutralise threats on odd rows. Red must always prefer the odd-row threat move.' },
 };
 
 /**
@@ -301,6 +305,7 @@ export const PATTERN_NAMES = [
   'double_threat', 'j_shape', 'figure_7', 'claimeven',
   'baseclaim', 'before', 'specialbefore',
   'undercut', 'overcut', 'z_threat', 'forced_win',
+  'odd_even_threat',
 ];
 
 /**
@@ -536,6 +541,7 @@ export function buildExplainPrompt({
   kbSection, playerName, positionTier,
   forcedBlockNote, blunderNote,
   userExamplesByPattern,
+  claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration,
 }) {
   const opponentName = playerName === 'Green' ? 'Grey' : 'Green';
 
@@ -647,7 +653,7 @@ ${postBoardViz}
 ${afterOpponentSection}
 ## What the analysis found
 ${patternSection}
-${kbSection ? '\n' + kbSection + '\n' : ''}${exampleBoardsSection}
+${kbSection ? '\n' + kbSection + '\n' : ''}${[claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration].filter(Boolean).map(s => `\n${s}\n`).join('')}${exampleBoardsSection}
 ## Output format
 Wrap any reference to a specific board location in zone tags:
 
