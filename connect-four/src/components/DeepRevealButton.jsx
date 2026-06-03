@@ -163,44 +163,6 @@ export function DeepRevealButton({
           )}
         </div>
 
-        {/* Best line chips */}
-        {deepReveal.bestLine && deepReveal.bestLine.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{
-              fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
-              letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
-            }}>
-              BEST LINE
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-              {deepReveal.bestLine.map((col, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <button
-                    onClick={() => {
-                      const m = typeof col === 'string' && col.match(/^Col (\d+)$/);
-                      onHighlightMove?.(m ? parseInt(m[1]) - 1 : col);
-                    }}
-                    style={{
-                      background: 'var(--tag-bg, #f3f0ea)',
-                      borderRadius: 8,
-                      padding: '4px 10px',
-                      border: '1.5px solid transparent',
-                      fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
-                      color: 'var(--ink)',
-                      cursor: onHighlightMove ? 'pointer' : 'default',
-                    }}
-                  >
-                    {col}
-                  </button>
-                  {i < deepReveal.bestLine.length - 1 && (
-                    <Icon name="chevR" size={14} color="var(--ink-soft)" />
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Flag section */}
         <div style={{ marginTop: 6 }}>
           {flagged ? (
