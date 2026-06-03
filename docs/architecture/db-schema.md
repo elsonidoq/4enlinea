@@ -146,8 +146,18 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
 | move_played | integer | NO | |
 | correct_move | integer | NO | |
 | pattern_category | text | NO | |
+| severity | integer | NO | `0` |
+| blunder_severity | real | YES | |
 | resolved_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
+
+Indexes:
+- `idx_blunders_user_unresolved` — `(user_id, created_at) WHERE resolved_at IS NULL`
+- `idx_blunders_severity` — `(user_id, severity DESC) WHERE resolved_at IS NULL`
+- `idx_blunders_game_unique` — UNIQUE `(user_id, board_state, move_played) WHERE puzzle_id IS NULL` (migration 030; atomic dedup for game blunders)
+
+`severity` = `round((best_score − score) / 36 * 10)` — instant score-spread measure, [0, 10]. Computed at insert time; never recomputed on read.
+`blunder_severity` = fraction of 3-ply post-blunder continuations ending in opponent win — graduated loss-of-control measure, [0, 1]. Computed by `computeBlunderSeverity()`.
 
 ---
 

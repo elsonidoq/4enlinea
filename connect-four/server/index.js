@@ -886,25 +886,16 @@ app.post('/api/blunders', async (req, res) => {
   // Auth required
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Skip positions that were already lost before this move — the real blunder happened earlier.
-  if (typeof best_score === 'number' && best_score < 0) {
-    return res.status(200).json({ skipped: true, reason: 'already_losing' });
-  }
+  // Blunders from losing positions are no longer skipped — the blunder_severity
+  // field provides the graduated measure of how much the move worsens the position.
+  // A move that drops from -2 to -15 is a meaningful blunder even if the position
+  // was already theoretically lost (as all second-player positions are).
 
   try {
-    // Deduplicate: same user, same board position, same wrong move → skip.
-    // Uses IS NOT DISTINCT FROM so puzzle_id=NULL matches puzzle_id=NULL (game blunders).
-    const { data: existing } = await supabase
-      .from('blunders')
-      .select('id')
-      .eq('user_id', req.user.id)
-      .eq('board_state', board_state)
-      .eq('move_played', move_played)
-      .is('puzzle_id', null)
-      .maybeSingle();
-
-    if (existing) return res.status(200).json({ id: existing.id, deduplicated: true });
-
+    // Plain insert — the partial unique index (migration 030) guards against
+    // duplicates on (user_id, board_state, move_played) WHERE puzzle_id IS NULL.
+    // Supabase upsert can't resolve conflicts against partial indexes, so we
+    // insert and treat unique-violation (23505) as success.
     const { data, error } = await supabase
       .from('blunders')
       .insert({
@@ -914,14 +905,16 @@ app.post('/api/blunders', async (req, res) => {
         move_played,
         correct_move,
         pattern_category,
-        // Pre-computed at write time; avoids solver queries on queue reads.
         severity: computeSeverity(best_score, score),
+        blunder_severity: req.body.blunder_severity ?? null,
       })
-      .select('id')
-      .single();
+      .select('id');
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json({ id: data.id });
+    if (error) {
+      if (error.code === '23505') return res.status(200).json({ deduplicated: true });
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(201).json({ id: data[0].id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1396,10 +1389,13 @@ app.post('/api/games/analyze', async (req, res) => {
         patternTag = null;
       }
 
-      // For blunders in non-losing positions, scan 3 plies of the post-blunder
-      // tree to compute what fraction of continuations end in an opponent win.
+      // Scan 3 plies of the post-blunder tree to compute what fraction of
+      // continuations end in an opponent win. Run for ALL blunders (including
+      // losing positions) — blunder_severity is the graduated measure that
+      // distinguishes minor mistakes from catastrophic ones regardless of
+      // whether the position was already theoretically lost.
       let blunderSeverity = null;
-      if (quality === 'blunder' && bestScore >= 0) {
+      if (quality === 'blunder') {
         const postBlunderMs = movesBeforeThisPly + String(col);
         try {
           const sv = await computeBlunderSeverity(solver, postBlunderMs, 3);

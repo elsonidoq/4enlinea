@@ -1,7 +1,10 @@
 ---
-name: Server architecture and endpoint map
-description: Express server structure, auth middleware, all API endpoints, Supabase/Stripe/Anthropic integration pattern
-type: project
+name: server-architecture-and-endpoint-map
+description: "Express server structure, auth middleware, all API endpoints, Supabase/Stripe/Anthropic integration pattern"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 4a3f280e-b330-47c8-953d-8c75cbbf4aa0
 ---
 
 # Server architecture (`connect-four/server/index.js`)
@@ -39,6 +42,9 @@ Runs on every request. Extracts `Authorization: Bearer <jwt>`, validates via `su
 | GET | /api/puzzles | optional | category list with locked flags |
 | GET | /api/puzzles/:id | optional | puzzle data; 403 if tier locked |
 | POST | /api/puzzles/:id/check | optional | predicate eval + attempt record + blunder insert |
+| POST | /api/blunders | auth required | record sparring blunder (atomic upsert via DB unique index) |
+| POST | /api/games | auth/device | create game row |
+| POST | /api/games/analyze | optional | per-ply quality analysis (scoreMove + classify + blunderSeverity) |
 | GET | /api/coach/weakness-map | paid required | aggregate miss rates |
 | GET | /api/coach/queue | paid required | next unresolved blunder |
 | POST | /api/coach/queue/:id/resolve | paid required | mark blunder resolved |

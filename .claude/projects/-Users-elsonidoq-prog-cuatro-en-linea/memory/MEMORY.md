@@ -107,11 +107,14 @@
 - [correct_col migration gap](project_correct_col_migration.md) — column added by 016_correct_col.sql; needed by claimeven/figure_7/j_shape; confirm applied before querying
 - [Supabase explicit grants — migration 012](project_supabase_grants.md) — new frontend tables need explicit GRANTs or PostgREST returns 42501 (enforced Oct 30 2026)
 - [Integration test slowness — use test:fast](project_integration_test_slowness.md) — use `npm run test:fast` (omits candidate-generator.test.js); `npm test` hangs 10+ min due to solver IPC deadlock
+- [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert via DB unique index
 
 ## References — board rendering
 
 - [Board disc color inversion + production Board API](reference_board_color_inversion.md) — `'red'` renders GREEN, `'yellow'` renders GRAY; production Board takes `board[][]` not `cols`/`mkCols` (mockup-only)
 - [User tier source](reference_tier_source.md) — `session.tier` is always undefined; tier is on the profile, read via `store.getProfile().tier` (see PostSetSummaryScreen.jsx:50)
+- [CSS width:100% resolves to auto when parent has only maxWidth](reference_css_maxwidth_percentage_trap.md) — must pair maxWidth with explicit width; caused Board to collapse to 64px in SplitReveal
+- [CSS flex-basis percentage doesn't resolve against flexbox-computed height](reference_css_flex_basis_percentage_height_trap.md) — use pixel values via ResizeObserver instead
 
 - [recordPuzzleAttempt canonical shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case: puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms; wrong shape silently corrupts stats
 - [SequenceHandler owns its entire UI](project_sequence_handler_ui.md) — self-contained Board/prompt/banners/Next; hardcoded English banners; onNext has no args (success-only); use takeover mode or refactor

@@ -95,6 +95,7 @@ export function ReviewScreen({ go, goBack, id }) {
                 pattern_category: category,
                 score: move.score,
                 best_score: move.bestScore,
+                blunder_severity: move.blunderSeverity ?? null,
               }),
             }).catch(() => {});
           }

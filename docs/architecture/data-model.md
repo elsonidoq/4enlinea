@@ -21,6 +21,10 @@ Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_categor
 `'immediate_threat'`, `'forced_block'`, `'double_threat'`, `'forced_win'`, `'forbidden_columns'`, `'z_threat'`, `'claimeven'`, `'undercut'`, `'overcut'`, `'figure_7'`, `'j_shape'`, `'unknown'`.
 
 Migration 028 added `severity INTEGER NOT NULL DEFAULT 0` to the `blunders` table. Value is `round((best_score − score) / 36 * 10)`, normalized to [0, 10]: 36 is the maximum possible spread on a 7×6 board (from +18 to −18), and the result is scaled to 10. Computed at insert time from the solver scores that are already in scope. Legacy rows default to 0. Never recompute on read — the solver may be unavailable for positions past a winning move. An index on `(user_id, severity DESC) WHERE resolved_at IS NULL` supports the queue endpoint's `ORDER BY severity DESC` without a full table scan.
+
+Migration 029 added `blunder_severity real` — a graduated loss-of-control measure: the fraction of depth-3 post-blunder continuations where the opponent wins (0–1 range). Unlike `severity` (instant score spread), `blunder_severity` captures how much the move *actually* increases losing scenarios vs winning scenarios. This is the primary quality gate for blunders from already-losing positions (i.e., virtually all second-player moves), replacing the former `bestScore < 0` skip. See [[blunder_severity_graduated_measure]].
+
+Migration 030 added a partial unique index `idx_blunders_game_unique` on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`, enabling atomic upsert deduplication of game blunders at the DB level. The `POST /api/blunders` endpoint now uses `.upsert()` with `ignoreDuplicates: true` instead of a check-then-insert pattern.
 Rationale: Slug-keyed constraints are self-documenting; integer IDs required cross-referencing a lookup table.
 
 ## Soft Delete
@@ -118,6 +122,7 @@ Grants: `GRANT SELECT, INSERT ON public.games TO anon, authenticated;`
 | `bestScore` | `number` | Best available solver score at that ply |
 | `bestCol` | `number` | 0-indexed column with the best score |
 | `patternTag` | `string \| null` | Classifier slug, or `null` if no pattern matched |
+| `blunderSeverity` | `number \| null` | Tree-scan fraction (0–1), computed for all blunders since 2026-06-03 |
 
 Forced moves (only 1 legal column) are included in `moves` with a quality label but excluded from `scored`.
 

@@ -55,7 +55,6 @@ async function main() {
 
   // ── Reprocess ────────────────────────────────────────────────────────────────
   let totalBlunders = 0;
-  let skippedAlreadyLosing = 0;
   let skippedNoUser = 0;
 
   for (let g = 0; g < games.length; g++) {
@@ -87,8 +86,9 @@ async function main() {
       const score = scores[col];
       const bestScore = scores[bestCol];
 
-      // Skip already-losing positions (mirrors POST /api/blunders guard)
-      if (bestScore < 0) { skippedAlreadyLosing++; continue; }
+      // Blunders from losing positions are no longer skipped — blunder_severity
+      // provides the graduated measure. A drop from -2 to -15 is a meaningful
+      // blunder even if the position was already theoretically lost.
 
       let patternTag = 'unknown';
       try {
@@ -135,7 +135,6 @@ async function main() {
   process.stderr.write('\n');
   console.log(`Done.`);
   console.log(`  Blunders inserted : ${totalBlunders}`);
-  console.log(`  Already-losing skipped: ${skippedAlreadyLosing}`);
   console.log(`  Anonymous games skipped: ${skippedNoUser}`);
 }
 

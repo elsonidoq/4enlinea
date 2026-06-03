@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -11,6 +11,7 @@ import { useGameBoard } from '../lib/useGameBoard.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { track } from '../lib/track.js';
 import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
+import { SplitReveal } from '../components/SplitReveal.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -25,7 +26,7 @@ function getRewindedMoves(mIdx, side, fullMovestring) {
  * Inner component that owns useGameBoard so React fully remounts it
  * (and reinitializes the hook) when the key changes (mistake navigation).
  */
-function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, moveIndex, patternTag, zhCells }) {
+function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, moveIndex, patternTag, zhCells, hideCoach, onCoachMessages }) {
   const { t } = useTranslation();
   const gameBoard = useGameBoard({
     initialMoves: rewindedMoves,
@@ -39,33 +40,46 @@ function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, mov
     track('mistake_reviewed', { gameId, moveIndex, category: patternTag ?? null });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Expose coach messages to parent when coach is rendered externally.
+  useEffect(() => {
+    if (hideCoach && onCoachMessages) {
+      onCoachMessages(gameBoard.coachMessages);
+    }
+  }, [hideCoach, onCoachMessages, gameBoard.coachMessages]);
+
   const showTrOverlay = trOverlay && gameBoard.moveHistory.length === rewindedMoves.length;
   const overlays = [
     ...(showTrOverlay ? [trOverlay] : []),
     ...gameBoard.hintOverlays,
   ];
 
+  const boardEl = (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px' }}>
+      <div style={{ width: '100%', maxWidth: hideCoach ? undefined : 380 }}>
+        {gameBoard.gameOver && (
+          <p style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)', margin: '0 0 12px' }}>
+            {t('sparring.terminalPosition')}
+          </p>
+        )}
+        <Board
+          board={gameBoard.board}
+          onColumnClick={gameBoard.handleColumnClick}
+          canPlay={gameBoard.userTurn && !gameBoard.gameOver && !gameBoard.aiThinking}
+          fullCols={gameBoard.fullCols}
+          lastDrop={gameBoard.lastDrop}
+          overlays={overlays}
+          zhCells={zhCells}
+        />
+      </div>
+    </div>
+  );
+
+  if (hideCoach) return boardEl;
+
   return (
     <>
       <CoachDialog fixed messages={gameBoard.coachMessages} />
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px' }}>
-        <div style={{ width: '100%', maxWidth: 380 }}>
-          {gameBoard.gameOver && (
-            <p style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)', margin: '0 0 12px' }}>
-              {t('sparring.terminalPosition')}
-            </p>
-          )}
-          <Board
-            board={gameBoard.board}
-            onColumnClick={gameBoard.handleColumnClick}
-            canPlay={gameBoard.userTurn && !gameBoard.gameOver && !gameBoard.aiThinking}
-            fullCols={gameBoard.fullCols}
-            lastDrop={gameBoard.lastDrop}
-            overlays={overlays}
-            zhCells={zhCells}
-          />
-        </div>
-      </div>
+      {boardEl}
     </>
   );
 }
@@ -159,6 +173,12 @@ export function ExplorerScreen({
   const [flagNote, setFlagNote] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [zhCells, setZhCells] = useState([]);
+  const [coachMessages, setCoachMessages] = useState([]);
+
+  // Stable callback so ExplorerBoard doesn't re-render loop.
+  const handleCoachMessages = useCallback((msgs) => {
+    setCoachMessages(msgs);
+  }, []);
 
   async function handleDeepReveal() {
     setDeepRevealOpen(true);
@@ -262,17 +282,194 @@ export function ExplorerScreen({
 
       {/* ExplorerBoard is keyed on selectedMistakeIdx — React remounts it (and its
           useGameBoard hook) whenever the user navigates to a different mistake. */}
-      <ExplorerBoard
-        key={selectedMistakeIdx}
-        rewindedMoves={currentRewindedMoves}
-        trOverlay={currentTrOverlay}
-        side={side}
-        difficulty={difficulty}
-        gameId={gameId}
-        moveIndex={currentMoveIndex}
-        patternTag={currentSelectedMove?.patternTag}
-        zhCells={zhCells}
-      />
+      {deepRevealOpen ? (
+        <>
+          <CoachDialog messages={coachMessages} size={58} />
+          <SplitReveal
+            isOpen={deepRevealOpen}
+            onClose={() => {
+              setDeepRevealOpen(false);
+              setZhCells([]);
+            }}
+            closeLabel={t('common.collapse', 'Collapse')}
+            initialSplitPct={65}
+            boardContent={
+              <ExplorerBoard
+                key={selectedMistakeIdx}
+                rewindedMoves={currentRewindedMoves}
+                trOverlay={currentTrOverlay}
+                side={side}
+                difficulty={difficulty}
+                gameId={gameId}
+                moveIndex={currentMoveIndex}
+                patternTag={currentSelectedMove?.patternTag}
+                zhCells={zhCells}
+                hideCoach
+                onCoachMessages={handleCoachMessages}
+              />
+            }
+            revealContent={
+            <>
+              {deepRevealLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    border: '3px solid #e2ddd2', borderTopColor: 'var(--disc-green)',
+                    animation: 'spin 0.7s linear infinite',
+                  }} />
+                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
+                    {t('deepReveal.loading', 'Reading the position…')}
+                  </p>
+                </div>
+              )}
+
+              {!deepRevealLoading && deepRevealError && (
+                <div style={{ padding: '8px 0' }}>
+                  <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+                    {deepRevealError}
+                  </p>
+                  <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
+                    {t('sparring.explanationUnavailable')}
+                  </p>
+                </div>
+              )}
+
+              {!deepRevealLoading && !deepRevealError && deepRevealExplanation && (
+                <div>
+                  {currentSelectedMove?.patternTag && (
+                    <div style={{ marginBottom: 12 }}>
+                      <span style={{
+                        background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
+                        fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
+                      }}>
+                        {currentSelectedMove.patternTag.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{
+                    margin: '0 0 14px',
+                    fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
+                    color: 'var(--ink)',
+                  }}>
+                    <AnnotatedExplanation
+                      text={deepRevealExplanation}
+                      userMajorThreats={userMajorThreats}
+                      onHighlightsChange={setZhCells}
+                    />
+                  </div>
+
+                  {deepRevealBestLine.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{
+                        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
+                        letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
+                      }}>
+                        BEST LINE
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                        {deepRevealBestLine.map((col, i) => (
+                          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{
+                              background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8,
+                              padding: '4px 10px',
+                              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
+                              color: 'var(--ink)',
+                            }}>
+                              {col}
+                            </span>
+                            {i < deepRevealBestLine.length - 1 && (
+                              <Icon name="chevR" size={14} color="var(--ink-soft)" />
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 6 }}>
+                    {flagged ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                        }}>
+                          <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
+                          {t('sparring.explanationFlagged')}
+                        </span>
+                      </div>
+                    ) : flagOpen ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <textarea
+                          autoFocus
+                          value={flagNote}
+                          onChange={e => setFlagNote(e.target.value)}
+                          placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
+                          rows={3}
+                          style={{
+                            width: '100%', boxSizing: 'border-box', resize: 'none',
+                            fontFamily: 'var(--font-body)', fontSize: 13,
+                            border: '1px solid var(--border-dim)', borderRadius: 8,
+                            padding: '6px 8px', colorScheme: 'light',
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => { setFlagOpen(false); setFlagNote(''); }}
+                            style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                            }}
+                          >
+                            {t('deepReveal.flagCancel', 'Cancel')}
+                          </button>
+                          <button
+                            onClick={() => handleFlag(flagNote.trim())}
+                            style={{
+                              background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
+                              fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
+                              borderRadius: 6, padding: '4px 12px',
+                            }}
+                          >
+                            {t('deepReveal.flagSend', 'Send')}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => setFlagOpen(true)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            background: 'transparent', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
+                          }}
+                        >
+                          <Icon name="flag" size={15} />
+                          {t('sparring.flagExplanation')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          }
+        />
+          </>
+      ) : (
+        <ExplorerBoard
+          key={selectedMistakeIdx}
+          rewindedMoves={currentRewindedMoves}
+          trOverlay={currentTrOverlay}
+          side={side}
+          difficulty={difficulty}
+          gameId={gameId}
+          moveIndex={currentMoveIndex}
+          patternTag={currentSelectedMove?.patternTag}
+          zhCells={zhCells}
+        />
+      )}
 
       {/* Inline error for "start from here" */}
       {fromPositionError && (
@@ -369,195 +566,6 @@ export function ExplorerScreen({
           {t('sparring.deepReveal')}
         </button>
       </Toolbar>
-
-      {/* Deep Reveal bottom-sheet panel */}
-      {deepRevealOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            onClick={() => setDeepRevealOpen(false)}
-            style={{
-              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200,
-            }}
-          />
-
-          {/* Sheet */}
-          <div style={{
-            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 201,
-            background: '#fff', borderRadius: '20px 20px 0 0',
-            padding: '14px 20px 32px',
-            maxHeight: '80vh', overflowY: 'auto',
-            boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
-          }}>
-            {/* Grab handle */}
-            <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e2ddd2', margin: '0 auto 12px' }} />
-
-            {/* Collapse button */}
-            <button
-              onClick={() => setDeepRevealOpen(false)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 13,
-                color: 'var(--ink-soft)', marginBottom: 14,
-              }}
-            >
-              <Icon name="chevD" size={16} /> {t('common.collapse', 'Collapse')}
-            </button>
-
-            {/* Loading spinner */}
-            {deepRevealLoading && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  border: '3px solid #e2ddd2', borderTopColor: 'var(--disc-green)',
-                  animation: 'spin 0.7s linear infinite',
-                }} />
-                <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                  {t('deepReveal.loading', 'Reading the position…')}
-                </p>
-              </div>
-            )}
-
-            {/* Timeout / error fallback */}
-            {!deepRevealLoading && deepRevealError && (
-              <div style={{ padding: '8px 0' }}>
-                <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
-                  {deepRevealError}
-                </p>
-                <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-                  {t('sparring.explanationUnavailable')}
-                </p>
-              </div>
-            )}
-
-            {/* Explanation */}
-            {!deepRevealLoading && !deepRevealError && deepRevealExplanation && (
-              <div>
-                {/* Pattern tag if available */}
-                {currentSelectedMove?.patternTag && (
-                  <div style={{ marginBottom: 12 }}>
-                    <span style={{
-                      background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8, padding: '4px 10px',
-                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 12, color: 'var(--ink)',
-                    }}>
-                      {currentSelectedMove.patternTag.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                )}
-
-                {/* LLM explanation */}
-                <div style={{
-                  margin: '0 0 14px',
-                  fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
-                  color: 'var(--ink)',
-                }}>
-                  <AnnotatedExplanation
-                    text={deepRevealExplanation}
-                    userMajorThreats={userMajorThreats}
-                    onHighlightsChange={setZhCells}
-                  />
-                </div>
-
-                {/* Best line chips */}
-                {deepRevealBestLine.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{
-                      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 11,
-                      letterSpacing: '1.2px', color: 'var(--ink-soft)', marginBottom: 7,
-                    }}>
-                      BEST LINE
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      {deepRevealBestLine.map((col, i) => (
-                        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{
-                            background: 'var(--tag-bg, #f3f0ea)', borderRadius: 8,
-                            padding: '4px 10px',
-                            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
-                            color: 'var(--ink)',
-                          }}>
-                            {col}
-                          </span>
-                          {i < deepRevealBestLine.length - 1 && (
-                            <Icon name="chevR" size={14} color="var(--ink-soft)" />
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Flag button */}
-                <div style={{ marginTop: 6 }}>
-                  {flagged ? (
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                      }}>
-                        <Icon name="check" size={15} color="var(--eval-good,#16a34a)" />
-                        {t('sparring.explanationFlagged')}
-                      </span>
-                    </div>
-                  ) : flagOpen ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <textarea
-                        autoFocus
-                        value={flagNote}
-                        onChange={e => setFlagNote(e.target.value)}
-                        placeholder={t('deepReveal.flagNotePlaceholder', "What's wrong with this explanation? (optional)")}
-                        rows={3}
-                        style={{
-                          width: '100%', boxSizing: 'border-box', resize: 'none',
-                          fontFamily: 'var(--font-body)', fontSize: 13,
-                          border: '1px solid var(--border-dim)', borderRadius: 8,
-                          padding: '6px 8px', colorScheme: 'light',
-                        }}
-                      />
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => { setFlagOpen(false); setFlagNote(''); }}
-                          style={{
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                          }}
-                        >
-                          {t('deepReveal.flagCancel', 'Cancel')}
-                        </button>
-                        <button
-                          onClick={() => handleFlag(flagNote.trim())}
-                          style={{
-                            background: 'var(--eval-bad)', border: 'none', cursor: 'pointer',
-                            fontFamily: 'var(--font-body)', fontSize: 13, color: '#fff',
-                            borderRadius: 6, padding: '4px 12px',
-                          }}
-                        >
-                          {t('deepReveal.flagSend', 'Send')}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => setFlagOpen(true)}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          background: 'transparent', border: 'none', cursor: 'pointer',
-                          fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)',
-                        }}
-                      >
-                        <Icon name="flag" size={15} />
-                        {t('sparring.flagExplanation')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Auth modal */}
       {showAuthModal && (

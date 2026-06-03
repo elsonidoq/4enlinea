@@ -30,6 +30,8 @@
 
 - Remove best line from explain-move-llm endpoint and all along the codebase
 
+- If a blunder is created by a game, the blunder must have a game_id
+
 - coach explanations yellow/red
 
 - when the coach uses terminology like "major threat", it should be highlighted somehow and on mouseover or tap, it shows a short explanation of the term, points you to a lesson?
