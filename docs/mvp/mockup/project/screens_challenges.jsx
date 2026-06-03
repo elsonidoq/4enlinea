@@ -221,7 +221,6 @@ const DEEP_DEFAULT = {
   ],
   tags: [{ cls: "pat", label: "Pattern · Double Threat" }, { cls: "good", label: "✓ Optimal · column 5" }],
   explanation: "Playing column 5 completes four on the bottom row immediately. Even if it were blocked, the same drop builds a second threat on the rising diagonal — Yellow could only answer one.",
-  bestLine: ["Col 5", "Col 2", "Col 6"],
 };
 
 function DeepReveal({ onClose, data }) {
@@ -253,18 +252,6 @@ function DeepReveal({ onClose, data }) {
             <p style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)", lineHeight: 1.45 }}>
               {d.explanation}
             </p>
-            <div style={{ marginTop: 14, background: "#f6f4ee", borderRadius: 14, padding: "12px 14px" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 13, color: "var(--ink-soft)", marginBottom: 6 }}>BEST LINE</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15 }}>
-                {d.bestLine.map((m, i) => (
-                  <React.Fragment key={i}>
-                    <span className="chip-move">{m}</span>
-                    {i < d.bestLine.length - 1 && <Icon name="chevR" size={14} color="var(--ink-faint)" />}
-                  </React.Fragment>
-                ))}
-                <span style={{ color: "var(--ink-faint)", fontSize: 13 }}>…</span>
-              </div>
-            </div>
             <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
               {flagged ? (
                 <span className="flag-link done"><Icon name="check" size={15} color="var(--eval-good)" /> Thanks — flagged</span>

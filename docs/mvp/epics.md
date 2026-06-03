@@ -296,12 +296,12 @@ Completes the Challenges surface: the Tier-2 panel, the multi-select puzzle type
 - **Mockup note:** the Set Picker mockup lists no Forbidden Columns set; the type exists per Gap 30 and gets a **free** entry in `challengeSets.js`. Each Forbidden Columns puzzle counts as **one scored item** in session accuracy and the by-pattern breakdown.
 
 *Deep Reveal Panel (Tier 2):*
-- **Data contract:** `patternTag`, `quality`, and `badge` come from the already-held `/api/evaluate-move` response (Epic 2a client state) — no duplicate classifier call. The panel calls `/api/explain-move-llm`, which Epic 2b extends to return `{ explanation, bestLine }` (solver principal variation as a column array). No other fields are added to the endpoint response.
+- **Data contract:** `patternTag`, `quality`, and `badge` come from the already-held `/api/evaluate-move` response (Epic 2a client state) — no duplicate classifier call. The panel calls `/api/explain-move-llm`, which returns `{ explanation }`. No other fields are added to the endpoint response.
 - **Cache wiring (added this epic):** `/api/explain-move-llm` reads `explanation_cache` first (key: `SHA256(movestring + ":" + col)`). On hit, return `deep_reveal_json` immediately. On miss, call LLM, then write result to `explanation_cache.deep_reveal_json`.
 - **Quota enforcement:** weekly-cap decrement runs **only on cache miss**, after the cache check. Cache hits do not consume quota. This is a correction to the current handler, which decrements before the cache check.
 - **Reuse:** `DeepRevealButton.jsx` / `ExplainMoveButton.jsx` already do most of this
 - Loading spinner until response (cache hit = no spinner)
-- Loaded: pattern tag(s) and badge/quality (from evaluate-move state), LLM explanation, "Best line" chips (solver PV from endpoint), "Flag this explanation" button
+- Loaded: pattern tag(s) and badge/quality (from evaluate-move state), LLM explanation, "Flag this explanation" button
 - LLM timeout >6s: show Tier 1 text + "Detailed explanation unavailable." (Gap 6b)
 - On open: `track('deep_reveal_viewed', { puzzleId, cached })`
 - On flag: write to `llm_feedback` table; `track('deep_reveal_flagged', { puzzleId })`

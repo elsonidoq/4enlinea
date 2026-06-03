@@ -306,10 +306,10 @@ The `deep_reveal_json` column in `explanation_cache` is extended additively:
 
 ```json
 // Old (still supported)
-{ "explanation": "Playing in column 4 creates a double threat...", "bestLine": [...], "prompt": "..." }
+{ "explanation": "Playing in column 4 creates a double threat...", "prompt": "..." }
 
 // New
-{ "explanation": "Playing in [zone:col4]column 4[/zone:col4] creates a double threat at [zone:cells:c4r2,c4r4]rows 2 and 4[/zone:cells:c4r2,c4r4]...", "bestLine": [...], "prompt": "..." }
+{ "explanation": "Playing in [zone:col4]column 4[/zone:col4] creates a double threat at [zone:cells:c4r2,c4r4]rows 2 and 4[/zone:cells:c4r2,c4r4]...", "prompt": "..." }
 ```
 
 Old cache entries without `[zone:]` tags are handled by `regexFallbackParse()` on the client — no data migration needed.
@@ -438,7 +438,6 @@ After the LLM responds, asynchronously generate TTS audio and store it alongside
 // explanation_cache.deep_reveal_json (extended)
 {
   "explanation": "Playing in [zone:col4]column 4[/zone:col4]...",
-  "bestLine": ["Col 4", "Col 2", "Col 5"],
   "prompt": "...",
   "audioBase64": "<base64-encoded mp3>",
   "audioTimestamps": [
@@ -454,7 +453,7 @@ After the LLM responds, asynchronously generate TTS audio and store it alongside
 ```
 LLM response received
   │
-  ├─ 1. Return { explanation, bestLine, prompt } to client immediately (same as today)
+  ├─ 1. Return { explanation, prompt } to client immediately (same as today)
   │
   └─ 2. Async (non-blocking):
        ├─ Generate TTS audio via Azure Speech SDK

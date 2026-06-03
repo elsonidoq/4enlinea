@@ -17,7 +17,6 @@ const MISTAKES = [
       overlays: [{ c: 4, r: 0, type: "tg" }, { c: 2, r: 2, type: "tg" }, { c: 1, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Claimeven" }, { cls: "good", label: "✓ Better · column 5" }],
       explanation: "Answering on column 5 claims the even square directly above Yellow's disc. That single response neutralises the odd threat you handed over and keeps the rising diagonal yours.",
-      bestLine: ["Col 5", "Col 3", "Col 2"],
     },
   },
   {
@@ -30,7 +29,6 @@ const MISTAKES = [
       overlays: [{ c: 1, r: 2, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Forced block" }, { cls: "good", label: "✓ Better · column 2" }],
       explanation: "Yellow was one move from four-in-a-row across the third row. Column 2 is the only square that breaks it — everything else loses on the spot.",
-      bestLine: ["Col 2", "Col 4", "Col 6"],
     },
   },
   {
@@ -43,7 +41,6 @@ const MISTAKES = [
       overlays: [{ c: 2, r: 2, type: "tg" }, { c: 4, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · The Fork" }, { cls: "good", label: "✓ Better · column 4" }],
       explanation: "Column 4 builds two threats at once — one across, one on the diagonal. Yellow can only block one, so the next move wins outright.",
-      bestLine: ["Col 4", "Col 3", "Col 7"],
     },
   },
   {
@@ -56,7 +53,6 @@ const MISTAKES = [
       overlays: [{ c: 0, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Odd threat" }, { cls: "good", label: "✓ Better · column 1" }],
       explanation: "As the first player you want the odd rows. Column 1 takes the odd square in the corner file — the exact threat that decides the endgame in your favour.",
-      bestLine: ["Col 1", "Col 6", "Col 3"],
     },
   },
 ];
