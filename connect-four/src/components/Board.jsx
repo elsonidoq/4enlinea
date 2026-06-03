@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Icon } from './Icon.jsx';
 
 const ROWS = 6;
@@ -38,6 +38,45 @@ function shimStyle(color, role) {
   return { background: bg, border, boxShadow: shadow };
 }
 
+/**
+ * Group a flat list of {c, r} cells into collinear runs and isolated dots.
+ * Runs are tried in order: horizontal → vertical → diagonal↗ → diagonal↘.
+ * Each cell is assigned to the first run of ≥2 it starts; leftover cells become dots.
+ */
+function groupCellsByCapsules(cells) {
+  const cellSet = new Set(cells.map(({ c, r }) => `${c},${r}`));
+  const dirs = [
+    { dc: 1, dr: 0 },
+    { dc: 0, dr: 1 },
+    { dc: 1, dr: 1 },
+    { dc: 1, dr: -1 },
+  ];
+  const used = new Set();
+  const runs = [];
+
+  for (const dir of dirs) {
+    for (const cell of cells) {
+      const key = `${cell.c},${cell.r}`;
+      if (used.has(key)) continue;
+      if (cellSet.has(`${cell.c - dir.dc},${cell.r - dir.dr}`)) continue;
+      const run = [cell];
+      let nc = cell.c + dir.dc, nr = cell.r + dir.dr;
+      while (cellSet.has(`${nc},${nr}`)) {
+        run.push({ c: nc, r: nr });
+        nc += dir.dc;
+        nr += dir.dr;
+      }
+      if (run.length >= 2) {
+        run.forEach(({ c, r }) => used.add(`${c},${r}`));
+        runs.push({ start: run[0], end: run[run.length - 1] });
+      }
+    }
+  }
+
+  const dots = cells.filter(({ c, r }) => !used.has(`${c},${r}`));
+  return { runs, dots };
+}
+
 export function Board({
   board = EMPTY_BOARD,
   onColumnClick,
@@ -52,6 +91,8 @@ export function Board({
   interactionMode = 'single_move',
   // Deprecated shim — CurationWorkspace.jsx only. [row, col, role, step?] tuples.
   highlightedCells = [],
+  // Coach-mention zone highlights — Array<{color: string, cells: Array<{c,r}>}> (0-indexed).
+  zhCells = [],
 }) {
   const [hoverCol, setHoverCol] = useState(null);
 
@@ -63,8 +104,62 @@ export function Board({
   const gap = compact ? 6 : 7;
   const hasBadge = !!badge || selectedCols.length > 0;
 
+  // Track board width for SVG capsule coordinate computation.
+  const boardRef = useRef(null);
+  const [boardWidth, setBoardWidth] = useState(0);
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBoardWidth(el.getBoundingClientRect().width));
+    ro.observe(el);
+    setBoardWidth(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+
+  // Build SVG capsule overlay for coach-mention zone highlights.
+  // Each zone renders independently so overlapping zones don't steal cells from each other.
+  const zhSvg = useMemo(() => {
+    if (!zhCells.length || !boardWidth) return null;
+    const cellW = (boardWidth - 2 * pad - 6 * gap) / 7;
+    const topPad = hasBadge ? pad + 20 : pad;
+
+    function center(col, row) {
+      return {
+        x: pad + col * (cellW + gap) + cellW / 2,
+        y: topPad + (5 - row) * (cellW + gap) + cellW / 2,
+      };
+    }
+
+    const elements = [];
+    let ki = 0;
+    for (const { color, cells } of zhCells) {
+      const { runs, dots } = groupCellsByCapsules(cells);
+      for (const { start, end } of runs) {
+        const S = center(start.c, start.r);
+        const E = center(end.c, end.r);
+        elements.push(
+          <line key={ki++} x1={S.x} y1={S.y} x2={E.x} y2={E.y}
+            stroke={color} strokeWidth={cellW * 0.85} strokeLinecap="round" opacity="0.4" />
+        );
+      }
+      for (const { c, r } of dots) {
+        const { x, y } = center(c, r);
+        elements.push(
+          <circle key={ki++} cx={x} cy={y} r={cellW * 0.43} fill={color} opacity="0.4" />
+        );
+      }
+    }
+
+    return (
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }}>
+        {elements}
+      </svg>
+    );
+  }, [zhCells, boardWidth, pad, gap, hasBadge]);
+
   return (
     <div
+      ref={boardRef}
       style={{
         background: 'var(--board)',
         borderRadius: 22,
@@ -78,6 +173,7 @@ export function Board({
       }}
       onMouseLeave={() => setHoverCol(null)}
     >
+      {zhSvg}
       {Array.from({ length: COLS }, (_, col) => {
         const colFull = fullCols.includes(col) || board[ROWS - 1]?.[col] !== 'empty';
         const tappable = canPlay && !colFull;

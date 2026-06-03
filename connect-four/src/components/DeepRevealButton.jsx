@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+import { AnnotatedText } from './AnnotatedText.jsx';
+import { AnnotatedExplanation } from './AnnotatedExplanation.jsx';
+import { parseAnnotatedText } from '../lib/annotatedText.js';
 import { AuthModal } from './AuthModal.jsx';
 import { UpgradeModal } from './UpgradeModal.jsx';
 import { Icon } from './Icon.jsx';
@@ -18,6 +20,8 @@ export function DeepRevealButton({
   trackingContext,
   buttonLabel,
   feature = 'explain-move-llm',
+  onZoneHighlightsChange,  // optional callback for future Board sync
+  userMajorThreats = [],   // Array<{c, r}> for [zone:tg] resolution
 }) {
   const { t } = useTranslation();
   const { session } = useStore();
@@ -28,6 +32,25 @@ export function DeepRevealButton({
   const [flagged, setFlagged] = useState(false);
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagNote, setFlagNote] = useState('');
+  const [activeZones, setActiveZones] = useState(new Set());
+
+  const { cleanText, zones } = useMemo(
+    () => parseAnnotatedText(deepReveal?.explanation || ''),
+    [deepReveal?.explanation],
+  );
+
+  const toggleZone = useCallback((index) => {
+    setActiveZones(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const clearZoneHighlights = useCallback(() => {
+    setActiveZones(new Set());
+  }, []);
 
   async function handleClick() {
     if (!session) {
@@ -117,13 +140,27 @@ export function DeepRevealButton({
   if (deepReveal) {
     return (
       <div style={revealBox}>
-        {/* Explanation with markdown */}
+        {/* Explanation with interactive zone highlights */}
         <div style={{
           margin: '0 0 12px',
           fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
           color: 'var(--ink)',
         }}>
-          <ReactMarkdown>{deepReveal.explanation}</ReactMarkdown>
+          {onZoneHighlightsChange ? (
+            <AnnotatedExplanation
+              text={deepReveal.explanation}
+              userMajorThreats={userMajorThreats}
+              onHighlightsChange={onZoneHighlightsChange}
+            />
+          ) : (
+            <AnnotatedText
+              cleanText={cleanText}
+              zones={zones}
+              activeZones={activeZones}
+              onToggleZone={toggleZone}
+              onClearAll={clearZoneHighlights}
+            />
+          )}
         </div>
 
         {/* Best line chips */}

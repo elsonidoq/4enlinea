@@ -37,6 +37,13 @@
   --eval-bad:     #e8543e;
   --eval-bad-bg:  #fbe4df;
 
+  /* Coach-mention zone highlight (Phase 1: Tap-to-Toggle) */
+  --zone-highlight: #5B9BD5;
+  --zone-color-0: #5B9BD5;
+  --zone-color-1: #E8543E;
+  --zone-color-2: #2FAA5A;
+  --zone-color-3: #8B5CF6;
+
   /* Threat overlay tokens (FR-004) */
   --threat-green: rgba(47,170,90,0.30);
   --threat-gray:  rgba(60,66,80,0.26);
@@ -106,4 +113,9 @@
 @keyframes ring {
   0%   { transform: scale(1);   opacity: .7; }
   100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes zhPulse {
+  0%, 100% { box-shadow: 0 0 0 2.5px var(--zh-color, var(--zone-highlight)); }
+  50%      { box-shadow: 0 0 0 5px var(--zh-color-soft, rgba(91, 155, 213, 0.35)); }
 }

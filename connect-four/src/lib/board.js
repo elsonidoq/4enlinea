@@ -52,3 +52,52 @@ console.assert(
   checkWin(_smokeBoard, 0, 3, 'red') === true,
   'checkWin: horizontal 4-in-a-row not detected at (0,3,red) in buildBoard("0616263")'
 );
+
+/**
+ * Find all cells that are part of a major (3-in-a-row) or minor (2-in-a-row)
+ * threat for either player. Used by zone annotation "tg" resolution.
+ *
+ * O(ROWS × COLS × 4 directions × 4 offsets) = O(672) — sub-millisecond.
+ *
+ * @param {string[][]} board  2D board (row 0 = bottom), values: 'empty','red','yellow'
+ * @returns {Object<string, {rm: boolean, rn: boolean, ym: boolean, yn: boolean}>}
+ *   Keys are "row,col" strings. rm/rn = red major/minor, ym/yn = yellow major/minor.
+ */
+export function getMajorThreatCells(board) {
+  const map = {};
+  const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c] !== 'empty') continue;
+
+      let rm = false, rn = false, ym = false, yn = false;
+
+      for (const [dr, dc] of dirs) {
+        for (let off = 0; off <= 3; off++) {
+          const sr = r - dr * off, sc = c - dc * off;
+          let red = 0, yel = 0, valid = true;
+
+          for (let i = 0; i < 4; i++) {
+            const nr = sr + dr * i, nc = sc + dc * i;
+            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+            if (board[nr][nc] === 'red') red++;
+            else if (board[nr][nc] === 'yellow') yel++;
+          }
+
+          if (!valid || (red > 0 && yel > 0)) continue;
+
+          const empty = 4 - red - yel;
+          if (red === 3 && empty === 1) rm = true;
+          else if (red === 2 && empty === 2) rn = true;
+          if (yel === 3 && empty === 1) ym = true;
+          else if (yel === 2 && empty === 2) yn = true;
+        }
+      }
+
+      if (rm || rn || ym || yn) map[`${r},${c}`] = { rm, rn, ym, yn };
+    }
+  }
+
+  return map;
+}

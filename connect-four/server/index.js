@@ -579,6 +579,19 @@ app.post('/api/recommend-move', async (req, res) => {
   }
 });
 
+// Inject a default-active marker into the first zone tag in an LLM explanation.
+// The LLM is not prompted to use '!' — the server picks the first zone instead.
+function injectDefaultActiveZone(explanation) {
+  let injected = false;
+  return explanation.replace(/\[zone:([^\]!]+)(!?)\]/g, (match, spec, bang) => {
+    if (!injected && !bang) {
+      injected = true;
+      return `[zone:${spec}!]`;
+    }
+    return match;
+  });
+}
+
 // Shared: build the LLM prompt for a given (movestring, col) without calling the LLM.
 // Returns { prompt, bestLine } or null if contrast move is unavailable.
 async function buildExplainContext(movestring, col, rounds = 1) {
@@ -730,7 +743,8 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
 
     const { prompt, bestLine } = context;
-    const explanation = await callLLM(prompt);
+    const rawExplanation = await callLLM(prompt);
+    const explanation = injectDefaultActiveZone(rawExplanation);
 
     if (supabase) {
       supabase.from('explanation_cache').insert({

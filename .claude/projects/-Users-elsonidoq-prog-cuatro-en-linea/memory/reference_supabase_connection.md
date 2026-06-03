@@ -25,3 +25,19 @@ psql "$DATABASE_URL" -f connect-four/server/migrations/NNN_slug.sql
 - Use the session pooler instead: `aws-1-us-west-2.pooler.supabase.com:5432`
 - Full format: `postgresql://postgres.kxtqwsumojtexokrtlfp:PASSWORD@aws-1-us-west-2.pooler.supabase.com:5432/postgres`
 - Get connection string from dashboard → Connect button → URI tab
+
+**Querying from Node.js (inline script pattern):**
+- `.env` file is at `connect-four/server/.env` (not project root)
+- Service key env var name is `SUPABASE_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_KEY`)
+- `dotenv` is not reliably available in `node -e`; parse the file manually:
+
+```bash
+cd /Users/elsonidoq/prog/cuatro_en_linea/connect-four && node -e "
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const env = fs.readFileSync('server/.env', 'utf8');
+env.split('\n').forEach(line => { const [k,...v] = line.split('='); if(k&&k.trim()) process.env[k.trim()] = v.join('=').trim(); });
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// ... query here
+"
+```

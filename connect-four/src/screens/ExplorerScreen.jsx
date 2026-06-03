@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -8,9 +8,9 @@ import { AuthModal } from '../components/AuthModal.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useGameBoard } from '../lib/useGameBoard.js';
-import { buildBoard } from '../lib/board.js';
+import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { track } from '../lib/track.js';
-import ReactMarkdown from 'react-markdown';
+import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -25,7 +25,7 @@ function getRewindedMoves(mIdx, side, fullMovestring) {
  * Inner component that owns useGameBoard so React fully remounts it
  * (and reinitializes the hook) when the key changes (mistake navigation).
  */
-function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, moveIndex, patternTag }) {
+function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, moveIndex, patternTag, zhCells }) {
   const { t } = useTranslation();
   const gameBoard = useGameBoard({
     initialMoves: rewindedMoves,
@@ -62,6 +62,7 @@ function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, mov
             fullCols={gameBoard.fullCols}
             lastDrop={gameBoard.lastDrop}
             overlays={overlays}
+            zhCells={zhCells}
           />
         </div>
       </div>
@@ -111,6 +112,21 @@ export function ExplorerScreen({
     ? { c: currentSelectedMove.col, r: rewindedHeights[currentSelectedMove.col], type: 'tr' }
     : null;
 
+  // Stable reference — avoids AnnotatedExplanation re-render loop.
+  const userMajorThreats = useMemo(() => {
+    if (!currentRewindedMoves) return [];
+    const { board: b } = buildBoard(currentRewindedMoves);
+    const threats = getMajorThreatCells(b);
+    const userColor = side === 'first' ? 'red' : 'yellow';
+    const isMajor = userColor === 'red' ? 'rm' : 'ym';
+    return Object.entries(threats)
+      .filter(([, v]) => v[isMajor])
+      .map(([key]) => {
+        const [r, c] = key.split(',').map(Number);
+        return { c, r };
+      });
+  }, [currentRewindedMoves, side]);
+
   // ── "Start from here" state ───────────────────────────────────────
   const [fromPositionError, setFromPositionError] = useState(null);
 
@@ -142,6 +158,7 @@ export function ExplorerScreen({
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagNote, setFlagNote] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [zhCells, setZhCells] = useState([]);
 
   async function handleDeepReveal() {
     setDeepRevealOpen(true);
@@ -151,6 +168,7 @@ export function ExplorerScreen({
     setFlagged(false);
     setFlagOpen(false);
     setFlagNote('');
+    setZhCells(new Map());
 
     if (!session?.access_token) {
       setDeepRevealOpen(false);
@@ -253,6 +271,7 @@ export function ExplorerScreen({
         gameId={gameId}
         moveIndex={currentMoveIndex}
         patternTag={currentSelectedMove?.patternTag}
+        zhCells={zhCells}
       />
 
       {/* Inline error for "start from here" */}
@@ -433,7 +452,11 @@ export function ExplorerScreen({
                   fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
                   color: 'var(--ink)',
                 }}>
-                  <ReactMarkdown>{deepRevealExplanation}</ReactMarkdown>
+                  <AnnotatedExplanation
+                    text={deepRevealExplanation}
+                    userMajorThreats={userMajorThreats}
+                    onHighlightsChange={setZhCells}
+                  />
                 </div>
 
                 {/* Best line chips */}

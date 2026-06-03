@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import Markdown from 'react-markdown';
+import { useState, useMemo, useCallback } from 'react';
+import { AnnotatedText } from './AnnotatedText.jsx';
+import { AnnotatedExplanation } from './AnnotatedExplanation.jsx';
+import { parseAnnotatedText } from '../lib/annotatedText.js';
 import { useTranslation } from 'react-i18next';
 import { track } from '../lib/track.js';
 
@@ -16,7 +18,7 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
  *   moves  — movestring BEFORE the player's move was committed (0-indexed digits)
  *   col    — 0-indexed column the player played
  */
-export function ExplainMoveButton({ moves, col }) {
+export function ExplainMoveButton({ moves, col, onZoneHighlightsChange }) {
   const { t } = useTranslation();
   const [loading, setLoading]         = useState(false);
   const [explanation, setExplanation] = useState(null);
@@ -24,6 +26,25 @@ export function ExplainMoveButton({ moves, col }) {
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagNote, setFlagNote]       = useState('');
   const [flagStatus, setFlagStatus]   = useState(null); // null | 'submitting' | 'success' | 'error'
+  const [activeZones, setActiveZones] = useState(new Set());
+
+  const { cleanText, zones } = useMemo(
+    () => parseAnnotatedText(explanation || ''),
+    [explanation],
+  );
+
+  const toggleZone = useCallback((index) => {
+    setActiveZones(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  const clearZoneHighlights = useCallback(() => {
+    setActiveZones(new Set());
+  }, []);
 
   async function handleExplain() {
     setLoading(true);
@@ -76,7 +97,22 @@ export function ExplainMoveButton({ moves, col }) {
     return (
       <div style={revealBox}>
         <div style={revealLabel}>Move explanation</div>
-        <div style={revealText}><Markdown>{explanation}</Markdown></div>
+        <div style={revealText}>
+          {onZoneHighlightsChange ? (
+            <AnnotatedExplanation
+              text={explanation}
+              onHighlightsChange={onZoneHighlightsChange}
+            />
+          ) : (
+            <AnnotatedText
+              cleanText={cleanText}
+              zones={zones}
+              activeZones={activeZones}
+              onToggleZone={toggleZone}
+              onClearAll={clearZoneHighlights}
+            />
+          )}
+        </div>
 
         {!showFlagForm && flagStatus !== 'success' && (
           <button

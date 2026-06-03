@@ -19,6 +19,7 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
   const [index, setIndex] = useState(initialIndex ?? 0);
   const [resolving, setResolving] = useState(false);
   const [highlightCol, setHighlightCol] = useState(null);
+  const [zhCells, setZhCells] = useState([]);
 
   const blunders = initialBlunders || [];
   const blunder = blunders[index];
@@ -41,6 +42,11 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
     if (!blunder) return { board: [], heights: [] };
     return buildBoard(blunder.board_state || '');
   }, [blunder]);
+
+  const userMajorThreats = useMemo(() =>
+    (blunder?.threat_cells || []).map(tc => ({ c: tc.col, r: tc.row })),
+    [blunder]
+  );
 
   const overlays = useMemo(() => {
     if (!blunder) return [];
@@ -119,7 +125,7 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
 
         {/* Board */}
         <div style={{ background: '#fff', borderRadius: 'var(--radius)', padding: 12, boxShadow: 'var(--shadow-sm)' }}>
-          <Board board={boardObj.board} compact canPlay={false} overlays={overlays} />
+          <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
         </div>
 
         {/* Pattern tag */}
@@ -168,6 +174,8 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
             highlightCol={blunder.correct_move}
             onReveal={() => setHighlightCol(blunder.correct_move)}
             onHighlightMove={setHighlightCol}
+            onZoneHighlightsChange={setZhCells}
+            userMajorThreats={userMajorThreats}
             trackingContext="past_mistakes"
             buttonLabel={t('mistakes.detail.whatShouldIHave')}
             feature="past_mistakes"

@@ -555,6 +555,20 @@ Note: In the board diagrams, **R** always denotes Green discs and **Y** always d
 ## Board position (AFTER ${playerName} plays col ${userCol + 1})
 ${postBoardViz}
 
+## Output format
+Wrap any reference to a specific board location in zone tags:
+
+- \`[zone:colN]column N[/zone:colN]\` — a single column
+- \`[zone:cNrM]the cell at row M[/zone:cNrM]\` — a single cell
+- \`[zone:cells:c1r2,c2r3]these cells[/zone:cells:c1r2,c2r3]\` — multiple cells (comma-separated)
+- \`[zone:rowN]row N[/zone:rowN]\` — an entire row
+- \`[zone:tg]this threat[/zone:tg]\` — all current major threat cells for the player
+
+Rules:
+- Only tag EXPLICIT spatial references. Do NOT tag abstract concepts like "the position" or "the tactic."
+- Use column numbers as they appear in the board context above (1-indexed columns, row 1 = bottom).
+- The board has 7 columns (1–7, left to right) and 6 rows (1–6, bottom to top).
+
 ## Task
 This move ends the game — ${playerName} wins immediately. Explain this in one sentence, naming the specific column and row of the winning connection.`;
   }
@@ -634,6 +648,21 @@ ${afterOpponentSection}
 ## What the analysis found
 ${patternSection}
 ${kbSection ? '\n' + kbSection + '\n' : ''}${exampleBoardsSection}
+## Output format
+Wrap any reference to a specific board location in zone tags:
+
+- \`[zone:colN]column N[/zone:colN]\` — a single column
+- \`[zone:cNrM]the cell at row M[/zone:cNrM]\` — a single cell
+- \`[zone:cells:c1r2,c2r3]these cells[/zone:cells:c1r2,c2r3]\` — multiple cells (comma-separated)
+- \`[zone:rowN]row N[/zone:rowN]\` — an entire row
+- \`[zone:tg]this threat[/zone:tg]\` — all current major threat cells for the player
+
+Rules:
+- Only tag EXPLICIT spatial references. Do NOT tag abstract concepts like "the position" or "the tactic."
+- Use column numbers as they appear in the board context above (1-indexed columns, row 1 = bottom).
+- For "best line" columns, tag each one individually.
+- The board has 7 columns (1–7, left to right) and 6 rows (1–6, bottom to top).
+
 ## Task
 ${isOptimal
   ? `Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -11,7 +11,8 @@ import { AuthModal } from '../components/AuthModal.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
-import { buildBoard } from '../lib/board.js';
+import { buildBoard, getMajorThreatCells } from '../lib/board.js';
+import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -63,10 +64,26 @@ export function ChallengeScreen({ go, goBack, category }) {
   const [deepRevealFlagOpen, setDeepRevealFlagOpen] = useState(false);
   const [deepRevealFlagNote, setDeepRevealFlagNote] = useState('');
   const [deepRevealTimedOut, setDeepRevealTimedOut] = useState(false);
+  const [zhCells, setZhCells] = useState([]);
 
   const promptKeyRef = useRef(null);
   const startTimeRef = useRef(null);
   const sessionIdRef = useRef(null);
+
+  // Stable reference — avoids AnnotatedExplanation re-render loop.
+  const userMajorThreats = useMemo(() => {
+    if (!board) return [];
+    const threats = getMajorThreatCells(board);
+    const puzzle = puzzles[currentIdx];
+    const userColor = (puzzle?.move_string?.length ?? 0) % 2 === 0 ? 'red' : 'yellow';
+    const isMajor = userColor === 'red' ? 'rm' : 'ym';
+    return Object.entries(threats)
+      .filter(([, v]) => v[isMajor])
+      .map(([key]) => {
+        const [r, c] = key.split(',').map(Number);
+        return { c, r };
+      });
+  }, [board, puzzles, currentIdx]);
 
   function initPuzzle(puzzle) {
     if (!puzzle) return;
@@ -83,6 +100,7 @@ export function ChallengeScreen({ go, goBack, category }) {
     setDeepRevealData(null);
     setDeepRevealFlagged(false);
     setDeepRevealTimedOut(false);
+    setZhCells(new Map());
     setSeqPosition(puzzle.move_string ?? '');
 
     // Pick a random prompt key from coach.<category>.prompt.*
@@ -731,18 +749,23 @@ export function ChallengeScreen({ go, goBack, category }) {
                       canPlay={false}
                       overlays={overlays}
                       badge={badge}
+                      zhCells={zhCells}
                     />
                   </div>
                 )}
 
                 {/* (c) LLM explanation */}
-                <p style={{
+                <div style={{
                   margin: '0 0 14px',
                   fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6,
                   color: 'var(--ink)',
                 }}>
-                  {deepRevealData.explanation}
-                </p>
+                  <AnnotatedExplanation
+                    text={deepRevealData.explanation}
+                    userMajorThreats={userMajorThreats}
+                    onHighlightsChange={setZhCells}
+                  />
+                </div>
 
                 {/* (d) Best line chips — omit if null/empty (legacy cache rows) */}
                 {deepRevealData.bestLine?.length > 0 && (

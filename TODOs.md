@@ -1,6 +1,6 @@
 - e-mail design
 - other way to register. password? with gmail? with instagram?
-- avoid repeated puzzles in the same session: e.g. three consecutive puzzles of immediate threat, where the immediate threat was a vertical stack of 3 disks
+- avoid repeated puzzles in the same session: e.g. three consecutive puzzles of immediate threat, where the immediate threat was a vertical stack of 3 disks. It might make sense to have a function per puzzle, that extracts the "shape" of the puzzle (e.g. for an immediate threat it might be the group of three orientation and coarced grained position, for double threat it might be the union of the involved pieces translated into the top right corner)
 - modify global colorscheme light 
 - the review blunder screen should specify if the user played green or grey
 - when reviewing a mistake, start a play from there
@@ -27,6 +27,8 @@
 - Accuracy by pattern is wrong, shows 100% accuracy when I failed 3 puzzles and got one correct
 
 - Back from clicking a blunder in the game review shows a screen where the coach writes Game not saved — analysis unavailable
+
+- Remove best line from explain-move-llm endpoint and all along the codebase
 
 - coach explanations yellow/red
 
