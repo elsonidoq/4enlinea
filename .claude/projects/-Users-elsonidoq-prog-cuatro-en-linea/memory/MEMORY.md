@@ -90,7 +90,7 @@
 - [Classifier current state + T037–T048 pending](project_classifier_current_state.md) — Cat1–Cat5 score-proxy fixes done; J/U/O/F pattern detector bugs NOT yet fixed; FP rates from v2 review
 - [Knowledge base status](project_kb_status.md) — 30 entries done; 9 fact-check errors fixed; 58 gaps in knowledge-base-gaps.md; worked_examples PENDING
 - [LLM explain system](project_explain_system.md) — POST /api/explain-move-llm; data flow, prompt structure, getPositionTier, forced_win leaf boards; review_feedback.sh
-- [explanation_cache stores prompt; buildExplainContext helper](project_explain_cache_schema.md) — deep_reveal_json={explanation,bestLine,prompt}; flag endpoint rebuilds prompt from cache or simulation if empty; migration 023 makes llm_prompt nullable
+- [explanation_cache stores prompt; buildExplainContext helper](project_explain_cache_schema.md) — deep_reveal_json={explanation,prompt}; flag endpoint rebuilds prompt from cache or simulation if empty; migration 023 makes llm_prompt nullable
 - [explainSimulate — implementation](project_explain_simulate.md) — DETECTOR_REGISTRY; leaf taxonomy; pattern ratio denominator; transposition dedup; numPlies must be odd for user's perspective
 - [LLM recommend next move](project_recommend_next_move.md) — POST /api/recommend-move; RecommendCoach.jsx + BadgeRow.jsx; colRankings; sparring footer
 - [explain endpoint — best-moves filtering](project_explain_best_moves.md) — explainSearch uses book.get() O(1); explain loads book (`['-x']` not `-nb`); timing results

@@ -9,7 +9,7 @@ metadata:
 
 ## Endpoints
 
-- `POST /api/explain-move-llm` — explains the user's actual last move; **auth required** (401 for anon); rate-limited 5 req/min; free-tier quota 20/week (429 when exceeded, resets Monday). Response: `{ explanation: string, bestLine: string[], cached?: boolean }`. Cache hits do NOT decrement quota.
+- `POST /api/explain-move-llm` — explains the user's actual last move; **auth required** (401 for anon); rate-limited 5 req/min; free-tier quota 20/week (429 when exceeded, resets Monday). Response: `{ explanation: string, prompt: string, cached?: boolean }`. Cache hits do NOT decrement quota.
 - `POST /api/llm-feedback` — stores flagged LLM responses; rate-limited 10 req/min; no auth required
 - `POST /api/recommend-move` — see [[project_recommend_next_move]] (separate but sibling feature)
 
@@ -28,17 +28,16 @@ CLI PoC: `./explain_move.sh <movestring> <col> [rounds=1]` → `connect-four/ser
 
 1. Auth gate → 401 if no user
 2. Input validation
-3. **Cache check**: SHA256(`movestring:col`) → `explanation_cache.deep_reveal_json` → return `{ explanation, bestLine, cached: true }` on hit (no quota decrement)
+3. **Cache check**: SHA256(`movestring:col`) → `explanation_cache.deep_reveal_json` → return `{ explanation, prompt, cached: true }` on hit (no quota decrement)
 4. **Quota decrement** (cache miss only)
-5. **`computeBestLine(movestring, col, solver)`** → `bestLine` array (1-indexed strings, always ≥1 element)
-6. `perspective = movestring.length % 2 === 0 ? 1 : 2`
-7. Pre-move solver scores → `selectContrastMove` (suboptimal → best; optimal → second-best; all-equal → skip LLM call)
-3. `getPositionTier(scores, board)`: any score > 0 → WINNING; best = 0 → DRAWING; all < 0 → LOSING. Maps `(tier, isOptimal)` to `moveQualityDesc` + `roleGoal`; LOSING branch explicitly tells LLM not to call the move strong.
-4. `explainSimulate(postMove, 2*rounds+1, anchorCell, perspective, solver)` run concurrently for user move + contrast move
-5. `computeDeltaTable` — keeps patterns where `max(userRatio, contrastRatio) > 0`, sorted by |Δratio|
-6. `getBoardVisualization` on both pre-move and post-move boards; **`scr` row stripped from both** (LLM must not see solver scores — invariant)
-7. `buildKBSection` loads KB `statement:` for patterns in delta table only
-8. `buildExplainPrompt` → `callLLM`
+5. `perspective = movestring.length % 2 === 0 ? 1 : 2`
+6. Pre-move solver scores → `selectContrastMove` (suboptimal → best; optimal → second-best; all-equal → skip LLM call)
+7. `getPositionTier(scores, board)`: any score > 0 → WINNING; best = 0 → DRAWING; all < 0 → LOSING. Maps `(tier, isOptimal)` to `moveQualityDesc` + `roleGoal`; LOSING branch explicitly tells LLM not to call the move strong.
+8. `explainSimulate(postMove, 2*rounds+1, anchorCell, perspective, solver)` run concurrently for user move + contrast move
+9. `computeDeltaTable` — keeps patterns where `max(userRatio, contrastRatio) > 0`, sorted by |Δratio|
+10. `getBoardVisualization` on both pre-move and post-move boards; **`scr` row stripped from both** (LLM must not see solver scores — invariant)
+11. `buildKBSection` loads KB `statement:` for patterns in delta table only
+12. `buildExplainPrompt` → `callLLM`
 
 ## Prompt sections (order)
 
