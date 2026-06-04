@@ -347,9 +347,9 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   delta groups (with occupants + parity) to the context builder. At a **draw leaf**,
   record every **major threat group** present on the board (each
   4-window with 3 discs of one color and 1 empty cell) as
-  `{ cells, winner: 'player'|'opponent', type: 'draw_threat' }`. Aggregate into a
+  `{ cells, owner: 'player'|'opponent', type: 'draw_threat' }` (where `owner` is whose threat this is — the player who would benefit from completing this group). Aggregate into a
   separate `draw_freq` counter (= N_draw_leaves_where_this_group_appeared /
-  total_leaves), tracked alongside `completed_freq`. Both frequencies enter the
+  total_leaves, where `total_leaves` = all leaves: won + draw + lost), tracked alongside `completed_freq`. Both frequencies enter the
   context block per the M2 format in `coach_explanation_principles.md`.
   **Rationale:** blunders often convert winning continuations to draws, not losses;
   without draw-leaf records the branch-A vs branch-B frequency comparison misses
@@ -409,7 +409,7 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
      in `allowedSet`.
 
   Coverage by zone type:
-  - `col4`: passes if any `allowedSet` entry contains a cell in col 3 (0-indexed).
+  - `col4`: passes if any `allowedSet` entry contains a cell in col 3 (0-indexed). (This is intentionally permissive: ABSTRACT-ONLY groups are referenced at column level without naming individual cells, so a column zone is valid whenever any allowed group touches that column.)
   - `c4r3`: passes if any `allowedSet` entry contains the cell at col=3, row=2.
   - `cells:c4r3,c5r3,…`: passes if all listed cells appear across allowed entries.
   - `tg` (entire board): **always fails** strong-P5 — the rebuilt coach never emits
