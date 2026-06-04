@@ -163,9 +163,22 @@ a data-preparation responsibility (testable). This is what makes Cases A and B
 The context handed to the coach is built by the algorithm below. Shape (Type 4 shown;
 other types reuse the same blocks plus type-specific evidence):
 
+**Player identity (derived, not hardcoded):** The coached player is whoever just
+played move A. Derive color and winning parity from `movestring.length` **after**
+appending A:
+
+- Odd length → coached player is Red → **Green** disc → winning parity = ODD rows (1, 3, 5)
+- Even length → coached player is Yellow → **Grey** disc → winning parity = EVEN rows (2, 4, 6)
+
+Every `Player:` line and every parity annotation in the context block must be
+computed from this rule. The Green/ODD examples in this doc are illustrative only.
+
 ```
 ## Move context
 - Player: Green (winning parity = ODD rows 1/3/5)   ← from KB parity rule
+  (Explicit player identity is required: a post-move board shows "Next: opponent"
+  and without this line the LLM reasons from the opponent's perspective — a real
+  observed failure mode.)
 - Green played col A; best alternative col B
 - Eval gap: small | moderate | large                ← drives tone (D1/D3)
 - Stage: opening (N discs); major threats: none
@@ -198,29 +211,50 @@ Deterministic. Given a position, the played move A, and the solver's best move B
 1. CLASSIFY STAGE / EVIDENCE
    a. If a direct win existed for the player, or an opponent immediate threat was
       ignored            → Type 1
-   b. Else if the critical (post-response) position has ≥2 simultaneous opponent
-      major threats, or matches a named scaffold (figure_7 / j_config)
+   b. Else if the CRITICAL POSITION has ≥2 simultaneous opponent major threats,
+      or matches a named scaffold (figure_7 / j_config)
                          → Type 2
+      CRITICAL POSITION = board after move A is played AND the opponent plays their
+      solver-optimal response to A. (Not the board right after A — the fork only
+      materialises after the opponent's reply.)
    c. Else if `par` shows a parity shift tied to an existing major threat
                          → Type 3
    d. Else               → Type 4
 
 2. COMPUTE EVAL GAP
-   gap = score(B) - score(A), bucketed → small | moderate | large   (D1/D3)
+   gap = score(B) - score(A), using c4solver scores (range [-18, +18]).
+   **Score perspective:** c4solver returns scores from the perspective of the
+   player *about to move* at the resulting position (positive = that player wins).
+   After playing col A or B, the next player is the **opponent**. Normalize to
+   coached-player perspective before computing the gap:
+
+       score_coached(col) = −raw_score(col)
+
+   Then: `gap = score_coached(B) − score_coached(A)`. A positive gap means B is
+   better for the coached player. The JS off-by-1 on odd `moveCount` (see
+   `reference_c4solver_behavior.md`) is handled inside `c4solver-wrapper.js`;
+   callers receive the already-corrected raw value.
+   Initial thresholds: small = gap ≤ 3 | moderate = 4–9 | large = ≥ 10.
+   SIGN-CHANGE OVERRIDE: if score(A) and score(B) have different signs (e.g. A is a
+   draw/loss, B is a win; or A is a loss, B is a draw), treat as at least moderate
+   (win→draw or draw→loss) or large (win→loss). A sign change is a qualitative
+   outcome shift the numeric gap alone may understate. Thresholds are starting points
+   — validate empirically against flagged feedback.    (D1/D3)
 
 3. BUILD EVIDENCE
-   - Run the continuation simulation for A and for B.
-   - Extract, per continuation, the specific winning groups of 4 (see "Required
-     simulation change" below).
-   - Aggregate completion frequency per group; take the top-delta groups.
-   - For each, fill: cells, occupants, key cell, parity, player-winning-parity flag,
-     player_discs_in_group, CONCRETE-ELIGIBLE vs ABSTRACT-ONLY (D2).
+   - TYPE 1 ONLY: skip the simulation. The winning line is already on the board —
+     use checkWin (player's missed win) or the opponent's immediate threat cells
+     directly. Steps 3–4 reduce to: identify the exact 4-cell line and its owner.
+   - ALL OTHER TYPES: run the continuation simulation for A and for B (see M1).
+   - Aggregate completed_freq and draw_freq per group across all leaves.
+   - For each group, fill: cells, occupants, key cell, parity, player-winning-parity
+     flag, player_discs_in_group, CONCRETE-ELIGIBLE vs ABSTRACT-ONLY (D2).
    - Attach the KB parity rule that justifies the parity label.
 
 4. ASSEMBLE CONTEXT BLOCK
    - Move context + boards + the type-appropriate evidence block.
-   - For Type 4, the Winning-line comparison block; for Type 1/2, the explicit
-     threat/winning lines; for Type 3, the `par`-grounded parity story.
+   - For Type 4, the Winning-line comparison block (M2 format); for Type 1/2, the
+     explicit threat/winning lines; for Type 3, the `par`-grounded parity story.
 
 5. SELECT FRAMING BY GAP (D1)
    - small    → "both reasonable; B slightly more principled"; no mistake language.
@@ -312,6 +346,105 @@ requires that data. The minimum change:
 
 This is a focused change to the leaf handling and aggregation; it does not require
 restructuring the search.
+
+---
+
+## Algorithm mechanics (three pinned decisions)
+
+These three specifics must not be re-derived by a planning agent; they are locked here.
+
+### M1. What the simulation aggregates — groups, not classifier tags
+
+The existing simulation records whether a classifier tag fired (`immediate_threat`,
+`double_threat`, etc.). **That is not enough.** The rebuilt system aggregates
+**specific 4-cell groups** that appear as winning lines or near-winning threats in
+terminal leaves, keyed by their canonical cell set (order-independent).
+
+**Win/loss leaves:** record the specific 4-cell group that completed the win (and its
+owner):
+
+```
+{ cells: [c3r2, c4r2, c5r2, c6r2], winner: 'player' | 'opponent', type: 'completed' }
+```
+
+**Draw leaves:** record every **major threat group** present on the board at the draw
+leaf — i.e., each 4-window with 3 discs of one color and 1 empty cell:
+
+```
+{ cells: [...], winner: 'player' | 'opponent', type: 'draw_threat' }
+```
+
+Draw leaves contribute group records because a blunder often converts winning
+continuations into draws rather than outright losses: the group the player was building
+toward still appears in those draws, and comparing its frequency across branches tells
+the real story ("after your move this line appears in 60% of wins and 30% of draws;
+after the better move it appears in 80% of wins").
+
+After collecting all leaves for a branch (A or B), aggregate into a frequency table:
+
+```
+group_key → { completed_freq: N_wins/total, draw_freq: N_draws/total, winner, cells }
+```
+
+Both frequencies are surfaced in the context block (see M2). The `total` denominator
+is always `total_leaves` (all outcomes included), so frequencies are comparable across
+groups.
+
+This is a data-shape change, not a search-strategy change. The existing traversal
+(solver-optimal continuations, current depth) is reused unchanged.
+
+### M2. Which groups enter the context block — the union rule
+
+A 4-window is included in the context block if it appears as a winning line in **any
+leaf of the A-branch simulation OR any leaf of the B-branch simulation** (union). This
+captures:
+
+- Lines the opponent builds **more often** after the player's move A — the central
+  warning.
+- Lines the player builds **more often** after the better move B — what B develops
+  toward.
+
+For each included group, the context block carries **both** branch frequencies,
+split by outcome type:
+
+```
+GROUP_k:
+  cells: c3r2, c4r2, c5r2, c6r2  (horizontal)
+  winner: opponent
+  occupants: c3r2=empty, c4r2=empty, c5r2=Green, c6r2=empty
+  key completing cell: c5r2 — row 2 — EVEN — IS opponent's winning parity
+  player_discs_in_group: 1         → ABSTRACT-ONLY       (D2)
+  after_A (player's move):  completed=0.48, draw_threat=0.13  (total 0.61)
+  after_B (best move):      completed=0.07, draw_threat=0.02  (total 0.09)
+```
+
+This is what lets the coach say: *"after your move, your opponent can build this line
+in 61% of continuations (48% as a completed win, 13% as a near-win in drawn games) —
+after the better move, only 9%."*
+
+### M3. Group selection — top 5 per branch, with discard logging
+
+From the union set, rank groups by **absolute completion frequency within each
+branch** and take the top 5 per branch (A and B independently), then merge. The merge
+may yield up to 10 distinct groups, typically fewer due to overlap.
+
+**Rationale for per-branch selection (not delta-ranked):** delta-ranking would miss a
+group that is dominant in only one branch. A group appearing 70% in the A-branch but
+0% in the B-branch has a large delta but may not appear in B at all — it is critical
+context. A group that is 60% in both branches is also worth showing (it's a shared
+structural feature). Per-branch top-5 captures both.
+
+**Discard logging (required):** after selection, log the number of groups that were in
+the union but not selected, and their frequency range. This is a diagnostic instrument
+— if the discarded groups have non-trivial frequencies, the cap of 5 is too tight and
+should be raised. Format:
+
+```
+[explain] discarded N groups (freq range [min–max]); kept 5 per branch.
+```
+
+Log at `debug` level so it does not appear in production but is visible in test runs
+and local development.
 
 ---
 
