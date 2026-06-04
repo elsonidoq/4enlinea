@@ -218,16 +218,18 @@ Deterministic. Given a position, the played move A, and the solver's best move B
       → Return plain-text prompt (no zone annotations): "Every column is equivalent
         here — the game state is already determined regardless of which column you
         pick."
-      → No quota unit is consumed (no LLM call needed; serve this as Tier-2 text).
+      → No LLM call is made; serve this as Tier-2 plain text. (No quota unit is
+        consumed — see Deep Reveal access gating in `deep_reveal_product.md`.)
 
    b. A IS OPTIMAL: score_coached(A) ≥ score_coached(B) for all alternatives B.
       → Proceed through steps 1–6 normally, but:
-        • B = the highest-scoring alternative (gap ≤ 0).
+        • B = the highest-scoring alternative.
         • Step 5 tone framing is INVERTED: instead of "why B is better," frame as
           "why A was the right call." Replace the small/moderate/large ladder with:
+        • Here gap = score_coached(B) − score_coached(A) ≤ 0 (A is better; larger negative = A is stronger):
             - gap = 0           → "Both A and the alternative are equivalent; your
                                    move is fine."
-            - gap between –3..0 → "Your move is solid; the alternative is a touch
+            - –3 < gap < 0      → "Your move is solid; the alternative is a touch
                                    more flexible but the difference is minor."
             - gap < –3          → "Your move is the strongest here; [what it
                                    preserves or builds]."
