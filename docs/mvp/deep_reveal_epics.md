@@ -230,7 +230,7 @@ guarantee from the current client-side best-effort drop
   1. **Show Tier-1:** Read the `explanation_cache` row for this `position_hash`
      where `deep_reveal_json` has the Tier-1 shape
      `{ patternTag, fullText, continuationLine, boardAnnotation }` (written by
-     the `/api/explain-move` endpoint, `index.js:436`). Return `fullText` as the
+     the `/api/explain-move` endpoint — verify the current `deep_reveal_json` shape at the Tier-1 cache write in `index.js` before implementing). Return `fullText` as the
      explanation. If no such row exists, return the static string
      `"Detailed explanation unavailable."` No zone annotations; plain text only.
 
@@ -256,7 +256,7 @@ guarantee from the current client-side best-effort drop
   **only when a valid Tier-2 explanation is delivered to the user.** Internal
   retries are transparent to the quota counter. If the final result is a Tier-1
   fallback, the quota unit is **not** consumed. Implementation: the existing
-  quota decrement at `index.js:762` must be moved to *after* the validation gate
+  quota decrement (near the weekly-count increment in `index.js` — search for the 429 rate-limit check block) must be moved to *after* the validation gate
   confirms a valid explanation; it must not run on a cache miss before validation
   completes.
 
