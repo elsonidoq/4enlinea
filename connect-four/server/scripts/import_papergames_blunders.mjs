@@ -5,7 +5,8 @@
 //   node --env-file=connect-four/server/.env \
 //     connect-four/server/scripts/import_papergames_blunders.mjs \
 //     --user-id <supabase-uuid> \
-//     [--account-id <papergames-id>]
+//     [--account-id <papergames-id>] \
+//     [--min-severity N]   only import blunders with severity >= N (default 5, range 0–10)
 //
 // Papergames API (verified 2026-06-04):
 //   Rooms:  GET /api/profile/:id/rooms?accountId=X&start=N&limit=50&gameType=Connect4
@@ -36,11 +37,12 @@ function parseArgs(argv) {
     if (argv[i] === '--user-id') args.userId = argv[i + 1];
     if (argv[i] === '--account-id') args.accountId = argv[i + 1];
     if (argv[i] === '--limit') args.limit = parseInt(argv[i + 1], 10);
+    if (argv[i] === '--min-severity') args.minSeverity = parseInt(argv[i + 1], 10);
   }
   return args;
 }
 
-const { userId, accountId = PAPERGAMES_ACCOUNT_ID } = parseArgs(process.argv.slice(2));
+const { userId, accountId = PAPERGAMES_ACCOUNT_ID, minSeverity = 5 } = parseArgs(process.argv.slice(2));
 if (!userId) { console.error('Missing --user-id <supabase-uuid>'); process.exit(1); }
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing env vars'); process.exit(1); }
@@ -84,7 +86,7 @@ function computeSeverity(bestScore, score) {
   return Math.round((bestScore - score) / 36 * 10);
 }
 
-async function extractBlunders(solver, moveString, side, userId) {
+async function extractBlunders(solver, moveString, side, userId, minSeverity) {
   const toInsert = [];
   for (let i = 0; i < moveString.length; i++) {
     const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
@@ -101,6 +103,7 @@ async function extractBlunders(solver, moveString, side, userId) {
     if (quality !== 'blunder') continue;
     const score = scores[col];
     const bestScore = scores[bestCol];
+    if (computeSeverity(bestScore, score) < minSeverity) continue;
     let patternTag = 'unknown';
     try {
       const r = classify(movesBefore, col, scores);
@@ -130,7 +133,7 @@ async function main() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const solver = createSolverProcess();
 
-  console.log(`Fetching rooms for account ${accountId}...`);
+  console.log(`Fetching rooms for account ${accountId}... (min-severity=${minSeverity})`);
   const allRooms = [];
   let start = 0;
   let total = null;
@@ -172,7 +175,7 @@ async function main() {
     if (!moveString || moveString.length === 0) { skippedNoMoves++; continue; }
 
     let toInsert;
-    try { toInsert = await extractBlunders(solver, moveString, side, userId); }
+    try { toInsert = await extractBlunders(solver, moveString, side, userId, minSeverity); }
     catch (e) {
       process.stderr.write(`\nSolver error ${room.uid}: ${e.message}\n`);
       skippedErrors++; continue;
@@ -183,9 +186,16 @@ async function main() {
     if (toInsert.length > 0) {
       const { error } = await supabase
         .from('blunders')
-        .upsert(toInsert, { onConflict: 'user_id,board_state,move_played', ignoreDuplicates: true });
+        .insert(toInsert);
       if (error) {
-        process.stderr.write(`\nInsert error ${room.uid}: ${error.message}\n`);
+        // Partial unique index (idx_blunders_game_unique) prevents duplicates at DB level;
+        // PostgREST onConflict doesn't support partial indexes, so we use plain insert.
+        // Duplicate-key errors on re-runs are expected and benign.
+        if (!error.message?.includes('duplicate key') && !error.message?.includes('unique constraint')) {
+          process.stderr.write(`\nInsert error ${room.uid}: ${error.message}\n`);
+        } else {
+          totalInserted += toInsert.length; // best-effort count; some may be dupes
+        }
       } else {
         totalInserted += toInsert.length;
       }
