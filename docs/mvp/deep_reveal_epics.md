@@ -224,14 +224,41 @@ guarantee from the current client-side best-effort drop
     - `[zone:col4]the fourth column[/zone:col4]` → **PASS**
   - **P4 (umbrella):** a violation of any of the above is **corrected before the user
     can read it**, never hidden after the fact.
-- **On validation failure:** regenerate (re-call the LLM, bounded retry). If still
-  invalid after the retry budget, **fall back** per `product_decisions.md` *Empty and
-  error states (b)*: return the **Tier 1 summary** + "Detailed explanation unavailable"
-  and **do not cache the invalid output**. (The 6 s LLM timeout from the same decision
-  governs the overall budget.)
+- **On validation failure:** re-call the LLM once (1 retry, same prompt). If still
+  invalid after the retry:
+
+  1. **Show Tier-1:** Read the `explanation_cache` row for this `position_hash`
+     where `deep_reveal_json` has the Tier-1 shape
+     `{ patternTag, fullText, continuationLine, boardAnnotation }` (written by
+     the `/api/explain-move` endpoint, `index.js:436`). Return `fullText` as the
+     explanation. If no such row exists, return the static string
+     `"Detailed explanation unavailable."` No zone annotations; plain text only.
+
+  2. **Log the failure** by inserting a row into a `deep_reveal_failures` table
+     (create via migration if it does not exist) with columns:
+     `id` (uuid), `position_hash` (text), `movestring` (text), `col` (int),
+     `endpoint` (text, value `'/api/explain-move-llm'`), `llm_prompt` (text),
+     `raw_llm_output` (text), `failure_reason` (text — which principle(s) failed,
+     e.g. `'P3:player_name'`), `created_at` (timestamptz). This table is for
+     offline analysis to improve the explanation engine; it is never read by the
+     app at runtime.
+
+  3. **Do not cache** the invalid output. If Tier-1 fallback is returned,
+     `explanation_cache` receives no Tier-2 write for this position. Future
+     requests retry the LLM. (Consistency note: re-opens of the same position
+     may vary until a valid Tier-2 response is produced and cached. This is
+     intentional — caching a fallback would permanently degrade the position.)
+
 - **Cache invariant:** only a fully-valid explanation is ever written to
   `explanation_cache.deep_reveal_json`. This makes the shared, cross-user cache a cache
   of *honest* explanations.
+- **Quota accounting:** The user's weekly Deep Reveal quota unit is decremented
+  **only when a valid Tier-2 explanation is delivered to the user.** Internal
+  retries are transparent to the quota counter. If the final result is a Tier-1
+  fallback, the quota unit is **not** consumed. Implementation: the existing
+  quota decrement at `index.js:762` must be moved to *after* the validation gate
+  confirms a valid explanation; it must not run on a cache miss before validation
+  completes.
 
 *Regression harness (first-class deliverable / part of definition-of-done):*
 
