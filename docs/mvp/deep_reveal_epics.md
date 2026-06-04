@@ -183,17 +183,44 @@ guarantee from the current client-side best-effort drop
       claims) contains both colors → blocked → rejected. ✓
     - `403a21c9` (non-existent threat, geometrically valid): NOT caught here —
       the 4-window is live. Deferred to the strong-form P5 in Epic B.
-  - **P2 (text ↔ highlight agreement):** the column/row/cell named in the span's
-    natural-language text must resolve to the same location the span highlights.
+  - **P2 (text ↔ highlight agreement):** P2 is enforced primarily at *generation
+    time* via the grounding contract: the model composes prose only over
+    pre-labeled locations, so text–highlight divergence is rare by construction.
+    At gate time the check is narrow and mechanical: for each zone whose spec names
+    a specific column (e.g. `col4`), scan the prose *inside that zone's tags* for
+    an explicit reference to a **different** column number. Use the regex
+    `col(?:umn)?\s*([1-7])` (case-insensitive); if any captured group does not
+    match the spec's column, reject and retry. Full NLP prose parsing is out of
+    scope — the grounding contract is the primary guard against subtler mismatches.
   - **P1 (no dangling affordance):** a span that resolves to zero board cells is not
     presented as interactive; a purely conceptual explanation with no spatial
     references renders as plain text with no affordances.
-  - **P3 (perceivable vocabulary):** reject internal notation (`R`/`Y` diagram
-    letters), the player names **Red / Yellow / Black**, and engine jargon (forced win,
-    leaf, solver, simulation, score, "patterns in data"). The explanation must use only
-    green/grey discs, column numbers, row numbers, and Connect Four concepts.
-  - **P6 (natural-language references):** a highlighted reference must read as natural
-    language ("the cell on the third row"), not a raw coordinate token.
+  - **P3 (perceivable vocabulary):** Scan the *entire* explanation string (not
+    just zone content) against three blocklists. Any match → reject and retry.
+
+    **Disc-notation blocklist** (word-boundary, case-insensitive):
+    `\bR\b`, `\bY\b`
+    (the diagram letters from ASCII board output; word boundaries prevent
+    false-positives on "row," "year," etc.)
+
+    **Player-name blocklist** (whole word, case-insensitive):
+    `\bRed\b`, `\bYellow\b`, `\bBlack\b`
+
+    **Engine-jargon blocklist** (phrase, case-insensitive):
+    `forced win`, `leaf position`, `the solver`, `forced_win`, `the simulation`,
+    `your score`, `the score is`, `patterns in data`
+
+    *(Note: the bare word "score" is not blocked — "scoring a win" is legitimate.
+    Only the engine-specific phrases above are blocked.)*
+  - **P6 (natural-language references):** For each zone, verify the *visible text
+    inside the zone tags* does not contain a raw coordinate token. Specifically,
+    the inner text must not match `\bc\d+r\d+\b` or `\bcol\d+\b` as a bare token.
+
+    Examples:
+    - `[zone:c4r3]c4r3[/zone:c4r3]` → **FAIL** (raw token exposed to user)
+    - `[zone:c4r3]the cell on row 3[/zone:c4r3]` → **PASS**
+    - `[zone:col4]col4[/zone:col4]` → **FAIL**
+    - `[zone:col4]the fourth column[/zone:col4]` → **PASS**
   - **P4 (umbrella):** a violation of any of the above is **corrected before the user
     can read it**, never hidden after the fact.
 - **On validation failure:** regenerate (re-call the LLM, bounded retry). If still
