@@ -344,8 +344,18 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   **won leaf** it records the **specific 4-cell winning group** and its owner instead of
   returning `patterns: null` (`:205`). Aggregate **group completion frequency across
   continuations**, keyed by the canonical 4-cell group, and surface the top A-vs-B
-  delta groups (with occupants + parity) to the context builder. This is a focused
-  leaf-handling + aggregation change; it does not restructure the search
+  delta groups (with occupants + parity) to the context builder. At a **draw leaf**,
+  record every **major threat group** present on the board (each
+  4-window with 3 discs of one color and 1 empty cell) as
+  `{ cells, winner: 'player'|'opponent', type: 'draw_threat' }`. Aggregate into a
+  separate `draw_freq` counter (= N_draw_leaves_where_this_group_appeared /
+  total_leaves), tracked alongside `completed_freq`. Both frequencies enter the
+  context block per the M2 format in `coach_explanation_principles.md`.
+  **Rationale:** blunders often convert winning continuations to draws, not losses;
+  without draw-leaf records the branch-A vs branch-B frequency comparison misses
+  groups the coached player was still building toward in those near-wins (see M1 in
+  `coach_explanation_principles.md` for the full argument).
+  This is a focused leaf-handling + aggregation change; it does not restructure the search
   (`coach_explanation_principles.md`, "Required simulation change").
 
 *Type 1–4 explanation taxonomy (evidence-driven selection):*
@@ -355,6 +365,14 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   (small / moderate / large), per the prompt-construction algorithm in
   `coach_explanation_principles.md`. The selection step is the missing piece — the
   current prompt is effectively always-Type-2.
+  For **Type 2 detection** (step 1b of the prompt-construction algorithm), the
+  critical position is the board after move A + opponent's optimal reply.
+  `buildExplainContext` already computes this as `opponentResponseMovestring` via
+  `getOpponentResponseMs` — **reuse it directly. Do not add new solver calls.**
+  For the **named-scaffold check** (Figure-7 / J-config) in step 1b, apply the
+  existing pattern detectors (`allen-j-configuration`, `community-figure-7` — see
+  `docs/knowledge-base/README.md`) to the *critical-position* board, not the
+  current board. Wire the detectors to the `opponentResponseMovestring` board.
 - Apply the locked decisions **D1 (honest about margin), D2 (concrete-eligible only at
   ≥2 player discs in a group), D3 (eval gap drives tone, not stage)** from that doc.
 
@@ -379,9 +397,24 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
 
 - Extend the Epic A validate-then-cache gate so that, in addition to the board-only
   checks, it rejects any highlight whose location is **not in the closed allowed-set**
-  the context builder produced for that explanation. The allowed-set must be available
-  to the gate at validation time (e.g. carried alongside the prompt through
-  `buildExplainContext`). This is the seam Epic A explicitly left open.
+  the context builder produced for that explanation. The context builder returns the
+  closed allowed-set alongside the prompt as `{ prompt, allowedSet }` where
+  `allowedSet` is a flat array of `{ cells: string[], zoneSpec: string }` entries
+  (one per mentionable group).
+
+  At gate time, for each zone spec in the LLM output:
+  1. Expand the spec to a cell set using the same parse logic as `zoneToOverlays`
+     (apply the -1 coordinate conversion: `c4r3` → col 3, row 2).
+  2. Check that every cell in the expanded set appears in **at least one** entry
+     in `allowedSet`.
+
+  Coverage by zone type:
+  - `col4`: passes if any `allowedSet` entry contains a cell in col 3 (0-indexed).
+  - `c4r3`: passes if any `allowedSet` entry contains the cell at col=3, row=2.
+  - `cells:c4r3,c5r3,…`: passes if all listed cells appear across allowed entries.
+  - `tg` (entire board): **always fails** strong-P5 — the rebuilt coach never emits
+    `tg`; if it appears, reject unconditionally.
+  - `row\d+`: passes if any allowed entry contains a cell in that row.
 - Extend the regression harness (from Epic A) to cover the strong-P5 / non-existent-
   threat fixture `403a21c9…` and re-assert the occupied-cell (`e86eeac9…`) and own-disc
   (`8d83947e…`) fixtures now fail *structurally* (the cells are never in the allowed-set
@@ -414,6 +447,18 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   aggregation change.
 - The `Board` class threat/parity utilities (`getMajorThreatCells`, `par`-row
   computation) for evidence extraction.
+
+**DELETE — do not preserve as "existing functionality":**
+
+- `computeDeltaTable` (`server/index.js`) — the classifier-tag diff; replaced by
+  group-frequency comparison from the new simulation aggregation.
+- `claimevenNarration`, `zThreatNarration`, `figure7Narration`,
+  `jShapeNarration` — pre-built narration strings injected into the old prompt;
+  replaced by the grounding-contract context block.
+- The KB-section generation code that produces those narration strings.
+
+These must be **removed**, not left dormant. Preserving them alongside the new
+code produces a hybrid that still emits the old always-Type-2 classifier tags.
 
 **NOT included:**
 
