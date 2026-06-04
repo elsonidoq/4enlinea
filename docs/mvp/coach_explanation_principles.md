@@ -208,6 +208,34 @@ D2; `Eval gap` implements D1/D3.
 Deterministic. Given a position, the played move A, and the solver's best move B:
 
 ```
+0. BRANCH BY A'S QUALITY
+
+   Let score_coached(col) = −raw_score(col) (see step 2 for normalization).
+   Let B = best alternative = non-A column with the highest score_coached value.
+
+   a. ALL MOVES EQUAL: every non-full column has the same score_coached value.
+      → Skip simulation and all classification steps.
+      → Return plain-text prompt (no zone annotations): "Every column is equivalent
+        here — the game state is already determined regardless of which column you
+        pick."
+      → No quota unit is consumed (no LLM call needed; serve this as Tier-2 text).
+
+   b. A IS OPTIMAL: score_coached(A) ≥ score_coached(B) for all alternatives B.
+      → Proceed through steps 1–6 normally, but:
+        • B = the highest-scoring alternative (gap ≤ 0).
+        • Step 5 tone framing is INVERTED: instead of "why B is better," frame as
+          "why A was the right call." Replace the small/moderate/large ladder with:
+            - gap = 0           → "Both A and the alternative are equivalent; your
+                                   move is fine."
+            - gap between –3..0 → "Your move is solid; the alternative is a touch
+                                   more flexible but the difference is minor."
+            - gap < –3          → "Your move is the strongest here; [what it
+                                   preserves or builds]."
+        • Do not describe A as having a flaw. Do not suggest B is superior.
+
+   c. A IS SUBOPTIMAL (normal case): score_coached(B) > score_coached(A).
+      → Proceed through steps 1–6 with the standard framing.
+
 1. CLASSIFY STAGE / EVIDENCE
    a. If a direct win existed for the player, or an opponent immediate threat was
       ignored            → Type 1
