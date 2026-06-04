@@ -156,15 +156,16 @@ guarantee from the current client-side best-effort drop
   - **P5 (board-only):** For each zone spec in the explanation, expand it to the
     set of board cells it references:
     - `col\d+`          → all 6 cells in that column (rows 0–5)
-    - `c\d+r\d+`        → that single cell (1-indexed wire → 0-indexed: subtract 1)
+    - `c\d+r\d+`        → that single cell (both col and row are 1-indexed in wire;
+                           subtract 1 from each: `c4r3` → col=3, row=2 internally)
     - `cells:c1r1,...`  → the listed cells (same -1 conversion each)
     - `row\d+`          → all 7 cells in that row
-    - `tg`              → skip blocked-group check; validate only out-of-bounds
+    - `tg`              → always passes (entire board; out-of-bounds check is vacuous)
 
     Then check every **4-window** (horizontal, vertical, or diagonal) that
     contains **at least one** of the referenced cells. A 4-window is **blocked**
     if it contains at least one disc of each color (can never be completed by
-    either player). A zone **fails** the P5 board-only check if **every**
+    either player). Disc color in the zone spec is irrelevant to the blocked-window check — only board occupancy matters. A zone **fails** the P5 board-only check if **every**
     4-window containing any of its referenced cells is blocked.
 
     A zone referencing partially-occupied cells where at least one candidate
