@@ -233,7 +233,8 @@ Deterministic. Given a position, the played move A, and the solver's best move B
    Then: `gap = score_coached(B) − score_coached(A)`. A positive gap means B is
    better for the coached player. The JS off-by-1 on odd `moveCount` (see
    `reference_c4solver_behavior.md`) is handled inside `c4solver-wrapper.js`;
-   callers receive the already-corrected raw value.
+   callers receive the off-by-1-corrected raw score; the sign flip above (step 2) is the caller's responsibility.
+   All subsequent gap references in this document use `gap = score_coached(B) − score_coached(A)` (coached-player perspective).
    Initial thresholds: small = gap ≤ 3 | moderate = 4–9 | large = ≥ 10.
    SIGN-CHANGE OVERRIDE: if score(A) and score(B) have different signs (e.g. A is a
    draw/loss, B is a win; or A is a loss, B is a draw), treat as at least moderate
