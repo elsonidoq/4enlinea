@@ -136,7 +136,7 @@ For groups **owned by the opponent** (`winner = 'opponent'`), the CONCRETE-ELIGI
 threshold applies to the *opponent's* discs, not the coached player's: an opponent group
 with ≥2 opponent discs is CONCRETE-ELIGIBLE and may be cited with explicit cells as a
 warning. A coached-player disc inside an opponent group does not contribute toward the
-opponent's eligibility count.
+opponent's eligibility count. A coached-player disc in the window does not block CONCRETE-ELIGIBLE status — eligibility is determined solely by the owner's disc count.
 
 ---
 
@@ -191,8 +191,7 @@ computed from this rule. The Green/ODD examples in this doc are illustrative onl
 
 ## Boards
 <before / after-A / after-B ASCII, including the `par` row>
-Discs must render as **Green** / **Grey** (not `R`/`Y`). Pass the board through
-a Green/Grey relabeling step before embedding. Passing `R`/`Y` to the LLM
+Discs must render as **Green** / **Grey** (not `R`/`Y`). Before embedding, replace every `R` token with `Green` and every `Y` token with `Grey` in the ASCII board output. Passing `R`/`Y` to the LLM
 causes it to echo the diagram letters in its output, violating P3 (perceived as
 "what are the R discs?" by users — see llm_feedback row `e094ee00`).
 
