@@ -132,6 +132,12 @@ at a real column and a real reason, with no invented cells.
 | D2 | Concreteness on sparse boards | **Adaptive by disc count** | Highlight a specific group of 4 only when it already holds **≥2 of the player's discs**; otherwise refer to column + winning-row-parity. Concrete when concreteness is earned, abstract when it isn't. |
 | D3 | What drives tone | **Eval gap, not stage** | Type 4 is "no concrete crime scene yet," not "everything is fine." A sparse board with a genuinely large gap still gets firm language. Stage selects *what kind of evidence* the explanation uses; the gap selects *how strong the language is*. |
 
+For groups **owned by the opponent** (`winner = 'opponent'`), the CONCRETE-ELIGIBLE
+threshold applies to the *opponent's* discs, not the coached player's: an opponent group
+with ≥2 opponent discs is CONCRETE-ELIGIBLE and may be cited with explicit cells as a
+warning. A coached-player disc inside an opponent group does not contribute toward the
+opponent's eligibility count.
+
 ---
 
 ## The grounding contract (anti-confabulation)
@@ -184,7 +190,11 @@ computed from this rule. The Green/ODD examples in this doc are illustrative onl
 - Stage: opening (N discs); major threats: none
 
 ## Boards
-<before / after-A / after-B ASCII, as today, including the `par` row>
+<before / after-A / after-B ASCII, including the `par` row>
+Discs must render as **Green** / **Grey** (not `R`/`Y`). Pass the board through
+a Green/Grey relabeling step before embedding. Passing `R`/`Y` to the LLM
+causes it to echo the diagram letters in its output, violating P3 (perceived as
+"what are the R discs?" by users — see llm_feedback row `e094ee00`).
 
 ## Winning-line comparison (best vs worst continuations)
 For each group of 4 with the largest A-vs-B completion-frequency delta:
@@ -247,8 +257,17 @@ Deterministic. Given a position, the played move A, and the solver's best move B
       CRITICAL POSITION = board after move A is played AND the opponent plays their
       solver-optimal response to A. (Not the board right after A — the fork only
       materialises after the opponent's reply.)
-   c. Else if `par` shows a parity shift tied to an existing major threat
-                         → Type 3
+   c. Else if **all three** hold:
+        1. At least one major threat exists on the board after A (non-empty result
+           from `getMajorThreatCells` on the post-A board).
+        2. At least one column's empty-cell count changes parity between the
+           pre-A board and the post-A board (compare the `par` row before and
+           after placing A).
+        3. The parity-flipped column is the same column, or adjacent to a column,
+           that contains one of the major threat cells from condition 1.
+      → Type 3.
+      *(Full evidence-block spec for Type 3 is deferred; see "Out of scope."
+      This rule is sufficient to route positions away from Type 4 correctly.)*
    d. Else               → Type 4
 
 2. COMPUTE EVAL GAP
@@ -417,6 +436,12 @@ After collecting all leaves for a branch (A or B), aggregate into a frequency ta
 group_key → { completed_freq: N_wins/total, draw_freq: N_draws/total, winner, cells }
 ```
 
+**Same-window, different winners:** If the same 4-window appears as a `completed`
+win for the coached player in some leaves and as a `draw_threat` for the opponent
+in others, create **two separate records** keyed as `<canonical_cells>:player` and
+`<canonical_cells>:opponent`. The `winner` field disambiguates them. Do not merge
+them into one record.
+
 Both frequencies are surfaced in the context block (see M2). The `total` denominator
 is always `total_leaves` (all outcomes included), so frequencies are comparable across
 groups.
@@ -426,7 +451,7 @@ This is a data-shape change, not a search-strategy change. The existing traversa
 
 ### M2. Which groups enter the context block — the union rule
 
-A 4-window is included in the context block if it appears as a winning line in **any
+A 4-window is included in the context block if it appears as a `completed` winning line **or as a `draw_threat`** in **any
 leaf of the A-branch simulation OR any leaf of the B-branch simulation** (union). This
 captures:
 
