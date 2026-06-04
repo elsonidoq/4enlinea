@@ -35,6 +35,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--user-id') args.userId = argv[i + 1];
     if (argv[i] === '--account-id') args.accountId = argv[i + 1];
+    if (argv[i] === '--limit') args.limit = parseInt(argv[i + 1], 10);
   }
   return args;
 }
@@ -44,16 +45,27 @@ if (!userId) { console.error('Missing --user-id <supabase-uuid>'); process.exit(
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing env vars'); process.exit(1); }
 
+async function fetchWithTimeout(url, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchRooms(accountId, start) {
   const url = `https://papergames.io/api/profile/${accountId}/rooms?accountId=${accountId}&start=${start}&limit=${ROOMS_PAGE_SIZE}&gameType=Connect4&_t=${Date.now()}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`fetchRooms HTTP ${res.status}`);
   return res.json();
 }
 
 async function fetchReplay(uid) {
   const url = `https://papergames.io/api/room/${uid}/replay?_t=${Date.now()}`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`fetchReplay HTTP ${res.status} uid=${uid}`);
   return res.json();
 }
@@ -125,17 +137,24 @@ async function main() {
   do {
     const { rooms, count } = await fetchRooms(accountId, start);
     if (total === null) { total = count; console.log(`Total games: ${total}`); }
+    if (rooms.length === 0) break; // guard: API returned empty page — stop pagination
     allRooms.push(...rooms);
     start += rooms.length;
+    process.stderr.write(`\r  Fetched ${allRooms.length}/${total} room headers...`);
     if (start < total) await new Promise(r => setTimeout(r, 200));
   } while (start < total);
+  process.stderr.write('\n');
   console.log(`Fetched ${allRooms.length} room headers.`);
+
+  const { limit } = parseArgs(process.argv.slice(2));
+  const roomsToProcess = limit ? allRooms.slice(0, limit) : allRooms;
+  if (limit) console.log(`Limiting to ${roomsToProcess.length} rooms (--limit ${limit}).`);
 
   let totalBlunders = 0, totalInserted = 0, skippedNoMoves = 0, skippedErrors = 0;
 
-  for (let g = 0; g < allRooms.length; g++) {
-    const room = allRooms[g];
-    process.stderr.write(`\r[${g + 1}/${allRooms.length}] uid=${room.uid}  blunders=${totalBlunders}`);
+  for (let g = 0; g < roomsToProcess.length; g++) {
+    const room = roomsToProcess[g];
+    process.stderr.write(`\r[${g + 1}/${roomsToProcess.length}] uid=${room.uid}  blunders=${totalBlunders}`);
 
     let replayData;
     try { replayData = await fetchReplay(room.uid); }
@@ -178,7 +197,7 @@ async function main() {
   solver.destroy();
   process.stderr.write('\n');
   console.log(`Done.`);
-  console.log(`  Rooms processed   : ${allRooms.length}`);
+  console.log(`  Rooms processed   : ${roomsToProcess.length}`);
   console.log(`  Blunders found    : ${totalBlunders}`);
   console.log(`  Blunders inserted : ${totalInserted}`);
   console.log(`  Skipped (no moves): ${skippedNoMoves}`);
