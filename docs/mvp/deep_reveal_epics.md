@@ -190,7 +190,8 @@ guarantee from the current client-side best-effort drop
     a specific column (e.g. `col4`), scan the prose *inside that zone's tags* for
     an explicit reference to a **different** column number. Use the regex
     `col(?:umn)?\s*([1-7])` (case-insensitive); if any captured group does not
-    match the spec's column, reject and retry. Full NLP prose parsing is out of
+    match the spec's column **number as written in the wire format** (both are 1-indexed: `col4`
+    spec vs "column 4" in prose — compare the numeric digit directly), reject and retry. Full NLP prose parsing is out of
     scope — the grounding contract is the primary guard against subtler mismatches.
   - **P1 (no dangling affordance):** a span that resolves to zero board cells is not
     presented as interactive; a purely conceptual explanation with no spatial
