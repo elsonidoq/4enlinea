@@ -112,6 +112,15 @@ expression of the coach's grounding contract (see *Product boundary* below): the
 commits to a closed set of locations its explanation may reference, and only those may
 be highlighted.
 
+An occupied cell is not intrinsically invalid as a highlight: it may legitimately
+appear in an explanation as a disc that is part of an existing live group (e.g.,
+"your two green discs in column 4"). What is invalid is describing or highlighting
+an **occupied cell as a future threat location** — as if it were empty and
+available for a winning line. The gate enforces this via the blocked-group check
+(Epic A) and the grounding contract (Epic B); the distinction is "occupied disc in
+a live group" (valid) vs "occupied cell treated as empty future-line member"
+(invalid).
+
 ### P6. References read as natural language
 A highlighted reference MUST read like natural language a person would say ("the cell on
 the third row"), not a raw coordinate token. This keeps the text coherent for screen
@@ -179,6 +188,12 @@ not consume additional quota units beyond the single Deep Reveal that opened the
   the same highlights. (The Deep Reveal explanation is already cached and shared across
   users — `product_decisions.md`, *Prompt caching for Deep Reveal*; this layer preserves
   that.)
+  *Fallback case:* When the gate cannot produce a valid Tier-2 explanation and
+  falls back to Tier-1, the fallback is **not cached** under the Tier-2 position
+  hash. Future re-opens of the same position will retry the LLM. A small class of
+  positions may show Tier-1 on every open until the LLM produces a valid Tier-2
+  response that passes the gate. This is intentional: caching a fallback would
+  permanently degrade that position even after the explanation engine improves.
 - **Instant interaction.** Tapping a reference highlights immediately — no perceptible
   wait. A cache hit shows the annotated explanation with no spinner.
 
@@ -211,13 +226,19 @@ This layer is **presentation + integrity**: it makes the Deep Reveal explanation
 and guarantees its highlights are honest. It does **not** decide *what* the coach says or
 *which* move/line is worth explaining.
 
-The content — what to explain, honesty about how much worse a move was, grounding every
-claim in real board facts — is owned by
-[`coach_explanation_principles.md`](./coach_explanation_principles.md). That doc defines
-the closed set of board locations the explanation may reference; **P5 here enforces that
-the same set is the only thing that can be highlighted.** The seam: the coach layer
-produces grounded, location-bounded explanation text; this layer renders it and guarantees
-P1–P6.
+commits to a closed set of locations its explanation may reference, and only those may
+be highlighted.
+
+An occupied cell is not intrinsically invalid as a highlight: it may legitimately
+appear in an explanation as a disc that is part of an existing live group (e.g.,
+"your two green discs in column 4"). What is invalid is describing or highlighting
+an **occupied cell as a future threat location** — as if it were empty and
+available for a winning line. The gate enforces this via the blocked-group check
+(Epic A) and the grounding contract (Epic B); the distinction is "occupied disc in
+a live group" (valid) vs "occupied cell treated as empty future-line member"
+(invalid).
+
+### P6. References read as natural language
 
 ---
 
