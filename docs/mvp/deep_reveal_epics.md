@@ -195,7 +195,16 @@ guarantee from the current client-side best-effort drop
     scope — the grounding contract is the primary guard against subtler mismatches.
   - **P1 (no dangling affordance):** a span that resolves to zero board cells is not
     presented as interactive; a purely conceptual explanation with no spatial
-    references renders as plain text with no affordances.
+    references renders as plain text with no affordances. At the gate, P1 enforces this
+    by requiring every zone spec to parse successfully and resolve to at least one
+    in-bounds board cell. This is a purely mechanical check — no content heuristic is
+    applied. The grounding contract in Epic B prevents abstract phrases from being
+    wrapped in zone tags at generation time, making a stronger gate interpretation
+    unnecessary.
+
+    **Coverage note:** The two P1 `llm_feedback` rows (`59a11a79`, `f4241ea6`) are
+    expected to pass the Epic A gate; they test the grounding contract (Epic B) and
+    strong-form P5, not the mechanical parse-and-resolve check.
   - **P3 (perceivable vocabulary):** Scan the *entire* explanation string (not
     just zone content) against three blocklists. Any match → reject and retry.
 
@@ -224,13 +233,16 @@ guarantee from the current client-side best-effort drop
     - `[zone:col4]the fourth column[/zone:col4]` → **PASS**
   - **P4 (umbrella):** a violation of any of the above is **corrected before the user
     can read it**, never hidden after the fact.
-- **On validation failure:** re-call the LLM once (1 retry, same prompt). If still
+- **On validation failure:** re-call the LLM once (1 retry, same prompt) via a direct
+  call to `callLLM` (`server/llmCoachHelpers.js:139`), bypassing the cache check and
+  quota machinery. Both the initial attempt and the retry are scoped inside a single
+  request handler invocation. If still
   invalid after the retry:
 
   1. **Show Tier-1:** Read the `explanation_cache` row for this `position_hash`
      where `deep_reveal_json` has the Tier-1 shape
      `{ patternTag, fullText, continuationLine, boardAnnotation }` (written by
-     the `/api/explain-move` endpoint — verify the current `deep_reveal_json` shape at the Tier-1 cache write in `index.js` before implementing). Return `fullText` as the
+     the `/api/explain-move` endpoint). Return `fullText` as the
      explanation. If no such row exists, return the static string
      `"Detailed explanation unavailable."` No zone annotations; plain text only.
 
@@ -241,7 +253,9 @@ guarantee from the current client-side best-effort drop
      `raw_llm_output` (text), `failure_reason` (text — which principle(s) failed,
      e.g. `'P3:player_name'`), `created_at` (timestamptz). This table is for
      offline analysis to improve the explanation engine; it is never read by the
-     app at runtime.
+     app at runtime. The server writes to this table via its direct database
+     connection (the Supabase service-role-key client), not via PostgREST.
+     The migration needs only the `CREATE TABLE` statement — no `GRANT` is required.
 
   3. **Do not cache** the invalid output. If Tier-1 fallback is returned,
      `explanation_cache` receives no Tier-2 write for this position. Future
@@ -304,8 +318,11 @@ guarantee from the current client-side best-effort drop
   client parse for rendering only.**
 - Board reconstruction + occupancy: the `Board` class already imported in
   `index.js` (used at `:736`, `colHeights` at `:741`); reuse for board-only P5 checks.
-- Win-line geometry for the "line through own disc" check: reuse existing board /
-  threat utilities (`getMajorThreatCells`, `checkWin`) rather than re-deriving 4-windows.
+- Board occupancy data: reuse the `Board` class (already imported in
+  `index.js`) for board reconstruction. The 4-window enumeration is a new small
+  adapter (~25 lines) that checks the blocked-vs-live condition; `getMajorThreatCells`
+  and `checkWin` have wrong semantics (threat/win detection, not window enumeration)
+  and are not reused.
 
 **NOT included:**
 
@@ -358,6 +375,37 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   This is a focused leaf-handling + aggregation change; it does not restructure the search
   (`coach_explanation_principles.md`, "Required simulation change").
 
+*Step 0 — branch by A's quality (prerequisite to type selection):*
+
+- Before selecting an explanation type, implement step 0 of the prompt-construction
+  algorithm from `coach_explanation_principles.md`:
+
+  1. **Compute `score_coached(col)`** for every legal move column by evaluating
+     `score_coached(col) = −raw_score(col)` (negation of the c4solver raw score),
+     which converts solver perspective (current-player positive) to coached perspective
+     (lower = better move for the user's opponent = harder for the user). Identify
+     **B** as the legal column with the highest `score_coached` value (i.e. the
+     non-A column most threatening to the user). Verify whether this sweep is already
+     performed inside `buildExplainContext`; if so, reuse the result — **do not add
+     new solver calls**. If not, add the per-column sweep there.
+
+  2. **ALL-MOVES-EQUAL short-circuit:** if all legal columns share the same
+     `score_coached` value, return the fixed plain-text string
+     `"All moves are roughly equivalent here — no single best move stands out."`
+     immediately. No LLM call is made, no quota unit is consumed, no cache write
+     occurs for this path.
+
+  3. **A-quality branch:**
+     - If A is already optimal (A has the highest `score_coached` — i.e. A is already
+       B), use the **inverted-framing branch**: acknowledge that B is marginally better
+       than A without calling A a mistake. Do not open with "you should have played B."
+     - Otherwise, use the **standard explain-B flow** (proceed to type selection with
+       B as the target move).
+
+  Implementing step 0 inside `buildExplainContext` keeps all branch logic in one place
+  and ensures it feeds naturally into both the prompt returned and the `allowedSet`
+  produced for the gate.
+
 *Type 1–4 explanation taxonomy (evidence-driven selection):*
 
 - Implement the deterministic stage/evidence classifier (Type 1 immediate / Type 2
@@ -365,6 +413,17 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   (small / moderate / large), per the prompt-construction algorithm in
   `coach_explanation_principles.md`. The selection step is the missing piece — the
   current prompt is effectively always-Type-2.
+
+  **Type routing scope:** Build the classifier to detect and route all four types
+  correctly. However, **only Type 4 ships with a fully-written prompt template** in
+  this epic. Types 1, 2, and 3 fall back to a Type 4-style handling (same grounding
+  contract, same prompt skeleton) until a follow-up epic validates them in production
+  and adds bespoke evidence blocks. Exception: **Type 3** (parity-structural) gets a
+  minimal stub template that reuses the Type 4 grounding contract and adds one sentence
+  acknowledging the parity flip; it does **not** receive a bespoke evidence block in
+  this epic. Full Type 3 evidence block is explicitly deferred until after Type 4 is
+  validated.
+
   For **Type 2 detection** (step 1b of the prompt-construction algorithm), the
   critical position is the board after move A + opponent's optimal reply.
   `buildExplainContext` already computes this as `opponentResponseMovestring` via
@@ -399,22 +458,48 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   checks, it rejects any highlight whose location is **not in the closed allowed-set**
   the context builder produced for that explanation. The context builder returns the
   closed allowed-set alongside the prompt as `{ prompt, allowedSet }` where
-  `allowedSet` is a flat array of `{ cells: string[], zoneSpec: string }` entries
-  (one per mentionable group).
+  `allowedSet` is a flat array of entries, one per mentionable group, with shape:
+
+  ```
+  // CONCRETE-ELIGIBLE group (D2: ≥2 player discs in the group)
+  { cells: string[], zoneSpec: string }
+
+  // ABSTRACT-ONLY group (D2: fewer than 2 player discs — referenced by
+  //   column/parity only, never by enumerated cells)
+  { col: number, parity: 'odd'|'even', zoneSpec: string }
+  // Note: no `cells` field. The LLM never sees individual cell coordinates
+  // for ABSTRACT-ONLY groups; it may only reference their column.
+  ```
+
+  **ABSTRACT-ONLY groups must not expose bare cells in `allowedSet`.** This is a
+  direct enforcement of D2 (grounding contract: ABSTRACT-ONLY groups may be referenced
+  only as "a winning line in column X on an odd row," never by enumerated cells). By
+  omitting the `cells` field, the gate naturally rejects any `c4r3`-style or
+  `cells:…` zone that targets an ABSTRACT-ONLY group's individual cells: the lookup
+  finds no `cells` field to match against and rejects. No additional gate-level flag
+  is required.
 
   At gate time, for each zone spec in the LLM output:
   1. Expand the spec to a cell set using the same parse logic as `zoneToOverlays`
      (apply the -1 coordinate conversion: `c4r3` → col 3, row 2).
   2. Check that every cell in the expanded set appears in **at least one** entry
-     in `allowedSet`.
+     in `allowedSet` that has a `cells` field.
+  3. For `col\d+` zones only, also accept a match against an ABSTRACT-ONLY entry
+     whose `col` matches the zone's column (0-indexed).
 
   Coverage by zone type:
-  - `col4`: passes if any `allowedSet` entry contains a cell in col 3 (0-indexed). (This is intentionally permissive: ABSTRACT-ONLY groups are referenced at column level without naming individual cells, so a column zone is valid whenever any allowed group touches that column.)
-  - `c4r3`: passes if any `allowedSet` entry contains the cell at col=3, row=2.
-  - `cells:c4r3,c5r3,…`: passes if all listed cells appear across allowed entries.
+  - `col4`: passes if any `allowedSet` entry (CONCRETE or ABSTRACT-ONLY) touches
+    col 3 (0-indexed). (Permissive by design: ABSTRACT-ONLY groups may only be
+    referenced at column granularity, so a column zone is valid whenever any allowed
+    group — concrete or abstract — covers that column.)
+  - `c4r3`: passes only if a CONCRETE-ELIGIBLE entry's `cells` list contains the
+    cell at col=3, row=2. An ABSTRACT-ONLY entry can never satisfy this check —
+    intentional enforcement of D2.
+  - `cells:c4r3,c5r3,…`: passes only if all listed cells appear in CONCRETE-ELIGIBLE
+    entries' `cells` lists.
   - `tg` (entire board): **always fails** strong-P5 — the rebuilt coach never emits
     `tg`; if it appears, reject unconditionally.
-  - `row\d+`: passes if any allowed entry contains a cell in that row.
+  - `row\d+`: passes if any CONCRETE-ELIGIBLE entry contains a cell in that row.
 - Extend the regression harness (from Epic A) to cover the strong-P5 / non-existent-
   threat fixture `403a21c9…` and re-assert the occupied-cell (`e86eeac9…`) and own-disc
   (`8d83947e…`) fixtures now fail *structurally* (the cells are never in the allowed-set
@@ -450,6 +535,13 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
 
 **DELETE — do not preserve as "existing functionality":**
 
+*Before deleting, run a callsite audit task:* grep each function name
+(`computeDeltaTable`, `claimevenNarration`, `zThreatNarration`, `figure7Narration`,
+`jShapeNarration`) across the codebase and confirm that **none** of them are reached
+by (a) the Tier-1 one-liner path (`/api/explain-move`, `index.js:436–439`), (b) the
+in-game coach one-liner surface, or (c) any lesson or challenge surface. Only after
+confirming zero live callsites on those paths proceed with deletion.
+
 - `computeDeltaTable` (`server/index.js`) — the classifier-tag diff; replaced by
   group-frequency comparison from the new simulation aggregation.
 - `claimevenNarration`, `zThreatNarration`, `figure7Narration`,
@@ -463,10 +555,15 @@ code produces a hybrid that still emits the old always-Type-2 classifier tags.
 **NOT included:**
 
 - TTS / read-aloud (deferred).
-- Pattern-name vocabulary in output, gap-bucket / ≥2-disc threshold tuning, and full
-  Type 3 grounding depth — all explicitly **out of scope / open questions** in
-  `coach_explanation_principles.md`; ship the Type 4 mechanism first, validate against
-  flagged feedback, then tune.
+- Pattern-name vocabulary in output, gap-bucket / ≥2-disc threshold tuning.
+- **Bespoke prompt templates for Types 1, 2, and 3.** The classifier routes all four
+  types correctly, but only Type 4 ships a fully-written template. Type 3 gets a
+  minimal stub that reuses the Type 4 grounding contract and adds one sentence about
+  the parity flip; Types 1 and 2 fall back to Type 4-style handling. Full bespoke
+  evidence blocks for Types 1–3 are deferred until Type 4 is validated in production.
+- **Full Type 3 grounding depth** — explicitly an open question in
+  `coach_explanation_principles.md`; the stub template intentionally avoids
+  committing to a Type 3 evidence block format.
 - Any change to gating, the three frontend surfaces, or the rendering layer.
 
 **Estimated spec:** 180–210 lines. **Estimated tasks:** 16–20.

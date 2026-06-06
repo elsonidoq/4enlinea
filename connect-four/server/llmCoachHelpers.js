@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
+import { Board, getImmediateThreats, detectFigure7, detectJShape } from './classifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -299,16 +300,6 @@ export function buildFlatTable(colData, rounds) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ordered list of tactical pattern names used by computeDeltaTable.
- */
-export const PATTERN_NAMES = [
-  'double_threat', 'j_shape', 'figure_7', 'claimeven',
-  'baseclaim', 'before', 'specialbefore',
-  'undercut', 'overcut', 'z_threat', 'forced_win',
-  'odd_even_threat',
-];
-
-/**
  * Returns { contrastCol, isOptimal } or null if all legal scores are equal
  * (no meaningful contrast exists).
  *
@@ -341,136 +332,6 @@ export function selectContrastMove(scores, userCol, board) {
   }
 }
 
-/**
- * Compare user move patterns vs contrast move patterns.
- * Returns { rows, insufficientTacticalData }.
- *
- * Each row: { name, userRatio, contrastRatio, delta, userTop2, contrastTop2 }
- * where Top2 is a short string of the top-2 histogram entries.
- * Rows are sorted by delta descending.
- */
-export function computeDeltaTable(userPatterns, contrastPatterns) {
-  function top2String(entry) {
-    const h = entry.cellHistogram ?? entry.colHistogram;
-    if (!h || Object.keys(h).length === 0) return '';
-    return Object.entries(h)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([k, v]) => `${k}×${v}`)
-      .join(' ');
-  }
-
-  const rows = [];
-  for (const name of PATTERN_NAMES) {
-    const u = userPatterns[name];
-    const c = contrastPatterns[name];
-    if (!u || !c) continue;
-    const userRatio = u.ratio;
-    const contrastRatio = c.ratio;
-    if (Math.max(userRatio, contrastRatio) <= 0) continue;
-    rows.push({
-      name,
-      userRatio,
-      contrastRatio,
-      delta: Math.abs(userRatio - contrastRatio),
-      userTop2: top2String(u),
-      contrastTop2: top2String(c),
-    });
-  }
-  rows.sort((a, b) => b.delta - a.delta);
-  return { rows, insufficientTacticalData: rows.length === 0 };
-}
-
-/**
- * Builds a natural-language summary of the pattern comparison between the
- * user's move and the contrast (better) move.  Replaces the raw PATTERN /
- * USER / CONTRAST / ΔRATIO table that the LLM used to misinterpret.
- *
- * Every sentence names the specific player and column so the LLM cannot
- * invert direction or attribute a pattern to the wrong side.
- */
-export function buildPatternNarrative({
-  deltaRows, playerName, opponentName,
-  userCol, contrastCol, userOutcomes, contrastOutcomes,
-  isOptimal, rounds, totalLeaves,
-}) {
-  const lines = [];
-
-  // ── Outcome overview ──────────────────────────────────────────────────────
-  function outcomeLabel(outcomes) {
-    const parts = [];
-    if (outcomes.winRate  > 0) parts.push(`wins ${(outcomes.winRate * 100).toFixed(0)}%`);
-    if (outcomes.lossRate > 0) parts.push(`loses ${(outcomes.lossRate * 100).toFixed(0)}%`);
-    if (outcomes.drawRate > 0) parts.push(`draws ${(outcomes.drawRate * 100).toFixed(0)}%`);
-    return parts.length > 0 ? parts.join(', ') : 'no decisive lines';
-  }
-
-  const blunderCol = isOptimal ? contrastCol : userCol;
-  const betterCol = isOptimal ? userCol : contrastCol;
-
-  lines.push(`After **${playerName}** plays **col ${userCol + 1}** (the move in question): ${outcomeLabel(userOutcomes)}.`);
-  lines.push(`After **${playerName}** plays **col ${contrastCol + 1}** (the alternative): ${outcomeLabel(contrastOutcomes)}.`);
-  lines.push('');
-
-  // ── Per-pattern details ───────────────────────────────────────────────────
-  const significant = deltaRows.filter(r =>
-    r.userRatio > 0 || r.contrastRatio > 0,
-  );
-
-  if (significant.length === 0) {
-    lines.push('No tactical patterns with meaningful differences were found.');
-  } else {
-    for (const r of significant) {
-      const display = displayName(r.name);
-      const userPct = (r.userRatio * 100).toFixed(0);
-      const contrastPct = (r.contrastRatio * 100).toFixed(0);
-
-      if (r.userRatio > 0 && r.contrastRatio > 0) {
-        // Both moves produce this pattern
-        if (Math.abs(r.userRatio - r.contrastRatio) < 0.02) {
-          lines.push(
-            `**${display}**: both col ${userCol + 1} and col ${contrastCol + 1} ` +
-            `lead to this in about ${userPct}% of continuations (negligible difference).`,
-          );
-        } else if (r.userRatio > r.contrastRatio) {
-          lines.push(
-            `**${display}**: col ${userCol + 1} leads to this in ${userPct}% of continuations ` +
-            `vs only ${contrastPct}% for col ${contrastCol + 1}.`,
-          );
-        } else {
-          lines.push(
-            `**${display}**: col ${contrastCol + 1} (the better move) leads to this in ${contrastPct}% ` +
-            `of continuations vs ${userPct}% for col ${userCol + 1}.`,
-          );
-        }
-      } else if (r.userRatio > 0) {
-        lines.push(
-          `**${display}**: only col ${userCol + 1} leads to this (${userPct}% of continuations); ` +
-          `col ${contrastCol + 1} avoids it entirely.`,
-        );
-      } else {
-        // only contrastRatio > 0
-        lines.push(
-          `**${display}**: only col ${contrastCol + 1} (the better move) leads to this ` +
-          `(${contrastPct}% of continuations); col ${userCol + 1} does not.`,
-        );
-      }
-
-      // Add top-2 location hints
-      if (r.userTop2 || r.contrastTop2) {
-        const hints = [];
-        if (r.userTop2) hints.push(`col ${userCol + 1}: ${r.userTop2}`);
-        if (r.contrastTop2) hints.push(`col ${contrastCol + 1}: ${r.contrastTop2}`);
-        if (hints.length > 0) lines.push(`  (top locations: ${hints.join('; ')})`);
-      }
-    }
-  }
-
-  lines.push('');
-  lines.push(`(${rounds} round${rounds !== 1 ? 's' : ''} of optimal play, ${totalLeaves} positions analyzed.)`);
-
-  return lines.join('\n');
-}
 
 /**
  * Derives the game-theoretic tier of a position from the pre-move solver scores.
@@ -489,6 +350,98 @@ export function getPositionTier(scores, board) {
   if (best > 0)  return 'WINNING';
   if (best === 0) return 'DRAWING';
   return 'LOSING';
+}
+
+/**
+ * Scans all 4-windows (horizontal, vertical, diagonal-up, diagonal-down) across the full
+ * 7x6 board and returns windows with exactly 3 discs of one color and 1 empty cell.
+ *
+ * NOT to use: getMajorThreatCells returns a per-cell flag map {rm, rn, ym, yn} — it
+ * cannot yield 4-cell group objects with owners. This helper is the correct tool for all
+ * group-level major-threat operations.
+ *
+ * Cell format: wire format c${col+1}r${row+1} (1-indexed) for ALL cells in the window
+ * (occupied cells included). This matches allowedSet.cells format.
+ *
+ * Deterministic ordering: horizontally first (cols inner, rows outer), then vertically,
+ * diag-up, diag-down.
+ *
+ * @param {Board} board  Board instance with board.board[row][col] (0 = empty, 1 = Red, 2 = Yellow)
+ * @param {number} perspective  1 = Red, 2 = Yellow (coached player's color)
+ * @returns {Array<{cells: string[], owner: 'player'|'opponent'}>}
+ */
+export function findMajorThreatWindows(board, perspective) {
+  const ROWS = 6;
+  const COLS = 7;
+  const opponent = 3 - perspective;
+  const results = [];
+
+  /** Checks a 4-cell window and pushes a record if it qualifies as a major threat. */
+  function checkWindow(cells) {
+    let playerCount = 0;
+    let oppCount = 0;
+    let emptyCount = 0;
+
+    for (const { r, c } of cells) {
+      const val = board.board[r][c];
+      if (val === perspective) playerCount++;
+      else if (val === opponent) oppCount++;
+      else if (val === 0) emptyCount++;
+      // mixed disc colors — skip without checking
+    }
+
+    if (playerCount === 3 && emptyCount === 1) {
+      results.push({
+        cells: cells.map(({ r, c }) => `c${c + 1}r${r + 1}`),
+        owner: 'player',
+      });
+    } else if (oppCount === 3 && emptyCount === 1) {
+      results.push({
+        cells: cells.map(({ r, c }) => `c${c + 1}r${r + 1}`),
+        owner: 'opponent',
+      });
+    }
+  }
+
+  // Direction order: horizontal, vertical, diagonal-up, diagonal-down
+
+  // Horizontal (same row, col +1)
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      checkWindow([
+        { r, c }, { r, c: c + 1 }, { r, c: c + 2 }, { r, c: c + 3 },
+      ]);
+    }
+  }
+
+  // Vertical (row +1, same col)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c < COLS; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c }, { r: r + 2, c }, { r: r + 3, c },
+      ]);
+    }
+  }
+
+  // Diagonal-up (row +1, col +1)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c: c + 1 }, { r: r + 2, c: c + 2 }, { r: r + 3, c: c + 3 },
+      ]);
+    }
+  }
+
+  // Diagonal-down (row +1, col -1)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 3; c < COLS; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c: c - 1 }, { r: r + 2, c: c - 2 }, { r: r + 3, c: c - 3 },
+      ]);
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -533,35 +486,630 @@ export async function getOpponentResponseMs(postMovestring, postBoard, opponentW
  * playerName            — 'Red' or 'Yellow' (the player who just moved)
  * positionTier          — 'WINNING' | 'DRAWING' | 'LOSING' (derived from pre-move scores)
  */
-export function buildExplainPrompt({
-  boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
-  userCol, contrastCol, isOptimal, isImmediateWin,
-  deltaRows, insufficientTacticalData, allLinesDecided,
-  rounds, totalLeaves, userOutcomes, contrastOutcomes,
-  kbSection, playerName, positionTier,
-  forcedBlockNote, blunderNote,
-  userExamplesByPattern,
-  claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration,
-}) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Classification, grouping, and prompt building helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ROWS = 6;
+const COLS = 7;
+
+/**
+ * T04 — checkAllMovesEqual
+ * Determines if all legal moves have the same solver score for the coached player.
+ *
+ * @param {number[]} preScores  raw solver scores (current-player perspective)
+ * @param {Board} board         Board instance
+ * @returns {{ isSettled: boolean, allMovesEqual: boolean }}
+ */
+export function checkAllMovesEqual(preScores, board) {
+  const legalCols = [0, 1, 2, 3, 4, 5, 6].filter(c => board.colHeights[c] < 6);
+  if (legalCols.length === 0) return { isSettled: false, allMovesEqual: false };
+  const legalScoresCoached = legalCols.map(c => -preScores[c]);
+  const allMovesEqual = legalScoresCoached.every(s => s === legalScoresCoached[0]);
+  const isSettled = allMovesEqual && legalCols.every(c => preScores[c] === 0);
+  return { isSettled, allMovesEqual };
+}
+
+/**
+ * T04 — getGapAndFraming
+ * Computes the eval gap between the user's column and the contrast column.
+ *
+ * @param {number[]} preScores    raw solver scores (current-player perspective)
+ * @param {number} col            user's column (0-indexed)
+ * @param {number} contrastCol    contrast column (0-indexed)
+ * @returns {{ gap: number, inverted: boolean, forceBucket: 'moderate'|'large'|null, gapBucket: 'small'|'moderate'|'large' }}
+ */
+export function getGapAndFraming(preScores, col, contrastCol) {
+  const scoreA = -preScores[col];
+  const scoreB = -preScores[contrastCol];
+  const gap = scoreB - scoreA;
+  const inverted = scoreA >= scoreB;
+
+  let forceBucket = null;
+  const signA = Math.sign(preScores[col]);
+  const signB = Math.sign(preScores[contrastCol]);
+  if (signA !== signB) {
+    // Sign change: at least one outcome crosses a game-theoretic boundary
+    const bothNonZero = (signA !== 0 && signB !== 0);
+    forceBucket = bothNonZero ? 'large' : 'moderate';
+  }
+
+  let gapBucket;
+  if (forceBucket) {
+    gapBucket = forceBucket;
+  } else {
+    const absGap = Math.abs(gap);
+    if (absGap <= 3) gapBucket = 'small';
+    else if (absGap <= 9) gapBucket = 'moderate';
+    else gapBucket = 'large';
+  }
+
+  return { gap, inverted, forceBucket, gapBucket };
+}
+
+/**
+ * T06/T14 — classifyExplanationType
+ * Routes a position to Type 1, 2, 3, or 4 based on available evidence.
+ * Priority order: Type 1 > 2 > 3 > 4 (first match wins).
+ *
+ * @param {Board} preMoveBoard       Board before the user's move A
+ * @param {Board} postABoard         Board after the user's move A
+ * @param {string|null} criticalPositionMs  Movestring of critical position (after opponent's best response), or null
+ * @param {number} perspective       1 (Red) or 2 (Yellow) — coached player
+ * @param {number} playedCol         0-indexed column the user played
+ * @returns {{ type: string }|{ type: string, parityFlipData: object }}
+ */
+export function classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol) {
+  // ── Type 1 (FR-011): immediate threat existed before the move ─────────────
+  const playerThreats = getImmediateThreats(preMoveBoard.board, preMoveBoard.colHeights, perspective);
+  const opponentThreats = getImmediateThreats(preMoveBoard.board, preMoveBoard.colHeights, 3 - perspective);
+  if (playerThreats.length > 0 || opponentThreats.length > 0) {
+    return { type: 'type1' };
+  }
+
+  // ── Type 2 (FR-012): critical position has structural threats ────────────
+  if (criticalPositionMs != null) {
+    const criticalBoard = new Board(criticalPositionMs);
+    const opponentThreatWindows = findMajorThreatWindows(criticalBoard, perspective)
+      .filter(g => g.owner === 'opponent');
+
+    if (opponentThreatWindows.length >= 2) {
+      return { type: 'type2' };
+    }
+
+    // ZERO_SCORES avoids new solver call — detectors use scores only for
+    // threat-type filtering, which doesn't affect structural match detection.
+    const ZERO_SCORES = [0, 0, 0, 0, 0, 0, 0];
+    if (detectFigure7(criticalBoard, ZERO_SCORES).matched) {
+      return { type: 'type2' };
+    }
+    if (detectJShape(criticalBoard, ZERO_SCORES).matched) {
+      return { type: 'type2' };
+    }
+  }
+
+  // ── Type 3 (FR-013): major threat adjacent to parity-flipped column ──────
+  const threatWindows = findMajorThreatWindows(postABoard, perspective);
+  if (threatWindows.length > 0) {
+    const threatCols = new Set();
+    for (const win of threatWindows) {
+      for (const cell of win.cells) {
+        const match = cell.match(/c(\d+)r(\d+)/);
+        if (match) threatCols.add(parseInt(match[1], 10) - 1);
+      }
+    }
+
+    // playedCol is same as or adjacent to (±1) any threat column
+    const isAdjacent = [...threatCols].some(tc => Math.abs(tc - playedCol) <= 1);
+    if (isAdjacent) {
+      const hasPlayerThreat = threatWindows.some(g => g.owner === 'player');
+      return {
+        type: 'type3',
+        parityFlipData: {
+          colA: playedCol + 1,
+          colX: playedCol + 1,
+          rowR: ROWS - preMoveBoard.colHeights[playedCol],
+          playerLabel: hasPlayerThreat ? 'you' : 'your opponent',
+        },
+      };
+    }
+  }
+
+  // ── Type 4 (default) ─────────────────────────────────────────────────────
+  return { type: 'type4' };
+}
+
+/**
+ * T08 — selectTopGroups (M3)
+ * Selects top 5 groups per branch by completed_freq, merges by canonical key.
+ *
+ * @param {Map<string, AggregatedGroup>} aGroups  A-branch groups
+ * @param {Map<string, AggregatedGroup>} bGroups  B-branch groups
+ * @returns {Array<{cells, owner, aCompleted, aDraw, bCompleted, bDraw}>}
+ */
+export function selectTopGroups(aGroups, bGroups) {
+  if (!aGroups || !bGroups) return [];
+  const aArr = [...aGroups.entries()].map(([key, g]) => ({ key, ...g }));
+  const bArr = [...bGroups.entries()].map(([key, g]) => ({ key, ...g }));
+
+  aArr.sort((a, b) => b.completed_freq - a.completed_freq);
+  bArr.sort((a, b) => b.completed_freq - a.completed_freq);
+
+  const aTop5 = aArr.slice(0, 5);
+  const bTop5 = bArr.slice(0, 5);
+
+  // Discard logging
+  if (aArr.length > 5) {
+    const discarded = aArr.slice(5);
+    const freqs = discarded.map(g => g.completed_freq);
+    console.debug(`[explain] discarded ${aArr.length - 5} groups (freq range [${Math.min(...freqs)}–${Math.max(...freqs)}]); kept 5 per branch.`);
+  }
+  if (bArr.length > 5) {
+    const discarded = bArr.slice(5);
+    const freqs = discarded.map(g => g.completed_freq);
+    console.debug(`[explain] discarded ${bArr.length - 5} groups (freq range [${Math.min(...freqs)}–${Math.max(...freqs)}]); kept 5 per branch.`);
+  }
+
+  // Union key sets
+  const keySet = new Set([...aTop5.map(g => g.key), ...bTop5.map(g => g.key)]);
+
+  const result = [];
+  for (const key of keySet) {
+    const aEntry = aGroups.get(key);
+    const bEntry = bGroups.get(key);
+    result.push({
+      cells: (aEntry || bEntry).cells,
+      owner: (aEntry || bEntry).owner,
+      aCompleted: aEntry?.completed_freq ?? 0,
+      aDraw: aEntry?.draw_freq ?? 0,
+      bCompleted: bEntry?.completed_freq ?? 0,
+      bDraw: bEntry?.draw_freq ?? 0,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * T09 — buildAllowedSet
+ * Builds the allowed set of groups from selectTopGroups output and the post-A board.
+ * Each group becomes either CONCRETE-ELIGIBLE or ABSTRACT-ONLY.
+ *
+ * @param {Array} groups   Output of selectTopGroups
+ * @param {Board} board    Post-A Board instance
+ * @param {number} perspective  1 (Red) or 2 (Yellow) — coached player
+ * @returns {Array<{cells?: string[], zoneSpec: string}|{col: number, parity: string, zoneSpec: string}>}
+ *   CONCRETE-ELIGIBLE: { cells, zoneSpec }
+ *   ABSTRACT-ONLY:     { col, parity, zoneSpec }  (no cells field)
+ */
+export function buildAllowedSet(groups, board, perspective) {
+  const result = [];
+  const opponent = 3 - perspective;
+
+  for (const group of groups) {
+    // Parse cell coordinates
+    const parsedCells = [];
+    for (const cellStr of group.cells) {
+      const match = cellStr.match(/c(\d+)r(\d+)/);
+      if (!match) continue;
+      parsedCells.push({ col: parseInt(match[1], 10) - 1, row: parseInt(match[2], 10) - 1, wire: cellStr });
+    }
+
+    // Count owner discs
+    let ownerDiscs = 0;
+    for (const { col, row } of parsedCells) {
+      const occupant = board.board[row][col];
+      if (group.owner === 'player' && occupant === perspective) ownerDiscs++;
+      else if (group.owner === 'opponent' && occupant === opponent) ownerDiscs++;
+    }
+
+    // Determine zone spec
+    const uniqueCols = new Set(parsedCells.map(c => c.col));
+    if (ownerDiscs >= 2) {
+      // CONCRETE-ELIGIBLE
+      let zoneSpec;
+      if (uniqueCols.size === 1) {
+        zoneSpec = `col${[...uniqueCols][0] + 1}`;
+      } else {
+        zoneSpec = `cells:${group.cells.join(',')}`;
+      }
+      result.push({ cells: group.cells, zoneSpec });
+    } else {
+      // ABSTRACT-ONLY
+      const colCounts = {};
+      for (const { col } of parsedCells) {
+        colCounts[col] = (colCounts[col] || 0) + 1;
+      }
+      const mostCommonCol = parseInt(
+        Object.entries(colCounts).sort((a, b) => b[1] - a[1])[0][0], 10
+      );
+
+      // Find key completing cell (first empty cell in group)
+      let keyParity = 'odd';
+      for (const { col, row } of parsedCells) {
+        if (board.board[row][col] === 0) {
+          keyParity = (row + 1) % 2 === 0 ? 'even' : 'odd';
+          break;
+        }
+      }
+
+      result.push({ col: mostCommonCol, parity: keyParity, zoneSpec: `col${mostCommonCol + 1}` });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * T09b — buildType1AllowedSet
+ * Builds the allowed set for Type 1 explanations from immediate threats.
+ *
+ * @param {Board} preMoveBoard  Board before the user's move A
+ * @param {number} perspective  1 or 2 (coached player)
+ * @returns {Array<{cells: string[], zoneSpec: string}>}
+ */
+export function buildType1AllowedSet(preMoveBoard, perspective) {
+  const playerImmediate = getImmediateThreats(preMoveBoard.board, preMoveBoard.colHeights, perspective);
+  const opponentImmediate = getImmediateThreats(preMoveBoard.board, preMoveBoard.colHeights, 3 - perspective);
+
+  console.log('[DEBUG buildType1AllowedSet] perspective:', perspective);
+  console.log('[DEBUG buildType1AllowedSet] playerImmediate (0-indexed cols):', playerImmediate);
+  console.log('[DEBUG buildType1AllowedSet] opponentImmediate (0-indexed cols):', opponentImmediate);
+  console.log('[DEBUG buildType1AllowedSet] colHeights:', preMoveBoard.colHeights);
+
+  if (playerImmediate.length === 0 && opponentImmediate.length === 0) return [];
+
+  // Helper: find windows where the empty cell is at gravity top and column is in immediate set
+  function filterWindows(windows, immediateCols) {
+    return windows
+      .filter(w => {
+        // Find the empty cell
+        for (const cellStr of w.cells) {
+          const match = cellStr.match(/c(\d+)r(\d+)/);
+          if (!match) continue;
+          const col = parseInt(match[1], 10) - 1;
+          const row = parseInt(match[2], 10) - 1;
+          if (preMoveBoard.board[row][col] === 0) {
+            // Must be at gravity top of a column in the immediate threat set
+            return row === preMoveBoard.colHeights[col] && immediateCols.includes(col);
+          }
+        }
+        return false;
+      })
+      .map(w => {
+        // Build zone spec
+        const cols = new Set(w.cells.map(c => parseInt(c.match(/c(\d+)/)[1], 10)));
+        const zoneSpec = cols.size === 1
+          ? `col${[...cols][0]}`
+          : `cells:${w.cells.join(',')}`;
+        return { cells: w.cells, zoneSpec };
+      });
+  }
+
+  const playerWindows = findMajorThreatWindows(preMoveBoard, perspective);
+  const oppWindows = findMajorThreatWindows(preMoveBoard, 3 - perspective);
+
+  console.log('[DEBUG buildType1AllowedSet] playerWindows (all major threat windows):', JSON.stringify(playerWindows));
+  console.log('[DEBUG buildType1AllowedSet] oppWindows (all major threat windows):', JSON.stringify(oppWindows));
+
+  const playerEntries = filterWindows(playerWindows, playerImmediate);
+  const oppEntries = filterWindows(oppWindows, opponentImmediate);
+
+  console.log('[DEBUG buildType1AllowedSet] playerEntries (after filter):', JSON.stringify(playerEntries));
+  console.log('[DEBUG buildType1AllowedSet] oppEntries (after filter):', JSON.stringify(oppEntries));
+
+  const result = [...playerEntries, ...oppEntries];
+  console.log('[DEBUG buildType1AllowedSet] final allowedSet:', JSON.stringify(result));
+  return result;
+}
+
+/**
+ * Loads the KB parity-relevant statements for the given perspective and returns
+ * a map of slug → statement text.
+ * @param {number} perspective  1 (Green) or 2 (Grey)
+ * @returns {Map<string, string>}
+ */
+function loadParityKBStatements(perspective) {
+  const slugs = ['derived-parity-formula', 'community-claimodd', 'allis-claimeven'];
+  if (perspective === 1) {
+    slugs.push('allen-v1', 'allen-v3');
+  } else {
+    slugs.push('allen-v2', 'allen-v4');
+  }
+
+  const map = new Map();
+  for (const slug of slugs) {
+    const stmt = loadKBStatement(slug);
+    if (stmt) map.set(slug, stmt);
+  }
+  return map;
+}
+
+/**
+ * T10 — buildGroupContextBlock
+ * Builds the "Move context", "Boards", and "Winning-line comparison" sections
+ * for the LLM prompt.
+ *
+ * @param {Array} groups       Output of selectTopGroups (may be empty for Type 1)
+ * @param {Array} allowedSet   Output of buildAllowedSet or buildType1AllowedSet
+ * @param {Board} board        Post-A Board instance
+ * @param {number} perspective  1 or 2 (coached player)
+ * @param {object} [options]
+ * @param {number} [options.userCol]         0-indexed user's column
+ * @param {number} [options.contrastCol]     0-indexed contrast column
+ * @param {string} [options.gapBucket]       'small'|'moderate'|'large'
+ * @param {number} [options.gap]             eval gap
+ * @param {boolean} [options.inverted]       true if user's move is optimal/superior
+ * @param {string} [options.preViz]          pre-move board visualization (with scr already stripped)
+ * @param {string} [options.afterViz]        post-opponent-response board visualization (with scr already stripped)
+ * @returns {string}
+ */
+export function buildGroupContextBlock(groups, allowedSet, board, perspective, options = {}) {
+  const { userCol, contrastCol, gapBucket, gap, inverted, preViz, afterViz } = options;
+  const playerName = perspective === 1 ? 'Green' : 'Grey';
+  const opponentName = perspective === 1 ? 'Grey' : 'Green';
+  const winningParity = perspective === 1 ? 'ODD' : 'EVEN';
+  const lines = [];
+
+  // ── Move context (FR-021) ─────────────────────────────────────────────────
+  lines.push('## Move context');
+  lines.push(`- Player: ${playerName} (winning parity = ${winningParity} rows 1/3/5)`);
+  if (userCol != null && contrastCol != null) {
+    // board is postBoard: col A height already incremented, col B unchanged
+    const colALandingRow = board.colHeights[userCol];          // 1-indexed
+    const colBLandingRow = board.colHeights[contrastCol] + 1;  // 1-indexed
+    lines.push(`- ${playerName} played col ${userCol + 1} (landing at c${userCol + 1}r${colALandingRow}); best alternative col ${contrastCol + 1} (landing at c${contrastCol + 1}r${colBLandingRow})`);
+  }
+  if (gapBucket) {
+    lines.push(`- Eval gap: ${gapBucket}`);
+  }
+
+  // Stage and major threats
+  const discCount = board.movestring ? board.movestring.length : 0;
+  const threatWindows = findMajorThreatWindows(board, perspective);
+  if (threatWindows.length === 0) {
+    lines.push(`- Stage: opening (${discCount} discs); major threats: none`);
+  } else {
+    lines.push(`- Stage: ${discCount} discs; major threats: ${threatWindows.length}`);
+  }
+  lines.push('');
+
+  // ── Boards (FR-023) — pre-move, post-move, post-opponent ──────────────────
+  lines.push('## Boards');
+  if (preViz) {
+    const viz = preViz.replace(/\bR\b/g, 'Green').replace(/\bY\b/g, 'Grey');
+    lines.push('### Before the move');
+    lines.push(viz);
+    lines.push('');
+  }
+  if (board.movestring != null) {
+    let viz = getBoardVisualization(board.movestring);
+    viz = viz.replace(/\bR\b/g, 'Green').replace(/\bY\b/g, 'Grey');
+    if (preViz || afterViz) lines.push('### After the move');
+    lines.push(viz);
+    lines.push('');
+  }
+  if (afterViz) {
+    const viz = afterViz.replace(/\bR\b/g, 'Green').replace(/\bY\b/g, 'Grey');
+    lines.push('### After opponent\'s response');
+    lines.push(viz);
+    lines.push('');
+  }
+  lines.push('Note: In the board diagrams, "Green" denotes Green discs and "Grey" denotes Grey discs.');
+  lines.push('');
+
+  // ── Winning-line comparison ───────────────────────────────────────────────
+  const { type1ThreatEntries } = options;
+  if (groups.length === 0 && type1ThreatEntries && type1ThreatEntries.length > 0) {
+    // Type 1: no simulation groups, but opponent has an immediate winning threat.
+    // Emit a minimal comparison block so the hard grounding rule has cells to anchor to.
+    lines.push('## Winning-line comparison (immediate threat)');
+    for (let k = 0; k < type1ThreatEntries.length; k++) {
+      const entry = type1ThreatEntries[k];
+      const cells = entry.cells;
+      let completingCell = '';
+      let completingRow = 0;
+      const occupants = cells.map(cellStr => {
+        const m = cellStr.match(/c(\d+)r(\d+)/);
+        if (!m) return 'unknown';
+        const c = parseInt(m[1], 10) - 1;
+        const r = parseInt(m[2], 10) - 1;
+        const val = board.board[r][c];
+        if (val === 0) {
+          completingCell = cellStr;
+          completingRow = r + 1; // 1-indexed
+          return 'empty';
+        }
+        return val === perspective ? playerName : opponentName;
+      });
+      const parity = completingRow % 2 === 0 ? 'even' : 'odd';
+      lines.push('');
+      lines.push(`THREAT_${k}:`);
+      lines.push(`  cells=[${cells.join(',')}] occupants=[${occupants.join(',')}]`);
+      if (completingCell) {
+        lines.push(`  completing cell: ${completingCell} (row ${completingRow} = ${parity}) — CONCRETE-ELIGIBLE`);
+      }
+    }
+  } else if (groups.length > 0) {
+    lines.push('## Winning-line comparison (best vs worst continuations)');
+
+    // Load KB parity statements once
+    const kbStatements = loadParityKBStatements(perspective);
+
+    const opponentNameCapitalized = perspective === 1 ? 'Grey' : 'Green';
+
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k];
+      lines.push('');
+
+      // Find matching allowedSet entry
+      const allowedEntry = allowedSet.find(a => {
+        if (a.cells) {
+          return a.cells.length === g.cells.length &&
+            a.cells.every((c, i) => c === g.cells[i]);
+        }
+        return false;
+      });
+
+      const isConcreteEligible = !!(allowedEntry && allowedEntry.cells);
+
+      // Format occupant list
+      const occupants = g.cells.map(cellStr => {
+        const m = cellStr.match(/c(\d+)r(\d+)/);
+        if (!m) return 'unknown';
+        const col = parseInt(m[1], 10) - 1;
+        const row = parseInt(m[2], 10) - 1;
+        const val = board.board[row][col];
+        if (val === 0) return 'empty';
+        if (val === perspective) return playerName;
+        return opponentName;
+      });
+
+      // Key completing cell
+      let keyCellStr = '';
+      let keyParity = '';
+      let winningParityLabel = '';
+      for (const cellStr of g.cells) {
+        const m = cellStr.match(/c(\d+)r(\d+)/);
+        if (!m) continue;
+        const col = parseInt(m[1], 10) - 1;
+        const row = parseInt(m[2], 10) - 1;
+        if (board.board[row][col] === 0) {
+          keyCellStr = cellStr;
+          keyParity = (row + 1) % 2 === 0 ? 'even' : 'odd';
+          const isWinningParity = (perspective === 1 && keyParity === 'odd') ||
+            (perspective === 2 && keyParity === 'even');
+          winningParityLabel = isWinningParity ? 'IS' : 'NOT';
+          break;
+        }
+      }
+
+      // Player discs count
+      let playerDiscs = 0;
+      for (const cellStr of g.cells) {
+        const m = cellStr.match(/c(\d+)r(\d+)/);
+        if (!m) continue;
+        const col = parseInt(m[1], 10) - 1;
+        const row = parseInt(m[2], 10) - 1;
+        if (board.board[row][col] === perspective) playerDiscs++;
+      }
+
+      const eligibilityLabel = isConcreteEligible ? 'CONCRETE-ELIGIBLE' : 'ABSTRACT-ONLY';
+
+      // Format cells list
+      const cellsStr = `cells=[${g.cells.join(',')}]`;
+      const occupantsStr = `occupants=[${occupants.join(',')}]`;
+
+      lines.push(`GROUP_${k}:`);
+      lines.push(`  ${cellsStr} ${occupantsStr}`);
+      lines.push(`    key completing cell: ${keyCellStr} (row ${parseInt(keyCellStr.match(/r(\d+)/)[1], 10)} = ${keyParity}, ${winningParityLabel} winning parity for ${playerName})`);
+      lines.push(`    player_discs_in_group: ${playerDiscs} — ${eligibilityLabel}`);
+      lines.push(`    A-branch: completed=${g.aCompleted.toFixed(2)} draw=${g.aDraw.toFixed(2)} | B-branch: completed=${g.bCompleted.toFixed(2)} draw=${g.bDraw.toFixed(2)}`);
+
+      // KB justification
+      for (const [, stmt] of kbStatements) {
+        lines.push(`    KB justification: ${stmt}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds the common section for all prompt types: LANGUAGE_RULE, Players,
+ * Hard grounding rules, Tone, zone tag instructions, and KB section.
+ *
+ * @param {{ playerName: string, gap: number, gapBucket: string, inverted: boolean, contextBlock: string }} params
+ * @param {'type4'|'type12'|'type3'} promptType
+ * @param {object} [typeSpecific]
+ * @returns {string}
+ */
+function buildCommonPromptSections({ playerName, gap, gapBucket, inverted, contextBlock }, promptType, typeSpecific = {}) {
   const opponentName = playerName === 'Green' ? 'Grey' : 'Green';
+  const perspective = playerName === 'Green' ? 1 : 2;
+  const sections = [];
 
+  // ── Role ──────────────────────────────────────────────────────────────────
+  if (promptType === 'type4') {
+    sections.push(`## Role
+You are a Connect Four coach explaining, in the opening, why one move develops
+better than another. There are no immediate threats on this board — do not
+describe any threat, fork, or winning line as if it exists now. Everything you
+say must be about what the moves build TOWARD.`);
+  } else if (promptType === 'type12') {
+    sections.push(`## Role
+You are a Connect Four coach explaining why one move was stronger than another.`);
+  } else {
+    // type3 — same as type12 role (type-neutral)
+    sections.push(`## Role
+You are a Connect Four coach explaining why one move was stronger than another.`);
+  }
+
+  // ── LANGUAGE_RULE ─────────────────────────────────────────────────────────
   const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+  sections.push(LANGUAGE_RULE);
 
-  // Short-circuit: move wins the game immediately.
-  if (isImmediateWin) {
-    return `## Role
-You are an expert Connect Four coach.
+  // ── Players ───────────────────────────────────────────────────────────────
+  sections.push(`## Players
+${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${perspective === 1 ? 'ODD' : 'EVEN'} rows (${perspective === 1 ? '1,3,5' : '2,4,6'}); ${opponentName}'s on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${perspective === 1 ? '2,4,6' : '1,3,5'}). Use only Connect Four terms.`);
 
-${LANGUAGE_RULE}
+  // ── Hard grounding rules ──────────────────────────────────────────────────
+  sections.push(`## Hard grounding rules
+- Reference ONLY cells and columns that appear in "Winning-line comparison" OR are named as landing cells in "Move context."
+- Never name a cell not listed in one of those two sections.
+- Never describe a cell as part of a winning line if its occupants entry is not
+  \`empty\`.
+- For ABSTRACT-ONLY groups: refer to "a winning line in column X on an odd row" —
+  do NOT enumerate its cells.
+- For CONCRETE-ELIGIBLE groups: you MAY highlight the listed empty cells.`);
 
-## Move context
-**${playerName}** just played **col ${userCol + 1}**.
-Note: In the board diagrams, **R** always denotes Green discs and **Y** always denotes Grey discs, regardless of whose turn it is. "Next: Red" means it is Green's turn; "Next: Yellow" means it is Grey's turn.
+  // ── Context block ─────────────────────────────────────────────────────────
+  sections.push(contextBlock);
 
-## Board position (AFTER ${playerName} plays col ${userCol + 1})
-${postBoardViz}
+  // ── Tone (driven by Eval gap) ─────────────────────────────────────────────
+  if (inverted) {
+    let text;
+    if (gap === 0) {
+      text = 'Both A and the alternative are equivalent; your move is fine.';
+    } else if (gap > -3) {
+      text = 'Your move is solid; the alternative is a touch more flexible but the difference is minor.';
+    } else {
+      text = 'Your move is the strongest here; what it preserves or builds.';
+    }
+    sections.push(`## Tone\n${text}`);
+  } else {
+    let text;
+    if (gapBucket === 'small') {
+      text = 'Both moves are reasonable; frame col B as slightly more principled,\n             not col A as a mistake. Do not manufacture a flaw.';
+    } else if (gapBucket === 'moderate') {
+      text = 'col B is clearly preferable; explain the developmental edge.';
+    } else {
+      text = 'col B is important; col A gives away real ground.';
+    }
+    sections.push(`## Tone (driven by Eval gap)\n- ${gapBucket}    → ${text}`);
+  }
 
-## Output format
+  // ── KB section (FR-024) ────────────────────────────────────────────────────
+  const kbEntries = ['derived-parity-formula'];
+  if (perspective === 1) {
+    kbEntries.push('allen-v1', 'allen-v3');
+  } else {
+    kbEntries.push('allen-v2', 'allen-v4');
+  }
+  kbEntries.push('community-claimodd', 'allis-claimeven');
+  const kbSection = buildKBSection(kbEntries);
+  if (kbSection) sections.push(kbSection);
+
+  return sections.join('\n\n');
+}
+
+/**
+ * Builds the zone tag instructions section common to all prompt types.
+ * @returns {string}
+ */
+function buildZoneTagInstructions() {
+  return `## Output format
 Wrap any reference to a specific board location in zone tags:
 
 - \`[zone:colN]column N[/zone:colN]\` — a single column
@@ -573,109 +1121,114 @@ Wrap any reference to a specific board location in zone tags:
 Rules:
 - Only tag EXPLICIT spatial references. Do NOT tag abstract concepts like "the position" or "the tactic."
 - Use column numbers as they appear in the board context above (1-indexed columns, row 1 = bottom).
-- The board has 7 columns (1–7, left to right) and 6 rows (1–6, bottom to top).
+- The board has 7 columns (1–7, left to right) and 6 rows (1–6, bottom to top).`;
+}
 
-## Task
-This move ends the game — ${playerName} wins immediately. Explain this in one sentence, naming the specific column and row of the winning connection.`;
-  }
+/**
+ * T11 — buildType4Prompt
+ * Builds the full prompt for Type 4 (developmental / opening) explanations.
+ *
+ * @param {{ playerName: string, gap: number, gapBucket: string, contextBlock: string, inverted: boolean }}
+ * @returns {string}
+ */
+export function buildType4Prompt({ playerName, gap, gapBucket, contextBlock, inverted }) {
+  const common = buildCommonPromptSections(
+    { playerName, gap, gapBucket, inverted, contextBlock },
+    'type4'
+  );
 
-  let patternSection;
-  if (allLinesDecided) {
-    patternSection =
-      `All continuations are decided before the depth limit — ` +
-      `no open positions remain for ${playerName} to analyze tactically.`;
-  } else if (insufficientTacticalData) {
-    patternSection =
-      `No tactical patterns detected across ${userOutcomes.perspectiveLeaves} open positions.`;
+  // Task section
+  let taskSection;
+  if (inverted) {
+    taskSection = `## Task
+In 2–3 sentences: lead with what your move (col A) builds toward (name the column(s) and the
+winning row parity; highlight a concrete group only if one is CONCRETE-ELIGIBLE).
+Then say what the alternative gives up, scaled to the Eval gap. Use [zone:...] only on
+cells/columns that appear in the comparison block.`;
   } else {
-    patternSection = buildPatternNarrative({
-      deltaRows, playerName, opponentName,
-      userCol, contrastCol, userOutcomes, contrastOutcomes,
-      isOptimal, rounds, totalLeaves,
-    });
+    taskSection = `## Task
+In 2–3 sentences: lead with what col B builds toward (name the column(s) and the
+winning row parity; highlight a concrete group only if one is CONCRETE-ELIGIBLE).
+Then say what col A gives up, scaled to the Eval gap. Use [zone:...] only on
+cells/columns that appear in the comparison block.`;
   }
 
-  // Move quality label depends on both optimality and game-theoretic position tier.
-  // A move is only "strong" if it comes from a winning position; when losing,
-  // even the best option cannot be called strong.
-  let moveQualityDesc;
-  let roleGoal;
-  if (positionTier === 'WINNING') {
-    moveQualityDesc = isOptimal
-      ? `a strong move`
-      : `a weaker move than col ${contrastCol + 1}`;
-    roleGoal = `give a grounded, concise explanation of why a specific move is ${isOptimal ? 'strong' : 'weak'}`;
-  } else if (positionTier === 'DRAWING') {
-    moveQualityDesc = isOptimal
-      ? `a solid move that preserves the draw`
-      : `a move that gives up the drawing advantage (col ${contrastCol + 1} keeps the draw)`;
-    roleGoal = `explain how this move ${isOptimal ? 'maintains' : 'throws away'} a drawable position`;
+  const zoneTagInstructions = buildZoneTagInstructions();
+
+  return `${common}
+
+${zoneTagInstructions}
+
+${taskSection}`;
+}
+
+/**
+ * T12 — buildType12Prompt
+ * Builds the full prompt for Type 1 and Type 2 explanations.
+ *
+ * @param {{ playerName: string, gap: number, gapBucket: string, contextBlock: string, explainType: 'type1'|'type2' }}
+ * @returns {string}
+ */
+export function buildType12Prompt({ playerName, gap, gapBucket, contextBlock, explainType }) {
+  const common = buildCommonPromptSections(
+    { playerName, gap, gapBucket, inverted: false, contextBlock },
+    'type12'
+  );
+
+  let taskSection;
+  if (explainType === 'type1') {
+    taskSection = `## Task
+In 2–3 sentences: explain why the missed immediate threat exists. Name the specific
+column, row, and the 4-cell line. Say why the better move (col B) was the correct
+choice and what col A gave up, scaled to the Eval gap. Use [zone:...] only on
+cells/columns that appear in the comparison block.`;
   } else {
-    // LOSING — no move can be called "strong"
-    moveQualityDesc = isOptimal
-      ? `the best available move in a losing position`
-      : `a weaker choice in an already losing position (col ${contrastCol + 1} resists longer)`;
-    roleGoal = `explain what this move does in an already losing position — do NOT call any move strong`;
+    taskSection = `## Task
+In 2–3 sentences: explain the tactical pattern (fork or scaffold) that the better
+move (col B) leads to. Name the specific columns and winning lines from the tactical
+analysis. Say what col A gives up, scaled to the Eval gap. Use [zone:...] only on
+cells/columns that appear in the comparison block.`;
   }
 
-  const forcedWinExamples = userExamplesByPattern?.forced_win ?? [];
-  let exampleBoardsSection = '';
-  if (forcedWinExamples.length > 0) {
-    const boards = forcedWinExamples.map((ms, i) => {
-      const viz = getBoardVisualization(ms);
-      return `### Critical position ${i + 1} (movestring: ${ms})\n${viz}`;
-    });
-    exampleBoardsSection =
-      `\n## Critical positions — no defense available\n` +
-      `In these positions ${playerName} faces threats they cannot all block:\n\n` +
-      boards.join('\n\n') +
-      `\n\nLook at these boards: identify the concrete threats (columns, rows, directions) that leave ${playerName} without a defense. Name them in your explanation.\n`;
-  }
+  const zoneTagInstructions = buildZoneTagInstructions();
 
-  const afterOpponentSection = afterOpponentBoardViz
-    ? `\n## Board position (AFTER ${opponentName} responds col ${opponentResponseCol + 1})\n${afterOpponentBoardViz}\n`
-    : '';
+  return `${common}
 
-  return `## Role
-You are an expert Connect Four coach. Your goal is to ${roleGoal}.
+${zoneTagInstructions}
 
-${LANGUAGE_RULE}
+${taskSection}`;
+}
 
-## Move context
-**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before the move, after the move, and after ${opponentName}'s best response. All analysis is from **${playerName}'s perspective**.
-Note: In the board diagrams, **R** always denotes Green discs and **Y** always denotes Grey discs, regardless of whose turn it is. "Next: Red" means it is Green's turn; "Next: Yellow" means it is Grey's turn.
-${forcedBlockNote ? `\n⚠️ ${forcedBlockNote}\n` : ''}${blunderNote ? `\n${blunderNote}\n` : ''}
-## Board position (BEFORE ${playerName} plays col ${userCol + 1})
-${boardViz}
+/**
+ * T13 — buildType3Prompt
+ * Builds the full prompt for Type 3 (parity / structural) explanations.
+ *
+ * @param {{ playerName: string, gap: number, gapBucket: string, contextBlock: string, parityFlipData: { colA: number, colX: number, rowR: number, playerLabel: string } }}
+ * @returns {string}
+ */
+export function buildType3Prompt({ playerName, gap, gapBucket, contextBlock, parityFlipData }) {
+  const common = buildCommonPromptSections(
+    { playerName, gap, gapBucket, inverted: false, contextBlock },
+    'type3'
+  );
 
-## Board position (AFTER ${playerName} plays col ${userCol + 1})
-${postBoardViz}
-${afterOpponentSection}
-## What the analysis found
-${patternSection}
-${kbSection ? '\n' + kbSection + '\n' : ''}${[claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration].filter(Boolean).map(s => `\n${s}\n`).join('')}${exampleBoardsSection}
-## Output format
-Wrap any reference to a specific board location in zone tags:
+  const { colA, colX, rowR, playerLabel } = parityFlipData;
 
-- \`[zone:colN]column N[/zone:colN]\` — a single column
-- \`[zone:cNrM]the cell at row M[/zone:cNrM]\` — a single cell
-- \`[zone:cells:c1r2,c2r3]these cells[/zone:cells:c1r2,c2r3]\` — multiple cells (comma-separated)
-- \`[zone:rowN]row N[/zone:rowN]\` — an entire row
-- \`[zone:tg]this threat[/zone:tg]\` — all current major threat cells for the player
+  const taskSection = `## Task
+In 2–3 sentences: lead with what col B builds toward (name the column(s) and the
+winning row parity; highlight a concrete group only if one is CONCRETE-ELIGIBLE).
+Then say what col A gives up, scaled to the Eval gap. Use [zone:...] only on
+cells/columns that appear in the comparison block.
 
-Rules:
-- Only tag EXPLICIT spatial references. Do NOT tag abstract concepts like "the position" or "the tactic."
-- Use column numbers as they appear in the board context above (1-indexed columns, row 1 = bottom).
-- For "best line" columns, tag each one individually.
-- The board has 7 columns (1–7, left to right) and 6 rows (1–6, bottom to top).
+Important: Playing in column ${colA} changes the number of empty squares in column ${colX}, so ${playerLabel} will now land on row ${rowR} — the row that matters for winning there.`;
 
-## Task
-${isOptimal
-  ? `Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.
-Ground your explanation first in the concrete board positions shown above — name specific columns and rows where decisive threats exist. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself. If no analysis is available, say so honestly and give only a high-level observation from the board position.`
-  : `Explain in 2–4 sentences why **col ${contrastCol + 1}** would have been a better move than col ${userCol + 1} for **${playerName}**.
-Lead with what col ${contrastCol + 1} achieves or avoids — that is the move to highlight for the player. Then explain what col ${userCol + 1} gives away. Name specific columns and rows from the board positions above. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself.`}
-Important: col ${contrastCol + 1} may appear both as ${opponentName}'s response move and as the hypothetical alternative for ${playerName}. Never conflate the two — always make clear whether you are describing ${opponentName}'s reply or a hypothetical move by ${playerName}.`;
+  const zoneTagInstructions = buildZoneTagInstructions();
+
+  return `${common}
+
+${zoneTagInstructions}
+
+${taskSection}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

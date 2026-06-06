@@ -129,6 +129,22 @@ options.detectors  — string[] of detector names to enable.
   and histograms. All leaves count toward `total`. This ensures patterns are attributed to the
   correct player without special-casing the recursion logic.
 
+- **Group recording at leaves** (T01/T02): `collectLeaves` now produces `groups: GroupRecord[]` for
+  every terminal leaf (won and draw leaves). Won leaves record the winning 4-cell group via
+  `findWinningGroup`. Draw leaves record all major-threat windows via `findMajorThreatWindows`.
+  `aggregateLeaves` aggregates groups into a `Map<string, AggregatedGroup>` keyed by
+  `canonicalCells:owner`. Each entry has `completed_freq` and `draw_freq` against `total_leaves`
+  (all leaves: won + draw + depth_limit). This powers the grounding contract for the new
+  explanation prompt templates.
+
+- **`groups` return field**: `explainSimulate` now returns `groups: Map<string, AggregatedGroup>`
+  alongside the existing `patterns`, `outcomes`, `timing` fields. The Map key is
+  `sortedCellsCsv:owner` (e.g. `"c3r2,c4r2,c5r2,c6r2:player"`). Each value has:
+  - `cells: string[]` — wire-format cell coords (e.g. `["c3r2","c4r2","c5r2","c6r2"]`)
+  - `owner: 'player'|'opponent'` — which player's group
+  - `completed_freq: number` — fraction of total leaves where this group was a completed line
+  - `draw_freq: number` — fraction of total leaves where this group was a draw threat
+
 - **Solver score cache**: a `Map<movestring, scores>` allocated per `explainSimulate()` call
   and threaded through `collectLeaves`. Avoids redundant queries when the same position is
   reached via different paths. Cache key is the literal movestring — transpositions via
@@ -177,18 +193,51 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 
 `connect-four/server/llmCoachHelpers.js` is the shared module for all LLM coaching server endpoints. It exports:
 
+### Recommend-move helpers (unchanged from Epic B)
+
 - `buildRecommendPrompt({...})` — assembles the full move-recommendation prompt
 - `buildFlatTable(colData, rounds)` — formats the per-column pattern table for the prompt
 - `getScoreTier(col, score, immediateWinSet, immediateLossSet)` — classifies a column into IMMEDIATE WIN / WINS / DRAWS / LOSES / IMMEDIATE LOSS
+- `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
+
+### Shared utilities
+
 - `isMajorThreatForPlayer(board, col, row, player)` — checks whether a cell is a 3+empty major threat; not exported from `classifier.js`, this is the canonical server location
 - `getBoardVisualization(movestring)` — shells out to `scripts/visualize_board.mjs` via `spawnSync`, strips the `scr` row
 - `buildKBSection(patternNames)` / `loadKBStatement(id)` — loads KB article statements for active patterns
 - `callLLM(prompt)` — calls OpenAI chat completions API; reads `OPENAI_API_KEY` / `OPENAI_MODEL` from env
-- `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
 - `selectContrastMove(scores, userCol, board)` — pure; returns `{ contrastCol, isOptimal }` or `null` when all legal scores are equal. `isOptimal=true`: user played best, contrast = second-best; `isOptimal=false`: user played suboptimally, contrast = best. Tie-break: closest to col 3.
-- `computeDeltaTable(userPatterns, contrastPatterns)` — pure; returns `{ rows, insufficientTacticalData }`. Rows are `{ name, userRatio, contrastRatio, delta, userTop2, contrastTop2 }` sorted by delta descending.
-- `buildExplainPrompt({ boardViz, postBoardViz, playerName, isOptimal, userCol, contrastCol, deltaRows, insufficientTacticalData, allLinesDecided, rounds, totalLeaves, userOutcomes, contrastOutcomes, kbSection, forcedBlockNote, blunderNote })` — pure; builds the LLM prompt for `/api/explain-move-llm`. Solver scores never appear in output. Column references are 1-indexed to the LLM. `boardViz` = pre-move board, `postBoardViz` = post-move board.
-- `PATTERN_NAMES` — ordered string array of the 11 pattern names consumed by `computeDeltaTable`
+- `getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver)` — returns the movestring after opponent's best response, or null if the game is over.
+- `findMajorThreatWindows(board, perspective)` — scans all 4-windows and returns windows with exactly 3 discs of one color + 1 empty cell. Returns `{ cells: string[], owner: 'player'|'opponent' }[]`. Replaces `getMajorThreatCells` for all group-level operations.
+
+### Explain-move type classifier (Epic B, T06/T14)
+
+- `checkAllMovesEqual(preScores, board)` — returns `{ isSettled, allMovesEqual }`. `isSettled=true` means all legal columns have zero score (genuine draw). Used to short-circuit the LLM call.
+- `getGapAndFraming(preScores, col, contrastCol)` — returns `{ gap, inverted, forceBucket, gapBucket }`. The eval gap between user's move and the contrast. `inverted=true` when the user's move is optimal. `gapBucket` is one of `small`/`moderate`/`large`, with sign-change override (`forceBucket`).
+- `classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol)` — routes a position to Type 1/2/3/4. Priority: Type 1 (immediate threat existed before move) > Type 2 (opponent has >=2 threats in critical position, or Figure-7/J-shape) > Type 3 (major threat adjacent to parity-flipped column) > Type 4 (default). Returns `{ type: string }` (adds `parityFlipData` for Type 3).
+
+### Grounding contract builders (Epic B, T08–T10)
+
+- `selectTopGroups(aGroups, bGroups)` — takes the `groups` Maps from A-branch and B-branch simulation results, selects top 5 per branch by `completed_freq`, merges by canonical key. Returns `AggregatedGroup[]` with `aCompleted`/`aDraw`/`bCompleted`/`bDraw` fields.
+- `buildAllowedSet(groups, board, perspective)` — converts `selectTopGroups` output to `AllowedSetEntry[]`. Each group is CONCRETE-ELIGIBLE (≥2 owner discs, has `cells` + `zoneSpec` fields) or ABSTRACT-ONLY (has `col` + `parity` + `zoneSpec` fields, no `cells`).
+- `buildType1AllowedSet(preMoveBoard, perspective)` — builds CONCRETE-ELIGIBLE entries directly from `getImmediateThreats` results (Type 1 skips simulation). Returns `{ cells, zoneSpec }[]`.
+- `buildGroupContextBlock(groups, allowedSet, board, perspective, options)` — builds the "Move context", "Boards", and "Winning-line comparison" sections. Accepts optional `preViz`/`afterViz` in `options` for pre-move and post-opponent board visualizations.
+
+### Prompt template builders (Epic B, T11–T13)
+
+- `buildType4Prompt({ playerName, gap, gapBucket, contextBlock, inverted })` — developmental/opening prompt. Role: coach explaining why one move develops better.
+- `buildType12Prompt({ playerName, gap, gapBucket, contextBlock, explainType })` — Type 1/2 prompt. Role: coach explaining why one move was stronger than another. Task differs for Type 1 (missed immediate threat) vs Type 2 (tactical pattern).
+- `buildType3Prompt({ playerName, gap, gapBucket, contextBlock, parityFlipData })` — Type 3 prompt. Adds a frozen parity-flip sentence naming the column, row, and whose parity changed.
+
+All three prompt templates share a common skeleton via `buildCommonPromptSections`: Role, Players, Hard grounding rules, Context block, Tone (driven by eval gap), KB parity rules, Output format (zone tag instructions).
+
+### Deleted functions (removed in Epic B, T18)
+
+The following functions were removed and replaced by the type-driven prompt builders:
+- `computeDeltaTable` — comparison-table logic (no longer needed; each type has a dedicated template)
+- `buildExplainPrompt` — single-template approach replaced by Type 1/2/3/4 dispatch
+- `buildPatternNarrative` — natural-language pattern summary (superseded by Group context block)
+- `PATTERN_NAMES` — consumed only by `computeDeltaTable`
 
 **Critical invariant**: solver scores are NEVER passed to the LLM. `getScoreTier` translates scores to tier labels (WINS/DRAWS/LOSES), and `getBoardVisualization` strips the `scr` row from board output. This invariant MUST be preserved by all callers.
 
@@ -212,26 +261,71 @@ call site for this flag (e.g. `explain_move.sh`). Scripts themselves read
 `process.env.OPENAI_API_KEY` and `process.env.OPENAI_MODEL` directly — no `dotenv`
 package needed.
 
-**LLM prompt structure contract** for move explanations (`buildExplainPrompt` / `explain_move.mjs` / `/api/explain-move-llm`):
+**LLM prompt structure contract** for move explanations (`/api/explain-move-llm`, Epic B):
 
-1. `## Role` — coach persona and move quality framing (strong / weak)
-2. `## Move context` — player name, column played, optional forced-block / blunder annotations
-3. `## Board position (BEFORE ...)` — pre-move `visualize_board.mjs` output, `scr` row stripped
-4. `## Board position (AFTER ...)` — post-move `visualize_board.mjs` output, `scr` row stripped
-5. `## Pattern comparison` — delta table from two `explainSimulate` calls (user move vs contrast move), sorted by |Δratio|, showing top-2 histogram entries per row
-6. `## Pattern definitions` — KB article statements for active patterns (optional)
-7. `## Task` — grounding instruction targeting 2–4 sentence response
+The prompt is built by one of four type-specific template builders (`buildType4Prompt`, `buildType12Prompt`, `buildType3Prompt`), dispatched by `classifyExplanationType`. All templates share a common skeleton via `buildCommonPromptSections`:
 
-Solver scores are intentionally excluded from the prompt. The LLM reasons from tactical patterns, outcome rates, and KB definitions only.
+1. `## Role` — type-dependent persona:
+   - **Type 1/2/3**: "You are a Connect Four coach explaining why one move was stronger than another."
+   - **Type 4**: "You are a Connect Four coach explaining, in the opening, why one move develops better than another."
+2. `## Players` — player identity (Green/Grey) with winning parity rows
+3. `## Hard grounding rules` — must reference only cells listed in the Winning-line comparison block
+4. `## Move context` — player, column played, best alternative, eval gap, stage, major threat count
+5. `## Boards` — up to three board visualizations (pre-move, post-move, post-opponent-response) with R→Green, Y→Grey substitution and `scr` row stripped
+6. `## Winning-line comparison` — zero or more `GROUP_k` blocks with per-group: cells, occupants, key completing cell, row parity, CONCRETE-ELIGIBLE/ABSTRACT-ONLY flag, A-branch vs B-branch frequency, KB justification
+7. `## Tone (driven by Eval gap)` — tone ladder scaled to `gapBucket` (small/moderate/large), with inverted framing when user's move is optimal
+8. `## Pattern definitions` (KB section) — loaded via `buildKBSection` for parity-related KB slugs
+9. `## Output format` — zone tag instructions
+10. `## Task` — type-specific grounding instruction (Type 1: missed immediate threat; Type 2: tactical pattern; Type 3: parity flip sentence; Type 4: developmental framing)
 
-When all pattern ratios are zero for both compared moves, `insufficient_tactical_data` is set and section 4 includes an explicit "No tactical patterns detected" notice rather than silently omitting the section (Principle VI: validate signal before use). The LLM is still called but told it has no pattern data.
+Solver scores are intentionally excluded from the prompt. The LLM reasons from the grounded `allowedSet` cells, winning-line comparison, and KB parity definitions only.
 
-**Contrast move selection**: if the user's move was suboptimal, the contrast is the best legal move; if optimal, the contrast is the second-best. Center column (col 3) breaks ties. If all legal scores are equal, the script exits without calling the LLM.
+**Contrast move selection**: if the user's move was suboptimal, the contrast is the best legal move; if optimal, the contrast is the second-best. Center column (col 3) breaks ties. If all legal scores are equal, the handler returns the "All moves are roughly equivalent" frozen string without calling the LLM. If `checkAllMovesEqual` detects a genuinely settled position (all scores zero), the shorter "All moves are roughly equivalent" frozen string is returned instead.
 
 **Key files**:
 - `connect-four/server/scripts/explain_move.mjs` — full PoC logic (no server required)
 - `explain_move.sh` — shell wrapper at project root (`./explain_move.sh <movestring> <col> [rounds=1]`)
 - `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)
+
+## Annotation Gate (`POST /api/explain-move-llm`)
+
+All LLM outputs from `/api/explain-move-llm` pass through `validateAnnotation` (in `server/annotationGate.js`) before being cached or delivered to the client.
+
+### Signature
+
+```js
+validateAnnotation(explanation, board, allowedSet = null)
+```
+
+The third parameter `allowedSet` is an internal grounding contract array built by `buildExplainContext`. When provided, an additional check runs.
+
+### Checks
+
+The gate runs up to seven checks:
+
+| Check | Description |
+|---|---|
+| **P1** — spec syntax/bounds | Every `[zone:SPEC]` must be a known format and resolve to ≥1 in-bounds cell. `tg` is always valid. |
+| **P2** — column-reference consistency | For `colN` zones, any explicit column reference in the inner text must match N. |
+| **P3** — forbidden terminology | Explanation must not contain disc notation (`\bR\b`, `\bY\b`), player names (Red/Yellow/Black), or engine jargon (forced win, the solver, forced_win, etc.). |
+| **P5** — blocked 4-windows | Each zone must have at least one live 4-window (not blocked by both players) on the actual board. |
+| **P6** — raw coordinates | Zone inner text must not contain raw coordinate strings like `c4r3` or `col5`. |
+| **P5strong** — zone-vs-allowedSet (Epic B) | When `allowedSet` is provided: `tg` always fails; `colN` must match an allowed column; cell-level specs must appear in a CONCRETE-ELIGIBLE entry's `cells` list. ABSTRACT-ONLY entries satisfy `colN` zones but NOT cell-level zones. |
+
+**Backward compatibility**: When the `allowedSet` parameter is `null` or omitted (old callers), P5strong is silently skipped. The Epic A API is fully preserved.
+
+**Retry**: If the first attempt fails validation, the same prompt is sent to the LLM a second time (bypassing cache and quota). If the retry also fails, the fallback path is taken.
+
+**Tier-1 fallback**: On double failure, the server reads the most recent `explanation_cache` row for the same `position_hash` and returns its `deep_reveal_json.fullText`, or the static string `"Detailed explanation unavailable."` if no row exists. The failure is logged to `deep_reveal_failures`. No quota unit is consumed.
+
+**Quota timing**: The weekly quota is decremented only **after** a valid explanation is confirmed — never before the LLM call and never for fallback responses. Cache hits (served before the LLM is called) also do not consume quota.
+
+**All-or-nothing rejection**: If ANY zone fails ANY check, the entire LLM output is rejected (FR-010).
+
+**Relevant modules**:
+- `server/zoneParser.js` — `parseZoneSpecs`, `expandSpec`, `isValidSpec`
+- `server/annotationGate.js` — `validateAnnotation`, `checkP1`–`checkP6`, `getWindowsThroughCell`, `isWindowBlocked`
+- `server/migrations/031_deep_reveal_failures.sql` — failure log table DDL
 
 ## Deep Reveal Quota
 

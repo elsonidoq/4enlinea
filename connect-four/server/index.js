@@ -6,15 +6,22 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, classifyAll, Board, getImmediateThreats, detectZThreat, detectFigure7, detectJShape } from './classifier.js';
+import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
 import { explainSimulate } from './explainSimulate.js';
 import {
   TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
   isMajorThreatForPlayer, getScoreTier,
   getBoardVisualization, buildKBSection,
-  buildFlatTable, buildRecommendPrompt, callLLM,
-  selectContrastMove, computeDeltaTable, buildExplainPrompt,
-  getPositionTier, getOpponentResponseMs,
+  buildRecommendPrompt, callLLM,
+  selectContrastMove,
+  getOpponentResponseMs,
+  checkAllMovesEqual, getGapAndFraming,
+  classifyExplanationType,
+  buildType1AllowedSet,
+  selectTopGroups,
+  buildAllowedSet,
+  buildGroupContextBlock,
+  buildType4Prompt, buildType12Prompt, buildType3Prompt,
 } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
@@ -25,6 +32,7 @@ import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson } from './lessonLoader.js';
+import { validateAnnotation } from './annotationGate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -605,7 +613,8 @@ function injectDefaultActiveZone(explanation) {
 }
 
 // Shared: build the LLM prompt for a given (movestring, col) without calling the LLM.
-// Returns { prompt } or null if contrast move is unavailable.
+// Returns { prompt, allowedSet } or null if contrast move is unavailable.
+// Returns { prompt: null, allowedSet: null, allMovesEqual: true } when all moves are settled.
 async function buildExplainContext(movestring, col, rounds = 1) {
   const board = new Board(movestring);
   const r = rounds;
@@ -615,101 +624,105 @@ async function buildExplainContext(movestring, col, rounds = 1) {
   const opponentPlayer = perspective === 1 ? 2 : 1;
   const postMovestring = movestring + col;
 
+  // ── 1. Solver scores ──────────────────────────────────────────────────────
   const preScores = movestring.length > 0
     ? await solver.query(movestring)
     : EMPTY_BOARD_SCORES;
 
-  const positionTier = getPositionTier(preScores, board);
+  // ── 2. All-moves-equal / settled check (T04) ──────────────────────────────
+  const { isSettled } = checkAllMovesEqual(preScores, board);
+  if (isSettled) {
+    return { prompt: null, allowedSet: null, allMovesEqual: true };
+  }
+
+  // ── 3. Contrast move ──────────────────────────────────────────────────────
   const contrast = selectContrastMove(preScores, col, board);
   if (contrast === null) return null;
-  const { contrastCol, isOptimal } = contrast;
+  const { contrastCol } = contrast;
 
-  const anchorRow = board.colHeights[col];
-  const contrastAnchorRow = board.colHeights[contrastCol];
+  // ── 4. Gap and framing (T04) ──────────────────────────────────────────────
+  const { gap, inverted, gapBucket } = getGapAndFraming(preScores, col, contrastCol);
 
-  const [userResult, contrastResult] = await Promise.all([
-    explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
-    explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
-  ]);
-
-  const { rows: deltaRows, insufficientTacticalData } =
-    computeDeltaTable(userResult.patterns, contrastResult.patterns);
-  const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
-
-  const [boardViz, postBoardViz] = await Promise.all([
-    getBoardVisualization(movestring || ''),
-    getBoardVisualization(postMovestring),
-  ]);
-
-  const opponentName = perspective === 1 ? 'Grey' : 'Green';
-  const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
-  const forcedBlockNote = forcedBlock
-    ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
-    : null;
-
+  // ── 5. Compute opponent response (needed for Type 2 classification) ───────
   const postBoard = new Board(postMovestring);
   const opponentWinCols = getImmediateThreats(postBoard.board, postBoard.colHeights, opponentPlayer);
-  const blunderNote = opponentWinCols.length > 0
-    ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
-    : null;
-
   const opponentResponseMovestring = await getOpponentResponseMs(
     postMovestring, postBoard, opponentWinCols, perspective, solver,
   );
-  const afterOpponentBoardViz = opponentResponseMovestring
-    ? getBoardVisualization(opponentResponseMovestring)
-    : null;
-  const opponentResponseCol = opponentResponseMovestring != null
-    ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
-    : null;
 
-  const activePatterns = deltaRows.map(row => row.name);
-  const kbSection = buildKBSection(activePatterns);
+  // ── 6. Classify explanation type (T06/T14) ────────────────────────────────
+  const typeResult = classifyExplanationType(board, postBoard, opponentResponseMovestring, perspective, col);
 
-  // ── Narration templates for Deep Reveal ──────────────────────────────────
-  // Run sync detectors against pre-move board for metadata-rich narration prose.
-  const zResult = detectZThreat(board, preScores);
-  const fig7Result = detectFigure7(board, preScores);
-  const jResult = detectJShape(board, preScores);
+  let prompt;
+  let allowedSet = null;
+  let topGroups = [];
 
-  const claimevenNarration = userResult.patterns.claimeven?.ratio > 0
-    ? 'Yellow wins by always responding above Red. The claimeven strategy guarantees Yellow controls every even-row cell that Red plays into — Red cannot escape the parity lock.'
-    : null;
+  // ── 7. Type-specialized path ──────────────────────────────────────────────
+  console.log('[DEBUG buildExplainContext] typeResult:', JSON.stringify(typeResult));
+  console.log('[DEBUG buildExplainContext] perspective:', perspective, '| col (0-indexed):', col, '| contrastCol (0-indexed):', contrastCol);
+  let type1ThreatEntries = null;
+  if (typeResult.type === 'type1') {
+    // Type 1: build allowedSet from board state, no simulation needed
+    const threatEntries = buildType1AllowedSet(board, perspective);
+    type1ThreatEntries = threatEntries;
+    // Add the played column (col A) so the LLM can reference it and its landing cell.
+    // Without this, any [zone:colA] or [zone:cArN] reference fails P5strong even though
+    // the Task prompt instructs the LLM to explain what col A gave up.
+    const landingRow = board.colHeights[col]; // 0-indexed; disc lands here after the move
+    allowedSet = [...threatEntries, {
+      cells: [`c${col + 1}r${landingRow + 1}`],
+      zoneSpec: `col${col + 1}`,
+    }];
+    console.log('[DEBUG buildExplainContext] type1 allowedSet:', JSON.stringify(allowedSet));
+  } else {
+    // Types 2/3/4: run simulations
+    const anchorRow = board.colHeights[col];
+    const contrastAnchorRow = board.colHeights[contrastCol];
 
-  const zThreatNarration = zResult.matched && zResult.highlightMetadata?.badgeCount != null
-    ? `The Z-Threat in column ${zResult.highlightMetadata.column + 1} has an odd gap count of ${zResult.highlightMetadata.badgeCount}. This odd count means the opponent cannot block this threat — every move they make in this column fills an odd cell, advancing Yellow toward the winning even row.`
-    : null;
+    const [userResult, contrastResult] = await Promise.all([
+      explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
+      explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
+    ]);
 
-  const figure7Narration = fig7Result.matched && fig7Result.categoryEvidence?.threat_cells
-    ? (() => {
-        const rows = [...new Set(fig7Result.categoryEvidence.threat_cells.map(t => t.row))];
-        return `The Figure-7 creates threats at rows ${rows.map(r => r + 1).join(' and ')} (1-indexed) that cannot both be blocked. Blocking one leaves the other exposed — and turn order guarantees the player wins.`;
-      })()
-    : null;
-
-  const jShapeNarration = jResult.matched
-    ? 'The J-Shape cluster creates three simultaneous winning threats: vertical, horizontal, and diagonal. The opponent would need three moves to block all three — they only get one.'
-    : null;
-
-  const userExamplesByPattern = {};
-  for (const [name, entry] of Object.entries(userResult.patterns)) {
-    if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+    topGroups = selectTopGroups(userResult.groups, contrastResult.groups);
+    allowedSet = buildAllowedSet(topGroups, postBoard, perspective);
   }
 
-  const isImmediateWin = postBoard.hasWon(perspective);
+  // ── 8. Build board visualizations ─────────────────────────────────────────
+  const [boardViz, postBoardViz, afterOpponentBoardViz] = await Promise.all([
+    getBoardVisualization(movestring || ''),
+    getBoardVisualization(postMovestring),
+    opponentResponseMovestring ? getBoardVisualization(opponentResponseMovestring) : Promise.resolve(null),
+  ]);
 
-  const prompt = buildExplainPrompt({
-    boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
-    userCol: col, contrastCol, isOptimal, isImmediateWin, positionTier, deltaRows,
-    insufficientTacticalData, allLinesDecided, rounds: r,
-    totalLeaves: userResult.totalLeaves,
-    userOutcomes: userResult.outcomes,
-    contrastOutcomes: contrastResult.outcomes,
-    kbSection, playerName, forcedBlockNote, blunderNote, userExamplesByPattern,
-    claimevenNarration, zThreatNarration, figure7Narration, jShapeNarration,
+  // ── 9. Build context block (T10) ──────────────────────────────────────────
+  const contextBlock = buildGroupContextBlock(topGroups, allowedSet, postBoard, perspective, {
+    userCol: col,
+    contrastCol,
+    gapBucket,
+    gap,
+    inverted,
+    preViz: boardViz,
+    afterViz: afterOpponentBoardViz,
+    type1ThreatEntries,
   });
 
-  return { prompt };
+  // ── 10. Dispatch prompt template (T11/T12/T13) ─────────────────────────────
+  if (typeResult.type === 'type1' || typeResult.type === 'type2') {
+    prompt = buildType12Prompt({
+      playerName, gap, gapBucket, contextBlock, explainType: typeResult.type,
+    });
+  } else if (typeResult.type === 'type3') {
+    prompt = buildType3Prompt({
+      playerName, gap, gapBucket, contextBlock, parityFlipData: typeResult.parityFlipData,
+    });
+  } else {
+    prompt = buildType4Prompt({
+      playerName, gap, gapBucket, contextBlock, inverted,
+    });
+  }
+
+  return { prompt, allowedSet };
 }
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
@@ -758,26 +771,93 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
   }
 
-  // ── 2. Quota decrement (cache miss only) ─────────────────────────────────
-  if (req.user.tier === 'free') {
-    const quota = await checkAndDecrementQuota(req.user);
-    if (!quota.allowed) {
-      return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
-    }
-  }
-
+  // ── 2. LLM call + annotation gate + retry ────────────────────────────────
   try {
     const context = await buildExplainContext(movestring, col, r);
     if (!context) {
+      // No quota consumed for the "all-moves-equal" early exit path
       return res.json({
         explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
         prompt: '',
       });
     }
 
-    const { prompt } = context;
+    if (context.allMovesEqual) {
+      // All moves genuinely settled (all scores zero). FR-007 frozen string.
+      return res.json({
+        explanation: 'All moves are roughly equivalent here — no single best move stands out.',
+        prompt: '',
+      });
+    }
+
+    const { prompt, allowedSet } = context;
+
+    // First attempt
+    console.log('[DEBUG explain-move-llm] allowedSet passed to validateAnnotation:', JSON.stringify(allowedSet));
     const rawExplanation = await callLLM(prompt);
-    const explanation = injectDefaultActiveZone(rawExplanation);
+    let explanation = injectDefaultActiveZone(rawExplanation);
+    console.log('[DEBUG explain-move-llm] rawExplanation:', rawExplanation);
+    let result = validateAnnotation(explanation, board, allowedSet);
+    console.log('[DEBUG explain-move-llm] validateAnnotation result (attempt 1):', JSON.stringify(result));
+
+    if (!result.valid) {
+      // ── Retry (same prompt, bypasses cache and quota) ──────────────────
+      const retryRaw = await callLLM(prompt);
+      const retryExplanation = injectDefaultActiveZone(retryRaw);
+      console.log('[DEBUG explain-move-llm] retryExplanation:', retryExplanation);
+      const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
+      console.log('[DEBUG explain-move-llm] validateAnnotation result (retry):', JSON.stringify(retryResult));
+
+      if (retryResult.valid) {
+        explanation = retryExplanation;
+        result = retryResult;
+      } else {
+        // ── Fallback path: double failure ──────────────────────────────
+        // Read Tier-1 fallback from explanation_cache
+        let fallbackText = 'Detailed explanation unavailable.';
+        if (supabase) {
+          const { data: fallbackRow } = await supabase
+            .from('explanation_cache')
+            .select('deep_reveal_json')
+            .eq('position_hash', positionHash)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (fallbackRow?.deep_reveal_json?.fullText) {
+            fallbackText = fallbackRow.deep_reveal_json.fullText;
+          }
+        }
+
+        // Log failure to deep_reveal_failures
+        if (supabase) {
+          try {
+            await supabase.from('deep_reveal_failures').insert({
+              position_hash: positionHash,
+              movestring,
+              col,
+              endpoint: '/api/explain-move-llm',
+              llm_prompt: prompt,
+              raw_llm_output: retryExplanation,
+              failure_reason: JSON.stringify(retryResult.failures),
+              created_at: new Date().toISOString(),
+            });
+          } catch (insertErr) {
+            console.error('[deep_reveal_failures insert]', insertErr.message);
+          }
+        }
+
+        // No quota consumed for fallback
+        return res.json({ explanation: fallbackText, prompt: null, cached: false });
+      }
+    }
+
+    // ── Valid path: decrement quota (if free-tier), cache, and respond ──
+    if (req.user.tier === 'free' && supabase) {
+      const quota = await checkAndDecrementQuota(req.user);
+      if (!quota.allowed) {
+        return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
+      }
+    }
 
     if (supabase) {
       supabase.from('explanation_cache').insert({

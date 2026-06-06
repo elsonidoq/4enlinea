@@ -49,7 +49,7 @@ Rationale: jsonb for variable-shape structured data; typed columns for values us
 
 Two access tiers:
 
-**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`):
+**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`):
 - Enable RLS.
 - Define **no** public policies.
 - The Express server accesses these exclusively via the service role key, which bypasses RLS.
@@ -76,6 +76,26 @@ Rationale: Supabase enforces explicit grants for all projects (deadline Oct 30 2
 **MUST**: Use sequential 3-digit numeric prefix: `NNN_slug.sql` (e.g., `015_new_puzzle_categories.sql`).
 **MUST**: Each migration file begins with a comment block: migration number, description, and `-- HUMAN REVIEW REQUIRED before applying to production.`
 **MUST NOT**: Skip numbers in the sequence.
+
+## Deep Reveal Failures (`deep_reveal_failures`)
+
+Records LLM outputs that failed annotation validation after retry, for offline analysis.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK, `DEFAULT gen_random_uuid()` |
+| `position_hash` | `text` | NOT NULL — `sha256(movestring:col)` |
+| `movestring` | `text` | NOT NULL — 0-indexed column digits |
+| `col` | `integer` | NOT NULL — 0-indexed column that was explained |
+| `endpoint` | `text` | NOT NULL, DEFAULT `'/api/explain-move-llm'` |
+| `llm_prompt` | `text` | NOT NULL — full prompt sent to the LLM |
+| `raw_llm_output` | `text` | NOT NULL — the retry attempt's raw LLM output (which failed) |
+| `failure_reason` | `text` | NOT NULL — JSON-serialized `string[]` of failure codes from `validateAnnotation` |
+| `created_at` | `timestamptz` | NOT NULL, DEFAULT `now()` |
+
+Access pattern: Backend-only. Server writes via Supabase service-role-key client (bypasses RLS). No public SELECT policies. Never read at runtime by the application.
+
+Migration: `031_deep_reveal_failures.sql`.
 
 ## Games (`games`)
 

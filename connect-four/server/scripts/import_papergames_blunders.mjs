@@ -106,7 +106,7 @@ async function extractBlunders(solver, moveString, side, userId, minSeverity) {
     if (computeSeverity(bestScore, score) < minSeverity) continue;
     let patternTag = 'unknown';
     try {
-      const r = classify(movesBefore, col, scores);
+      const r = classify(movesBefore, bestCol, scores);
       const raw = r?.tag;
       patternTag = raw && VALID_PATTERN_CATEGORIES.has(raw) ? raw : 'unknown';
     } catch (_e) {}

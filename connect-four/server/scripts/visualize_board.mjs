@@ -17,10 +17,11 @@ function rawCell(v) {
 
 // Annotated board: 3-char inner value, rendered as ' VALUE ' (5-char cell).
 // Discs: "R 1" / "Y42"  (player + padStart(2) move number)
-// Major threat: "[R]" / "[Y]" / "[*]" (both)
+// Major threat gravity-top: "<R>" / "<Y>" / "<*>"  ← immediately playable
+// Major threat non-gravity:  "[R]" / "[Y]" / "[*]"
 // Minor threat: "(r)" / "(y)" / "(*)" (both)
 // Empty: "   "
-function annotatedValue(r, c, board, moveGrid, threatMap) {
+function annotatedValue(r, c, board, moveGrid, threatMap, colHeights) {
   const v = board[r][c];
   if (v !== 0) {
     const player = v === 1 ? 'R' : 'Y';
@@ -29,8 +30,10 @@ function annotatedValue(r, c, board, moveGrid, threatMap) {
   const t = threatMap[`${r},${c}`];
   if (!t) return '   ';
   if (t.rm || t.ym) {
-    if (t.rm && t.ym) return '[*]';
-    return t.rm ? '[R]' : '[Y]';
+    const isGT = r === colHeights[c];
+    if (t.rm && t.ym) return isGT ? '<*>' : '[*]';
+    if (t.rm)         return isGT ? '<R>' : '[R]';
+    return                   isGT ? '<Y>' : '[Y]';
   }
   if (t.rn && t.yn) return '(*)';
   return t.rn ? '(r)' : '(y)';
@@ -97,12 +100,18 @@ async function main() {
   console.log('     ' + Array.from({length: COLS}, (_, i) => `   ${i+1}  `).join(''));
   for (let row = ROWS - 1; row >= 0; row--) {
     const cells = Array.from({length: COLS}, (_, c) => {
-      return ' ' + annotatedValue(row, c, board, moveGrid, threatMap) + ' ';
+      return ' ' + annotatedValue(row, c, board, moveGrid, threatMap, colHeights) + ' ';
     }).join('|');
     console.log(`  ${row + 1}  |${cells}|`);
   }
 
   console.log('');
+
+  // Column heights row (5-char cells)
+  const htLine = Array.from({length: COLS}, (_, c) => {
+    return '  ' + String(colHeights[c]).padStart(2) + ' ';
+  }).join('|');
+  console.log(`  ht |${htLine}|  (discs in column)`);
 
   // Parity row (5-char cells): ' NP  ' where N=empty count, P=O/E
   const parLine = Array.from({length: COLS}, (_, c) => {
@@ -130,15 +139,19 @@ async function main() {
   }
   if (majorThreats.length > 0) {
     majorThreats.sort((a, b) => a.col - b.col || a.row - b.row);
-    const list = majorThreats.map(({ col, row, who }) => `col${col} row${row} (${who})`).join('   ');
+    const list = majorThreats.map(({ col, row, who }) => {
+      const isGT = (row - 1) === colHeights[col - 1]; // convert to 0-indexed
+      return `col${col} row${row} (${who})${isGT ? ' [GT]' : ''}`;
+    }).join('   ');
     console.log(`  Major threats: ${list}`);
   } else {
     console.log('  Major threats: none');
   }
 
   console.log('');
-  console.log('  Legend: R/Y = disc(move#)   [R]/[Y] = major threat (3-in-row)   (r)/(y) = minor threat (2-in-row)');
-  console.log('          [*]/(*) = both players   par: O=odd E=even   scr: solver score per column');
+  console.log('  Legend: R/Y = disc(move#)   <R>/<Y> = major threat gravity-top (immediately playable)');
+  console.log('          [R]/[Y] = major threat non-gravity   (r)/(y) = minor threat   [GT] = gravity-top in threats list');
+  console.log('          [*]/(*) = both players   ht: disc count   par: O=odd E=even   scr: solver score per column');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

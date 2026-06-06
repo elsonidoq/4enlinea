@@ -28,6 +28,7 @@ import {
   detectClaimodd,
   detectClaimeven,
 } from './classifier.js';
+import { findMajorThreatWindows } from './llmCoachHelpers.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -158,6 +159,70 @@ async function getScores(ms, solver, cache, stats) {
 }
 
 /**
+ * Scans all 4-windows (same window set as getMajorThreatCells, findMajorThreatWindows)
+ * and returns the first window where all 4 cells are occupied by `player`.
+ *
+ * Cell format: wire format c${col+1}r${row+1} (1-indexed) to match allowedSet.cells format.
+ *
+ * @param {Board} board  Board instance (board.board[row][col] where row 0 = bottom)
+ * @param {number} player  1 or 2
+ * @returns {string[]|null}  4 wire-format coords, or null if no winning group found
+ */
+function findWinningGroup(board, player) {
+  const ROWS = 6;
+  const COLS = 7;
+
+  function checkWindow(cells) {
+    for (const { r, c } of cells) {
+      if (board.board[r][c] !== player) return false;
+    }
+    return true;
+  }
+
+  function toWire(cells) {
+    return cells.map(({ r, c }) => `c${c + 1}r${r + 1}`);
+  }
+
+  // Horizontal
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      const cells = [{ r, c }, { r, c: c + 1 }, { r, c: c + 2 }, { r, c: c + 3 }];
+      if (checkWindow(cells)) return toWire(cells);
+    }
+  }
+
+  // Vertical
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cells = [{ r, c }, { r: r + 1, c }, { r: r + 2, c }, { r: r + 3, c }];
+      if (checkWindow(cells)) return toWire(cells);
+    }
+  }
+
+  // Diagonal-up
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      const cells = [
+        { r, c }, { r: r + 1, c: c + 1 }, { r: r + 2, c: c + 2 }, { r: r + 3, c: c + 3 },
+      ];
+      if (checkWindow(cells)) return toWire(cells);
+    }
+  }
+
+  // Diagonal-down
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 3; c < COLS; c++) {
+      const cells = [
+        { r, c }, { r: r + 1, c: c - 1 }, { r: r + 2, c: c - 2 }, { r: r + 3, c: c - 3 },
+      ];
+      if (checkWindow(cells)) return toWire(cells);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Recursively collects leaf board states by following tied-best moves for numPlies.
  * "Optimal" always means tied-best for whoever is currently to move — this correctly
  * models both players playing optimally without special-casing perspective.
@@ -185,7 +250,7 @@ async function getScores(ms, solver, cache, stats) {
  * @param {Map<string, Array>}    classCache  classification result cache (dedup)
  * @param {DetectorEntry[]}       registry    active detector list
  * @param {{calls: number, hits: number}} stats  solver call counter
- * @returns {Promise<Array<{leafType: string, patterns: Array|null, currentPlayer: number, ms?: string}>>}
+ * @returns {Promise<Array<{leafType: string, patterns: Array|null, currentPlayer: number, ms?: string, groups: Array<{cells: string[], owner: string, type: string}>}>>}
  */
 async function collectLeaves(ms, numPlies, perspective, solver, cache, classCache, registry, stats) {
   const board = new Board(ms);
@@ -198,24 +263,41 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
 
   if (isTerminal) {
     let leafType;
-    if (wonByPerspective)   leafType = 'won_by_perspective';
-    else if (wonByOpponent) leafType = 'won_by_opponent';
-    else                    leafType = 'draw';
-    // Won/draw positions carry no useful pattern data for the perspective player.
-    return [{ leafType, patterns: null, currentPlayer: board.currentPlayer }];
+    let groups = [];
+    if (wonByPerspective) {
+      leafType = 'won_by_perspective';
+      const winningGroup = findWinningGroup(board, perspective);
+      if (winningGroup) {
+        groups = [{ cells: winningGroup, owner: 'player', type: 'completed' }];
+      }
+    } else if (wonByOpponent) {
+      leafType = 'won_by_opponent';
+      const winningGroup = findWinningGroup(board, opponent);
+      if (winningGroup) {
+        groups = [{ cells: winningGroup, owner: 'opponent', type: 'completed' }];
+      }
+    } else {
+      leafType = 'draw';
+      groups = findMajorThreatWindows(board, perspective).map(g => ({
+        cells: g.cells,
+        owner: g.owner,
+        type: 'draw_threat',
+      }));
+    }
+    return [{ leafType, patterns: null, currentPlayer: board.currentPlayer, groups }];
   }
 
   if (numPlies === 0) {
     // Only classify if it's perspective's turn — opponent-to-move leaves are not useful.
     if (board.currentPlayer !== perspective) {
-      return [{ leafType: 'depth_limit', patterns: null, currentPlayer: board.currentPlayer }];
+      return [{ leafType: 'depth_limit', patterns: null, currentPlayer: board.currentPlayer, groups: [] }];
     }
     // Dedup: if this position was already classified via a transposition, skip.
     if (classCache.has(ms)) return [];
     const scores = await getScores(ms, solver, cache, stats);
     const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
-    return [{ leafType: 'depth_limit', patterns, currentPlayer: board.currentPlayer, ms }];
+    return [{ leafType: 'depth_limit', patterns, currentPlayer: board.currentPlayer, ms, groups: [] }];
   }
 
   const scores = await getScores(ms, solver, cache, stats);
@@ -234,7 +316,7 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
   if (board.currentPlayer === perspective && !classCache.has(ms)) {
     const patterns = await runDetectors(board, scores, solver, registry);
     classCache.set(ms, patterns);
-    leaves.push({ leafType: 'intermediate', patterns, currentPlayer: board.currentPlayer, ms });
+    leaves.push({ leafType: 'intermediate', patterns, currentPlayer: board.currentPlayer, ms, groups: [] });
   }
 
   for (const col of optimalCols) {
@@ -264,9 +346,9 @@ async function collectLeaves(ms, numPlies, perspective, solver, cache, classCach
  * @param {{col: number, row: number}} anchorCell
  * @param {number} perspective  1 or 2
  * @param {DetectorEntry[]} registry  — determines which pattern keys appear in output
- * @returns {{ patterns: object, outcomes: object }}
+ * @returns {{ patterns: object, outcomes: object, groups: Map<string, {cells: string[], owner: string, completed_freq: number, draw_freq: number}>, totalLeaves: number }}
  */
-function aggregateLeaves(leaves, anchorCell, perspective, registry) {
+export function aggregateLeaves(leaves, anchorCell, perspective, registry) {
   // Outcome counters
   let wonByPerspective  = 0;
   let wonByOpponent     = 0;
@@ -287,7 +369,29 @@ function aggregateLeaves(leaves, anchorCell, perspective, registry) {
     };
   }
 
+  // Groups accumulator — Map<string, { cells, owner, completedCount, drawCount }>
+  const groupsMap = new Map();
+
   for (const leaf of leaves) {
+    // Process groups for ALL leaf types (must happen before the outcome continue statements)
+    if (leaf.groups) {
+      for (const group of leaf.groups) {
+        const canonicalCells = [...group.cells].sort().join(',');
+        const key = `${canonicalCells}:${group.owner}`;
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, {
+            cells: group.cells,
+            owner: group.owner,
+            completedCount: 0,
+            drawCount: 0,
+          });
+        }
+        const entry = groupsMap.get(key);
+        if (group.type === 'completed') entry.completedCount++;
+        else if (group.type === 'draw_threat') entry.drawCount++;
+      }
+    }
+
     if (leaf.leafType === 'won_by_perspective') { wonByPerspective++; continue; }
     if (leaf.leafType === 'won_by_opponent')    { wonByOpponent++;    continue; }
     if (leaf.leafType === 'draw')               { draws++;            continue; }
@@ -331,6 +435,17 @@ function aggregateLeaves(leaves, anchorCell, perspective, registry) {
   }
 
   const total = leaves.length;
+
+  // Convert group counts to frequencies and build AggregatedGroup entries
+  for (const [, entry] of groupsMap) {
+    const completed_freq = total > 0 ? entry.completedCount / total : 0;
+    const draw_freq = total > 0 ? entry.drawCount / total : 0;
+    entry.completed_freq = completed_freq;
+    entry.draw_freq = draw_freq;
+    delete entry.completedCount;
+    delete entry.drawCount;
+  }
+
   return {
     patterns: agg,
     outcomes: {
@@ -343,6 +458,8 @@ function aggregateLeaves(leaves, anchorCell, perspective, registry) {
       lossRate: total > 0 ? wonByOpponent    / total : 0,
       drawRate: total > 0 ? draws            / total : 0,
     },
+    groups: groupsMap,
+    totalLeaves: total,
   };
 }
 
@@ -384,7 +501,7 @@ export async function explainSimulate(movestring, numPlies, anchorCell, perspect
   const stats = { calls: 0, hits: 0 };
 
   const leaves = await collectLeaves(movestring, numPlies, perspective, solver, cache, classCache, registry, stats);
-  const { patterns, outcomes } = aggregateLeaves(leaves, anchorCell, perspective, registry);
+  const { patterns, outcomes, groups } = aggregateLeaves(leaves, anchorCell, perspective, registry);
 
   return {
     totalLeaves: leaves.length,
@@ -392,6 +509,7 @@ export async function explainSimulate(movestring, numPlies, anchorCell, perspect
     perspective,
     patterns,
     outcomes,
+    groups,
     timing: {
       totalMs: Date.now() - t0,
       solverCalls: stats.calls,

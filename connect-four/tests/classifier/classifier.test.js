@@ -92,6 +92,17 @@ describe('classify() false-positive regressions', () => {
   });
 });
 
+describe('classify() forced_block', () => {
+  // Regression: 4435451225, blunder col=1 (0-indexed).
+  // Yellow has an immediate vertical threat at col5 (0-indexed). Red played col1
+  // (failed to block). The import script must classify bestCol (col5), not the
+  // blunder column, to correctly tag the puzzle category as forced_block.
+  test('4435451225 bestCol=5 in forced-block position — must be tagged forced_block', () => {
+    const result = classify('4435451225', 5, [-16, -16, -16, -16, -16, 2, -16]);
+    assert.equal(result.tag, 'forced_block');
+  });
+});
+
 describe('classify() double_threat', () => {
   // Existing fixtures kept
   test('3344 col2 → double_threat', () => {
@@ -123,6 +134,14 @@ describe('classify() double_threat', () => {
   // Also: movestring that is Cat 3 via the new Cat 1 regression position
   test('3133101113201232540 col2 → double_threat (not immediate_threat)', () => {
     const result = classify('3133101113201232540', 2, [2, -1000, 11, 4, 9, 8, 7]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // Regression: blunder record 5b0db593 — classifying the CORRECT move (col3)
+  // must return double_threat. The bug was an upstream stale DB row tagged
+  // 'unknown'; the classifier itself returns the right tag for the correct col.
+  test('444432655223 col3 → double_threat (blunder correct-move classification)', () => {
+    const result = classify('444432655223', 3, [-14, -15, -14, 14, -14, 14, -14]);
     assert.equal(result.tag, 'double_threat');
   });
 

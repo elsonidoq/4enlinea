@@ -85,6 +85,7 @@
 - [Commit-first: click = immediate commit](project_commit_first_no_confirm.md) — no confirmation step; pendingMove state dead; confirm/cancel buttons removed 2026-05-27
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category; don't reuse the slug
 - [Coach + Deep Reveal product docs](project_coach_deep_reveal_docs.md) — coach_explanation_principles.md (content) + deep_reveal_product.md (AUTHORITATIVE annotation layer, P1–P6, read-aloud deferred) + deep_reveal_improvements.md (stale prior-art, Phase 1 already shipped); real new work = server-side validate-then-cache
+- [Blunder tagging design decisions](project_blunder_tagging_design.md) — storage gate independent of tagging; forced_win first-class pattern; unknown eliminated → suboptimal_move; reason TEXT column; tagBlunder never throws; 4-epic plan
 - [Epic 4 implementation state](project_epic4_implementation.md) — all 4 lesson screens + API shipped; lessons/ at connect-four/lessons/; ChallengeScreen lessonMode wired; key gotchas documented
 
 ## Project — implementation details
@@ -127,6 +128,8 @@
 
 - [Sparring games table design](project_sparring_games_table.md) — side='first'/'second' enum; anonymous users DO write server rows; Epic 3b dependency on game_id; GRANT required
 - [checkWin extraction needed](project_checkwin_extraction.md) — private fn in HomePage.jsx line 39; signature (board,row,col,color); must extract to src/lib/board.js before GameScreen
+
+- [Epic A + B annotation gate & coach rebuild — done](project_epic_a_annotation_gate.md) — spec 021 (gate P1-P6) + spec 022 (4-type coach, grounding contract, strong-P5, allowedSet) both shipped on branch `101-new-design`; 311 tests pass; migration 031 pending apply
 
 ## Project — open bugs
 
