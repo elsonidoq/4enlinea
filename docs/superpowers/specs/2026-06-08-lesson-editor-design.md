@@ -38,7 +38,7 @@ A full lesson editor at `/admin/lessons` inside the existing React app. The edit
 
 | Route | Screen |
 |---|---|
-| `/admin` | `AdminLessonListScreen` — list all lessons with edit/new/delete actions |
+| `/admin/lessons` | `AdminLessonListScreen` — list all lessons with edit/new/delete actions |
 | `/admin/lessons/new` | `AdminLessonEditorScreen` — blank lesson form |
 | `/admin/lessons/:id` | `AdminLessonEditorScreen` — edit existing lesson |
 
@@ -72,7 +72,7 @@ The board widget is the core of the editor. It is shared between slide boards an
 - Paste or type any movestring → board renders that game position immediately
 - The field is the source of truth for disc positions
 - The board display uses `boardSpecToBoard` derived from parsing the movestring
-- **Column indexing**: movestring digits are 1-indexed (c4solver convention, columns 1–7); overlay `(c, r)` coordinates and `correctCol` are 0-indexed (project internal convention). The board widget handles this translation — the author never sees raw indices.
+- **Column indexing**: movestring digits are 0-indexed (columns 0–6), consistent with all internal project conventions. Only `c4solver-wrapper.js` translates to 1-indexed when invoking the solver; the lesson editor never touches that layer.
 - **Player assignment**: odd-numbered moves (1st, 3rd, …) are placed as `'g'` (green/player 1); even-numbered moves are placed as `'d'` (gray/player 2). This determines which color disc appears when the author clicks a column.
 
 ### Board interaction (disc placement)
