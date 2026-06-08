@@ -27,6 +27,9 @@
 
 - There is a working PoC to import games from papergames (./connect-four/server/scripts/import_papergames_blunders.mjs). The user should be able to set the papergames id into the profile and click import. Free tier imports the last 5 games. Imported games must have the papergames metadata
 
+
+- the curation page, instead of having one component per category, must have a drop down to select what puzzle type we want to generate. Those puzzle types must be the same as the blunders categories
+
 - when you go to the next board in a challenge set, the pieces that are shared between the previous board and the next board just appear, but the new ones introduced by the next board fall using the animation like if you were dropping them. In the first board all pieces fall. The pieces that are already in the board should not perform any effect, just appear in the board
 
 - The coach reads the deep reveal. As the coach mentions rows, columns, cells or regions the board is highlighted on the corresponding zone so it is easy to understand what the coach talks about. In the text, also rows, columns, cells and regions are highlighted if the user performs a tap or mouse over 
@@ -44,7 +47,7 @@
     - Games I had horrible blunders
     - Recent games
 
-- All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of the blunders must be through those categories
+- All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of blunders should be either through categories, and browse recent blunders
 
 - Accuracy by pattern is wrong, shows 100% accuracy when I failed 3 puzzles and got one correct
 

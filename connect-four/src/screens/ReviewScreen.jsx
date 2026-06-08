@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -6,12 +6,9 @@ import { TopBar } from '../components/TopBar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard } from '../lib/board.js';
-import { PAID_CATEGORIES, CATEGORY_ORDER } from '../lib/categories.js';
+import { PAID_CATEGORIES } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
-
-// VALID_CATEGORIES includes all categories defined in CATEGORY_ORDER
-const VALID_CATEGORIES = new Set(CATEGORY_ORDER);
 
 function getQualityColor(quality) {
   if (quality === 'optimal') return 'var(--eval-good)';
@@ -27,13 +24,6 @@ export function ReviewScreen({ go, goBack, id }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMistakeIdx, setSelectedMistakeIdx] = useState(0);
-  const blundersWrittenRef = useRef(false);
-
-  useEffect(() => {
-    // Reset the guard when id changes
-    blundersWrittenRef.current = false;
-  }, [id]);
-
   useEffect(() => {
     if (!id) {
       setError(t('sparring.reviewNoGame'));
@@ -69,37 +59,6 @@ export function ReviewScreen({ go, goBack, id }) {
         setSelectedMistakeIdx(0);
         setLoading(false);
 
-        // Fire blunder writes (fire-and-forget) for authenticated users with blunders.
-        // Guard with a ref to avoid duplicates from double-mounts (Strict Mode, re-navigation).
-        if (session?.user?.id && data.blunderCount > 0 && !blundersWrittenRef.current) {
-          blundersWrittenRef.current = true;
-          const blunderMoves = (data.moves || []).filter(m => m.quality === 'blunder');
-          for (const move of blunderMoves) {
-            const plyIndex = data.side === 'first'
-              ? (move.moveIndex - 1) * 2
-              : (move.moveIndex - 1) * 2 + 1;
-            const board_state = data.fullMovestring.slice(0, plyIndex);
-            const category = move.patternTag && VALID_CATEGORIES.has(move.patternTag)
-              ? move.patternTag
-              : 'unknown';
-            fetch(`${API}/api/blunders`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
-              },
-              body: JSON.stringify({
-                board_state,
-                move_played: move.col,
-                correct_move: move.bestCol,
-                pattern_category: category,
-                score: move.score,
-                best_score: move.bestScore,
-                blunder_severity: move.blunderSeverity ?? null,
-              }),
-            }).catch(() => {});
-          }
-        }
 
         // Analytics
         const accuracy = data.scored > 0

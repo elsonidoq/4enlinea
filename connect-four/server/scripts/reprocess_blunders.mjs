@@ -6,17 +6,12 @@
 //   node --env-file=connect-four/server/.env connect-four/server/scripts/reprocess_blunders.mjs
 
 import { createClient } from '@supabase/supabase-js';
-import { classify } from '../classifier.js';
+import { classify, tagBlunder } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from '../moveQualityScorer.js';
+import { VALID_BLUNDER_TAGS } from '../blunderTags.js';
 
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
-
-const VALID_PATTERN_CATEGORIES = new Set([
-  'immediate_threat', 'forced_block', 'double_threat', 'forced_win',
-  'forbidden_columns', 'z_threat', 'claimeven', 'undercut', 'overcut',
-  'figure_7', 'j_shape', 'unknown',
-]);
 const INVALID_MOVE = -1000;
 const BLUNDER_SEVERITY_DEPTH = 3;
 
@@ -90,12 +85,15 @@ async function main() {
       // provides the graduated measure. A drop from -2 to -15 is a meaningful
       // blunder even if the position was already theoretically lost.
 
-      let patternTag = 'unknown';
+      let patternTag = 'suboptimal_move';
+      let reason = 'solver error: tagBlunder failed';
+      let direction = 'missed_own';
       try {
-        const classifyResult = classify(movesBeforeThisPly, col, scores);
-        const raw = classifyResult?.tag;
-        patternTag = raw && VALID_PATTERN_CATEGORIES.has(raw) ? raw : 'unknown';
-      } catch (_e) { /* leave unknown */ }
+        const result = await tagBlunder(movesBeforeThisPly, col, bestCol, solver);
+        patternTag = VALID_BLUNDER_TAGS.has(result.tag) ? result.tag : 'suboptimal_move';
+        reason = result.reason;
+        direction = result.direction;
+      } catch (_e) { /* leave fallback values */ }
 
       let severityFraction = null;
       try {
@@ -111,6 +109,8 @@ async function main() {
         move_played: col,
         correct_move: bestCol,
         pattern_category: patternTag,
+        reason,
+        direction,
         severity: computeSeverity(bestScore, score),
         // blunder_severity stores the tree-scan fraction (0–1); null if scan failed.
         // This column may not exist yet — the insert will succeed anyway since

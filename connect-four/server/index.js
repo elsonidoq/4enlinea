@@ -6,7 +6,9 @@ import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
+import { classify, checkWin, classifyAll, Board, getImmediateThreats, tagBlunder } from './classifier.js';
+import { VALID_BLUNDER_TAGS } from './blunderTags.js';
+import { insertGameBlunder } from './insertGameBlunder.js';
 import { explainSimulate } from './explainSimulate.js';
 import {
   TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
@@ -993,6 +995,14 @@ app.post('/api/blunders', async (req, res) => {
   // was already theoretically lost (as all second-player positions are).
 
   try {
+    // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
+    const safeCategory = VALID_BLUNDER_TAGS.has(pattern_category)
+      ? pattern_category
+      : 'suboptimal_move';
+    if (!VALID_BLUNDER_TAGS.has(pattern_category)) {
+      console.warn(`POST /api/blunders: unrecognized pattern_category '${pattern_category}' substituted with 'suboptimal_move'`);
+    }
+
     // Plain insert — the partial unique index (migration 030) guards against
     // duplicates on (user_id, board_state, move_played) WHERE puzzle_id IS NULL.
     // Supabase upsert can't resolve conflicts against partial indexes, so we
@@ -1005,7 +1015,7 @@ app.post('/api/blunders', async (req, res) => {
         board_state,
         move_played,
         correct_move,
-        pattern_category,
+        pattern_category: safeCategory,
         severity: computeSeverity(best_score, score),
         blunder_severity: req.body.blunder_severity ?? null,
       })
@@ -1482,12 +1492,23 @@ app.post('/api/games/analyze', async (req, res) => {
       const bestScore = scores[bestCol];
 
       // Classify the position
+      // tagBlunder replaces the old classify() call for blunder tagging.
+      // It may issue 60+ solver queries per blunder ply — acceptable because
+      // this endpoint is called post-game, not during interactive play.
       let patternTag = null;
-      try {
-        const classifyResult = classify(movesBeforeThisPly, col, scores);
-        patternTag = classifyResult?.tag ?? null;
-      } catch (_e) {
-        patternTag = null;
+      let reason = null;
+      let direction = null;
+      if (quality === 'blunder') {
+        try {
+          const tagResult = await tagBlunder(movesBeforeThisPly, col, bestCol, solver);
+          patternTag = tagResult.tag;
+          reason = tagResult.reason;
+          direction = tagResult.direction;
+        } catch (_e) {
+          patternTag = 'suboptimal_move';
+          reason = 'solver error: tagBlunder threw';
+          direction = 'missed_own';
+        }
       }
 
       // Scan 3 plies of the post-blunder tree to compute what fraction of
@@ -1514,8 +1535,26 @@ app.post('/api/games/analyze', async (req, res) => {
         bestScore,
         bestCol,
         patternTag,
+        reason,
+        direction,
         blunderSeverity,
       });
+
+      // Server-side blunder INSERT — fire-and-forget relative to the HTTP response.
+      // Anonymous users skip the INSERT (user_id would be NULL).
+      if (req.user && quality === 'blunder') {
+        await insertGameBlunder(supabase, {
+          user_id: req.user.id,
+          board_state: movesBeforeThisPly,
+          move_played: col,
+          correct_move: bestCol,
+          pattern_category: patternTag,
+          reason,
+          direction,
+          severity: computeSeverity(bestScore, score),
+          blunder_severity: blunderSeverity,
+        });
+      }
 
       // Only count non-forced moves toward accuracy
       if (legalCount > 1) {

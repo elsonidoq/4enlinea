@@ -56,6 +56,18 @@ Current slugs (as of Epic 6): `immediate_threat`, `forced_block`, `double_threat
 `odd_even_threat` was added in Epic 6 as a free 2-star category. It is Red-only, `single_move` interaction mode, and has no `highlight_metadata`. Detection uses `immediateThreats` not `getMajorThreatCells`.
 **MUST NOT**: Hard-code category slug lists anywhere else in server code — always import from `categories.js`.
 
+## Blunder Tag Registry
+
+**MUST**: All valid blunder tags are defined once in `server/blunderTags.js` as the `VALID_BLUNDER_TAGS` Set.
+
+The set contains exactly 15 tags (as of Epic 2 batch 1): `immediate_threat`, `forced_block`, `forced_win`, `double_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`, `z_threat`, `odd_even_threat`, `claimeven`, `claimodd`, `drawing_move`, `suboptimal_move`, `forbidden_columns`.
+
+`VALID_BLUNDER_TAGS` is distinct from `VALID_CATEGORIES` in `server/categories.js` (which lists puzzle category slugs). Blunder tags are applied to sparring-game blunders via `tagBlunder()` in `classifier.js`. Any tag not in this set is substituted with `'suboptimal_move'` before INSERT into the `blunders` table.
+
+**MUST** import `VALID_BLUNDER_TAGS` from `server/blunderTags.js` wherever a blunder tag is validated (e.g., the `POST /api/games/analyze` endpoint guard).
+**MUST NOT** duplicate the tag set locally — always import from `blunderTags.js`.
+**MUST NOT** conflate `VALID_BLUNDER_TAGS` with `VALID_CATEGORIES` — they serve different purposes.
+
 ## Classifier vs Predicate Evaluator — Explicit Separation
 
 **MUST NOT** conflate these two systems — they are independent:
@@ -74,6 +86,58 @@ New category evaluators MUST be added as a named function `eval<CategoryCamelCas
 
 Categories that store their answer in `highlightMetadata` (z_threat, undercut, overcut) read `puzzle.highlightMetadata`.
 Categories that store their answer as a scalar (claimeven, figure_7, j_shape) read `puzzle.correctCol`.
+
+## Classifier API — Perspective, classifyPattern, and tagBlunder
+
+`classifier.js` exposes two functions beyond the category-level `classify()`:
+
+### `classifyPattern(ms, perspective, solver)`
+
+```js
+classifyPattern(ms, perspective, solver) → Promise<Set<string>>
+```
+
+Returns the set of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Tags are drawn from all 13 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
+
+- `ms` — 0-indexed movestring.
+- `perspective` — 1 (Red) or 2 (Yellow). The player whose patterns to detect.
+- `solver` — c4solver wrapper with `.query(ms)` method.
+
+**Inline detector list**: `classifyPattern` maintains its own inline list of 13 detectors. This list MUST be kept in sync with `DETECTOR_REGISTRY` in `explainSimulate.js`. `classifyPattern` must NOT import `DETECTOR_REGISTRY` directly to avoid a circular dependency (`explainSimulate.js` imports from `classifier.js`).
+
+**Detector perspective parameter**: Every `detect*` function accepts a `perspective` parameter defaulting to `board.currentPlayer`. When `classifyPattern` calls detectors, it passes the explicit `perspective` — never relying on the default.
+
+### `tagBlunder(moves, playedCol, correctCol, solver)`
+
+```js
+tagBlunder(moves, playedCol, correctCol, solver) → Promise<{ tag: string, direction: string, reason: string }>
+```
+
+Tags a blunder with the tactical pattern the player missed. Never throws — all errors resolve to the solver-error fallback `{ tag: 'suboptimal_move', direction: 'missed_own', reason: 'solver error: ...' }`.
+
+- `moves` — 0-indexed movestring of the position where the blunder was made.
+- `playedCol` — 0-indexed column the player actually played.
+- `correctCol` — 0-indexed best column.
+- `solver` — c4solver wrapper.
+
+`direction` is one of:
+- `'defensive_miss'` — blunderer had `forced_block` before playing (Step 1).
+- `'enabled_opponent'` — the wrong move gives the opponent a pattern (Steps 2, 4).
+- `'missed_own'` — the blunderer had a pattern before playing but lost it by playing elsewhere (Steps 3, 5 fallback).
+
+**Priority cascade**: Step 1 (defensive_miss) > Step 2 (enabled_opponent, 1-ply) > Step 3 (missed_own) > Step 4 (enabled_opponent, continuation) > Step 5 (score-based fallback).
+
+### FR-033: Two-step perspective contract
+
+Five score-consuming detectors implement a **recursive two-step** pattern when called with a `perspective` that differs from `board.currentPlayer`:
+
+- `detectForcedBlock`, `detectForcedWin`, `detectZThreat`, `detectOddEvenThreat`, `detectForbiddenColumns`
+
+When `perspective !== board.currentPlayer && solver !== null`, each detector recursively evaluates **all** child positions (one per playable column) from the requested perspective. The pattern matches only if it matches from the requested perspective in **every** child position.
+
+This IIFE (`(async () => { ... })()`) returns a Promise, so these five detectors become async when the perspective changes. The IIFE shields against terminal child positions (where the solver rejects) by returning `{ matched: false }` — a terminal game cannot exhibit tactical patterns.
+
+Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectUndercut`, `detectOvercut`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
 
 ## Board Class
 

@@ -16,20 +16,16 @@
 //           replayData.players[j].symbol = 'circle-dark' (first) | 'circle-light' (second)
 
 import { createClient } from '@supabase/supabase-js';
-import { classify } from '../classifier.js';
+import { classify, tagBlunder } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from '../moveQualityScorer.js';
+import { VALID_BLUNDER_TAGS } from '../blunderTags.js';
 
 const PAPERGAMES_ACCOUNT_ID = '69e773d36bf9938bffc1509a';
 const ROOMS_PAGE_SIZE = 50;
 const INVALID_MOVE = -1000;
 const BLUNDER_SEVERITY_DEPTH = 3;
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
-const VALID_PATTERN_CATEGORIES = new Set([
-  'immediate_threat', 'forced_block', 'double_threat', 'forced_win',
-  'forbidden_columns', 'z_threat', 'claimeven', 'undercut', 'overcut',
-  'figure_7', 'j_shape', 'unknown',
-]);
 
 function parseArgs(argv) {
   const args = {};
@@ -104,11 +100,14 @@ async function extractBlunders(solver, moveString, side, userId, minSeverity) {
     const score = scores[col];
     const bestScore = scores[bestCol];
     if (computeSeverity(bestScore, score) < minSeverity) continue;
-    let patternTag = 'unknown';
+    let patternTag = 'suboptimal_move';
+    let reason = 'solver error: tagBlunder failed';
+    let direction = 'missed_own';
     try {
-      const r = classify(movesBefore, bestCol, scores);
-      const raw = r?.tag;
-      patternTag = raw && VALID_PATTERN_CATEGORIES.has(raw) ? raw : 'unknown';
+      const result = await tagBlunder(movesBefore, col, bestCol, solver);
+      patternTag = VALID_BLUNDER_TAGS.has(result.tag) ? result.tag : 'suboptimal_move';
+      reason = result.reason;
+      direction = result.direction;
     } catch (_e) {}
     let severityFraction = null;
     try {
@@ -122,6 +121,8 @@ async function extractBlunders(solver, moveString, side, userId, minSeverity) {
       move_played: col,
       correct_move: bestCol,
       pattern_category: patternTag,
+      reason,
+      direction,
       severity: computeSeverity(bestScore, score),
       blunder_severity: severityFraction,
     });

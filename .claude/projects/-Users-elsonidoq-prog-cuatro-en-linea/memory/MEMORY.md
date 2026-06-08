@@ -18,6 +18,7 @@
 - [Migration constraint order](feedback_migration_constraint_order.md) — drop constraints before updating data, not after; learned from broken migration 013
 - [c4solver binary stale/crash fix](feedback_binary_rebuild.md) — exit 137 or wrong behavior: delete binary and `make` (Makefile copies to server/ automatically)
 - [Server restart kills Vite](feedback_server_restart.md) — pkill on server/index.js kills Vite too (same terminal process group); tell user to restart manually
+- [Server testing pattern — extract helper + node --test](feedback_server_testing_pattern.md) — no endpoint test harness exists; extract thin helpers and unit-test with node --test (NOT Jest); never mock supabase module-level client
 - [LLM perspective bug — name the player explicitly](feedback_llm_perspective_bug.md) — post-move board says "Next: Yellow" → LLM adopts opponent's perspective; fix with a `## Move context` section
 - [Mobile tap highlight fix](feedback_mobile_tap_highlight.md) — tappable non-button elements need `WebkitTapHighlightColor: transparent` + `userSelect: none`; native `<button>` exempt
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons; no abstract Allis rules (except Claimeven + Claimodd which are concrete and visual)
@@ -35,7 +36,8 @@
 
 - [Coordinate convention](reference_coordinate_convention.md) — all internal coords 0-indexed; only two translation boundaries: frontend display + c4solver-wrapper
 - [c4solver score semantics](reference_c4solver_scores.md) — sign=current-player perspective; magnitude=speed of outcome; range [-18,+18]; book encodes as score+19 (0=not in book)
-- [c4solver behavioral quirks](reference_c4solver_behavior.md) — hangs on strings through winning moves; flat scores at forced-win terminals; JS score formula off-by-1 on odd moveCount; never use score threshold to detect immediate wins
+- [c4solver behavioral quirks](reference_c4solver_behavior.md) — returns error (not silent hang) for winning-move strings; scores invalid at won positions; JS score formula off-by-1 on odd moveCount; never use score threshold to detect immediate wins
+- [c4solver score universality trap](reference_c4solver_score_universality.md) — max(scores)<0 = ALL moves lose; min(scores)<0 = SOME move loses; sign flip causes false positives for forced_win; use recursive approach for non-mover perspective (FR-033 in spec 023)
 - [Cat 4 forced_win forced-block detection](reference_cat5_forced_block_detection.md) — solver scores can't identify forced block in forced-win terminal; use direct board checkWin instead
 - [POST /api/scores contract](reference_api_scores_endpoint.md) — POST (not GET); body {moves}; response {scores: number[7]}; INVALID_MOVE=-1000 sentinel; filter strictly before ranking
 
@@ -90,6 +92,9 @@
 
 ## Project — implementation details
 
+- [Epic 1 patterns-blunders implementation state](project_epic1_patterns_blunders.md) — 38 tasks done; classifyPattern + tagBlunder exported; migrations 032–034 applied; no call sites wired (Epic 2 scope)
+- [Epic 2 patterns-blunders implementation state](project_epic2_patterns_blunders.md) — **DONE** 2026-06-07 (11/13 tasks; T010 backfill pending); debugging gotcha: fire-and-forget INSERT silently drops blunders when req.user is null
+- [Epic 3 coach explanation rebuild — scope defined](project_epic3_coach_rebuild.md) — replace explainSimulate with tagBlunder+classifyPattern; remove classifyAll; 13–17 tasks; defined in epics doc, not yet specced
 - [Classifier current state + T037–T048 pending](project_classifier_current_state.md) — Cat1–Cat5 score-proxy fixes done; J/U/O/F pattern detector bugs NOT yet fixed; FP rates from v2 review
 - [Knowledge base status](project_kb_status.md) — 30 entries done; 9 fact-check errors fixed; 58 gaps in knowledge-base-gaps.md; worked_examples PENDING
 - [LLM explain system](project_explain_system.md) — POST /api/explain-move-llm; data flow, prompt structure, getPositionTier, forced_win leaf boards; review_feedback.sh

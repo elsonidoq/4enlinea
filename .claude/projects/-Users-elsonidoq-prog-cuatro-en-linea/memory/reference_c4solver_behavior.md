@@ -1,23 +1,25 @@
 ---
 name: c4solver behavioral quirks
-description: c4solver rejects input strings containing winning moves; scores at won positions are unreliable
+description: c4solver returns an error (not a silent hang) for winning-move strings; scores at won positions are unreliable
 type: reference
 originSessionId: fc1fb961-5695-4a98-a66a-009449178618
 ---
-## c4solver silently hangs on strings that contain a winning move
+## c4solver returns an error for strings that contain a winning move
 
-If a move string ends on (or passes through) a position where the player who just moved created 4-in-a-row, c4solver produces **no output at all** — it does not write a result line, it does not print an error. The c4solver-wrapper.js Promise queue entry is never resolved, and because queries are chained via `pending`, **all subsequent queries in that solver process also hang forever**.
+**Correction (2026-06-06):** c4solver does NOT silently hang on winning-move strings. It returns an error message:
 
-This surfaces as a test suite that "runs for 15 minutes" with no failures — tests are just frozen waiting on solver.query().
-
-**How to validate test fixtures**: before using a move string in a test, race `solver.query(ms)` against a short timeout and reject if it times out:
-
-```js
-const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('HANG')), 2000));
-await Promise.race([solver.query(ms), timeout]);  // throws if invalid
+```
+Invalid move at position N: move in column C would create a winning alignment
+Line 1: Invalid move 7 "4343434"
 ```
 
-Known-bad positions discovered during 008 integration tests: `'44334455667711223355'`, `'445566332211'`, `'44556633221144'`, `'4455663'`, `'112233445566'`.
+Example: `4343434` — Red gets 4-in-a-row in column 4 on move 7. The solver rejects the 7th move and prints the above error.
+
+However, **scores at won/terminal positions are meaningless** — even if the solver doesn't hang, any score returned for a position reached through a winning move should not be used for game analysis. Guard against this in code before querying the solver.
+
+**Previous "silent hang" observations** may have been caused by the c4solver-wrapper.js not correctly handling the solver's error output (wrapper uses `pending` queue; if the error line doesn't match the expected score line format, the Promise may never resolve). If you encounter hangs: check whether the wrapper correctly parses solver error lines.
+
+Known-bad positions discovered during 008 integration tests (may cause wrapper hangs): `'44334455667711223355'`, `'445566332211'`, `'44556633221144'`, `'4455663'`, `'112233445566'`.
 
 Known-good positions (≥10 moves, verified): `'765432176543'`, `'12345671234567'`, `'12345677654321'`, `'44554433'`, `'441133'`.
 

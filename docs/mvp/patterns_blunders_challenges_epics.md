@@ -1,6 +1,6 @@
 # Patterns → Blunders → Challenges — Implementation Epic Breakdown
 
-*Defines the four implementation epics for shipping the three-layer model described in
+*Defines the implementation epics for shipping the three-layer model described in
 `docs/mvp/patterns_blunders_challenges.md`. That doc is the authoritative design reference;
 these epics decompose it into `/speckit-specify`-ready scopes. Where this file conflicts
 with the source doc, the source doc wins.*
@@ -26,82 +26,60 @@ with the source doc, the source doc wins.*
 - **Anon write prohibition.** `blunders.user_id` is `NOT NULL` in the DB (constraint-level). The client-side skip for anonymous users matches this constraint — it is not a workaround for a nullable column.
 - **Non-challenge tags are stored.** `forced_win`, `drawing_move`, and `suboptimal_move` are stored in `blunders` like any other tag. They are excluded from challenge-set matching only; they are never dropped at insert.
 - **`forced_win` tag ≠ `forced_win` puzzle category.** The blunder tag means "solver confirmed the player had a forced win." The puzzle category labels a multi-move learner exercise. They share a name; they are distinct concepts.
+- **i18n entries for `undercut`, `overcut`, `odd_even_threat`, `claimodd` are already present** in `en.json` (`coach.<tag>.prompt.*` and `deepReveal.patternLabel.<tag>`). No i18n work is required by these epics.
 
 ---
 
 ## Non-obvious facts (must be encoded in implementing specs)
 
-1. **`classifyPattern` does not exist.** `rg classifyPattern server/` returns nothing. Every epic referencing it must state it is a new function. `classifyAll` exists at `classifier.js:1217` and `classifyBestMove` at `:1245` — Epic 3 must audit both before retiring either.
+1. **`classifyPattern` does not exist.** `rg classifyPattern server/` returns nothing. Every epic referencing it must state it is a new function. `classifyAll` exists at `classifier.js:1217` and `classifyBestMove` at `:1245` — Epic 1 must audit both before retiring either. **`classifyAll` is preserved in Epic 2** (active callers: `/api/debug/classify-all` endpoint, `scripts/classify_all.mjs`, `explainSimulate.js`) and removed in Epic 3 (its callers are adapted to `classifyPattern`/`tagBlunder`); `classifyBestMove` is audited and removed in Epic 2 if it has no callers.
 
 2. **`blunders.user_id` is `NOT NULL`.** Schema-enforced. The anonymous-write skip is a client-side guard that matches a DB constraint, not a workaround.
 
-3. **Removing `unknown` from the CHECK constraint is a breaking change.** Any code still inserting `'unknown'` fails at DB level the moment the migration applies. Epic 2 must require a pre-deploy audit: `rg "'unknown'" server/scripts/ server/index.js`.
+3. **Removing `unknown` from the CHECK constraint is a breaking change.** Any code still inserting `'unknown'` fails at DB level the moment the migration applies. Epic 1 must require a pre-deploy audit: `rg "'unknown'" server/scripts/ server/index.js`. Epic 2 extends this audit to `src/` (specifically `ReviewScreen.jsx`, which has a `VALID_CATEGORIES` set and an `'unknown'` fallback at line ~82–84 on the old client-side `POST /api/blunders` path). Similarly, `forbidden_columns` is a live tag today — emitted by `classifier.js` and both import scripts. The new tagger stops emitting it (replacing it with `immediate_threat`), but `forbidden_columns` **stays in the constraint** as a legacy-tolerated value. The audit must enumerate `forbidden_columns` callsites too.
 
 4. **`forced_win` tag ≠ `forced_win` puzzle category.** See settled decisions above.
-
-5. **Four i18n entries are missing in production today.** `undercut`, `overcut`, `odd_even_threat`, and `claimodd` lack `coach.<tag>.prompt.<n>` and `deepReveal.patternLabel.<tag>` entries in `en.json`/`es.json`. Any user who blunders one of these patterns gets a silent `coach.undefined.prompt.0` rendering failure. Epic 1 is a production bug fix, not a nice-to-have.
 
 ---
 
 ## Epic order
 
 ```
-Epic 1 (i18n fix)               → unblocked; ships immediately
-Epic 2 (DB migrations)          → unblocked; must land before Epic 3
-Epic 3 (classifyPattern +       → depends on Epic 2 (reason column + constraint)
-         tagBlunder)
-Epic 4 (call sites + repair)    → depends on Epic 3
+Epic 1 (schema + core algorithm)  → unblocked; must land before Epic 2
+Epic 2 (production wiring)        → depends on Epic 1 (tagBlunder must exist)
+Epic 3 (coach explanation rebuild) → depends on Epic 2 (tagBlunder must be wired and producing
+                                     non-null reason/direction on stored blunder rows)
 ```
 
-Epics 1 and 2 are independent of each other and of each other's content. Epics 3 and 4 form a strict chain.
-
 ---
 
-### Epic 1 — i18n Production Bug Fix
+### Epic 1 — Schema + Core Algorithm
 
-**Goal:** Add four missing i18n entries so no blunder tag produces a `coach.undefined.prompt.0`
-rendering failure in the Coach Screen 6 or Deep Reveal Screen 8 surfaces.
+**Goal:** Update the `blunders` schema to support the new tag set and add the `reason` column,
+then implement `classifyPattern` and `tagBlunder` — the two new classifier functions.
+Neither function exists today. The DB migrations are bundled here because the `reason` column
+is exactly what `tagBlunder` returns, and the constraint update must land before the first
+`tagBlunder` insert. Together these form one coherent "build the engine" deliverable.
 
 **Scope:**
 
-Add the following to `en.json`, using the exact strings from `patterns_blunders_challenges.md §4`:
+*Pre-deploy audit (hard prerequisite before any migration runs):*
 
-| Key | Value |
-|---|---|
-| `coach.undercut.prompt.0` | *"One of your threats is a trap. Which column would cost you?"* |
-| `coach.overcut.prompt.0` | *"Your opponent's threat has a weakness. Find the column that kills it."* |
-| `coach.odd_even_threat.prompt.0` | *"Red has threats on both row parities. How do you control both?"* |
-| `coach.claimodd.prompt.0` | *"Red controls the center with all even columns. How do you respond?"* |
-| `deepReveal.patternLabel.undercut` | `Undercut` |
-| `deepReveal.patternLabel.overcut` | `Overcut` |
-| `deepReveal.patternLabel.odd_even_threat` | `Odd/Even Threat` |
-| `deepReveal.patternLabel.claimodd` | `Claimodd` |
+- Run `rg "'unknown'" server/scripts/ server/index.js` and enumerate every callsite inserting
+  a `pattern_category` value. **IF** any live callsite still inserts `'unknown'`, **THEN**
+  patch it to fall through to `'suboptimal_move'` before the migration applies.
+- Run `rg "'forbidden_columns'" server/scripts/ server/index.js` and enumerate every callsite.
+  These callsites are **not patched** — the new tagger stops emitting `forbidden_columns`
+  naturally, and the tag stays valid in the constraint as a legacy-tolerated value.
 
-Add stub entries (empty string) for all eight keys in `es.json`.
+*Data truncation (hard prerequisite — must execute before migration (a)):*
 
-**IF** any key already exists in `en.json`, **THEN** preserve the existing value and do not overwrite — flag for review instead.
-
-**Acceptance criteria:**
-- `t('coach.undercut.prompt.0')` returns a non-empty string in the English locale (same for the other three tags).
-- `es.json` contains all eight keys (empty string is acceptable for stubs).
-- No existing i18n key is changed or deleted.
-
-**NOT included:** Any change to classifier, DB, call sites, or challenge-set matching.
-
-**Estimated spec:** 40–60 lines. **Estimated tasks:** 3–5.
-
----
-
-### Epic 2 — DB Prerequisite Migrations
-
-**Goal:** Update the `blunders` table schema so the new tag set can be inserted without
-constraint failures and blunder rows can carry a human-readable reason string.
-
-**Scope:**
-
-*Pre-deploy audit (hard prerequisite before migration runs):*
-
-- Run `rg "'unknown'" server/scripts/ server/index.js` and confirm every callsite that inserts a `pattern_category` value. **IF** any live callsite still inserts `'unknown'`, **THEN** patch it to fall through to `'suboptimal_move'` before the migration applies.
+- **TRUNCATE the `blunders` table** before the constraint migration runs. This eliminates
+  validation failure on pre-existing rows with `'unknown'` tags. Postgres validates existing
+  rows at `ADD CONSTRAINT` time; applying the new constraint to a non-empty table containing
+  `'unknown'` rows causes the migration to fail.
+- All existing blunder rows are intentionally discarded. They will be regenerated in the
+  Epic 2 reprocess-all-games step with correctly tagged rows.
 
 *Migration (a) — update CHECK constraint:*
 
@@ -112,51 +90,60 @@ constraint failures and blunder rows can carry a human-readable reason string.
     'immediate_threat', 'forced_block', 'forced_win', 'double_threat',
     'undercut', 'overcut', 'figure_7', 'j_shape', 'z_threat',
     'odd_even_threat', 'claimeven', 'claimodd',
-    'drawing_move', 'suboptimal_move'
+    'drawing_move', 'suboptimal_move',
+    'forbidden_columns'
   ))
   ```
-  `unknown` is excluded. This is a **breaking change** — any code still inserting `'unknown'` fails at DB level immediately on migration apply.
+  `unknown` is excluded. `forbidden_columns` is retained as a legacy-tolerated value even
+  though the new tagger no longer emits it. This is a **breaking change** for `unknown` —
+  any code still inserting `'unknown'` fails at DB level immediately on migration apply.
 
 *Migration (b) — reason column:*
 
-- Add `reason TEXT` (nullable) to the `blunders` table. No index required; this column is for offline inspection only.
+- Add `reason TEXT` (nullable) to the `blunders` table. No index required; offline inspection only.
 
-**Acceptance criteria:**
-- `INSERT INTO blunders (pattern_category, ...) VALUES ('unknown', ...)` is rejected by the DB.
-- `INSERT INTO blunders (pattern_category, reason, ...) VALUES ('drawing_move', 'win dropped to draw, no pattern detected', ...)` succeeds.
-- Existing `blunders` rows with currently-valid tags are unaffected.
+*Migration (c) — direction column:*
 
-**NOT included:** `tagBlunder` implementation, call site changes, relabeling of existing rows with old tags (Epic 4).
-
-**Estimated spec:** 60–80 lines. **Estimated tasks:** 5–7.
-
----
-
-### Epic 3 — `classifyPattern` + `tagBlunder`
-
-**Goal:** Implement the two new classifier functions per `patterns_blunders_challenges.md §5`.
-Neither function exists today. `classifyAll` (`:1217`) and `classifyBestMove` (`:1245`) are
-audited first — they serve different purposes and are not simply renamed.
-
-**Scope:**
+- Add `direction TEXT` (nullable) to the `blunders` table. Persists the direction field returned
+  by `tagBlunder` (`'missed_own'`, `'enabled_opponent'`, or `'defensive_miss'`) as a first-class
+  column alongside `reason`. No index required.
 
 *Pre-implementation audit:*
 
-- `rg classifyAll server/` — enumerate all callers. Determine which are on the blunder-tagging path vs. other paths.
-- `rg classifyBestMove server/` — same. Document whether each caller can be replaced by `classifyPattern` or must be preserved.
+- `rg classifyAll server/` — enumerate all callers; determine which are on the blunder-tagging
+  path vs. other paths.
+- `rg classifyBestMove server/` — same. Document whether each caller can be replaced by
+  `classifyPattern` or must be preserved. Do not retire either function in this epic.
 
-*`classifyPattern(ms, perspective)`:*
+*DETECTOR_REGISTRY perspective audit (prerequisite before implementing `classifyPattern`):*
+
+- Enumerate **every entry in DETECTOR_REGISTRY** (`rg 'DETECTOR_REGISTRY' server/`).
+- For each detector, record whether it already accepts a `perspective` argument or defaults
+  to `Board.currentPlayer` / derives perspective from `ms` alone.
+- Produce a two-column list: detectors that need a `perspective` parameter added vs. those
+  that already have it.
+- The retrofit must **not alter behavior of the existing `classify()` puzzle-generation path**,
+  which is kept entirely unchanged. The puzzle-gen path is NOT being modified in these epics.
+  Detectors that gain a `perspective` parameter must keep their current behavior when called
+  from `classify()` — use a default of `Board.currentPlayer(ms)` so existing callers are unaffected.
+
+*`classifyPattern(ms, perspective)` — new function:*
 
 ```
 classifyPattern(ms, perspective) → Promise<Set<string>>
 ```
 
-- Runs all detectors in the registry with `perspective` as the explicit evaluating player, regardless of who is to move in `ms`.
+- Runs all detectors in the registry with `perspective` as the explicit evaluating player,
+  regardless of who is to move in `ms`.
 - Returns the **full set** of matching tags; the caller applies the §3.4 priority cascade.
-- Each detector must accept `perspective` as an explicit parameter (default: `Board.currentPlayer`). This allows evaluating either player's patterns without constructing movestrings that end on their turn.
-- `detectClaimeven` runs up to 60 `solver.query` calls per invocation; this cost is acceptable because `classifyPattern` is called from `tagBlunder` on the lazy post-game analyze path and never blocks the UI. No per-call query budget or wall-clock timeout is required.
+- Each detector must accept `perspective` as an explicit parameter (default: `Board.currentPlayer(ms)`).
+  This allows evaluating either player's patterns without constructing movestrings that end on
+  their turn.
+- `detectClaimeven` runs up to 60 `solver.query` calls per invocation; this cost is acceptable
+  because `classifyPattern` is called from `tagBlunder` on the lazy post-game analyze path and
+  never blocks the UI. No per-call query budget or wall-clock timeout is required.
 
-*`tagBlunder(moves, playedCol, correctCol, solver)`:*
+*`tagBlunder(moves, playedCol, correctCol, solver)` — new function:*
 
 ```
 tagBlunder(moves, playedCol, correctCol, solver) → Promise<{
@@ -166,7 +153,7 @@ tagBlunder(moves, playedCol, correctCol, solver) → Promise<{
 }>
 ```
 
-Implements the 5-step priority cascade (§3.4) in order:
+Implements the 5-step priority cascade (`patterns_blunders_challenges.md §3.4`) in order:
 
 1. **Defensive miss** — `forced_block ∈ P(moves, blunderer)` → `{ tag: 'forced_block', direction: 'defensive_miss' }`
 2. **Enabled immediate (1-ply)** — `immediate_threat ∈ P(moves + playedCol, opponent)` → `{ tag: 'immediate_threat', direction: 'enabled_opponent' }`
@@ -176,69 +163,329 @@ Implements the 5-step priority cascade (§3.4) in order:
 
 **Never throws.** On solver failure: `{ tag: 'suboptimal_move', direction: 'missed_own', reason: 'solver error: <message>' }`.
 
-`reason` is a human-readable string persisted to `blunders.reason` (column added in Epic 2).
+`reason` is persisted to `blunders.reason` (column added in migration (b) above).
 
-*Player-only pattern guards:*
+*Player-only pattern guards (encode in tests):*
 
-- **IF** a `missed` or `enabled` set contains `odd_even_threat` or `claimodd` for a Yellow perspective, **THEN** that is a detector bug — add an assertion in tests.
+- **IF** a `missed` or `enabled` set contains `odd_even_threat` or `claimodd` for a Yellow
+  perspective, **THEN** that is a detector bug — add an assertion.
 - Same for `claimeven` for a Red perspective.
 
 *Tests:*
 
-- Unit test for each per-pattern predicate in §3.3 (missed-own / enabled-opponent / defensive-miss directions, each with a concrete movestring).
-- Integration test: a position triggering both `missed_own` and `enabled_opponent` resolves to `missed_own`.
-- Test that `tagBlunder` returns `{ tag: 'suboptimal_move' }` (does not throw) on a synthetic solver-failure input.
+- Unit test for each per-pattern predicate in §3.3 (missed-own / enabled-opponent /
+  defensive-miss directions, each with a concrete movestring from DB or codebase history —
+  never invent a movestring by hand).
+- Integration test: a position triggering both `missed_own` and `enabled_opponent` resolves
+  to `missed_own`.
+- Test that `tagBlunder` resolves to `{ tag: 'suboptimal_move' }` (does not throw) on a
+  synthetic solver-failure input.
+- `classify(moves, candidateCol, scores)` is **not modified** and has no new tests here.
 
-`classify(moves, candidateCol, scores)` is **not modified**. It classifies what a candidate column creates and is correct for puzzle generation.
+**Acceptance criteria:**
 
-**NOT included:** Updating call sites (Epic 4). Retiring `classifyAll`/`classifyBestMove` (deferred to Epic 4 after confirming no remaining callers post-migration).
+- `INSERT INTO blunders (pattern_category, ...) VALUES ('unknown', ...)` is rejected by the DB.
+- `INSERT INTO blunders (pattern_category, ...) VALUES ('forbidden_columns', ...)` succeeds (legacy-tolerated).
+- `INSERT INTO blunders (pattern_category, reason, direction, ...) VALUES ('drawing_move', 'win dropped to draw, no pattern detected', 'missed_own', ...)` succeeds.
+- The `blunders` table is empty before the constraint migration runs (truncated in the data-truncation step).
+- `tagBlunder` resolves (does not throw) on every input, including degenerate and solver-error cases.
+- All player-only guard assertions pass for Red-only and Yellow-only patterns.
+- No existing caller of `classify()` (puzzle-generation path) changes behavior after the perspective retrofit.
 
-**Estimated spec:** 180–220 lines. **Estimated tasks:** 12–16.
+**NOT included:** Updating call sites (Epic 2). Retiring `classifyAll` / `classifyBestMove`
+(deferred to Epic 2 after confirming no remaining callers). Any i18n changes (already done).
+Reprocessing existing blunder rows (Epic 2 reprocess-all-games step).
+
+**Estimated spec:** 220–260 lines. **Estimated tasks:** 14–18.
 
 ---
 
-### Epic 4 — Call Site Migration + Data Repair
+### Epic 2 — Production Wiring
 
-**Goal:** Wire `tagBlunder` into all three production call sites, update `VALID_PATTERN_CATEGORIES`,
-enforce anonymous-user gating, and relabel existing mislabeled blunder rows.
+**Goal:** Wire `tagBlunder` into all production call sites, persist `reason`/`direction` at
+every write site, eliminate the `'unknown'` fallback everywhere it exists (including the
+frontend), and run a best-effort backfill of existing game rows.
 
 **Scope:**
 
-*Three call site migrations (exact diffs from `patterns_blunders_challenges.md §6.2`):*
+*Pre-implementation audit:*
 
-**`scripts/import_papergames_blunders.mjs`** (`extractBlunders`, line ~109) — replace `classify(movesBefore, bestCol, scores)` with `await tagBlunder(movesBefore, col, bestCol, solver)`; set `patternTag = VALID_PATTERN_CATEGORIES.has(tag) ? tag : 'suboptimal_move'`.
+- `rg classifyAll server/` and `rg classifyBestMove server/` — enumerate remaining callers
+  after Epic 1. Document which can be replaced by `classifyPattern` and which must be preserved.
+  This audit result drives the conditional retire step below.
 
-**`scripts/reprocess_blunders.mjs`** (line ~95) — replace `classify(movesBeforeThisPly, col, scores)` with `await tagBlunder(movesBeforeThisPly, col, bestCol, solver)`.
+*`'unknown'` fallback audit — extend to `src/`:*
 
-**`server/index.js`** (`POST /api/games/analyze`, line ~1487) — replace `classify(movesBeforeThisPly, col, scores)` with `await tagBlunder(movesBeforeThisPly, col, bestCol, solver)`; set `patternTag = tag ?? null`.
+- Run `rg "'unknown'" server/scripts/ server/index.js src/` to enumerate every site still
+  emitting `'unknown'` as a `pattern_category` / `VALID_CATEGORIES` member.
+- Patch every site found to use `'suboptimal_move'` instead. This is a hard prerequisite:
+  the Epic 1 migration removes `'unknown'` from the DB CHECK constraint, so any remaining
+  callsite causes a DB error at insert time.
 
-All three call sites already hold all four inputs to `tagBlunder` (`movesBefore`, `playedCol`, `correctCol`, `solver`).
+*Call site migrations:*
+
+**`server/index.js` — `POST /api/games/analyze` (server-direct write — primary sparring path):**
+
+The real sparring blunder-persistence path is a 3-hop flow today:
+1. `POST /api/games/analyze` computes `patternTag` and returns it in JSON (no INSERT).
+2. `ReviewScreen.jsx` reads `patternTag` per move and fires `POST /api/blunders`.
+3. `POST /api/blunders` does the actual INSERT.
+
+This epic moves persistence server-side (into hop 1), eliminating the client round-trip for new writes:
+
+- Replace `classify(movesBeforeThisPly, col, scores)` with
+  `await tagBlunder(movesBeforeThisPly, col, bestCol, solver)`.
+- Destructure: `const { tag, reason, direction } = result`.
+- **IF** `req.user` is set, **THEN** INSERT directly into `blunders` with `pattern_category = tag`,
+  `reason`, `direction`, and `user_id = req.user.id`. Do not rely on the client to fire
+  `POST /api/blunders` for new writes.
+- The existing `POST /api/blunders` endpoint is **not removed** — it may still be called by
+  older clients. Epic 2 does not rely on it for new writes; it is backward-compat only.
+- `tagBlunder` always runs (tag is still returned in the JSON response for the frontend);
+  the INSERT is gated on `req.user`.
+
+**`scripts/reprocess_blunders.mjs`** (line ~95) — replace `classify(movesBeforeThisPly, col, scores)`
+with `await tagBlunder(movesBeforeThisPly, col, bestCol, solver)`.
+Include `reason` and `direction` in the `toInsert` object so all three new columns are populated
+on every reprocessed row.
+
+**`scripts/import_papergames_blunders.mjs`** (`extractBlunders`, line ~109) — **SKIPPED / no test
+required.** Papergames.io integration was intentionally cut from the product (`product_decisions.md`).
+The script must remain compilable (update the `tagBlunder` call signature and `VALID_PATTERN_CATEGORIES`
+so it does not reference `'unknown'`), but no test coverage is required and it is not exercised
+by Epic 2 acceptance criteria.
+
+*`ReviewScreen.jsx` — frontend `'unknown'` fallback and dead-code cleanup:*
+
+`ReviewScreen.jsx` is a load-bearing participant in the old 3-hop path. After server-direct
+write is in place, the entire client-side blunder-write block is removed. The frontend still
+reads `patternTag` from the analyze response for display. Changes required:
+
+- Replace the `'unknown'` fallback (line ~82–84: `pattern_category: 'unknown'`) with
+  `'suboptimal_move'` before removing the write block (ensures no DB constraint violation on
+  any backward-compat `POST /api/blunders` call during the transition window).
+- Remove the client-side blunder-write block (lines ~74–101: the `POST /api/blunders`
+  fire-and-forget loop). The analyze endpoint is the sole write path after this epic.
+- Remove dead code left by the write block removal: `VALID_CATEGORIES`, the `CATEGORY_ORDER`
+  import, `blundersWrittenRef`, the `useRef` import, and the `useEffect` that resets the ref.
+  Leaving these in place will break `npm run lint` (ESLint 9 `no-unused-vars`).
+- `VALID_CATEGORIES` is NOT repurposed to hold blunder-specific tags — the blunder-tag
+  allowlist lives exclusively in `server/blunderTags.js`.
+
+*`VALID_PATTERN_CATEGORIES` — consolidate to single canonical set:*
+
+The canonical set is created as `server/blunderTags.js` exporting `VALID_BLUNDER_TAGS`. All
+per-file local copies are replaced by importing from this module. Actions:
+
+| Site | Variable name | Action |
+|---|---|---|
+| `server/blunderTags.js` | `VALID_BLUNDER_TAGS` | **NEW** — 15-tag `Set`, mirrors migration 032 constraint |
+| `server/scripts/reprocess_blunders.mjs` | `VALID_PATTERN_CATEGORIES` | **Remove** local set; import `VALID_BLUNDER_TAGS` |
+| `server/scripts/import_papergames_blunders.mjs` | `VALID_PATTERN_CATEGORIES` | **Remove** local set; import `VALID_BLUNDER_TAGS` (compilability only) |
+| `src/` (`ReviewScreen.jsx`) | `VALID_CATEGORIES` | **Remove entirely** — dead code once write block is deleted |
+| `server/index.js` (analyze endpoint insert site) | _(none today)_ | Import `VALID_BLUNDER_TAGS`; add explicit guard: if `tag` not in set, substitute `'suboptimal_move'` |
+
+**VALID_BLUNDER_TAGS contains:** `immediate_threat`, `forced_block`, `forced_win`,
+`double_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`, `z_threat`,
+`odd_even_threat`, `claimeven`, `claimodd`, `drawing_move`, `suboptimal_move`,
+`forbidden_columns`.
+**`unknown` is absent.**
+**`forbidden_columns` is retained** — legacy-tolerated; new tagger no longer emits it but it
+stays in the set and the DB constraint.
 
 *Anonymous user gating:*
 
-- `tagBlunder` runs on **all** paths regardless of auth — tag and reason are always computed.
-- **IF** `user_id` is absent, **THEN** skip the `INSERT INTO blunders` at the call site. Do not gate the `tagBlunder` call itself.
+- `tagBlunder` runs on **all** paths regardless of auth — tag and reason are always computed
+  and returned in the JSON response.
+- **IF** `req.user` is absent on the analyze endpoint, **THEN** skip the `INSERT INTO blunders`.
+  Do not gate the `tagBlunder` call itself. `blunders.user_id` is `NOT NULL` at the DB level;
+  the skip is a server-side guard that matches this constraint, not a workaround.
 
-*`VALID_PATTERN_CATEGORIES` update:*
+*Retire `classifyBestMove` (conditional) — preserve `classifyAll`:*
 
-- **Add:** `drawing_move`, `suboptimal_move`, `odd_even_threat`, `claimodd`, `forced_win`.
-- **Remove:** `unknown`.
+- After the migrations above, run `rg classifyBestMove server/`. **IF** no callers remain,
+  **THEN** delete `classifyBestMove`. **IF** callers remain, **THEN** document them and do not delete.
+- `classifyAll` is **NOT retired in Epic 2**. It has confirmed active callers: the
+  `/api/debug/classify-all` endpoint, `scripts/classify_all.mjs`, and `explainSimulate.js`.
+  Run `rg classifyAll server/`, record all callers, and produce an explicit
+  "PRESERVE — active callers, removal deferred to Epic 3" finding. Do not delete `classifyAll`.
 
-*Retire `classifyAll` / `classifyBestMove` (conditional):*
+*Reprocess-all-games step (best-effort backfill — not a release gate):*
 
-- After the three migrations above, run `rg classifyAll server/` and `rg classifyBestMove server/`. **IF** no callers remain, **THEN** delete both functions. **IF** callers remain, **THEN** document them and do not delete.
-
-*Relabeling migration (deferrable):*
-
-- Run `reprocess_blunders.mjs` to regenerate correctly tagged rows for existing blunders. This is deferrable — existing mislabeled rows are imprecise but not broken. It must complete before any analytics or challenge-matching that relies on correct tags.
+- Run `reprocess_blunders.mjs` to re-analyze every game in the DB and populate `blunders`
+  with newly tagged rows (including `reason` and `direction`) using `tagBlunder`.
+- The `blunders` table was truncated in Epic 1 before the constraint migration; this step
+  is the sole source of new blunder rows for historical games post-migration.
+- This step is **idempotent** and **best-effort**: do not gate Epic 2 completion on row counts
+  or require it to finish before shipping. Analytics and challenge-matching will catch up as
+  rows are populated. Do not frame this as a blocking release prerequisite.
 
 **Acceptance criteria:**
-- `POST /api/games/analyze` no longer calls `classify(...)` for blunder tagging.
-- `tagBlunder` is the sole blunder-tagging entry point across all three call sites.
-- `VALID_PATTERN_CATEGORIES` does not contain `'unknown'`.
-- A game blunder by an authenticated user produces a `blunders` row with a non-null `reason` column.
-- A game blunder by an anonymous user does not produce a `blunders` row; `tagBlunder` still runs internally.
 
-**NOT included:** New blunder UI, challenge-matching changes, any change to the Tier-1 coach explanation path.
+- `POST /api/games/analyze` calls `tagBlunder(...)` and — when `req.user` is set — INSERTs
+  a `blunders` row with non-null `pattern_category`, `reason`, and `direction`. No call to
+  `classify(...)` remains for blunder tagging.
+- `tagBlunder` is the sole blunder-tagging entry point on all active write paths.
+- No site (server or frontend) inserts or emits `'unknown'` as a `pattern_category` value.
+- `VALID_BLUNDER_TAGS` in `server/blunderTags.js` does not contain `'unknown'`. All server
+  scripts import from it; `VALID_CATEGORIES` in `ReviewScreen.jsx` is removed as dead code.
+- A game blunder by an authenticated user produces a `blunders` row with non-null `reason`
+  and `direction` columns.
+- A game blunder by an anonymous user does not produce a `blunders` row; `tagBlunder` still
+  runs internally and the tag is returned in the analyze JSON response.
+- `import_papergames_blunders.mjs` is importable without syntax errors (compilability); no
+  runtime test is required for it.
+- `POST /api/blunders` with a stale-client `pattern_category: 'unknown'` returns 200/201 (not 500);
+  row is stored with `pattern_category = 'suboptimal_move'`.
+- `classifyAll` is preserved in `classifier.js` with documented callers; it is not deleted.
 
-**Estimated spec:** 150–180 lines. **Estimated tasks:** 10–13.
+**NOT included:** New blunder UI, challenge-matching changes, any change to the Tier-1 coach
+explanation path, i18n changes, removing the `POST /api/blunders` endpoint.
+
+**Estimated spec:** 170–210 lines. **Estimated tasks:** 12–15.
+
+---
+
+### Epic 3 — Coach Explanation Rebuild
+
+**Goal:** Replace the `explainSimulate`-based LLM grounding with `tagBlunder`'s structured output
+(`{tag, reason, direction}`), and use `classifyPattern` on the correct-move board position to
+describe what the best move achieves. After this epic there are exactly two classification APIs:
+`classifyPattern` (board-level pattern detection) and `tagBlunder` (blunder analysis and coach
+grounding). `explainSimulate.js` and `classifyAll` are removed. The coach explanation has one
+clear, verifiable source of truth for why a move was bad.
+
+**Depends on:** Epic 2 — `tagBlunder` must be wired into `POST /api/games/analyze` and
+producing non-null `reason`/`direction` on stored `blunders` rows before this epic begins.
+
+**Scope:**
+
+*Pre-implementation audit:*
+
+- Enumerate all callers of `explainSimulate` in `server/` (`rg explainSimulate server/`). Document
+  which code paths call it and exactly what they consume from the result (`groups`, `activeCells`,
+  `topGroups`, etc.). This is the removal surface.
+- Enumerate all callers of `classifyAll` in `server/` (`rg classifyAll connect-four/server/`).
+  Document the replacement plan for each caller before any deletion.
+- Read `buildExplainContext` in `server/index.js` top-to-bottom. Document the four explanation
+  types (type1/2/3/4), the `allowedSet` construction path for each, and which functions are
+  called exclusively from within it. These are all candidates for removal.
+
+*Reason string enrichment — prerequisite for LLM grounding:*
+
+`tagBlunder`'s `reason` strings are currently terse internal match descriptors
+(e.g., `"matched missed_own: double_threat"`). LLM prompts need human-readable context.
+
+- Define a `REASON_TEMPLATES` map (in `server/classifier.js` or a new `server/blunderReasons.js`)
+  that maps each `{tag, direction}` pair to a plain-language sentence. Example:
+  - `{double_threat, missed_own}` → `"You had a double threat available but played elsewhere, giving up the winning position."`
+  - `{immediate_threat, enabled_opponent}` → `"Your move allowed your opponent to create an immediate winning threat."`
+  - `{forced_block, defensive_miss}` → `"You had a forced defensive move but played elsewhere, letting your opponent win immediately."`
+- Cover all 15 tags × relevant directions. Tags that only appear in one direction (e.g.,
+  `forced_block` is always `defensive_miss`) have one entry; others have up to three.
+- `tagBlunder` returns the enriched human-readable string as `reason`. All existing callers that
+  persist `reason` to the DB benefit automatically — the column is TEXT with no content constraint.
+- **IF** any existing test asserts the exact terse reason string, **THEN** update those tests.
+
+*`classifyPattern` extension — return cell locations alongside tags:*
+
+The `allowedSet` mechanism that constrains which board cells the LLM may reference currently
+derives cell data from `explainSimulate`'s group results. After removing `explainSimulate`, this
+data must come from `classifyPattern`.
+
+- Extend `classifyPattern(ms, perspective)` to return
+  `Map<string, { cells: string[] }>` instead of `Set<string>`. The map key is the tag name;
+  `cells` contains the 0-indexed `"cCrR"` strings for each cell that activated it (already
+  available from each detector's `activeCells` field — propagate rather than recompute).
+- **IF** a detector returns no `activeCells`, **THEN** return `cells: []` for that tag; do not
+  block on missing spatial data.
+- Existing callers that only need tag names can use `new Set(result.keys())`. Update all callers
+  of `classifyPattern` to the new return type — there should be few after Epic 2.
+
+*`buildExplainContext` rework — replace simulation with `tagBlunder` + `classifyPattern`:*
+
+`buildExplainContext` currently dispatches to four explanation types (type1/2/3/4) and runs
+`explainSimulate` for types 2/3/4. Replace with a unified two-sided grounding:
+
+- **Blunder side ("what went wrong"):** `tagBlunder(movestring, col, bestCol, solver)` — returns
+  `{tag, reason, direction}`. Use `tag` to identify the pattern; use the enriched `reason` string
+  directly in the prompt. Use `direction` for framing (missed_own / enabled_opponent /
+  defensive_miss).
+- **Correct-move side ("what the best move achieves"):** `classifyPattern(movestring + bestCol, perspective)`
+  — returns the map of patterns (with cells) active after the correct move. This replaces
+  `explainSimulate(movestring + contrastCol, ...)`.
+- **`allowedSet` derivation:** Build from the union of cell data from the blunder-side
+  `classifyPattern(movestring, perspective)` (patterns the blunderer had) and correct-side
+  `classifyPattern` (patterns the correct move activates). This replaces `buildAllowedSet`,
+  `buildType1AllowedSet`, and `selectTopGroups`.
+- **Retain unchanged:** board visualizations, `selectContrastMove`, the all-moves-equal /
+  settled check, and the `validateAnnotation` gate (annotation integrity, spec 021).
+- **Remove:** the type1/2/3/4 dispatch, `buildType12Prompt`, `buildType3Prompt`,
+  `buildType4Prompt`, `buildType1AllowedSet`, `selectTopGroups`. Replace with a single unified
+  prompt builder (see below).
+
+*LLM prompt template:*
+
+- Write a single new `buildBlunderExplainPrompt({tag, direction, reason, blunderPatternCells, correctMovePatterns, boardViz, postBoardViz, playerName, gap, gapBucket, allowedSet})`.
+- The prompt must preserve the P1–P6 annotation constraints from spec 021. The `allowedSet` and
+  `validateAnnotation` gate are **retained unchanged** — only the data fed into them changes.
+- Do not change the LLM model, the retry logic, the quota gate, or the fallback path in
+  `POST /api/explain-move-llm`.
+
+*`explanation_cache` handling:*
+
+- Cached prompts use the old template. Old entries remain valid — users see the explanation text,
+  not the prompt. No migration or forced invalidation is required.
+- Add a nullable `template_version TEXT` column to `explanation_cache` (new rows get `'v2'`; old
+  rows stay NULL). This lets operators identify and optionally purge old-format entries without a
+  hard cutover. One `ALTER TABLE ADD COLUMN` migration, no data backfill.
+
+*`explainSimulate.js` removal:*
+
+- After `buildExplainContext` is reworked, run `rg explainSimulate server/` to confirm zero callers.
+  **IF** zero callers, **THEN** delete `explainSimulate.js`.
+  **IF** callers remain, document them and do not delete until they are migrated.
+- `DETECTOR_REGISTRY` is **not removed** — it is the backbone of `classifyPattern`.
+
+*`classifyAll` removal and caller adaptation:*
+
+- `classifyAll` is currently called from: `server/index.js` debug endpoint (~line 2016) and
+  `server/scripts/classify_all.mjs`.
+- Replace the debug endpoint's `classifyAll` call with `classifyPattern` (board-level pattern
+  inspection) or `tagBlunder` (blunder analysis), depending on what the endpoint is debugging.
+  Update the endpoint response shape accordingly.
+- Replace `server/scripts/classify_all.mjs` with a script that calls `tagBlunder` per move in a
+  game, matching the new canonical blunder-analysis API.
+- After all callers are adapted, run `rg classifyAll connect-four/server/` to confirm zero hits,
+  then delete `classifyAll` from `classifier.js`.
+
+*Tests:*
+
+- Unit test: `tagBlunder` returns a human-readable `reason` sentence (not a terse match
+  descriptor) for each `{tag, direction}` pair. Use known movestrings from the codebase or DB —
+  never generate a movestring by hand.
+- Unit test: `classifyPattern` returns non-empty `cells` for at least the `immediate_threat` and
+  `double_threat` detectors on verified movestrings.
+- Integration test: `buildExplainContext` on a known blunder movestring returns a non-null prompt
+  containing the enriched `reason` string and passes `validateAnnotation`.
+- **Manual quality gate (required before shipping):** Compare LLM explanations generated by the
+  new system against a sample of 10 existing cached explanations for the same movestrings. Any
+  regression in accuracy or clarity blocks the epic. This is a human review step.
+
+**Acceptance criteria:**
+
+- `POST /api/explain-move-llm` produces a valid, `validateAnnotation`-passing explanation on a
+  known blunder position using the new `tagBlunder`-grounded prompt.
+- `rg explainSimulate server/` returns zero hits (file deleted).
+- `rg classifyAll connect-four/server/` returns zero hits in the main source tree (function
+  deleted from `classifier.js`; the replacement script, if any, uses `tagBlunder`).
+- `classifyPattern` returns `Map<string, {cells: string[]}>` — callers updated accordingly.
+- `tagBlunder`'s `reason` field is a human-readable sentence for every `{tag, direction}` pair.
+- `validateAnnotation` still passes for LLM-generated explanations (no annotation integrity regression).
+- A `template_version` column exists on `explanation_cache`; new rows have value `'v2'`.
+
+**NOT included:** Changing the LLM model or provider, modifying the annotation integrity spec
+(spec 021) or Deep Reveal product (spec 022), UI changes to explanation display, reprocessing
+the `explanation_cache` table, new explanation categories or types.
+
+**Estimated spec:** 190–230 lines. **Estimated tasks:** 13–17.

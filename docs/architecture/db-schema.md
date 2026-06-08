@@ -148,6 +148,8 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
 | pattern_category | text | NO | |
 | severity | integer | NO | `0` |
 | blunder_severity | real | YES | |
+| reason | text | YES | |
+| direction | text | YES | |
 | resolved_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
 
@@ -158,6 +160,17 @@ Indexes:
 
 `severity` = `round((best_score − score) / 36 * 10)` — instant score-spread measure, [0, 10]. Computed at insert time; never recomputed on read.
 `blunder_severity` = fraction of 3-ply post-blunder continuations ending in opponent win — graduated loss-of-control measure, [0, 1]. Computed by `computeBlunderSeverity()`.
+
+**CHECK constraint on `pattern_category`**: Must be one of 15 valid values:
+`immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns` (legacy),
+`z_threat`, `odd_even_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`,
+`claimodd`, `claimeven`,
+`drawing_move`, `suboptimal_move`
+`unknown` is excluded (not a valid pattern_category). `forbidden_columns` is tolerated as a legacy value from earlier classifier versions.
+
+**`reason`**: Free-text explanation of why the blunder was tagged this way, e.g. `"matched missed_own: forced_win"`. Populated by `tagBlunder()`. Nullable — older records or batch-inserted blunders may not have a reason.
+
+**`direction`**: One of three known values (`missed_own`, `enabled_opponent`, `defensive_miss`) with no CHECK constraint for forward compatibility — future directions may be added. Nullable for older records.
 
 ---
 
