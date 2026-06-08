@@ -1403,7 +1403,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
           ...data,
           slides: data.slides.map(s => ({
             ...s,
-            movestring: '',
+            movestring: s.movestring ?? '',  // ← round-trips if lesson was saved by this editor
             overlays: s.overlays ?? [],
             legendItems: s.legendItems ?? [],
             coachMessages: s.coachMessages ?? [],
@@ -1411,7 +1411,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
           })),
           socratic: data.socratic ? {
             ...data.socratic,
-            movestring: '',
+            movestring: data.socratic.movestring ?? '',  // ← same
             overlays: data.socratic.overlays ?? [],
           } : null,
         };
@@ -1585,20 +1585,24 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
   );
 }
 
-// Convert editor state (with movestrings) to the lesson JSON payload (with boardSpecs)
+// Convert editor state to the lesson JSON payload.
+// boardSpec is derived from movestring (used by the app to render).
+// movestring is stored alongside boardSpec so the editor can round-trip cleanly.
 function lessonToJsonPayload(lesson) {
   const { _idManuallyEdited, ...rest } = lesson;
   const convertBoard = (ms) => boardToSpec(parseMovestring(ms ?? ''));
   return {
     ...rest,
     slides: rest.slides.map(slide => ({
+      movestring: slide.movestring ?? '',        // ← stored for editor round-trip
       coachMessages: slide.coachMessages,
-      boardSpec: convertBoard(slide.movestring),
+      boardSpec: convertBoard(slide.movestring), // ← used by app to render
       overlays: slide.overlays,
       legendItems: slide.legendItems,
       infoProse: slide.infoProse,
     })),
     socratic: rest.socratic ? {
+      movestring: rest.socratic.movestring ?? '', // ← stored for editor round-trip
       boardSpec: convertBoard(rest.socratic.movestring),
       correctCol: rest.socratic.correctCol,
     } : null,
