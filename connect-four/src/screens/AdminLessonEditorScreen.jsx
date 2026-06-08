@@ -1,0 +1,258 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import LessonMetaForm from '../components/admin/LessonMetaForm.jsx';
+import SlideEditor from '../components/admin/SlideEditor.jsx';
+import SocraticEditor from '../components/admin/SocraticEditor.jsx';
+import { parseMovestring, boardToSpec } from '../lib/movestring.js';
+
+const VALID_CATEGORIES = [
+  'immediate_threat', 'forced_block', 'double_threat', 'claimeven', 'z_threat',
+  'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
+];
+
+function emptyLesson() {
+  return {
+    title: '',
+    id: '',
+    order: 12,
+    free: true,
+    userPerspective: 'yellow',
+    slides: [emptySlide()],
+    socratic: null,
+    confirmationCategory: null,
+    confirmationCount: 2,
+  };
+}
+
+function emptySlide() {
+  return { movestring: '', overlays: [], coachMessages: [{ text: '', mood: 'happy' }], legendItems: [], infoProse: '' };
+}
+
+// Convert editor state to the lesson JSON payload.
+// boardSpec is derived from movestring (used by the app to render).
+// movestring is stored alongside boardSpec so the editor can round-trip cleanly.
+function lessonToJsonPayload(lesson) {
+  const { _idManuallyEdited, ...rest } = lesson;
+  const convertBoard = (ms) => boardToSpec(parseMovestring(ms ?? ''));
+  return {
+    ...rest,
+    slides: rest.slides.map(slide => ({
+      movestring: slide.movestring ?? '',
+      coachMessages: slide.coachMessages,
+      boardSpec: convertBoard(slide.movestring),
+      overlays: slide.overlays,
+      legendItems: slide.legendItems,
+      infoProse: slide.infoProse,
+    })),
+    socratic: rest.socratic ? {
+      movestring: rest.socratic.movestring ?? '',
+      boardSpec: convertBoard(rest.socratic.movestring),
+      correctCol: rest.socratic.correctCol,
+    } : null,
+  };
+}
+
+/**
+ * Props:
+ *   lessonId: string | null  (null = new lesson)
+ *   onBack: () => void
+ */
+export default function AdminLessonEditorScreen({ lessonId, onBack }) {
+  const [lesson, setLesson] = useState(null);
+  const [saveState, setSaveState] = useState('idle');
+  const [saveError, setSaveError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const isNew = !lessonId;
+
+  useEffect(() => {
+    if (isNew) {
+      setLesson(emptyLesson());
+      return;
+    }
+    fetch(`/api/admin/lessons/${lessonId}`)
+      .then(r => r.json())
+      .then(data => {
+        const hydrated = {
+          ...data,
+          slides: data.slides.map(s => ({
+            ...s,
+            movestring: s.movestring ?? '',
+            overlays: s.overlays ?? [],
+            legendItems: s.legendItems ?? [],
+            coachMessages: s.coachMessages ?? [],
+            infoProse: s.infoProse ?? '',
+          })),
+          socratic: data.socratic ? {
+            ...data.socratic,
+            movestring: data.socratic.movestring ?? '',
+            overlays: data.socratic.overlays ?? [],
+          } : null,
+        };
+        setLesson(hydrated);
+      });
+  }, [lessonId]);
+
+  const handleSave = useCallback(async () => {
+    setSaveState('saving');
+    setSaveError('');
+    try {
+      const payload = lessonToJsonPayload(lesson);
+      const url = isNew ? '/api/admin/lessons' : `/api/admin/lessons/${lessonId}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2000);
+    } catch (e) {
+      setSaveState('error');
+      setSaveError(e.message);
+    }
+  }, [lesson, isNew, lessonId]);
+
+  const handleDelete = useCallback(async () => {
+    await fetch(`/api/admin/lessons/${lessonId}`, { method: 'DELETE' });
+    onBack();
+  }, [lessonId, onBack]);
+
+  function addSlide() {
+    setLesson(l => ({ ...l, slides: [...l.slides, emptySlide()] }));
+  }
+
+  function updateSlide(i, updated) {
+    setLesson(l => ({ ...l, slides: l.slides.map((s, j) => j === i ? updated : s) }));
+  }
+
+  function deleteSlide(i) {
+    setLesson(l => ({ ...l, slides: l.slides.filter((_, j) => j !== i) }));
+  }
+
+  function moveSlide(i, dir) {
+    setLesson(l => {
+      const slides = [...l.slides];
+      const target = i + dir;
+      if (target < 0 || target >= slides.length) return l;
+      [slides[i], slides[target]] = [slides[target], slides[i]];
+      return { ...l, slides };
+    });
+  }
+
+  if (!lesson) return <div style={{ color: '#fff', padding: 32 }}>Loading…</div>;
+
+  const sectionLabel = { fontWeight: 700, fontSize: 16, color: '#fff', marginBottom: 8 };
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: '#fff', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onBack} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>← Back</button>
+        <h1 style={{ margin: 0, fontSize: 20 }}>{isNew ? 'New lesson' : `Edit: ${lesson.title || lesson.id}`}</h1>
+      </div>
+
+      {/* Metadata */}
+      <section>
+        <div style={sectionLabel}>Metadata</div>
+        <LessonMetaForm meta={lesson} onChange={updated => setLesson(l => ({ ...l, ...updated }))} />
+      </section>
+
+      {/* Slides */}
+      <section>
+        <div style={sectionLabel}>Slides</div>
+        {lesson.slides.map((slide, i) => (
+          <div key={i} style={{ marginBottom: 12 }}>
+            <SlideEditor
+              slide={slide}
+              index={i}
+              total={lesson.slides.length}
+              onChange={updated => updateSlide(i, updated)}
+              onMoveUp={() => moveSlide(i, -1)}
+              onMoveDown={() => moveSlide(i, 1)}
+              onDelete={() => deleteSlide(i)}
+            />
+          </div>
+        ))}
+        <button onClick={addSlide} style={{ padding: '8px 20px', borderRadius: 8, cursor: 'pointer' }}>+ Add slide</button>
+      </section>
+
+      {/* Socratic */}
+      <section>
+        <div style={sectionLabel}>Socratic</div>
+        <SocraticEditor
+          enabled={lesson.socratic !== null}
+          socratic={lesson.socratic}
+          onChange={s => setLesson(l => ({ ...l, socratic: s }))}
+        />
+      </section>
+
+      {/* Confirmation */}
+      <section>
+        <div style={sectionLabel}>Confirmation challenges</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#1e1e1e', padding: 16, borderRadius: 8, border: '1px solid #333' }}>
+          <div>
+            <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Category</label>
+            <select
+              value={lesson.confirmationCategory ?? ''}
+              onChange={e => setLesson(l => ({ ...l, confirmationCategory: e.target.value || null }))}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #444', background: '#111', color: '#fff' }}
+            >
+              <option value="">None</option>
+              {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Count</label>
+            <input
+              type="number" min={0}
+              value={lesson.confirmationCount}
+              onChange={e => setLesson(l => ({ ...l, confirmationCount: parseInt(e.target.value, 10) || 0 }))}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #444', background: '#111', color: '#fff', width: 80 }}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Action bar */}
+      <div style={{ position: 'sticky', bottom: 0, background: '#111', borderTop: '1px solid #333', padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button
+          onClick={handleSave}
+          disabled={saveState === 'saving'}
+          style={{ padding: '8px 24px', borderRadius: 8, cursor: 'pointer', background: '#166534', color: '#fff', fontWeight: 700 }}
+        >
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : 'Save'}
+        </button>
+        <button
+          onClick={() => window.open(`/lessons/${lesson.id}?adminPreview=1`, '_blank')}
+          disabled={isNew && saveState !== 'saved'}
+          style={{ padding: '8px 24px', borderRadius: 8, cursor: 'pointer', background: '#1d4ed8', color: '#fff' }}
+        >
+          Preview ↗
+        </button>
+        {!isNew && (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{ marginLeft: 'auto', padding: '8px 20px', borderRadius: 8, cursor: 'pointer', background: '#7f1d1d', color: '#fff' }}
+          >
+            Delete
+          </button>
+        )}
+        {saveState === 'error' && <span style={{ color: '#f87171', fontSize: 13 }}>{saveError}</span>}
+      </div>
+
+      {/* Delete confirm */}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'grid', placeItems: 'center', zIndex: 999 }}>
+          <div style={{ background: '#1e1e1e', borderRadius: 12, padding: 32, maxWidth: 360, textAlign: 'center' }}>
+            <p>Delete <strong>{lesson.title || lesson.id}</strong>? This cannot be undone.</p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 16 }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '8px 20px', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleDelete} style={{ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', background: '#7f1d1d', color: '#fff' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
