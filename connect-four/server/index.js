@@ -20,6 +20,9 @@ import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson } from './lessonLoader.js';
+import { reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
+import { requireAdmin } from './adminAuth.js';
+import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation } from './annotationGate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +44,7 @@ app.use((req, res, next) => {
 
 // ── Lesson loader ──────────────────────────────────────────────────────────────
 loadLessons(join(__dirname, '../lessons'));
+const LESSONS_DIR = join(__dirname, '../lessons');
 
 // ── Rate limiting (T068) ───────────────────────────────────────────────────────
 
@@ -271,6 +275,56 @@ app.get('/api/lessons/:id', (req, res) => {
   const lesson = getLesson(req.params.id);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
+});
+
+// ── Admin lesson endpoints ─────────────────────────────────────────────────────
+
+app.get('/api/admin/lessons', requireAdmin, (req, res) => {
+  res.json(getLessonsAll());
+});
+
+app.get('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  const all = getLessonsAll();
+  const lesson = all.find(l => l.id === req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'Not found' });
+  res.json(lesson);
+});
+
+app.post('/api/admin/lessons', requireAdmin, (req, res) => {
+  const lesson = req.body;
+  const err = validateLesson(lesson);
+  if (err) return res.status(400).json({ error: err });
+  try {
+    saveLessonFile(LESSONS_DIR, lesson);
+    reloadLessons();
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  const lesson = req.body;
+  const err = validateLesson(lesson);
+  if (err) return res.status(400).json({ error: err });
+  try {
+    const oldId = req.params.id !== lesson.id ? req.params.id : null;
+    saveLessonFile(LESSONS_DIR, lesson, oldId);
+    reloadLessons();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  try {
+    deleteLessonFile(LESSONS_DIR, req.params.id);
+    reloadLessons();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/scores', async (req, res) => {
@@ -507,7 +561,6 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (cached?.deep_reveal_json) {
       return res.json({
         explanation: cached.deep_reveal_json.explanation,
-        prompt: cached.deep_reveal_json.prompt ?? '',
         cached: true,
       });
     }
@@ -520,7 +573,6 @@ app.post('/api/explain-move-llm', async (req, res) => {
       // No quota consumed for the "all-moves-equal" early exit path
       return res.json({
         explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
-        prompt: '',
       });
     }
 
@@ -528,7 +580,6 @@ app.post('/api/explain-move-llm', async (req, res) => {
       // All moves genuinely settled (all scores zero). FR-007 frozen string.
       return res.json({
         explanation: 'All moves are roughly equivalent here — no single best move stands out.',
-        prompt: '',
       });
     }
 
@@ -537,7 +588,6 @@ app.post('/api/explain-move-llm', async (req, res) => {
       // No LLM call — canned message prevents fabricated nuance.
       return res.json({
         explanation: context.trivialExplanation,
-        prompt: '',
       });
     }
 
@@ -598,7 +648,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         }
 
         // No quota consumed for fallback
-        return res.json({ explanation: fallbackText, prompt: null, cached: false });
+        return res.json({ explanation: fallbackText, cached: false });
       }
     }
 
@@ -619,7 +669,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, prompt });
+    res.json({ explanation });
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -1665,6 +1715,15 @@ if (process.env.STRIPE_SECRET_KEY) {
   const { default: Stripe } = await import('stripe');
   stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 }
+
+// POST /api/dev/upgrade — bypass payment, immediately set tier to paid
+app.post('/api/dev/upgrade', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (supabase) {
+    await supabase.from('users').update({ tier: 'paid' }).eq('id', req.user.id);
+  }
+  res.json({ tier: 'paid' });
+});
 
 // POST /api/stripe/create-checkout
 app.post('/api/stripe/create-checkout', async (req, res) => {
