@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadLessons, getLessons, getLesson } from '../../server/lessonLoader.js';
+import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from '../../server/lessonLoader.js';
 
 /** Minimal valid lesson fixture */
 function makeValidLesson(overrides = {}) {
@@ -107,4 +107,41 @@ test('lessonLoader: slide with boardSpec having 6 elements is excluded', () => {
   } finally {
     console.error = originalError;
   }
+});
+
+test('lessonLoader: reloadLessons re-reads the same directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-reload-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeValidLesson());
+  loadLessons(dir);
+  assert.equal(getLessons().length, 1);
+
+  // Add a second lesson and reload
+  writeTempLesson(dir, 'lesson-02-second.json', makeValidLesson({ id: 'second', title: 'Second' }));
+  reloadLessons();
+  assert.equal(getLessons().length, 2);
+});
+
+test('lessonLoader: getLessonsAll returns full lesson objects (not summaries)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-all-'));
+  const lesson = makeValidLesson({ confirmationCategory: 'immediate_threat', confirmationCount: 3 });
+  writeTempLesson(dir, 'lesson-01-test.json', lesson);
+  loadLessons(dir);
+
+  const all = getLessonsAll();
+  assert.equal(all.length, 1);
+  assert.equal(all[0].confirmationCategory, 'immediate_threat');
+  assert.equal(all[0].confirmationCount, 3);
+  assert.ok('slides' in all[0], 'full object should include slides');
+});
+
+test('lessonLoader: validateLesson returns null for a valid lesson', () => {
+  const err = validateLesson(makeValidLesson());
+  assert.equal(err, null);
+});
+
+test('lessonLoader: validateLesson returns error string for missing id', () => {
+  const bad = makeValidLesson();
+  delete bad.id;
+  const err = validateLesson(bad);
+  assert.ok(typeof err === 'string' && err.length > 0, 'should return error string');
 });

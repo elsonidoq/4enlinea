@@ -15,6 +15,7 @@ import path from 'node:path';
 
 /** @type {Array<Object>} */
 let _lessons = [];
+let _dir = '';
 
 /**
  * Validate that boardSpec arrays in slides and socratic have exactly 7 elements.
@@ -41,7 +42,7 @@ function validateBoardSpecs(lesson) {
  * Validate required top-level fields on a lesson object.
  * Returns an error string if invalid, or null if valid.
  */
-function validateLesson(lesson) {
+export function validateLesson(lesson) {
   if (typeof lesson.id !== 'string') return 'missing or invalid field: id (must be string)';
   if (typeof lesson.title !== 'string') return 'missing or invalid field: title (must be string)';
   if (typeof lesson.free !== 'boolean') return 'missing or invalid field: free (must be boolean)';
@@ -74,6 +75,7 @@ function validateLesson(lesson) {
  * @param {string} dir  Absolute path to the lessons directory
  */
 export function loadLessons(dir) {
+  _dir = dir;
   _lessons = [];
 
   if (!fs.existsSync(dir)) {
@@ -118,6 +120,14 @@ export function loadLessons(dir) {
   }
 
   _lessons.sort((a, b) => a.order - b.order);
+}
+
+export function reloadLessons() {
+  if (_dir) loadLessons(_dir);
+}
+
+export function getLessonsAll() {
+  return [..._lessons];
 }
 
 /**
