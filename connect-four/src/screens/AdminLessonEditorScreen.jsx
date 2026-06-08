@@ -4,6 +4,18 @@ import SlideEditor from '../components/admin/SlideEditor.jsx';
 import SocraticEditor from '../components/admin/SocraticEditor.jsx';
 import { parseMovestring, boardToSpec } from '../lib/movestring.js';
 
+function authHeaders() {
+  const sb = localStorage.getItem('supabase.auth.token');
+  if (!sb) return {};
+  try {
+    const parsed = JSON.parse(sb);
+    const token = parsed?.currentSession?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 const VALID_CATEGORIES = [
   'immediate_threat', 'forced_block', 'double_threat', 'claimeven', 'z_threat',
   'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
@@ -46,6 +58,7 @@ function lessonToJsonPayload(lesson) {
     socratic: rest.socratic ? {
       movestring: rest.socratic.movestring ?? '',
       boardSpec: convertBoard(rest.socratic.movestring),
+      overlays: rest.socratic.overlays ?? [],
       correctCol: rest.socratic.correctCol,
     } : null,
   };
@@ -68,7 +81,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       setLesson(emptyLesson());
       return;
     }
-    fetch(`/api/admin/lessons/${lessonId}`)
+    fetch(`/api/admin/lessons/${lessonId}`, { headers: authHeaders() })
       .then(r => r.json())
       .then(data => {
         const hydrated = {
@@ -100,7 +113,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       const method = isNew ? 'POST' : 'PUT';
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -114,7 +127,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
   }, [lesson, isNew, lessonId]);
 
   const handleDelete = useCallback(async () => {
-    await fetch(`/api/admin/lessons/${lessonId}`, { method: 'DELETE' });
+    await fetch(`/api/admin/lessons/${lessonId}`, { method: 'DELETE', headers: authHeaders() });
     onBack();
   }, [lessonId, onBack]);
 

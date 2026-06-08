@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
+function authHeaders() {
+  const sb = localStorage.getItem('supabase.auth.token');
+  if (!sb) return {};
+  try {
+    const parsed = JSON.parse(sb);
+    const token = parsed?.currentSession?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Props:
  *   onEdit: (lessonId: string) => void
@@ -9,7 +21,7 @@ export default function AdminLessonListScreen({ onEdit, onNew }) {
   const [lessons, setLessons] = useState(null);
 
   async function load() {
-    const res = await fetch('/api/admin/lessons');
+    const res = await fetch('/api/admin/lessons', { headers: authHeaders() });
     setLessons(await res.json());
   }
 
@@ -17,7 +29,7 @@ export default function AdminLessonListScreen({ onEdit, onNew }) {
 
   async function handleDelete(id, title) {
     if (!confirm(`Delete "${title}"?`)) return;
-    await fetch(`/api/admin/lessons/${id}`, { method: 'DELETE' });
+    await fetch(`/api/admin/lessons/${id}`, { method: 'DELETE', headers: authHeaders() });
     load();
   }
 
