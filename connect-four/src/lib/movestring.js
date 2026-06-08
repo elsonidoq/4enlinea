@@ -1,3 +1,5 @@
+import { buildBoard } from './board.js';
+
 /**
  * Movestring utilities for the lesson editor.
  * Movestrings use 0-indexed columns (0–6). Only c4solver-wrapper.js
@@ -9,17 +11,7 @@
 
 /** Parse a movestring into a 6×7 board array ('empty' | 'red' | 'yellow'). */
 export function parseMovestring(movestring) {
-  const board = Array.from({ length: 6 }, () => Array(7).fill('empty'));
-  const heights = Array(7).fill(0);
-  for (let i = 0; i < movestring.length; i++) {
-    const col = parseInt(movestring[i], 10);
-    if (isNaN(col) || col < 0 || col > 6) continue;
-    const row = heights[col];
-    if (row >= 6) continue;
-    board[row][col] = i % 2 === 0 ? 'red' : 'yellow';
-    heights[col]++;
-  }
-  return board;
+  return buildBoard(movestring).board;
 }
 
 /**
