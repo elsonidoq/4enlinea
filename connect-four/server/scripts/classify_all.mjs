@@ -1,4 +1,4 @@
-import { classifyAll, Board } from '../classifier.js';
+import { classifyPattern, Board } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 
 const ROWS = 6;
@@ -7,11 +7,10 @@ const COLS = 7;
 const moves = process.argv[2] ?? '';
 
 const solver = createSolverProcess();
-let scores, detectorResults;
+let scores;
 try {
   scores = await solver.query(moves);
   const board = new Board(moves);
-  detectorResults = await classifyAll(moves, scores, solver);
 
   // ── Board state ─────────────────────────────────────────────────────────────
   const playerName = p => p === 1 ? 'Red' : 'Yellow';
@@ -92,11 +91,14 @@ try {
   }
   console.log('');
 
-  // ── Pattern detectors ─────────────────────────────────────────────────────
+  // ── Pattern detectors (both perspectives) ────────────────────────────────
   console.log('=== PATTERN DETECTORS ===');
-  for (const { detectorName, result } of detectorResults) {
-    console.log(`${detectorName}:`, JSON.stringify(result));
-  }
+  const redResult = await classifyPattern(moves, 1, solver);
+  const yellowResult = await classifyPattern(moves, 2, solver);
+  const redTags = [...new Set(redResult.keys())];
+  const yellowTags = [...new Set(yellowResult.keys())];
+  console.log('Red (player 1):', redTags.length > 0 ? redTags.join(', ') : 'none');
+  console.log('Yellow (player 2):', yellowTags.length > 0 ? yellowTags.join(', ') : 'none');
 } finally {
   solver.destroy();
 }

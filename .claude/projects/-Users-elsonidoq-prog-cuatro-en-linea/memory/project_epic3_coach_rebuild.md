@@ -1,37 +1,45 @@
 ---
 name: project_epic3_coach_rebuild
-description: "Epic 3 (coach explanation rebuild) scope — replace explainSimulate with tagBlunder+classifyPattern, remove classifyAll; defined in epics doc"
+description: "Epic 3 (coach explanation rebuild) — spec/plan/tasks done at specs/025-patterns-blunders-epic3; 26 tasks; key architectural decisions locked"
 metadata:
   type: project
 ---
 
-Epic 3 defined 2026-06-07 in `docs/mvp/patterns_blunders_challenges_epics.md`. Not yet specced. Depends on Epic 2 (tagBlunder must produce non-null reason/direction on stored blunder rows).
+Spec/plan/tasks completed 2026-06-08 at `specs/025-patterns-blunders-epic3/`. Ready for `/coordinate-implementation`.
 
-**Why:** The user wants one clear explanation engine. After Epic 2, the blunder classification produces `{tag, reason, direction}` — richer and more accurate than `explainSimulate`'s heuristic simulation. Epic 3 makes that the LLM grounding signal.
+**Why:** Replace `explainSimulate`'s heuristic simulation with `tagBlunder`+`classifyPattern` grounding. One clean explanation engine, two clean APIs.
 
-## Goal
+## Key architectural decisions locked in spec/plan
 
-Replace `explainSimulate`-based LLM grounding with `tagBlunder` output. After Epic 3:
-- Two clean APIs: `classifyPattern` (board-level detection) and `tagBlunder` (blunder analysis + coach grounding).
-- `explainSimulate.js` deleted.
-- `classifyAll` deleted (callers adapted to `classifyPattern`/`tagBlunder`).
+- **`classifyPattern` return type**: Changes from `Set<string>` to `Map<tag, {cells: string[]}>`. Each detector emits `activeCells`. `tagBlunder`'s internal `P()` must be adapted: `const P = async (ms, p) => new Set((await classifyPattern(...)).keys())`.
+- **`allowedSet` Tier model** (in `buildExplainContext`, not `classifyPattern`):
+  - Tier 1 (concrete cells — most detectors): emit CONCRETE-ELIGIBLE `allowedSet` entry
+  - Tier 2 (column-anchored abstract — z_threat): derive ABSTRACT-ONLY entry from capsule column
+  - Tier 3 (position-global — forced_win, forced_block, claimeven, odd_even_threat): pass `null` (NOT `[]`) to `validateAnnotation`; `[]` causes P5strong to fail everything
+- **`REASON_TEMPLATES`**: 23 entries (not 24 — `forbidden_columns` unreachable), lives in `server/blunderReasons.js`
+- **`POSITIVE_TEMPLATES`**: 12 per-tag positive sentences for optimal-move path, same file
+- **Optimal-move tag priority**: uses §3.4 blunder cascade ordering, not Map insertion order
+- **`direction`-aware `allowedSet`**: `enabled_opponent` adds `classifyPattern(moves+playedCol+oppBestCol, opponent)`; `defensive_miss` adds opponent's `immediate_threat` cells only (forced_block is Tier 3, not emitted)
+- **`reason` enrichment**: DB keeps terse strings; `REASON_TEMPLATES` applied only at prompt-build time
+- **`classifyAll` replacement**: two `classifyPattern` calls (Red + Yellow perspective) → `{red:[...], yellow:[...]}`
 
-## Key complexity: `allowedSet` spatial grounding
+## Deletion scope (full cleanup)
 
-`explainSimulate` currently provides cell location data that constrains which board cells the LLM may reference (the `allowedSet` mechanism from spec 021). `classifyPattern` currently returns only `Set<string>` (tag names). Epic 3 must extend `classifyPattern` to return `Map<string, {cells}>` so `allowedSet` can be built without simulation.
+- `explainSimulate.js` — deleted (not just removed from `buildExplainContext`)
+- `/api/recommend-move` endpoint + `app.use('/api/recommend-move', makeLimit(5))` rate-limiter line
+- `src/pages/HomePage.jsx` + `src/components/RecommendCoach.jsx` — both entirely deleted (dead code on `101-new-design`; sparring uses `GameScreen.jsx`)
+- CLI scripts: `review_feedback.mjs`, `recommend_next_move.mjs`, `explain_simulate.mjs`, `explain_move.mjs`
 
-## Key complexity: reason string enrichment
+## Key task ordering constraints
 
-`tagBlunder`'s `reason` strings are terse internal codes (`"matched missed_own: double_threat"`). Epic 3 adds a `REASON_TEMPLATES` map covering all `{tag, direction}` pairs with human-readable sentences for the LLM prompt.
+- T005 (classifyPattern Map + tagBlunder P() adapter + all callers) MUST be one atomic commit
+- T021 (explainSimulate deletion) MUST run before T016 (classifyAll zero-hit check) — explainSimulate has comment refs to classifyAll
+- T012 (integration tests) before Phase 5 cleanup — don't delete old helpers until new path confirmed
 
-## Key complexity: `buildExplainContext` rework
+## DB state
 
-Currently dispatches to 4 explanation types (type1/2/3/4) with different prompt templates. Epic 3 replaces with a single unified prompt that takes `{tag, direction, reason, blunderPatternCells, correctMovePatterns, boardViz, allowedSet}`. The `validateAnnotation` gate (spec 021 P1–P6) is retained unchanged.
-
-## Estimated scope
-
-13–17 tasks. `explanation_cache` gets a `template_version TEXT` column (nullable, no data backfill). Old cached explanations remain valid — users see the explanation text, not the prompt.
+≥48 blunders with tag/direction confirmed in DB (reprocessed + papergames import). Corpus gate (≥50 rows) is met.
 
 ## NOT in Epic 3
 
-LLM model changes, annotation integrity spec (021) changes, Deep Reveal product (022) changes, UI changes to explanation display, reprocessing explanation_cache.
+LLM model changes, annotation gate (spec 021) changes, Deep Reveal UI changes, explanation_cache reprocessing, `/api/recommend-move` migration (endpoint deleted as dead, not migrated).

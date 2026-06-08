@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/024-patterns-blunders-epic2/plan.md
+specs/025-patterns-blunders-epic3/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

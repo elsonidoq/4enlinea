@@ -1,27 +1,16 @@
-// Tests for Batch 2 classification, grouping, and prompt-building helpers.
+// Tests for LLM coaching helpers.
 // Uses node:test + node:assert/strict (project convention — no Jest).
 //
-// T07: Classifier unit tests (SC-003: >=1 fixture per type)
-// Also covers T04 (checkAllMovesEqual, getGapAndFraming),
-// T08 (selectTopGroups), T09 (buildAllowedSet), T09b (buildType1AllowedSet).
+// Covers T04 (checkAllMovesEqual, getGapAndFraming).
+// T06/T08/T09/T09b/T10/T11/T12/T13 were removed in Epic 3 Batch 3 (T013) —
+// those type-dispatch helpers no longer exist.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  Board,
-  getImmediateThreats,
-} from './classifier.js';
+import { Board } from './classifier.js';
 import {
   checkAllMovesEqual,
   getGapAndFraming,
-  classifyExplanationType,
-  selectTopGroups,
-  buildAllowedSet,
-  buildType1AllowedSet,
-  buildGroupContextBlock,
-  buildType4Prompt,
-  buildType12Prompt,
-  buildType3Prompt,
   findMajorThreatWindows,
 } from './llmCoachHelpers.js';
 
@@ -135,117 +124,7 @@ describe('getGapAndFraming', () => {
     // scoreA = -2, scoreB = -4, gap = -4 - (-2) = -2, abs = 2
     assert.equal(result.gapBucket, 'small');
   });
-});
 
-// ===========================================================================
-// T06/T14 — classifyExplanationType
-// ===========================================================================
-
-describe('classifyExplanationType', () => {
-  // Test 1: Type 1 — player has immediate threat
-  test('Type 1: player has immediate threat (fixture "001122")', () => {
-    // Movestring "001122" (0-indexed): Red at (0,0),(0,1),(0,2)
-    //   → Red has 3 horizontal at row 0, immediate threat at col 3
-    const preMoveBoard = new Board('001122');
-    const postABoard = new Board('0011225'); // Red plays elsewhere (col 5)
-    const perspective = 1; // Red is coached player
-    const playedCol = 5;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, null, perspective, playedCol);
-    assert.equal(result.type, 'type1');
-  });
-
-  // Test 2: Type 2 — opponent has >=2 threats in critical position
-  test('Type 2: >=2 opponent threats in critical position', () => {
-    // Critical board "506152645464":
-    //   Yellow has 3 horizontal at row 0 cols 0-2 (empty at col 3)
-    //   AND 3 vertical at col 4 rows 0-2 (empty at row 3)
-    const preMoveBoard = new Board(''); // No immediate threats
-    const postABoard = new Board('0'); // Dummy
-    const criticalPositionMs = '506152645464';
-    const perspective = 1;
-    const playedCol = 0;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol);
-    assert.equal(result.type, 'type2');
-  });
-
-  // Test 3: Type 2 via scaffold (Figure 7 or J-shape)
-  // Note: detectFigure7/detectJShape with ZERO_SCORES require the completing
-  // column to have a positive score. With all-zero scores these detectors
-  // won't fire in practice. This test verifies the opponent-threats path
-  // as the primary Type 2 detection mechanism.
-  test('Type 2: fallback scaffold check is wired', () => {
-    // Same as test 2; verify the opponent-threat windows path
-    const preMoveBoard = new Board('');
-    const postABoard = new Board('0');
-    const criticalPositionMs = '506152645464';
-    const perspective = 1;
-    const playedCol = 0;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol);
-    assert.equal(result.type, 'type2');
-  });
-
-  // Test 4: Type 3 — major threat adjacent to parity-flip column
-  test('Type 3: major threat adjacent to played column', () => {
-    // preMoveBoard "3030": Red at (0,3),(1,3); Yellow at (0,0),(1,0)
-    // User plays col 3 → postABoard "30303": Red at (0,3),(1,3),(2,3)
-    //   → vertical major threat at col 3
-    // playedCol=3 is same as threat column → Type 3
-    const preMoveBoard = new Board('3030');
-    const postABoard = new Board('30303');
-    const perspective = 1;
-    const playedCol = 3;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, null, perspective, playedCol);
-    assert.equal(result.type, 'type3');
-    assert.ok(result.parityFlipData);
-    assert.equal(typeof result.parityFlipData.colA, 'number');
-    assert.equal(typeof result.parityFlipData.colX, 'number');
-    assert.equal(typeof result.parityFlipData.rowR, 'number');
-    assert.ok(typeof result.parityFlipData.playerLabel === 'string');
-  });
-
-  // Test 5: Type 4 — sparse early-game position
-  test('Type 4: sparse position "34"', () => {
-    const preMoveBoard = new Board('34');
-    const postABoard = new Board('345'); // user plays col 5
-    const perspective = 1;
-    const playedCol = 5;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, null, perspective, playedCol);
-    assert.equal(result.type, 'type4');
-  });
-
-  // Test 6: Fallthrough order — Type 1 > 2 > 3 > 4
-  test('Fallthrough order: Type 1 matches before Type 2/3/4', () => {
-    // Position with immediate threat (Type 1) that could also be Type 3
-    const preMoveBoard = new Board('001122'); // Red has immediate threat at col 3
-    const postABoard = new Board('0011225'); // Red plays col 5
-    const criticalPositionMs = '506152645464'; // has opponent threats (would be Type 2)
-    const perspective = 1;
-    const playedCol = 5;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol);
-    // Should be Type 1 (first match wins), not Type 2 or 3
-    assert.equal(result.type, 'type1');
-  });
-
-  test('Fallthrough order: Type 2 matches before Type 3', () => {
-    // Position without immediate threats but with >=2 opponent threats
-    const preMoveBoard = new Board(''); // No threats
-    // Use "30303" for postABoard (has major threat, would be Type 3)
-    const postABoard = new Board('30303');
-    const criticalPositionMs = '506152645464'; // has 2 opponent threats (Type 2)
-    const perspective = 1;
-    const playedCol = 3;
-
-    const result = classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol);
-    assert.equal(result.type, 'type2');
-  });
-
-  // Test 7: getGapAndFraming inverted=true (FR-008/FR-016 mutual exclusion)
   test('getGapAndFraming inverted for optimal-A position (FR-008)', () => {
     // A's score_coached (=-preScore) >= B's → inverted=true
     const preScores = [-10, 0, 0, -3, 0, 0, 0]; // A=col0, B=col3
@@ -259,318 +138,24 @@ describe('classifyExplanationType', () => {
 });
 
 // ===========================================================================
-// T08 — selectTopGroups
+// findMajorThreatWindows — smoke test
 // ===========================================================================
 
-describe('selectTopGroups', () => {
-  test('empty maps → empty result', () => {
-    const result = selectTopGroups(new Map(), new Map());
+describe('findMajorThreatWindows', () => {
+  test('returns empty array for empty board', () => {
+    const board = new Board('');
+    const result = findMajorThreatWindows(board, 1);
     assert.deepEqual(result, []);
   });
 
-  test('top 5 per branch merged by key', () => {
-    const aGroups = new Map([
-      ['c3r2,c4r2,c5r2,c6r2:player', {
-        cells: ['c3r2', 'c4r2', 'c5r2', 'c6r2'],
-        owner: 'player',
-        completed_freq: 0.8,
-        draw_freq: 0.1,
-      }],
-      ['c1r1,c2r1,c3r1,c4r1:opponent', {
-        cells: ['c1r1', 'c2r1', 'c3r1', 'c4r1'],
-        owner: 'opponent',
-        completed_freq: 0.3,
-        draw_freq: 0.2,
-      }],
-    ]);
-
-    const bGroups = new Map([
-      ['c3r2,c4r2,c5r2,c6r2:player', {
-        cells: ['c3r2', 'c4r2', 'c5r2', 'c6r2'],
-        owner: 'player',
-        completed_freq: 0.5,
-        draw_freq: 0.3,
-      }],
-    ]);
-
-    const result = selectTopGroups(aGroups, bGroups);
-    assert.equal(result.length, 2);
-
-    // Find the shared group
-    const shared = result.find(r => r.owner === 'player');
-    assert.ok(shared);
-    assert.equal(shared.aCompleted, 0.8);
-    assert.equal(shared.aDraw, 0.1);
-    assert.equal(shared.bCompleted, 0.5);
-    assert.equal(shared.bDraw, 0.3);
-
-    // A-only group should have b* = 0
-    const aOnly = result.find(r => r.owner === 'opponent');
-    assert.ok(aOnly);
-    assert.equal(aOnly.bCompleted, 0);
-    assert.equal(aOnly.bDraw, 0);
-  });
-
-  test('selectTopGroups handles null/undefined inputs', () => {
-    assert.deepEqual(selectTopGroups(null, new Map()), []);
-    assert.deepEqual(selectTopGroups(new Map(), null), []);
-  });
-});
-
-// ===========================================================================
-// T09 — buildAllowedSet
-// ===========================================================================
-
-describe('buildAllowedSet', () => {
-  test('CONCRETE-ELIGIBLE with >=2 player discs', () => {
-    // Build a simple board where the player has 2 discs in a group
-    const grid = Array.from({ length: 6 }, () => Array(7).fill(0));
-    grid[0][0] = 1; grid[1][0] = 1; grid[0][1] = 1; // Red discs mixed
-    const board = { board: grid, colHeights: [2, 1, 0, 0, 0, 0, 0] };
-
-    const groups = [{
-      cells: ['c1r1', 'c2r1', 'c3r1', 'c4r1'],
-      owner: 'player',
-      aCompleted: 0.5,
-      aDraw: 0.1,
-      bCompleted: 0.2,
-      bDraw: 0.05,
-    }];
-
-    // All 4 cells are in different cols → zoneSpec = cells:...
-    // Red discs in group: check each cell
-    // c1r1 = col0,row0 → board[0][0] = 1 = perspective (1) → count++
-    // c2r1 = col1,row0 → board[0][1] = 1 = perspective → count++
-    // 2 discs → CONCRETE-ELIGIBLE
-    const result = buildAllowedSet(groups, board, 1);
-    assert.equal(result.length, 1);
-    assert.ok(result[0].cells, 'CONCRETE-ELIGIBLE should have cells field');
-    assert.equal(result[0].zoneSpec, 'cells:c1r1,c2r1,c3r1,c4r1');
-  });
-
-  test('ABSTRACT-ONLY with <2 player discs', () => {
-    const grid = Array.from({ length: 6 }, () => Array(7).fill(0));
-    grid[0][0] = 1; // Only 1 Red disc
-    const board = { board: grid, colHeights: [1, 0, 0, 0, 0, 0, 0] };
-
-    const groups = [{
-      cells: ['c1r1', 'c1r2', 'c1r3', 'c1r4'],
-      owner: 'player',
-      aCompleted: 0.3,
-      aDraw: 0,
-      bCompleted: 0.1,
-      bDraw: 0,
-    }];
-
-    // All same col (col 0) → zoneSpec = col1
-    // Only 1 Red in the group (grid[0][0]=1) → ABSTRACT-ONLY
-    const result = buildAllowedSet(groups, board, 1);
-    assert.equal(result.length, 1);
-    assert.ok(!result[0].cells, 'ABSTRACT-ONLY should NOT have cells field');
-    assert.ok('col' in result[0], 'ABSTRACT-ONLY should have col');
-    assert.ok('parity' in result[0], 'ABSTRACT-ONLY should have parity');
-    assert.equal(result[0].zoneSpec, 'col1');
-  });
-
-  test('same-column group → col zone spec', () => {
-    const grid = Array.from({ length: 6 }, () => Array(7).fill(0));
-    grid[0][0] = 1; grid[1][0] = 1; grid[2][0] = 1; // 3 Reds vertical
-    const board = { board: grid, colHeights: [3, 0, 0, 0, 0, 0, 0] };
-
-    const groups = [{
-      cells: ['c1r1', 'c1r2', 'c1r3', 'c1r4'],
-      owner: 'player',
-      aCompleted: 0.6,
-      aDraw: 0,
-      bCompleted: 0.3,
-      bDraw: 0,
-    }];
-
-    // 3 Reds in the group → CONCRETE-ELIGIBLE
-    // All same col (0) → zoneSpec = col1
-    const result = buildAllowedSet(groups, board, 1);
-    assert.equal(result.length, 1);
-    assert.equal(result[0].zoneSpec, 'col1');
-  });
-});
-
-// ===========================================================================
-// T09b — buildType1AllowedSet
-// ===========================================================================
-
-describe('buildType1AllowedSet', () => {
-  test('returns empty for board with no immediate threats', () => {
-    const board = new Board('34'); // 2 discs, sparse
-    const result = buildType1AllowedSet(board, 1);
-    assert.deepEqual(result, []);
-  });
-
-  test('returns entries for position with immediate threat', () => {
-    // "001122": Red has 3 horizontal at row 0, immediate threat at col 3
+  test('returns player threats for position with horizontal 3-in-a-row', () => {
+    // "001122": Red at (col0,r0),(col0,r1),(col1,r0),(col1,r1),(col2,r0),(col2,r1)
+    // Actually: 0=col0 disc, 1=col1 disc, etc; move 0 → Red plays col0
+    // After "001122": Red has col0r0, col1r0, col2r0 → horizontal major threat at col3r0
     const board = new Board('001122');
-    const result = buildType1AllowedSet(board, 1);
-    assert.ok(result.length > 0);
-    assert.ok(result.every(e => Array.isArray(e.cells)));
-    assert.ok(result.every(e => typeof e.zoneSpec === 'string'));
-  });
-});
-
-// ===========================================================================
-// T10 — buildGroupContextBlock (smoke test)
-// ===========================================================================
-
-describe('buildGroupContextBlock', () => {
-  test('returns string with Move context section', () => {
-    const board = new Board('34');
-    const result = buildGroupContextBlock([], [], board, 1, {
-      userCol: 3,
-      contrastCol: 4,
-      gapBucket: 'small',
-    });
-    assert.ok(result.includes('## Move context'));
-    assert.ok(result.includes('## Boards'));
-    assert.ok(!result.includes('## Winning-line comparison'));
-  });
-
-  test('includes Winning-line comparison when groups present', () => {
-    const board = new Board('34');
-    const groups = [{
-      cells: ['c1r1', 'c2r1', 'c3r1', 'c4r1'],
-      owner: 'player',
-      aCompleted: 0.5,
-      aDraw: 0,
-      bCompleted: 0.2,
-      bDraw: 0,
-    }];
-    const allowedSet = [{
-      cells: ['c1r1', 'c2r1', 'c3r1', 'c4r1'],
-      zoneSpec: 'cells:c1r1,c2r1,c3r1,c4r1',
-    }];
-    const result = buildGroupContextBlock(groups, allowedSet, board, 1, {
-      userCol: 3,
-      contrastCol: 4,
-      gapBucket: 'small',
-    });
-    assert.ok(result.includes('## Winning-line comparison'));
-    assert.ok(result.includes('GROUP_0'));
-    assert.ok(result.includes('CONCRETE-ELIGIBLE'));
-  });
-
-  test('major threats: none when no threats exist', () => {
-    const board = new Board('34');
-    const result = buildGroupContextBlock([], [], board, 1, {
-      userCol: 3,
-      contrastCol: 4,
-      gapBucket: 'small',
-    });
-    assert.ok(result.includes('major threats: none'));
-  });
-});
-
-// ===========================================================================
-// T11 — buildType4Prompt (smoke test)
-// ===========================================================================
-
-describe('buildType4Prompt', () => {
-  test('returns prompt string with all sections', () => {
-    const result = buildType4Prompt({
-      playerName: 'Green',
-      gap: 5,
-      gapBucket: 'moderate',
-      contextBlock: '## Move context\n- Player: Green\n',
-      inverted: false,
-    });
-    assert.ok(result.includes('## Role'));
-    assert.ok(result.includes('## Players'));
-    assert.ok(result.includes('## Hard grounding rules'));
-    assert.ok(result.includes('## Tone'));
-    assert.ok(result.includes('## Task'));
-    assert.ok(result.includes('## Output format'));
-    assert.ok(result.includes('Green'));
-    assert.ok(result.includes('Grey'));
-  });
-
-  test('inverted=true produces inverted tone', () => {
-    const result = buildType4Prompt({
-      playerName: 'Grey',
-      gap: 0,
-      gapBucket: 'small',
-      contextBlock: '## Move context\n- Player: Grey\n',
-      inverted: true,
-    });
-    assert.ok(result.includes('Both A and the alternative are equivalent'));
-    assert.ok(!result.includes('col B is clearly preferable'));
-  });
-
-  test('gap=0 inverted produces neutral tone', () => {
-    const result = buildType4Prompt({
-      playerName: 'Green',
-      gap: 0,
-      gapBucket: 'small',
-      contextBlock: '## Move context',
-      inverted: true,
-    });
-    assert.ok(result.includes('Both A and the alternative are equivalent'));
-  });
-});
-
-// ===========================================================================
-// T12 — buildType12Prompt (smoke test)
-// ===========================================================================
-
-describe('buildType12Prompt', () => {
-  test('returns prompt string', () => {
-    const result = buildType12Prompt({
-      playerName: 'Green',
-      gap: 8,
-      gapBucket: 'moderate',
-      contextBlock: '## Move context\n',
-      explainType: 'type1',
-    });
-    assert.ok(result.includes('## Role'));
-    assert.ok(result.includes('missed immediate threat'));
-  });
-
-  test('type1 task mentions missed immediate threat', () => {
-    const result = buildType12Prompt({
-      playerName: 'Green',
-      gap: 5,
-      gapBucket: 'moderate',
-      contextBlock: '## Move context\n',
-      explainType: 'type1',
-    });
-    assert.ok(result.includes('missed immediate threat'));
-  });
-
-  test('type2 task mentions tactical pattern', () => {
-    const result = buildType12Prompt({
-      playerName: 'Grey',
-      gap: 12,
-      gapBucket: 'large',
-      contextBlock: '## Move context\n',
-      explainType: 'type2',
-    });
-    assert.ok(result.includes('tactical pattern'));
-  });
-});
-
-// ===========================================================================
-// T13 — buildType3Prompt (smoke test)
-// ===========================================================================
-
-describe('buildType3Prompt', () => {
-  test('returns prompt string with parity sentence', () => {
-    const result = buildType3Prompt({
-      playerName: 'Green',
-      gap: 3,
-      gapBucket: 'small',
-      contextBlock: '## Move context\n',
-      parityFlipData: { colA: 4, colX: 4, rowR: 4, playerLabel: 'you' },
-    });
-    assert.ok(result.includes('## Role'));
-    assert.ok(result.includes('changes the number of empty squares'));
-    assert.ok(result.includes('column 4'));
-    assert.ok(result.includes('row 4'));
-    assert.ok(result.includes('you'));
+    const result = findMajorThreatWindows(board, 1);
+    assert.ok(result.length > 0, 'should find at least one threat window');
+    const hasPlayer = result.some(w => w.owner === 'player');
+    assert.ok(hasPlayer, 'should have player-owned threat window');
   });
 });

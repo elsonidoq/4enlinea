@@ -18,11 +18,19 @@ connect-four/tests/
   hallucination/       # LLM explanation acceptance test (manual)
     run_hallucination_test.js
   integration/         # HTTP-level regression tests
-  blunder/
+  blunder/             # Blunder + explain context tests (node:test, NOT Jest)
+    tagBlunder.test.js
+    blunderReasons.test.js
+    insertGameBlunder.test.js
+    classifyPatternCells.test.js
+    tagBlunderPAdaptation.test.js
+    buildExplainContext.test.js
   difficulty/
   scores/
   unit/
 ```
+
+**`tests/blunder/` convention**: All files in `tests/blunder/` use `node:test` (NOT Jest). They are included in `test:fast` and `test`. To run a single file: `node --test connect-four/tests/blunder/buildExplainContext.test.js`.
 
 ## Fixture Format
 
@@ -89,11 +97,19 @@ HTTP integration tests spin up an express app in-process using `node:http` + `cr
 ```
 cd connect-four && npm test
 ```
-Tests are **explicitly listed** in the `test` script in `package.json` — there is no automatic discovery. The following files are included:
+Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
+
+**`npm test` includes**:
 - `server/test_explain_parity.js`
+- `server/annotationGate.test.js`
 - `tests/predicates/predicates.test.js`
 - `tests/predicates/forbidden_columns.test.js`
 - `tests/classifier/classifier.test.js`
+- `tests/blunder/tagBlunder.test.js`
+- `tests/blunder/blunderReasons.test.js`
+- `tests/blunder/classifyPatternCells.test.js`
+- `tests/blunder/tagBlunderPAdaptation.test.js`
+- `tests/blunder/buildExplainContext.test.js`
 - `tests/integration/candidate-generator.test.js`
 - `tests/integration/forced_win.test.js`
 - `tests/integration/sequence_check.test.js`
@@ -101,8 +117,11 @@ Tests are **explicitly listed** in the `test` script in `package.json` — there
 - `tests/integration/claimeven.test.js`
 - `tests/integration/figure7_jshape.test.js`
 - `tests/integration/undercut_overcut.test.js`
+- `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer)
 
-Files in `tests/blunder/`, `tests/difficulty/`, `tests/scores/`, and `tests/unit/` exist but are **not run by `npm test`** — add them to the script explicitly when they are ready.
+**`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js` and `tests/blunder/insertGameBlunder.test.js` but **excludes** `tests/integration/candidate-generator.test.js`.
+
+Files in `tests/difficulty/` and `tests/scores/` exist but are **not included** in either script — add them explicitly when they are ready.
 
 ### Pure Function Extraction Pattern
 

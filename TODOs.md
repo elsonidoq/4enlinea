@@ -1,21 +1,33 @@
 - e-mail design: The current e-mail is ugly
+
 - I don't think it is very effective to have only the magic link as a way to sign in. What other ways to register can we implement. password? with gmail? with meta?
-- avoid repeated puzzles in the same session: e.g. three consecutive puzzles of immediate threat, where the immediate threat was a vertical stack of 3 disks. It might make sense to have a function per puzzle, that extracts the "shape" of the puzzle (e.g. for an immediate threat it might be the group of three orientation and coarced grained position, for double threat it might be the union of the involved pieces translated into the top right corner)
+
+- avoid repeated puzzles in the same session: e.g. three consecutive puzzles of immediate threat, where the immediate threat was a vertical stack of 3 disks. It might make sense to have a function per puzzle, that extracts the "shape" of the puzzle (e.g. for an immediate threat it might be the group of three orientation and coarced grained position, for double threat it might be the union of the involved pieces translated into the top right corner). Using the shape, a ranker function can determine an order that the puzzle should have so that there are no two identicaly shaped puzzle next to each other
+
 - modify global colorscheme light. Currently there is a global dark color scheme, and all the components have to override it. 
+
 - the review blunder screen should specify if the user played green or grey
+
 - do not leak llm prompt for deep reveal. The API shouldn't expose that as well. 
-- session stats table is not used
-- The app must use different paths for the navigation. Why were they removed in the implementation of docs/mvp/epics.md?
+
+- session stats table is not used, if not used, it should be dropped
+
+- The app must use different paths for the navigation, we need to have permalinks
+
 - each challenge in the challenges view must have: 1. progress bar, 2. if the user already cleared a challenge set, it has to be visually clear 3. the accuracy somewhat visually (not with a number)
 
-- Words like "fork" or "double threat" should be marked differently so that doing mouse over / clicking / tapping shows a popup with a small explanation of what the word is. That can be done with the knowledge-base
+- Words like "fork" or "double threat" should be marked differently so that doing mouse over / clicking / tapping shows a popup with a small explanation of what the word is. This can be done with the knowledge-base
 
-- Only display the "learn more" when the user makes a mistake. It doesn't make sense when the user spotted the optimal move
+- In the challenges screen, only display the "learn more" when the user makes a mistake. It doesn't make sense when the user spotted the optimal move
 
 - in forced_win, when we arrive to the double threat, the two threats must be highlighted in the board
+
 - no supabase requests should be done client side, every request from the client must be performed to the server, and the server handles the request to the database
+
 - We need to perform a full vulnerabilities scan: is the app secure?
+
 - Make the coach speak. It is very hard for someone to read the coach's messages while they are playing.
+
 - the app must have sounds: 
     background music
     disk falling
@@ -29,6 +41,8 @@
 
 
 - the curation page, instead of having one component per category, must have a drop down to select what puzzle type we want to generate. Those puzzle types must be the same as the blunders categories
+
+- Technical debt: we need to map technical debt and fix the most important issues. There are dead screens and dead code. We need to clean the repository. 
 
 - when you go to the next board in a challenge set, the pieces that are shared between the previous board and the next board just appear, but the new ones introduced by the next board fall using the animation like if you were dropping them. In the first board all pieces fall. The pieces that are already in the board should not perform any effect, just appear in the board
 
@@ -47,7 +61,7 @@
     - Games I had horrible blunders
     - Recent games
 
-- All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of blunders should be either through categories, and browse recent blunders
+- All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of blunders should be either through categories, and browse recent blunders. Also filter blunders imported from papergames
 
 - Accuracy by pattern is wrong, shows 100% accuracy when I failed 3 puzzles and got one correct
 

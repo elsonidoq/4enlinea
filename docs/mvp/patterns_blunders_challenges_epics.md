@@ -367,6 +367,10 @@ producing non-null `reason`/`direction` on stored `blunders` rows before this ep
   `topGroups`, etc.). This is the removal surface.
 - Enumerate all callers of `classifyAll` in `server/` (`rg classifyAll connect-four/server/`).
   Document the replacement plan for each caller before any deletion.
+- Enumerate every direct caller of `classifyPattern` in `server/` (`rg classifyPattern server/`).
+  This is a required pre-change audit: the return-type signature change (if Option A is chosen,
+  see below) silently breaks `tagBlunder`'s internal `P()` helper which uses set-membership
+  operations on the result. All callers must be identified before any signature change is made.
 - Read `buildExplainContext` in `server/index.js` top-to-bottom. Document the four explanation
   types (type1/2/3/4), the `allowedSet` construction path for each, and which functions are
   called exclusively from within it. These are all candidates for removal.
@@ -383,41 +387,72 @@ producing non-null `reason`/`direction` on stored `blunders` rows before this ep
   - `{forced_block, defensive_miss}` → `"You had a forced defensive move but played elsewhere, letting your opponent win immediately."`
 - Cover all 15 tags × relevant directions. Tags that only appear in one direction (e.g.,
   `forced_block` is always `defensive_miss`) have one entry; others have up to three.
-- `tagBlunder` returns the enriched human-readable string as `reason`. All existing callers that
-  persist `reason` to the DB benefit automatically — the column is TEXT with no content constraint.
-- **IF** any existing test asserts the exact terse reason string, **THEN** update those tests.
+- **`tagBlunder` retains its terse machine-readable `reason` strings.** `blunders.reason` stores
+  these terse values as-is (e.g., `"matched missed_own: double_threat"`). `tagBlunder`'s return
+  value is not changed; existing tests that assert terse reason strings are not updated.
+- **`REASON_TEMPLATES` is applied only inside the prompt builder**, keyed on `{tag, direction}`.
+  The prompt builder maps `{tag, direction}` to a human-readable sentence before inserting it
+  into the LLM prompt. The `reason` value stored to `blunders.reason` is the original terse
+  string from `tagBlunder`; the value passed to the LLM is the enriched sentence from the template.
 
-*`classifyPattern` extension — return cell locations alongside tags:*
+*`classifyPattern` extension — cell-location source for `allowedSet` (Decision: Option A):*
 
 The `allowedSet` mechanism that constrains which board cells the LLM may reference currently
-derives cell data from `explainSimulate`'s group results. After removing `explainSimulate`, this
-data must come from `classifyPattern`.
+derives cell data from `explainSimulate`'s group results. Removing `explainSimulate` removes
+that source. **No existing detector returns `activeCells` or per-cell coordinate strings** —
+detectors return `{ matched: boolean }`, `{ matched, cols }` (column indices), or
+`{ matched, correctCol }`. Per-cell coordinate extraction is **real new work**, not a
+propagation step.
 
-- Extend `classifyPattern(ms, perspective)` to return
-  `Map<string, { cells: string[] }>` instead of `Set<string>`. The map key is the tag name;
-  `cells` contains the 0-indexed `"cCrR"` strings for each cell that activated it (already
-  available from each detector's `activeCells` field — propagate rather than recompute).
-- **IF** a detector returns no `activeCells`, **THEN** return `cells: []` for that tag; do not
-  block on missing spatial data.
-- Existing callers that only need tag names can use `new Set(result.keys())`. Update all callers
-  of `classifyPattern` to the new return type — there should be few after Epic 2.
+**Decision: Option A** — `classifyPattern` returns `Map<string, { cells: string[] }>`.
+
+- **Option A (chosen):** Extend `classifyPattern` to return `Map<string, { cells: string[] }>`.
+  Add genuine per-cell coordinate output to each relevant detector — a non-trivial sub-task;
+  scope and test each detector separately. Existing callers that only need tag names adapt
+  with `new Set(result.keys())`.
+  - **`tagBlunder` adaptation required:** `tagBlunder` has an internal
+    `P(ms, player) => classifyPattern(ms, player)` helper used for set-membership tests
+    (`∈`, `∉`, `∪`) across all five cascade steps. If `classifyPattern` returns `Map`, these
+    operations break silently at runtime. Adapt as:
+    `const P = async (ms, player) => new Set((await classifyPattern(ms, player, solver)).keys())`
+    Add a regression test asserting the cascade resolves identically on a known blunder
+    movestring (source from DB or codebase, never invented by hand) before shipping.
+  - Enumerate every direct `classifyPattern` caller in `server/` (pre-implementation audit above).
+    Every caller must be adapted before the signature change ships.
+
+- **Option B (rejected):** Keep `classifyPattern` returning `Set<string>` (tags only). Derive
+  annotation cell data from a board/threat-map utility (e.g., `getMajorThreatCells`) independently
+  of detectors, in a separate helper called from `buildExplainContext`. No `tagBlunder` adaptation
+  required under this option.
 
 *`buildExplainContext` rework — replace simulation with `tagBlunder` + `classifyPattern`:*
 
 `buildExplainContext` currently dispatches to four explanation types (type1/2/3/4) and runs
 `explainSimulate` for types 2/3/4. Replace with a unified two-sided grounding:
 
-- **Blunder side ("what went wrong"):** `tagBlunder(movestring, col, bestCol, solver)` — returns
-  `{tag, reason, direction}`. Use `tag` to identify the pattern; use the enriched `reason` string
-  directly in the prompt. Use `direction` for framing (missed_own / enabled_opponent /
-  defensive_miss).
-- **Correct-move side ("what the best move achieves"):** `classifyPattern(movestring + bestCol, perspective)`
-  — returns the map of patterns (with cells) active after the correct move. This replaces
+- **Scope: both blunders and optimal moves.** `POST /api/explain-move-llm` is called with the
+  recommended/best column (`DeepRevealButton` passes `candidateCol`) as well as the player's
+  played column. `buildExplainContext` must handle both cases. When `col == bestCol` the move is
+  optimal; `tagBlunder` is not called because there is no blunder to analyze.
+- **Blunder side — `col ≠ bestCol` ("what went wrong"):** Call
+  `tagBlunder(movestring, col, bestCol, solver)` → `{tag, reason, direction}`. Use `tag` to
+  identify the pattern. Apply `REASON_TEMPLATES` in the prompt builder (keyed on `{tag, direction}`)
+  to produce the human-readable sentence inserted into the LLM prompt. The terse `reason` from
+  `tagBlunder` is **not** inserted directly into the prompt. Use `direction` for framing
+  (missed_own / enabled_opponent / defensive_miss).
+- **Optimal-move side — `col == bestCol` ("what the best move achieves"):** Do not call
+  `tagBlunder`. Use `classifyPattern(movestring + col, perspective)` to extract patterns active
+  after the move and frame the prompt as "this is good because X". The same pattern-context
+  mechanism works symmetrically for both cases.
+- **Correct-move side (both cases):** `classifyPattern(movestring + bestCol, perspective)` —
+  returns patterns active after the best move. For blunder explanations this contrasts with the
+  played move; for optimal explanations this is the move itself. This replaces
   `explainSimulate(movestring + contrastCol, ...)`.
-- **`allowedSet` derivation:** Build from the union of cell data from the blunder-side
-  `classifyPattern(movestring, perspective)` (patterns the blunderer had) and correct-side
-  `classifyPattern` (patterns the correct move activates). This replaces `buildAllowedSet`,
-  `buildType1AllowedSet`, and `selectTopGroups`.
+- **`allowedSet` derivation:** Build from the union of cell data from
+  `classifyPattern(movestring, perspective)` (patterns at the played position) and
+  `classifyPattern(movestring + bestCol, perspective)` (patterns after the best move). This
+  replaces `buildAllowedSet`, `buildType1AllowedSet`, and `selectTopGroups`. The exact mechanism
+  uses the `cells` arrays returned by `classifyPattern` (Option A, Map with cells).
 - **Retain unchanged:** board visualizations, `selectContrastMove`, the all-moves-equal /
   settled check, and the `validateAnnotation` gate (annotation integrity, spec 021).
 - **Remove:** the type1/2/3/4 dispatch, `buildType12Prompt`, `buildType3Prompt`,
@@ -427,6 +462,9 @@ data must come from `classifyPattern`.
 *LLM prompt template:*
 
 - Write a single new `buildBlunderExplainPrompt({tag, direction, reason, blunderPatternCells, correctMovePatterns, boardViz, postBoardViz, playerName, gap, gapBucket, allowedSet})`.
+  Here `reason` is the human-readable sentence from `REASON_TEMPLATES` (not the terse string
+  from `tagBlunder`). For optimal-move calls (`col == bestCol`), `tag`/`direction` are omitted
+  or null and the prompt frames the move positively.
 - The prompt must preserve the P1–P6 annotation constraints from spec 021. The `allowedSet` and
   `validateAnnotation` gate are **retained unchanged** — only the data fed into them changes.
 - Do not change the LLM model, the retry logic, the quota gate, or the fallback path in
@@ -451,36 +489,46 @@ data must come from `classifyPattern`.
 
 - `classifyAll` is currently called from: `server/index.js` debug endpoint (~line 2016) and
   `server/scripts/classify_all.mjs`.
-- Replace the debug endpoint's `classifyAll` call with `classifyPattern` (board-level pattern
-  inspection) or `tagBlunder` (blunder analysis), depending on what the endpoint is debugging.
-  Update the endpoint response shape accordingly.
-- Replace `server/scripts/classify_all.mjs` with a script that calls `tagBlunder` per move in a
-  game, matching the new canonical blunder-analysis API.
+- Replace the debug endpoint's `classifyAll` call with two `classifyPattern` calls — one with
+  Red perspective, one with Yellow perspective. Return both pattern sets in the response shape
+  (e.g., `{ red: [...tags], yellow: [...tags] }`). This preserves the endpoint's "what patterns
+  exist in this position" debugging purpose.
+- Replace `server/scripts/classify_all.mjs` with a script that calls `classifyPattern`
+  (both perspectives) per position, matching the new canonical pattern-inspection API.
 - After all callers are adapted, run `rg classifyAll connect-four/server/` to confirm zero hits,
   then delete `classifyAll` from `classifier.js`.
 
 *Tests:*
 
-- Unit test: `tagBlunder` returns a human-readable `reason` sentence (not a terse match
-  descriptor) for each `{tag, direction}` pair. Use known movestrings from the codebase or DB —
-  never generate a movestring by hand.
+- Unit test: `REASON_TEMPLATES` covers all 15 tags × relevant directions; every `{tag, direction}`
+  pair used by `tagBlunder` has a corresponding human-readable sentence. Use snapshot assertions
+  so a future change to template text is an explicit, reviewable diff.
 - Unit test: `classifyPattern` returns non-empty `cells` for at least the `immediate_threat` and
-  `double_threat` detectors on verified movestrings.
-- Integration test: `buildExplainContext` on a known blunder movestring returns a non-null prompt
-  containing the enriched `reason` string and passes `validateAnnotation`.
+  `double_threat` detectors on verified movestrings from the codebase or DB — never invented by hand.
+- Unit test: `tagBlunder`'s cascade resolves identically before and after the `P()` adaptation —
+  regression test on a known blunder movestring sourced from DB or codebase, never invented by hand.
+- Integration test: `buildExplainContext` on a known blunder movestring (`col ≠ bestCol`) returns
+  a non-null prompt containing a human-readable enriched reason sentence (from `REASON_TEMPLATES`)
+  and passes `validateAnnotation`.
+- Integration test: `buildExplainContext` on an optimal-move call (`col == bestCol`) returns a
+  non-null prompt and passes `validateAnnotation` (no `tagBlunder` call on this path).
 - **Manual quality gate (required before shipping):** Compare LLM explanations generated by the
   new system against a sample of 10 existing cached explanations for the same movestrings. Any
   regression in accuracy or clarity blocks the epic. This is a human review step.
 
 **Acceptance criteria:**
 
-- `POST /api/explain-move-llm` produces a valid, `validateAnnotation`-passing explanation on a
-  known blunder position using the new `tagBlunder`-grounded prompt.
+- `POST /api/explain-move-llm` produces a valid, `validateAnnotation`-passing explanation for
+  both a blunder position (`col ≠ bestCol`) and an optimal-move position (`col == bestCol`).
 - `rg explainSimulate server/` returns zero hits (file deleted).
 - `rg classifyAll connect-four/server/` returns zero hits in the main source tree (function
-  deleted from `classifier.js`; the replacement script, if any, uses `tagBlunder`).
-- `classifyPattern` returns `Map<string, {cells: string[]}>` — callers updated accordingly.
-- `tagBlunder`'s `reason` field is a human-readable sentence for every `{tag, direction}` pair.
+  deleted from `classifier.js`; the debug endpoint uses `classifyPattern` with both perspectives;
+  the replacement script uses `classifyPattern`).
+- `classifyPattern` returns `Map<string, {cells: string[]}>` and all callers are updated,
+  including `tagBlunder`'s internal `P()` adapted to `new Set(result.keys())`.
+- `REASON_TEMPLATES` covers all `{tag, direction}` pairs; the LLM prompt contains a
+  human-readable enriched reason sentence. `blunders.reason` still stores the terse
+  machine-readable string from `tagBlunder`.
 - `validateAnnotation` still passes for LLM-generated explanations (no annotation integrity regression).
 - A `template_version` column exists on `explanation_cache`; new rows have value `'v2'`.
 

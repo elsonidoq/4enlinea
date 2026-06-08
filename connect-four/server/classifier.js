@@ -508,12 +508,12 @@ export function detectZThreat(board, scores, perspective = board.currentPlayer, 
         const childMs = board.movestring + c;
         let childScores;
         try { childScores = await solver.query(childMs); }
-        catch { return { matched: false }; } // terminal position → pattern doesn't apply
+        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
         const childBoard = new Board(childMs);
         const result = await detectZThreat(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false };
+        if (!result.matched) return { matched: false, cells: [] };
       }
-      return { matched: true };
+      return { matched: true, cells: [] };
     })();
   }
 
@@ -535,10 +535,11 @@ export function detectZThreat(board, scores, perspective = board.currentPlayer, 
     }
   }
 
-  if (candidates.length !== 1) return { matched: false };
+  if (candidates.length !== 1) return { matched: false, cells: [] };
   const { col, fromRow, toRow, badgeCount } = candidates[0];
   return {
     matched: true,
+    cells: [],
     highlightMetadata: { type: 'capsule', column: col, fromRow, toRow, badgeCount },
     categoryEvidence: {},
   };
@@ -572,20 +573,22 @@ export function detectUndercut(board, scores, perspective = board.currentPlayer)
       if (isT4SameParity(R, kill)) continue;                            // U1 @see allen-t4
       if (isT5Exception(R, kill)) continue;                             // U2 @see allen-t5
       if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue;   // U3 @see allen-t2 sub-case 3
+      const hCells = [
+        { column: col, row: kill, role: 'killing_threat' },
+        { column: col, row: R,    role: 'dead_threat' },
+      ];
       return {
         matched: true,
+        cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
         highlightMetadata: {
           type: 'cells',
-          cells: [
-            { column: col, row: kill, role: 'killing_threat' },
-            { column: col, row: R,    role: 'dead_threat' },
-          ],
+          cells: hCells,
         },
         categoryEvidence: {},
       };
     }
   }
-  return { matched: false };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -616,23 +619,25 @@ export function detectOvercut(board, scores, perspective = board.currentPlayer) 
       if (!isT4SameParity(R, neutralised) &&
           !isT5Exception(R, neutralised) &&
           !isT2Blocking(colRows, neutralised)) continue;
+      const hCells = [
+        { column: col, row: neutralised, role: 'neutralised_threat' },
+        { column: col, row: R,           role: 'major_threat' },
+      ];
       return {
         matched: true,
         reason: isT4SameParity(R, neutralised) ? 'same_parity_t4'
               : isT5Exception(R, neutralised) ? 'active_forcing'
               : 'chain_t2',
+        cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
         highlightMetadata: {
           type: 'cells',
-          cells: [
-            { column: col, row: neutralised, role: 'neutralised_threat' },
-            { column: col, row: R,           role: 'major_threat' },
-          ],
+          cells: hCells,
         },
         categoryEvidence: {},
       };
     }
   }
-  return { matched: false };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -778,11 +783,13 @@ export function detectFigure7(board, scores, perspective = board.currentPlayer) 
         );
         if (!hasConsecutivePair) continue;
 
+        const hCells = placed.map(c => ({ column: c.col, row: c.row, role: 'pattern_piece' }));
         return {
           matched: true,
+          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
           highlightMetadata: {
             type: 'cells',
-            cells: placed.map(c => ({ column: c.col, row: c.row, role: 'pattern_piece' })),
+            cells: hCells,
           },
           correctCol: comp.col,
           categoryEvidence: {
@@ -793,7 +800,7 @@ export function detectFigure7(board, scores, perspective = board.currentPlayer) 
       }
     }
   }
-  return { matched: false };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -836,11 +843,13 @@ export function detectJShape(board, scores, perspective = board.currentPlayer) {
           if (checkWin(board.board, row, farCol, 3 - perspective)) oppOddInFarCol = true;
         }
         if (oppOddInFarCol) continue;
+        const hCells = placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' }));
         return {
           matched: true,
+          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
           highlightMetadata: {
             type: 'cells',
-            cells: placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' })),
+            cells: hCells,
           },
           correctCol: completing.col,
           categoryEvidence: {
@@ -866,11 +875,13 @@ export function detectJShape(board, scores, perspective = board.currentPlayer) {
           if (checkWin(board.board, row, farCol, 3 - perspective)) oppOddInFarCol = true;
         }
         if (oppOddInFarCol) continue;
+        const hCells = placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' }));
         return {
           matched: true,
+          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
           highlightMetadata: {
             type: 'cells',
-            cells: placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' })),
+            cells: hCells,
           },
           correctCol: completing.col,
           categoryEvidence: {
@@ -881,7 +892,7 @@ export function detectJShape(board, scores, perspective = board.currentPlayer) {
     }
   }
 
-  return { matched: false };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -914,17 +925,17 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
         const childMs = board.movestring + c;
         let childScores;
         try { childScores = await solver.query(childMs); }
-        catch { return { matched: false }; } // terminal position → pattern doesn't apply
+        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
         const childBoard = new Board(childMs);
         const result = await detectOddEvenThreat(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false };
+        if (!result.matched) return { matched: false, cells: [] };
       }
-      return { matched: true };
+      return { matched: true, cells: [] };
     })();
   }
 
   // Odd-even threat is Red-only (FR-009)
-  if (perspective !== 1) return { matched: false };
+  if (perspective !== 1) return { matched: false, cells: [] };
 
   const oddRowMoves  = []; // { col, landingRow } where landingRow % 2 === 0 (Red parity)
   const evenRowMoves = []; // { col, landingRow } where landingRow % 2 === 1 (Yellow parity)
@@ -941,7 +952,7 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
   }
 
   // FR-006 conditions 3+4: need at least one odd-row AND one even-row threat
-  if (oddRowMoves.length === 0 || evenRowMoves.length === 0) return { matched: false };
+  if (oddRowMoves.length === 0 || evenRowMoves.length === 0) return { matched: false, cells: [] };
 
   // FR-008 (both-on-odd-row tie-break) is unreachable: FR-006 condition 4 requires
   // one even-row threat, so any position where all threats are odd-row is filtered above.
@@ -951,6 +962,7 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
   const correctCol = oddRowMoves[0].col;
   return {
     matched: true,
+    cells: [],
     correctCol,
     highlightMetadata: null,
     categoryEvidence: {
@@ -975,18 +987,18 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
  */
 export function detectClaimodd(board, scores, perspective = board.currentPlayer) {
   // Claimodd is Red-only (FR-009)
-  if (perspective !== 1) return { matched: false };
+  if (perspective !== 1) return { matched: false, cells: [] };
 
   // All columns must have even heights
   for (let col = 0; col < board.colHeights.length; col++) {
-    if (board.colHeights[col] % 2 !== 0) return { matched: false };
+    if (board.colHeights[col] % 2 !== 0) return { matched: false, cells: [] };
   }
 
   // Center column must not be full
-  if (board.colHeights[3] >= 6) return { matched: false };
+  if (board.colHeights[3] >= 6) return { matched: false, cells: [] };
 
   // scores[3] must be positive and tie the maximum legal score
-  if (!scores || scores[3] <= 0) return { matched: false };
+  if (!scores || scores[3] <= 0) return { matched: false, cells: [] };
 
   const legalScores = [];
   for (let col = 0; col < 7; col++) {
@@ -994,9 +1006,14 @@ export function detectClaimodd(board, scores, perspective = board.currentPlayer)
   }
   const maxLegal = Math.max(...legalScores);
 
-  if (scores[3] !== maxLegal) return { matched: false };
+  if (scores[3] !== maxLegal) return { matched: false, cells: [] };
 
-  return { matched: true, correctCol: 3 };
+  const correctCol = 3;
+  return {
+    matched: true,
+    correctCol,
+    cells: [`c${correctCol + 1}r${board.colHeights[correctCol] + 1}`],
+  };
 }
 
 /**
@@ -1011,7 +1028,7 @@ export function detectClaimodd(board, scores, perspective = board.currentPlayer)
  */
 export async function detectClaimeven(board, solver, perspective = board.currentPlayer) {
   // Claimeven is Yellow-only: guard out if perspective != Yellow
-  if (perspective !== 2 || board.movestring.length === 0) return { matched: false };
+  if (perspective !== 2 || board.movestring.length === 0) return { matched: false, cells: [] };
 
   // Identify odd-height columns (odd empty-space count)
   const oddCols = [];
@@ -1028,21 +1045,22 @@ export async function detectClaimeven(board, solver, perspective = board.current
   } else if (oddCols.length === 2) {
     // Subtype B: opponent's last move made one of these columns odd
     const lastCol = parseInt(board.movestring[board.movestring.length - 1], 10);
-    if (!oddCols.includes(lastCol)) return { matched: false };
+    if (!oddCols.includes(lastCol)) return { matched: false, cells: [] };
     subtype = 'B';
     baseinversePair = [...oddCols];
     correctCol = oddCols.find(c => c !== lastCol);
   } else {
-    return { matched: false };
+    return { matched: false, cells: [] };
   }
 
   // Run simulation from position after correct move
   const newMoves = board.movestring + correctCol.toString();
   const simResult = await runClaimevenSimulation(newMoves, solver);
-  if (!simResult.yellowWins) return { matched: false };
+  if (!simResult.yellowWins) return { matched: false, cells: [] };
 
   return {
     matched: true,
+    cells: [],
     highlightMetadata: null,
     correctCol,
     categoryEvidence: {
@@ -1129,8 +1147,9 @@ async function runClaimevenSimulation(ms, solver) {
  */
 export function detectImmediateThreat(board, perspective = board.currentPlayer) {
   const cols = board.immediateThreats(perspective);
-  if (cols.length === 0) return { matched: false };
-  return { matched: true, cols };
+  if (cols.length === 0) return { matched: false, cells: [] };
+  const cells = cols.map(col => `c${col + 1}r${board.colHeights[col] + 1}`);
+  return { matched: true, cols, cells };
 }
 
 /**
@@ -1155,7 +1174,9 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
     threatCells.filter(t => t.row === board.colHeights[t.col]).map(t => t.col)
   );
   if (gravityTopCols.size >= 2) {
-    return { matched: true, cols: [...gravityTopCols] };
+    const cols = [...gravityTopCols];
+    const cells = cols.map(col => `c${col + 1}r${board.colHeights[col] + 1}`);
+    return { matched: true, cols, cells };
   }
 
   // Case B: consecutive-row threats in the same column
@@ -1168,12 +1189,14 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
     const sorted = rows.sort((a, b) => a - b);
     for (let i = 0; i < sorted.length - 1; i++) {
       if (sorted[i + 1] === sorted[i] + 1) {
-        return { matched: true, cols: [parseInt(colStr)] };
+        const col = parseInt(colStr);
+        const cells = [`c${col + 1}r${board.colHeights[col] + 1}`];
+        return { matched: true, cols: [col], cells };
       }
     }
   }
 
-  return { matched: false };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -1199,16 +1222,16 @@ export function detectForcedBlock(board, scores, perspective = board.currentPlay
         const childMs = board.movestring + c;
         let childScores;
         try { childScores = await solver.query(childMs); }
-        catch { return { matched: false }; } // terminal position → pattern doesn't apply
+        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
         const childBoard = new Board(childMs);
         const result = await detectForcedBlock(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false };
+        if (!result.matched) return { matched: false, cells: [] };
       }
-      return { matched: true };
+      return { matched: true, cells: [] };
     })();
   }
 
-  if (board.immediateThreats(3 - perspective).length === 0) return { matched: false };
+  if (board.immediateThreats(3 - perspective).length === 0) return { matched: false, cells: [] };
   const matchedCols = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
@@ -1221,8 +1244,8 @@ export function detectForcedBlock(board, scores, perspective = board.currentPlay
     });
     if (someOtherFails) matchedCols.push(col);
   }
-  if (matchedCols.length === 0) return { matched: false };
-  return { matched: true, cols: matchedCols };
+  if (matchedCols.length === 0) return { matched: false, cells: [] };
+  return { matched: true, cols: matchedCols, cells: [] };
 }
 
 /**
@@ -1248,16 +1271,16 @@ export function detectForcedWin(board, scores, perspective = board.currentPlayer
         const childMs = board.movestring + c;
         let childScores;
         try { childScores = await solver.query(childMs); }
-        catch { return { matched: false }; } // terminal position → pattern doesn't apply
+        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
         const childBoard = new Board(childMs);
         const result = await detectForcedWin(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false };
+        if (!result.matched) return { matched: false, cells: [] };
       }
-      return { matched: true };
+      return { matched: true, cells: [] };
     })();
   }
 
-  if (!scores.every(s => s <= 0)) return { matched: false };
+  if (!scores.every(s => s <= 0)) return { matched: false, cells: [] };
   const matchedCols = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
@@ -1266,8 +1289,8 @@ export function detectForcedWin(board, scores, perspective = board.currentPlayer
     const isBestBadMove = scores.every(s => s <= score || s === 0);
     if (isBestBadMove && scores.some(s => s < score)) matchedCols.push(col);
   }
-  if (matchedCols.length === 0) return { matched: false };
-  return { matched: true, cols: matchedCols };
+  if (matchedCols.length === 0) return { matched: false, cells: [] };
+  return { matched: true, cols: matchedCols, cells: [] };
 }
 
 /**
@@ -1293,78 +1316,45 @@ export function detectForbiddenColumns(board, scores, perspective = board.curren
         const childMs = board.movestring + c;
         let childScores;
         try { childScores = await solver.query(childMs); }
-        catch { return { matched: false }; } // terminal position → pattern doesn't apply
+        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
         const childBoard = new Board(childMs);
         const result = await detectForbiddenColumns(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false };
+        if (!result.matched) return { matched: false, cells: [] };
       }
-      return { matched: true };
+      return { matched: true, cells: [] };
     })();
   }
 
-  if (!scores.every(s => s <= 0)) return { matched: false };
+  if (!scores.every(s => s <= 0)) return { matched: false, cells: [] };
   // Only count columns where the opponent had NO immediate threat before but gains one after.
   // If the opponent already had a threat, failing to block it is a forced_block, not forbidden_columns.
-  if (board.immediateThreats(3 - perspective).length > 0) return { matched: false };
+  if (board.immediateThreats(3 - perspective).length > 0) return { matched: false, cells: [] };
   const matchedCols = [];
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
     if (board.withMove(col).immediateThreats(3 - perspective).length > 0) matchedCols.push(col);
   }
-  if (matchedCols.length === 0) return { matched: false };
-  return { matched: true, cols: matchedCols };
-}
-
-/**
- * Runs all detectors against a single Board, returning one result per detector.
- * Caches (reachableThreats, etc.) are shared across all detectors via the Board instance.
- * @param {string} moves
- * @param {number[]} scores
- * @param {object} [solver]  Required only for detectClaimeven
- * @returns {Promise<Array<{detectorName: string, result: object}>>}
- * @complexity O(42) board parse + per-detector cost (all reachableThreats() cached after first)
- * @cache not cached
- */
-// NOTE: classifyAll has active callers — PRESERVED for Epic 2.
-// Callers (as of 2026-06-07):
-//   1. server/index.js — /api/debug/classify-all (localhost-only debug endpoint)
-//   2. server/scripts/classify_all.mjs — CLI classification script
-// Removal is deferred to Epic 3 (coach explanation rebuild).
-export async function classifyAll(moves, scores, solver) {
-  const board = new Board(moves);
-  return [
-    { detectorName: 'immediate_threat',  result: detectImmediateThreat(board) },
-    { detectorName: 'double_threat',     result: detectDoubleThreat(board) },
-    { detectorName: 'forced_block',      result: detectForcedBlock(board, scores) },
-    { detectorName: 'forced_win',        result: detectForcedWin(board, scores) },
-    { detectorName: 'forbidden_columns', result: detectForbiddenColumns(board, scores) },
-    { detectorName: 'z_threat',          result: detectZThreat(board, scores) },
-    { detectorName: 'odd_even_threat',   result: detectOddEvenThreat(board, scores) },
-    { detectorName: 'undercut',          result: detectUndercut(board, scores) },
-    { detectorName: 'overcut',           result: detectOvercut(board, scores) },
-    { detectorName: 'figure_7',          result: detectFigure7(board, scores) },
-    { detectorName: 'j_shape',           result: detectJShape(board, scores) },
-    { detectorName: 'claimodd',          result: detectClaimodd(board, scores) },
-    { detectorName: 'claimeven',         result: await detectClaimeven(board, solver) },
-  ];
+  if (matchedCols.length === 0) return { matched: false, cells: [] };
+  return { matched: true, cols: matchedCols, cells: [] };
 }
 
 /**
  * Classifies a position by running all 13 pattern detectors for a specific perspective.
- * Returns a Set of matching tag strings (never contains 'unknown').
+ * Returns a Map from matching tag string to { cells: string[] } (never contains 'unknown').
+ * cells wire format: "c{col+1}r{row+1}" (1-indexed). cells: [] when detector has no spatial output.
  *
- * NOTE: This inline list MUST be kept in sync with DETECTOR_REGISTRY in
- * explainSimulate.js. Adding a new detector requires an entry in both places.
+ * NOTE: This inline list is the sole registry of pattern detectors.
+ * Adding a new detector requires an entry in this list only.
  *
  * @param {string} ms  movestring (0-indexed)
  * @param {number} perspective  1 or 2
  * @param {object} solver  c4solver wrapper with .query(ms) → Promise<number[]>
- * @returns {Promise<Set<string>>}
+ * @returns {Promise<Map<string, { cells: string[] }>>}
  */
 export async function classifyPattern(ms, perspective, solver) {
   const board = new Board(ms);
   const scores = await solver.query(ms);
-  const tags = new Set();
+  const tags = new Map();
 
   const detectors = [
     // Sync detectors — non-score-consuming
@@ -1388,7 +1378,7 @@ export async function classifyPattern(ms, perspective, solver) {
 
   await Promise.all(detectors.map(async ([tag, fn]) => {
     const result = await fn();
-    if (result.matched) tags.add(tag);
+    if (result.matched) tags.set(tag, { cells: result.cells });
   }));
 
   return tags;
@@ -1426,8 +1416,9 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
     const blunderer = moves.length % 2 === 0 ? 1 : 2; // even move count → Red opens
     const opponent  = 3 - blunderer;
 
-    // Short alias: classify patterns for a position from a player's perspective
-    const P = (ms, player) => classifyPattern(ms, player, solver);
+    // Short alias: classify patterns for a position from a player's perspective.
+    // Returns a Set<string> of matched tags — wraps classifyPattern (which now returns Map).
+    const P = async (ms, player) => new Set((await classifyPattern(ms, player, solver)).keys());
 
     // bm(ms): best-move function — argmax of solver scores, lowest-index tie-break
     const bm = async (ms) => {

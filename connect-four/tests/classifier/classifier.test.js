@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   classify, parseBoardState, hasActiveDoubleThreat,
-  classifyAll, Board,
+  Board,
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
   detectZThreat, detectUndercut, detectOvercut,
@@ -195,88 +195,8 @@ describe('SC-002: classify() single Board construction', () => {
   });
 });
 
-// SC-008: classifyAll returns results matching individual detectors for representative positions
-describe('classifyAll()', () => {
-  let solver;
-  before(() => { solver = createSolverProcess(); });
-  after(() => { solver.destroy(); });
-
-  const DETECTOR_MAP = [
-    { name: 'immediate_threat',  fn: (b, s, sv) => detectImmediateThreat(b) },
-    { name: 'double_threat',     fn: (b, s, sv) => detectDoubleThreat(b) },
-    { name: 'forced_block',      fn: (b, s, sv) => detectForcedBlock(b, s) },
-    { name: 'forced_win',        fn: (b, s, sv) => detectForcedWin(b, s) },
-    { name: 'forbidden_columns', fn: (b, s, sv) => detectForbiddenColumns(b, s) },
-    { name: 'z_threat',          fn: (b, s, sv) => detectZThreat(b, s) },
-    { name: 'odd_even_threat',   fn: (b, s, sv) => detectOddEvenThreat(b, s) },
-    { name: 'undercut',          fn: (b, s, sv) => detectUndercut(b, s) },
-    { name: 'overcut',           fn: (b, s, sv) => detectOvercut(b, s) },
-    { name: 'figure_7',          fn: (b, s, sv) => detectFigure7(b, s) },
-    { name: 'j_shape',           fn: (b, s, sv) => detectJShape(b, s) },
-    { name: 'claimodd',          fn: (b, s, sv) => detectClaimodd(b, s) },
-    { name: 'claimeven',         fn: (b, s, sv) => detectClaimeven(b, sv) },
-  ];
-
-  async function assertClassifyAllMatchesDetectors(ms, scores, solverInstance) {
-    const allResults = await classifyAll(ms, scores, solverInstance);
-    assert.equal(allResults.length, 13, 'classifyAll must return 13 entries');
-
-    for (let i = 0; i < DETECTOR_MAP.length; i++) {
-      const { name, fn } = DETECTOR_MAP[i];
-      const entry = allResults[i];
-      assert.equal(entry.detectorName, name, `entry[${i}].detectorName must be "${name}"`);
-
-      const expected = await fn(new Board(ms), scores, solverInstance);
-      assert.deepEqual(entry.result, expected, `classifyAll entry "${name}" must match standalone detector`);
-    }
-  }
-
-  test('empty board: all entries match standalone detectors', async () => {
-    const ms = '';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('simple opening (001122): all entries match standalone detectors', async () => {
-    // z_threat detector type
-    const ms = '001122';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('claimeven position (3233333556): all entries match standalone detectors', async () => {
-    // claimeven detector type — subtype B known fixture
-    const ms = '3233333556';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 120_000 });
-
-  test('figure-7 position (021353342445): all entries match standalone detectors', async () => {
-    // figure_7 detector type
-    const ms = '021353342445';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('j-shape position (30321143442): all entries match standalone detectors', async () => {
-    // j_shape detector type
-    const ms = '30321143442';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('returns array of objects with detectorName and result keys', async () => {
-    const ms = '3344';
-    const scores = await solver.query(ms);
-    const allResults = await classifyAll(ms, scores, solver);
-    assert.ok(Array.isArray(allResults));
-    for (const entry of allResults) {
-      assert.ok('detectorName' in entry, 'each entry must have detectorName');
-      assert.ok('result' in entry, 'each entry must have result');
-      assert.ok('matched' in entry.result, 'each result must have matched field');
-    }
-  }, { timeout: 30_000 });
-});
+// classifyAll() tests removed in Epic 3 Batch 3 (T016) — classifyAll was deleted
+// from classifier.js. The debug endpoint and CLI script now use classifyPattern.
 
 describe('hasActiveDoubleThreat()', () => {
   // col5(viz)/col4(code) carries two stacked Yellow wins:

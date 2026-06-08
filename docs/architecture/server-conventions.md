@@ -94,16 +94,16 @@ Categories that store their answer as a scalar (claimeven, figure_7, j_shape) re
 ### `classifyPattern(ms, perspective, solver)`
 
 ```js
-classifyPattern(ms, perspective, solver) → Promise<Set<string>>
+classifyPattern(ms, perspective, solver) → Promise<Map<string, { cells: string[] }>>
 ```
 
-Returns the set of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Tags are drawn from all 13 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
+Returns a Map of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Each value has a `cells` array of wire-format cell coordinates (`"c{col+1}r{row+1}"`, 1-indexed). Tags are drawn from all 13 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
 
 - `ms` — 0-indexed movestring.
 - `perspective` — 1 (Red) or 2 (Yellow). The player whose patterns to detect.
 - `solver` — c4solver wrapper with `.query(ms)` method.
 
-**Inline detector list**: `classifyPattern` maintains its own inline list of 13 detectors. This list MUST be kept in sync with `DETECTOR_REGISTRY` in `explainSimulate.js`. `classifyPattern` must NOT import `DETECTOR_REGISTRY` directly to avoid a circular dependency (`explainSimulate.js` imports from `classifier.js`).
+**Inline detector list**: `classifyPattern` maintains its own inline list of 13 detectors. This list is the sole registry of pattern detectors. `classifyPattern` must NOT import any external registry to avoid circular dependencies.
 
 **Detector perspective parameter**: Every `detect*` function accepts a `perspective` parameter defaulting to `board.currentPlayer`. When `classifyPattern` calls detectors, it passes the explicit `perspective` — never relying on the default.
 
@@ -160,85 +160,36 @@ classifier and detectors. Construct it once per position; pass it to all consume
 `checkWin` never reads `board[row][col]` itself — only neighbor cells. This means threat
 scanning functions can call `checkWin` on an empty cell without placing the piece first.
 
-## Forward Simulation (`explainSimulate`)
+## Explain Context (`explainContext.js`)
 
-`explainSimulate(movestring, numPlies, anchorCell, perspective, solver, options={})` in `explainSimulate.js`
-plays out optimal continuations and aggregates which tactical patterns appear at the leaves.
-It answers "what does this move set up?" for the coach LLM.
+`buildExplainContext(movestring, col, rounds, solver)` in `server/explainContext.js` is the
+unified grounding flow for the LLM explain-move endpoint. It replaces the former
+`explainSimulate`-based approach (deleted in Epic 3).
 
+```js
+buildExplainContext(movestring, col, rounds = 1, solver)
+  → Promise<{ prompt: string, allowedSet: Array|null }
+           | { prompt: null, allowedSet: null, allMovesEqual: true }
+           | null>
 ```
-options.detectors  — string[] of detector names to enable.
-                     Default: all names in DETECTOR_REGISTRY (including 'claimeven').
-                     Example (exclude claimeven):
-                       DETECTOR_REGISTRY.map(d => d.name).filter(n => n !== 'claimeven')
-```
 
-**Key design decisions**:
+- Returns `null` if the contrast move could not be determined.
+- Returns `{ prompt: null, allowedSet: null, allMovesEqual: true }` when all legal moves
+  have equal solver scores (settled position).
+- Otherwise returns `{ prompt, allowedSet }` where:
+  - `prompt` — full LLM system prompt string (from `buildBlunderExplainPrompt`)
+  - `allowedSet` — `AllowedSetEntry[]` or `null` (null = no Tier 1/2 patterns found)
 
-- **Detector registry** (`DETECTOR_REGISTRY` in `explainSimulate.js`): all detectors are
-  declared as `{ name, fn, isAsync, histType }` entries. Sync detectors receive `(board, scores)`;
-  async detectors receive `(board, solver)`. `options.detectors` filters this registry before
-  each simulation. Only patterns in the active registry appear as keys in the output `patterns`
-  object. **Adding a new detector = one entry in `DETECTOR_REGISTRY`; no other code changes
-  required.**
-  - `histType: 'col'`  → output entry has `colHistogram` keyed by column index string
-  - `histType: 'cell'` → output entry has `cellHistogram` keyed by `"colC,rowR"`
-  - `histType: null`   → no histogram field
-
-- **Claimeven cost**: `detectClaimeven` is async and issues ~20 solver queries per call via
-  `runClaimevenSimulation`. It is included in the default registry. To exclude it for speed,
-  filter it out via `options.detectors`. Measure actual cost via `result.timing.solverCalls`.
-
-- **Leaf filtering**: only leaves where `currentPlayer === perspective` contribute to `frequency`
-  and histograms. All leaves count toward `total`. This ensures patterns are attributed to the
-  correct player without special-casing the recursion logic.
-
-- **Group recording at leaves** (T01/T02): `collectLeaves` now produces `groups: GroupRecord[]` for
-  every terminal leaf (won and draw leaves). Won leaves record the winning 4-cell group via
-  `findWinningGroup`. Draw leaves record all major-threat windows via `findMajorThreatWindows`.
-  `aggregateLeaves` aggregates groups into a `Map<string, AggregatedGroup>` keyed by
-  `canonicalCells:owner`. Each entry has `completed_freq` and `draw_freq` against `total_leaves`
-  (all leaves: won + draw + depth_limit). This powers the grounding contract for the new
-  explanation prompt templates.
-
-- **`groups` return field**: `explainSimulate` now returns `groups: Map<string, AggregatedGroup>`
-  alongside the existing `patterns`, `outcomes`, `timing` fields. The Map key is
-  `sortedCellsCsv:owner` (e.g. `"c3r2,c4r2,c5r2,c6r2:player"`). Each value has:
-  - `cells: string[]` — wire-format cell coords (e.g. `["c3r2","c4r2","c5r2","c6r2"]`)
-  - `owner: 'player'|'opponent'` — which player's group
-  - `completed_freq: number` — fraction of total leaves where this group was a completed line
-  - `draw_freq: number` — fraction of total leaves where this group was a draw threat
-
-- **Solver score cache**: a `Map<movestring, scores>` allocated per `explainSimulate()` call
-  and threaded through `collectLeaves`. Avoids redundant queries when the same position is
-  reached via different paths. Cache key is the literal movestring — transpositions via
-  different column orderings are not detected as the same entry.
-
-- **Won-position safety**: if `board.hasWon(1) || board.hasWon(2)`, the solver is not queried
-  (it rejects positions reached through winning moves). Zero scores are used; detectors run
-  safely and return `matched: false` for solver-dependent patterns.
-
-- **anchorCell**: fixed for the entire recursion tree. The caller computes it as
-  `{ col, row: new Board(movesBeforePlay).colHeights[col] }` before calling `explainSimulate`.
-  Disc-involvement tracking (`withAnchorDisc`) checks whether the anchor cell appears in
-  each matched pattern's active cells. For patterns without cell-level geometry
-  (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns — these return
-  `cols` arrays only), involvement is determined by column match alone (noted as column proxy).
-
-- **`timing` return field**: every call returns `{ totalMs, solverCalls, solverCacheHits }`.
-  `solverCalls` counts cache misses only (actual `solver.query()` invocations).
-  `solverCacheHits` counts positions served from the score cache.
-
-**Cost estimate** (branching factor b ≈ 3):
-
-| numPlies | Tree solver calls | +claimeven (~20/node) | Total with claimeven |
-|---|---|---|---|
-| 2 | ~21 | ~9 nodes × 20 = ~180 | ~200 |
-| 3 | ~40 | ~13 nodes × 20 = ~260 | ~300 |
-| 4 | ~120 | ~40 nodes × 20 = ~800 | ~920 |
-
-Run `./explain_simulate.sh <movestring> <col> <numPlies>` and check the printed `Timing` line
-to get the real numbers for a specific position.
+**Flow**:
+1. Query solver scores; check for settled position.
+2. Select contrast move via `selectContrastMove`.
+3. On the blunder path: call `tagBlunder` to get `{ tag, direction }` and derive `humanReason`
+   from `REASON_TEMPLATES`.
+4. On the optimal path: classify patterns at the best-move position and derive `positiveReason`
+   from `POSITIVE_TEMPLATES` via the priority cascade.
+5. Build `allowedSet` from `classifyPattern` results (three directions contribute pattern maps).
+6. Build board visualizations via `getBoardVisualization`.
+7. Build and return the prompt via `buildBlunderExplainPrompt`.
 
 ## Solver Score Semantics (Critical Invariant)
 
@@ -274,34 +225,33 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - `getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver)` — returns the movestring after opponent's best response, or null if the game is over.
 - `findMajorThreatWindows(board, perspective)` — scans all 4-windows and returns windows with exactly 3 discs of one color + 1 empty cell. Returns `{ cells: string[], owner: 'player'|'opponent' }[]`. Replaces `getMajorThreatCells` for all group-level operations.
 
-### Explain-move type classifier (Epic B, T06/T14)
+### Explain-move utilities (Epic 3)
 
 - `checkAllMovesEqual(preScores, board)` — returns `{ isSettled, allMovesEqual }`. `isSettled=true` means all legal columns have zero score (genuine draw). Used to short-circuit the LLM call.
 - `getGapAndFraming(preScores, col, contrastCol)` — returns `{ gap, inverted, forceBucket, gapBucket }`. The eval gap between user's move and the contrast. `inverted=true` when the user's move is optimal. `gapBucket` is one of `small`/`moderate`/`large`, with sign-change override (`forceBucket`).
-- `classifyExplanationType(preMoveBoard, postABoard, criticalPositionMs, perspective, playedCol)` — routes a position to Type 1/2/3/4. Priority: Type 1 (immediate threat existed before move) > Type 2 (opponent has >=2 threats in critical position, or Figure-7/J-shape) > Type 3 (major threat adjacent to parity-flipped column) > Type 4 (default). Returns `{ type: string }` (adds `parityFlipData` for Type 3).
 
-### Grounding contract builders (Epic B, T08–T10)
+### Prompt builder (Epic 3, replaces type-dispatch)
 
-- `selectTopGroups(aGroups, bGroups)` — takes the `groups` Maps from A-branch and B-branch simulation results, selects top 5 per branch by `completed_freq`, merges by canonical key. Returns `AggregatedGroup[]` with `aCompleted`/`aDraw`/`bCompleted`/`bDraw` fields.
-- `buildAllowedSet(groups, board, perspective)` — converts `selectTopGroups` output to `AllowedSetEntry[]`. Each group is CONCRETE-ELIGIBLE (≥2 owner discs, has `cells` + `zoneSpec` fields) or ABSTRACT-ONLY (has `col` + `parity` + `zoneSpec` fields, no `cells`).
-- `buildType1AllowedSet(preMoveBoard, perspective)` — builds CONCRETE-ELIGIBLE entries directly from `getImmediateThreats` results (Type 1 skips simulation). Returns `{ cells, zoneSpec }[]`.
-- `buildGroupContextBlock(groups, allowedSet, board, perspective, options)` — builds the "Move context", "Boards", and "Winning-line comparison" sections. Accepts optional `preViz`/`afterViz` in `options` for pre-move and post-opponent board visualizations.
+- `buildBlunderExplainPrompt({ tag, direction, humanReason, positiveReason, correctMovePatterns, boardViz, postBoardViz, playerName, gap, gapBucket, allowedSet })` — builds the full LLM system prompt for the explain-move endpoint. Handles both the blunder path (when `tag`/`direction`/`humanReason` are set, `positiveReason` is null) and the optimal path (when `positiveReason` is set, `tag`/`direction`/`humanReason` are null). Used exclusively by `buildExplainContext` in `explainContext.js`.
 
-### Prompt template builders (Epic B, T11–T13)
+Parameter shapes:
+  - `tag` — string or null (null on optimal-move path). One of the 15 VALID_BLUNDER_TAGS values.
+  - `direction` — `'missed_own'|'enabled_opponent'|'defensive_miss'` or null.
+  - `humanReason` — string from `REASON_TEMPLATES.get('${tag}:${direction}')` on blunder path, or null.
+  - `positiveReason` — string from `POSITIVE_TEMPLATES.get(tag)` on optimal path, or null.
+  - `correctMovePatterns` — `Map<string, {cells: string[]}>` from `classifyPattern(ms + bestCol, perspective, solver)`.
+  - `boardViz`, `postBoardViz` — board visualization strings from `getBoardVisualization`.
+  - `playerName` — `'Green'` or `'Grey'`.
+  - `gap`, `gapBucket` — eval gap metrics from `getGapAndFraming`.
+  - `allowedSet` — `AllowedSetEntry[]` or null. Never pass `[]` (empty array) — that causes P5strong failures for all `tg` zones.
 
-- `buildType4Prompt({ playerName, gap, gapBucket, contextBlock, inverted })` — developmental/opening prompt. Role: coach explaining why one move develops better.
-- `buildType12Prompt({ playerName, gap, gapBucket, contextBlock, explainType })` — Type 1/2 prompt. Role: coach explaining why one move was stronger than another. Task differs for Type 1 (missed immediate threat) vs Type 2 (tactical pattern).
-- `buildType3Prompt({ playerName, gap, gapBucket, contextBlock, parityFlipData })` — Type 3 prompt. Adds a frozen parity-flip sentence naming the column, row, and whose parity changed.
+### Deleted functions (Epic 3)
 
-All three prompt templates share a common skeleton via `buildCommonPromptSections`: Role, Players, Hard grounding rules, Context block, Tone (driven by eval gap), KB parity rules, Output format (zone tag instructions).
-
-### Deleted functions (removed in Epic B, T18)
-
-The following functions were removed and replaced by the type-driven prompt builders:
-- `computeDeltaTable` — comparison-table logic (no longer needed; each type has a dedicated template)
-- `buildExplainPrompt` — single-template approach replaced by Type 1/2/3/4 dispatch
-- `buildPatternNarrative` — natural-language pattern summary (superseded by Group context block)
-- `PATTERN_NAMES` — consumed only by `computeDeltaTable`
+The following functions were removed to simplify the explain-move path:
+- `classifyExplanationType` — type-1/2/3/4 dispatch (replaced by direct blunder/optimal paths in `buildExplainContext`)
+- `buildType12Prompt`, `buildType3Prompt`, `buildType4Prompt` — type-specific templates (replaced by `buildBlunderExplainPrompt`)
+- `buildCommonPromptSections`, `buildGroupContextBlock`, `selectTopGroups`, `buildAllowedSet`, `buildType1AllowedSet` — simulation-era grounding contract builders (no longer needed)
+- `computeDeltaTable`, `buildExplainPrompt`, `buildPatternNarrative`, `PATTERN_NAMES` — earlier versions
 
 **Critical invariant**: solver scores are NEVER passed to the LLM. `getScoreTier` translates scores to tier labels (WINS/DRAWS/LOSES), and `getBoardVisualization` strips the `scr` row from board output. This invariant MUST be preserved by all callers.
 
@@ -347,8 +297,7 @@ Solver scores are intentionally excluded from the prompt. The LLM reasons from t
 **Contrast move selection**: if the user's move was suboptimal, the contrast is the best legal move; if optimal, the contrast is the second-best. Center column (col 3) breaks ties. If all legal scores are equal, the handler returns the "All moves are roughly equivalent" frozen string without calling the LLM. If `checkAllMovesEqual` detects a genuinely settled position (all scores zero), the shorter "All moves are roughly equivalent" frozen string is returned instead.
 
 **Key files**:
-- `connect-four/server/scripts/explain_move.mjs` — full PoC logic (no server required)
-- `explain_move.sh` — shell wrapper at project root (`./explain_move.sh <movestring> <col> [rounds=1]`)
+- `connect-four/server/explainContext.js` — `buildExplainContext` (the grounding entry point)
 - `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)
 
 ## Annotation Gate (`POST /api/explain-move-llm`)
