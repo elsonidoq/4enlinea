@@ -532,6 +532,15 @@ app.post('/api/explain-move-llm', async (req, res) => {
       });
     }
 
+    if (context.trivial) {
+      // optimal move + small gap: all alternatives are negligibly different.
+      // No LLM call — canned message prevents fabricated nuance.
+      return res.json({
+        explanation: context.trivialExplanation,
+        prompt: '',
+      });
+    }
+
     const { prompt, allowedSet } = context;
 
     // First attempt

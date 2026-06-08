@@ -255,6 +255,36 @@ export function regexFallbackParse(text) {
     addZone(`row${n}`, m.index, m.index + m[0].length, m[0]);
   }
 
+  // Bare zone:colN — e.g. "zone:col3" (LLM occasionally outputs this instead of [zone:colN]...[/zone:colN])
+  const bareZoneCol = /\bzone:col(\d+)\b/gi;
+  while ((m = bareZoneCol.exec(text)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n >= 1 && n <= 7) addZone(`col${n}`, m.index, m.index + m[0].length, m[0]);
+  }
+
+  // Bare zone:cNrM — e.g. "zone:c6r3"
+  const bareZoneCell = /\bzone:c(\d+)r(\d+)\b/gi;
+  while ((m = bareZoneCell.exec(text)) !== null) {
+    const c = parseInt(m[1], 10);
+    const r = parseInt(m[2], 10);
+    if (c >= 1 && c <= 7 && r >= 1 && r <= 6) {
+      addZone(`c${c}r${r}`, m.index, m.index + m[0].length, m[0]);
+    }
+  }
+
+  // Bare zone:cells:c1r2,c2r3 — multi-cell list
+  const bareZoneCells = /\bzone:cells:((?:c\d+r\d+,?)+)\b/gi;
+  while ((m = bareZoneCells.exec(text)) !== null) {
+    addZone(`cells:${m[1].replace(/,$/, '')}`, m.index, m.index + m[0].length, m[0]);
+  }
+
+  // Bare zone:rowN — e.g. "zone:row3" (run after the rowRegex to avoid duplicate matches)
+  const bareZoneRow = /\bzone:row(\d+)\b/gi;
+  while ((m = bareZoneRow.exec(text)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n >= 1 && n <= 6) addZone(`row${n}`, m.index, m.index + m[0].length, m[0]);
+  }
+
   // Sort by start position and re-index.
   zones.sort((a, b) => a.startChar - b.startChar);
   zones.forEach((z, i) => { z.index = i; });

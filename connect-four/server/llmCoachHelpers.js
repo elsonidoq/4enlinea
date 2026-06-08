@@ -660,11 +660,12 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
 
   // ── Output format ─────────────────────────────────────────────────────────
   sections.push(`## Output format
-When referencing specific board locations, wrap them in zone tags using the syntax:
-  zone:colN for a column (N = column number 1–7)
-  zone:cNrM for a single cell (N = column 1–7, M = row 1–6)
-  zone:cells:c1r2,c2r3 for multiple cells
-  zone:rowN for an entire row
+When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets. The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag's spec). Syntax:
+  [zone:colN]column N[/zone:colN] for a column (N = column number 1–7)
+  [zone:cNrM]that cell[/zone:cNrM] for a single cell (N = column 1–7, M = row 1–6)
+  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] for multiple cells
+  [zone:rowN]row N[/zone:rowN] for an entire row
+To make a zone active by default (strongest spatial point), add ! after the spec in the opening tag: [zone:c6r3!]that cell[/zone:c6r3].
 Only tag EXPLICIT spatial references. Do not tag abstract concepts.
 Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).`);
 

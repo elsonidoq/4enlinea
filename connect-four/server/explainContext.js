@@ -12,6 +12,7 @@ import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
   getGapAndFraming,
+  getPositionTier,
   selectContrastMove,
   getBoardVisualization,
   buildBlunderExplainPrompt,
@@ -138,6 +139,24 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const { contrastCol, isOptimal } = contrast;
 
   const { gap, gapBucket } = getGapAndFraming(preScores, col, contrastCol);
+
+  // ── Trivial-optimal guard ──────────────────────────────────────────────────
+  // When the user played an optimal move and the gap is small, all alternatives
+  // are equivalent in practice. Calling the LLM forces it to fabricate nuance.
+  // Return a canned message instead.
+  const positionTier = getPositionTier(preScores, board);
+  if (isOptimal && gapBucket === 'small') {
+    const opponentName = perspective === 1 ? 'Grey' : 'Green';
+    let trivialExplanation;
+    if (positionTier === 'WINNING') {
+      trivialExplanation = `All available moves maintain ${playerName}'s winning position — this is solid. No single column decisively outperforms the others here.`;
+    } else if (positionTier === 'LOSING') {
+      trivialExplanation = `All available moves lead to difficult positions — ${opponentName} holds the advantage regardless. No column changes the fundamental outlook.`;
+    } else {
+      trivialExplanation = `All available moves are roughly equivalent. There is no clear best choice in this balanced position.`;
+    }
+    return { prompt: null, allowedSet: null, trivial: true, trivialExplanation };
+  }
 
   // ── Step 2: Determine bestCol ─────────────────────────────────────────────
   // isOptimal = true → user played the best move; bestCol = col (their move)

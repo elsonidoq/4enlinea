@@ -1,11 +1,18 @@
 ---
 name: project_explain_simulate
-description: "explainSimulate.js design — pluggable detector registry, claimeven included, timing output"
+description: "OBSOLETE — explainSimulate.js deleted in Epic 3 (2026-06-08); kept for historical reference only"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 5521e723-b304-4e1e-8057-4c823e60f521
 ---
+
+> **OBSOLETE as of 2026-06-08.** `explainSimulate.js` was deleted in Epic 3 (`specs/025-patterns-blunders-epic3`).
+> Replaced by `tagBlunder` + `classifyPattern` in `server/explainContext.js`.
+> The DETECTOR_REGISTRY concept is gone; `classifyPattern`'s inline detector list in `classifier.js` is the sole registry.
+> See [[project_epic3_coach_rebuild]] for current state.
+
+## Historical content (pre-Epic-3)
 
 ## Current signature (2026-05-27)
 

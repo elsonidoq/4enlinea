@@ -63,23 +63,21 @@
 
 - All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of blunders should be either through categories, and browse recent blunders. Also filter blunders imported from papergames
 
-- Accuracy by pattern is wrong, shows 100% accuracy when I failed 3 puzzles and got one correct
-
 - Back from clicking a blunder in the game review shows a screen where the coach writes Game not saved — analysis unavailable
 
 - Remove best line from explain-move-llm endpoint and all along the codebase
 
-- If a blunder is created by a game, the blunder must have a game_id
+- Streak is never incremented
 
-- In every part of the project the disks must be refered to as green/gray not yellow/red
+- If a blunder is created by a game, the blunder must reference that game, so we can navigate in the app
 
-- clicking back when we are in a practice session should take you to the saga map
+- In every part of the project the disks must be refered to as green/gray not yellow/red, even in scripts like visualize_board.sh
+
+- clicking back when we are in a practice session should take you to the saga map, it takes you to the lesson
 
 - You can only ask for one hint per practice case. Now you can click hints indefinitelly
 
 - We need a practical way to create the content for the lessons. I need to brainstorm that
-
-- when the coach uses terminology like "major threat", it should be highlighted somehow and on mouseover or tap, it shows a short explanation of the term, points you to a lesson?
 
 - a blunder must have permalink, it's a shared nugget of information! shareable across social network
 

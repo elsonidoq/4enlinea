@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnnotatedText } from './AnnotatedText.jsx';
 import { AnnotatedExplanation } from './AnnotatedExplanation.jsx';
-import { parseAnnotatedText } from '../lib/annotatedText.js';
+import { parseAnnotatedText, regexFallbackParse } from '../lib/annotatedText.js';
 import { AuthModal } from './AuthModal.jsx';
 import { UpgradeModal } from './UpgradeModal.jsx';
 import { Icon } from './Icon.jsx';
@@ -34,10 +34,14 @@ export function DeepRevealButton({
   const [flagNote, setFlagNote] = useState('');
   const [activeZones, setActiveZones] = useState(new Set());
 
-  const { cleanText, zones } = useMemo(
-    () => parseAnnotatedText(deepReveal?.explanation || ''),
-    [deepReveal?.explanation],
-  );
+  const { cleanText, zones } = useMemo(() => {
+    const primary = parseAnnotatedText(deepReveal?.explanation || '');
+    // Fall back to regex-based detection for cache entries without [zone:] tags.
+    if (primary.zones.length === 0 && deepReveal?.explanation) {
+      return regexFallbackParse(deepReveal.explanation);
+    }
+    return primary;
+  }, [deepReveal?.explanation]);
 
   const toggleZone = useCallback((index) => {
     setActiveZones(prev => {
