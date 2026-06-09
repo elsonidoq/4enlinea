@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/026-url-routing-permalinks/plan.md
+specs/027-past-games-navigation/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

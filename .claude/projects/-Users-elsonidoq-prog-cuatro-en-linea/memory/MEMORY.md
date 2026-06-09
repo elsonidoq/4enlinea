@@ -8,6 +8,7 @@
 - [AskUserQuestion requires min 2 options](feedback_ask_user_question_min_options.md) — single-option questions throw InputValidationError; always provide at least 2 distinct options per question
 - [Run a critical subagent review after speckit-specify](feedback_spec_review_before_plan.md) — Sonnet subagent vs best_practices_spec_driven_development.md catches blocking contract/scope issues before they propagate to plan and tasks
 - [Prefer empirical testing over theoretical analysis](feedback_empirical_first.md) — run code early, don't spend many rounds on mental analysis before testing
+- [ASCII diagrams for UI brainstorming](feedback_ascii_diagrams_brainstorming.md) — use ASCII art for screen layouts; skip the browser visual companion offer entirely
 - [Answer questions before editing](feedback_answer_before_editing.md) — always answer the question in text first, then proceed with any file edits or tool calls
 - [Never generate random boards](feedback_no_random_boards.md) — random movestrings are not valid game positions; always source candidates from DB, git history, or KB examples
 - [Never run git stash to check baselines](feedback_no_git_stash.md) — git stash failed mid-write on 2026-05-18, corrupted index; use code reasoning instead
@@ -23,6 +24,7 @@
 - [Mobile tap highlight fix](feedback_mobile_tap_highlight.md) — tappable non-button elements need `WebkitTapHighlightColor: transparent` + `userSelect: none`; native `<button>` exempt
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons; no abstract Allis rules (except Claimeven + Claimodd which are concrete and visual)
 - [Opus for critique, Sonnet for applying decisions](feedback_agent_model_selection.md) — use Opus for independent gap analysis; Sonnet for mechanical document updates
+- [Mockup-vs-production gap verification](feedback_mockup_production_gap.md) — mockup prototypes use infra (NAV_GROUPS, mkCols, variant rail) absent from production; grep src/ before speccing any mockup concept
 - [Check CSS exists before using mockup class/token names](feedback_check_css_before_using_mockup_classes.md) — grep in src/styles/tokens.css + src/index.css before using any class or `--token` from mockup; `--bg-chal` not `--bg-challenges`
 - [Epic vs speckit scope](feedback_epic_vs_speckit_scope.md) — when auditing an epic doc that feeds speckit, only fix factual errors / cross-epic contracts / mockup-vs-Gap conflicts at the epic level
 - [Don't mix slash commands in a single handoff prompt](feedback_handoff_no_mixed_commands.md) — a handoff prompt for `/speckit-specify` can't also tell the agent to run `/speckit-clarify`; pre-answer clarifications inline instead
@@ -136,6 +138,7 @@
 - [checkWin extraction needed](project_checkwin_extraction.md) — private fn in HomePage.jsx line 39; signature (board,row,col,color); must extract to src/lib/board.js before GameScreen
 
 - [Epic A + B annotation gate & coach rebuild — done](project_epic_a_annotation_gate.md) — spec 021 (gate P1-P6) + spec 022 (4-type coach, grounding contract, strong-P5, allowedSet) both shipped on branch `101-new-design`; 311 tests pass; migration 031 pending apply
+- [Past Games & Blunder Navigation epics](project_past_games_epics.md) — Epic A full speckit pipeline done (specs/027-past-games-navigation/, 19 tasks); selGameId dropped for nav param; blunder writes already server-side; cols=g at even indices; NAV_GROUPS/mkCols mockup-only. Epic B not yet specked.
 
 ## Project — open bugs
 
