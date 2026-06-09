@@ -16,8 +16,10 @@ const SCREENS = {
   game:       (p) => <GameBoard {...p} />,
   review:     (p) => <PostGameReview {...p} />,
   explorer:   (p) => <PositionExplorer {...p} />,
-  mistakes:      (p) => <MistakesList {...p} />,
-  mistakeDetail: (p) => <MistakeDetail {...p} />,
+  mistakes:      (p) => <CategoryList {...p} />,
+  mistakeDetail: (p) => <MistakesList {...p} category={p.selCategory} />,
+  blunderDetail: (p) => <MistakeDetail {...p} />,
+  pastGames:     (p) => <PastGamesList {...p} />
 };
 
 const NAV_GROUPS = [
@@ -25,7 +27,8 @@ const NAV_GROUPS = [
   { label: "Lessons", items: [["saga", "Saga Map", "2"], ["concept", "Lesson Concept", "3"], ["socratic", "Socratic Board", "4"], ["clchallenge", "Confirmation Challenge", "6·7"]] },
   { label: "Challenges", items: [["setpicker", "Set Picker", "5"], ["challenge", "Challenge Board + Feedback", "6·7"], ["summary", "Post-Set Summary", "9"]] },
   { label: "Sparring", items: [["difficulty", "Difficulty Picker", "10"], ["game", "Game Board", "11"], ["review", "Post-Game Review", "12"], ["explorer", "Position Explorer", "13"]] },
-  { label: "Past Mistakes", items: [["mistakes", "Mistakes List", "14"], ["mistakeDetail", "Mistake Detail", "15"]] },
+  { label: "Past Mistakes", items: [["mistakes", "Category List", "14"], ["mistakeDetail", "Category Detail", "15"], ["blunderDetail", "Blunder Detail", "·"]] },
+  { label: "Past Games", items: [["pastGames", "Past Games List", "·"]] },
 ];
 
 function Seg({ value, options, onChange }) {
@@ -44,16 +47,21 @@ function App() {
   const [sagaVariant, setSagaVariant] = useState("A");
   const [fbVariant, setFbVariant] = useState("A");
   const [mistakesVariant, setMistakesVariant] = useState("in");
+  const [gamesVariant, setGamesVariant] = useState("in");
   const [selMistake, setSelMistake] = useState(0);
-  const [reviewed, setReviewedMap] = useState({ 3: true });
+  const [reviewed, setReviewedMap] = useState({ 3: true, 7: true });
   const setReviewed = (id, v) => setReviewedMap(m => ({ ...m, [id]: v }));
+  const [mistakeContext, setMistakeContext] = useState("list");
+  const [mistakeSource, setMistakeSource] = useState(null);
+  const [selCategory, setSelCategory] = useState("Claimeven");
   const go = (s) => setScreen(s);
 
-  const props = { go, isAuthed, sagaVariant, fbVariant, mistakesVariant, selMistake, setSelMistake, reviewed, setReviewed };
+  const props = { go, isAuthed, sagaVariant, fbVariant, mistakesVariant, gamesVariant, selMistake, setSelMistake, reviewed, setReviewed, mistakeContext, setMistakeContext, mistakeSource, setMistakeSource, selCategory, setSelCategory };
 
   const sagaNames = { A: "Winding path", B: "Meadow stones", C: "Clean list" };
   const fbNames = { A: "Strip below", B: "Compact inline", C: "Docked card" };
   const mNames = { in: "Signed in", empty: "Empty", out: "Signed out" };
+  const gNames  = { in: "Signed in", empty: "Empty", out: "Signed out" };
 
   return (
     <div className="stage">
@@ -94,8 +102,15 @@ function App() {
             )}
             {g.label === "Past Mistakes" && (
               <div className="variant-box">
-                <div className="vlabel">List state · {mNames[mistakesVariant]}</div>
+                <div className="vlabel">Category list state · {mNames[mistakesVariant]}</div>
                 <Seg value={mistakesVariant} options={["in", "empty", "out"]} onChange={(v) => { setMistakesVariant(v); go("mistakes"); }} />
+                <div style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 700, marginTop: 6, lineHeight: 1.3 }}>Controls the Category List screen (signed-in, empty, signed-out).</div>
+              </div>
+            )}
+            {g.label === "Past Games" && (
+              <div className="variant-box">
+                <div className="vlabel">List state · {gNames[gamesVariant]}</div>
+                <Seg value={gamesVariant} options={["in", "empty", "out"]} onChange={(v) => { setGamesVariant(v); go("pastGames"); }} />
                 <div style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 700, marginTop: 6, lineHeight: 1.3 }}>Signed-in list, empty state, or signed-out gate.</div>
               </div>
             )}

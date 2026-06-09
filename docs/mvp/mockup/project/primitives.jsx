@@ -27,6 +27,7 @@ function Icon({ name, size = 22, color = "currentColor", strokeWidth = 2.4 }) {
     swords: <g {...p}><path d="M5 4l9 9M4 5l3-1 11 11 1 3-3-1L4 5z" /><path d="M19 4l-5 5" /></g>,
     chart:  <g {...p}><path d="M4 20V4M4 20h16" /><rect x="7" y="12" width="2.8" height="5" rx="1" fill={color} stroke="none" /><rect x="12" y="8" width="2.8" height="9" rx="1" fill={color} stroke="none" /><rect x="17" y="14" width="2.8" height="3" rx="1" fill={color} stroke="none" /></g>,
     play:   <path d="M8 5.5v13l10-6.5-10-6.5z" fill={color} stroke="none" />,
+    clock:  <g {...p}><circle cx="12" cy="12" r="8" /><path d="M12 8.5V12l2.5 2" /></g>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>

@@ -131,11 +131,29 @@ function GameBoard({ go }) {
 
 /* ---------- Post-Game Review ---------- */
 const TIMELINE = "g g g m g g bad g g g g m g bad g g g g m g g g".split(" ").map(q => q === "bad" ? "bad" : q);
-function PostGameReview({ go }) {
+/* timeline index → MISTAKES array index (blunder nodes only) */
+const REVIEW_BAD_TO_MISTAKE = { 6: 0, 13: 1 };
+
+function PostGameReview({ go, setMistakeContext = () => {}, setMistakeSource = () => {}, setSelMistake = () => {} }) {
   const final = mkCols(["gdgd", "dgdg", "gdgdg", "dgdgd", "gdg", "dgd", "gd"]);
   const [sel, setSel] = useState(null);
   const labelOf = (q) => q === "g" ? "" : q === "m" ? "?" : "✕";
   const cls = (q) => q === "g" ? "good" : q === "m" ? "mid" : "bad";
+
+  const handleNodeTap = (q, i) => {
+    if (q === "bad") {
+      const mIdx = REVIEW_BAD_TO_MISTAKE[i];
+      if (mIdx !== undefined) setSelMistake(mIdx);
+      setMistakeContext("game");
+      setMistakeSource({ date: "Jun 7", gameId: "g1" });
+      setSel(i);
+      go("blunderDetail");
+    } else if (q === "m") {
+      setSel(i);
+      go("explorer");
+    }
+  };
+
   return (
     <div className="screen s-spar">
       <TopBar title="Game Review" onBack={() => go("home")} right2="search" onRight2={() => {}} rightIcon="gear" onRight={() => {}} />
@@ -157,17 +175,17 @@ function PostGameReview({ go }) {
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 16 }}>Move timeline <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>— tap a flag to review</span></div>
+          <div className="section-title" style={{ marginTop: 16 }}>Move timeline <span className="muted" style={{ fontSize: 12.5, fontWeight: 700 }}>— tap ✕ to review blunder</span></div>
           <div className="timeline">
             {TIMELINE.map((q, i) => (
               <div key={i} className={"tl-node " + cls(q) + (sel === i ? " sel" : "")}
-                onClick={() => { if (q !== "g") { setSel(i); go("explorer"); } }}
+                onClick={() => handleNodeTap(q, i)}
                 style={{ cursor: q === "g" ? "default" : "pointer" }}>
                 {q === "g" ? i + 1 : labelOf(q)}
               </div>
             ))}
           </div>
-          <p className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>Move 8 and move 14 were the blunders.</p>
+          <p className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>Move 7 and move 14 were the blunders — tap ✕ to deep-dive.</p>
         </div>
       </div>
       <div className="home-indicator"></div>

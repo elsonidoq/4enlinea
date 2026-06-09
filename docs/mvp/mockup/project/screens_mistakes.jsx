@@ -1,12 +1,11 @@
 /* ============================================================
    DecodeC4 — Past Mistakes
-   List (signed-in / empty / signed-out variants) · Detail
-   Reaches the shared DeepReveal bottom sheet from screens_challenges.jsx
+   CategoryList (Level 1) · MistakesList w/ category prop (Level 2)
+   MistakeDetail / blunder detail (Level 3)
    ============================================================ */
 
-/* Captured blunders. Each carries the frozen mistake position +
-   the data the Deep Reveal sheet needs for the better move. */
 const MISTAKES = [
+  /* ── Claimeven ─────────────────────────────────────────── */
   {
     id: 0, pattern: "Claimeven", date: "May 24", move: 7, total: 22, severity: 2,
     cols: ["gd", "dg", "gd", "ggd", "d", "", ""],
@@ -17,8 +16,36 @@ const MISTAKES = [
       overlays: [{ c: 4, r: 0, type: "tg" }, { c: 2, r: 2, type: "tg" }, { c: 1, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Claimeven" }, { cls: "good", label: "✓ Better · column 5" }],
       explanation: "Answering on column 5 claims the even square directly above Yellow's disc. That single response neutralises the odd threat you handed over and keeps the rising diagonal yours.",
+      bestLine: ["Col 5", "Col 3", "Col 2"],
     },
   },
+  {
+    id: 6, pattern: "Claimeven", date: "Jun 5", move: 6, total: 20, severity: 2,
+    cols: ["g", "dg", "gd", "dgd", "d", "", ""],
+    playedCell: { c: 3, r: 2 }, threat: [{ c: 4, r: 0 }, { c: 0, r: 1 }],
+    coachCol: 4,
+    reveal: {
+      cols: ["g", "dg", "gd", "dgd", "dg", "", ""],
+      overlays: [{ c: 4, r: 1, type: "tg" }, { c: 0, r: 1, type: "tg" }],
+      tags: [{ cls: "pat", label: "Pattern · Claimeven" }, { cls: "good", label: "✓ Better · column 5" }],
+      explanation: "Column 5 claims the even square and neutralises Yellow's rising diagonal. The claimeven principle: even squares above opponent discs control the endgame.",
+      bestLine: ["Col 5", "Col 3", "Col 2"],
+    },
+  },
+  {
+    id: 7, pattern: "Claimeven", date: "May 18", move: 5, total: 16, severity: 1,
+    cols: ["g", "d", "gd", "dg", "g", "", ""],
+    playedCell: { c: 1, r: 0 }, threat: [{ c: 3, r: 1 }],
+    coachCol: 3,
+    reveal: {
+      cols: ["g", "d", "gd", "dgg", "g", "", ""],
+      overlays: [{ c: 3, r: 2, type: "tg" }],
+      tags: [{ cls: "pat", label: "Pattern · Claimeven" }, { cls: "good", label: "✓ Better · column 4" }],
+      explanation: "The even square on column 4 was key. Claiming it stops Yellow's diagonal and maintains your parity advantage into the endgame.",
+      bestLine: ["Col 4", "Col 2", "Col 6"],
+    },
+  },
+  /* ── Forced block ───────────────────────────────────────── */
   {
     id: 1, pattern: "Forced block", date: "May 24", move: 14, total: 22, severity: 3,
     cols: ["dgd", "gd", "ggg", "d", "dg", "", ""],
@@ -29,10 +56,38 @@ const MISTAKES = [
       overlays: [{ c: 1, r: 2, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Forced block" }, { cls: "good", label: "✓ Better · column 2" }],
       explanation: "Yellow was one move from four-in-a-row across the third row. Column 2 is the only square that breaks it — everything else loses on the spot.",
+      bestLine: ["Col 2", "Col 4", "Col 6"],
     },
   },
   {
-    id: 2, pattern: "The Fork", date: "May 19", move: 11, total: 19, severity: 2,
+    id: 4, pattern: "Forced block", date: "Jun 3", move: 9, total: 18, severity: 2,
+    cols: ["gd", "dgd", "gg", "dg", "d", "", ""],
+    playedCell: { c: 5, r: 0 }, threat: [{ c: 2, r: 1 }],
+    coachCol: 2,
+    reveal: {
+      cols: ["gd", "dgd", "ggg", "dg", "d", "", ""],
+      overlays: [{ c: 2, r: 2, type: "tg" }],
+      tags: [{ cls: "pat", label: "Pattern · Forced block" }, { cls: "good", label: "✓ Better · column 3" }],
+      explanation: "Yellow's double threat in column 3 needed a block immediately. Playing column 3 closes both lines and swings the initiative back your way.",
+      bestLine: ["Col 3", "Col 6", "Col 4"],
+    },
+  },
+  {
+    id: 5, pattern: "Forced block", date: "May 30", move: 12, total: 20, severity: 1,
+    cols: ["dg", "g", "dgg", "d", "gd", "", ""],
+    playedCell: { c: 6, r: 0 }, threat: [{ c: 2, r: 2 }],
+    coachCol: 2,
+    reveal: {
+      cols: ["dg", "g", "dggg", "d", "gd", "", ""],
+      overlays: [{ c: 2, r: 3, type: "tg" }],
+      tags: [{ cls: "pat", label: "Pattern · Forced block" }, { cls: "good", label: "✓ Better · column 3" }],
+      explanation: "Yellow's diagonal from column 3 was one move from completion. The block at column 3 defuses it and keeps your positional advantage.",
+      bestLine: ["Col 3", "Col 7", "Col 1"],
+    },
+  },
+  /* ── The Fork ───────────────────────────────────────────── */
+  {
+    id: 2, pattern: "The Fork", date: "May 19", move: 11, total: 19, severity: 1,
     cols: ["g", "dgd", "gd", "dg", "d", "g", ""],
     playedCell: { c: 5, r: 0 }, threat: [{ c: 2, r: 2 }, { c: 4, r: 1 }],
     coachCol: 3,
@@ -41,8 +96,10 @@ const MISTAKES = [
       overlays: [{ c: 2, r: 2, type: "tg" }, { c: 4, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · The Fork" }, { cls: "good", label: "✓ Better · column 4" }],
       explanation: "Column 4 builds two threats at once — one across, one on the diagonal. Yellow can only block one, so the next move wins outright.",
+      bestLine: ["Col 4", "Col 3", "Col 7"],
     },
   },
+  /* ── Odd threat ─────────────────────────────────────────── */
   {
     id: 3, pattern: "Odd threat", date: "May 12", move: 9, total: 24, severity: 1,
     cols: ["d", "gd", "dgg", "gd", "dg", "d", ""],
@@ -53,11 +110,12 @@ const MISTAKES = [
       overlays: [{ c: 0, r: 1, type: "tg" }],
       tags: [{ cls: "pat", label: "Pattern · Odd threat" }, { cls: "good", label: "✓ Better · column 1" }],
       explanation: "As the first player you want the odd rows. Column 1 takes the odd square in the corner file — the exact threat that decides the endgame in your favour.",
+      bestLine: ["Col 1", "Col 6", "Col 3"],
     },
   },
 ];
 
-/* ---------- Severity chip — bars + explicit label, no numbers ---------- */
+/* ---------- Severity chip ------------------------------------------ */
 function SeverityMeter({ level }) {
   const labels = { 1: "Minor", 2: "Moderate", 3: "Critical" };
   const cls = level >= 3 ? "bad" : level === 2 ? "mid" : "good";
@@ -74,9 +132,8 @@ function SeverityMeter({ level }) {
   );
 }
 
-/* ---------- Past Mistakes — list ---------- */
-function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
-  const [filter, setFilter] = useState("All");
+/* ---------- Level 1 — Category List ---------------------------------- */
+function CategoryList({ go, mistakesVariant, reviewed, setSelCategory }) {
 
   /* signed-out gate */
   if (mistakesVariant === "out") {
@@ -123,34 +180,106 @@ function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
     );
   }
 
-  /* signed-in list — sorted by severity, most serious first */
-  const list = MISTAKES.filter(m => {
-    const r = !!reviewed[m.id];
-    if (filter === "Reviewed") return r;
-    if (filter === "Unreviewed") return !r;
-    return true;
-  }).sort((a, b) => b.severity - a.severity);
+  /* Build per-category data */
+  const catMap = {};
+  MISTAKES.forEach(m => {
+    if (!catMap[m.pattern]) catMap[m.pattern] = [];
+    catMap[m.pattern].push(m);
+  });
+
+  const cats = Object.entries(catMap).map(([pattern, items]) => {
+    const unreviewed = items.filter(m => !reviewed[m.id]);
+    const maxSev = unreviewed.length > 0 ? Math.max(...unreviewed.map(m => m.severity)) : 0;
+    const thumb = ([...(unreviewed.length > 0 ? unreviewed : items)]).sort((a, b) => b.severity - a.severity)[0];
+    return { pattern, items, unreviewed, maxSev, thumb };
+  });
+
+  /* Most-critical unreviewed first; all-reviewed categories at bottom */
+  cats.sort((a, b) => {
+    if (a.maxSev === 0 && b.maxSev === 0) return 0;
+    if (a.maxSev === 0) return 1;
+    if (b.maxSev === 0) return -1;
+    return b.maxSev - a.maxSev;
+  });
+
+  const totalUnreviewed = MISTAKES.filter(m => !reviewed[m.id]).length;
 
   return (
     <div className="screen s-spar">
-      <TopBar title="Past Mistakes" onBack={() => go("stats")} />
+      <TopBar title="Past Mistakes" onBack={() => go("stats")}
+        meta={totalUnreviewed > 0 ? totalUnreviewed + " to review" : undefined} />
+      <div className="scroll" style={{ padding: "4px 20px 24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+          {cats.map(({ pattern, items, unreviewed, maxSev, thumb }) => {
+            const allDone = maxSev === 0;
+            return (
+              <button key={pattern} className="cat-row" onClick={() => {
+                setSelCategory(pattern);
+                go("mistakeDetail");
+              }}>
+                <div className="cat-thumb">
+                  <Board cols={mkCols(thumb.cols)} overlays={[{ ...thumb.playedCell, type: "tr" }]} compact />
+                </div>
+                <div className="cat-row-body">
+                  <span className="cat-row-name">{pattern}</span>
+                  {allDone
+                    ? <span className="cat-reviewed-badge"><Icon name="check" size={11} color="#1c8a4a" /> done</span>
+                    : <span className="cat-new-badge">{unreviewed.length} new</span>}
+                </div>
+                <span className="cat-row-count">{items.length}</span>
+                <Icon name="chevR" size={18} color="var(--ink-faint)" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="home-indicator"></div>
+    </div>
+  );
+}
+
+/* ---------- Level 2 — Category Detail (filtered blunder list) -------- */
+function MistakesList({ go, reviewed, setSelMistake, setMistakeContext, category = null }) {
+  const [filter, setFilter] = useState("Unreviewed");
+  useEffect(() => { setFilter("Unreviewed"); }, [category]);
+
+  const base = category ? MISTAKES.filter(m => m.pattern === category) : MISTAKES;
+  const list = base
+    .filter(m => filter === "Reviewed" ? !!reviewed[m.id] : !reviewed[m.id])
+    .sort((a, b) => b.severity - a.severity);
+
+  const catTotal = base.length;
+
+  return (
+    <div className="screen s-spar">
+      <TopBar
+        title={category || "Past Mistakes"}
+        onBack={() => go(category ? "mistakes" : "stats")}
+        meta={category ? catTotal + " blunder" + (catTotal !== 1 ? "s" : "") : undefined}
+      />
       <div className="scroll" style={{ padding: "0 20px 24px" }}>
         <div className="filter-tabs">
-          {["All", "Unreviewed", "Reviewed"].map(t => (
+          {["Unreviewed", "Reviewed"].map(t => (
             <button key={t} className={filter === t ? "on" : ""} onClick={() => setFilter(t)}>{t}</button>
           ))}
         </div>
 
         {list.length === 0 ? (
           <p className="muted center" style={{ fontWeight: 700, fontSize: 14, padding: "30px 10px" }}>
-            Nothing here — switch tabs to see your other moves.
+            {filter === "Reviewed"
+              ? "None reviewed yet — tap a blunder to study it."
+              : "All caught up in this category!"}
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
             {list.map(m => {
               const isR = !!reviewed[m.id];
               return (
-                <button key={m.id} className="blunder-card" onClick={() => { setSelMistake(m.id); go("mistakeDetail"); }}>
+                <button key={m.id} className="blunder-card" onClick={() => {
+                  setMistakeContext("list");
+                  setSelMistake(m.id);
+                  go("blunderDetail");
+                }}>
                   <div className="blunder-thumb">
                     <Board cols={mkCols(m.cols)} overlays={[{ ...m.playedCell, type: "tr" }]} compact />
                   </div>
@@ -160,7 +289,7 @@ function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
                       <SeverityMeter level={m.severity} />
                     </div>
                     <div className="bc-meta">
-                      <span className="bc-date">{m.date}</span>
+                      <span className="bc-date">Move {m.move} · {m.date}</span>
                       {isR && <span className="reviewed-chip"><Icon name="check" size={12} color="#1c8a4a" /> Reviewed</span>}
                     </div>
                   </div>
@@ -176,11 +305,20 @@ function MistakesList({ go, mistakesVariant, reviewed, setSelMistake }) {
   );
 }
 
-/* ---------- Past Mistakes — detail ---------- */
-function MistakeDetail({ go, selMistake, setSelMistake, reviewed, setReviewed }) {
+/* ---------- Level 3 — Blunder Detail --------------------------------- */
+function MistakeDetail({ go, selMistake, setSelMistake, reviewed, setReviewed, mistakeContext = "list", mistakeSource = null }) {
   const m = MISTAKES[selMistake] || MISTAKES[0];
   const [reveal, setReveal] = useState(false);
   const isR = !!reviewed[m.id];
+
+  /* back: from a game → review screen; from category detail → mistakeDetail */
+  const handleBack = () => mistakeContext === "game" ? go("review") : go("mistakeDetail");
+
+  const metaNode = mistakeSource ? (
+    <button className="meta-game-link" onClick={() => go("review")}>
+      Move {m.move} / {m.total} · {mistakeSource.date} ›
+    </button>
+  ) : ("Move " + m.move + " / " + m.total);
 
   const overlays = [
     { ...m.playedCell, type: "tr" },
@@ -192,7 +330,7 @@ function MistakeDetail({ go, selMistake, setSelMistake, reviewed, setReviewed })
 
   return (
     <div className="screen s-spar">
-      <TopBar title="Mistake" onBack={() => go("mistakes")} meta={"Move " + m.move + " / " + m.total} />
+      <TopBar title="Mistake" onBack={handleBack} meta={metaNode} />
       <div className="scroll" style={{ padding: "0 0 16px" }}>
         <CoachDialog size={50} messages={[{ lead: "You played column " + (m.playedCell.c + 1) + " here.", text: "Let me show you what worked better.", mood: "think" }]} />
 
@@ -232,4 +370,4 @@ function MistakeDetail({ go, selMistake, setSelMistake, reviewed, setReviewed })
   );
 }
 
-Object.assign(window, { MistakesList, MistakeDetail, MISTAKES });
+Object.assign(window, { CategoryList, MistakesList, MistakeDetail, MISTAKES });

@@ -45,6 +45,15 @@ function HomeScreen({ go, isAuthed = false }) {
           <Icon name="chevR" size={22} color="var(--ink-faint)" />
         </button>
 
+        <button className="feature-card" onClick={() => go("pastGames")} style={{ marginTop: 14, background: "linear-gradient(170deg,#fff,#e8faf8)", flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <div className="fc-icon" style={{ background: "#c7f0ea", color: "#1a8a7c" }}><Icon name="clock" size={28} color="#1a8a7c" /></div>
+          <div style={{ flex: 1 }}>
+            <h3>Past Games</h3>
+            <p>Review your game history</p>
+          </div>
+          <Icon name="chevR" size={22} color="var(--ink-faint)" />
+        </button>
+
         {/* daily coach nudge */}
         <div style={{ marginTop: 18 }}>
           <CoachDialog size={50} messages={[{ text: "Forced blocks are your weak spot today. Want a quick drill?", mood: "happy" }]} />
