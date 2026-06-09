@@ -290,3 +290,35 @@ For pages where only one perspective exists (e.g. Puzzles, where the position is
 **Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 15 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
 
 **Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.
+
+## URL Sync & Navigation
+
+**`react-router-dom` is permanently absent** — spec 011 FR-001 invariant. Do NOT reintroduce it.
+
+### Single source of truth: `urlMapping.js`
+
+`src/lib/urlMapping.js` exports:
+- `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
+- `SESSION_ONLY_SCREENS` — `Set` of 4 screen keys whose state cannot survive a cold page load: `summary`, `explorer`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`.
+- `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
+- `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
+
+### Navigation API
+
+| Function | History effect | When to use |
+|---|---|---|
+| `go(screenKey, params)` | `pushState` — adds a history entry | Normal forward navigation |
+| `goReplace(screenKey, params)` | `replaceState` — no new history entry | Replacing current entry (e.g., after saving a game) |
+| `goBack()` | `window.history.back()` | Back button / back gesture |
+
+### Event handling
+
+The `popstate` handler in `App.jsx` is the **canonical place** for back-navigation tracking. `goBack()` itself does NOT call `track()` — tracking fires inside the `popstate` listener so it covers both programmatic back navigation and browser back-button gestures.
+
+### Cold-boot behaviour
+
+On initial page load, `App.jsx` calls `parseUrl(location.pathname)` and calls `replaceState` to normalise the URL. Screens in `SESSION_ONLY_SCREENS` cannot be loaded from a cold URL (their required state is absent); the mount effect redirects them to `home`.
+
+### `clchallenge` cold-boot fetch pattern
+
+The `clchallenge` screen encodes only `lessonId` in the URL. On cold boot (when `lessonTitle` is absent from navigation params), `CLChallengeScreen` fetches the remaining props from `GET /api/lessons/:lessonId`. Components that require data beyond what fits in a URL path parameter MUST follow this same fetch-on-missing-props pattern.

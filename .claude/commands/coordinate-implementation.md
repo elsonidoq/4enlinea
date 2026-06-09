@@ -41,7 +41,11 @@ Then group the stories into sequential **implementation batches**. Each batch:
 - Is implementable without depending on uncommitted work from a later batch
 - Has shared prerequisites included in the earliest batch that needs them
 - Groups stories that modify the same primary file (e.g., two stories that both require changes to the same component belong in the same batch)
-- Is scoped to roughly one agent session of work (not too large, not trivially small)
+- Is scoped to a meaningful amount of work — aim for **5–10 tasks per batch**
+
+**Startup cost rule:** Each sub-agent pays a fixed cold-start cost (loading context, reading architecture docs, orienting to the codebase). A batch must justify that cost. As a concrete heuristic: if a batch contains fewer than ~4 tasks, ask yourself whether it can be merged into the adjacent batch without creating a dependency conflict. If it can, merge it.
+
+**Fold pure setup into the first consumer:** If a batch only creates infrastructure (a new module, a migration, a shared utility) that the immediately following batch depends on and extends, merge the two into one batch — unless the setup alone is large enough to fill a substantial agent session. A module + its tests that the next batch immediately imports is not a standalone batch; it's the opening section of the next batch.
 
 **Present your proposed partition to the user.** For each batch, list:
 - Which user stories it covers

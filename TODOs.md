@@ -10,7 +10,7 @@
 
 - [SOLVED] do not leak llm prompt for deep reveal. The API shouldn't expose that as well. 
 
-- [PLANNED] The app must use different paths for the navigation, we need to have permalinks
+- [SOLVED] The app must use different paths for the navigation, we need to have permalinks
 
 - each challenge in the challenges view must have: 1. progress bar, 2. if the user already cleared a challenge set, it has to be visually clear 3. the accuracy somewhat visually (not with a number)
 
@@ -84,3 +84,7 @@
 - We need to be able to perform a deploy to staging, and a deploy to production
 
 - After clicking in the correct column in the socratic board, a disk must fall. Also a visual feedback wether your answer is correct or not must be shown, exactly as it is done in the challenges board. In practice boards, the first board also does not drop a disk when you click, the second one works well
+
+- When you make a mistake, the coach should say something about that
+
+- In deep reveal, the cells that get highlighted by default from the text is not working properly. It has to be disabled

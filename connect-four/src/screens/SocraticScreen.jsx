@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer, useRef } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -19,6 +19,9 @@ export function SocraticScreen({ go, goBack, lessonId }) {
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [phase, dispatch] = useReducer(socraticReducer, 'ask');
   const [showHint, setShowHint] = useState(false);
+  const [board, setBoard] = useState(null);
+  const [heights, setHeights] = useState(null);
+  const [lastDrop, setLastDrop] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/api/lessons/${lessonId}`)
@@ -28,6 +31,15 @@ export function SocraticScreen({ go, goBack, lessonId }) {
       })
       .then(data => {
         setLesson(data);
+        if (data.socratic) {
+          setBoard(boardSpecToBoard(data.socratic.boardSpec));
+          const h = Array(7).fill(0);
+          for (let c = 0; c < 7; c++) {
+            h[c] = data.socratic.boardSpec[c]?.length ?? 0;
+          }
+          setHeights(h);
+        }
+        setLastDrop(null);
         setLoadState('ready');
       })
       .catch(err => {
@@ -58,7 +70,22 @@ export function SocraticScreen({ go, goBack, lessonId }) {
 
   function handleColumnClick(col) {
     if (phase !== 'ask' && phase !== 'wrong1') return;
+    if (!board || !heights) return;
+
+    const row = heights[col];
+    if (row >= 6) return;
+
     const correct = col === lesson.socratic.correctCol;
+    const color = lesson.socratic.movestring.length % 2 === 0 ? 'red' : 'yellow';
+
+    const newBoard = board.map(r => [...r]);
+    newBoard[row][col] = color;
+    const newHeights = [...heights];
+    newHeights[col]++;
+
+    setBoard(newBoard);
+    setHeights(newHeights);
+    setLastDrop({ c: col, r: row });
     dispatch({ type: correct ? 'CORRECT' : 'WRONG' });
   }
 
@@ -85,13 +112,30 @@ export function SocraticScreen({ go, goBack, lessonId }) {
     );
   }
 
+  if (!board) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <TopBar onBack={() => goBack()} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
+          {t('common.loading', 'Loading…')}
+        </div>
+      </div>
+    );
+  }
+
   const { socratic } = lesson;
   const correctCol = socratic.correctCol;
 
-  // Derive overlays — only add win overlay in wrong2
-  const overlays = phase === 'wrong2'
-    ? [{ c: correctCol, r: socratic.boardSpec[correctCol].length, type: 'win' }]
-    : [];
+  // Derive overlays — win overlay on correct or wrong2
+  const overlays = (() => {
+    if (phase === 'correct' && lastDrop) {
+      return [{ c: lastDrop.c, r: lastDrop.r, type: 'win' }];
+    }
+    if (phase === 'wrong2') {
+      return [{ c: correctCol, r: socratic.boardSpec[correctCol]?.length ?? 0, type: 'win' }];
+    }
+    return [];
+  })();
 
   // CoachDialog messages
   const coachMessages = showHint
@@ -116,10 +160,11 @@ export function SocraticScreen({ go, goBack, lessonId }) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
         <Board
-          board={boardSpecToBoard(socratic.boardSpec)}
+          board={board}
           canPlay={canPlay}
           onColumnClick={handleColumnClick}
           overlays={overlays}
+          lastDrop={lastDrop}
         />
       </div>
 

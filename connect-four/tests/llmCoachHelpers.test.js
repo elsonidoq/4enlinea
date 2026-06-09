@@ -7,12 +7,12 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Board } from './classifier.js';
+import { Board } from '../server/classifier.js';
 import {
   checkAllMovesEqual,
   getGapAndFraming,
   findMajorThreatWindows,
-} from './llmCoachHelpers.js';
+} from '../server/llmCoachHelpers.js';
 
 // ===========================================================================
 // T04 — checkAllMovesEqual

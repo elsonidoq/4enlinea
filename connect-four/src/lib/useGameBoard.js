@@ -262,8 +262,14 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       if (data.coachPhraseKey) {
         coachText = t(data.coachPhraseKey);
         coachMood = data.coachMood || 'happy';
+      } else if (data.quality === 'blunder') {
+        // Fallback for blunders without category-specific keys:
+        // use the generic blunder pool so the coach signals the mistake
+        const key = pickRandomKey(t, 'coach.generic.blunder');
+        coachText = t(key);
+        coachMood = data.coachMood || 'oops';
       } else {
-        // Fallback: random generic phrase
+        // Fallback: random generic phrase for non-blunder moves
         const key = pickRandomKey(
           t,
           'coach.sparring.user_move.generic',

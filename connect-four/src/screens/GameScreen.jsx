@@ -9,7 +9,7 @@ import { useGameBoard } from '../lib/useGameBoard.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function GameScreen({ go, goBack, difficulty, side, initialMoves = '' }) {
+export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMoves = '' }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
 
@@ -56,8 +56,8 @@ export function GameScreen({ go, goBack, difficulty, side, initialMoves = '' }) 
     // 4. Analytics
     track('game_ended', { result, moveCount: movesStr.length, difficulty });
 
-    // 5. Navigate to review screen
-    go('review', { id: gameId });
+    // 5. Navigate to review screen (replaces the /game entry in browser history)
+    goReplace('review', { id: gameId });
   }
 
   // ── Game board hook ─────────────────────────────────────────────

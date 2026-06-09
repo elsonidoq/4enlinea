@@ -2,6 +2,7 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
@@ -141,6 +142,15 @@ let anthropic = null;
 if (process.env.ANTHROPIC_API_KEY) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+// ── SPA index.html (read at startup for catch-all route) ──────────────────────
+
+let indexHtml = null;
+try {
+  indexHtml = readFileSync(join(__dirname, '../dist/index.html'), 'utf8');
+} catch {
+  console.log('[server] dist/index.html not found — SPA catch-all will return 500');
 }
 
 // ── Auth middleware (T020) ─────────────────────────────────────────────────────
@@ -1678,7 +1688,11 @@ app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
 
   const threatsAfter = countThreatsAfterMove(position, col);
   if (threatsAfter >= 2) {
-    return res.json({ outcome: 'success' });
+    const positionAfter = position + String(col);
+    const { board: boardAfter, colHeights: heightsAfter } = parseBoardState(positionAfter);
+    const threatCols = getImmediateThreats(boardAfter, heightsAfter, learner);
+    const threatCells = threatCols.map(tc => ({ c: tc, r: heightsAfter[tc] }));
+    return res.json({ outcome: 'success', threatCells });
   }
 
   const positionAfterLearnerMove = position + String(col);
@@ -2453,6 +2467,41 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json({ id: data.id, verified: false });
+});
+
+// ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
+
+app.use(express.static(join(__dirname, '../dist')));
+
+app.get('/{*path}', async (req, res) => {
+  if (!indexHtml) return res.status(500).send('App not built');
+
+  // FR-014: inject OG meta tags for /game/:id paths
+  const gameMatch = req.path.match(/^\/game\/([^/]+)$/);
+  if (gameMatch && supabase) {
+    const gameId = gameMatch[1];
+    try {
+      const { data } = await supabase
+        .from('games')
+        .select('id, difficulty, result')
+        .eq('id', gameId)
+        .single();
+
+      if (data) {
+        const capitalize = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+        const ogTitle = `Connect Four game — ${capitalize(data.difficulty)} — ${capitalize(data.result)}`;
+        const ogDesc = 'Review this Connect Four game on DecodeC4.';
+        const ogTags = `<meta property="og:title" content="${ogTitle}">
+<meta property="og:description" content="${ogDesc}">`;
+        const patched = indexHtml.replace('</head>', `${ogTags}\n</head>`);
+        return res.type('html').send(patched);
+      }
+    } catch (e) {
+      // fall through to serve plain index.html
+    }
+  }
+
+  res.type('html').send(indexHtml);
 });
 
 // ── Server start ───────────────────────────────────────────────────────────────

@@ -181,13 +181,13 @@
     },
     "claimeven": {
       "prompt": {
-        "0": "As Yellow, you can secure a draw — find the Claimeven move.",
-        "1": "Yellow has a drawing strategy here. Which column keeps it alive?",
-        "2": "Use Claimeven: Yellow plays below every Red even-row threat."
+        "0": "As Gray, you can secure a draw — find the Claimeven move.",
+        "1": "Gray has a drawing strategy here. Which column keeps it alive?",
+        "2": "Use Claimeven: Gray plays below every Green even-row threat."
       },
       "hint": {
-        "0": "Look for an even row where Red has a threat — Yellow should mirror below it.",
-        "1": "Claimeven works by ensuring Yellow always gets the square directly below Red's even-row threats."
+        "0": "Look for an even row where Green has a threat — Gray should mirror below it.",
+        "1": "Claimeven works by ensuring Gray always gets the square directly below Green's even-row threats."
       },
       "optimal": {
         "0": "Exactly — that's the Claimeven move that secures the draw."
@@ -196,7 +196,7 @@
         "0": "You're still in the draw zone, but the Claimeven key column was stronger."
       },
       "blunder": {
-        "0": "That column gives up Yellow's Claimeven drawing advantage."
+        "0": "That column gives up Gray's Claimeven drawing advantage."
       }
     },
     "z_threat": {
@@ -221,18 +221,18 @@
     },
     "odd_even_threat": {
       "prompt": {
-        "0": "Red has two threat moves. One lands on an odd row (Red's home row) — that's the winner. Which column do you choose?",
-        "1": "Both moves create threats, but one lands on an odd row — Red's natural parity. That's the move that gives Red lasting control. Play it."
+        "0": "Green has two threat moves. One lands on an odd row (Green's home row) — that's the winner. Which column do you choose?",
+        "1": "Both moves create threats, but one lands on an odd row — Green's natural parity. That's the move that gives Green lasting control. Play it."
       },
       "hint": {
-        "0": "One of the threat moves lands on an odd row. Odd rows belong to Red — that's the correct target."
+        "0": "One of the threat moves lands on an odd row. Odd rows belong to Green — that's the correct target."
       },
       "optimal": {
-        "0": "Correct! The odd-row threat gives Red parity control — it can't be neutralised by Yellow's claimeven strategy.",
-        "1": "Exactly right. Playing to the odd row aligns with Red's natural parity advantage."
+        "0": "Correct! The odd-row threat gives Green parity control — it can't be neutralised by Gray's claimeven strategy.",
+        "1": "Exactly right. Playing to the odd row aligns with Green's natural parity advantage."
       },
       "suboptimal": {
-        "0": "That move creates a threat, but it lands on an even row — Yellow's parity. The odd-row threat in the other column is stronger."
+        "0": "That move creates a threat, but it lands on an even row — Gray's parity. The odd-row threat in the other column is stronger."
       },
       "blunder": {
         "0": "That column doesn't create a threat at all. Look for the moves that create an immediate winning window."
@@ -266,29 +266,29 @@
     },
     "claimodd": {
       "prompt": {
-        "0": "As Red, break the claimeven lock — find the odd-row anchor.",
-        "1": "Red is stuck on even rows. Create an odd-row threat.",
-        "2": "All columns have even height — Red needs to break the pattern."
+        "0": "As Green, break the claimeven lock — find the odd-row anchor.",
+        "1": "Green is stuck on even rows. Create an odd-row threat.",
+        "2": "All columns have even height — Green needs to break the pattern."
       },
       "hint": {
-        "0": "Look for a column where playing gives Red an odd-row anchor.",
-        "1": "Check if center column creates a parity shift for Red."
+        "0": "Look for a column where playing gives Green an odd-row anchor.",
+        "1": "Check if center column creates a parity shift for Green."
       },
       "optimal": {
         "0": "Perfect — you broke the claimeven lock with that odd-row anchor.",
-        "1": "That odd-row anchor shifts the parity. Yellow's claimeven is broken.",
-        "2": "Well played — Red now has a winning threat Yellow cannot claim.",
-        "3": "Exactly — the center column anchor gives Red the advantage."
+        "1": "That odd-row anchor shifts the parity. Gray's claimeven is broken.",
+        "2": "Well played — Green now has a winning threat Gray cannot claim.",
+        "3": "Exactly — the center column anchor gives Green the advantage."
       },
       "suboptimal": {
         "0": "You're staying on even rows — try center column for an odd-row anchor.",
         "1": "Good effort, but an odd-row anchor was the stronger defensive idea.",
-        "2": "That column keeps Red on even rows. Break the pattern instead."
+        "2": "That column keeps Green on even rows. Break the pattern instead."
       },
       "blunder": {
-        "0": "That keeps Red on even rows — Yellow's claimeven still dominates.",
+        "0": "That keeps Green on even rows — Gray's claimeven still dominates.",
         "1": "You need an odd-row anchor — this column doesn't provide one.",
-        "2": "Red stays trapped on even parity. Look for the center column.",
+        "2": "Green stays trapped on even parity. Look for the center column.",
         "3": "That move doesn't break the claimeven lock. Try center column."
       }
     },
@@ -402,6 +402,16 @@
         "1": "You missed the undercut column. The lower threat wins.",
         "2": "Wrong column — your opponent's threat is still alive.",
         "3": "That doesn't exploit the gravity advantage. Look again."
+      }
+    },
+    "generic": {
+      "blunder": {
+        "0": "Hmm, not the strongest move there.",
+        "1": "Your opponent will like that.",
+        "2": "That one's tricky — check the hint if you're stuck.",
+        "3": "That leaves a gap for your opponent.",
+        "4": "Not the best choice here.",
+        "5": "Your opponent has a good answer to that."
       }
     },
     "summary": {
@@ -599,7 +609,7 @@
     "claimeven": {
       "optimal": {
         "summary": {
-          "0": "That's the Claimeven column that secures Yellow's draw."
+          "0": "That's the Claimeven column that secures Gray's draw."
         }
       },
       "suboptimal": {
@@ -609,7 +619,7 @@
       },
       "blunder": {
         "summary": {
-          "0": "That column gives up Yellow's Claimeven drawing strategy."
+          "0": "That column gives up Gray's Claimeven drawing strategy."
         }
       }
     },
@@ -654,10 +664,10 @@
     "immediate_threat": { "displayName": "Immediate Threat", "description": "Find the move that wins right now." },
     "forced_block":     { "displayName": "Forced Block", "description": "Block your opponent's immediate winning threat." },
     "double_threat":    { "displayName": "Double Threat", "description": "Create two simultaneous winning threats." },
-    "claimeven":        { "displayName": "Claimeven", "description": "Use Yellow's Claimeven strategy to secure a draw." },
+    "claimeven":        { "displayName": "Claimeven", "description": "Use Gray's Claimeven strategy to secure a draw." },
     "z_threat":         { "displayName": "Z-Threat", "description": "Exploit Z-threat parity to guarantee the win." },
-    "odd_even_threat":  { "displayName": "Odd & Even Threats", "description": "Red has two threat moves. Pick the one that lands on an odd row — Red's natural parity — to guarantee control." },
-    "claimodd":         { "displayName": "Claimodd", "description": "Break the parity lock — find Red's odd-row anchor against Claimeven." },
+    "odd_even_threat":  { "displayName": "Odd & Even Threats", "description": "Green has two threat moves. Pick the one that lands on an odd row — Green's natural parity — to guarantee control." },
+    "claimodd":         { "displayName": "Claimodd", "description": "Break the parity lock — find Green's odd-row anchor against Claimeven." },
     "mixed":            { "displayName": "Mixed", "description": "A mix of all challenge types." },
     "undercut":         { "displayName": "Undercut", "description": "Take the square below your opponent's threat." },
     "overcut":          { "displayName": "Overcut", "description": "Play above your opponent's intended threat." },
@@ -734,6 +744,12 @@
     "confirmation": {
       "header": "{{title}} — Practice",
       "empty":  "No practice puzzles available yet."
+    }
+  },
+  "review": {
+    "share": {
+      "button": "Share",
+      "copied": "Link copied!"
     }
   }
 }

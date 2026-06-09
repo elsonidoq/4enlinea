@@ -31,6 +31,7 @@
 - [Navigator spreads params as direct props](feedback_navigator_params_spread.md) — don't destructure a `params` object in screens; navigation params are spread as individual props
 - [Product doc authoring](feedback_product_doc_authoring.md) — MVP product docs state requirements not implementation; anchor principles to llm_feedback rows; reconcile against product_vision/product_decisions (latter wins); verify current-state claims against code
 - [ChallengeScreen mode extensions — audit `category` references](feedback_challenge_screen_mode_extensions.md) — any new mode that replaces `category` must replace all bare `category` refs with `effectiveCategory`; silent bug produces `coach.undefined.prompt.0`
+- [Express 5 wildcard catch-all syntax](feedback_express5_wildcard.md) — use `app.get('/{*path}', ...)` not `app.get('*', ...)`; bare `*` throws PathError at startup
 
 ## References — solver and board mechanics
 

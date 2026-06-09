@@ -24,6 +24,19 @@ export function ReviewScreen({ go, goBack, id }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMistakeIdx, setSelectedMistakeIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  function handleShare() {
+    const url = window.location.href;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(() => console.warn('[share] clipboard write failed'));
+    } else {
+      console.warn('[share] clipboard API unavailable');
+    }
+  }
   useEffect(() => {
     if (!id) {
       setError(t('sparring.reviewNoGame'));
@@ -208,6 +221,32 @@ export function ReviewScreen({ go, goBack, id }) {
                 <span>{t('sparring.blunder')} {analysis.blunderCount}</span>
               </div>
             </div>
+          </div>
+
+          {/* Share button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={handleShare}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 14,
+                border: 'none',
+                background: 'rgba(0,0,0,0.06)',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 700,
+                fontSize: 15,
+                color: 'var(--ink)',
+                cursor: 'pointer',
+              }}
+            >
+              {t('review.share.button')}
+            </button>
+            {copied && (
+              <span style={{ fontSize: 13, color: 'var(--eval-good)', fontWeight: 600 }}>
+                {t('review.share.copied')}
+              </span>
+            )}
           </div>
 
           {/* Move Timeline */}

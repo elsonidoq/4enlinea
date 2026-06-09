@@ -16,11 +16,11 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { assignHeatmaps } from './heatmap.js';
+import { assignHeatmaps } from '../server/heatmap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const BINARY   = join(__dirname, 'c4solver');
-const BOOK     = join(__dirname, '7x6.book');
+const BINARY   = join(__dirname, '..', 'server', 'c4solver');
+const BOOK     = join(__dirname, '..', 'server', '7x6.book');
 const ROWS = 6, COLS = 7;
 
 function runSolver(moves) {

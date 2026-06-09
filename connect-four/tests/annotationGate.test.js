@@ -14,8 +14,8 @@ import {
   checkP5Strong,
   getWindowsThroughCell,
   isWindowBlocked,
-} from './annotationGate.js';
-import { Board } from './classifier.js';
+} from '../server/annotationGate.js';
+import { Board } from '../server/classifier.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

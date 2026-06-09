@@ -202,10 +202,12 @@ export function ChallengeScreen({
       .then(data => {
         setEvaluation(data);
 
-        // Update coach
+        // Update coach — fall back to generic blunder pool when no category-specific key exists
+        const phraseKey = data.coachPhraseKey
+          ?? `coach.generic.blunder.${Math.floor(Math.random() * 6)}`;
         setCoachMessages(prev => [...prev, {
-          text: t(data.coachPhraseKey),
-          mood: data.coachMood,
+          text: t(phraseKey),
+          mood: data.coachMood ?? 'oops',
         }]);
 
         // Win overlay if optimal win
@@ -423,6 +425,10 @@ export function ChallengeScreen({
         setLastDrop({ c: col, r: heights[col] });
         setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.forced_win.optimal.0' });
         setCoachMessages(prev => [...prev, { text: t('coach.forced_win.optimal.0'), mood: 'happy' }]);
+        // Highlight both threat cells on double-threat success
+        if (data.threatCells && data.threatCells.length > 0) {
+          setOverlays(data.threatCells.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
+        }
         store?.recordPuzzleAttempt({
           puzzle_id: current.id,
           device_uuid: 'local',

@@ -369,6 +369,23 @@ The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users
 
 All external clients (`supabase`, `anthropic`, `stripe`) are initialized conditionally — the server starts and serves requests even when these are absent, returning 503 for affected endpoints.
 
+## SPA Catch-all Route
+
+The server hosts the built SPA (`dist/`) and serves `dist/index.html` for all non-API paths via a catch-all route.
+
+**Registration order** (enforced by Express route order):
+1. All `/api/*` routes
+2. `app.use(express.static(join(__dirname, '../dist')))` — serves JS/CSS/asset files
+3. Catch-all for HTML — registered last
+
+**Express 5 wildcard syntax**: Use `app.get('/{*path}', handler)` — bare `app.get('*', ...)` throws `PathError` at startup in Express 5 (path-to-regexp no longer accepts unparameterized `*`).
+
+**`dist/index.html` caching**: Read once at startup into a module-level `let indexHtml`. If the file is absent (e.g., pre-build), log a warning and return 500 from the catch-all. Never read or write it per-request.
+
+**OG injection**: For `/game/:id` paths, inject `<meta property="og:title">` and `<meta property="og:description">` before `</head>` using a local `patched` variable. Never mutate the cached `indexHtml` string.
+
+---
+
 ## Lesson Loader
 
 `server/lessonLoader.js` is the canonical module for loading lesson content from JSON files at server startup.

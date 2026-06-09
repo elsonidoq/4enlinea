@@ -19,6 +19,7 @@ export function CoachDialog({ messages, size = 58, fixed = false }) {
         background: 'rgba(255,255,255,0.45)',
         margin: '0 12px', borderRadius: 18, padding: '10px 12px',
         backdropFilter: 'blur(2px)',
+        height: 140,
       } : {}),
     }}>
       <CoachAvatar size={size} mood={mood} />
