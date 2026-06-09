@@ -41,6 +41,7 @@ export function ChallengeScreen({
   lessonTitle,
   confirmationCategory,
   confirmationCount,
+  confirmationChallenges = null,
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
@@ -62,6 +63,7 @@ export function ChallengeScreen({
   // Deep Reveal state
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
   const [zhCells, setZhCells] = useState([]);
+  const [hintUsed, setHintUsed] = useState(false);
 
   const promptKeyRef = useRef(null);
   const startTimeRef = useRef(null);
@@ -94,6 +96,7 @@ export function ChallengeScreen({
     setIsSubmitting(false);
     setDeepRevealOpen(false);
     setZhCells([]);
+    setHintUsed(false);
     setSeqPosition(puzzle.move_string ?? '');
 
     // Pick a random prompt key from coach.<category>.prompt.*
@@ -114,6 +117,30 @@ export function ChallengeScreen({
   useEffect(() => {
     async function loadPuzzles() {
       try {
+        // Use embedded challenges when provided (lesson editor curation)
+        if (lessonMode && confirmationChallenges?.length > 0) {
+          const loaded = confirmationChallenges.map(ch => ({
+            id: ch.puzzleId || `inline-${ch.moveString}`,
+            category: confirmationCategory,
+            move_string: ch.moveString,
+            interaction_mode: ch.interactionMode || 'single_move',
+            highlight_metadata: ch.highlightMetadata ?? null,
+            correct_col: ch.correctCol,
+            user_player: ch.userPlayer,
+          }));
+          sessionIdRef.current = null;
+          setPuzzles(loaded);
+          setCurrentIdx(0);
+          if (loaded.length > 0) {
+            initPuzzle(loaded[0]);
+            setPhase('pre-move');
+          } else {
+            setPhase('pre-move');
+          }
+          return;
+        }
+
+        // Legacy random draw
         const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
         const drawCategory = lessonMode ? confirmationCategory : category;
         const drawN        = lessonMode ? confirmationCount    : 8;
@@ -137,7 +164,7 @@ export function ChallengeScreen({
     }
     loadPuzzles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, lessonMode, confirmationCategory, confirmationCount]);
+  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges]);
 
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
@@ -199,6 +226,7 @@ export function ChallengeScreen({
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
+        store?.recordActivityDay().catch(() => {});
 
         // Analytics
         if (data.quality === 'optimal') {
@@ -211,12 +239,14 @@ export function ChallengeScreen({
   }
 
   function handleHint() {
+    if (hintUsed) return;
     const effectiveCategory = lessonMode ? confirmationCategory : category;
     const keys = [`coach.${effectiveCategory}.hint.0`, `coach.${effectiveCategory}.hint.1`];
     const valid = keys.filter(k => t(k) !== k);
     if (valid.length === 0) return;
     const key = valid[Math.floor(Math.random() * valid.length)];
     setCoachMessages(prev => [...prev, { text: t(key), mood: 'think' }]);
+    setHintUsed(true);
   }
 
   function advanceSession() {
@@ -228,7 +258,7 @@ export function ChallengeScreen({
   }
 
   function handleBack() {
-    if (lessonMode) { go('concept', { lessonId }); return; }
+    if (lessonMode) { go('saga'); return; }
     if (session || window.confirm(t('challenge.leave_confirm_body', "Your progress won't be saved."))) {
       go('setpicker');
     }
@@ -353,6 +383,7 @@ export function ChallengeScreen({
       time_ms: Date.now() - startTimeRef.current,
       ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
     });
+    store?.recordActivityDay().catch(() => {});
 
     track('puzzle_attempted', { puzzleId: current.id, category: 'forbidden_columns', submittedCols: cols, correctCols: forbiddenCols });
 
@@ -401,6 +432,7 @@ export function ChallengeScreen({
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
+        store?.recordActivityDay().catch(() => {});
         track('puzzle_solved_correct', { puzzleId: current.id, category });
         setPhase('post-move');
       } else {
@@ -608,8 +640,8 @@ export function ChallengeScreen({
                 {evaluation.summaryLine ?? t(evaluation.summaryLineKey)}
               </p>
 
-              {/* Learn more button — hidden for forbidden_columns and sequence mode */}
-              {category !== 'forbidden_columns' && puzzles[currentIdx]?.interaction_mode !== 'sequence' && (
+              {/* Learn more button — hidden for forbidden_columns, sequence mode, and correct answers */}
+              {category !== 'forbidden_columns' && puzzles[currentIdx]?.interaction_mode !== 'sequence' && evaluation?.quality !== 'optimal' && (
                 <button
                   onClick={handleLearnMore}
                   style={{
@@ -655,6 +687,7 @@ export function ChallengeScreen({
               icon="bulb"
               label="Hint"
               onClick={handleHint}
+              disabled={hintUsed}
             />
           )
         ) : (

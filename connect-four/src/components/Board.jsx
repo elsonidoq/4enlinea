@@ -80,6 +80,7 @@ function groupCellsByCapsules(cells) {
 export function Board({
   board = EMPTY_BOARD,
   onColumnClick,
+  onCellClick,
   canPlay = false,
   overlays = [],
   badge,
@@ -270,6 +271,7 @@ export function Board({
               return (
                 <div
                   key={r}
+                  onClick={onCellClick ? (e) => { e.stopPropagation(); onCellClick(col, r); } : undefined}
                   style={{
                     aspectRatio: 1,
                     borderRadius: '50%',
@@ -278,6 +280,7 @@ export function Board({
                     position: 'relative',
                     display: 'grid',
                     placeItems: 'center',
+                    cursor: onCellClick ? 'crosshair' : undefined,
                   }}
                 >
                   {/* New-API disc (green/gray) — skipped when shim overrides this cell */}

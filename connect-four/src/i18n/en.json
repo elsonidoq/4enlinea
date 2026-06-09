@@ -83,12 +83,10 @@
     "sendError": "Something went wrong. Please try again."
   },
   "upgrade": {
-    "heading": "Join the waitlist",
-    "body": "Pro features are coming soon. Enter your email and we'll notify you when they launch.",
-    "cta": "Notify me",
-    "placeholder": "Your email address",
-    "success": "You're on the list — we'll be in touch!",
-    "error": "Something went wrong. Please try again.",
+    "heading": "Become Pro",
+    "body": "Upgrade to Pro for unlimited deep reveals.",
+    "cta": "Become Pro — free for now",
+    "success": "You're now a Pro member!",
     "dismiss": "Maybe later"
   },
   "common": {

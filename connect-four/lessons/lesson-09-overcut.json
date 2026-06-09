@@ -11,12 +11,27 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["gdd", "gdd", "gdd", "", "", "", ""],
+      "boardSpec": [
+        "gdd",
+        "gdd",
+        "gdd",
+        "",
+        "",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 3, "r": 2, "type": "tg" }
+        {
+          "c": 3,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Upper threat wins" }
+        {
+          "type": "tg",
+          "label": "Upper threat wins"
+        }
       ],
       "infoProse": "Red has a three-in-a-row at row 0 (columns 0–2, lower threat) and Yellow at row 2 (columns 0–2, upper threat). Both are even parity rows. Because they share parity, the lower threat does not kill the upper — Yellow's upper threat prevails."
     },
@@ -27,20 +42,97 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["gdd", "gdd", "gdd", "", "", "", "g"],
+      "boardSpec": [
+        "gdd",
+        "gdd",
+        "gdd",
+        "",
+        "",
+        "",
+        "g"
+      ],
       "overlays": [
-        { "c": 3, "r": 2, "type": "tg" }
+        {
+          "c": 3,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Winning upper threat" }
+        {
+          "type": "tg",
+          "label": "Winning upper threat"
+        }
       ],
       "infoProse": "With an extra Red disc at column 6 to show a more developed game, the overcut remains strong. The same-parity rule means Yellow's upper threat at row 2 wins regardless of the lower threat at row 0."
     }
   ],
   "socratic": {
-    "boardSpec": ["gdd", "gdd", "gdd", "", "", "", ""],
+    "boardSpec": [
+      "gdd",
+      "gdd",
+      "gdd",
+      "",
+      "",
+      "",
+      ""
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "overcut",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "45c8f60d-14d6-4bc7-bff7-b63c4dd5e6ce",
+      "moveString": "322233353155505310161125",
+      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPredicateType": "overcut",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 2,
+            "role": "neutralised_threat",
+            "column": 4
+          },
+          {
+            "row": 3,
+            "role": "major_threat",
+            "column": 4
+          }
+        ]
+      },
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "b87536d6-5fca-4b06-b246-d3755d5c2702",
+      "moveString": "413520424420116155020",
+      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPredicateType": "overcut",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 3,
+            "role": "neutralised_threat",
+            "column": 3
+          },
+          {
+            "row": 4,
+            "role": "major_threat",
+            "column": 3
+          }
+        ]
+      },
+      "correctCol": null,
+      "userPlayer": 2
+    }
+  ]
 }

@@ -58,12 +58,16 @@ export function ConceptScreen({ go, goBack, lessonId }) {
       setSlideIndex(i => i + 1);
     } else if (lesson.socratic != null) {
       go('socratic', { lessonId });
-    } else if (lesson.confirmationCategory != null && lesson.confirmationCount > 0) {
+    } else if (
+      (lesson.confirmationChallenges?.length > 0) ||
+      (lesson.confirmationCategory != null && lesson.confirmationCount > 0)
+    ) {
       go('clchallenge', {
         lessonId,
         lessonTitle: lesson.title,
         confirmationCategory: lesson.confirmationCategory,
         confirmationCount: lesson.confirmationCount,
+        confirmationChallenges: lesson.confirmationChallenges || null,
       });
     } else {
       store.saveLessonProgress(lessonId, 'complete');

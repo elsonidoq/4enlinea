@@ -11,12 +11,27 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["", "", "", "gd", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gd",
+        "",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 3, "r": 1, "type": "claim" }
+        {
+          "c": 3,
+          "r": 1,
+          "type": "claim"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "Yellow claims this cell" }
+        {
+          "type": "claim",
+          "label": "Yellow claims this cell"
+        }
       ],
       "infoProse": "Red plays column 3 landing on row 0 (an even row). Yellow responds by playing directly above at row 1. The claimeven response ensures Yellow controls the odd row in this column."
     },
@@ -27,23 +42,84 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["gd", "", "gd", "gd", "gd", "", ""],
+      "boardSpec": [
+        "gd",
+        "",
+        "gd",
+        "gd",
+        "gd",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 0, "r": 1, "type": "claim" },
-        { "c": 2, "r": 1, "type": "claim" },
-        { "c": 3, "r": 1, "type": "claim" },
-        { "c": 4, "r": 1, "type": "claim" }
+        {
+          "c": 0,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 2,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "claim"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "Claimed cells" }
+        {
+          "type": "claim",
+          "label": "Claimed cells"
+        }
       ],
       "infoProse": "After several claimeven responses across the board, Yellow controls the odd row in every column where Red played on an even row. This builds Yellow's positional advantage."
     }
   ],
   "socratic": {
-    "boardSpec": ["gd", "", "gd", "g", "gd", "", ""],
+    "boardSpec": [
+      "gd",
+      "",
+      "gd",
+      "g",
+      "gd",
+      "",
+      ""
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "claimeven",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "fc5ff387-e4e9-46e0-8fd0-66a2dcc2d3be",
+      "moveString": "033524632333656655640",
+      "goalPrompt": "Use the Claimeven strategy — identify which columns Yellow can claim to guarantee a draw.",
+      "goalPredicateType": "claimeven",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 6,
+      "userPlayer": 2
+    },
+    {
+      "puzzleId": "d9095b68-a72a-4d5b-ad5f-540ebef8e250",
+      "moveString": "33333530054551041",
+      "goalPrompt": "Use the Claimeven strategy — identify which columns Yellow can claim to guarantee a draw.",
+      "goalPredicateType": "claimeven",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 0,
+      "userPlayer": 2
+    }
+  ]
 }

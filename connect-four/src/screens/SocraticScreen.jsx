@@ -38,12 +38,16 @@ export function SocraticScreen({ go, goBack, lessonId }) {
 
 
   function advance() {
-    if (lesson.confirmationCategory != null && lesson.confirmationCount > 0) {
+    if (
+      (lesson.confirmationChallenges?.length > 0) ||
+      (lesson.confirmationCategory != null && lesson.confirmationCount > 0)
+    ) {
       go('clchallenge', {
         lessonId,
         lessonTitle: lesson.title,
         confirmationCategory: lesson.confirmationCategory,
         confirmationCount: lesson.confirmationCount,
+        confirmationChallenges: lesson.confirmationChallenges || null,
       });
     } else {
       store.saveLessonProgress(lessonId, 'complete');
@@ -105,7 +109,7 @@ export function SocraticScreen({ go, goBack, lessonId }) {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
         title={t(`lesson.${lessonId}.title`, { defaultValue: '' })}
-        onBack={() => go('concept', { lessonId })}
+        onBack={() => go('saga')}
       />
 
       <CoachDialog messages={coachMessages} />

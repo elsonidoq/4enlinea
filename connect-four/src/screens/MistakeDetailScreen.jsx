@@ -182,6 +182,12 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
               {t('mistakes.detail.legend.opponentThreat')}
             </div>
           </div>
+          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>
+            {(() => {
+              const userColor = (blunder.board_state || '').length % 2 === 0 ? 'green' : 'gray';
+              return <>You played: <strong>{userColor}</strong></>;
+            })()}
+          </div>
           <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: 'var(--ink-soft)', opacity: 0.5, fontFamily: 'monospace' }}>
               {blunder.board_state || ''}

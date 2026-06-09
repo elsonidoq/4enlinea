@@ -145,3 +145,109 @@ test('lessonLoader: validateLesson returns error string for missing id', () => {
   const err = validateLesson(bad);
   assert.ok(typeof err === 'string' && err.length > 0, 'should return error string');
 });
+
+// ── confirmationChallenges validation ────────────────────────────────────────────
+
+test('validateLesson: accepts valid confirmationChallenges array', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [
+      { moveString: '33201', correctCol: 3, userPlayer: 1 },
+      { moveString: '44452556366', correctCol: 0, userPlayer: 2, puzzleId: 'abc-123', interactionMode: 'single_move' },
+    ],
+  });
+  const err = validateLesson(lesson);
+  assert.equal(err, null);
+});
+
+test('validateLesson: accepts confirmationChallenges: null (backward compat)', () => {
+  const lesson = makeValidLesson({ confirmationChallenges: null });
+  const err = validateLesson(lesson);
+  assert.equal(err, null);
+});
+
+test('validateLesson: accepts missing confirmationChallenges (backward compat)', () => {
+  const lesson = makeValidLesson(); // confirmationChallenges is not set
+  const err = validateLesson(lesson);
+  assert.equal(err, null);
+});
+
+test('validateLesson: rejects confirmationChallenges that is not an array', () => {
+  const lesson = makeValidLesson({ confirmationChallenges: 'not-an-array' });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('confirmationChallenges'));
+});
+
+test('validateLesson: rejects entry with missing moveString', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [{ correctCol: 3, userPlayer: 1 }],
+  });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('moveString'));
+});
+
+test('validateLesson: rejects entry with invalid moveString (non-digit chars)', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [{ moveString: '33abc', correctCol: 3, userPlayer: 1 }],
+  });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('moveString'));
+});
+
+test('validateLesson: rejects entry with correctCol out of range', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [{ moveString: '33', correctCol: 7, userPlayer: 1 }],
+  });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('correctCol'));
+});
+
+test('validateLesson: rejects entry with userPlayer not 1 or 2', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [{ moveString: '33', correctCol: 3, userPlayer: 0 }],
+  });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('userPlayer'));
+});
+
+test('validateLesson: rejects entry with invalid interactionMode', () => {
+  const lesson = makeValidLesson({
+    confirmationChallenges: [{ moveString: '33', correctCol: 3, userPlayer: 1, interactionMode: 'invalid' }],
+  });
+  const err = validateLesson(lesson);
+  assert.ok(typeof err === 'string' && err.includes('interactionMode'));
+});
+
+// ── getLesson backward-compat transformations ─────────────────────────────────────
+
+test('getLesson: derives explicit null when legacy fields exist but no confirmationChallenges', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-compat-'));
+  const lesson = makeValidLesson({
+    confirmationCategory: 'immediate_threat',
+    confirmationCount: 3,
+    // confirmationChallenges intentionally not set
+  });
+  writeTempLesson(dir, 'lesson-01-test.json', lesson);
+  loadLessons(dir);
+
+  const result = getLesson(lesson.id);
+  assert.equal(result.confirmationChallenges, null, 'should set confirmationChallenges to explicit null');
+  assert.equal(result.confirmationCount, 3, 'should preserve original confirmationCount');
+});
+
+test('getLesson: derives confirmationCount from curated challenges when present', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-derived-'));
+  const lesson = makeValidLesson({
+    confirmationCategory: 'immediate_threat',
+    confirmationCount: 99, // stale value, should be overridden
+    confirmationChallenges: [
+      { moveString: '33201', correctCol: 3, userPlayer: 1 },
+      { moveString: '44452', correctCol: 0, userPlayer: 2 },
+    ],
+  });
+  writeTempLesson(dir, 'lesson-01-test.json', lesson);
+  loadLessons(dir);
+
+  const result = getLesson(lesson.id);
+  assert.equal(result.confirmationCount, 2, 'should derive count from confirmationChallenges.length');
+  assert.equal(result.confirmationChallenges.length, 2);
+});

@@ -1,6 +1,6 @@
 import { ChallengeScreen } from './ChallengeScreen.jsx';
 
-export function CLChallengeScreen({ go, goBack, lessonId, lessonTitle, confirmationCategory, confirmationCount }) {
+export function CLChallengeScreen({ go, goBack, lessonId, lessonTitle, confirmationCategory, confirmationCount, confirmationChallenges }) {
   return (
     <ChallengeScreen
       go={go}
@@ -10,6 +10,7 @@ export function CLChallengeScreen({ go, goBack, lessonId, lessonTitle, confirmat
       lessonTitle={lessonTitle}
       confirmationCategory={confirmationCategory}
       confirmationCount={confirmationCount}
+      confirmationChallenges={confirmationChallenges}
     />
   );
 }

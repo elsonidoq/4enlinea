@@ -245,7 +245,13 @@ export function DeepRevealButton({
         onClose={() => setShowAuth(false)}
         reason={t('auth.deepRevealGate')}
       />}
-      {showPaywall && <UpgradeModal onDismiss={() => setShowPaywall(false)} onNotify={() => {}} />}
+      {showPaywall && <UpgradeModal onDismiss={() => setShowPaywall(false)} onUpgrade={async () => {
+        await fetch(`${API}/api/dev/upgrade`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        });
+        setShowPaywall(false);
+      }} />}
     </>
   );
 }

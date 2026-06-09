@@ -326,6 +326,30 @@ app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
   }
 });
 
+// ── Admin puzzle picker ──────────────────────────────────────────────────────────
+
+app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
+  const { category } = req.query;
+  if (!category || typeof category !== 'string') {
+    return res.status(400).json({ error: 'category query parameter is required' });
+  }
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: `invalid category: ${category}` });
+  }
+  try {
+    const { data: puzzles, error } = await supabase
+      .from('puzzles')
+      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col, user_player, created_at')
+      .eq('is_active', true)
+      .eq('category', category)
+      .order('created_at', { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ puzzles: puzzles || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/scores', async (req, res) => {
   const { moves, depth } = req.body;
   if (typeof moves !== 'string') {
@@ -1148,6 +1172,78 @@ app.post('/api/evaluate-move', async (req, res) => {
     const coachMood = coachMoodMap[quality] ?? 'think';
 
     res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
+// Returns richer results (correctCol, threatCells) than /api/evaluate-move.
+app.post('/api/evaluate-move/inline', async (req, res) => {
+  const { movestring, col, puzzle } = req.body;
+
+  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
+    return res.status(400).json({ error: 'invalid movestring' });
+  }
+  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
+  if (!isValidCol0(colInt)) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+  if (!puzzle || typeof puzzle !== 'object') {
+    return res.status(400).json({ error: 'puzzle object is required' });
+  }
+  const category = puzzle.category || puzzle.goalPredicateType;
+  if (!category || !VALID_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `invalid puzzle category: ${category}` });
+  }
+
+  try {
+    // Get solver scores
+    let scores;
+    if (movestring === '' || movestring.length === 0) {
+      scores = EMPTY_BOARD_SCORES;
+    } else {
+      scores = await solver.query(movestring);
+    }
+
+    // Score the move
+    const { badge, quality, bestCol } = scoreMove(scores, colInt);
+
+    // Classify for pattern tag
+    const classifyResult = classify(movestring, colInt, scores);
+    const patternTag = classifyResult?.tag ?? null;
+
+    // Run predicate evaluation for richer results
+    const predicatePuzzle = {
+      moveString: puzzle.moveString || movestring,
+      category,
+      goalPredicateType: puzzle.goalPredicateType || category,
+      goalPredicateParams: puzzle.goalPredicateParams ?? null,
+      highlightMetadata: puzzle.highlightMetadata ?? null,
+      correctCol: puzzle.correctCol,
+    };
+    const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
+
+    // Determine phrase pool key
+    const phrasePoolKey = category || patternTag;
+
+    const coachPhraseKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      : null;
+
+    const summaryLineKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+      : null;
+
+    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+    const coachMood = coachMoodMap[quality] ?? 'think';
+
+    res.json({
+      badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag,
+      correctCol: predicateResult.correctCol ?? null,
+      threatCells: predicateResult.threatCells ?? null,
+      forbiddenCols: predicateResult.forbiddenCols ?? null,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

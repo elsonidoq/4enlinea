@@ -5,43 +5,103 @@
   "userPerspective": "yellow",
   "slides": [
     {
+      "movestring": "33201",
       "coachMessages": [
         {
           "text": "An immediate threat is a move that wins the game on the very next turn.",
           "mood": "happy"
         }
       ],
-      "boardSpec": ["", "d", "d", "d", "", "", ""],
+      "boardSpec": [
+        "d",
+        "g",
+        "g",
+        "gd",
+        "",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 0, "r": 0, "type": "tg" },
-        { "c": 4, "r": 0, "type": "tg" }
-      ],
-      "legendItems": [
-        { "type": "tg", "label": "Winning move" }
-      ],
-      "infoProse": "When you have three discs in a row with an open space at either end, you have an immediate threat. Playing in that space wins the game instantly."
-    },
-    {
-      "coachMessages": [
         {
-          "text": "Your opponent must block your threat — or you win on the spot!",
-          "mood": "think"
+          "c": 4,
+          "r": 0,
+          "type": "tg"
         }
       ],
-      "boardSpec": ["gd", "dg", "d", "d", "", "", "g"],
-      "overlays": [
-        { "c": 4, "r": 0, "type": "tg" }
-      ],
       "legendItems": [
-        { "type": "tg", "label": "Your threat" }
+        {
+          "type": "tg",
+          "label": "Winning move"
+        }
       ],
-      "infoProse": "In a real game, you have other discs on the board but your threat remains the priority. If your opponent ignores it, you win immediately."
+      "infoProse": "When you have three discs in a row with an open space at either end, you have an immediate threat. Playing in that space wins the game instantly."
     }
   ],
   "socratic": {
-    "boardSpec": ["g", "d", "d", "d", "", "", ""],
-    "correctCol": 4
+    "movestring": "320101311201",
+    "boardSpec": [
+      "ggg",
+      "dddgd",
+      "dd",
+      "gg",
+      "",
+      "",
+      ""
+    ],
+    "overlays": [],
+    "correctCol": 0
   },
   "confirmationCategory": "immediate_threat",
-  "confirmationCount": 2
+  "confirmationCount": 4,
+  "order": 1,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "90a23043-eac2-47a2-a33e-85b1c4b05ee2",
+      "moveString": "4403233632402553",
+      "goalPrompt": "Find the winning move.",
+      "goalPredicateType": "immediate_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "b328e328-4ffd-4d2b-b287-461ade18d70d",
+      "moveString": "31414644663362212",
+      "goalPrompt": "Find the winning move.",
+      "goalPredicateType": "immediate_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 2
+    },
+    {
+      "puzzleId": "985e11e3-1a41-405d-ae89-ded3b0b5edff",
+      "moveString": "55250234",
+      "goalPrompt": "Find the winning move.",
+      "goalPredicateType": "immediate_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "de6f2e12-2be9-48b0-ae47-6df1fd31ed74",
+      "moveString": "2254033463134261240",
+      "goalPrompt": "Find the winning move.",
+      "goalPredicateType": "immediate_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 2
+    }
+  ]
 }

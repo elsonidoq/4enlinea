@@ -62,6 +62,33 @@ export function validateLesson(lesson) {
     return 'invalid field: confirmationCount (must be integer >= 0)';
   }
 
+  // Validate confirmationChallenges if present
+  if (lesson.confirmationChallenges !== undefined && lesson.confirmationChallenges !== null) {
+    if (!Array.isArray(lesson.confirmationChallenges)) {
+      return 'invalid field: confirmationChallenges (must be array or null)';
+    }
+    for (let i = 0; i < lesson.confirmationChallenges.length; i++) {
+      const ch = lesson.confirmationChallenges[i];
+      if (typeof ch.moveString !== 'string' || !/^[0-6]*$/.test(ch.moveString)) {
+        return `confirmationChallenges[${i}].moveString must be a string of digits 0-6`;
+      }
+      if (ch.correctCol !== undefined && ch.correctCol !== null) {
+        if (!Number.isInteger(ch.correctCol) || ch.correctCol < 0 || ch.correctCol > 6) {
+          return `confirmationChallenges[${i}].correctCol must be an integer 0-6 or null`;
+        }
+      }
+      if (ch.userPlayer !== 1 && ch.userPlayer !== 2) {
+        return `confirmationChallenges[${i}].userPlayer must be 1 or 2`;
+      }
+      if (ch.puzzleId !== undefined && typeof ch.puzzleId !== 'string') {
+        return `confirmationChallenges[${i}].puzzleId must be a string`;
+      }
+      if (ch.interactionMode !== undefined && !['single_move', 'sequence'].includes(ch.interactionMode)) {
+        return `confirmationChallenges[${i}].interactionMode must be 'single_move' or 'sequence'`;
+      }
+    }
+  }
+
   const boardSpecErr = validateBoardSpecs(lesson);
   if (boardSpecErr) return boardSpecErr;
 
@@ -140,9 +167,25 @@ export function getLessons() {
 
 /**
  * Returns the full lesson object for the given id, or null if not found.
+ * Applies backward-compat transformations:
+ * - If confirmationChallenges is missing but legacy fields exist, sets explicit null.
+ * - Derives confirmationCount from confirmationChallenges.length when non-empty.
  * @param {string} id
  * @returns {Object|null}
  */
 export function getLesson(id) {
-  return _lessons.find(l => l.id === id) ?? null;
+  const lesson = _lessons.find(l => l.id === id) ?? null;
+  if (!lesson) return null;
+
+  // Backward compat: explicit null signals "use legacy draw"
+  if (lesson.confirmationChallenges === undefined && lesson.confirmationCategory != null && lesson.confirmationCount > 0) {
+    return { ...lesson, confirmationChallenges: null };
+  }
+
+  // Derive confirmationCount from curated challenges when present
+  if (Array.isArray(lesson.confirmationChallenges) && lesson.confirmationChallenges.length > 0) {
+    return { ...lesson, confirmationCount: lesson.confirmationChallenges.length };
+  }
+
+  return lesson;
 }

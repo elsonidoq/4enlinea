@@ -2,18 +2,17 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
 
-export function UpgradeModal({ onDismiss, onNotify }) {
+export function UpgradeModal({ onDismiss, onUpgrade }) {
   const { t } = useTranslation();
-  const [email, setEmail] = useState('');
-  const [uiState, setUiState] = useState('idle'); // idle | success | error
+  const [uiState, setUiState] = useState('idle'); // idle | loading | success
 
-  async function handleSubmit() {
-    if (!email) return;
+  async function handleUpgrade() {
+    setUiState('loading');
     try {
-      await onNotify?.(email);
+      await onUpgrade?.();
       setUiState('success');
     } catch {
-      setUiState('error');
+      setUiState('idle');
     }
   }
 
@@ -73,44 +72,22 @@ export function UpgradeModal({ onDismiss, onNotify }) {
             {t('upgrade.success')}
           </div>
         ) : (
-          <>
-            <input
-              type="email"
-              placeholder={t('upgrade.placeholder')}
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={{
-                width: '100%', padding: '14px 16px', borderRadius: 14,
-                border: '1.5px solid #e2ddd2', fontSize: 15,
-                fontFamily: 'var(--font-body)', color: 'var(--ink)',
-                outline: 'none', boxSizing: 'border-box',
-                marginBottom: 10,
-              }}
-            />
-
-            {uiState === 'error' && (
-              <p style={{ color: 'var(--eval-bad)', fontSize: 13, margin: '0 0 8px', fontWeight: 600 }}>
-                {t('upgrade.error')}
-              </p>
-            )}
-
-            <button
-              onClick={handleSubmit}
-              disabled={!email}
-              style={{
-                width: '100%', padding: '15px 22px', borderRadius: 16, border: 'none',
-                fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
-                cursor: email ? 'pointer' : 'not-allowed',
-                background: email ? 'var(--disc-green)' : '#c7c2b8',
-                color: '#fff',
-                boxShadow: email ? '0 6px 0 #228245' : 'none',
-                transition: 'background .15s',
-                marginBottom: 8,
-              }}
-            >
-              {t('upgrade.cta')}
-            </button>
-          </>
+          <button
+            onClick={handleUpgrade}
+            disabled={uiState === 'loading'}
+            style={{
+              width: '100%', padding: '15px 22px', borderRadius: 16, border: 'none',
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
+              cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
+              background: uiState === 'loading' ? '#c7c2b8' : 'var(--disc-green)',
+              color: '#fff',
+              boxShadow: uiState === 'loading' ? 'none' : '0 6px 0 #228245',
+              transition: 'background .15s',
+              marginBottom: 8,
+            }}
+          >
+            {t('upgrade.cta')}
+          </button>
         )}
 
         <button

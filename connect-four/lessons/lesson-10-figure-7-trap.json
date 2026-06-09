@@ -13,13 +13,32 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+      "boardSpec": [
+        "",
+        "ddgdg",
+        "",
+        "gdg",
+        "dggd",
+        "gd",
+        "d"
+      ],
       "overlays": [
-        { "c": 2, "r": 2, "type": "tg" },
-        { "c": 2, "r": 3, "type": "tg" }
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Winning cells" }
+        {
+          "type": "tg",
+          "label": "Winning cells"
+        }
       ],
       "infoProse": "Four Yellow discs form a compact L-shape around columns 3-4. Playing in column 2 creates threats in two different directions: a horizontal 4-in-a-row at row 2, and a diagonal 4-in-a-row through the center. The opponent can only stop one."
     },
@@ -30,21 +49,122 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+      "boardSpec": [
+        "",
+        "ddgdg",
+        "",
+        "gdg",
+        "dggd",
+        "gd",
+        "d"
+      ],
       "overlays": [
-        { "c": 2, "r": 2, "type": "tg" },
-        { "c": 2, "r": 3, "type": "tg" }
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Unblockable threats" }
+        {
+          "type": "tg",
+          "label": "Unblockable threats"
+        }
       ],
       "infoProse": "If the opponent blocks one cell, you win through the other. Two threats from one setup — this is why the Figure-7 trap is so powerful."
     }
   ],
   "socratic": {
-    "boardSpec": ["", "ddgdg", "", "gdg", "dggd", "gd", "d"],
+    "boardSpec": [
+      "",
+      "ddgdg",
+      "",
+      "gdg",
+      "dggd",
+      "gd",
+      "d"
+    ],
     "correctCol": 4
   },
   "confirmationCategory": "figure_7",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "5ddf5fc9-2528-40b2-ae33-b76847868da4",
+      "moveString": "441314453361115",
+      "goalPrompt": "Spot the Figure-7 pattern and play the key move to exploit it.",
+      "goalPredicateType": "figure_7",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 0,
+            "role": "pattern_piece",
+            "column": 2
+          },
+          {
+            "row": 1,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 2
+          }
+        ]
+      },
+      "correctCol": 4,
+      "userPlayer": 2
+    },
+    {
+      "puzzleId": "b4d7b8d8-8feb-48a7-96fc-2baa51abcb65",
+      "moveString": "464462105302631062260",
+      "goalPrompt": "Spot the Figure-7 pattern and play the key move to exploit it.",
+      "goalPredicateType": "figure_7",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 0,
+            "role": "pattern_piece",
+            "column": 2
+          },
+          {
+            "row": 1,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 4
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 2
+          }
+        ]
+      },
+      "correctCol": 3,
+      "userPlayer": 2
+    }
+  ]
 }

@@ -11,13 +11,32 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["dgg", "", "dg", "d", "dg", "", "d"],
+      "boardSpec": [
+        "dgg",
+        "",
+        "dg",
+        "d",
+        "dg",
+        "",
+        "d"
+      ],
       "overlays": [
-        { "c": 1, "r": 0, "type": "tg" },
-        { "c": 5, "r": 0, "type": "tg" }
+        {
+          "c": 1,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 5,
+          "r": 0,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Threat cells" }
+        {
+          "type": "tg",
+          "label": "Threat cells"
+        }
       ],
       "infoProse": "Playing column 3 gave Yellow three in a row (columns 2–4). Now Yellow can win at either column 1 or column 5. The opponent can only block one — the other wins the game."
     },
@@ -28,21 +47,74 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["g", "", "ddg", "ddg", "dd", "gg", ""],
+      "boardSpec": [
+        "g",
+        "",
+        "ddg",
+        "ddg",
+        "dd",
+        "gg",
+        ""
+      ],
       "overlays": [
-        { "c": 1, "r": 0, "type": "tg" },
-        { "c": 1, "r": 1, "type": "tg" }
+        {
+          "c": 1,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 1,
+          "r": 1,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Winning cells" }
+        {
+          "type": "tg",
+          "label": "Winning cells"
+        }
       ],
       "infoProse": "Yellow has three in a row on two different rows (rows 0 and 1, columns 2–4). Both threats end at column 1. The opponent can block row 0 or row 1, but not both."
     }
   ],
   "socratic": {
-    "boardSpec": ["dgg", "", "dg", "", "dg", "", "d"],
+    "boardSpec": [
+      "dgg",
+      "",
+      "dg",
+      "",
+      "dg",
+      "",
+      "d"
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "double_threat",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "f9057953-03dd-436c-95a5-90f60104538e",
+      "moveString": "55006050660510",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "980706dd-a411-4940-a478-57c29e72ad79",
+      "moveString": "63324301305053",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    }
+  ]
 }

@@ -6,19 +6,17 @@
 
 - modify global colorscheme light. Currently there is a global dark color scheme, and all the components have to override it. 
 
-- the review blunder screen should specify if the user played green or grey
+- [SOLVED] the review blunder screen should specify if the user played green or grey
 
-- do not leak llm prompt for deep reveal. The API shouldn't expose that as well. 
+- [SOLVED] do not leak llm prompt for deep reveal. The API shouldn't expose that as well. 
 
-- session stats table is not used, if not used, it should be dropped
-
-- The app must use different paths for the navigation, we need to have permalinks
+- [PLANNED] The app must use different paths for the navigation, we need to have permalinks
 
 - each challenge in the challenges view must have: 1. progress bar, 2. if the user already cleared a challenge set, it has to be visually clear 3. the accuracy somewhat visually (not with a number)
 
 - Words like "fork" or "double threat" should be marked differently so that doing mouse over / clicking / tapping shows a popup with a small explanation of what the word is. This can be done with the knowledge-base
 
-- In the challenges screen, only display the "learn more" when the user makes a mistake. It doesn't make sense when the user spotted the optimal move
+- [SOLVED] In the challenges screen, only display the "learn more" when the user makes a mistake. It doesn't make sense when the user spotted the optimal move
 
 - in forced_win, when we arrive to the double threat, the two threats must be highlighted in the board
 
@@ -35,7 +33,7 @@
     disk hitted the bottom of the board
 
 
-- When you reach the number of deep reveals for free tier, the popup that is shown says "Join the waitlist". It should be a "become pro". This popup for now should have a button to bypass the payment and become paid member immediatly
+- [SOLVED] When you reach the number of deep reveals for free tier, the popup that is shown says "Join the waitlist". It should be a "become pro". This popup for now should have a button to bypass the payment and become paid member immediatly
 
 - There is a working PoC to import games from papergames (./connect-four/server/scripts/import_papergames_blunders.mjs). The user should be able to set the papergames id into the profile and click import. Free tier imports the last 5 games. Imported games must have the papergames metadata
 
@@ -48,7 +46,7 @@
 
 - The coach reads the deep reveal. As the coach mentions rows, columns, cells or regions the board is highlighted on the corresponding zone so it is easy to understand what the coach talks about. In the text, also rows, columns, cells and regions are highlighted if the user performs a tap or mouse over 
 
-- Navigation doesn't work that well. Sometimes clicking back stops working, or sometimes it cycles through screens. BTW, why did we discard having different urls?
+- [SOLVED] Navigation doesn't work that well. Sometimes clicking back stops working, or sometimes it cycles through screens. BTW, why did we discard having different urls?
 
 - There should be a shortcut to enter "debugging mode" and be able to see things like solver scores in the deep reveal. So I can quickly verify that the deep reveal makes sense. Also it would be good to read the context the deep reveal had
 
@@ -63,21 +61,26 @@
 
 - All blunders need to have at least one category (may be it makes sense to have different taxonomies). The navigation of blunders should be either through categories, and browse recent blunders. Also filter blunders imported from papergames
 
-- Back from clicking a blunder in the game review shows a screen where the coach writes Game not saved — analysis unavailable
+- [SOLVED] Back from clicking a blunder in the game review shows a screen where the coach writes Game not saved — analysis unavailable
 
-- Remove best line from explain-move-llm endpoint and all along the codebase
+- [SOLVED] Remove best line from explain-move-llm endpoint and all along the codebase
 
-- Streak is never incremented
+- [SOLVED] Streak is never incremented
 
 - If a blunder is created by a game, the blunder must reference that game, so we can navigate in the app
 
 - In every part of the project the disks must be refered to as green/gray not yellow/red, even in scripts like visualize_board.sh
 
-- clicking back when we are in a practice session should take you to the saga map, it takes you to the lesson
+- [SOLVED] clicking back when we are in a practice session should take you to the saga map, it takes you to the lesson
 
-- You can only ask for one hint per practice case. Now you can click hints indefinitelly
+- [SOLVED] You can only ask for one hint per practice case. Now you can click hints indefinitelly
 
-- We need a practical way to create the content for the lessons. I need to brainstorm that
+- [SOLVED] We need a practical way to create the content for the lessons. I need to brainstorm that
 
-- a blunder must have permalink, it's a shared nugget of information! shareable across social network
+- a blunder must have permalink, it's a shared nugget of information! shareable across social network — requires refactoring MistakeDetailScreen to cold-boot from a single blunder id (currently takes a blunders[] array + index passed by MistakesListScreen) and adding a GET /api/blunders/:id endpoint
 
+- We need to have a production DB, and a staging DB
+
+- We need to be able to perform a deploy to staging, and a deploy to production
+
+- After clicking in the correct column in the socratic board, a disk must fall. Also a visual feedback wether your answer is correct or not must be shown, exactly as it is done in the challenges board. In practice boards, the first board also does not drop a disk when you click, the second one works well

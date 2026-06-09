@@ -11,12 +11,27 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+      "boardSpec": [
+        "ggd",
+        "ggd",
+        "ggd",
+        "dd",
+        "",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 3, "r": 2, "type": "tg" }
+        {
+          "c": 3,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Z-Threat cell" }
+        {
+          "type": "tg",
+          "label": "Z-Threat cell"
+        }
       ],
       "infoProse": "Column 3 has two Yellow discs at rows 0 and 1. Three empty cells sit above the threat at row 2 (rows 3, 4, 5). Because this gap is odd, Yellow reaches the threat before Red can fill past it."
     },
@@ -27,20 +42,81 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+      "boardSpec": [
+        "ggd",
+        "ggd",
+        "ggd",
+        "dd",
+        "",
+        "",
+        ""
+      ],
       "overlays": [
-        { "c": 3, "r": 2, "type": "tg" }
+        {
+          "c": 3,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Z-Threat cell" }
+        {
+          "type": "tg",
+          "label": "Z-Threat cell"
+        }
       ],
       "infoProse": "Even if the opponent tries to block column 3, the odd number of empty cells above means they cannot fill all of them before Yellow plays the winning move. The parity is locked in Yellow's favor."
     }
   ],
   "socratic": {
-    "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
+    "boardSpec": [
+      "ggd",
+      "ggd",
+      "ggd",
+      "dd",
+      "",
+      "",
+      ""
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "z_threat",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "22a4c6ab-9ae6-4b1a-aa9e-0781945c6c67",
+      "moveString": "3551333260",
+      "goalPrompt": "Identify the column where a Z-threat gives you unstoppable parity control.",
+      "goalPredicateType": "z_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "capsule",
+        "toRow": 2,
+        "column": 4,
+        "fromRow": 0,
+        "badgeCount": 3
+      },
+      "correctCol": 4,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "e58a4d58-d89b-482e-b1e6-ccf5bebc8786",
+      "moveString": "11412362505",
+      "goalPrompt": "Identify the column where a Z-threat gives you unstoppable parity control.",
+      "goalPredicateType": "z_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "capsule",
+        "toRow": 3,
+        "column": 0,
+        "fromRow": 1,
+        "badgeCount": 3
+      },
+      "correctCol": 0,
+      "userPlayer": 2
+    }
+  ]
 }

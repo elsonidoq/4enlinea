@@ -13,14 +13,37 @@
           "mood": "happy"
         }
       ],
-      "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+      "boardSpec": [
+        "g",
+        "ddg",
+        "dg",
+        "gdg",
+        "d",
+        "d",
+        ""
+      ],
       "overlays": [
-        { "c": 0, "r": 3, "type": "tg" },
-        { "c": 2, "r": 2, "type": "tg" },
-        { "c": 4, "r": 2, "type": "tg" }
+        {
+          "c": 0,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Triple threat" }
+        {
+          "type": "tg",
+          "label": "Triple threat"
+        }
       ],
       "infoProse": "Five Yellow discs form a compact cluster across columns 0-4. The key cells unlock threats in three directions: a diagonal through the center, and horizontal continuations at either end of row 2. Blocking one or two still leaves the third."
     },
@@ -31,22 +54,117 @@
           "mood": "think"
         }
       ],
-      "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+      "boardSpec": [
+        "g",
+        "ddg",
+        "dg",
+        "gdg",
+        "d",
+        "d",
+        ""
+      ],
       "overlays": [
-        { "c": 0, "r": 3, "type": "tg" },
-        { "c": 2, "r": 2, "type": "tg" },
-        { "c": 4, "r": 2, "type": "tg" }
+        {
+          "c": 0,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Triple threat" }
+        {
+          "type": "tg",
+          "label": "Triple threat"
+        }
       ],
       "infoProse": "Three winning cells, one move to set them up. The J-Shape is the most powerful attacking formation in Connect Four."
     }
   ],
   "socratic": {
-    "boardSpec": ["g", "ddg", "dg", "gdg", "d", "d", ""],
+    "boardSpec": [
+      "g",
+      "ddg",
+      "dg",
+      "gdg",
+      "d",
+      "d",
+      ""
+    ],
     "correctCol": 2
   },
   "confirmationCategory": "j_shape",
-  "confirmationCount": 2
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "51a0caae-980d-4863-9cdf-37ecb3aeb59b",
+      "moveString": "4334433135461151",
+      "goalPrompt": "Place a disk to form a J-shape pattern",
+      "goalPredicateType": "j_shape",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 0,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 1,
+            "role": "pattern_piece",
+            "column": 4
+          }
+        ]
+      },
+      "correctCol": 4,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "02f88fdf-f26d-4d38-b1c3-5fc74eaba1e4",
+      "moveString": "43055465500",
+      "goalPrompt": "Spot the J-Shape pattern and play the key move to exploit it.",
+      "goalPredicateType": "j_shape",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 0,
+            "role": "pattern_piece",
+            "column": 5
+          },
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 5
+          },
+          {
+            "row": 1,
+            "role": "pattern_piece",
+            "column": 4
+          }
+        ]
+      },
+      "correctCol": 4,
+      "userPlayer": 2
+    }
+  ]
 }

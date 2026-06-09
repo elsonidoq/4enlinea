@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LessonMetaForm from '../components/admin/LessonMetaForm.jsx';
 import SlideEditor from '../components/admin/SlideEditor.jsx';
 import SocraticEditor from '../components/admin/SocraticEditor.jsx';
+import PuzzlePickerModal from '../components/admin/PuzzlePickerModal.jsx';
+import PuzzlePickerRow from '../components/admin/PuzzlePickerRow.jsx';
 import { parseMovestring, boardToSpec } from '../lib/movestring.js';
 
 function authHeaders() {
@@ -32,6 +34,7 @@ function emptyLesson() {
     socratic: null,
     confirmationCategory: null,
     confirmationCount: 2,
+    confirmationChallenges: [],
   };
 }
 
@@ -45,8 +48,11 @@ function emptySlide() {
 function lessonToJsonPayload(lesson) {
   const { _idManuallyEdited, ...rest } = lesson;
   const convertBoard = (ms) => boardToSpec(parseMovestring(ms ?? ''));
+  const challenges = rest.confirmationChallenges ?? [];
   return {
     ...rest,
+    confirmationCount: challenges.length > 0 ? challenges.length : rest.confirmationCount,
+    confirmationChallenges: challenges.length > 0 ? challenges : undefined,
     slides: rest.slides.map(slide => ({
       movestring: slide.movestring ?? '',
       coachMessages: slide.coachMessages,
@@ -74,6 +80,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
   const [saveState, setSaveState] = useState('idle');
   const [saveError, setSaveError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const isNew = !lessonId;
 
   useEffect(() => {
@@ -99,6 +106,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
             movestring: data.socratic.movestring ?? '',
             overlays: data.socratic.overlays ?? [],
           } : null,
+          confirmationChallenges: data.confirmationChallenges ?? [],
         };
         setLesson(hydrated);
       });
@@ -153,6 +161,43 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
     });
   }
 
+  // ── Confirmation puzzle management ─────────────────────────────────────────────
+
+  function handleAddPuzzle(puzzleData) {
+    setLesson(l => ({
+      ...l,
+      confirmationChallenges: [...(l.confirmationChallenges ?? []), {
+        puzzleId: puzzleData.id,
+        moveString: puzzleData.move_string,
+        goalPrompt: puzzleData.goal_prompt || '',
+        goalPredicateType: puzzleData.goal_predicate_type || l.confirmationCategory,
+        goalPredicateParams: puzzleData.goal_predicate_params ?? null,
+        cooperativeAiMoves: puzzleData.cooperative_ai_moves ?? [],
+        interactionMode: puzzleData.interaction_mode || 'single_move',
+        highlightMetadata: puzzleData.highlight_metadata ?? null,
+        correctCol: puzzleData.correct_col,
+        userPlayer: puzzleData.user_player,
+      }],
+    }));
+  }
+
+  function handleRemovePuzzle(idx) {
+    setLesson(l => ({
+      ...l,
+      confirmationChallenges: l.confirmationChallenges.filter((_, i) => i !== idx),
+    }));
+  }
+
+  function handleMovePuzzle(idx, dir) {
+    setLesson(l => {
+      const challenges = [...l.confirmationChallenges];
+      const target = idx + dir;
+      if (target < 0 || target >= challenges.length) return l;
+      [challenges[idx], challenges[target]] = [challenges[target], challenges[idx]];
+      return { ...l, confirmationChallenges: challenges };
+    });
+  }
+
   if (!lesson) return <div style={{ color: '#fff', padding: 32 }}>Loading…</div>;
 
   const sectionLabel = { fontWeight: 700, fontSize: 16, color: '#fff', marginBottom: 8 };
@@ -203,7 +248,8 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       {/* Confirmation */}
       <section>
         <div style={sectionLabel}>Confirmation challenges</div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#1e1e1e', padding: 16, borderRadius: 8, border: '1px solid #333' }}>
+        <div style={{ background: '#1e1e1e', padding: 16, borderRadius: 8, border: '1px solid #333', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Category dropdown — filter for picker + metadata */}
           <div>
             <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Category</label>
             <select
@@ -215,15 +261,56 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
               {VALID_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Count</label>
-            <input
-              type="number" min={0}
-              value={lesson.confirmationCount}
-              onChange={e => setLesson(l => ({ ...l, confirmationCount: parseInt(e.target.value, 10) || 0 }))}
-              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #444', background: '#111', color: '#fff', width: 80 }}
-            />
+
+          {/* Curated puzzle list */}
+          {lesson.confirmationChallenges?.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {lesson.confirmationChallenges.map((puzzle, i) => (
+                <PuzzlePickerRow
+                  key={puzzle.puzzleId || i}
+                  puzzle={puzzle}
+                  index={i}
+                  total={lesson.confirmationChallenges.length}
+                  onRemove={() => handleRemovePuzzle(i)}
+                  onMoveUp={() => handleMovePuzzle(i, -1)}
+                  onMoveDown={() => handleMovePuzzle(i, 1)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Derived count + Add button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, color: '#888' }}>
+              {lesson.confirmationChallenges?.length || 0} puzzle(s) selected
+            </span>
+            <button
+              onClick={() => setShowPicker(true)}
+              disabled={!lesson.confirmationCategory}
+              style={{
+                padding: '6px 14px', borderRadius: 6, cursor: lesson.confirmationCategory ? 'pointer' : 'not-allowed',
+                background: lesson.confirmationCategory ? '#166534' : '#333', color: '#fff', fontWeight: 700,
+                border: 'none', fontSize: 13,
+              }}
+            >
+              + Add Puzzle
+            </button>
           </div>
+
+          {/* Legacy fallback: random draw count (only when no curated puzzles) */}
+          {(!lesson.confirmationChallenges || lesson.confirmationChallenges.length === 0) && lesson.confirmationCategory && (
+            <div style={{ borderTop: '1px solid #333', paddingTop: 10 }}>
+              <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>
+                Or use random draw (legacy)
+              </label>
+              <input
+                type="number" min={0}
+                value={lesson.confirmationCount}
+                onChange={e => setLesson(l => ({ ...l, confirmationCount: parseInt(e.target.value, 10) || 0 }))}
+                style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #444', background: '#111', color: '#fff', width: 80 }}
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -265,6 +352,16 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Puzzle picker modal */}
+      {showPicker && (
+        <PuzzlePickerModal
+          category={lesson.confirmationCategory}
+          existingPuzzles={lesson.confirmationChallenges ?? []}
+          onAdd={(puzzleData) => { handleAddPuzzle(puzzleData); setShowPicker(false); }}
+          onClose={() => setShowPicker(false)}
+        />
       )}
     </div>
   );
