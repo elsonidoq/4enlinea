@@ -94,6 +94,24 @@
     "confirm": "Confirm",
     "collapse": "Collapse"
   },
+  "games": {
+    "title": "Past Games",
+    "empty": "No games yet. Play a sparring game to see it here.",
+    "load_more": "Load more",
+    "loading": "Loading…",
+    "filter_all": "All",
+    "filter_won": "Won",
+    "filter_lost": "Lost",
+    "filter_draw": "Draw",
+    "filter_has_blunder": "With mistakes",
+    "blunder_count_one": "{{count}} mistake",
+    "blunder_count_other": "{{count}} mistakes",
+    "accuracy": "{{value}}% accuracy",
+    "difficulty_easy": "Easy",
+    "difficulty_medium": "Medium",
+    "difficulty_hard": "Hard",
+    "difficulty_perfect": "Perfect"
+  },
   "home": {
     "stats_button": "Progress & Stats",
     "tagline_prefix": "Welcome back. Learn ",
@@ -104,7 +122,11 @@
     "challenges_title": "Challenges",
     "challenges_subtitle": "Find the best move",
     "sparring_title": "Sparring",
-    "sparring_subtitle": "Play a bot that teaches as you go"
+    "sparring_subtitle": "Play a bot that teaches as you go",
+    "past_games": {
+      "title": "Past Games",
+      "subtitle": "Review your sparring history"
+    }
   },
   "coach": {
     "title": "Personal AI Coach",

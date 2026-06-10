@@ -67,6 +67,17 @@ export function HomeScreen({ go }) {
           wide
         />
 
+        <FeatureCard
+          icon={<Icon name="clock" size={28} color="#0d8a7a" />}
+          iconBg="rgba(13,138,122,0.12)"
+          iconColor="#0d8a7a"
+          background="var(--card)"
+          title={t('home.past_games.title')}
+          subtitle={t('home.past_games.subtitle')}
+          wide
+          onClick={() => go('pastGames')}
+        />
+
         <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />
 
         <button

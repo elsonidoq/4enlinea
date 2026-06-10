@@ -1120,6 +1120,22 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
  * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
  * Returns null if the prefix resolves to a non-object or empty object.
  */
+/**
+ * Convert a 0-indexed movestring to cols array (7 strings in g/d encoding).
+ * g = first-player disc (even indices), d = second-player disc (odd indices).
+ * Each string represents one column's discs from bottom to top.
+ * O(moves.length) — no solver calls.
+ * @param {string} moves — 0-indexed movestring (digits 0–6)
+ * @returns {string[7]} cols array, bottom-to-top per column
+ */
+function movesToCols(moves) {
+  const cols = ['', '', '', '', '', '', ''];
+  for (let i = 0; i < moves.length; i++) {
+    cols[parseInt(moves[i], 10)] += (i % 2 === 0) ? 'g' : 'd';
+  }
+  return cols;
+}
+
 function pickFromPool(translations, prefix) {
   const parts = prefix.split('.');
   let node = translations;
@@ -1263,7 +1279,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
 
 // POST /api/games — save a completed sparring game record
 app.post('/api/games', async (req, res) => {
-  const { device_uuid, moves, difficulty, side, result } = req.body;
+  const { device_uuid, moves, difficulty, side, result, accuracy } = req.body;
 
   // device_uuid may be null for authenticated users; the other fields are required
   if (!moves || !difficulty || !side || !result) {
@@ -1287,19 +1303,30 @@ app.post('/api/games', async (req, res) => {
     return res.status(400).json({ error: 'result must be win, loss, or draw' });
   }
 
+  if (accuracy !== undefined) {
+    if (typeof accuracy !== 'number' || accuracy < 0 || accuracy > 100) {
+      return res.status(400).json({ error: 'accuracy must be a number between 0 and 100' });
+    }
+  }
+
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
   try {
+    const insertPayload = {
+      user_id: req.user?.id ?? null,
+      device_uuid: device_uuid || req.user?.id || 'anonymous',
+      moves,
+      difficulty,
+      side,
+      result,
+    };
+    if (accuracy !== undefined) {
+      insertPayload.accuracy = accuracy;
+    }
+
     const { data, error } = await supabase
       .from('games')
-      .insert({
-        user_id: req.user?.id ?? null,
-        device_uuid: device_uuid || req.user?.id || 'anonymous',
-        moves,
-        difficulty,
-        side,
-        result,
-      })
+      .insert(insertPayload)
       .select('id')
       .single();
 
@@ -1345,6 +1372,116 @@ app.post('/api/games/from-position', async (req, res) => {
   }
 });
 
+// GET /api/games — list past games for the authenticated user
+// Returns { games: GameRecord[] } with cols encoding, blunder counts, and outcome mapping.
+// Auth required — 401 for anonymous users. No device_uuid fallback.
+app.get('/api/games', async (req, res) => {
+  // Auth gate
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Validate query params
+  let limit = 50;
+  if (req.query.limit !== undefined) {
+    const parsed = parseInt(req.query.limit, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      return res.status(400).json({ error: 'limit must be a positive integer' });
+    }
+    if (parsed > 50) {
+      return res.status(400).json({ error: 'limit must be ≤ 50' });
+    }
+    limit = parsed;
+  }
+
+  let outcomeFilter = null;
+  if (req.query.outcome !== undefined) {
+    if (req.query.outcome !== 'won' && req.query.outcome !== 'lost') {
+      return res.status(400).json({ error: 'invalid outcome' });
+    }
+    outcomeFilter = req.query.outcome === 'won' ? 'win' : 'loss';
+  }
+
+  let hasBlunder = false;
+  if (req.query.has_blunder !== undefined) {
+    if (req.query.has_blunder !== 'true') {
+      return res.status(400).json({ error: 'invalid has_blunder' });
+    }
+    hasBlunder = true;
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    const userId = req.user.id;
+
+    // Build games query
+    let gamesQuery = supabase
+      .from('games')
+      .select('id, result, created_at, difficulty, accuracy, moves')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (outcomeFilter) {
+      gamesQuery = gamesQuery.eq('result', outcomeFilter);
+    }
+
+    const { data: games, error: gamesError } = await gamesQuery;
+
+    if (gamesError) return res.status(500).json({ error: gamesError.message });
+
+    if (!games || games.length === 0) {
+      return res.json({ games: [] });
+    }
+
+    // Get blunder counts for these games in a single query
+    const gameIds = games.map(g => g.id);
+    const { data: blunders, error: blundersError } = await supabase
+      .from('blunders')
+      .select('game_id')
+      .in('game_id', gameIds)
+      .eq('user_id', userId);
+
+    if (blundersError) return res.status(500).json({ error: blundersError.message });
+
+    // Count blunders per game
+    const blunderCountMap = {};
+    for (const b of (blunders || [])) {
+      blunderCountMap[b.game_id] = (blunderCountMap[b.game_id] || 0) + 1;
+    }
+
+    // Map outcome values: DB uses 'win'/'loss'/'draw', API uses 'won'/'lost'/'draw'
+    const outcomeMap = { win: 'won', loss: 'lost', draw: 'draw' };
+
+    // Build response
+    const result = [];
+    for (const g of games) {
+      const blunderCount = blunderCountMap[g.id] || 0;
+
+      // has_blunder filter — skip games with no blunders
+      if (hasBlunder && blunderCount === 0) continue;
+
+      result.push({
+        id: g.id,
+        move_string: g.moves,
+        outcome: outcomeMap[g.result] || g.result,
+        created_at: g.created_at,
+        source: 'ai',
+        difficulty: g.difficulty,
+        accuracy: g.accuracy ?? null,
+        blunder_count: blunderCount,
+        move_count: g.moves.length,
+        cols: movesToCols(g.moves),
+      });
+    }
+
+    res.json({ games: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/games/analyze — analyze all user plies in a completed game
 // Returns move-by-move quality breakdown, accuracy, and a summary phrase key.
 // No auth required — anonymous users can analyze games.
@@ -1360,13 +1497,13 @@ app.post('/api/games/analyze', async (req, res) => {
   // Fetch game row
   const { data: game, error: gameError } = await supabase
     .from('games')
-    .select('id, moves, side, difficulty')
+    .select('id, moves, side, difficulty, created_at')
     .eq('id', gameId)
     .single();
 
   if (gameError || !game) return res.status(404).json({ error: 'game not found' });
 
-  const { moves, side, difficulty } = game;
+  const { moves, side, difficulty, created_at } = game;
 
   // Counters
   let scored = 0;
@@ -1462,6 +1599,7 @@ app.post('/api/games/analyze', async (req, res) => {
           direction,
           severity: computeSeverity(bestScore, score),
           blunder_severity: blunderSeverity,
+          game_id: gameId,
         });
       }
 
@@ -1496,6 +1634,7 @@ app.post('/api/games/analyze', async (req, res) => {
     fullMovestring: moves,
     difficulty,
     side,
+    gameDate: created_at,
   });
 });
 

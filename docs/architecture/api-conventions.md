@@ -342,6 +342,44 @@ Explains a specific move the human just played (post-move reflection).
 
 Returns 400 for `interaction_mode = 'sequence'` puzzles — use `/sequence/move` instead.
 
+## GET /api/games
+
+Lists past sparring games for the authenticated user.
+
+**Auth**: Required (401 if `req.user` is null).
+
+**Query params**:
+- `limit`: positive integer ≤ 50 (default 20). Returns 400 if non-numeric, zero, negative, or > 50.
+- `outcome`: `'won'` or `'lost'`. Returns 400 for any other value (including `'draw'`). When omitted, all outcomes are returned.
+- `has_blunder`: `'true'` (string). Returns 400 for any other value. When omitted, all games are returned.
+
+**Response** (`200 OK`):
+```json
+{
+  "games": [
+    {
+      "id": "<uuid>",
+      "outcome": "won" | "lost" | "draw",
+      "date": "<ISO timestamp>",
+      "source": "ai",
+      "difficulty": "easy | medium | hard | perfect",
+      "accuracy": 82 | null,
+      "blunder_count": 2,
+      "move_count": 22,
+      "cols": ["gdg", "", "d", ...]
+    }
+  ]
+}
+```
+
+- `outcome`: DB values `win`/`loss`/`draw` are mapped to `won`/`lost`/`draw` in the response.
+- `accuracy`: from the `games.accuracy` column (written by `POST /api/games/analyze`); `null` if the game has not been analyzed.
+- `blunder_count`: count of `blunders` rows linked to this game via `game_id`.
+- `cols`: 7-element array of per-column move encoding (`g` = current player, `d` = opponent), produced by `movesToCols`.
+- Games with `blunder_count === 0` are excluded when `has_blunder=true`.
+
+**Errors**: 400 (invalid params), 401 (unauthenticated), 503 (Supabase not configured), 500 (DB error).
+
 ## POST /api/games
 
 Saves a completed sparring game record.

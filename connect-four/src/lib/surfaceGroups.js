@@ -7,4 +7,5 @@ export const SURFACE_BG = {
   summary: '--bg-chal',
   difficulty: '--bg-spar', game: '--bg-spar',
   review: '--bg-spar', explorer: '--bg-spar',
+  pastGames: '--bg-spar',
 };

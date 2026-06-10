@@ -20,6 +20,7 @@ export const URL_MAP = [
   { pattern: '/game',                screenKey: 'game',          paramNames: [] },
   { pattern: '/explorer',            screenKey: 'explorer',      paramNames: [] },
   { pattern: '/mistakeDetail',       screenKey: 'mistakeDetail', paramNames: [] },
+  { pattern: '/pastGames',           screenKey: 'pastGames',     paramNames: [] },
 ];
 
 /**

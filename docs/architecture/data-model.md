@@ -27,6 +27,8 @@ Migration 029 added `blunder_severity real` — a graduated loss-of-control meas
 Migration 030 added a partial unique index `idx_blunders_game_unique` on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`, enabling atomic upsert deduplication of game blunders at the DB level. The `POST /api/blunders` endpoint now uses `.upsert()` with `ignoreDuplicates: true` instead of a check-then-insert pattern.
 Rationale: Slug-keyed constraints are self-documenting; integer IDs required cross-referencing a lookup table.
 
+Migration 036 added `game_id uuid` (nullable FK → `games(id)`, `ON DELETE SET NULL`) to the `blunders` table. This links blunders created during post-game analysis to their originating sparring game row. Blunders from puzzle attempts continue to use `puzzle_id`; `game_id` is `null` for those. `GET /api/games` uses `game_id` to compute per-game `blunder_count` in a single query.
+
 ## Soft Delete
 
 **MUST**: Use `is_active boolean NOT NULL DEFAULT true` on `puzzles` for soft delete.
@@ -108,7 +110,10 @@ Migration: `031_deep_reveal_failures.sql`.
 | `difficulty` | `text` | NOT NULL, CHECK IN ('easy','medium','hard','perfect') |
 | `side` | `text` | NOT NULL, CHECK IN ('first','second') |
 | `result` | `text` | NOT NULL, CHECK IN ('win','loss','draw') |
+| `accuracy` | `real` | nullable — percentage of optimal user plies (0–100); written by `POST /api/games/analyze`; null until analyzed |
 | `created_at` | `timestamptz` | NOT NULL, DEFAULT `now()` |
+
+`accuracy` is added by migration 036. It is `null` for games that have not been analyzed. `GET /api/games` returns it as-is (null passes through).
 
 Index: `(device_uuid, created_at DESC)` for per-device game listing (Epic 3b).
 RLS: Disabled (server accesses via service-role key).

@@ -63,6 +63,7 @@
 
 - [Supabase connection details](reference_supabase_connection.md) — new key format (sb_publishable/sb_secret); direct DB host fails, use pooler at aws-1-us-west-2.pooler.supabase.com
 - [Open Chrome with remote debugging](reference_open_chrome.md) — must use binary directly; `open -a` fails to bind port 9222 on macOS/Chrome 147
+- [ReviewScreen navigation contract](reference_review_screen_nav.md) — `go('review', { id: game.id })`; URL is `/game/:id`; screen takes `id` prop (UUID), not `moveString`
 - [Gemini model name](reference_gemini_model.md) — correct model is `gemini-3.1-pro-preview`; use in all MCP Gemini tool calls
 
 ## Project — architecture

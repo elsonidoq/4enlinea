@@ -300,6 +300,30 @@ Solver scores are intentionally excluded from the prompt. The LLM reasons from t
 - `connect-four/server/explainContext.js` — `buildExplainContext` (the grounding entry point)
 - `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)
 
+## Game Blunder Writes (`insertGameBlunder`)
+
+`insertGameBlunder(supabase, row)` in `server/insertGameBlunder.js` is the sole write path for blunders detected during post-game analysis (i.e., from `POST /api/games/analyze`). The client no longer writes these directly via `POST /api/blunders`.
+
+The `row` shape:
+```js
+{
+  user_id,         // required — anonymous users are silently skipped
+  board_state,     // movestring at the point of the blunder
+  move_played,     // 0-indexed column actually played
+  correct_move,    // 0-indexed best column
+  pattern_category,// blunder tag slug; unrecognized tags are substituted with 'suboptimal_move'
+  reason,          // human-readable reason string
+  direction,       // 'defensive_miss' | 'enabled_opponent' | 'missed_own'
+  severity,        // integer [0,10] score-spread measure
+  blunder_severity,// real [0,1] tree-scan fraction, or null
+  game_id,         // uuid FK → games(id), nullable — links the blunder to its sparring game
+}
+```
+
+- `game_id` is nullable. Pass `null` (or omit) for blunders that do not originate from a sparring game row.
+- The function is fire-and-forget — it never throws or rejects; all errors are logged via `console.error`.
+- Deduplication is handled by a DB unique index; `23505` constraint violations are silently swallowed.
+
 ## Annotation Gate (`POST /api/explain-move-llm`)
 
 All LLM outputs from `/api/explain-move-llm` pass through `validateAnnotation` (in `server/annotationGate.js`) before being cached or delivered to the client.

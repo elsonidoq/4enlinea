@@ -96,3 +96,35 @@ p {
 .modal-card input { background: #fff; color: var(--ink); }
 @keyframes modalPopIn { from { transform: translateY(-50%) scale(.92); } to { transform: translateY(-50%) scale(1); } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Past Games list */
+.game-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: transform .12s, box-shadow .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.game-card:active { transform: scale(0.98); }
+.gc-board { flex-shrink: 0; }
+.gc-info { flex: 1; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+.gc-top { display: flex; align-items: center; gap: 8px; }
+.gc-outcome { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+.gc-outcome.won  { background: var(--eval-good-bg); color: #1c8a4a; }
+.gc-outcome.lost { background: var(--eval-bad-bg);  color: #b03030; }
+.gc-outcome.draw { background: var(--surface-2);    color: var(--ink-soft); }
+.gc-date  { font-size: 12px; color: var(--ink-faint); margin-left: auto; }
+.gc-meta  { font-size: 12px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-blunders { font-size: 11px; color: var(--eval-warn, #b07800); font-weight: 600; }
+.outcome-chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+.outcome-chip.won  { background: var(--eval-good-bg); color: #1c8a4a; }
+.outcome-chip.lost { background: var(--eval-bad-bg);  color: #b03030; }
+.outcome-chip.draw { background: var(--surface-2);    color: var(--ink-soft); }

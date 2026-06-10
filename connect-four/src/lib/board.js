@@ -124,3 +124,23 @@ export function boardSpecToBoard(boardSpec) {
   });
   return result;
 }
+
+/**
+ * Convert a cols array (7 strings in g/d encoding, bottom-to-top per column)
+ * to a 6x7 board array suitable for the Board component.
+ *
+ * g -> 'red', d -> 'yellow'. Input validation returns empty board on failure.
+ *
+ * @param {string[]} cols — 7 strings in g/d encoding, bottom-to-top per column
+ * @returns {string[][]} board[row][col] with 'empty'|'red'|'yellow' values
+ */
+export function colsToBoard(cols) {
+  if (!Array.isArray(cols) || cols.length !== 7) {
+    return Array.from({ length: 6 }, () => Array(7).fill('empty'));
+  }
+  try {
+    return boardSpecToBoard(cols);
+  } catch (_e) {
+    return Array.from({ length: 6 }, () => Array(7).fill('empty'));
+  }
+}

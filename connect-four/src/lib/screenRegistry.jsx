@@ -13,6 +13,7 @@ import { CLChallengeScreen } from '../screens/CLChallengeScreen.jsx';
 import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
 import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
+import { PastGamesListScreen } from '../screens/PastGamesListScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -30,4 +31,5 @@ export const SCREENS = {
   explorer: ExplorerScreen,
   mistakes: MistakesListScreen,
   mistakeDetail: MistakeDetailScreen,
+  pastGames: PastGamesListScreen,
 };

@@ -69,8 +69,9 @@ For each batch, spawn a sub-agent using the Agent tool with:
 **Wait for the sub-agent to finish before spawning the next one.** Do not run batches in parallel.
 
 After each sub-agent completes:
-1. Parse its output for the `## Handoff context` section and save it — this becomes the `[handoff from previous batch]` in the next prompt.
-2. Read `tasks.md` and mark completed tasks using TaskUpdate. Base completions on what the sub-agent reports having built.
+1. Parse its output for the `## Handoff context` section and save it as a secondary reference.
+2. Invoke the `handoff-prompt` skill using the Skill tool (`skill: "handoff-prompt"`). This skill runs tests, reads tasks.md, compares plan vs. reality, and produces a tight, self-contained prompt capturing non-obvious facts the next agent needs. The skill's output becomes the `[handoff from previous batch]` in the next sub-agent prompt (replacing the sub-agent's own `## Handoff context` if the two differ — the skill output is authoritative).
+3. Read `tasks.md` and mark completed tasks using TaskUpdate. Base completions on what the sub-agent reports having built.
 
 ### Sub-agent prompt format
 

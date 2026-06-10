@@ -18,3 +18,5 @@ The mockup files at `docs/mvp/mockup/project/` are UX prototypes, not production
 **Why:** During the Epic A pipeline, three mockup concepts were specced as requirements before code verification revealed they didn't exist (NAV_GROUPS → zombie FR-027, mkCols → created colsToBoard instead, gamesVariant app state → made internal). Each caused a blocking critique finding that had to be unwound.
 
 **How to apply:** When a mockup file shows a pattern (state variable, helper function, constant), grep the production `src/` and `server/` trees before writing it into a spec FR. If it doesn't exist, either create it explicitly (like `colsToBoard`) or adapt to the production equivalent (like SCREENS+URL_MAP+SURFACE_BG for NAV_GROUPS). Document the decision in the spec's Assumptions section.
+
+**Systematic fix:** The `past-games-manager` skill now has a `production_audit` stage injected between `epic_fix` and `spec_create`. It greps every named symbol from the epic/mockup against `connect-four/src/`, produces a ⚠ Mockup-only table, and passes it as a hard constraint into the spec-creation agent's prompt so no mockup-only symbol is silently assumed to exist.
