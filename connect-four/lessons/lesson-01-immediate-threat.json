@@ -26,15 +26,136 @@
           "c": 4,
           "r": 0,
           "type": "tg"
+        },
+        {
+          "c": 1,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 0,
+          "type": "win"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
           "label": "Winning move"
+        },
+        {
+          "type": "win",
+          "label": "Winning move"
         }
       ],
       "infoProse": "When you have three discs in a row with an open space at either end, you have an immediate threat. Playing in that space wins the game instantly."
+    },
+    {
+      "movestring": "644565566",
+      "coachMessages": [
+        {
+          "text": "Immediate threats can be horizontal, vertical or diagonal ",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "dg",
+        "ddg",
+        "ggdg"
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 6,
+          "r": 3,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "User threat"
+        },
+        {
+          "type": "win",
+          "label": "Winning move"
+        }
+      ],
+      "infoProse": ""
+    },
+    {
+      "movestring": "3334243556566",
+      "coachMessages": [
+        {
+          "text": "Also an immediate threat does not need to have three consecutive disks",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "g",
+        "gdgg",
+        "dd",
+        "dgg",
+        "ddg"
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 6,
+          "r": 2,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Winning move"
+        },
+        {
+          "type": "tg",
+          "label": "User threat"
+        }
+      ],
+      "infoProse": "These ones are harder to spot"
     }
   ],
   "socratic": {

@@ -13,5 +13,3 @@ metadata:
 
 This is a **prerequisite** for the LLM explain PoC (`explain_move.sh`) which captures `visualize_board.mjs` output as part of the LLM prompt context.
 
-[[project_board_refactor_009]]
-[[project_llm_explain_poc]]

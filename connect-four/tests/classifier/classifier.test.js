@@ -180,6 +180,40 @@ describe('classify() edge cases', () => {
   });
 });
 
+describe('detectForcedWin()', () => {
+  test('double_threat board does NOT match — that is Category 3', () => {
+    // '33442': Red played col2, creating a double_threat. detectForcedWin must return false.
+    const board = new Board('33442');
+    assert.equal(detectForcedWin(board, 1).matched, false);
+  });
+
+  test('"33" (both played center) does NOT match — no immediate threat on post-move board', () => {
+    // Yellow just played col3 after Red's center. No forcing chain exists.
+    const board = new Board('33');
+    assert.equal(detectForcedWin(board, 2).matched, false);
+  });
+
+  test('forcing chain position matches — 1 immediate threat → block → double_threat', () => {
+    // '662345230545562635626452': Yellow (player 2) just played col2.
+    // Chain: immediate threat → opp blocks col3 → user plays col3 → opp blocks col4 → user wins col4.
+    const board = new Board('662345230545562635626452');
+    assert.equal(detectForcedWin(board, 2).matched, true);
+  });
+
+  test('classify() lost position falls through to suboptimal_move, not forced_win', () => {
+    // All-negative scores, col6 is least bad — no forcing chain on the board.
+    const result = classify('3333344455', 6, [-16, -16, -16, -16, -16, -16, -2]);
+    assert.equal(result.tag, 'suboptimal_move');
+  });
+
+  test('classify() col3 after "3" falls through to suboptimal_move, not forced_win', () => {
+    // Yellow plays center vs Red's center. All Yellow scores negative but no tactical chain.
+    const scores = [-4, -2, -2, -1, -2, -2, -4];
+    const result = classify('3', 3, scores);
+    assert.notEqual(result.tag, 'forced_win');
+  });
+});
+
 // SC-002: classify() constructs Board exactly once (no direct parseBoardState calls)
 describe('SC-002: classify() single Board construction', () => {
   test('classify() body contains zero parseBoardState calls', () => {

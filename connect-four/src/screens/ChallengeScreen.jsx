@@ -10,6 +10,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
+import { pickRandomKey } from '../lib/coachUtils.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -68,6 +69,7 @@ export function ChallengeScreen({
   const promptKeyRef = useRef(null);
   const startTimeRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const usedPhraseKeysRef = useRef(new Set());
 
   // Stable reference — avoids AnnotatedExplanation re-render loop.
   const userMajorThreats = useMemo(() => {
@@ -171,6 +173,8 @@ export function ChallengeScreen({
     const current = puzzles[currentIdx];
     if (!current || !board || !heights) return;
 
+    const effectiveCategory = lessonMode ? confirmationCategory : category;
+
     const row = heights[col];
     if (row >= 6) return; // full column
 
@@ -196,18 +200,21 @@ export function ChallengeScreen({
     fetch(`${API}/api/evaluate-move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movestring: current.move_string, col, category }),
+      body: JSON.stringify({ movestring: current.move_string, col, category: effectiveCategory }),
     })
       .then(r => r.json())
       .then(data => {
         setEvaluation(data);
 
-        // Update coach — fall back to generic blunder pool when no category-specific key exists
-        const phraseKey = data.coachPhraseKey
-          ?? `coach.generic.blunder.${Math.floor(Math.random() * 6)}`;
+        // Update coach — fall back to quality-aware generic pool when no category-specific key exists
+        const used = usedPhraseKeysRef.current;
+        let phraseKey = data.coachPhraseKey
+          ?? pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used);
+        used.add(phraseKey);
+        const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
-          mood: data.coachMood ?? 'oops',
+          mood: data.coachMood ?? moodDefaults[data.quality] ?? 'think',
         }]);
 
         // Win overlay if optimal win

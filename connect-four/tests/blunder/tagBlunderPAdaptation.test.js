@@ -57,15 +57,16 @@ describe('tagBlunder P() adapter regression (FR-T03)', () => {
     }
   }, { timeout: 60_000 });
 
-  it('missed_own / forced_win still resolves after P() adaptation', async () => {
+  it('missed_own / no tactical pattern resolves after P() adaptation', async () => {
     const solver = createSolverProcess();
     try {
-      // '3233333556' (10 moves, Red's turn): Red loses forced_win pattern by playing col0.
+      // '3233333556' (10 moves, Red's turn): all scores are -2, no tactical forcing chain.
+      // Old score-based forced_win incorrectly fired here; correct result is suboptimal_move.
       const result = await tagBlunder('3233333556', 0, 2, solver);
-      assert.equal(result.tag, 'forced_win',
-        'tag must be forced_win: Red had a forced_win that was abandoned');
+      assert.equal(result.tag, 'suboptimal_move',
+        'tag must be suboptimal_move: no real forcing chain exists in this position');
       assert.equal(result.direction, 'missed_own',
-        'direction must be missed_own: Red missed their own forced_win');
+        'direction must be missed_own: no pattern was detected');
     } finally {
       solver.destroy();
     }

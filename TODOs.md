@@ -33,6 +33,10 @@
     disk hitted the bottom of the board
 
 
+- The speed between the player moves and the coach moves is too high, I don't have time to read both coach messages. There should be a small pause between those messages
+
+- In all screens where we are reviewing a game or a blunder, it must be clear if the user was playing Gray or Green
+
 - [SOLVED] When you reach the number of deep reveals for free tier, the popup that is shown says "Join the waitlist". It should be a "become pro". This popup for now should have a button to bypass the payment and become paid member immediatly
 
 - There is a working PoC to import games from papergames (./connect-four/server/scripts/import_papergames_blunders.mjs). The user should be able to set the papergames id into the profile and click import. Free tier imports the last 5 games. Imported games must have the papergames metadata

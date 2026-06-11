@@ -1,6 +1,7 @@
 import { HomeScreen } from '../screens/HomeScreen.jsx';
 import { StatsScreen } from '../screens/StatsScreen.jsx';
 import { SetPickerScreen } from '../screens/SetPickerScreen.jsx';
+import { CategoryListScreen } from '../screens/CategoryListScreen.jsx';
 import { ChallengeScreen } from '../screens/ChallengeScreen.jsx';
 import { PostSetSummaryScreen } from '../screens/PostSetSummaryScreen.jsx';
 import { DifficultyPickerScreen } from '../screens/DifficultyPickerScreen.jsx';
@@ -29,7 +30,8 @@ export const SCREENS = {
   game: GameScreen,
   review: ReviewScreen,
   explorer: ExplorerScreen,
-  mistakes: MistakesListScreen,
-  mistakeDetail: MistakeDetailScreen,
+  mistakes: CategoryListScreen,
+  mistakeDetail: (p) => <MistakesListScreen {...p} />,
+  blunderDetail: MistakeDetailScreen,
   pastGames: PastGamesListScreen,
 };

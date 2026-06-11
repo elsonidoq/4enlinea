@@ -416,9 +416,11 @@ export function classify(moves, candidateCol, scores) {
     }
   }
 
-  // ── Category 3: Double Threat ─────────────────────────────────────────────
+  // ── Categories 3 & 4: build post-move board once for both checks ─────────
   if (board.colHeights[candidateCol] < ROWS) {
     const nextBoard = board.withMove(candidateCol);
+
+    // ── Category 3: Double Threat ───────────────────────────────────────────
     const threatCells = [];
     for (const [col, rows] of nextBoard.reachableThreats(board.currentPlayer)) {
       for (const row of rows) threatCells.push({ col, row });
@@ -442,6 +444,11 @@ export function classify(moves, candidateCol, scores) {
         if (sorted[i + 1] === sorted[i] + 1) return { tag: 'double_threat' };
       }
     }
+
+    // ── Category 4: Forced Win ──────────────────────────────────────────────
+    if (detectForcedWin(nextBoard, board.currentPlayer).matched) {
+      return { tag: 'forced_win' };
+    }
   }
 
   // ── Category 2: Forced Block ──────────────────────────────────────────────
@@ -456,15 +463,6 @@ export function classify(moves, candidateCol, scores) {
         });
         if (someOtherFails) return { tag: 'forced_block' };
       }
-    }
-  }
-
-  // ── Category 4: Forced Win ────────────────────────────────────────────────
-  if (score < 0) {
-    const allNegative = scores.every(s => s <= 0);
-    const isBestBadMove = scores.every(s => s <= score || s === 0);
-    if (allNegative && isBestBadMove && scores.some(s => s < score)) {
-      return { tag: 'forced_win' };
     }
   }
 
@@ -1259,38 +1257,45 @@ export function detectForcedBlock(board, scores, perspective = board.currentPlay
  * @complexity O(7)
  * @cache not cached
  */
-export function detectForcedWin(board, scores, perspective = board.currentPlayer, solver = null) {
-  // FR-033: when perspective != current player, recurse into all child moves
-  if (perspective !== board.currentPlayer && solver) {
-    return (async () => {
-      const playableCols = [];
-      for (let c = 0; c < COLS; c++) {
-        if (board.colHeights[c] < ROWS) playableCols.push(c);
-      }
-      for (const c of playableCols) {
-        const childMs = board.movestring + c;
-        let childScores;
-        try { childScores = await solver.query(childMs); }
-        catch { return { matched: false, cells: [] }; } // terminal position → pattern doesn't apply
-        const childBoard = new Board(childMs);
-        const result = await detectForcedWin(childBoard, childScores, perspective, solver);
-        if (!result.matched) return { matched: false, cells: [] };
-      }
-      return { matched: true, cells: [] };
-    })();
+export function detectForcedWin(board, perspective = board.currentPlayer, maxDepth = 8) {
+  if (maxDepth <= 0) return { matched: false, cells: [] };
+
+  // Do not match if the board already has a double_threat — that's Category 3.
+  // forced_win requires at least one forcing step before the terminal condition.
+  if (detectDoubleThreat(board, perspective).matched) return { matched: false, cells: [] };
+
+  // Need exactly 1 immediate threat to force the opponent's response.
+  // 0 = no forcing pressure; ≥2 = already a double_threat (caught above).
+  const myThreats = board.immediateThreats(perspective);
+  if (myThreats.length !== 1) return { matched: false, cells: [] };
+
+  const blockCol = myThreats[0];
+  if (board.colHeights[blockCol] >= ROWS) return { matched: false, cells: [] };
+
+  const afterBlock = board.withMove(blockCol);
+  const opponent = 3 - perspective;
+
+  // If opponent gains an immediate threat after blocking, the chain is broken.
+  if (afterBlock.immediateThreats(opponent).length > 0) return { matched: false, cells: [] };
+
+  // Try all user continuation moves.
+  for (let col = 0; col < COLS; col++) {
+    if (afterBlock.colHeights[col] >= ROWS) continue;
+
+    const row = afterBlock.colHeights[col];
+    const afterUser = afterBlock.withMove(col);
+
+    // Terminal 1: user wins immediately with this continuation.
+    if (afterUser.checkWin(row, col, perspective)) return { matched: true, cells: [] };
+
+    // Terminal 2: user creates a double_threat with this continuation.
+    if (detectDoubleThreat(afterUser, perspective).matched) return { matched: true, cells: [] };
+
+    // Recurse: continue the forcing chain.
+    if (detectForcedWin(afterUser, perspective, maxDepth - 2).matched) return { matched: true, cells: [] };
   }
 
-  if (!scores.every(s => s <= 0)) return { matched: false, cells: [] };
-  const matchedCols = [];
-  for (let col = 0; col < COLS; col++) {
-    if (board.colHeights[col] >= ROWS) continue;
-    const score = scores[col];
-    if (score >= 0) continue;
-    const isBestBadMove = scores.every(s => s <= score || s === 0);
-    if (isBestBadMove && scores.some(s => s < score)) matchedCols.push(col);
-  }
-  if (matchedCols.length === 0) return { matched: false, cells: [] };
-  return { matched: true, cols: matchedCols, cells: [] };
+  return { matched: false, cells: [] };
 }
 
 /**
@@ -1362,7 +1367,7 @@ export async function classifyPattern(ms, perspective, solver) {
     ['double_threat',     () => detectDoubleThreat(board, perspective)],
     // Score-consuming detectors: pass solver for the recursive perspective case (FR-033)
     ['forced_block',      () => detectForcedBlock(board, scores, perspective, solver)],
-    ['forced_win',        () => detectForcedWin(board, scores, perspective, solver)],
+    ['forced_win',        () => detectForcedWin(board, perspective)],
     ['forbidden_columns', () => detectForbiddenColumns(board, scores, perspective, solver)],
     ['z_threat',          () => detectZThreat(board, scores, perspective, solver)],
     ['odd_even_threat',   () => detectOddEvenThreat(board, scores, perspective, solver)],

@@ -120,11 +120,13 @@ p {
 .gc-outcome { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
 .gc-outcome.won  { background: var(--eval-good-bg); color: #1c8a4a; }
 .gc-outcome.lost { background: var(--eval-bad-bg);  color: #b03030; }
-.gc-outcome.draw { background: var(--surface-2);    color: var(--ink-soft); }
+.gc-outcome.draw { background: #e9eaec;              color: var(--ink-soft); }
 .gc-date  { font-size: 12px; color: var(--ink-faint); margin-left: auto; }
 .gc-meta  { font-size: 12px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gc-blunders { font-size: 11px; color: var(--eval-warn, #b07800); font-weight: 600; }
+.gc-blunder-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #b07800; background: #fdf0d9; padding: 2px 7px; border-radius: 999px; }
+.gc-no-blunder-chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; color: #1c8a4a; background: var(--eval-good-bg); padding: 2px 7px; border-radius: 999px; }
 .outcome-chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .outcome-chip.won  { background: var(--eval-good-bg); color: #1c8a4a; }
 .outcome-chip.lost { background: var(--eval-bad-bg);  color: #b03030; }
-.outcome-chip.draw { background: var(--surface-2);    color: var(--ink-soft); }
+.outcome-chip.draw { background: #e9eaec;              color: var(--ink-soft); }

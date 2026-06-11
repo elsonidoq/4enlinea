@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/027-past-games-navigation/plan.md
+specs/029-coach-commentary/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index
@@ -67,6 +67,14 @@ If the user asks a question, answer the question first before editing any files 
 
 ## The knowledge-base
 The knowledge base's goal is to provide expertise knowledge to a coding agent, structured in a AI friendly way, so that a coding agent has the right context to make expert based decisions
+
+## Querying the database from Node.js
+
+Always read memory `reference_supabase_connection.md` before writing any inline DB script. Key facts that are easy to get wrong:
+- `.env` is at `connect-four/server/.env`, not the project root
+- Must `cd connect-four` first so `require('@supabase/supabase-js')` resolves
+- Service key var is `SUPABASE_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_KEY`)
+- Parse `.env` manually — `dotenv` is not reliably available in `node -e`
 
 ## Running tests
 Use `npm run test:fast` (inside `connect-four/`) for all regular development and CI checks. It omits `candidate-generator.test.js`, which calls the real c4solver up to 400 times per test and frequently hangs for 10+ minutes due to solver IPC deadlock. Only run `npm test` when explicitly testing candidate generation.

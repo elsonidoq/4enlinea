@@ -156,6 +156,8 @@ Returns the authenticated user's blunders with server-computed threat cell locat
 
 **Query params**:
 - `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
+- `category`: optional string, must be a valid blunder tag slug. Filters blunders to a single pattern category.
+- `game_id`: optional UUID string. Filters blunders to those linked to a specific game.
 
 **Response**: `{ "blunders": [...], "total": number }`
 
@@ -170,14 +172,20 @@ Each blunder object:
   "created_at": "2026-05-01T12:00:00Z",
   "resolved_at": null,
   "severity": 12,
+  "game_id": "<uuid>" | null,
+  "moveIndex": 8,
   "threat_cells": [{ "col": 4, "row": 2 }]
 }
 ```
+
+- `game_id`: UUID of the related game, or `null` if the blunder is not linked to a game.
+- `moveIndex`: integer equal to `board_state.length` — the global 0-indexed ply count for this blunder position.
 
 - `threat_cells` is computed server-side via `Board.majorThreatCells()`, filtering for the opponent's major threats after the played move.
 - `severity` is `round((best_score − score) / 36 * 10)`, an integer in [0, 10]. Normalized by 36 (max possible spread on a 7×6 board) and scaled to 10. Stored at insert time; 0 for legacy rows. UI buckets: Minor=1, Moderate=2–3, Critical=4–10 (chosen from empirical simulation data — ~58% / 28% / 14% of non-zero blunders).
 - Capped at 50 rows, ordered by `severity DESC, created_at ASC` (worst mistakes first; ties broken by oldest-first).
 - Auth: inline `requireAuth` (401).
+- Errors: 400 `{ "error": "invalid category" }` when `?category=` is not a valid blunder tag; 400 `{ "error": "invalid game_id" }` when `?game_id=` is not a valid UUID.
 
 ### `POST /api/coach/queue/:blunderId/resolve`
 
@@ -290,14 +298,32 @@ Explains a specific move the human just played (post-move reflection).
 
 ## Move Evaluation Endpoint
 
-`POST /api/evaluate-move` — scores a move the user just played and returns i18n keys for the Coach dialog and Tier-1 strip.
+`POST /api/evaluate-move` — scores a move and returns i18n keys for the Coach dialog and Tier-1 strip. Supports two paths: **user-move** (default, for puzzle attempts and sparring user clicks) and **AI-move** (for sparring AI move commentary).
 
-**Request body**: `{ movestring: string, col: number, category?: string }`
-- `movestring`: position **before** the user's move (0-indexed, 0–42 chars).
-- `col`: 0-indexed column the user played.
-- `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position.
+### User-Move Path (default, `aiMove` absent or false)
 
-**Response**:
+**Request body**: `{ movestring: string, col: number, category?: string, aiMove?: false }`
+- `movestring`: position **before** the move (0-indexed, 0–42 chars).
+- `col`: 0-indexed column played.
+- `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position via `classify()` (synchronous, pre-move board).
+- `aiMove`: absent or `false`.
+
+### AI-Move Path (`aiMove: true`)
+
+When `req.body.aiMove === true`, the server classifies the **post-move** board from the AI player's perspective:
+
+1. Computes `postMoveMovestring = movestring + col` and `aiPlayerInt = (movestring.length % 2) + 1`.
+2. Calls `await classifyPattern(postMoveMovestring, aiPlayerInt, solver)` — async, returns a `Map<tag, details>`.
+3. Applies the fixed priority ordering to select a single `patternTag`:
+   `immediate_threat` > `double_threat` > `forced_win` > `forced_block` > `forbidden_columns` > `z_threat` > `odd_even_threat` > `claimeven` > `figure_7` > `j_shape` > `overcut` > `undercut` > `claimodd`
+4. If no tags match, `patternTag` is `null`.
+
+The `coachPhraseKey` in the AI-move response is ignored by the client. The client uses `quality` and `patternTag` from the response to select phrases from `coach.ai_move.*` pools (see FR-007 in spec 029).
+
+**Latency note**: The AI-path evaluate-move call may exceed the 2 s latency guideline on `forced_win` positions due to `classifyPattern`'s solver queries (re-evaluates the board for each of 13 detectors). This is a known, tracked exception — caching is deferred to a future performance pass.
+
+### Response Shape (both paths)
+
 ```json
 {
   "badge": "good" | "mid" | "bad",

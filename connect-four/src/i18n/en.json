@@ -110,7 +110,9 @@
     "difficulty_easy": "Easy",
     "difficulty_medium": "Medium",
     "difficulty_hard": "Hard",
-    "difficulty_perfect": "Perfect"
+    "difficulty_perfect": "Perfect",
+    "difficulty_perfect_ai": "Perfect AI",
+    "no_blunders": "No mistakes"
   },
   "home": {
     "stats_button": "Progress & Stats",
@@ -427,6 +429,33 @@
       }
     },
     "generic": {
+      "optimal": {
+        "0": "Good move.",
+        "1": "Nice choice.",
+        "2": "That's the one.",
+        "3": "Well played.",
+        "4": "Sharp.",
+        "5": "Solid.",
+        "6": "You found it.",
+        "7": "That's the play.",
+        "8": "You're reading the board.",
+        "9": "Clean.",
+        "10": "Efficient.",
+        "11": "Exactly right.",
+        "12": "Strong.",
+        "13": "No wasted moves.",
+        "14": "You're thinking ahead.",
+        "15": "Keeping the pressure on.",
+        "16": "You're making this difficult.",
+        "17": "I didn't expect that.",
+        "18": "That's how you stay in control.",
+        "19": "You're tightening the grip."
+      },
+      "suboptimal": {
+        "0": "Not bad, but there was a sharper move.",
+        "1": "You're close — try to find the stronger option.",
+        "2": "Reasonable, but not the best here."
+      },
       "blunder": {
         "0": "Hmm, not the strongest move there.",
         "1": "Your opponent will like that.",
@@ -453,26 +482,10 @@
           "1": "Explore the position. Try a different move."
         }
       },
-      "ai_move": {
-        "0": "I'll take that.",
-        "1": "Interesting. Let's see.",
-        "2": "Hmm. My turn."
-      },
-      "deliberate_mistake": {
-        "0": "Oops — did I just give you something?",
-        "1": "I may have slipped there. Can you punish it?"
-      },
       "hint": {
         "generic": {
           "0": "The best move is highlighted — trust the column.",
           "1": "Look at the highlighted column. What does it set up?"
-        }
-      },
-      "user_move": {
-        "generic": {
-          "0": "Interesting choice. Let's see how it plays out.",
-          "1": "Got it. Now watch how I respond.",
-          "2": "Noted. Your move is on the board."
         }
       },
       "review": {
@@ -486,6 +499,83 @@
           "2": "You played well. Let's find the edge.",
           "3": "Some tactical moments worth revisiting."
         }
+      }
+    },
+    "ai_move": {
+      "immediate_threat": {
+        "0": "I can win right now.",
+        "1": "That's game — connecting four."
+      },
+      "forced_block": {
+        "0": "I had to block that — you had a real threat there.",
+        "1": "No choice but to defend. Nice pressure."
+      },
+      "double_threat": {
+        "0": "Sorry — I've created two threats at once. You can only block one.",
+        "1": "Double threat. One of them will connect."
+      },
+      "claimeven": {
+        "0": "Claimeven working in my favor — I'm claiming below your even-row threat.",
+        "1": "I'll take that even-row claim. Your threat is neutralized."
+      },
+      "z_threat": {
+        "0": "Z-threat activated — that odd-row square is mine now.",
+        "1": "I've secured the parity chain. You'd need an even number of moves to stop me."
+      },
+      "odd_even_threat": {
+        "0": "Playing to the odd row — that's parity control on my side.",
+        "1": "Odd-row threat in place. Even rows won't save you."
+      },
+      "forced_win": {
+        "0": "I can force you to lose from here — let's see if you can find the escape.",
+        "1": "The path is forced — find the escape if you can."
+      },
+      "claimodd": {
+        "0": "Breaking the claimeven lock — I'm anchoring on an odd row.",
+        "1": "Claimodd. Your even-row strategy just lost its grip."
+      },
+      "figure_7": {
+        "0": "Figure-7 trap set — two threats you can't both stop.",
+        "1": "I've completed the Figure-7. Two threats incoming."
+      },
+      "j_shape": {
+        "0": "J-Shape in place — I'm threatening in three directions now.",
+        "1": "Three simultaneous threats. You can block one, maybe two."
+      },
+      "overcut": {
+        "0": "Overcut — my upper threat beats yours in this column.",
+        "1": "Same parity, upper wins. Your lower threat is dead."
+      },
+      "undercut": {
+        "0": "Undercut. Gravity fills bottom-up — your upper threat can't reach first.",
+        "1": "I'm taking the lower threat. Yours is blocked by my disc now."
+      },
+      "suboptimal": {
+        "0": "I might have missed something there — see if you can take advantage.",
+        "1": "Not my sharpest move. There may be an opportunity for you.",
+        "2": "I gave you something — find it."
+      },
+      "neutral": {
+        "0": "I'll take that square.",
+        "1": "Setting up my position.",
+        "2": "Let's see how this develops.",
+        "3": "Building my foundation.",
+        "4": "Keeping my options open.",
+        "5": "Every move counts.",
+        "6": "I like this square.",
+        "7": "Expanding my reach.",
+        "8": "Laying the groundwork.",
+        "9": "Staying flexible.",
+        "10": "A quiet move, but purposeful.",
+        "11": "I have a plan.",
+        "12": "Patience.",
+        "13": "Filling the gaps.",
+        "14": "The threat is stronger than the execution.",
+        "15": "Watching and waiting.",
+        "16": "Nothing flashy — just solid.",
+        "17": "I'm keeping my options alive.",
+        "18": "One move at a time.",
+        "19": "Holding my ground."
       }
     }
   },
@@ -737,7 +827,9 @@
       "overcut": "Overcut",
       "figure_7": "Figure 7",
       "j_shape": "J-shape",
-      "odd_even_threat": "Odd & Even Threats"
+      "odd_even_threat": "Odd & Even Threats",
+      "suboptimal_move": "Suboptimal move",
+      "drawing_move": "Drawing move"
     },
     "detail": {
       "topbarTitle": "Mistake",
@@ -752,7 +844,17 @@
       },
       "whatShouldIHave": "What should I have played?",
       "markReviewed": "Mark as reviewed",
-      "markedReviewed": "Marked as reviewed"
+      "markedReviewed": "Marked as reviewed",
+      "all_caught_up": "All caught up in this category!",
+      "none_reviewed": "None reviewed yet — tap a blunder to study it.",
+      "meta_count": "{{count}} blunder",
+      "meta_count_pl": "{{count}} blunders",
+      "source_game": "{{date}} game"
+    },
+    "to_review": "{{count}} to review",
+    "cat": {
+      "done": "done",
+      "new": "{{count}} new"
     }
   },
   "socratic": {

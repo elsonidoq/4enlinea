@@ -194,11 +194,16 @@ Redesign the Past Mistakes surface with a two-level category drill-down and add 
 
 #### Backend — extend blunder list endpoint
 
-Extend `GET /api/coach/queue` (already shipped) to accept:
-- `?category=<pattern_slug>` — filter by `pattern_category` (e.g. `claimeven`). When omitted, returns all categories (existing behaviour).
-- **No other changes** to the existing query, status filter, or row cap.
+Extend `GET /api/coach/queue` (already shipped) to accept two optional query params:
 
-The category detail list (Level 2) calls this endpoint with the selected category slug.
+- `?category=<pattern_slug>` — filter by `pattern_category` (e.g. `claimeven`). When omitted, returns all categories (existing behaviour).
+- `?game_id=<uuid>` — filter `WHERE game_id = $game_id`. When omitted, returns blunders from all sources (both game blunders and puzzle blunders). This is intentional: the Mistakes surface shows a unified view of all blunders.
+
+**SELECT changes for `?game_id=` support:** add `game_id` to the SELECT so callers can confirm provenance. Derive `moveIndex` at the response layer as `board_state.length` (the number of moves already played when the blunder was recorded equals the length of the board-state string at that moment).
+
+**No other changes** to the existing query, status filter, or row cap.
+
+The category detail list (Level 2) calls this endpoint with `?category=<slug>`. `PostGameReview` calls it with `?game_id=<uuid>` to build the in-game blunder navigation list (see *PostGameReview — timeline tap update* below).
 
 #### Frontend — Level 1: `CategoryList` (`mistakes` route)
 
@@ -211,12 +216,14 @@ The `mistakes` route now renders `CategoryList` instead of the old flat `Mistake
   label: string            // display name via t('mistakes.category.' + slug)
   items: Blunder[]         // all blunders in this category
   unreviewed: Blunder[]    // items where resolved_at is null
-  maxSev: 0|1|2|3          // max severity among unreviewed; 0 = all reviewed
+  maxSev: number           // raw 0–10 integer from blunders.severity; 0 = all reviewed
   thumb: Blunder           // most-critical unreviewed (or most-critical overall if all reviewed)
 }
 ```
 
-*Ordering:* categories are sorted by `maxSev` descending. Categories where `maxSev === 0` (all reviewed) are sorted to the bottom. Within equal `maxSev`, preserve insertion order.
+*Ordering:* categories are sorted by `maxSev` descending using the raw 0–10 value. Categories where `maxSev === 0` (all reviewed) are sorted to the bottom. Within equal `maxSev`, preserve insertion order.
+
+*SeverityMeter display buckets (per `api-conventions.md`):* Minor = severity 1; Moderate = severity 2–3; Critical = severity 4–10. These buckets are for visual display only; sorting always uses the raw value.
 
 *Category row layout (from `screens_mistakes.jsx` `CategoryList`):*
 - Left: small board thumbnail of `thumb` (compact, with `tr` overlay on played cell).
@@ -276,39 +283,56 @@ The ordered list of blunders to navigate with Prev/Next:
 
 `selMistake` is an index into `blunderNavList`. The toolbar counter reads `"N of M"` where M is `blunderNavList.length`.
 
-#### PostGameReview — timeline tap update (`screens_sparring.jsx`)
+#### PostGameReview — blunder nav assembly and timeline tap update (`screens_sparring.jsx`)
 
-- Tapping a `✕` (blunder) node in the move timeline:
+**On mount (when `props.id` is present):** `PostGameReview` fetches `GET /api/coach/queue?game_id=<props.id>` and stores the result as `blunderNavList` (ordered by `moveIndex` asc, i.e. by `board_state.length` asc). This list is passed to `blunderDetail` when the user taps a blunder node.
+
+`moveIndex` is not stored as a separate DB column — it is derived as `board_state.length` in the API response layer (the number of moves already played when the blunder was recorded).
+
+The `"Move N / M"` display in `MistakeDetail` resolves as:
+- **N** = the blunder's `moveIndex` (= `board_state.length` from the coach/queue response).
+- **M** = total moves in the game, derived from `games.move_string.length`. `PostGameReview` already has `move_string` (from `POST /api/games/analyze`); pass it as part of `mistakeSource` or derive M from the length of the analyzed-moves array.
+
+The thumbnail `playedCell` overlay:
+- **col** = `blunder.move_played` (already on the blunder row).
+- **row** = must be derived from `board_state` by counting the number of discs already in that column (i.e. the height of that column at the time the blunder was made). Do not read row from the mockup's `playedCell.row` field — that field does not exist on real blunder rows.
+
+**Tapping a `✕` (blunder) node in the move timeline:**
   1. Sets `mistakeContext = "game"`.
-  2. Sets `mistakeSource = { date: game.date, gameId: game.id }`. `game.date` is the formatted `gameDate` field returned by `POST /api/games/analyze` (ISO 8601, format client-side e.g. "Jun 7"). `game.id` is `props.id` (the `id` navigation param, passed by either `GameBoard` or `PastGamesList` — `PostGameReview` does not distinguish).
+  2. Sets `mistakeSource = { date: game.date, gameId: game.id, totalMoves: move_string.length }`. `game.date` is the formatted `gameDate` field returned by `POST /api/games/analyze` (ISO 8601, format client-side e.g. "Jun 7"). `game.id` is `props.id` (the `id` navigation param, passed by either `GameBoard` or `PastGamesList` — `PostGameReview` does not distinguish).
   3. Sets `selMistake` to the index of the blunder matching that move index within `blunderNavList`.
-  4. Sets `blunderNavList` to the game's blunders ordered by `moveIndex` asc.
+  4. `blunderNavList` is already populated from the on-mount fetch above; no re-assignment needed.
   5. Calls `go('blunderDetail')`.
 - Tapping a `?` (suboptimal) node continues to navigate to `go('explorer')` as before — no change.
 
-#### App shell wiring (`app.jsx`)
+#### App shell wiring
 
-*SCREENS changes:*
+Production routing uses `SCREENS` + `URL_MAP` + `SURFACE_BG` + `SESSION_ONLY_SCREENS` (in `src/lib/screenRegistry.jsx`, `src/lib/urlMapping.js`, `src/lib/surfaceGroups.js`). There is no `NAV_GROUPS` concept in production — that construct exists only in the mockup `app.jsx` prototype.
+
+*`SCREENS` changes (`src/lib/screenRegistry.jsx`):*
 ```js
-mistakes:      (p) => <CategoryList {...p} />,           // was MistakesList
+mistakes:      (p) => <CategoryList {...p} />,                           // was MistakesList
 mistakeDetail: (p) => <MistakesList {...p} category={p.selCategory} />,  // new
-blunderDetail: (p) => <MistakeDetail {...p} />,           // was mistakeDetail
+blunderDetail: (p) => <MistakeDetail {...p} />,                          // was mistakeDetail
 ```
+`mistakes` and `mistakeDetail` are already registered in production (routing contracts unchanged — only their rendered component changes). Only `blunderDetail` is a new registration.
 
-*New state:*
+*`URL_MAP` changes (`src/lib/urlMapping.js`):*
+- `blunderDetail` → `/blunder` (new entry; `mistakes` and `mistakeDetail` already present).
+
+*`SURFACE_BG` changes (`src/lib/surfaceGroups.js`):*
+- `blunderDetail` → `'--bg-home'` (same surface group as `mistakes` and `mistakeDetail`; new entry only).
+
+*`SESSION_ONLY_SCREENS` changes (`src/lib/screenRegistry.jsx`):*
+- Add `mistakeDetail` and `blunderDetail` to `SESSION_ONLY_SCREENS`. Deep links to either route bounce to the list root (`mistakes`). `mistakeDetail` requires `selCategory` state that is not URL-encoded; `blunderDetail` requires `blunderNavList` state that is not URL-encoded. Both are session-only.
+
+*New app-level state:*
 - `selCategory: string` (default `"claimeven"`). Always a DB slug.
 - `mistakeContext: "list" | "game"` (default `"list"`).
-- `mistakeSource: { date, gameId } | null` (default `null`).
+- `mistakeSource: { date: string, gameId: string, totalMoves: number } | null` (default `null`).
 - `blunderNavList: Blunder[]` (default `[]`).
 
 *Thread all four through `props`* (include both value and setter for each).
-
-*NAV_GROUPS — Past Mistakes group update:*
-```js
-["mistakes",      "Category List",     "14"],
-["mistakeDetail", "Category Detail",   "15"],
-["blunderDetail", "Blunder Detail",    "·" ],
-```
 
 #### i18n keys (new/updated, in `en.json`)
 
@@ -334,9 +358,12 @@ mistakes.category.odd_even_threat  "Odd / even threat"
 mistakes.category.undercut         "Undercut"
 mistakes.category.overcut          "Overcut"
 mistakes.category.figure_7         "Figure-7"
-mistakes.category.j_shape          "J-shape"
-mistakes.category.unknown          "Other"
+mistakes.category.j_shape              "J-shape"
+mistakes.category.forbidden_columns   "Forbidden columns"
+mistakes.category.unknown             "Other"
 ```
+
+> `GET /api/coach/queue` is intentionally unfiltered by blunder source — it returns both game blunders and puzzle blunders. The Mistakes surface shows a unified view. `forbidden_columns` is a puzzle-only pattern category; its i18n key is required so it renders correctly in the category list when puzzle blunders are present.
 
 #### CSS additions (new classes, add to `styles.css`)
 
@@ -376,4 +403,4 @@ Epic A ships first. Epic B depends on Epic A's `game_id` migration.
 | Epic | New screens / routes | Backend changes | Spec lines | Tasks |
 |---|---|---|---|---|
 | A. Past Games Navigation | `pastGames` (new); Home card | `GET /api/games` (new); extend `POST /api/games` (add `accuracy`); extend `POST /api/games/analyze` (server-side blunder inserts gain `game_id`, anonymous-user skip, response gains `gameDate`); migration: `game_id` + index on `blunders`, `accuracy` column on `games` | 145–170 | 26–32 |
-| B. Blunder Category Navigation | `mistakes` → `CategoryList`; `mistakeDetail` → `MistakesList` with category slug; `blunderDetail` → `MistakeDetail` | extend `GET /api/coach/queue` with `?category=` slug filter | 145–170 | 26–32 |
+| B. Blunder Category Navigation | `mistakes` → `CategoryList`; `mistakeDetail` → `MistakesList` with category slug; `blunderDetail` → `MistakeDetail` | extend `GET /api/coach/queue` with `?category=` slug filter + `?game_id=` filter (adds `game_id` to SELECT; derives `moveIndex` as `board_state.length`) | 145–170 | 26–32 |

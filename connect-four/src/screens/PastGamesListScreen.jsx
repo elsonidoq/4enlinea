@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { Icon } from '../components/Icon.jsx';
+import { Board } from '../components/Board.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { colsToBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
@@ -9,48 +10,70 @@ import { track } from '../lib/track.js';
 const API = import.meta.env.VITE_API_BASE_URL || '';
 const PAGE_SIZE = 20;
 
-const CELL_COLOR = {
-  red:   '#22c55e',
-  yellow: '#9ca3af',
-  empty: 'var(--surface-2)',
-};
+// Thumbnail dimensions: render Board at RENDER_W then scale down.
+// compact Board uses pad=9, gap=6; cells have aspectRatio:1.
+const THUMB_RENDER_W = 252;
+const THUMB_W = 72;
+const THUMB_SCALE = THUMB_W / THUMB_RENDER_W;
+const _cellW = (THUMB_RENDER_W - 2 * 9 - 6 * 6) / 7;
+const THUMB_RENDER_H = 6 * _cellW + 5 * 6 + 2 * 9;
+const THUMB_H = Math.round(THUMB_RENDER_H * THUMB_SCALE);
 
-function MiniBoard({ cols }) {
+function BoardThumb({ cols }) {
   const board = colsToBoard(cols);
-  // Show bottom-left 4×4 slice: rows 0–3, cols 0–3
-  const slice = board.slice(0, 4).map(r => r.slice(0, 4));
-  // Render top-to-bottom (row 3 first, row 0 last) to match visual gravity
-  const rows = [...slice].reverse();
-
   return (
-    <div style={{ display: 'grid', gridTemplateRows: 'repeat(4, 12px)', gridTemplateColumns: 'repeat(4, 12px)', gap: 1 }}>
-      {rows.map((row, ri) =>
-        row.map((cell, ci) => (
-          <div
-            key={`${ri}-${ci}`}
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              background: CELL_COLOR[cell] ?? CELL_COLOR.empty,
-            }}
-          />
-        ))
-      )}
+    <div style={{ width: THUMB_W, height: THUMB_H, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ width: THUMB_RENDER_W, transformOrigin: 'top left', transform: `scale(${THUMB_SCALE})`, pointerEvents: 'none' }}>
+        <Board board={board} compact />
+      </div>
     </div>
   );
 }
 
+const PAPERGAMES_AVATAR_BASE = 'https://papergames.io/en/assets/images/avatars';
+
+function pgInitials(name) {
+  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function OpponentAvatar({ name, avatarUuid }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (avatarUuid && !imgFailed) {
+    return (
+      <img
+        src={`${PAPERGAMES_AVATAR_BASE}/${avatarUuid}.svg`}
+        alt={name}
+        onError={() => setImgFailed(true)}
+        style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    );
+  }
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: '50%', background: 'var(--surface-2)',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 10, fontWeight: 800, color: 'var(--ink-soft)', flexShrink: 0,
+    }}>
+      {pgInitials(name)}
+    </span>
+  );
+}
+
+const DIFF_STYLES = {
+  easy:    { bg: 'var(--eval-good-bg)', color: '#1c8a4a' },
+  medium:  { bg: 'var(--eval-mid-bg)',  color: '#b9760a' },
+  hard:    { bg: 'var(--eval-bad-bg)',  color: '#c23a26' },
+  perfect: { bg: '#e0e7ff',             color: '#3730a3' },
+};
+
 function GameCard({ game, t, onClick }) {
   const dateStr = new Date(game.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const diffKey = `games.difficulty_${game.difficulty}`;
-  const diffLabel = t(diffKey);
-  const meta = game.accuracy != null ? `${diffLabel} · ${t('games.accuracy', { value: Math.round(game.accuracy) })}` : diffLabel;
+  const diffStyle = game.difficulty ? (DIFF_STYLES[game.difficulty] ?? {}) : null;
 
   return (
-    <button className="game-card" onClick={onClick} style={{ fontFamily: 'inherit', color: 'var(--ink)', color_scheme: 'light' }}>
+    <button className="game-card" onClick={onClick} style={{ fontFamily: 'inherit', color: 'var(--ink)' }}>
       <div className="gc-board">
-        <MiniBoard cols={game.cols} />
+        <BoardThumb cols={game.cols} />
       </div>
       <div className="gc-info">
         <div className="gc-top">
@@ -59,11 +82,37 @@ function GameCard({ game, t, onClick }) {
           </span>
           <span className="gc-date">{dateStr}</span>
         </div>
-        <div className="gc-meta">{meta}</div>
-        {game.blunder_count > 0 && (
-          <div className="gc-blunders">
-            {t(game.blunder_count === 1 ? 'games.blunder_count_one' : 'games.blunder_count_other', { count: game.blunder_count })}
+
+        {/* Row 2: source info */}
+        {game.source === 'papergames' ? (
+          <div className="gc-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <OpponentAvatar name={game.opponent_name} avatarUuid={game.opponent_avatar} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.opponent_name}</span>
+            {game.accuracy != null && (
+              <span style={{ marginLeft: 'auto', flexShrink: 0 }}>{t('games.accuracy', { value: Math.round(game.accuracy) })}</span>
+            )}
           </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {diffStyle && (
+              <span style={{ background: diffStyle.bg, color: diffStyle.color, fontSize: 11.5, fontWeight: 800, padding: '2px 8px', borderRadius: 999, flexShrink: 0 }}>
+                {game.difficulty === 'perfect' ? t('games.difficulty_perfect_ai') : t(`games.difficulty_${game.difficulty}`)}
+              </span>
+            )}
+            {game.accuracy != null && (
+              <span className="gc-meta">{t('games.accuracy', { value: Math.round(game.accuracy) })}</span>
+            )}
+          </div>
+        )}
+
+        {/* Row 3: blunder chip */}
+        {game.blunder_count > 0 ? (
+          <span className="gc-blunder-chip" style={{ alignSelf: 'flex-start' }}>
+            <Icon name="flag" size={11} />
+            {t(game.blunder_count === 1 ? 'games.blunder_count_one' : 'games.blunder_count_other', { count: game.blunder_count })}
+          </span>
+        ) : (
+          <span className="gc-no-blunder-chip" style={{ alignSelf: 'flex-start' }}>{t('games.no_blunders')}</span>
         )}
       </div>
     </button>

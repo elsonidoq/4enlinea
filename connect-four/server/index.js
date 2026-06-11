@@ -8,6 +8,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, Board, getImmediateThreats, tagBlunder, classifyPattern } from './classifier.js';
+import { classifyAiMove } from './classifyAiMove.js';
 import { buildExplainContext } from './explainContext.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
@@ -1178,8 +1179,13 @@ app.post('/api/evaluate-move', async (req, res) => {
     const { badge, quality, bestCol } = scoreMove(scores, colInt);
 
     // Classify for pattern tag
-    const classifyResult = classify(movestring, colInt, scores);
-    const patternTag = classifyResult?.tag ?? null;
+    let patternTag;
+    if (req.body.aiMove === true) {
+      patternTag = await classifyAiMove(movestring, colInt, solver);
+    } else {
+      const classifyResult = classify(movestring, colInt, scores);
+      patternTag = classifyResult?.tag ?? null;
+    }
 
     // Determine phrase pool key (request category takes priority)
     const phrasePoolKey = category || patternTag;
@@ -1357,126 +1363,164 @@ app.post('/api/games/from-position', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
   try {
-    const { data: game, error } = await supabase
+    let moves, side;
+    const { data: aiGame } = await supabase
       .from('games')
       .select('moves, side')
       .eq('id', gameId)
       .single();
 
-    if (error || !game) return res.status(404).json({ error: 'game not found' });
+    if (aiGame) {
+      ({ moves, side } = aiGame);
+    } else {
+      const { data: pgGame } = await supabase
+        .from('papergames_games')
+        .select('moves, side')
+        .eq('id', gameId)
+        .single();
+      if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      ({ moves, side } = pgGame);
+    }
 
-    const truncated = game.moves.slice(0, N);
-    res.json({ moves: truncated, side: game.side, difficulty });
+    const truncated = moves.slice(0, N);
+    res.json({ moves: truncated, side, difficulty });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/games — list past games for the authenticated user
-// Returns { games: GameRecord[] } with cols encoding, blunder counts, and outcome mapping.
-// Auth required — 401 for anonymous users. No device_uuid fallback.
+// GET /api/games — list past games for the authenticated user (AI sparring + papergames imports).
+// Returns { games: GameRecord[], total: number } sorted by date descending, paginated.
+// Auth required — 401 for anonymous users.
 app.get('/api/games', async (req, res) => {
-  // Auth gate
-  if (!req.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Validate query params
-  let limit = 50;
+  let limit = 20;
   if (req.query.limit !== undefined) {
     const parsed = parseInt(req.query.limit, 10);
-    if (isNaN(parsed) || parsed < 1) {
-      return res.status(400).json({ error: 'limit must be a positive integer' });
-    }
-    if (parsed > 50) {
-      return res.status(400).json({ error: 'limit must be ≤ 50' });
+    if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+      return res.status(400).json({ error: 'limit must be 1–50' });
     }
     limit = parsed;
   }
 
+  let offset = 0;
+  if (req.query.offset !== undefined) {
+    const parsed = parseInt(req.query.offset, 10);
+    if (isNaN(parsed) || parsed < 0) {
+      return res.status(400).json({ error: 'offset must be a non-negative integer' });
+    }
+    offset = parsed;
+  }
+
+  // outcome filter: API accepts 'won'/'lost'/'draw', DB stores 'win'/'loss'/'draw'
+  const outcomeApiToDb = { won: 'win', lost: 'loss', draw: 'draw' };
   let outcomeFilter = null;
   if (req.query.outcome !== undefined) {
-    if (req.query.outcome !== 'won' && req.query.outcome !== 'lost') {
-      return res.status(400).json({ error: 'invalid outcome' });
-    }
-    outcomeFilter = req.query.outcome === 'won' ? 'win' : 'loss';
+    outcomeFilter = outcomeApiToDb[req.query.outcome];
+    if (!outcomeFilter) return res.status(400).json({ error: 'invalid outcome' });
   }
 
   let hasBlunder = false;
-  if (req.query.has_blunder !== undefined) {
-    if (req.query.has_blunder !== 'true') {
-      return res.status(400).json({ error: 'invalid has_blunder' });
-    }
-    hasBlunder = true;
-  }
+  if (req.query.has_blunder === 'true') hasBlunder = true;
+  else if (req.query.has_blunder !== undefined) return res.status(400).json({ error: 'invalid has_blunder' });
 
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
   try {
     const userId = req.user.id;
-
-    // Build games query
-    let gamesQuery = supabase
-      .from('games')
-      .select('id, result, created_at, difficulty, accuracy, moves')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (outcomeFilter) {
-      gamesQuery = gamesQuery.eq('result', outcomeFilter);
-    }
-
-    const { data: games, error: gamesError } = await gamesQuery;
-
-    if (gamesError) return res.status(500).json({ error: gamesError.message });
-
-    if (!games || games.length === 0) {
-      return res.json({ games: [] });
-    }
-
-    // Get blunder counts for these games in a single query
-    const gameIds = games.map(g => g.id);
-    const { data: blunders, error: blundersError } = await supabase
-      .from('blunders')
-      .select('game_id')
-      .in('game_id', gameIds)
-      .eq('user_id', userId);
-
-    if (blundersError) return res.status(500).json({ error: blundersError.message });
-
-    // Count blunders per game
-    const blunderCountMap = {};
-    for (const b of (blunders || [])) {
-      blunderCountMap[b.game_id] = (blunderCountMap[b.game_id] || 0) + 1;
-    }
-
-    // Map outcome values: DB uses 'win'/'loss'/'draw', API uses 'won'/'lost'/'draw'
     const outcomeMap = { win: 'won', loss: 'lost', draw: 'draw' };
 
-    // Build response
-    const result = [];
-    for (const g of games) {
-      const blunderCount = blunderCountMap[g.id] || 0;
+    // Fetch all matching rows from both tables in parallel; sort/paginate in JS.
+    // Both tables are bounded per user so this avoids complex UNION SQL.
+    let aiQuery = supabase
+      .from('games')
+      .select('id, result, created_at, difficulty, accuracy, moves, side')
+      .eq('user_id', userId);
+    let pgQuery = supabase
+      .from('papergames_games')
+      .select('id, result, played_at, moves, side, opponent_name, opponent_avatar, accuracy')
+      .eq('user_id', userId);
 
-      // has_blunder filter — skip games with no blunders
+    if (outcomeFilter) {
+      aiQuery = aiQuery.eq('result', outcomeFilter);
+      pgQuery = pgQuery.eq('result', outcomeFilter);
+    }
+
+    const [{ data: aiGames, error: aiError }, { data: pgGames, error: pgError }] = await Promise.all([
+      aiQuery,
+      pgQuery,
+    ]);
+
+    if (aiError) return res.status(500).json({ error: aiError.message });
+    if (pgError) return res.status(500).json({ error: pgError.message });
+
+    // Fetch blunder counts for both game sets in parallel
+    const aiIds = (aiGames || []).map(g => g.id);
+    const pgIds = (pgGames || []).map(g => g.id);
+
+    // Use not-null filter instead of .in() to avoid URL-length limits (>~200 IDs causes 400 Bad Request)
+    const [aiBlundersRes, pgBlundersRes] = await Promise.all([
+      aiIds.length > 0
+        ? supabase.from('blunders').select('game_id').not('game_id', 'is', null).eq('user_id', userId)
+        : Promise.resolve({ data: [], error: null }),
+      pgIds.length > 0
+        ? supabase.from('blunders').select('papergames_game_id').not('papergames_game_id', 'is', null).eq('user_id', userId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (aiBlundersRes.error) return res.status(500).json({ error: aiBlundersRes.error.message });
+    if (pgBlundersRes.error) return res.status(500).json({ error: pgBlundersRes.error.message });
+
+    const aiBlunderMap = {};
+    for (const b of (aiBlundersRes.data || [])) {
+      aiBlunderMap[b.game_id] = (aiBlunderMap[b.game_id] || 0) + 1;
+    }
+    const pgBlunderMap = {};
+    for (const b of (pgBlundersRes.data || [])) {
+      pgBlunderMap[b.papergames_game_id] = (pgBlunderMap[b.papergames_game_id] || 0) + 1;
+    }
+
+    // Normalise both sets to a unified shape
+    const unified = [];
+
+    for (const g of (aiGames || [])) {
+      const blunderCount = aiBlunderMap[g.id] || 0;
       if (hasBlunder && blunderCount === 0) continue;
-
-      result.push({
+      unified.push({
         id: g.id,
-        move_string: g.moves,
         outcome: outcomeMap[g.result] || g.result,
         created_at: g.created_at,
         source: 'ai',
         difficulty: g.difficulty,
         accuracy: g.accuracy ?? null,
         blunder_count: blunderCount,
-        move_count: g.moves.length,
         cols: movesToCols(g.moves),
       });
     }
 
-    res.json({ games: result });
+    for (const g of (pgGames || [])) {
+      const blunderCount = pgBlunderMap[g.id] || 0;
+      if (hasBlunder && blunderCount === 0) continue;
+      unified.push({
+        id: g.id,
+        outcome: outcomeMap[g.result] || g.result,
+        created_at: g.played_at,
+        source: 'papergames',
+        opponent_name: g.opponent_name,
+        opponent_avatar: g.opponent_avatar ?? null,
+        accuracy: g.accuracy ?? null,
+        blunder_count: blunderCount,
+        cols: movesToCols(g.moves),
+      });
+    }
+
+    // Sort by date descending, paginate
+    unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const total = unified.length;
+    const page = unified.slice(offset, offset + limit);
+
+    res.json({ games: page, total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1494,16 +1538,30 @@ app.post('/api/games/analyze', async (req, res) => {
 
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
-  // Fetch game row
-  const { data: game, error: gameError } = await supabase
-    .from('games')
-    .select('id, moves, side, difficulty, created_at')
-    .eq('id', gameId)
-    .single();
+  // Fetch game row — check AI sparring games first, then papergames imports
+  let moves, side, difficulty, created_at;
+  {
+    const { data: aiGame } = await supabase
+      .from('games')
+      .select('id, moves, side, difficulty, created_at')
+      .eq('id', gameId)
+      .single();
 
-  if (gameError || !game) return res.status(404).json({ error: 'game not found' });
-
-  const { moves, side, difficulty, created_at } = game;
+    if (aiGame) {
+      ({ moves, side, difficulty, created_at } = aiGame);
+    } else {
+      const { data: pgGame } = await supabase
+        .from('papergames_games')
+        .select('id, moves, side, played_at')
+        .eq('id', gameId)
+        .single();
+      if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      moves = pgGame.moves;
+      side = pgGame.side;
+      difficulty = null;
+      created_at = pgGame.played_at;
+    }
+  }
 
   // Counters
   let scored = 0;
@@ -1888,14 +1946,26 @@ app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
 
+  console.log('[DEBUG coach/queue] raw query:', JSON.stringify(req.query));
+
   const status = req.query.status || 'all';
   if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
     return res.status(400).json({ error: 'invalid status' });
   }
 
+  const category = req.query.category || null;
+  if (category && !VALID_BLUNDER_TAGS.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
+  }
+
+  const gameId = req.query.game_id || null;
+  if (gameId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gameId)) {
+    return res.status(400).json({ error: 'invalid game_id' });
+  }
+
   let query = supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity')
+    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id')
     .eq('user_id', req.user.id)
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
     .order('severity', { ascending: false })
@@ -1908,8 +1978,17 @@ app.get('/api/coach/queue', async (req, res) => {
     query = query.not('resolved_at', 'is', null);
   }
 
+  if (category) {
+    query = query.eq('pattern_category', category);
+  }
+
+  if (gameId) {
+    query = query.eq('game_id', gameId);
+  }
+
   const { data: blunders, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
+  console.log('[DEBUG coach/queue] category param:', JSON.stringify(req.query.category), '| rows returned:', blunders?.length, '| categories in result:', [...new Set((blunders||[]).map(b=>b.pattern_category))]);
 
   function computeThreatCells(board_state, move_played) {
     try {
@@ -1938,6 +2017,8 @@ app.get('/api/coach/queue', async (req, res) => {
     severity: b.severity,
     blunder_severity: b.blunder_severity ?? null,
     threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+    game_id: b.game_id ?? null,
+    moveIndex: (b.board_state || '').length,
   }));
 
   res.json({ blunders: enriched, total: enriched.length });

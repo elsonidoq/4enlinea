@@ -11,6 +11,13 @@ import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
+const DIFFICULTIES = [
+  { key: 'easy',    subtitleKey: 'sparring.easySub' },
+  { key: 'medium',  subtitleKey: 'sparring.mediumSub', isDefault: true },
+  { key: 'hard',    subtitleKey: 'sparring.hardSub' },
+  { key: 'perfect', subtitleKey: 'sparring.perfectSub' },
+];
+
 function getRewindedMoves(mIdx, side, fullMovestring) {
   const totalPliesBefore = side === 'first'
     ? (mIdx - 1) * 2
@@ -138,21 +145,31 @@ export function ExplorerScreen({
 
   // ── "Start from here" state ───────────────────────────────────────
   const [fromPositionError, setFromPositionError] = useState(null);
+  const [diffPickerOpen, setDiffPickerOpen] = useState(false);
+  const [pickedDifficulty, setPickedDifficulty] = useState('medium');
 
-  async function handleStartFromHere() {
+  async function doStartFromHere(diff) {
     setFromPositionError(null);
     const N = currentRewindedMoves.length;
     try {
       const res = await fetch(`${API}/api/games/from-position`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameId, N, difficulty }),
+        body: JSON.stringify({ gameId, N, difficulty: diff }),
       });
       if (!res.ok) throw new Error('failed');
       const data = await res.json();
       go('game', { initialMoves: data.moves, side: data.side, difficulty: data.difficulty });
     } catch {
       setFromPositionError(t('sparring.reviewError'));
+    }
+  }
+
+  function handleStartFromHere() {
+    if (!difficulty) {
+      setDiffPickerOpen(true);
+    } else {
+      doStartFromHere(difficulty);
     }
   }
 
@@ -217,8 +234,8 @@ export function ExplorerScreen({
             timeoutContent={
               <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
                 {currentSelectedMove?.patternTag
-                  ? t(`coach.categories.${currentSelectedMove.patternTag}`, currentSelectedMove.patternTag)
-                  : t('coach.sparring.user_move.generic.0', 'Try a different approach.')}
+                  ? t(`mistakes.pattern.${currentSelectedMove.patternTag}`, currentSelectedMove.patternTag)
+                  : t('coach.generic.suboptimal.0')}
               </p>
             }
             boardContent={
@@ -347,6 +364,133 @@ export function ExplorerScreen({
           {t('sparring.deepReveal')}
         </button>
       </Toolbar>
+
+      {/* Difficulty picker bottom sheet — shown when papergames review has no difficulty */}
+      {diffPickerOpen && (
+        <>
+          <div
+            onClick={() => setDiffPickerOpen(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.45)',
+              zIndex: 100,
+            }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            background: '#fff',
+            colorScheme: 'light',
+            borderRadius: '20px 20px 0 0',
+            padding: '20px 18px 32px',
+            zIndex: 101,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 15,
+              color: 'var(--ink-soft)',
+              marginBottom: 2,
+            }}>
+              {t('sparring.chooseDifficulty')}
+            </div>
+
+            {DIFFICULTIES.map(d => {
+              const selected = pickedDifficulty === d.key;
+              return (
+                <button
+                  key={d.key}
+                  onClick={() => setPickedDifficulty(d.key)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    padding: '16px 18px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--card)',
+                    border: '2px solid',
+                    borderColor: selected ? 'var(--disc-green)' : 'var(--line)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    transition: 'border-color .12s, box-shadow .12s',
+                    boxShadow: selected ? 'var(--shadow-sm)' : 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        fontSize: 17,
+                        color: 'var(--ink)',
+                      }}>
+                        {t(`sparring.${d.key}`)}
+                      </span>
+                      {d.isDefault && (
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          fontFamily: 'var(--font-display)',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: 'var(--eval-good-bg)',
+                          color: 'var(--disc-green)',
+                          letterSpacing: 0.3,
+                        }}>
+                          DEFAULT
+                        </span>
+                      )}
+                    </div>
+                    <div style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 13,
+                      color: 'var(--ink-soft)',
+                      marginTop: 3,
+                      lineHeight: 1.3,
+                    }}>
+                      {t(d.subtitleKey)}
+                    </div>
+                  </div>
+                  <div style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    border: '2.5px solid',
+                    borderColor: selected ? 'var(--disc-green)' : 'var(--ink-faint)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'border-color .12s',
+                  }}>
+                    {selected && (
+                      <div style={{
+                        width: 13,
+                        height: 13,
+                        borderRadius: '50%',
+                        background: 'var(--disc-green)',
+                      }} />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+
+            <button
+              className="btn btn-primary"
+              onClick={() => { setDiffPickerOpen(false); doStartFromHere(pickedDifficulty); }}
+              style={{ marginTop: 6 }}
+            >
+              {t('sparring.startGame')}
+            </button>
+          </div>
+        </>
+      )}
 
     </div>
   );

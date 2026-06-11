@@ -44,7 +44,8 @@ Runs on every request. Extracts `Authorization: Bearer <jwt>`, validates via `su
 | POST | /api/puzzles/:id/check | optional | predicate eval + attempt record + blunder insert |
 | POST | /api/blunders | auth required | record sparring blunder (atomic upsert via DB unique index) |
 | POST | /api/games | auth/device | create game row |
-| POST | /api/games/analyze | optional | per-ply quality analysis (scoreMove + classify + blunderSeverity) |
+| GET | /api/games | auth required | merged list of AI sparring games + papergames imports, sorted by date, paginated; returns `{ games, total }` |
+| POST | /api/games/analyze | optional | per-ply quality analysis; falls back to `papergames_games` if gameId not in `games` |
 | GET | /api/coach/weakness-map | paid required | aggregate miss rates |
 | GET | /api/coach/queue | paid required | next unresolved blunder |
 | POST | /api/coach/queue/:id/resolve | paid required | mark blunder resolved |

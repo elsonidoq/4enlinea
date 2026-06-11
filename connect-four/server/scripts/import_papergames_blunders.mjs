@@ -1,19 +1,22 @@
 // import_papergames_blunders.mjs
-// Fetch Connect 4 games from papergames.io and import blunders into Supabase.
+// Fetch Connect 4 games from papergames.io, import games into papergames_games,
+// and import blunders into blunders (linked via papergames_game_id).
 //
 // Usage:
 //   node --env-file=connect-four/server/.env \
 //     connect-four/server/scripts/import_papergames_blunders.mjs \
 //     --user-id <supabase-uuid> \
-//     [--account-id <papergames-id>] \
-//     [--min-severity N]   only import blunders with severity >= N (default 5, range 0–10)
+//     [--account-id <papergames-id>]
 //
 // Papergames API (verified 2026-06-04):
 //   Rooms:  GET /api/profile/:id/rooms?accountId=X&start=N&limit=50&gameType=Connect4
 //           Response: { rooms: [...], count: number }
 //   Replay: GET /api/room/:uid/replay
 //           game.actions[i].action.x = 0-indexed column (0–6, no adjustment needed)
-//           replayData.players[j].symbol = 'circle-dark' (first) | 'circle-light' (second)
+//           replayData.game.actions[0].userId = accountId of the first player
+//           replayData.outcome.winnerAccountId — null on draw
+//           replayData.outcome.finishReason — e.g. 'connect4', 'time-up'
+//           replayData.durationMs — total game duration in ms
 
 import { createClient } from '@supabase/supabase-js';
 import { classify, tagBlunder } from '../classifier.js';
@@ -33,12 +36,11 @@ function parseArgs(argv) {
     if (argv[i] === '--user-id') args.userId = argv[i + 1];
     if (argv[i] === '--account-id') args.accountId = argv[i + 1];
     if (argv[i] === '--limit') args.limit = parseInt(argv[i + 1], 10);
-    if (argv[i] === '--min-severity') args.minSeverity = parseInt(argv[i + 1], 10);
   }
   return args;
 }
 
-const { userId, accountId = PAPERGAMES_ACCOUNT_ID, minSeverity = 5 } = parseArgs(process.argv.slice(2));
+const { userId, accountId = PAPERGAMES_ACCOUNT_ID } = parseArgs(process.argv.slice(2));
 if (!userId) { console.error('Missing --user-id <supabase-uuid>'); process.exit(1); }
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing env vars'); process.exit(1); }
@@ -73,17 +75,51 @@ function parseMoves(replayData) {
 }
 
 function getUserSide(replayData, accountId) {
-  const p = replayData.players.find(p => p.accountId === accountId);
-  if (!p) throw new Error(`accountId ${accountId} not in replay`);
-  return p.symbol === 'circle-dark' ? 'first' : 'second';
+  const firstAction = replayData.game.actions[0];
+  if (!firstAction) throw new Error('No actions in replay');
+  return firstAction.userId === accountId ? 'first' : 'second';
+}
+
+function getOpponent(replayData, accountId) {
+  return replayData.players.find(p => p.accountId !== accountId) ?? null;
+}
+
+function getResult(replayData, accountId) {
+  const winnerId = replayData.game?.outcome?.winnerAccountId ?? null;
+  if (!winnerId) return 'draw';
+  return winnerId === accountId ? 'win' : 'loss';
+}
+
+function buildGameRow(room, replayData, accountId, userId, side) {
+  const opponent = getOpponent(replayData, accountId);
+  return {
+    user_id: userId,
+    papergames_room_uid: room.uid,
+    papergames_account_id: accountId,
+    moves: parseMoves(replayData),
+    side,
+    result: getResult(replayData, accountId),
+    opponent_name: opponent?.name ?? 'Unknown',
+    opponent_account_id: opponent?.accountId ?? '',
+    opponent_avatar: opponent?.avatar ?? null,
+    opponent_country_code: opponent?.countryCode ?? null,
+    opponent_elo: opponent?.eloRating != null ? Math.round(opponent.eloRating) : null,
+    finish_reason: replayData.game?.outcome?.finishReason ?? null,
+    duration_ms: replayData.durationMs ?? null,
+    tournament_uid: replayData.tournamentUid ?? null,
+    played_at: room.createdAt,
+  };
 }
 
 function computeSeverity(bestScore, score) {
   return Math.round((bestScore - score) / 36 * 10);
 }
 
-async function extractBlunders(solver, moveString, side, userId, minSeverity) {
+// Returns { blunders, accuracy } where accuracy is 0–100 or null if no scored plies.
+// papergamesGameId is NOT set here — caller stamps it onto blunders before inserting.
+async function extractBlunders(solver, moveString, side, userId) {
   const toInsert = [];
+  let scored = 0, optimalCount = 0;
   for (let i = 0; i < moveString.length; i++) {
     const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
     if (!isUserPly) continue;
@@ -94,12 +130,13 @@ async function extractBlunders(solver, moveString, side, userId, minSeverity) {
       ? EMPTY_BOARD_SCORES
       : await solver.query(movesBefore);
     const legalCount = scores.filter(s => s !== INVALID_MOVE).length;
-    if (legalCount <= 1) continue; // forced move — skip
+    if (legalCount <= 1) continue; // forced move — skip accuracy + blunder scoring
+    scored++;
     const { quality, bestCol } = scoreMove(scores, col);
+    if (quality === 'optimal') { optimalCount++; continue; }
     if (quality !== 'blunder') continue;
     const score = scores[col];
     const bestScore = scores[bestCol];
-    if (computeSeverity(bestScore, score) < minSeverity) continue;
     let patternTag = 'suboptimal_move';
     let reason = 'solver error: tagBlunder failed';
     let direction = 'missed_own';
@@ -127,14 +164,25 @@ async function extractBlunders(solver, moveString, side, userId, minSeverity) {
       blunder_severity: severityFraction,
     });
   }
-  return toInsert;
+  const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : null;
+  return { blunders: toInsert, accuracy };
+}
+
+async function upsertGame(supabase, gameRow) {
+  const { data, error } = await supabase
+    .from('papergames_games')
+    .upsert(gameRow, { onConflict: 'papergames_room_uid', ignoreDuplicates: false })
+    .select('id')
+    .single();
+  if (error) throw new Error(`upsertGame ${gameRow.papergames_room_uid}: ${error.message}`);
+  return data.id;
 }
 
 async function main() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const solver = createSolverProcess();
 
-  console.log(`Fetching rooms for account ${accountId}... (min-severity=${minSeverity})`);
+  console.log(`Fetching rooms for account ${accountId}...`);
   const allRooms = [];
   let start = 0;
   let total = null;
@@ -175,13 +223,26 @@ async function main() {
 
     if (!moveString || moveString.length === 0) { skippedNoMoves++; continue; }
 
-    let toInsert;
-    try { toInsert = await extractBlunders(solver, moveString, side, userId, minSeverity); }
-    catch (e) {
+    // Run solver analysis first so accuracy is available for the game row.
+    let blunders, accuracy;
+    try {
+      ({ blunders, accuracy } = await extractBlunders(solver, moveString, side, userId));
+    } catch (e) {
       process.stderr.write(`\nSolver error ${room.uid}: ${e.message}\n`);
       skippedErrors++; continue;
     }
 
+    let papergamesGameId;
+    try {
+      const gameRow = { ...buildGameRow(room, replayData, accountId, userId, side), accuracy };
+      papergamesGameId = await upsertGame(supabase, gameRow);
+    } catch (e) {
+      process.stderr.write(`\nGame upsert error ${room.uid}: ${e.message}\n`);
+      skippedErrors++; continue;
+    }
+
+    // Stamp the game ID onto each blunder now that we have it.
+    const toInsert = blunders.map(b => ({ ...b, papergames_game_id: papergamesGameId }));
     totalBlunders += toInsert.length;
 
     if (toInsert.length > 0) {

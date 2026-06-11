@@ -25,6 +25,8 @@ export function ReviewScreen({ go, goBack, id }) {
   const [error, setError] = useState(null);
   const [selectedMistakeIdx, setSelectedMistakeIdx] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [gameBlunderList, setGameBlunderList] = useState([]);
+  const [gameDate, setGameDate] = useState('');
 
   function handleShare() {
     const url = window.location.href;
@@ -72,12 +74,31 @@ export function ReviewScreen({ go, goBack, id }) {
         setSelectedMistakeIdx(0);
         setLoading(false);
 
+        // Derive formatted game date
+        const rawDate = data.gameDate; // ISO 8601
+        const formattedDate = rawDate
+          ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '';
+        setGameDate(formattedDate);
 
         // Analytics
         const accuracy = data.scored > 0
           ? Math.round(data.optimalCount / data.scored * 100)
           : null;
         track('game_reviewed', { gameId: id, accuracy, blunderCount: data.blunderCount });
+
+        // Fire-and-forget: fetch game blunder list for ✕-node navigation
+        if (session?.access_token) {
+          fetch(`${API}/api/coach/queue?game_id=${id}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
+            .then(r => r.ok ? r.json() : { blunders: [] })
+            .then(d => {
+              const sorted = (d.blunders || []).slice().sort((a, b) => a.moveIndex - b.moveIndex);
+              setGameBlunderList(sorted);
+            })
+            .catch(() => setGameBlunderList([]));
+        }
       })
       .catch(() => {
         setError(t('sparring.reviewError'));
@@ -91,6 +112,25 @@ export function ReviewScreen({ go, goBack, id }) {
     : [];
 
   function navigateToMistake(moveIndex) {
+    // Resolve the move object from analysis
+    const move = analysis.moves.find(m => m.moveIndex === moveIndex);
+
+    if (move?.quality === 'blunder') {
+      const globalPlyIndex = analysis.side === 'first'
+        ? 2 * (moveIndex - 1)
+        : 2 * (moveIndex - 1) + 1;
+      const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
+      if (matchedIdx !== -1) {
+        go('blunderDetail', {
+          blunderNavList: gameBlunderList,
+          index: matchedIdx,
+          mistakeContext: 'game',
+          mistakeSource: { date: gameDate, gameId: id, totalMoves: analysis.fullMovestring.length },
+        });
+        return;
+      }
+    }
+    // suboptimal nodes, or blunder with no match → Explorer fallback
     go('explorer', {
       gameId: id,
       moveIndex,
@@ -268,14 +308,37 @@ export function ReviewScreen({ go, goBack, id }) {
                     <button
                       key={move.moveIndex}
                       type="button"
-                      onClick={isOptimal ? undefined : () => go('explorer', {
-                        gameId: id,
-                        moveIndex: move.moveIndex,
-                        moves: analysis.moves,
-                        difficulty: analysis.difficulty,
-                        side: analysis.side,
-                        fullMovestring: analysis.fullMovestring,
-                      })}
+                      onClick={isOptimal ? undefined : () => {
+                        if (move.quality === 'blunder') {
+                          const side = analysis.side; // 'first' | 'second'
+                          const globalPlyIndex = side === 'first'
+                            ? 2 * (move.moveIndex - 1)
+                            : 2 * (move.moveIndex - 1) + 1;
+                          const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
+                          if (matchedIdx !== -1) {
+                            go('blunderDetail', {
+                              blunderNavList: gameBlunderList,
+                              index: matchedIdx,
+                              mistakeContext: 'game',
+                              mistakeSource: {
+                                date: gameDate,
+                                gameId: id,
+                                totalMoves: analysis.fullMovestring.length,
+                              },
+                            });
+                            return;
+                          }
+                        }
+                        // Fallback: suboptimal node, or blunder with no match
+                        go('explorer', {
+                          gameId: id,
+                          moveIndex: move.moveIndex,
+                          moves: analysis.moves,
+                          difficulty: analysis.difficulty,
+                          side: analysis.side,
+                          fullMovestring: analysis.fullMovestring,
+                        });
+                      }}
                       style={{
                         width: 36,
                         height: 36,

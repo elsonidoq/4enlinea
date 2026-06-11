@@ -119,6 +119,39 @@ Index: `(device_uuid, created_at DESC)` for per-device game listing (Epic 3b).
 RLS: Disabled (server accesses via service-role key).
 Grants: `GRANT SELECT, INSERT ON public.games TO anon, authenticated;`
 
+## PaperGames Games (`papergames_games`)
+
+Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. Separate from `games` (AI sparring) because the data shape is different: no `difficulty`, and opponent metadata is stored.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `uuid` | PK, `DEFAULT gen_random_uuid()` |
+| `user_id` | `uuid` | nullable FK → `auth.users(id)`, `ON DELETE SET NULL` |
+| `papergames_room_uid` | `text` | NOT NULL, UNIQUE — deduplication key (e.g. `"BfsnYZBT5"`) |
+| `papergames_account_id` | `text` | NOT NULL — user's papergames account ID |
+| `moves` | `text` | NOT NULL, 0-indexed movestring |
+| `side` | `text` | NOT NULL, CHECK IN ('first','second') |
+| `result` | `text` | NOT NULL, CHECK IN ('win','loss','draw') |
+| `opponent_name` | `text` | NOT NULL |
+| `opponent_account_id` | `text` | NOT NULL |
+| `opponent_avatar` | `text` | nullable — UUID; avatar URL = `https://papergames.io/en/assets/images/avatars/{uuid}.svg` |
+| `opponent_country_code` | `text` | nullable — ISO 2-letter code |
+| `opponent_elo` | `integer` | nullable — Elo rating at time of game |
+| `finish_reason` | `text` | nullable — e.g. `'connect4'`, `'time-up'` |
+| `duration_ms` | `integer` | nullable — total game duration |
+| `tournament_uid` | `text` | nullable — papergames tournament identifier |
+| `played_at` | `timestamptz` | NOT NULL — `createdAt` from the papergames room |
+| `accuracy` | `real` | nullable — % of optimal user plies (0–100); computed during import by `import_papergames_blunders.mjs`; null for rows imported before migration 039 |
+| `created_at` | `timestamptz` | NOT NULL, DEFAULT `now()` — import timestamp |
+
+Index: `(user_id, played_at DESC)` for per-user game listing.
+RLS: Disabled (server accesses via service-role key).
+Migrations: `038_papergames_games.sql` (table + `blunders.papergames_game_id`), `039_papergames_accuracy.sql` (accuracy column).
+
+The `blunders` table has `papergames_game_id uuid nullable FK → papergames_games(id) ON DELETE SET NULL` (added by migration 038). This is separate from `game_id` which links to AI sparring games.
+
+`import_papergames_blunders.mjs` computes accuracy in the same solver pass as blunder extraction (optimal/scored plies ratio), then upserts it into the game row. Re-import is required to populate accuracy for rows created before migration 039.
+
 ## GameAnalysis (ephemeral — not persisted)
 
 `GameAnalysis` is computed on demand by `POST /api/games/analyze` and never stored. Shape:

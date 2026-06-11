@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildBoard, checkWin } from './board.js';
 import {
@@ -8,23 +8,9 @@ import {
   sampleColumnFromScores,
   secondBestColumn,
 } from './aiDifficulty.js';
+import { pickRandomKey } from './coachUtils.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
-
-/**
- * Pick a random i18n key from a prefixed pool (e.g. 'coach.sparring.ai_move')
- * by probing t(key + '.0'), t(key + '.1'), ... until t() returns the key itself (not found).
- */
-function pickRandomKey(t, prefix) {
-  const indices = [];
-  for (let i = 0; i < 10; i++) {
-    const fullKey = `${prefix}.${i}`;
-    if (t(fullKey) !== fullKey) indices.push(i);
-  }
-  if (indices.length === 0) return `${prefix}.0`;
-  const idx = indices[Math.floor(Math.random() * indices.length)];
-  return `${prefix}.${idx}`;
-}
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -63,6 +49,10 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   const fullCols = heights
     .map((h, i) => (h >= 6 ? i : -1))
     .filter((i) => i !== -1);
+
+  // Tracks phrase keys used in this game to avoid repetition within a session.
+  const usedPhraseKeysRef = useRef(new Set());
+  const trackPhrase = (key) => { usedPhraseKeysRef.current.add(key); return key; };
 
   // ── Helpers ────────────────────────────────────────────────────
   function updateCoach(text, mood, replace = false) {
@@ -109,7 +99,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       setHintOverlays(bestCols);
 
       // Show generic hint phrase
-      const key = pickRandomKey(t, 'coach.sparring.hint.generic');
+      const key = trackPhrase(pickRandomKey(t, 'coach.sparring.hint.generic', usedPhraseKeysRef.current));
       updateCoach(t(key), 'think');
     } catch (e) {
       // Silently handle network errors
@@ -134,23 +124,54 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   }, []);
 
   // ── AI move logic ──────────────────────────────────────────────
-  async function commitAiMove(currentMoves, aiCol, isDeliberate) {
+  async function commitAiMove(currentMoves, aiCol, classificationPromise) {
     const newHistory = [...currentMoves, aiCol];
     const { board: newBoard, heights: newHeights } = buildBoard(
       newHistory.join(''),
     );
     const row = newHeights[aiCol] - 1;
 
+    // Board state mutations run BEFORE awaiting classification (FR-006)
     setMoveHistory(newHistory);
     setLastDrop({ c: aiCol, r: row });
 
-    // Coach phrase — replace intro on side='second' opening
-    const phrasePool = isDeliberate
-      ? 'coach.sparring.deliberate_mistake'
-      : 'coach.sparring.ai_move';
-    const phraseKey = pickRandomKey(t, phrasePool);
+    // Await classification result (null on network error / HTTP error / auto-play skip)
+    const classification = await classificationPromise;
+
+    // Quality-gated coach phrase selection (FR-007)
+    let phraseKey, mood;
+    const patternPool = classification?.patternTag
+      ? `coach.ai_move.${classification.patternTag}`
+      : null;
+
+    const used = usedPhraseKeysRef.current;
+    if (!classification) {
+      // Null classification (network error, HTTP error, missing quality, or auto-play skip)
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      mood = 'think';
+    } else if (classification.quality !== 'optimal') {
+      // Suboptimal or blunder AI move → suboptimal pool
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.suboptimal', used));
+      mood = 'oops';
+    } else if (patternPool) {
+      // Quality is optimal, patternTag is non-null — probe pool existence
+      const probe = `${patternPool}.0`;
+      if (t(probe) !== probe) {
+        phraseKey = trackPhrase(pickRandomKey(t, patternPool, used));
+        mood = 'think';
+      } else {
+        phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+        mood = 'think';
+      }
+    } else {
+      // Optimal quality but no patternTag → neutral fallback
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      mood = 'think';
+    }
+
+    // FR-008: preserve intro-replacement when side='second' and empty board
     const replace = currentMoves.length === 0 && side === 'second';
-    updateCoach(t(phraseKey), isDeliberate ? 'oops' : 'think', replace);
+    updateCoach(t(phraseKey), mood, replace);
 
     // Check AI win
     if (checkWin(newBoard, row, aiCol, aiColor)) {
@@ -198,7 +219,20 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
         legalCols.length > 0
           ? legalCols[Math.floor(Math.random() * legalCols.length)]
           : 3;
-      await commitAiMove(currentMoves, aiCol, false);
+      const classifyPromise = (currentMoves.length === 0 && side === 'second')
+        ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
+        : fetch(`${API}/api/evaluate-move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
+          })
+          .then(async r => {
+            if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
+            const data = await r.json();
+            return data.quality !== undefined ? data : null; // missing quality → neutral fallback
+          })
+          .catch(() => null);     // network error → neutral fallback (SC-006)
+      await commitAiMove(currentMoves, aiCol, classifyPromise);
       return;
     }
 
@@ -225,7 +259,24 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       aiCol = sampleColumnFromScores(scores, temp);
     }
 
-    await commitAiMove(currentMoves, aiCol, isDeliberate);
+    if (import.meta.env.DEV && isDeliberate) {
+      console.log('[deliberate_mistake] applied', { aiCol });
+    }
+
+    const classifyPromise = (currentMoves.length === 0 && side === 'second')
+      ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
+      : fetch(`${API}/api/evaluate-move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
+        })
+        .then(async r => {
+          if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
+          const data = await r.json();
+          return data.quality !== undefined ? data : null; // missing quality → neutral fallback
+        })
+        .catch(() => null);     // network error → neutral fallback (SC-006)
+    await commitAiMove(currentMoves, aiCol, classifyPromise);
   }
 
   // ── User move handler ──────────────────────────────────────────
@@ -259,21 +310,20 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
       let coachText;
       let coachMood = 'happy';
+      const used = usedPhraseKeysRef.current;
       if (data.coachPhraseKey) {
+        trackPhrase(data.coachPhraseKey);
         coachText = t(data.coachPhraseKey);
         coachMood = data.coachMood || 'happy';
       } else if (data.quality === 'blunder') {
         // Fallback for blunders without category-specific keys:
         // use the generic blunder pool so the coach signals the mistake
-        const key = pickRandomKey(t, 'coach.generic.blunder');
+        const key = trackPhrase(pickRandomKey(t, 'coach.generic.blunder', used));
         coachText = t(key);
         coachMood = data.coachMood || 'oops';
       } else {
-        // Fallback: random generic phrase for non-blunder moves
-        const key = pickRandomKey(
-          t,
-          'coach.sparring.user_move.generic',
-        );
+        // Fallback: random generic phrase for non-blunder moves (FR-011)
+        const key = trackPhrase(pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used));
         coachText = t(key);
       }
       updateCoach(coachText, coachMood);

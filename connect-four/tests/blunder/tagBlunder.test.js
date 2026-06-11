@@ -68,14 +68,15 @@ describe('tagBlunder - pattern detection', () => {
     }
   }, { timeout: 60_000 });
 
-  // missed_own: pre-move has forced_win, playing wrong col loses it
+  // missed_own: no tactical pattern detected — all scores equally bad, no forcing chain
   it('returns missed_own when blunderer loses a pattern', async () => {
     const solver = await createSolverProcess();
     try {
+      // '3233333556': all solver scores are -2, no tactical forcing chain exists.
+      // Old score-based forced_win incorrectly fired here; correct result is suboptimal_move.
       const result = await tagBlunder('3233333556', 0, 2, solver);
-      assert.equal(result.tag, 'forced_win');
+      assert.equal(result.tag, 'suboptimal_move');
       assert.equal(result.direction, 'missed_own');
-      assert.ok(result.reason.startsWith('matched missed_own:'));
     } finally {
       solver.destroy();
     }

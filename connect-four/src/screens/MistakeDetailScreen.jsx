@@ -12,17 +12,17 @@ import { track } from '../lib/track.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, index: initialIndex, status: _status }) {
+export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index: initialIndex, mistakeContext, mistakeSource }) {
   const { t } = useTranslation();
   const { session } = useStore();
 
+  const blunders = navList ?? [];
   const [index, setIndex] = useState(initialIndex ?? 0);
   const [resolving, setResolving] = useState(false);
   const [highlightCol, setHighlightCol] = useState(null);
   const [zhCells, setZhCells] = useState([]);
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
 
-  const blunders = initialBlunders || [];
   const blunder = blunders[index];
   const isReviewed = blunder?.resolved_at != null;
 
@@ -63,14 +63,55 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
     return result;
   }, [blunder, boardObj, highlightCol]);
 
+  // Back navigation: contextual based on mistakeContext
+  function handleBack() {
+    if (mistakeContext === 'game' && mistakeSource?.gameId) {
+      go('review', { id: mistakeSource.gameId });
+    } else {
+      goBack();
+    }
+  }
+
   if (!blunder) {
     return (
       <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-        <TopBar title={t('mistakes.detail.topbarTitle')} onBack={goBack} />
+        <TopBar title={t('mistakes.detail.topbarTitle')} onBack={handleBack} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--ink-soft)' }}>
-          No data
+          {t('mistakes.detail.noBlunderFound', 'no blunder found')}
         </div>
       </div>
+    );
+  }
+
+  const displayMoveNumber = (blunder.moveIndex ?? 0) + 1;
+
+  // TopBar meta content
+  let metaContent;
+  if (mistakeSource) {
+    metaContent = (
+      <button
+        onClick={() => go('review', { id: mistakeSource.gameId })}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--ink-soft)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          padding: 0,
+          fontFamily: 'inherit',
+          textDecoration: 'underline',
+          textUnderlineOffset: 2,
+        }}
+      >
+        {`Move ${displayMoveNumber} / ${mistakeSource.totalMoves} · ${mistakeSource.date} ›`}
+      </button>
+    );
+  } else {
+    metaContent = (
+      <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
+        {`Move ${displayMoveNumber} / ${blunders.length}`}
+      </span>
     );
   }
 
@@ -78,14 +119,18 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
     setHighlightCol(null);
     setDeepRevealOpen(false);
     setZhCells([]);
-    setIndex((index - 1 + blunders.length) % blunders.length);
+    if (index > 0) {
+      setIndex(index - 1);
+    }
   }
 
   function handleNext() {
     setHighlightCol(null);
     setDeepRevealOpen(false);
     setZhCells([]);
-    setIndex((index + 1) % blunders.length);
+    if (index < blunders.length - 1) {
+      setIndex(index + 1);
+    }
   }
 
   async function handleMarkReviewed() {
@@ -109,8 +154,6 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
     }
   }
 
-  const moveNumber = (blunder.board_state || '').length + 1;
-
   const coachMessages = [
     { text: t('mistakes.detail.coach.line1', { n: blunder.move_played + 1 }), mood: 'think' },
     { text: t('mistakes.detail.coach.line2'), mood: 'think' },
@@ -120,8 +163,8 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
     <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         title={t('mistakes.detail.topbarTitle')}
-        onBack={goBack}
-        meta={t('mistakes.detail.moveLabel', { n: moveNumber })}
+        onBack={handleBack}
+        meta={metaContent}
       />
 
       {deepRevealOpen ? (
@@ -273,6 +316,7 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
       <Toolbar>
         <button
           onClick={handlePrev}
+          disabled={index === 0}
           style={{
             flex: 1,
             display: 'flex',
@@ -286,15 +330,26 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
             color: 'var(--ink)',
             fontWeight: 700,
             fontSize: 14,
-            cursor: 'pointer',
+            cursor: index === 0 ? 'default' : 'pointer',
             fontFamily: 'inherit',
+            opacity: index === 0 ? 0.4 : 1,
           }}
         >
           <Icon name="chevL" size={20} />
           Prev
         </button>
+        <span style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--ink-soft)',
+          padding: '0 12px',
+          whiteSpace: 'nowrap',
+        }}>
+          {`${index + 1} of ${blunders.length}`}
+        </span>
         <button
           onClick={handleNext}
+          disabled={index === blunders.length - 1}
           style={{
             flex: 1,
             display: 'flex',
@@ -308,8 +363,9 @@ export function MistakeDetailScreen({ go, goBack, blunders: initialBlunders, ind
             color: 'var(--ink)',
             fontWeight: 700,
             fontSize: 14,
-            cursor: 'pointer',
+            cursor: index === blunders.length - 1 ? 'default' : 'pointer',
             fontFamily: 'inherit',
+            opacity: index === blunders.length - 1 ? 0.4 : 1,
           }}
         >
           Next
