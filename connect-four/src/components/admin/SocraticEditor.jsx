@@ -57,6 +57,24 @@ export default function SocraticEditor({ enabled, socratic, onChange }) {
 
       {enabled && socratic && (
         <>
+          <div>
+            <div style={label}>Board instructions</div>
+            <textarea
+              readOnly
+              value={socratic._boardInstructions ?? ''}
+              rows={3}
+              style={{
+                width: '100%', marginTop: 6, padding: '8px 10px',
+                borderRadius: 6, border: '1px solid #444',
+                background: '#111', resize: 'vertical', boxSizing: 'border-box',
+                color: socratic._boardInstructions ? '#fff' : '#666',
+                fontStyle: socratic._boardInstructions ? 'normal' : 'italic',
+                fontSize: 13,
+              }}
+              placeholder="(no board instructions)"
+            />
+          </div>
+
           <BoardEditor
             label="Socratic position"
             movestring={socratic.movestring ?? ''}

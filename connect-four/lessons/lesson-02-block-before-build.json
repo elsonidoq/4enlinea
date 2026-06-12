@@ -219,6 +219,7 @@
     }
   ],
   "socratic": {
+    "_boardInstructions": "Show a minimal board where Red has three horizontal discs across the bottom of columns 0, 1, and 2 (row 0), leaving column 3 row 0 as the only empty cell that completes Red's four-in-a-row — it is immediately playable since nothing is below it. Yellow has two discs at row 0 in columns 5 and 6, making column 4 look like a tempting building move. Mark Red's completing cell at col 3 row 0 with 'tg' (this is the mandatory block) and the tempting Yellow building cell at col 4 row 0 with 'td' (the trap — playing here hands Red the win). No other overlays are needed. The student must choose col 3 to block Red's immediate threat rather than extend their own position.",
     "movestring": "",
     "boardSpec": [
       "",

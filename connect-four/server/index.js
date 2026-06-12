@@ -14,6 +14,7 @@ import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { callLLM } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
+import { registerUserRoutes } from './userRoutes.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -180,6 +181,9 @@ async function loadUser(req, _res, next) {
 }
 
 app.use(loadUser);
+
+// ── User data endpoints (/api/user/*) ──
+registerUserRoutes(app, supabase);
 
 // ── Deep Reveal quota helper ──────────────────────────────────────────────────
 

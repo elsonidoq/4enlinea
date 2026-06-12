@@ -66,6 +66,7 @@
     }
   ],
   "socratic": {
+    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat at row 2 in two different columns: column 3 and one other column (e.g., column 6). Column 3 already has exactly one disc at the bottom (row 0), so the gap from the column top to the threat is 1 cell (odd) — making it a Z-Threat. The distractor column is fully empty, so its gap to row 2 is 2 cells (even) — not a Z-Threat. Mark Yellow's threat cell in column 3 with 'tg' and the threat cell in the distractor column with 'td'. The student must notice that the single disc in column 3 shifts the parity — the same row number, opposite ownership.",
     "goalPrompt": "Which column contains Yellow's Z-Threat?",
     "boardSpec": ["ggd", "ggd", "ggd", "dd", "", "", ""],
     "correctCol": 3

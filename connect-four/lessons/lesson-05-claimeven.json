@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "Red just played in one column, landing on an even-indexed row. Which column should Yellow play to claim the cell directly above and neutralise Red's threat?",
-    "_boardInstructions": "Show a mid-game position where Red has just played in one column landing on row 0 (even-indexed), leaving the row 1 cell above empty and unclaimed. There should also be another column where the cell above Red's last disc is already occupied (so that column is not a valid Claimeven target). The student must identify the column where the valid Claimeven response is available — the one where both the Red disc is on an even row AND the cell directly above is empty.",
+    "_boardInstructions": "Show a mid-game board (8–10 discs total) where two columns each have a Red disc on row 0. In col 3, the cell at row 1 directly above Red is empty — this is the valid Claimeven target. In a second column (e.g., col 1), the cell at row 1 above Red is already occupied by Yellow, ruling it out as a Claimeven play. Include a horizontal Red three-in-a-row threat whose completing cell passes through col 3 row 1, making the Claimeven motivation concrete. The student must play col 3 as the only open column where Yellow can claim the row directly above Red's even-row disc.",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 3
   },

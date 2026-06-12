@@ -66,6 +66,7 @@ function lessonToJsonPayload(lesson) {
       boardSpec: convertBoard(rest.socratic.movestring),
       overlays: rest.socratic.overlays ?? [],
       correctCol: rest.socratic.correctCol,
+      _boardInstructions: rest.socratic._boardInstructions ?? '',
     } : null,
   };
 }
@@ -105,6 +106,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
             ...data.socratic,
             movestring: data.socratic.movestring ?? '',
             overlays: data.socratic.overlays ?? [],
+            _boardInstructions: data.socratic._boardInstructions ?? '',
           } : null,
           confirmationChallenges: data.confirmationChallenges ?? [],
         };

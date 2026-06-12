@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/029-coach-commentary/plan.md
+specs/030-server-mediated-data-access/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

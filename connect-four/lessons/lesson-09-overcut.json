@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "Yellow's threat sits directly above Red's threat in the same column. The column has an odd number of empty cells and it is Yellow's turn. Which column wins?",
-    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat completing at col C row R, Red has a horizontal major threat completing at col C row R-1 (directly below Yellow's), the column has an odd number of empty cells, and it is Yellow's turn. Row R should belong exclusively to Yellow (no shared threat). The correct answer is col C. Make both threat lines and their shared column clearly identifiable.",
+    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat completing at col C at an odd-indexed row R, and Red has a horizontal major threat completing in the same col C at the even-indexed row R-1 directly below. Col C must have an odd number of empty cells and it must be Yellow's turn. Row R belongs exclusively to Yellow — Red has no threat through that cell. Mark Yellow's threat cell at row R with 'tg' and Red's threat cell at row R-1 with 'td'. Yellow wins by playing col C: the disc lands at R-1 (blocking Red's threat), and row R immediately becomes the next available cell, turning Yellow's threat into a direct check. No same-parity complications or shared-cell gotchas — keep the position clean so the active-forcing mechanic is the only thing at work.",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 3
   },

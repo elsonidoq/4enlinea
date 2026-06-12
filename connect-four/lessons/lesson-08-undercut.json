@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "Which column lets Yellow win by undercutting Red's threat — placing Yellow's winning cell directly below Red's?",
-    "_boardInstructions": "Show a mid-game position where Red has a clear horizontal major threat completing in col C at some odd-indexed row, and Yellow has three discs forming a horizontal line completing in the same col C at the even-indexed row directly below. Yellow should play col C to win immediately via the undercut. No same-parity complications. Make the two threat lines and their shared column visually clear.",
+    "_boardInstructions": "Show a mid-game position (10–14 discs total) where col 2 has exactly 2 discs already placed (rows 0–1 filled, row 2 is the next playable cell). Red has a horizontal major threat completing at col 2 row 3 (odd-indexed), and Yellow has a horizontal major threat completing at col 2 row 2 (even-indexed, directly below — the very next cell in the column). Mark Yellow's row-2 cell with 'tg' (fires immediately — the undercut) and Red's row-3 cell with 'td' (killed by gravity; col 2 row 3 is never reached because Yellow wins the instant the column is touched). Legend: 'tg' = Yellow's winning cell (lower threat, fires first), 'td' = Red's dead threat (upper, blocked). Yellow plays col 2 to win instantly.",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 2
   },

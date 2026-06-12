@@ -203,10 +203,8 @@ export class IndexedDBStore {
     });
   }
 
-  // T017 — extended migrateToSupabase (all-or-nothing)
-  async migrateToSupabase(supabaseStore, supabaseClient) {
-    const profile = await this.getProfile();
-
+  // T033 — migrateToSupabase via POST /api/user/migrate (all-or-nothing)
+  async migrateToSupabase(_supabaseStore, supabaseClient) {
     // Step 1: Read ALL data from IndexedDB in parallel
     const db = await this._db();
     const [attempts, lessonRows, sparringRecord, sessionRows, streak] = await Promise.all([
@@ -221,65 +219,41 @@ export class IndexedDBStore {
       this.getStreak(),
     ]);
 
-    // Step 2: Write ALL data to Supabase in parallel (throws on any failure)
-    await Promise.all([
-      // puzzle_attempts bulk insert
-      (async () => {
-        if (attempts.length === 0) return;
-        const { error } = await supabaseClient
-          .from('puzzle_attempts')
-          .insert(attempts.map(a => ({
-            puzzle_id: a.puzzle_id,
-            device_uuid: profile.device_uuid,
-            moves_tried: a.moves_tried || [],
-            outcome: a.outcome,
-            first_attempt_correct: a.first_attempt_correct,
-            time_ms: a.time_ms,
-            created_at: a.created_at,
-          })));
-        if (error) throw new Error(`Migration failed (puzzle_attempts): ${error.message}`);
-      })(),
+    // Step 2: Get auth token from supabaseClient (not supabaseStore)
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Migration failed: not authenticated');
 
-      // lesson_progress
-      (async () => {
-        for (const row of lessonRows) {
-          await supabaseStore.saveLessonProgress(row.lessonId, row.status);
-        }
-      })(),
+    // Step 3: POST all data to /api/user/migrate — single atomic request
+    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+    const res = await fetch(`${apiBase}/api/user/migrate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        puzzle_attempts: attempts,
+        session_stats: sessionRows,
+        lesson_progress: lessonRows,
+        sparring_record: sparringRecord,
+        streak,
+      }),
+    });
 
-      // sparring_record — direct UPDATE to avoid double-increment
-      (async () => {
-        const { error } = await supabaseClient
-          .from('users')
-          .update({ sparring_record: sparringRecord })
-          .eq('id', supabaseStore._userId);
-        if (error) throw new Error(`Migration failed (sparring_record): ${error.message}`);
-      })(),
+    // Step 4: Throw on non-204 — do NOT clear IndexedDB
+    if (!res.ok) {
+      let errMsg = `Migration failed: HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body.error) errMsg += ` — ${body.error}`;
+      } catch {
+        // response body not JSON — keep status-only message
+      }
+      throw new Error(errMsg);
+    }
 
-      // session_stats — upsert each row
-      (async () => {
-        for (const row of sessionRows) {
-          const { error } = await supabaseClient
-            .from('session_stats')
-            .upsert(
-              { user_id: supabaseStore._userId, date: row.date, stats: row },
-              { onConflict: 'user_id,date' }
-            );
-          if (error) throw new Error(`Migration failed (session_stats): ${error.message}`);
-        }
-      })(),
-
-      // streak
-      (async () => {
-        const { error } = await supabaseClient
-          .from('users')
-          .update({ streak_count: streak.streak_count, last_active_date: streak.last_active_date })
-          .eq('id', supabaseStore._userId);
-        if (error) throw new Error(`Migration failed (streak): ${error.message}`);
-      })(),
-    ]);
-
-    // Step 3: Only after ALL writes succeed, clear all IndexedDB stores
+    // Step 5: Only after success (204), clear all 5 IndexedDB stores
     await new Promise((resolve, reject) => {
       const tx = db.transaction(
         ['puzzle_attempts', 'session_stats', 'lesson_progress', 'sparring_record', 'streak'],

@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "Two columns each have an empty cell at row 2. In which column does Red naturally land on row 2 as the columns fill up?",
-    "_boardInstructions": "Show a mid-game board with two candidate columns: Column A has 0 discs (empty), Column B has 1 disc (Red at row 0). Both have an empty cell at row 2. The student must identify Column A (height 0, row 2 → even gap of 2 → Red lands there) as the column where Red owns row 2. Mark the two candidate cells but leave the student to reason about which belongs to Red.",
+    "_boardInstructions": "Place one Red disc at row 0 of col 4 only; all other columns are empty. Both col 2 and col 4 have an empty cell at row 2 — mark both so the student can compare them. Mark col 2 row 2 with 'tg': column height is 0, gap to row 2 is 2 (even), so Red lands there. Mark col 4 row 2 with 'td': column height is 1, gap to row 2 is 1 (odd), so Yellow lands there instead. The student clicks the column where Red naturally reaches row 2 as the column fills.",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": null
   },

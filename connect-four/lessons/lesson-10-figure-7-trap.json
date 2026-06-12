@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "Yellow has a Figure-7 pattern hidden in this position. Find the two threat cells and name the column they share.",
-    "_boardInstructions": "Use the KB worked example movestring 43222430403 (Red has the canonical Figure-7 with threats at col 6 row 3 and col 6 row 4, all Yellow solver scores are -12 to -14). Present the board from Red's perspective. The student must identify the shared column (col 6, 0-indexed) and both threat rows. This tests pure shape recognition in a cluttered mid-game context.",
+    "_boardInstructions": "Show a mid-game position (10–14 discs) where Yellow has exactly five discs in a canonical Figure-7 shape: three on an ascending diagonal (col 1 row 0, col 2 row 1, col 3 row 2) and two on a horizontal arm at the same height (col 1 row 2, col 2 row 2), sharing the hinge at col 3 row 2. Both Yellow threat cells — the horizontal extension at col 4 row 2 and the diagonal extension at col 4 row 3 — land in col 4 on adjacent rows; keep col 4 empty so both threats are latent (above gravity), making this a zugzwang trap rather than a plain fork. Mark the five Figure-7 discs with 'win' overlays and both threat cells with 'tg' overlays. Add 5–7 Red discs for mid-game realism but do not introduce competing Red threats. The student must click col 4 to identify it as the column that holds both threat cells.",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 4
   },

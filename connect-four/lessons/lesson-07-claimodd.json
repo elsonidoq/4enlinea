@@ -54,6 +54,7 @@
     }
   ],
   "socratic": {
+    "_boardInstructions": "Show an all-even mid-game position where Red has three discs forming a horizontal major threat completing at col 3 row 5 (the top cell of an otherwise empty center column). Every column currently has an even number of empty cells — col 3 has 6, so Yellow would make the sixth and final move there, not Red. Red must play col 3 first: that converts it from 6 empty cells to 5 (odd), guaranteeing Red makes the last move in that column and lands on the threat. Mark col 3's top cell (row 5) with 'tg' to indicate Red's winning target. Mark the top empty cells of two flanking columns (e.g., cols 1 and 5) with 'td' to show that playing elsewhere leaves col 3 even-count — Yellow would claim row 5 instead.",
     "goalPrompt": "Every column has an even number of empty cells. Where does Red play to guarantee that column will end with Red's move?",
     "boardSpec": ["gd", "gd", "gd", "gd", "gd", "gd", "gd"],
     "correctCol": 3

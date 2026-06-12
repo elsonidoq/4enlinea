@@ -201,6 +201,7 @@
     }
   ],
   "socratic": {
+    "_boardInstructions": "Yellow has three discs stacked vertically in col 0 at rows 0, 1, and 2; playing col 0 again drops a disc at row 3 and completes a vertical four-in-a-row — mark col 0 row 3 with 'tg'. Col 3 holds two Yellow discs (rows 0 and 1), which looks like a promising horizontal setup; mark col 3 row 2 with 'td' to flag it as tempting but not an immediate win. Col 1 carries three Red discs at rows 0–2 topped by a Yellow disc at row 3, adding board density without giving Red an active immediate threat. The student's task is to spot the single column whose stack is already three deep and play it to win right now.",
     "movestring": "320101311201",
     "boardSpec": [
       "ggg",

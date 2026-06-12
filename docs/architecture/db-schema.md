@@ -253,3 +253,17 @@ Unique: `stripe_event_id`
 | payload | jsonb | NO | |
 | processed_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
+
+---
+
+## Security posture (established spec 030)
+
+**Server-side service-role key**: All `/api/user/*` endpoints use the Supabase service-role key (`SUPABASE_SERVICE_ROLE_KEY`) server-side. The service-role key bypasses all Row-Level Security (RLS) policies. The browser anon key (`VITE_SUPABASE_ANON_KEY`) is now used exclusively for `supabase.auth.*` calls (sign-in, sign-up, token refresh). Data reads and writes never go through the anon key.
+
+**Primary access control**: Every `/api/user/*` endpoint enforces ownership by filtering all queries with `user_id = req.user.id` (or `id = req.user.id` for the `users` table). The `req.user` object is populated by the `loadUser` middleware, which validates the JWT via `supabase.auth.getUser(token)` and fetches the user's profile row from `public.users`. If the token is invalid or absent, `req.user` is null and every data endpoint returns `401 Unauthorized`.
+
+**Defense-in-depth**: Existing RLS policies on `session_stats`, `puzzle_attempts`, `lesson_progress`, and other tables remain in place as a second layer of protection. If a future code path bypasses the server-side ownership filter, RLS prevents cross-user data access. RLS is not relied upon as the primary access control mechanism.
+
+**No new RLS policies**: This feature requires no new RLS policies. The existing policies are sufficient as defense-in-depth.
+
+**Client-side posture**: Zero `.from(...)` or `.rpc(...)` Supabase calls remain in the browser JavaScript bundle outside of `supabase.auth.*`. The browser communicates with the database exclusively through `/api/user/*` server endpoints, each of which enforces authentication and ownership server-side.

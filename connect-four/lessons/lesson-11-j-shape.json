@@ -55,7 +55,7 @@
   ],
   "socratic": {
     "goalPrompt": "One of these J-shapes wins — the other is a ghost. Which column do you play to activate the real J?",
-    "_boardInstructions": "Show a position with two candidate J-shaped disc clusters: one with an odd-row anchor (valid — Yellow owns the key threat cells) and one with an even-row anchor (invalid — opponent reaches the threat cells first). Both should look visually similar so the student must check the anchor row, not just the shape. The correct column is the one that exploits the valid J.",
+    "_boardInstructions": "Show a mid-game position (14–18 moves played) where Yellow has two complete four-disc J-shaped clusters that look visually identical but differ only in their anchor row. One J has its anchor disc at an odd row (row 1 or 3, 0-indexed); its fork fires at col 2 — mark its four discs with 'tg' overlays and the col 2 target cell with 'tg' ('Play here — fork is live'). The other J has its anchor at an even row (row 0 or 2); mark its corresponding threat cell with 'td' ('Opponent reaches this first'). No other distractors; the only puzzle is identifying which anchor row is odd. Legend: 'tg' = Real J discs and fork column (col 2), 'td' = Ghost J threat cell (dead).",
     "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 2
   },
