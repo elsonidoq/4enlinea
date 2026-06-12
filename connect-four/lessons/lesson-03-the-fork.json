@@ -5,66 +5,192 @@
   "userPerspective": "yellow",
   "slides": [
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "33212303",
       "coachMessages": [
         {
           "text": "Yellow has one strong threat. Red blocks it. What did Yellow accomplish?",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a simple position (6–8 moves played) where Yellow has one clear immediate horizontal threat (three in a row with one completing cell). No other threats exist. Mark the Yellow three-in-a-row discs with 'win' overlays and the threat cell with 'tg'. Then show (same slide or a follow-up visual state) Red placing a disc to block that cell — mark the blocked cell with 'td'. Legend: 'win' = Yellow's connected discs, 'tg' = Yellow's threat cell, 'td' = Red blocks here.</board instructions>\n\nOne threat gives your opponent a simple task: block it. They use one move, your attack is over, and you have gained nothing. To guarantee a win, you need your opponent to face a problem they cannot fully solve in a single move."
+      "boardSpec": [
+        "g",
+        "d",
+        "gg",
+        "gddd",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 3,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 4,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray's connected discs"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell"
+        }
+      ],
+      "infoProse": "One threat gives your opponent a simple task: block it. They use one move, your attack is over, and you have gained nothing. To guarantee a win, you need your opponent to face a problem they cannot fully solve in a single move."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "3333332444441",
       "coachMessages": [
         {
           "text": "One move, two threats. Red must answer — but there is only one answer, and it only covers one.",
           "mood": "happy"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a position (8–12 moves played) where Yellow can play one central column and simultaneously create two distinct horizontal or diagonal threats pointing at two different columns. Show the position AFTER Yellow has made the fork move. Mark both threat cells with 'tg' overlays. The two threat cells should be in clearly different columns. Legend: 'tg' = Yellow's two threat cells (opponent can only block one).</board instructions>\n\nA fork is a single move that creates two simultaneous threats. Your opponent has one turn to respond — they can block one threat, but the other remains. On your next move, you win. The key: both threat cells must be immediately reachable (at the top of their column's current stack)."
+      "boardSpec": [
+        "",
+        "g",
+        "g",
+        "gdgdgd",
+        "dgdgd",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Green's two threat cells (opponent can only block one)"
+        }
+      ],
+      "infoProse": "A fork is a single move that creates two simultaneous threats. Your opponent has one turn to respond — they can block one threat, but the other remains. On your next move, you win. The key: both threat cells must be immediately reachable (at the top of their column's current stack)."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "3333322422111",
       "coachMessages": [
         {
           "text": "Forks don't have to point left and right. Two threats can stack vertically in the same column — blocking the bottom one hands Yellow the top.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a position where Yellow has two horizontal threats that both complete in the same column, on two different rows (e.g., row 0 and row 1 in column 1). Both completing cells should be in column 1 — the bottom one is immediately playable (top of the stack) and the one above it becomes available once the first is played. Mark both threat cells with 'tg' overlays in the shared column. Legend: 'tg' = Both Yellow threat cells (stacked in the same column).</board instructions>\n\nForks are not always spread across two different columns. When two threats both complete in the same column on adjacent rows, blocking the bottom threat hands you the top one — your opponent's block becomes your setup. This stacked variant is just as decisive as the spread-out form."
+      "boardSpec": [
+        "",
+        "gdg",
+        "dggd",
+        "gdgdg",
+        "d",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 0,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 2,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Both Green threat cells (stacked in the same column)"
+        }
+      ],
+      "infoProse": "Forks are not always spread across two different columns. When two threats both complete in the same column on adjacent rows, blocking the bottom threat hands you the top one — your opponent's block becomes your setup. This stacked variant is just as decisive as the spread-out form."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "332443322243621",
       "coachMessages": [
         {
           "text": "This looks like a fork — but are both threat cells actually reachable right now? Check the column heights before celebrating.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game position where Yellow appears to have two threats, but at least one of the threat cells is buried — it sits above empty cells in its column and is not immediately playable (cannot be reached on the next move). Mark the immediately playable threat cell with 'tg' and the buried (future) threat cell with 'td'. Use a visible stack of empty cells below the buried threat to make the issue clear. Legend: 'tg' = Real immediate threat, 'td' = Future threat (not reachable yet — not a fork).</board instructions>\n\nA fork only works when both threats are immediately reachable — at the top of their column's current stack. A position with one real threat and one future threat is not a fork: your opponent blocks the immediate threat and has plenty of time to deal with the buried one later. Always verify that both threat cells are playable on the very next move."
+      "boardSpec": [
+        "",
+        "g",
+        "gdgdd",
+        "gddgd",
+        "dgg",
+        "",
+        "g"
+      ],
+      "overlays": [
+        {
+          "c": 5,
+          "r": 1,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Future threat (not reachable yet - not a fork)"
+        },
+        {
+          "type": "win",
+          "label": "Real immediate threat"
+        }
+      ],
+      "infoProse": "A fork only works when both threats are immediately reachable — at the top of their column's current stack. A position with one real threat and one future threat is not a fork: your opponent blocks the immediate threat and has plenty of time to deal with the buried one later. Always verify that both threat cells are playable on the very next move."
     }
   ],
   "socratic": {
-    "goalPrompt": "Find the single move that creates two immediate winning threats at the same time.",
-    "_boardInstructions": "Show a position (8–12 moves played) where Yellow has a clear fork-creating move: one column where playing creates two simultaneous immediate threats in two different columns. Both resulting threat cells must be at the top of their column stacks (immediately reachable). The correct column is the fork-creating move, not either of the two threat columns.",
-    "boardSpec": ["", "", "", "", "", "", ""],
+    "movestring": "",
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "overlays": [],
     "correctCol": 3
   },
   "confirmationCategory": "double_threat",
-  "confirmationCount": 2,
+  "confirmationCount": 4,
   "confirmationChallenges": [
     {
-      "puzzleId": "f9057953-03dd-436c-95a5-90f60104538e",
-      "moveString": "55006050660510",
+      "puzzleId": "d1170298-5d4a-4c7b-ac1e-57e0f6929648",
+      "moveString": "104300405142342531",
       "goalPrompt": "Find the move that creates two simultaneous threats.",
       "goalPredicateType": "double_threat",
       "goalPredicateParams": {},
@@ -75,8 +201,32 @@
       "userPlayer": 1
     },
     {
-      "puzzleId": "980706dd-a411-4940-a478-57c29e72ad79",
-      "moveString": "63324301305053",
+      "puzzleId": "b9ad0136-8665-4994-860d-64f6123df557",
+      "moveString": "0256543133",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "c910e365-38ce-48c8-8d2e-51bac76f6c0d",
+      "moveString": "253454464424013022",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "0198f91c-4772-4016-b229-0c5046ad8f69",
+      "moveString": "666321611604056530311253504104",
       "goalPrompt": "Find the move that creates two simultaneous threats.",
       "goalPredicateType": "double_threat",
       "goalPredicateParams": {},
@@ -86,5 +236,6 @@
       "correctCol": null,
       "userPlayer": 1
     }
-  ]
+  ],
+  "order": 3
 }

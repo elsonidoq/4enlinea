@@ -5,58 +5,231 @@
   "userPerspective": "yellow",
   "slides": [
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "3332324445",
       "coachMessages": [
         {
           "text": "Red has three discs in a row with one empty square to complete the four. What is Yellow's only safe move?",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a simple early-game position (6–8 moves played) where Red has a clear horizontal three-in-a-row with one immediately playable completing cell. Yellow has no immediate winning threat. Mark the Red three-in-a-row discs with 'win' overlays and the completing empty cell with a 'td' overlay (danger — must block here). Legend: 'win' = Red's connected discs, 'td' = The only safe move (block here).</board instructions>\n\nWhen your opponent can complete four-in-a-row on their very next move, you must block that square. There is no better move — building your own position while your opponent wins is not strategy, it is a loss."
+      "boardSpec": [
+        "",
+        "",
+        "dd",
+        "gdgg",
+        "gdg",
+        "d",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Winning move"
+        },
+        {
+          "type": "td",
+          "label": "The only safe move (block here)"
+        }
+      ],
+      "infoProse": "When your opponent can complete four-in-a-row on their very next move, you must block that square. There is no better move — building your own position while your opponent wins is not strategy, it is a loss."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "333232444525",
       "coachMessages": [
         {
-          "text": "You built — but Red didn't wait. See what happens when Yellow ignores the threat.",
+          "text": "You built — but Gray didn't wait. See what happens when Green ignores the threat.",
           "mood": "sad"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show two consecutive boards side by side (or use a single board showing the outcome). Start from a position similar to slide 1: Red has a three-in-a-row, Yellow has a tempting building move (e.g., an attractive two-in-a-row extension). Show the position AFTER Yellow plays the building move instead of blocking — Red then completes the four-in-a-row on the next move. Mark Red's completed four-in-a-row with 'win' overlays. Legend: 'win' = Red's winning four-in-a-row. The key visual: Yellow's building move is visible but Red has already won.</board instructions>\n\nThis is the consequence of building instead of blocking: your opponent completes four-in-a-row on the very next turn. No matter how promising your own move looked, the game is over before you get to use it. Block first, always."
+      "boardSpec": [
+        "",
+        "",
+        "ddg",
+        "gdgg",
+        "gdg",
+        "dd",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray winning four-in-a-row"
+        }
+      ],
+      "infoProse": "This is the consequence of building instead of blocking: your opponent completes four-in-a-row on the very next turn. No matter how promising your own move looked, the game is over before you get to use it. Block first, always."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "33333321222421",
       "coachMessages": [
         {
           "text": "Threats don't only run sideways. A vertical or diagonal three-in-a-row is just as urgent — the same rule applies.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game position (8–12 moves played) where Red has an immediate threat that is either vertical (three discs stacked in a column, next disc would win) or diagonal (three Red discs on a diagonal with one empty completing cell that is immediately playable). Yellow has an attractive horizontal building move available in a different column. Mark the Red threat cell with 'td' (block here) and the Yellow tempting move with 'tg'. Legend: 'td' = Opponent's immediate threat (block this), 'tg' = Tempting Yellow move (wrong this turn).</board instructions>\n\nThe direction doesn't change the urgency. A vertical stack of three Red discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
+      "boardSpec": [
+        "",
+        "dd",
+        "ggdgg",
+        "gdgdgd",
+        "d",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 0,
+          "r": 0,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "td",
+          "label": "Opponent's immediate threat (block this)"
+        },
+        {
+          "type": "tg",
+          "label": "User threat"
+        }
+      ],
+      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Red discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "movestring": "3333332122454422126151",
       "coachMessages": [
         {
           "text": "Red has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game position where Red has three discs forming a horizontal or diagonal line, but the fourth completing cell is NOT immediately playable — it is above empty cells in its column (there are one or more empty cells below it that must be filled first). Yellow has a good building move available. Mark the Red three-in-a-row discs with 'win' overlays, and mark the buried completing cell with a 'td' overlay that has a visual 'not yet reachable' quality (or simply note in the legend). Also mark Yellow's good building move with 'tg'. Legend: 'win' = Red's connected discs, 'td' = Red's threat cell (not reachable yet), 'tg' = Yellow should build here instead.</board instructions>\n\nNot every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Red cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate."
+      "boardSpec": [
+        "",
+        "dgdd",
+        "ggdgdd",
+        "gdgdgd",
+        "ggd",
+        "dg",
+        "g"
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 5,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 4,
+          "type": "win"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "win"
+        },
+        {
+          "c": 0,
+          "r": 2,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "claim"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray's connected disks"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell"
+        },
+        {
+          "type": "tg",
+          "label": "Green should build here instead"
+        },
+        {
+          "type": "claim",
+          "label": "Empty cells below the threat"
+        }
+      ],
+      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for yellow?"
     }
   ],
   "socratic": {
-    "goalPrompt": "Red has an immediate threat. Which column must Yellow play to survive?",
-    "_boardInstructions": "Show a mid-game position (10–14 moves played) where Red has a clear immediate threat (horizontal, vertical, or diagonal — three in a row with one immediately playable completing cell) AND Yellow has one or two visually attractive building moves available. The correct answer is the blocking column, not an attacking one. Make sure Yellow has no immediate winning move of their own (this is a pure 'find the block' position).",
-    "boardSpec": ["", "", "", "", "", "", ""],
+    "movestring": "",
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "overlays": [],
     "correctCol": 3
   },
   "confirmationCategory": "forced_block",
@@ -86,5 +259,6 @@
       "correctCol": null,
       "userPlayer": 2
     }
-  ]
+  ],
+  "order": 2
 }
