@@ -3,178 +3,69 @@
   "title": "Immediate Threats",
   "free": true,
   "userPerspective": "yellow",
+  "order": 1,
   "slides": [
     {
       "movestring": "33201",
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "An immediate threat is a move that wins the game on the very next turn.",
-          "mood": "happy"
+          "text": "Look at the board. Can you find a four-cell window that already has three Yellow discs and one empty space?",
+          "mood": "think"
         }
       ],
-      "boardSpec": [
-        "d",
-        "g",
-        "g",
-        "gd",
-        "",
-        "",
-        ""
-      ],
-      "overlays": [
-        {
-          "c": 4,
-          "r": 0,
-          "type": "tg"
-        },
-        {
-          "c": 1,
-          "r": 0,
-          "type": "win"
-        },
-        {
-          "c": 2,
-          "r": 0,
-          "type": "win"
-        },
-        {
-          "c": 3,
-          "r": 0,
-          "type": "win"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "tg",
-          "label": "Winning move"
-        },
-        {
-          "type": "win",
-          "label": "Winning move"
-        }
-      ],
-      "infoProse": "When you have three discs in a row with an open space at either end, you have an immediate threat. Playing in that space wins the game instantly."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Movestring: 33201. Show the resulting position. Yellow has three discs in a horizontal row at row 0 (cols 1, 2, 3). Mark the three Yellow discs with 'win' overlays and the empty completing cell at col 4 row 0 with a 'tg' overlay. Legend: 'win' = Three connected discs, 'tg' = Threat square (the winning move).</board instructions>\n\nAn immediate threat is any four-cell window that already contains three of your discs and one empty square. That empty square is your threat cell — play it and you win instantly."
     },
     {
       "movestring": "644565566",
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "Immediate threats can be horizontal, vertical or diagonal ",
-          "mood": "happy"
+          "text": "Threats look the same in every direction — horizontal, vertical, diagonal. Train your eye to scan all four.",
+          "mood": "think"
         }
       ],
-      "boardSpec": [
-        "",
-        "",
-        "",
-        "",
-        "dg",
-        "ddg",
-        "ggdg"
-      ],
-      "overlays": [
-        {
-          "c": 3,
-          "r": 0,
-          "type": "tg"
-        },
-        {
-          "c": 4,
-          "r": 1,
-          "type": "win"
-        },
-        {
-          "c": 5,
-          "r": 2,
-          "type": "win"
-        },
-        {
-          "c": 6,
-          "r": 3,
-          "type": "win"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "tg",
-          "label": "User threat"
-        },
-        {
-          "type": "win",
-          "label": "Winning move"
-        }
-      ],
-      "infoProse": ""
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Movestring: 644565566. Show the resulting position. Yellow has a diagonal three-in-a-row. Mark the three Yellow diagonal discs with 'win' overlays and the empty completing cell with a 'tg' overlay. Legend: 'win' = Three connected discs, 'tg' = Winning move.</board instructions>\n\nThe pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss."
     },
     {
       "movestring": "3334243556566",
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "Also an immediate threat does not need to have three consecutive disks",
-          "mood": "happy"
+          "text": "The empty square does not have to be at the end of the line — it can sit anywhere inside the four-cell window.",
+          "mood": "think"
         }
       ],
-      "boardSpec": [
-        "",
-        "",
-        "g",
-        "gdgg",
-        "dd",
-        "dgg",
-        "ddg"
-      ],
-      "overlays": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Movestring: 3334243556566. Show the resulting position. Yellow has three discs in a horizontal four-cell window with the empty cell in an interior position (not at either end). Mark the three Yellow discs with 'win' overlays and the interior empty cell with a 'tg' overlay. Legend: 'win' = Three connected discs, 'tg' = Winning move (interior gap).</board instructions>\n\nWhen the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "c": 3,
-          "r": 2,
-          "type": "win"
-        },
-        {
-          "c": 4,
-          "r": 2,
-          "type": "tg"
-        },
-        {
-          "c": 5,
-          "r": 2,
-          "type": "win"
-        },
-        {
-          "c": 6,
-          "r": 2,
-          "type": "win"
+          "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
+          "mood": "think"
         }
       ],
-      "legendItems": [
-        {
-          "type": "win",
-          "label": "Winning move"
-        },
-        {
-          "type": "tg",
-          "label": "User threat"
-        }
-      ],
-      "infoProse": "These ones are harder to spot"
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position (around 10–14 moves played) where: (1) Red has an immediate horizontal or diagonal threat — three Red discs with one empty completing cell that is immediately playable (at the top of its column's current stack), and (2) Yellow also has an attractive setup move — Yellow could extend a two-in-a-row to three-in-a-row in a clearly different column. Mark the Red threat cell with a 'td' overlay, and mark Yellow's tempting building move with a 'tg' overlay to draw the eye. Legend: 'td' = Opponent's immediate threat (block this!), 'tg' = Tempting Yellow build (wrong this turn).</board instructions>\n\nImmediate threats are urgent for both players. Before committing to your own move, always scan your opponent's board for the pattern: any four-cell window with three of their discs and one empty square. A missed block loses the game on the very next move — no matter how good your own plan looked."
     }
   ],
   "socratic": {
+    "goalPrompt": "Red has an immediate threat somewhere on the board. Which column must Yellow play to survive?",
     "movestring": "320101311201",
-    "boardSpec": [
-      "ggg",
-      "dddgd",
-      "dd",
-      "gg",
-      "",
-      "",
-      ""
-    ],
+    "boardSpec": ["ggg", "dddgd", "dd", "gg", "", "", ""],
     "overlays": [],
     "correctCol": 0
   },
   "confirmationCategory": "immediate_threat",
   "confirmationCount": 4,
-  "order": 1,
   "confirmationChallenges": [
     {
       "puzzleId": "90a23043-eac2-47a2-a33e-85b1c4b05ee2",

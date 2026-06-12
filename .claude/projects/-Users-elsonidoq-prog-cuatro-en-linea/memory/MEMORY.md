@@ -63,6 +63,7 @@
 - [Multi-agent orchestration patterns](reference_multiagent_orchestration_patterns.md) — handoff context pattern, AskUserQuestion gate, Opus-for-critique/Sonnet-for-create, state persistence
 
 - [PostgREST schema cache](reference_postgrest_schema_cache.md) — adding a column via SQL requires a schema reload or PostgREST returns "Bad Request"
+- [deep_reveal_failures table](reference_deep_reveal_failures.md) — logs P5Strong zone-tag validation failures with full prompt + raw LLM output; primary tool for debugging annotation rejections
 
 ## References — infrastructure
 

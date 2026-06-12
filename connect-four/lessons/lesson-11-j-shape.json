@@ -3,102 +3,60 @@
   "title": "J-Shape",
   "free": false,
   "userPerspective": "yellow",
-  "_sourceMovestringForBoardSpec": "22533013114",
-  "_socraticSourceMovestring": "22533013114",
   "slides": [
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "The J-Shape: an L-shaped cluster of 4 discs creating three winning continuations. Your opponent can block one, maybe two — but not all three.",
-          "mood": "happy"
-        }
-      ],
-      "boardSpec": [
-        "g",
-        "ddg",
-        "dg",
-        "gdg",
-        "d",
-        "d",
-        ""
-      ],
-      "overlays": [
-        {
-          "c": 0,
-          "r": 3,
-          "type": "tg"
-        },
-        {
-          "c": 2,
-          "r": 2,
-          "type": "tg"
-        },
-        {
-          "c": 4,
-          "r": 2,
-          "type": "tg"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "tg",
-          "label": "Triple threat"
-        }
-      ],
-      "infoProse": "Five Yellow discs form a compact cluster across columns 0-4. The key cells unlock threats in three directions: a diagonal through the center, and horizontal continuations at either end of row 2. Blocking one or two still leaves the third."
-    },
-    {
-      "coachMessages": [
-        {
-          "text": "With threats in three directions (diagonal, horizontal-center, horizontal-right), the opponent needs three moves to block all of them. They only get one.",
+          "text": "These four discs look like the letter J. Before reading on — where do you think the winning move goes?",
           "mood": "think"
         }
       ],
-      "boardSpec": [
-        "g",
-        "ddg",
-        "dg",
-        "gdg",
-        "d",
-        "d",
-        ""
-      ],
-      "overlays": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position (8–12 moves played) where Yellow has exactly four discs arranged in a J shape: a vertical pair forming the lower stem, one disc extending horizontally right at the top of the stem (the hook top), and one disc on the diagonal rising from the stem base. The J anchor disc (bottom of the stem) should be at an odd-indexed row (0-indexed: row 1, 3, or 5). Mark the four Yellow J-shape discs with 'win' overlays. Do not mark the threat cells yet — let the student look first. Legend: 'win' = The four J-shape discs.</board instructions>\n\nFour Yellow discs arranged in a J shape. The stem of the J is vertical, the hook extends horizontally, and the diagonal arm rises from the base. Before the next slide reveals the threats, study the shape: where would Yellow's winning move(s) complete a four-in-a-row?"
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "c": 0,
-          "r": 3,
-          "type": "tg"
-        },
-        {
-          "c": 2,
-          "r": 2,
-          "type": "tg"
-        },
-        {
-          "c": 4,
-          "r": 2,
-          "type": "tg"
+          "text": "Two threats converge on the same column. Playing in that column creates a fork — one move, two wins.",
+          "mood": "happy"
         }
       ],
-      "legendItems": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show the same J-shape position as slide 1. Now reveal the two primary threats: (1) the horizontal arm of the J extended one cell to the right (or left, depending on orientation) — a horizontal major threat; (2) the diagonal arm extended one cell — a diagonal major threat. Both threat cells should converge on the same column (the shared column where both lines can be completed). Mark both threat cells with 'tg' overlays. Also mark the four J-shape discs with 'win' overlays to show which discs form each line. Legend: 'win' = J-shape pattern discs, 'tg' = Both threat cells (both in the same column — fork).</board instructions>\n\nThe J-shape creates two threats that converge on the same column: one horizontal, one diagonal. Playing in that column sets up a fork — both threats become live simultaneously. Your opponent faces two winning lines in one move and can only block one. This is why the J-shape is so powerful: the setup move forces a no-win situation."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "type": "tg",
-          "label": "Triple threat"
+          "text": "Your opponent blocks one arm of the J. The other arm is still alive. Try blocking the horizontal — the diagonal survives.",
+          "mood": "happy"
         }
       ],
-      "infoProse": "Three winning cells, one move to set them up. The J-Shape is the most powerful attacking formation in Connect Four."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show the same J-shape position as slide 1–2, but now show the result AFTER the opponent makes the most natural block: filling the horizontal arm's completing cell. Mark the opponent's blocking disc with 'td' ('Blocks horizontal threat'). The diagonal threat cell should still be marked 'tg' ('Diagonal still alive'). Make it visually clear that blocking one arm leaves the other completely open. Legend: 'td' = Opponent blocks horizontal arm, 'tg' = Diagonal threat survives (Yellow wins next move).</board instructions>\n\nWhatever your opponent blocks, the other arm of the J survives. Block the horizontal threat cell — the diagonal is still alive. Block the diagonal threat cell — the horizontal is still alive. Your opponent would need two moves to handle both, but they only get one. The J-shape is won on the move that creates both threats simultaneously."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "The J looks right — but the anchor is on an even row (0-indexed). Count the gap to the threat cell: it's even, so your opponent reaches it first.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position with a visually identical J-shape to slides 1–3 but where the anchor disc (bottom of the J stem) is at an even-indexed row (0-indexed: row 0, 2, or 4). Because the anchor is on an even row, the gap from the column's current height to the key threat cell will be even — Yellow's opponent lands on it first. Mark the anchor disc with 'td' ('Even-row anchor — J does not work here') and the threat cell with 'td' as well ('Your opponent reaches this first'). Contrast this with a version showing an odd-row anchor where 'tg' marks the valid threat cell. Legend: 'td' = Even-row anchor (J is a ghost threat), 'tg' = Odd-row anchor (J is real — Yellow owns the threat cell).</board instructions>\n\nThe J-shape only works when the anchor disc sits at an odd-indexed row (0-indexed: rows 1, 3, 5). This parity condition ensures that Yellow, not the opponent, is the player who naturally lands on the key threat cells as those columns fill.\n\nWith an even-indexed anchor, the gap from the column top to the threat cell is even — the opponent reaches it first. The shape looks identical, but the J is a ghost. Always check the anchor row before committing to building a J."
     }
   ],
   "socratic": {
-    "boardSpec": [
-      "g",
-      "ddg",
-      "dg",
-      "gdg",
-      "d",
-      "d",
-      ""
-    ],
+    "goalPrompt": "One of these J-shapes wins — the other is a ghost. Which column do you play to activate the real J?",
+    "_boardInstructions": "Show a position with two candidate J-shaped disc clusters: one with an odd-row anchor (valid — Yellow owns the key threat cells) and one with an even-row anchor (invalid — opponent reaches the threat cells first). Both should look visually similar so the student must check the anchor row, not just the shape. The correct column is the one that exploits the valid J.",
+    "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 2
   },
   "confirmationCategory": "j_shape",

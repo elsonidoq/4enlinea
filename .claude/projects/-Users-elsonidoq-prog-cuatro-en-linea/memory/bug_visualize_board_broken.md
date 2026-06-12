@@ -9,7 +9,5 @@ metadata:
 
 **Fix**: change the import to `getMajorThreatCells` and update the single call site inside the script.
 
-**Status**: NOT yet fixed as of 2026-05-26. Causes `SyntaxError: does not provide an export named 'buildThreatMap'` when running `./visualize_board.sh`.
-
-This is a **prerequisite** for the LLM explain PoC (`explain_move.sh`) which captures `visualize_board.mjs` output as part of the LLM prompt context.
+**Status**: Verified working as of 2026-06-11 — `./visualize_board.sh` ran successfully. This bug has been fixed at some point; memory can be disregarded.
 

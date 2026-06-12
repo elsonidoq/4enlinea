@@ -233,6 +233,12 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const postBestBoard = new Board(movestring + bestCol);
   const allowedSet = buildAllowedSetFromPatternMaps(patMaps, postBestBoard);
 
+  // Whitelist the contrast column in P5Strong when allowedSet is non-null.
+  // P5Strong only fires when allowedSet is provided; if null, all column refs are unchecked.
+  if (!isOptimal && allowedSet !== null) {
+    allowedSet.push({ col: contrastCol, validationOnly: true });
+  }
+
   // ── Step 6: Board visualizations ──────────────────────────────────────────
   const postMovestring = movestring + col;
   const [boardViz, postBoardViz] = await Promise.all([
@@ -253,6 +259,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     gap,
     gapBucket,
     allowedSet,
+    playedCol: col,
+    contrastCol: isOptimal ? undefined : contrastCol,
   });
 
   return { prompt, allowedSet };

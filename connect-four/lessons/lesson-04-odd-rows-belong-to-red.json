@@ -5,60 +5,60 @@
   "userPerspective": "red",
   "slides": [
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "In Connect Four, odd rows belong to Red, even rows to Yellow. The first piece in any column goes to row 0, the bottom row — Red's row.",
-          "mood": "happy"
-        }
-      ],
-      "boardSpec": ["", "", "", "gd", "", "", ""],
-      "overlays": [
-        { "c": 3, "r": 0, "type": "claim" },
-        { "c": 3, "r": 1, "type": "claim" }
-      ],
-      "legendItems": [
-        { "type": "claim", "label": "Parity row marker" }
-      ],
-      "infoProse": "The bottom row (row 0) belongs to Red because Red always plays first. Yellow gets row 1, Red gets row 2, and so on. This bottom-up alternation is called parity and it never changes."
-    },
-    {
-      "coachMessages": [
-        {
-          "text": "Gravity means pieces fill from the bottom. Red gets row 0, Yellow row 1, Red row 2 — bottom-up parity is locked.",
+          "text": "Red always goes first. In any empty column, who lands on the bottom cell? Who lands one above? Follow the sequence.",
           "mood": "think"
         }
       ],
-      "boardSpec": ["", "", "", "gdg", "", "", ""],
-      "overlays": [
-        { "c": 3, "r": 0, "type": "claim" },
-        { "c": 3, "r": 1, "type": "claim" },
-        { "c": 3, "r": 2, "type": "claim" }
-      ],
-      "legendItems": [
-        { "type": "claim", "label": "Parity row marker" }
-      ],
-      "infoProse": "With three discs stacked in column 3, the alternating parity is clear: Red (bottom), Yellow (middle), Red (top). Every piece obeys this bottom-up rule."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a single empty column (e.g., col 3). Use alternating overlays to mark the first three cells from the bottom with player labels: row 0 marked 'tg' with label 'Red (move 1)', row 1 marked 'td' with label 'Yellow (move 2)', row 2 marked 'tg' with label 'Red (move 3)'. All other columns empty. Legend: 'tg' = Red's cell, 'td' = Yellow's cell.</board instructions>\n\nRed plays first, so the first disc in any empty column always belongs to Red — that is row 0 (0-indexed, bottom). Yellow lands at row 1, Red at row 2, Yellow at row 3, and so on. The pattern never breaks.\n\nTwo equivalent ways to say this:\n- **0-indexed:** Red owns rows 0, 2, 4 (even numbers)\n- **1-indexed (as used in most books):** Red owns rows 1, 3, 5 (odd numbers)\n\nBoth say the same thing. This lesson uses 0-indexed coordinates throughout."
     },
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "Understanding which rows belong to which player is the foundation for Claimeven, Z-Threats, and all advanced tactics.",
-          "mood": "happy"
+          "text": "Each column runs its own alternation independently. Count the discs already in the column — that tells you who owns the next cell.",
+          "mood": "think"
         }
       ],
-      "boardSpec": ["", "", "", "gdg", "", "", ""],
-      "overlays": [
-        { "c": 3, "r": 0, "type": "claim" },
-        { "c": 3, "r": 1, "type": "claim" },
-        { "c": 3, "r": 2, "type": "claim" }
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game board where three columns have different heights: one column is empty (0 discs), one has 1 disc (Red at bottom), one has 2 discs (Red then Yellow). For each column, mark the next available empty cell with a player-coloured overlay: empty column → 'tg' (Red goes next), 1-disc column → 'td' (Yellow goes next), 2-disc column → 'tg' (Red goes next). Legend: 'tg' = Red's next cell in this column, 'td' = Yellow's next cell in this column.</board instructions>\n\nEach column has its own mini-game. Count how many discs are already there — the next disc in that column belongs to whoever is next in the alternation for that column's current height. The global rule (Red first everywhere) means: if a column has an even number of discs (0, 2, 4…), the next disc is Red's; if it has an odd number (1, 3, 5…), the next disc is Yellow's."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "Watch out: the same row number can belong to different players in different columns. The row alone doesn't tell you who owns it.",
+          "mood": "think"
+        }
       ],
-      "legendItems": [
-        { "type": "claim", "label": "Parity row marker" }
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a board with two columns that both have an empty cell at row 2, but one column has 0 discs already (so row 2 is Red's — 2 empty cells below it) and the other has 1 disc already (so row 2 is Yellow's — 1 empty cell below it). Mark the row-2 cell in the empty column with 'tg' (Red's) and the row-2 cell in the 1-disc column with 'td' (Yellow's). Keep other columns neutral. Legend: 'tg' = Row 2 here belongs to Red, 'td' = Row 2 here belongs to Yellow.</board instructions>\n\nThis is the critical trap: the same row number belongs to different players in different columns, depending on how many discs are already there. Row 2 in a fresh column belongs to Red (it is the 3rd disc, Red's turn). Row 2 in a column that already has one disc belongs to Yellow (it is the 2nd disc to be placed, Yellow's turn).\n\nThe shortcut: **subtract the current column height from the row number.** If the result is even, Red owns it; if odd, Yellow owns it."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "A threat is only real if the right player lands on the completing cell. Who will get there first in this column?",
+          "mood": "think"
+        }
       ],
-      "infoProse": "Mastering parity is what separates beginners from advanced players. Every fork, threat, and blockade traces back to this one idea."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position where Red has three discs forming a horizontal line whose completing cell is at row 2 in a column of current height 0. Also show a second identical-looking setup (same row number) but in a column of current height 1, where Yellow would reach that cell first instead. Mark the valid Red threat cell (column height 0, row 2 → Red's) with 'tg' and the invalid one (column height 1, row 2 → Yellow's) with 'td'. Legend: 'tg' = Red's real threat (Red lands here), 'td' = Ghost threat (Yellow lands here first).</board instructions>\n\nA threat is only as good as who lands on the completing cell. Before trusting any threat, ask: will I actually reach that cell, or will my opponent get there first? This is the question that Claimeven, Z-Threats, and all parity-based strategies are built on — and it all comes back to this one rule: count from the current column height."
     }
   ],
-  "socratic": null,
+  "socratic": {
+    "goalPrompt": "Two columns each have an empty cell at row 2. In which column does Red naturally land on row 2 as the columns fill up?",
+    "_boardInstructions": "Show a mid-game board with two candidate columns: Column A has 0 discs (empty), Column B has 1 disc (Red at row 0). Both have an empty cell at row 2. The student must identify Column A (height 0, row 2 → even gap of 2 → Red lands there) as the column where Red owns row 2. Mark the two candidate cells but leave the student to reason about which belongs to Red.",
+    "boardSpec": ["", "", "", "", "", "", ""],
+    "correctCol": null
+  },
   "confirmationCategory": null,
   "confirmationCount": 0
 }

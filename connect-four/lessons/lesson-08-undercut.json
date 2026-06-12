@@ -5,92 +5,58 @@
   "userPerspective": "yellow",
   "slides": [
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "The undercut: a lower threat kills the upper threat because gravity fills bottom-up.",
-          "mood": "happy"
-        }
-      ],
-      "boardSpec": [
-        "gd",
-        "gd",
-        "gd",
-        "",
-        "",
-        "",
-        ""
-      ],
-      "overlays": [
-        {
-          "c": 3,
-          "r": 0,
-          "type": "td"
-        },
-        {
-          "c": 3,
-          "r": 1,
-          "type": "tg"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "td",
-          "label": "Lower threat (kills above)"
-        },
-        {
-          "type": "tg",
-          "label": "Upper threat (gets killed)"
-        }
-      ],
-      "infoProse": "Red has a three-in-a-row at row 0 (columns 0–2) and Yellow has one at row 1 (columns 0–2). Both would complete with column 3. The lower threat (Red, row 0) fills first because of gravity, killing Yellow's threat at row 1."
-    },
-    {
-      "coachMessages": [
-        {
-          "text": "The undercut only works when the lower threat is on a different parity row than the upper threat. Same-parity threats coexist (T4 rule).",
+          "text": "Two threats, same column. One is higher, one is lower. Gravity fills bottom-up — which threat gets there first?",
           "mood": "think"
         }
       ],
-      "boardSpec": [
-        "gdg",
-        "gdg",
-        "gdg",
-        "",
-        "d",
-        "d",
-        ""
-      ],
-      "overlays": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a simple position where Yellow has a horizontal major threat completing at col 3 row 0 (even-indexed) and Red has a horizontal major threat completing at col 3 row 1 (odd-indexed). Col 3 is empty. Mark Yellow's threat cell at row 0 with 'tg' (your threat, fires first) and Red's threat cell at row 1 with 'td' (dead — can never be reached). Legend: 'tg' = Yellow's lower threat (fires first — the undercut), 'td' = Red's upper threat (killed by gravity).</board instructions>\n\nGravity fills columns bottom-up. Whoever owns the lower cell in a column gets there first — period. Yellow's threat at row 0 fires the instant any disc enters column 3. Red's threat at row 1 will never be reached, because Yellow wins the moment the column is touched. The lower threat kills the upper threat."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "c": 3,
-          "r": 0,
-          "type": "td"
-        },
-        {
-          "c": 3,
-          "r": 2,
-          "type": "td"
+          "text": "You don't find an undercut — you build one. Arrange your three-in-a-row so it completes at the cell directly below their threat.",
+          "mood": "happy"
         }
       ],
-      "legendItems": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position (10–14 moves played) where Red already has three discs forming a horizontal line whose completing cell is col C row 3 (odd-indexed). Yellow's three discs form a horizontal line whose completing cell is also col C but at row 2 (even-indexed — directly below Red's threat). Yellow has not yet played the winning move. Mark Red's threat cell at row 3 with 'td' (will be killed) and Yellow's threat cell at row 2 with 'tg' (wins first). Legend: 'tg' = Yellow's undercut threat (row 2 — fires first), 'td' = Red's threat (row 3 — killed by Yellow's lower threat).</board instructions>\n\nYou don't find an undercut — you build one. By arranging your three-in-a-row to complete at the cell directly below your opponent's threat, you own that column. Whoever plays into col C, Yellow wins at row 2 before Red ever reaches row 3. The undercut is a weapon you construct during the setup phase."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "type": "td",
-          "label": "Same-parity threats coexist"
+          "text": "When both threats land on rows of the same parity (both even or both odd), neither kills the other — both must be blocked separately.",
+          "mood": "think"
         }
       ],
-      "infoProse": "Both threats are at even-indexed rows (0 and 2), which means they're on the same parity. The lower one does not kill the upper one — both must be blocked separately. This is the T4 (same-parity) rule."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Yellow has a horizontal major threat completing at col 3 row 0 (even-indexed) and Red also has a horizontal major threat completing at col 3 row 2 (also even-indexed). Both threat cells are in the same column but two rows apart, both on even rows. Mark both cells with 'tg' overlays (both live — both must be blocked). Legend: 'tg' = Both threats are live (same parity — neither kills the other).</board instructions>\n\nThe undercut only works when your threat is on the *opposite* parity row to theirs — one even, one odd. When both threats land on the same parity (both even rows like 0 and 2, or both odd rows like 1 and 3), neither kills the other. Both remain alive and your opponent must block them separately. Check the row numbers: if they share parity, no undercut is possible."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "One Yellow disc sits below Red's threat — but is that an undercut? What makes a real undercut?",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Red has a horizontal major threat completing at col C row 1. Yellow has a single disc in col C row 0 (directly below Red's threat), but that Yellow disc is NOT part of any three-in-a-row — there is no Yellow major threat at row 0. Mark the Yellow disc at row 0 with 'td' ('Lone disc — no undercut') and Red's threat cell at row 1 with 'tg' ('Red's threat — still live'). Legend: 'td' = Yellow's lone disc (does NOT constitute an undercut), 'tg' = Red's threat (still dangerous).</board instructions>\n\nOccupying the cell below your opponent's threat does not create an undercut. You need a real winning threat at that cell — three Yellow discs that would form four-in-a-row there. A single disc below their threat does nothing: Red can still complete their threat freely because Yellow has no counter-threat to fear. Build the full three-in-a-row first, then the cell becomes an undercut."
     }
   ],
   "socratic": {
-    "boardSpec": [
-      "gd",
-      "gd",
-      "gddd",
-      "",
-      "g",
-      "g",
-      ""
-    ],
+    "goalPrompt": "Which column lets Yellow win by undercutting Red's threat — placing Yellow's winning cell directly below Red's?",
+    "_boardInstructions": "Show a mid-game position where Red has a clear horizontal major threat completing in col C at some odd-indexed row, and Yellow has three discs forming a horizontal line completing in the same col C at the even-indexed row directly below. Yellow should play col C to win immediately via the undercut. No same-parity complications. Make the two threat lines and their shared column visually clear.",
+    "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 2
   },
   "confirmationCategory": "undercut",

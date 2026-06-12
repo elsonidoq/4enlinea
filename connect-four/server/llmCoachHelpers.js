@@ -548,6 +548,8 @@ export function buildBlunderExplainPrompt({
   gap,
   gapBucket,
   allowedSet,
+  playedCol,          // 0-indexed; undefined = not provided
+  contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
 }) {
   const opponentName = playerName === 'Green' ? 'Grey' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -578,21 +580,25 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
 
   // ── Boards ────────────────────────────────────────────────────────────────
   const boardLines = ['## Boards'];
-  const vizBefore = (boardViz || '[unavailable]').replace(/\bR\b/g, 'Green').replace(/\bY\b/g, 'Grey');
-  const vizAfter  = (postBoardViz || '[unavailable]').replace(/\bR\b/g, 'Green').replace(/\bY\b/g, 'Grey');
   boardLines.push('### Before the move');
-  boardLines.push(vizBefore);
+  boardLines.push(boardViz || '[unavailable]');
   boardLines.push('');
   boardLines.push('### After the move');
-  boardLines.push(vizAfter);
+  boardLines.push(postBoardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('Note: In the board diagrams, "Green" denotes Green discs and "Grey" denotes Grey discs.');
+  boardLines.push('Note: In the board, Gn = Green discs, Gy = Grey discs.');
   sections.push(boardLines.join('\n'));
 
   // ── Move context ──────────────────────────────────────────────────────────
   const contextLines = ['## Move context'];
   contextLines.push(`- Player: ${playerName} (winning parity = ${winningParity} rows ${winningRows})`);
   contextLines.push(`- Eval gap: ${gapBucket}`);
+  if (playedCol !== undefined) {
+    contextLines.push(`- Move played: column ${playedCol + 1}`);
+  }
+  if (isBlunder && contrastCol !== undefined) {
+    contextLines.push(`- Better move: column ${contrastCol + 1}`);
+  }
   if (isBlunder) {
     contextLines.push(`- Key insight: ${humanReason}`);
   } else {
@@ -617,14 +623,16 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   // ── Hard grounding rules ──────────────────────────────────────────────────
   const groundingLines = ['## Hard grounding rules'];
   if (allowedSet !== null) {
-    groundingLines.push('Reference ONLY the cells listed in "Allowed annotation cells" below.');
+    groundingLines.push('Reference ONLY the cells listed in "Strategic reference cells" below.');
     groundingLines.push('Never name a cell not in that list.');
     groundingLines.push('');
-    groundingLines.push('### Allowed annotation cells');
+    groundingLines.push('### Strategic reference cells — NOT where the move was played');
+    groundingLines.push('These cells are tactical reference points for your explanation, not the location of the move itself.');
     if (allowedSet.length === 0) {
       groundingLines.push('(no specific cells — describe patterns in general terms only)');
     } else {
       for (const entry of allowedSet) {
+        if (entry.validationOnly) continue;
         if (entry.cells) {
           groundingLines.push(`- Concrete cells: [${entry.cells.join(', ')}]`);
         } else if (entry.col !== undefined) {
@@ -633,7 +641,8 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
       }
     }
   } else {
-    groundingLines.push('Describe patterns in general terms. Do not reference specific cells or columns unless they appear in the boards above.');
+    groundingLines.push('Column numbers (1–7) are always valid to reference — they appear in every board header.');
+    groundingLines.push('Only omit specific CELL references (e.g. c4r3) if the cell is not listed in the boards above.');
   }
   sections.push(groundingLines.join('\n'));
 
@@ -665,7 +674,6 @@ When referencing specific board locations, wrap each reference in zone tags with
   [zone:cNrM]that cell[/zone:cNrM] for a single cell (N = column 1–7, M = row 1–6)
   [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] for multiple cells
   [zone:rowN]row N[/zone:rowN] for an entire row
-To make a zone active by default (strongest spatial point), add ! after the spec in the opening tag: [zone:c6r3!]that cell[/zone:c6r3].
 Only tag EXPLICIT spatial references. Do not tag abstract concepts.
 Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).`);
 

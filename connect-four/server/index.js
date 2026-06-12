@@ -536,19 +536,6 @@ app.post('/api/explain-move', async (req, res) => {
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
 
-// Inject a default-active marker into the first zone tag in an LLM explanation.
-// The LLM is not prompted to use '!' — the server picks the first zone instead.
-function injectDefaultActiveZone(explanation) {
-  let injected = false;
-  return explanation.replace(/\[zone:([^\]!]+)(!?)\]/g, (match, spec, bang) => {
-    if (!injected && !bang) {
-      injected = true;
-      return `[zone:${spec}!]`;
-    }
-    return match;
-  });
-}
-
 // Delegates to the unified explainContext.js flow (Epic 3).
 // The module-level solver is injected here; tests pass their own solver via explainContext.js.
 async function buildExplainContextActive(movestring, col, rounds = 1) {
@@ -634,7 +621,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     // First attempt
     console.log('[DEBUG explain-move-llm] allowedSet passed to validateAnnotation:', JSON.stringify(allowedSet));
     const rawExplanation = await callLLM(prompt);
-    let explanation = injectDefaultActiveZone(rawExplanation);
+    let explanation = rawExplanation;
     console.log('[DEBUG explain-move-llm] rawExplanation:', rawExplanation);
     let result = validateAnnotation(explanation, board, allowedSet);
     console.log('[DEBUG explain-move-llm] validateAnnotation result (attempt 1):', JSON.stringify(result));
@@ -642,7 +629,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (!result.valid) {
       // ── Retry (same prompt, bypasses cache and quota) ──────────────────
       const retryRaw = await callLLM(prompt);
-      const retryExplanation = injectDefaultActiveZone(retryRaw);
+      const retryExplanation = retryRaw;
       console.log('[DEBUG explain-move-llm] retryExplanation:', retryExplanation);
       const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
       console.log('[DEBUG explain-move-llm] validateAnnotation result (retry):', JSON.stringify(retryResult));

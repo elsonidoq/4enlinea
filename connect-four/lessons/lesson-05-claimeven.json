@@ -5,93 +5,58 @@
   "userPerspective": "yellow",
   "slides": [
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "When Red plays on an even row, Yellow can 'claim' the cell directly above. Red gets row 0 (even), Yellow gets row 1 (odd).",
-          "mood": "happy"
-        }
-      ],
-      "boardSpec": [
-        "",
-        "",
-        "",
-        "gd",
-        "",
-        "",
-        ""
-      ],
-      "overlays": [
-        {
-          "c": 3,
-          "r": 1,
-          "type": "claim"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "claim",
-          "label": "Yellow claims this cell"
-        }
-      ],
-      "infoProse": "Red plays column 3 landing on row 0 (an even row). Yellow responds by playing directly above at row 1. The claimeven response ensures Yellow controls the odd row in this column."
-    },
-    {
-      "coachMessages": [
-        {
-          "text": "Yellow's claimeven strategy: always respond above Red's even-row move. Yellow controls every odd row that Red reaches on an even row.",
+          "text": "From lesson 4: Red owns rows 0, 2, 4 in a fresh column (0-indexed). Yellow owns rows 1, 3, 5. Yellow's natural home is the row directly above Red's.",
           "mood": "think"
         }
       ],
-      "boardSpec": [
-        "gd",
-        "",
-        "gd",
-        "gd",
-        "gd",
-        "",
-        ""
-      ],
-      "overlays": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a single empty column (col 3). Mark rows 0, 2, 4 with 'td' overlays labelled 'Red' and rows 1, 3, 5 with 'tg' overlays labelled 'Yellow'. All other columns empty. Legend: 'td' = Red's natural rows (0, 2, 4), 'tg' = Yellow's natural rows (1, 3, 5).</board instructions>\n\nRecall from lesson 4: in any empty column, Red owns rows 0, 2, 4 (0-indexed) and Yellow owns rows 1, 3, 5. Yellow's natural home is always the cell directly above Red's natural cell.\n\nThis is the foundation of Claimeven: whenever Red plays on their natural even-indexed row, Yellow can immediately respond above to lock in Yellow's natural odd-indexed row in that column."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "c": 0,
-          "r": 1,
-          "type": "claim"
-        },
-        {
-          "c": 2,
-          "r": 1,
-          "type": "claim"
-        },
-        {
-          "c": 3,
-          "r": 1,
-          "type": "claim"
-        },
-        {
-          "c": 4,
-          "r": 1,
-          "type": "claim"
+          "text": "Red plays col 3 and lands on row 0. Yellow responds directly above at row 1. What threat did Yellow just neutralise?",
+          "mood": "think"
         }
       ],
-      "legendItems": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Red has played col 3 (Red disc at row 0) and Yellow has just responded at row 1 in col 3 (Yellow disc). Also show a Red horizontal three-in-a-row threat whose completing cell passes through col 3 row 1 — that cell is now occupied by Yellow. Mark the Yellow disc at row 1 col 3 with a 'tg' overlay ('Claimed'). Mark the Red threat discs with 'win' overlays and draw a visual cross or 'td' through the now-blocked threat cell to show the threat is dead. Legend: 'tg' = Yellow's claimed cell, 'win' = Red's threat discs (now neutralised), 'td' = Red's threat cell (claimed by Yellow).</board instructions>\n\nRed plays col 3 and lands on row 0 (their natural even row). Yellow responds immediately above, claiming row 1 (Yellow's natural odd row). A Red horizontal threat whose completing cell passed through row 1 of col 3 is now gone — Yellow owns that cell. This is Claimeven: respond above Red's even-row play to neutralise every Red threat that passes through the row above."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "type": "claim",
-          "label": "Claimed cells"
+          "text": "Yellow doesn't need to calculate threats one by one. Every time Red plays on an even row, respond directly above — Red's threat network collapses column by column.",
+          "mood": "happy"
         }
       ],
-      "infoProse": "After several claimeven responses across the board, Yellow controls the odd row in every column where Red played on an even row. This builds Yellow's positional advantage."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position where Red has played on row 0 in multiple columns (e.g., cols 0, 2, 3, 4) and Yellow has responded directly above in each (Yellow discs at row 1 in those same columns). Each column now has a Red-Yellow pair at rows 0–1. Mark each Yellow row-1 disc with a 'tg' overlay ('Claimed'). Also show one or two Red horizontal threat windows that are neutralised because their completing cells in row 1 are already occupied by Yellow. Legend: 'tg' = Yellow's claimed cells.</board instructions>\n\nYellow doesn't need to calculate threats one by one. Every time Red plays on an even-indexed row, respond directly above. Red's even-row threat network in every such column is automatically neutralised — Yellow claimed the row above, and every threat that passed through those cells is now dead.\n\nThis board-wide strategy is Claimeven: a systematic response that collapses Red's threat infrastructure without needing to identify each individual threat."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "Careful — Claimeven only applies when Red plays on their natural even row. If Red plays on an odd row, responding above puts you on an even row. That's Red's territory.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Red has just played on row 1 (an odd-indexed row — not Red's natural even row). If Yellow blindly responds 'above' at row 2 (an even-indexed row, Red's natural territory), Yellow hands Red a cell on Red's natural row. Mark Red's disc at row 1 with a neutral marker. Mark row 2 above it with 'td' ('Wrong — hands Red an even-row cell'). Then show the correct response: Yellow should NOT play directly above here. Legend: 'td' = Row 2 here is Red's natural row — do not play here blindly.</board instructions>\n\nClaimeven only works when Red plays on their natural even-indexed row (0, 2, 4…). If Red plays on an odd-indexed row, responding directly above would place Yellow on an even-indexed row — Red's territory. That hands Red a cell on their natural row, which is the opposite of Claimeven.\n\nThe rule: check the row Red landed on. If it is even-indexed (0, 2, 4…), respond above. If it is odd-indexed (1, 3, 5…), do not apply Claimeven here — a different strategy applies."
     }
   ],
   "socratic": {
-    "boardSpec": [
-      "gd",
-      "",
-      "gd",
-      "g",
-      "gd",
-      "",
-      ""
-    ],
+    "goalPrompt": "Red just played in one column, landing on an even-indexed row. Which column should Yellow play to claim the cell directly above and neutralise Red's threat?",
+    "_boardInstructions": "Show a mid-game position where Red has just played in one column landing on row 0 (even-indexed), leaving the row 1 cell above empty and unclaimed. There should also be another column where the cell above Red's last disc is already occupied (so that column is not a valid Claimeven target). The student must identify the column where the valid Claimeven response is available — the one where both the Red disc is on an even row AND the cell directly above is empty.",
+    "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 3
   },
   "confirmationCategory": "claimeven",

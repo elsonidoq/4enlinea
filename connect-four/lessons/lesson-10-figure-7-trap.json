@@ -3,92 +3,60 @@
   "title": "Figure-7 Trap",
   "free": false,
   "userPerspective": "yellow",
-  "_sourceMovestringForBoardSpec": "441314453361115",
-  "_socraticSourceMovestring": "441314453361115",
   "slides": [
     {
+      "boardSpec": ["", "", "", "", "", "", ""],
       "coachMessages": [
         {
-          "text": "The Figure-7: an L-shape of 4 discs plus one key cell that creates two threats. The opponent cannot block both.",
-          "mood": "happy"
-        }
-      ],
-      "boardSpec": [
-        "",
-        "ddgdg",
-        "",
-        "gdg",
-        "dggd",
-        "gd",
-        "d"
-      ],
-      "overlays": [
-        {
-          "c": 2,
-          "r": 2,
-          "type": "tg"
-        },
-        {
-          "c": 2,
-          "r": 3,
-          "type": "tg"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "tg",
-          "label": "Winning cells"
-        }
-      ],
-      "infoProse": "Four Yellow discs form a compact L-shape around columns 3-4. Playing in column 2 creates threats in two different directions: a horizontal 4-in-a-row at row 2, and a diagonal 4-in-a-row through the center. The opponent can only stop one."
-    },
-    {
-      "coachMessages": [
-        {
-          "text": "Blocking one threat leaves the other exposed. The turn order means you always get the winning move.",
+          "text": "Four discs forming the number '7': a diagonal arm, a horizontal arm, and a shared hinge. Find the two threat cells — they are both in the same column.",
           "mood": "think"
         }
       ],
-      "boardSpec": [
-        "",
-        "ddgdg",
-        "",
-        "gdg",
-        "dggd",
-        "gd",
-        "d"
-      ],
-      "overlays": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position (10–14 moves played) where Yellow has exactly 4 discs arranged in a Figure-7 shape: three discs along a diagonal arm and two discs along a horizontal arm (sharing one disc at the hinge). The two Yellow major threat cells should both be in the same column (the shared column of the diagonal and horizontal threats), on adjacent rows. Mark the four Yellow Figure-7 discs with 'win' overlays ('Pattern discs') and both threat cells with 'tg' overlays ('Threat cells — same column'). Do not yet explain why having both threats in the same column matters. Legend: 'win' = The four Figure-7 discs, 'tg' = Both threat cells (note they share a column).</board instructions>\n\nThe Figure-7 is named for its visual shape: a diagonal arm and a horizontal arm sharing a hinge disc. The key property is structural — both threat cells land in the same column on adjacent rows. Find these two cells and count: they are one row apart, same column."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "c": 2,
-          "r": 2,
-          "type": "tg"
-        },
-        {
-          "c": 2,
-          "r": 3,
-          "type": "tg"
+          "text": "Watch what happens when your opponent blocks the lower threat cell. Their block is directly below your upper threat — it just activated it.",
+          "mood": "happy"
         }
       ],
-      "legendItems": [
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show the same Figure-7 position as slide 1, then show the result AFTER the opponent plays into the shared column, blocking the lower threat cell. The opponent's disc lands at the lower threat row. Because the two threat cells are on adjacent rows, the opponent's disc is now directly below the upper threat cell — the upper threat is now at the top of the column stack and immediately live. Mark the opponent's blocking disc with 'td' ('Blocks lower threat'), and mark the now-active upper threat cell with 'tg' ('Upper threat now fires!'). Legend: 'td' = Opponent's block (activates upper threat), 'tg' = Upper threat (now immediately live).</board instructions>\n\nThe adjacent-row property is what makes the Figure-7 a trap, not just a fork. When the opponent blocks the lower threat cell, their disc lands directly below the upper threat — making it the next available cell in the column. The block that saved one threat instantly activates the other. Your opponent cannot block both in one move because blocking the bottom one hands you the top."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
         {
-          "type": "tg",
-          "label": "Unblockable threats"
+          "text": "What if both threat cells are already at the top of the stack? Then it is a direct fork — powerful, but the zugzwang trap mechanism doesn't apply.",
+          "mood": "think"
         }
       ],
-      "infoProse": "If the opponent blocks one cell, you win through the other. Two threats from one setup — this is why the Figure-7 trap is so powerful."
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position with the same 4-disc Figure-7 shape as slides 1–2, but now the shared column is almost full — both threat cells (adjacent rows) are already at or very near the current top of the stack (both immediately or near-immediately playable). This means the opponent faces two directly playable threats, not a staircase lock. Mark both threat cells with 'tg' (both immediately reachable). Add a visible indicator of the column height (e.g., show the stack of discs below the two threat cells). Legend: 'tg' = Both threats immediately reachable (direct fork, not a zugzwang trap).</board instructions>\n\nWhen both threat cells are already at the top of the column stack, you have a direct double-threat (a fork from lesson 3) rather than a zugzwang trap. Your opponent still loses, but the mechanism is different: they face two threats they cannot both block in one move, rather than a self-defeating block sequence. A Figure-7 puzzle specifically requires at least one threat cell to be above the current stack — where the adjacent-row trap mechanism is what wins."
+    },
+    {
+      "boardSpec": ["", "", "", "", "", "", ""],
+      "coachMessages": [
+        {
+          "text": "The diagonal can also run the other way. The '7' becomes a mirror image — same logic, different scanning direction. Don't miss it.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position where Yellow has a Mirror-7 shape: the diagonal arm runs in the opposite direction from the canonical Figure-7 (descending left-to-right instead of ascending, or vice versa), causing the shared threat column to sit to the LEFT of the hinge rather than to the right. The two threat cells are still in the same shared column, adjacent rows. Mark the four Yellow Mirror-7 discs with 'win' overlays and both threat cells with 'tg'. The visual emphasis should be on showing that the shape is a reflection — students who only learned the ascending-diagonal form need to recognise this variant. Legend: 'win' = Mirror-7 pattern discs, 'tg' = Both threat cells (shared column, adjacent rows — same logic).</board instructions>\n\nThe Figure-7 has a mirror image: the diagonal arm runs the other way, placing the shared threat column to the opposite side of the hinge. Structurally, the pattern is identical — two threats in the same column on adjacent rows. The only difference is the scanning direction. Players who memorise the canonical shape miss the Mirror-7 in games. Whenever you see a diagonal three-in-a-row, check both the right and left side for the horizontal arm."
     }
   ],
   "socratic": {
-    "boardSpec": [
-      "",
-      "ddgdg",
-      "",
-      "gdg",
-      "dggd",
-      "gd",
-      "d"
-    ],
+    "goalPrompt": "Yellow has a Figure-7 pattern hidden in this position. Find the two threat cells and name the column they share.",
+    "_boardInstructions": "Use the KB worked example movestring 43222430403 (Red has the canonical Figure-7 with threats at col 6 row 3 and col 6 row 4, all Yellow solver scores are -12 to -14). Present the board from Red's perspective. The student must identify the shared column (col 6, 0-indexed) and both threat rows. This tests pure shape recognition in a cluttered mid-game context.",
+    "boardSpec": ["", "", "", "", "", "", ""],
     "correctCol": 4
   },
   "confirmationCategory": "figure_7",

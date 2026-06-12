@@ -38,7 +38,7 @@ export const REASON_TEMPLATES = new Map([
   ['claimeven:enabled_opponent',        "You gave Yellow a claimeven endgame — they now control the pairing."],
   ['claimodd:missed_own',               "You had the claimodd control — all even columns, center command — and lost it."],
   ['claimodd:enabled_opponent',         "Your move gave Red the claimodd endgame control."],
-  ['drawing_move:missed_own',           "You had a win available and settled for a draw."],
+  ['drawing_move:missed_own',           "You had a forced win available with best play — the position was winning — but this move settled for a draw."],
   ['suboptimal_move:missed_own',        "There was a stronger move — this one gives ground."],
 ]);
 
