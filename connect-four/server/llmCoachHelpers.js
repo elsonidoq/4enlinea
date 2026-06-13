@@ -680,14 +680,22 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   }
 
   // ── Output format ─────────────────────────────────────────────────────────
-  sections.push(`## Output format
-When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets. The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag's spec). Syntax:
-  [zone:colN]column N[/zone:colN] for a column (N = column number 1–7)
-  [zone:cNrM]that cell[/zone:cNrM] for a single cell (N = column 1–7, M = row 1–6)
-  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] for multiple cells
-  [zone:rowN]row N[/zone:rowN] for an entire row
-Only tag EXPLICIT spatial references. Do not tag abstract concepts.
-Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).`);
+  const formatLines = ['## Output format'];
+  formatLines.push('When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets.');
+  formatLines.push('The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag\'s spec).');
+  formatLines.push('');
+  formatLines.push('Syntax (use EXACTLY these patterns — the closing tag MUST repeat the same spec as the opening tag):');
+  formatLines.push('  [zone:colN]column N[/zone:colN] — for a column (N = column number 1–7). Example: [zone:col3]column 3[/zone:col3]');
+  formatLines.push('  [zone:cNrM]that cell[/zone:cNrM] — for a single cell. Example: [zone:c5r2]that cell[/zone:c5r2]');
+  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] — for multiple cells');
+  formatLines.push('  [zone:rowN]row N[/zone:rowN] — for an entire row. Example: [zone:row3]row 3[/zone:row3]');
+  formatLines.push('');
+  formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
+  formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
+  formatLines.push('');
+  formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
+  formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
+  sections.push(formatLines.join('\n'));
 
   // ── Task ──────────────────────────────────────────────────────────────────
   if (isBlunder) {
