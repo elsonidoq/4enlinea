@@ -26,7 +26,7 @@ function Navigator() {
     setActiveScreen(resolved);
     setScreen(resolved);
     setParams(resolvedParams);
-    window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '', resolvedUrl);
+    window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '', resolvedUrl + window.location.hash);
     track('session_start', { screen: resolved });
   }, []);
 
