@@ -233,10 +233,13 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const postBestBoard = new Board(movestring + bestCol);
   const allowedSet = buildAllowedSetFromPatternMaps(patMaps, postBestBoard);
 
-  // Whitelist the contrast column in P5Strong when allowedSet is non-null.
+  // Whitelist the played column and contrast column in P5Strong when allowedSet is non-null.
   // P5Strong only fires when allowedSet is provided; if null, all column refs are unchecked.
-  if (!isOptimal && allowedSet !== null) {
-    allowedSet.push({ col: contrastCol, validationOnly: true });
+  if (allowedSet !== null) {
+    allowedSet.push({ col, validationOnly: true }); // the move being explained
+    if (!isOptimal) {
+      allowedSet.push({ col: contrastCol, validationOnly: true }); // the better move
+    }
   }
 
   // ── Step 6: Board visualizations ──────────────────────────────────────────

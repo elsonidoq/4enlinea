@@ -622,23 +622,35 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
 
   // ── Hard grounding rules ──────────────────────────────────────────────────
   const groundingLines = ['## Hard grounding rules'];
+  // Collect allowed columns for the prompt
+  const allowedCols = [];
+  if (playedCol !== undefined) allowedCols.push(playedCol);
+  if (contrastCol !== undefined && contrastCol !== playedCol) allowedCols.push(contrastCol);
+
   if (allowedSet !== null) {
-    groundingLines.push('Reference ONLY the cells listed in "Strategic reference cells" below.');
-    groundingLines.push('Never name a cell not in that list.');
-    groundingLines.push('');
-    groundingLines.push('### Strategic reference cells — NOT where the move was played');
-    groundingLines.push('These cells are tactical reference points for your explanation, not the location of the move itself.');
-    if (allowedSet.length === 0) {
-      groundingLines.push('(no specific cells — describe patterns in general terms only)');
-    } else {
-      for (const entry of allowedSet) {
-        if (entry.validationOnly) continue;
-        if (entry.cells) {
-          groundingLines.push(`- Concrete cells: [${entry.cells.join(', ')}]`);
-        } else if (entry.col !== undefined) {
-          groundingLines.push(`- Abstract zone: column ${entry.col + 1}, ${entry.parity} row`);
-        }
+    // Add pattern-derived columns
+    for (const entry of allowedSet) {
+      if (entry.col !== undefined && !allowedCols.includes(entry.col)) {
+        allowedCols.push(entry.col);
       }
+    }
+    groundingLines.push('You may reference these columns using zone tags:');
+    groundingLines.push(allowedCols.map(c => `[zone:col${c + 1}]column ${c + 1}[/zone:col${c + 1}]`).join(', '));
+    groundingLines.push('');
+    // Build strategic cells list (non-validationOnly, cell-type entries only)
+    const strategicCells = [];
+    for (const entry of allowedSet) {
+      if (entry.validationOnly) continue;
+      if (entry.cells && entry.cells.length > 0) {
+        strategicCells.push(...entry.cells);
+      }
+    }
+    if (strategicCells.length > 0) {
+      groundingLines.push('### Strategic reference cells');
+      groundingLines.push('These cells are tactical reference points for your explanation.');
+      groundingLines.push(`- Concrete cells: [${strategicCells.join(', ')}]`);
+    } else {
+      groundingLines.push('(no specific cell references — use the allowed columns above and describe patterns in general terms)');
     }
   } else {
     groundingLines.push('Column numbers (1–7) are always valid to reference — they appear in every board header.');
