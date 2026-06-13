@@ -296,6 +296,28 @@ Solver scores are intentionally excluded from the prompt. The LLM reasons from t
 
 **Contrast move selection**: if the user's move was suboptimal, the contrast is the best legal move; if optimal, the contrast is the second-best. Center column (col 3) breaks ties. If all legal scores are equal, the handler returns the "All moves are roughly equivalent" frozen string without calling the LLM. If `checkAllMovesEqual` detects a genuinely settled position (all scores zero), the shorter "All moves are roughly equivalent" frozen string is returned instead.
 
+### Zone tag normalization (`normalizeZoneTags`)
+
+LLMs frequently malform zone tags in explain-move output. Common errors:
+- `[zone:column 2]...[/zone:column]` instead of `[zone:col2]...[/zone:col2]`
+- `[zone:col 3]...[/zone:col]` instead of `[zone:col3]...[/zone:col3]`
+
+`normalizeZoneTags()` in `server/index.js` fixes these before validation:
+1. Opening tags: `[zone:column N]` or `[zone:col N]` → `[zone:colN]`
+2. Closing tags: pairs each opening `[zone:colN]` with the nearest following `[/zone:*]` and rewrites it to `[/zone:colN]`
+
+This function MUST be called on both the first attempt and retry LLM output before `validateAnnotation()`.
+
+### allowedSet construction rules
+
+`buildExplainContext` in `explainContext.js` builds the `allowedSet` for P5Strong validation. Rules:
+1. **Pattern-derived cells**: from `classifyPattern` results at the played position, best-move position, and (for blunders) opponent-response position. Tier 1 tags contribute cells; Tier 2 contributes abstract columns; Tier 3 is skipped.
+2. **Played column**: always added as `{ col, validationOnly: true }` — the LLM may reference where the move was played.
+3. **Contrast column** (blunders only): added as `{ col: contrastCol, validationOnly: true }` — the LLM may reference the better column.
+4. **Played cell** (pending): the exact cell where the disc landed should also be whitelisted. Computed by counting discs in `col` within `movestring`.
+
+`validationOnly: true` means the entry is used for P5Strong validation but excluded from the prompt's "Strategic reference cells" list. Columns with this flag are instead listed explicitly in the "Hard grounding rules" section with their exact zone tag format.
+
 **Key files**:
 - `connect-four/server/explainContext.js` — `buildExplainContext` (the grounding entry point)
 - `connect-four/server/scripts/visualize_board.mjs` — board visualization (called via `spawnSync`)

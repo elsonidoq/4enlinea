@@ -147,6 +147,12 @@
 
 - [Papergames integration](project_papergames_integration.md) — papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips
 
+## Project — bugs fixed
+
+- [Magic link auth: Navigator strips hash before GoTrueClient processes it](project_magic_link_auth_race.md) — React useEffect race condition; fixed by preserving window.location.hash in replaceState
+- [Service worker cache-first breaks app after deploy](bug_service_worker_stale_cache.md) — SW cached index.html permanently → stale JS references → MIME error; fixed with network-first for HTML
+- [Deep reveal zone validation fixes](deep_reveal_zone_validation_fixes.md) — P5Strong played-col whitelist, LLM zone tag normalization, prompt format improvements; played-cell whitelist pending
+
 ## Project — open bugs
 
 - [Server parity bug — AI-first games](project_parity_bug_ai_first.md) — human/ai heatmaps swapped when AI opens the game; not yet fixed

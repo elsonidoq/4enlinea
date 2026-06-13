@@ -80,11 +80,17 @@ async function safeClassifyPattern(ms, perspective, solver) {
  */
 function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
   const entries = [];
+  const seenCells = new Set();
 
   for (const map of patternMaps) {
     for (const [tag, { cells }] of map) {
       if (TIER1_TAGS.has(tag) && cells.length > 0) {
-        entries.push({ cells, zoneSpec: 'tg' });
+        const dedupedCells = cells.filter(c => {
+          if (seenCells.has(c)) return false;
+          seenCells.add(c);
+          return true;
+        });
+        if (dedupedCells.length > 0) entries.push({ cells: dedupedCells, zoneSpec: 'tg' });
       } else if (TIER2_TAGS.has(tag)) {
         // Derive capsule column: first col where (ROWS - colHeights[c]) % 2 === 1
         const { colHeights } = boardForCapsule;
@@ -237,6 +243,9 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   // P5Strong only fires when allowedSet is provided; if null, all column refs are unchecked.
   if (allowedSet !== null) {
     allowedSet.push({ col, validationOnly: true }); // the move being explained
+    // Also whitelist the exact cell where the disc landed (pre-move column height = row index)
+    const playedRow = board.colHeights[col];
+    allowedSet.push({ cells: [`c${col}r${playedRow}`], validationOnly: true });
     if (!isOptimal) {
       allowedSet.push({ col: contrastCol, validationOnly: true }); // the better move
     }

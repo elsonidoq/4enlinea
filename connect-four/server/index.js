@@ -38,6 +38,7 @@ if (process.env.SENTRY_DSN) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
 app.use(express.json());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);

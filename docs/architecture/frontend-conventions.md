@@ -330,3 +330,29 @@ On initial page load, `App.jsx` calls `parseUrl(location.pathname)` and calls `r
 ### `clchallenge` cold-boot fetch pattern
 
 The `clchallenge` screen encodes only `lessonId` in the URL. On cold boot (when `lessonTitle` is absent from navigation params), `CLChallengeScreen` fetches the remaining props from `GET /api/lessons/:lessonId`. Components that require data beyond what fits in a URL path parameter MUST follow this same fetch-on-missing-props pattern.
+
+## Service Worker (`public/sw.js`)
+
+The service worker provides offline support and performance caching. Critical rules for modifying it:
+
+### Caching strategy per request type
+
+| Request type | Strategy | Rationale |
+|---|---|---|
+| Navigation (HTML pages) | **Network-first** | `index.html` changes every deploy (new hashed JS filenames). Cache-first would serve stale HTML → broken app. |
+| Hashed assets (`/assets/*`) | **Cache-first** | Vite generates content-hashed filenames. Immutable — a cached version is always correct. |
+| Other static (manifest, favicon, fonts) | **Cache-first with network update** | Rarely changes; cache for speed, update in background. |
+| API requests (`/api/*`) | **Bypass** | Never cache API responses — they must be fresh. |
+| Cross-origin requests | **Bypass** | Supabase, Google Fonts etc. are handled by their own CDNs. |
+
+### Important: bump CACHE_NAME on any SW logic change
+
+The `CACHE_NAME` constant (e.g., `'decodec4-shell-v2'`) must be bumped whenever the caching strategy changes. This purges all stale cached entries from old SW versions. Failing to bump it means users with the old SW installed will continue serving stale content.
+
+### Never cache index.html with cache-first
+
+**Doing so will break the app after every deploy.** The cached index.html references old hashed JS files that no longer exist on the server, causing MIME type errors ("Expected a JavaScript module but the server responded with text/html").
+
+### SW lifecycle
+
+`skipWaiting()` is called on install — the new SW activates immediately without waiting for all tabs to close. `clients.claim()` is called on activate — the SW takes control of all clients immediately. This means SW updates apply on the next navigation, not the next full page load.
