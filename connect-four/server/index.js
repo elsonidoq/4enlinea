@@ -168,11 +168,17 @@ async function loadUser(req, _res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return next();
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('users')
       .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid')
       .eq('id', data.user.id)
       .single();
+
+    if (!profile) {
+      // Trigger on auth.users may not have fired — create the row now.
+      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid').single()
+        .then(({ data: created }) => { if (created) profile = created; });
+    }
 
     req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString() };
   } catch {
