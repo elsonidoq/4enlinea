@@ -5,7 +5,7 @@
   "steps": {
     "build": {
       "commands": [
-        "cd ../solver-src && make",
+        "cd solver-src && make SERVER_DIR=../server",
         "npm run build"
       ]
     }
