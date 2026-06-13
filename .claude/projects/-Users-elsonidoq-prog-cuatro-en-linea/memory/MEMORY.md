@@ -117,6 +117,7 @@
 - [Past Games & Blunder Navigation epics](project_past_games_epics.md) — Epics A+B fully implemented; blunderDetail SESSION_ONLY; navigateToMistake takes a number; globalPlyIndex formula
 - [Coach commentary epic — board-grounded messages](project_coach_commentary_epic.md) — spec/plan/tasks complete at specs/029; 16 tasks; key architectural decisions locked
 - [Spec 030 — server-mediated data access](project_spec030_server_mediated_data_access.md) — spec/plan/tasks done; 43 tasks; session-stats write asymmetry, device_uuid server-derived, migrate covers 5 targets
+- [Spec 030 — byPattern computation mismatch](project_spec030_session_stats_bypattern_mismatch.md) — both old and new getAllSessionStats read non-existent fields; byPattern always empty in prod
 - [explain-move-llm endpoint + explanation_cache](project_explain_system.md) — data flow, LLM prompt invariants, cache schema, Type 1–4 taxonomy
 - [Classifier current state + T037–T048 pending](project_classifier_current_state.md) — Cat1–Cat5 fixes done; J/U/O/F pattern detector bugs NOT yet fixed; FP rates
 - [Knowledge base status](project_kb_status.md) — 30 entries done; 9 fact-check errors fixed; 58 gaps; worked_examples PENDING

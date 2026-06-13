@@ -1,0 +1,11 @@
+{
+  "epic_path": "TODOs_epics.md",
+  "epic_section": "Epic 2 — Staging/Production Infrastructure & Deploy",
+  "spec_dir": "specs/031-staging-production-deploy",
+  "stage": "plan_critique",
+  "pending_brainstorming_decisions": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": "## Handoff context\n\n### Key architectural decisions\n\n1. **Path correction (critical)**: solver-src/ is a sibling of connect-four/ at the repo root (not inside connect-four/). nixpacks.toml build command must be 'cd ../solver-src && make && npm run build'. Makefile audited — no macOS-specific flags; SERVER_DIR=../connect-four/server confirms binary lands correctly.\n\n2. **pg in devDependencies**: Must move to dependencies. Railway prunes devDependencies after build; pg needed at runtime by migrate.js.\n\n3. **schema_migrations is self-bootstrapped**: Created by migrate.js itself (CREATE TABLE IF NOT EXISTS), NOT by a numbered .sql migration file.\n\n4. **--baseline reads filenames dynamically**: No hardcoded list. Whatever .sql files exist in server/migrations/ at run time get recorded. Currently 39 files (001–039).\n\n### Non-obvious ordering constraints\n\n- VITE_* env vars must be set in Railway BEFORE the first build — baked into Vite bundle at build time\n- Production --baseline must run BEFORE the first Railway deploy\n- Staging migrate.js runs in normal mode (not baseline) on first deploy — staging DB starts empty\n- Puzzle data import depends on staging schema being fully in place first\n\n### Trade-offs and deferrals\n- No CI/CD — all deploys are manual per spec assumption\n- No automated smoke tests — manual operator procedure\n\n### Reviewer attention points\n- nixpkgs package name: gcc (not g++ or gpp) is the correct Nixpkgs package name\n- schema_migrations not in PostgREST — Supabase default RLS blocks anon access automatically\n- 39 existing migrations (001–039) — --baseline records whatever is on disk at run time",
+  "pending_deferrals": []
+}

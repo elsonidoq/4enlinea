@@ -71,11 +71,21 @@ export async function writePuzzleAttempts(supabase, userId, deviceUuid, attempts
     if (error) {
       // 23505 = unique_violation — treat as success (duplicate retry)
       if (error.code === '23505') return;
+      // 23503 = foreign_key_violation — one bad puzzle_id poisons the batch;
+      // fall back to row-by-row so valid rows still land.
+      if (error.code === '23503') {
+        for (const row of rows) {
+          const { error: rowErr } = await supabase.from('puzzle_attempts').insert(row);
+          if (rowErr && rowErr.code !== '23505' && rowErr.code !== '23503') {
+            return { error: rowErr.message };
+          }
+        }
+        return;
+      }
       return { error: error.message };
     }
   } catch (err) {
-    // Some Supabase client versions throw on 23505 instead of returning error
-    if (err?.code === '23505') return;
+    if (err?.code === '23505' || err?.code === '23503') return;
     return { error: err.message };
   }
 }

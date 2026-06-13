@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/030-server-mediated-data-access/plan.md
+specs/031-staging-production-deploy/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

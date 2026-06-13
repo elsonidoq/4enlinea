@@ -355,6 +355,14 @@ export function registerUserRoutes(app, supabase) {
     }
 
     try {
+      // Ensure device_uuid is set — new users have null until first migration.
+      let deviceUuid = req.user.device_uuid;
+      if (!deviceUuid) {
+        const { randomUUID } = await import('node:crypto');
+        deviceUuid = randomUUID();
+        await supabase.from('users').update({ device_uuid: deviceUuid }).eq('id', req.user.id);
+      }
+
       const operations = [];
 
       // puzzle_attempts
@@ -363,7 +371,7 @@ export function registerUserRoutes(app, supabase) {
           writePuzzleAttempts(
             supabase,
             req.user.id,
-            req.user.device_uuid,
+            deviceUuid,
             body.puzzle_attempts,
           ),
         );
@@ -399,7 +407,9 @@ export function registerUserRoutes(app, supabase) {
         );
       }
 
-      await Promise.all(operations);
+      const results = await Promise.all(operations);
+      const failed = results.find(r => r?.error);
+      if (failed) return res.status(500).json({ error: failed.error });
       res.status(204).send();
     } catch (err) {
       res.status(500).json({ error: err.message });

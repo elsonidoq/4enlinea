@@ -154,9 +154,24 @@ each backed by its own database.
   the connection/env split (`.env` lives at `connect-four/server/.env`; see
   `reference_supabase_connection.md`).
 - Parameterize all environment-specific config (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `OPENAI_*`, `FRONTEND_URL`, `PORT`) per environment.
+  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `OPENAI_*`, `FRONTEND_URL`, `PORT`,
+  `DATABASE_URL` (Postgres pooler connection string used by `migrate.js` via the `pg` driver)) per
+  environment.
+- **Existing Supabase project is production.** The current live Supabase project is designated
+  production as-is. A new, empty Supabase project is provisioned for staging only.
 - A migration-application path that runs the same `server/migrations/*.sql` against staging then
-  production, in order, with a record of what has been applied.
+  production, in order, with a record of what has been applied. `migrate.js` must self-bootstrap the
+  `schema_migrations` ledger table (`CREATE TABLE IF NOT EXISTS`) as its very first step. Because the
+  existing production DB already has all 39 migrations applied, a one-time ledger pre-seed step is
+  required before the first production deploy: `INSERT INTO schema_migrations (filename) VALUES
+  (<each of the 39 filenames>) ON CONFLICT DO NOTHING`. Without this, `migrate.js` sees an empty
+  ledger and attempts to replay all 39 migrations, crashing on non-idempotent DDL.
+- **Staging puzzle-data provisioning.** A fresh Supabase project has no puzzle rows; migrations only
+  create schema. As a one-time staging-setup step, export puzzle rows from production (`pg_dump
+  --data-only --table=puzzles`) and import into staging so the smoke test has data to work with.
+- **Auth redirect URL allowlisting.** Add `FRONTEND_URL` as an allowed magic-link redirect URL in
+  each Supabase project's Auth → URL Configuration → Redirect URLs. This is a per-environment
+  deliverable; without it, magic-link sign-in fails regardless of code correctness.
 - A repeatable deploy action for each target (build `dist/`, ship server, run migrations) and a
   documented promote-staging→prod flow.
 
@@ -165,22 +180,33 @@ each backed by its own database.
 - Staging and production each resolve to a distinct database; a write in one is invisible in the other.
 - A documented command/pipeline deploys to staging and a separate one deploys to production.
 - Migrations apply identically and idempotently to both targets; applied-migration state is tracked.
-- A smoke test (load app, sign in, complete one puzzle) passes against staging after deploy.
+- A smoke test (load app, sign in via magic link, complete one puzzle) passes against staging after
+  deploy. The smoke test presupposes: (a) the staging Supabase project's Auth redirect URLs include
+  the staging `FRONTEND_URL` (otherwise magic-link sign-in fails), and (b) puzzle rows have been
+  imported into staging (otherwise no puzzle is available to complete).
 
 **NOT included:** CDN/edge tuning, autoscaling, blue-green or canary deploys, secret-manager
 migration, observability dashboards beyond existing Sentry.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Hosting model.** `docs/cloud_provider_research.md` weighs VPS vs PaaS vs serverless for a
-  solver-heavy app; the persistent c4solver child process (`server-conventions.md`) constrains
-  serverless. Output: chosen host for the Node/solver server and the static frontend, plus the
-  per-environment topology.
-- **DB split mechanism.** Decide between two separate Supabase projects vs. Supabase branching vs.
-  schema separation, weighing cost and migration ergonomics. Output: the chosen mechanism and its
-  env-var implications.
-- **Migration runner.** There is currently no applied-migrations ledger. Decide on the tool
-  (Supabase CLI migrations vs. a hand-rolled runner). Output: the runner choice and ledger format.
+- **Hosting model.** Railway PaaS hosts the Node/solver server. Express serves the Vite `dist/` as
+  static files from the same service — no separate frontend host. One Railway project with two
+  environments (staging and production), each getting its own build and env var set. `VITE_*` vars
+  are baked into the Vite build at deploy time per environment. Railway supports persistent processes
+  (required by c4solver's 2-second startup), has near-zero usage-based cost at MVP scale, and
+  handles SSL/DNS automatically.
+- **DB split mechanism.** Two separate Supabase projects — one for staging, one for production —
+  each with its own URL, keys, auth users, and schema. Staging stays on Supabase's free tier;
+  production upgrades to Pro when needed. This provides full isolation with independent migrations;
+  schema separation would share auth users and complicate RLS; Supabase branching is designed for
+  ephemeral PR previews, not persistent staging.
+- **Migration runner.** A hand-rolled Node script (`server/migrate.js`) reads
+  `server/migrations/*.sql` alphabetically, checks a
+  `schema_migrations(filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ)` ledger table in each DB,
+  and runs only unapplied files in order inside transactions. Railway deploy command:
+  `node server/migrate.js && node server/index.js`. A failed migration aborts the deploy and blocks
+  server start.
 
 ---
 
