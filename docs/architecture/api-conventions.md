@@ -6,6 +6,7 @@
 **MUST**: Curation and admin routes use `/api/admin/<resource>` (e.g., `/api/admin/candidates`).
 **MUST**: Stripe routes use `/api/stripe/<action>` (e.g., `/api/stripe/create-checkout`).
 **MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
+**MUST**: Authenticated user-data routes use `/api/user/<resource>` (e.g., `/api/user/profile`, `/api/user/streak`). Established in spec 030; full endpoint contracts at `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
 ## Error Response Shape
 
@@ -34,6 +35,16 @@
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
 - **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
   Threat model: the server is expected to run behind a firewall or on a private network without port forwarding. `requireLocalhost` is the sole access control layer — there is no API key, session token, or other authentication for admin routes. If the deployment model changes (e.g. cloud-hosted server with a remote admin UI), admin routes must be migrated to token-based auth before deployment.
+
+### `/api/user/*` ownership invariants (spec 030)
+
+**MUST**: Every `/api/user/*` endpoint MUST check `req.user` at the top of the handler and return `401 { "error": "Unauthorized" }` if null. The `loadUser` middleware runs globally, but the explicit inline guard is required — do not rely on middleware ordering alone.
+
+**MUST**: Every `/api/user/*` endpoint MUST filter all DB queries with `user_id = req.user.id` (or `id = req.user.id` for the `users` table). No endpoint may read or write another user's data.
+
+**MUST**: `device_uuid` MUST be sourced from `req.user.device_uuid` (populated by `loadUser`). Client request bodies MUST NOT include `device_uuid` — the server derives it, never trusts it from the wire.
+
+Full endpoint contracts: `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
 ## Supabase Usage Pattern
 

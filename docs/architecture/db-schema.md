@@ -266,4 +266,6 @@ Unique: `stripe_event_id`
 
 **No new RLS policies**: This feature requires no new RLS policies. The existing policies are sufficient as defense-in-depth.
 
+**service_role table grants**: The service-role key bypasses RLS but still requires explicit table-level `GRANT` in Postgres. Every table the server reads or writes must include `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO service_role` in its migration. Without this, PostgREST returns "permission denied" even with a valid service-role key. See `040_service_role_grants.sql` for the full list. When adding a new table that the server accesses, always include this grant in the same migration.
+
 **Client-side posture**: Zero `.from(...)` or `.rpc(...)` Supabase calls remain in the browser JavaScript bundle outside of `supabase.auth.*`. The browser communicates with the database exclusively through `/api/user/*` server endpoints, each of which enforces authentication and ownership server-side.

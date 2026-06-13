@@ -136,9 +136,6 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } }
   );
-  console.log('[server] Supabase URL:', process.env.SUPABASE_URL);
-} else {
-  console.log('[server] Supabase not configured (SUPABASE_URL=%s)', process.env.SUPABASE_URL);
 }
 
 // ── Anthropic client ──────────────────────────────────────────────────────────
@@ -163,27 +160,22 @@ try {
 async function loadUser(req, _res, next) {
   req.user = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ') || !supabase) {
-    console.log('[loadUser] early-return: hasHeader=%s supabaseNull=%s', !!authHeader?.startsWith('Bearer '), !supabase);
-    return next();
-  }
+  if (!authHeader?.startsWith('Bearer ') || !supabase) return next();
 
   const token = authHeader.slice(7);
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    console.log('[loadUser] getUser: userId=%s error=%s', data?.user?.id, error?.message);
     if (error || !data?.user) return next();
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('users')
       .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid')
       .eq('id', data.user.id)
       .single();
 
-    console.log('[loadUser] profile: found=%s profileError=%s', !!profile, profileError?.message);
     req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString() };
-  } catch (err) {
-    console.log('[loadUser] caught exception: %s', err?.message);
+  } catch {
+    // Non-fatal: treat as anonymous
   }
   next();
 }

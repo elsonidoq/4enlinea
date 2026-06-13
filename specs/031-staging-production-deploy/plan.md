@@ -22,7 +22,7 @@ production database with schema already applied.
 **Project Type**: DevOps/infrastructure additions to an existing web-service monorepo  
 **Performance Goals**: `migrate.js` startup time is not latency-sensitive; correctness is the only constraint  
 **Constraints**: `DATABASE_URL` MUST use session-mode pooler (port 5432); transaction-mode pooler (port 6543) is forbidden for multi-statement transactions and `pg_dump`. No CI/CD automation — all deploys are manual.  
-**Scale/Scope**: 39 existing migrations; two Railway environments; two Supabase projects
+**Scale/Scope**: 39 existing migrations (files 001–040 with 004 absent from the sequence); two Railway environments; two Supabase projects
 
 ## Constitution Check
 
@@ -266,11 +266,19 @@ Key decisions:
 - The `npm install` phase is automatic in nixpacks (before `cmds`); no explicit `npm install` needed.
 - `VITE_*` variables must be set as Railway environment variables before the build runs (they are baked into the bundle at build time by Vite).
 
+> **Railway build sandbox test (required before finalizing nixpacks.toml)**: Before committing
+> `nixpacks.toml`, the operator MUST test `cd ../solver-src && make` on a throwaway Railway deploy
+> to confirm the build sandbox permits parent-directory traversal from `connect-four/`. If Railway
+> sandboxes the build to the declared root directory and blocks `../` traversal, the fallback is:
+> set Railway's root directory to the **repository root** (not `connect-four/`) and change the build
+> command to `cd solver-src && make && cd connect-four && npm run build`. The start command and all
+> relative paths within `nixpacks.toml` must be adjusted accordingly if the fallback is used.
+
 ### package.json change
 
 Move `"pg": "^8.21.0"` from `devDependencies` to `dependencies`.
 
-**Why**: Railway prunes `devDependencies` after the build phase. `migrate.js` and `server/index.js` (via the connection pool used by some endpoints) need `pg` at runtime. It must survive the prune step.
+**Why**: Railway prunes `devDependencies` after the build phase. `pg` is needed at runtime by `migrate.js` only — `server/index.js` does not import `pg` directly. `migrate.js` runs as `node server/migrate.js` in the Railway start command (before `node server/index.js`), so `pg` must survive the prune step and be present in the runtime container. Moving it to `dependencies` achieves this.
 
 ### Environment variable checklist (both Railway environments)
 
@@ -296,14 +304,27 @@ Each Railway environment (staging, production) must have these set independently
 
 ### Operator steps (non-code, documented in runbook)
 
+> **Ops execution environment**: The `--baseline`, `pg_dump`, and `psql` operations MUST be run from
+> the operator's local machine with a Postgres client whose major version matches Supabase's Postgres
+> server version. Check the Supabase project settings for the current version; as of 2026, Supabase
+> defaults to Postgres 15. A version mismatch causes `pg_dump` to fail with a
+> `server version mismatch` error. The runbook must state the required version explicitly.
+
+> **VITE_* vs FRONTEND_URL timing**: `VITE_*` variables are build-time — they must be set before
+> Railway triggers any build because Vite bakes them into the compiled bundle. `FRONTEND_URL` is a
+> runtime variable — it is read by the server process at startup, not during the build, so it can be
+> set (or corrected) after the domain is known; doing so triggers only a container restart, not a
+> full rebuild.
+
 1. **Provision staging Supabase project** — new free-tier project; note its URL, anon key, service role key, and session-mode pooler URL.
-2. **Configure Railway environments** — create staging and production environments in one Railway project; set all env vars per the table above.
-3. **Set VITE_* variables before first build** — these are baked into the bundle; must be set before Railway triggers a build.
-4. **Bootstrap production ledger** — `DATABASE_URL=<prod-url> node server/migrate.js --baseline` (run from `connect-four/`).
-5. **Staging schema bootstrap** — first deploy to staging will run `migrate.js` in normal mode against the empty staging DB; all 39+ migrations apply in order.
-6. **Import puzzle data to staging** — `pg_dump / psql` pipeline per the research decision above.
-7. **Configure Supabase Auth redirect URLs** — staging `FRONTEND_URL` → staging project; production `FRONTEND_URL` → production project.
-8. **Smoke test staging** — load app → sign in via magic link → complete one puzzle.
+2. **Configure Railway environments** — create staging and production environments in one Railway project. Set all `VITE_*` variables and all other env vars **except `FRONTEND_URL`** before the first build. `FRONTEND_URL` cannot be set yet because the Railway domain is not assigned until after the first deploy.
+3. **First deploy (staging and production)** — trigger the initial Railway deploy. After the deploy completes, Railway assigns a stable domain (e.g., `myapp.up.railway.app`). Note this domain for each environment.
+4. **Set FRONTEND_URL and configure Supabase Auth redirect URLs** — now that the Railway domain is known: (a) set `FRONTEND_URL` in each Railway environment; (b) add the staging `FRONTEND_URL` to the staging Supabase project's Auth → URL Configuration → Redirect URLs, and the production `FRONTEND_URL` to the production project's Redirect URLs. Trigger a redeploy (restart only, not a rebuild) for each environment.
+5. **Verify production schema before baseline** — before running `--baseline` against production, manually verify that the production database's actual schema matches what the on-disk migration files are expected to have created. List tables and key columns (e.g., via `psql "$PROD_DATABASE_URL" -c "\dt"` and spot-checking column definitions) and cross-reference with each migration file. If any mismatch is found, reconcile it before proceeding. Do not run `--baseline` against a schema that diverges from the migration files.
+6. **Bootstrap production ledger** — after schema verification, run `DATABASE_URL=<prod-url> node server/migrate.js --baseline` from `connect-four/`. This records all 39 currently-applied migration filenames in `schema_migrations` without re-executing any SQL.
+7. **Staging schema bootstrap** — the first deploy to staging already runs `migrate.js` in normal mode against the empty staging DB (started in step 3); all 39 migrations apply in order automatically.
+8. **Import puzzle data to staging** — `pg_dump / psql` pipeline per the research decision above.
+9. **Smoke test staging** — load app → sign in via magic link → complete one puzzle.
 
 ---
 

@@ -24,12 +24,10 @@ export function ProfileStoreProvider({ children }) {
     if (!supabase) return;
 
     supabase.auth.getSession().then(({ data }) => {
-      console.log('[auth] getSession:', data.session ? 'session found' : 'no session');
       if (data.session) switchToSupabase(data.session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log('[auth] onAuthStateChange event=%s hasSession=%s', event, !!newSession);
       if (newSession) {
         switchToSupabase(newSession, event);
       } else {

@@ -135,10 +135,11 @@ appear in the production Supabase dashboard, and vice versa.
 - **FR-001b**: The c4solver binary committed to the repository is a macOS ARM64 Mach-O executable
   that CANNOT run on Railway's Linux containers. `connect-four/nixpacks.toml` MUST configure the
   build command to compile the solver for the target platform: the build command MUST execute
-  `cd solver-src && make` (which produces the Linux binary and copies it to `server/`) before
-  `npm run build`. The 33 MB `7x6.book` opening book file is platform-independent and does not
-  need regeneration.
-- **FR-002**: The Railway build command MUST be `cd solver-src && make && npm run build` executed
+  `cd ../solver-src && make` (which produces the Linux binary and copies it to `server/`) before
+  `npm run build`. `solver-src/` is at the repository root, one level above `connect-four/`, so the
+  path is `../solver-src` when executed from `connect-four/`. The 33 MB `7x6.book` opening book
+  file is platform-independent and does not need regeneration.
+- **FR-002**: The Railway build command MUST be `cd ../solver-src && make && npm run build` executed
   from `connect-four/`, and the start command MUST be
   `node server/migrate.js && node server/index.js` with no `--env-file` flag (Railway injects env
   vars directly).
@@ -172,14 +173,18 @@ appear in the production Supabase dashboard, and vice versa.
 - **FR-010**: Two separate Supabase projects MUST be used — one designated as production (the
   existing live project), one new project for staging. Schema separation or Supabase branching
   MUST NOT be used.
-- **FR-011**: Each Railway environment (staging, production) MUST have the following env vars set
-  independently: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`,
-  `VITE_SUPABASE_ANON_KEY`, `DATABASE_URL`, `FRONTEND_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`,
-  `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`,
-  `STRIPE_WEBHOOK_SECRET`, `SENTRY_DSN`, `PORT`. `DATABASE_URL` MUST use the Supabase
-  **session-mode pooler** (port **5432**) with `sslmode=require` appended to the connection string.
-  The transaction-mode pooler (port 6543) MUST NOT be used: it breaks multi-statement transactions
-  and does not support `pg_dump`.
+- **FR-011**: Each Railway environment (staging, production) MUST have env vars set independently,
+  with the following distinction:
+  - **Required on both staging and production** (app will not start or will serve broken pages
+    without these): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`,
+    `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `FRONTEND_URL`, `PORT`.
+  - **Optional on staging** (app degrades gracefully to 503 on the affected endpoints if absent;
+    staging smoke test does not exercise these paths): `OPENAI_API_KEY`, `OPENAI_MODEL`,
+    `ANTHROPIC_API_KEY`, Stripe keys (`STRIPE_SECRET_KEY`, `STRIPE_MONTHLY_PRICE_ID`,
+    `STRIPE_ANNUAL_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`), `SENTRY_DSN`.
+  - `DATABASE_URL` MUST use the Supabase **session-mode pooler** (port **5432**) with
+    `sslmode=require` appended to the connection string. The transaction-mode pooler (port 6543)
+    MUST NOT be used: it breaks multi-statement transactions and does not support `pg_dump`.
 - **FR-012**: `VITE_*` variables MUST be set in the Railway environment before the build step runs,
   so they are baked into the compiled frontend bundle for that environment.
 - **FR-013**: As a one-time staging setup step, the operator MUST export puzzle rows from

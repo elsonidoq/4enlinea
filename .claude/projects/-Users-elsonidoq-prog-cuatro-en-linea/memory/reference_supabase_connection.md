@@ -22,9 +22,14 @@ psql "$DATABASE_URL" -f connect-four/server/migrations/NNN_slug.sql
 
 **Direct DB connection:**
 - Hostname `db.kxtqwsumojtexokrtlfp.supabase.co` does NOT resolve (new platform)
-- Use the session pooler instead: `aws-1-us-west-2.pooler.supabase.com:5432`
+- Use the **session pooler** (port **5432**): `aws-1-us-west-2.pooler.supabase.com:5432`
 - Full format: `postgresql://postgres.kxtqwsumojtexokrtlfp:PASSWORD@aws-1-us-west-2.pooler.supabase.com:5432/postgres`
 - Get connection string from dashboard → Connect button → URI tab
+
+**Session pooler vs transaction pooler — critical distinction:**
+- **Session pooler (port 5432)** — required for: DDL migrations (`migrate.js`), `pg_dump`/`psql` data export/import, any multi-statement transaction. Use this for `DATABASE_URL`.
+- **Transaction pooler (port 6543)** — pgBouncer transaction mode; FORBIDDEN for DDL and `pg_dump`. Do not use for migrations.
+- Always include `sslmode=require` in the connection string.
 
 **Querying from Node.js (inline script pattern):**
 - `.env` file is at `connect-four/server/.env` (not project root)

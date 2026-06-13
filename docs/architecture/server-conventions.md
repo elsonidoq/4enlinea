@@ -410,6 +410,25 @@ The server hosts the built SPA (`dist/`) and serves `dist/index.html` for all no
 
 ---
 
+## Route Module Organization
+
+**`server/userRoutes.js`** (spec 030): The 15 `/api/user/*` endpoints are extracted into `registerUserRoutes(app, supabase)` — the first route module extracted from `index.js`. This pattern enables endpoint tests to create a clean Express app with a mock supabase client and test HTTP handler logic without the real DB.
+
+**Registration**: `index.js` imports `registerUserRoutes` and calls it once after `app.use(loadUser)`:
+```js
+import { registerUserRoutes } from './userRoutes.js';
+// ... after app.use(loadUser):
+registerUserRoutes(app, supabase);
+```
+
+**`server/userHelpers.js`** (spec 030): Five per-table write helpers (`writeSessionStats`, `writeLessonProgress`, `writePuzzleAttempts`, `writeSparringRecord`, `writeStreak`) used by both the individual POST endpoints and the migrate endpoint — single write path per table. All return `{ error: string }` on failure, `undefined` on success. Unit-tested independently with `node --test` against stub supabase objects.
+
+**MUST**: When adding a new `/api/user/*` endpoint that writes to one of the 5 covered tables, call the existing helper rather than reimplementing the write inline.
+
+**MUST**: New route groups with ≥5 related endpoints SHOULD follow the `register<Feature>Routes(app, supabase)` extraction pattern rather than inlining in `index.js`. The module should be testable without the real DB or solver.
+
+---
+
 ## Lesson Loader
 
 `server/lessonLoader.js` is the canonical module for loading lesson content from JSON files at server startup.
@@ -423,3 +442,78 @@ The server hosts the built SPA (`dist/`) and serves `dist/index.html` for all no
 **`order` derivation**: Extracted from the filename numeric prefix (e.g., `lesson-05-claimeven.json` → `order: 5`). Lessons are sorted ascending by `order` before caching.
 
 **Directory**: `connect-four/lessons/`. Ships empty in Epic 4; content added in Epic 5.
+
+---
+
+## Migration Runner (`migrate.js`)
+
+`server/migrate.js` is the database migration runner. It reads `.sql` files from `server/migrations/`, compares against a `schema_migrations` ledger table, and applies pending migrations inside transactions. It runs as the first step of the Railway start command (`node server/migrate.js && node server/index.js`); a non-zero exit blocks the server from starting.
+
+### DATABASE_URL requirement
+
+`DATABASE_URL` **MUST** use the Supabase **session-mode pooler** (port **5432**) with `sslmode=no-verify` appended to the connection string. The connection is still SSL-encrypted; `no-verify` skips certificate chain validation which is necessary because Supabase's pooler uses self-signed certificates. (`sslmode=require` triggers strict certificate verification in the `pg` driver v8.21+, which fails against Supabase poolers.)
+
+The **transaction-mode pooler** (port **6543**) is **forbidden** — it breaks multi-statement transactions (each statement may execute on a different backend connection) and does not support `pg_dump`.
+
+Example correct format:
+```
+postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=no-verify
+```
+
+### schema_migrations ledger table
+
+Self-bootstrapped by `migrate.js` as its first database action:
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename   TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+- `filename` is the `.sql` basename (e.g., `001_initial.sql`), not a full path.
+- `PRIMARY KEY` on filename enforces uniqueness; `ON CONFLICT DO NOTHING` in baseline mode is safe.
+- No foreign keys, no RLS — this is a server-managed operational table, not a user-data table.
+
+### Normal mode (default)
+
+1. Creates `schema_migrations` table if it does not exist.
+2. Reads all `.sql` filenames from `server/migrations/`, sorted alphabetically.
+3. Reads all `filename` values from `schema_migrations`.
+4. Computes `pending = disk_files − ledger_set`.
+5. For each pending file in alphabetical order:
+   - Acquires a client from the pool
+   - `BEGIN` transaction
+   - Executes the file's SQL
+   - `INSERT` filename into `schema_migrations`
+   - `COMMIT`
+   - On any error: `ROLLBACK`, prints error identifying the failing file to stderr, exits 1
+6. Prints summary, exits 0.
+
+### Baseline mode (`--baseline`)
+
+Invoked as `node server/migrate.js --baseline`. Records all `.sql` filenames present on disk without executing any SQL from those files.
+
+1. Creates `schema_migrations` table if it does not exist.
+2. Reads all `.sql` filenames from `server/migrations/`, sorted alphabetically.
+3. For each filename: `INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`.
+4. Prints count of rows recorded, exits 0.
+
+**Idempotency**: `ON CONFLICT DO NOTHING` makes repeated `--baseline` runs safe. After `--baseline`, a normal `migrate.js` run finds all filenames in the ledger and applies 0 new files.
+
+**Runtime**: Must be run from `connect-four/`, or from any directory where `server/migrations/` resolves correctly relative to the script's `__dirname`.
+
+### Transaction rollback behavior
+
+Each migration file runs inside its own `BEGIN/COMMIT` transaction. A failure:
+- Rolls back only that file's SQL (prior files remain committed)
+- Does NOT insert a row into `schema_migrations` for the failing file
+- Prints `ERROR: Migration [filename] failed. Transaction rolled back.` to stderr
+- Exits with code 1, which causes `&&` in the Railway start command to skip `node server/index.js`
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Failure — DATABASE_URL absent, connection error, migration SQL error, or file read error |
