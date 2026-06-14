@@ -79,7 +79,7 @@ async function main() {
     }
   }
 
-  const nextPlayer = moves.length % 2 === 0 ? 'Green' : 'Grey';
+  const nextPlayer = moves.length % 2 === 0 ? 'Green' : 'Gray';
   console.log(`  Move ${moves.length}  |  Next: ${nextPlayer}${gameOver ? '  [GAME OVER]' : ''}`);
   console.log('');
 
@@ -149,7 +149,7 @@ async function main() {
   }
 
   console.log('');
-  console.log('  Legend: Gn=Green  Gy=Grey   Gn/Gy = disc(move#)   <Gn>/<Gy> = major threat gravity-top (immediately playable)');
+  console.log('  Legend: Gn=Green  Gy=Gray   Gn/Gy = disc(move#)   <Gn>/<Gy> = major threat gravity-top (immediately playable)');
   console.log('          [Gn]/[Gy] = major threat non-gravity   (gn)/(gy) = minor threat   [GT] = gravity-top in threats list');
   console.log('          [*]/(*) = both players   ht: disc count   par: O=odd E=even   scr: solver score per column');
 }

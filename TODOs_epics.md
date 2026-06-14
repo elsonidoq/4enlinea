@@ -217,14 +217,14 @@ green/gray, leaving a cleaner tree for subsequent epics.
 
 **Scope:**
 
-- Map technical debt: enumerate dead screens (cross-check `screenRegistry.js`, `urlMapping.js`, and
-  actual `go(...)` call sites), unreferenced components, and dead exports. Produce a written
-  debt inventory ranked by impact before deleting anything.
+- Map technical debt: enumerate dead screens (cross-check `screenRegistry.jsx`, `urlMapping.js`, and
+  actual `go(...)` call sites) and unreferenced components. Produce a written debt inventory before
+  deleting anything.
 - Remove confirmed-dead screens/components/code. For anything ambiguous, surface it in the
   inventory rather than deleting on a guess.
-- Green/gray terminology sweep (user-facing only): audit `rg -iw "yellow|red"` across `src/`,
-  `server/`, `lessons/`, and tooling (`visualize_board.sh`, `scripts/`). Replace **user-facing**
-  strings and tool output with green/gray. **Do NOT** touch the internal `'red'`/`'yellow'`
+- Green/gray terminology sweep: audit `rg -iw "yellow|red"` across `src/`,
+  `server/`, `lessons/`, and tooling (`visualize_board.sh`, `scripts/`). Replace **in-scope**
+  strings with green/gray. **Do NOT** touch the internal `'red'`/`'yellow'`
   board-cell enum, the Board API, or solver coordinate logic (verified-pending fact #7).
 
 **Acceptance criteria:**
@@ -235,13 +235,47 @@ green/gray, leaving a cleaner tree for subsequent epics.
   unchanged and tests still pass.
 
 **NOT included:** Large architectural refactors, renaming the internal cell enum, performance work,
-or rewriting any still-live screen.
+rewriting any still-live screen, or per-symbol dead-export pruning (this epic operates at file
+granularity only).
 
-#### Brainstorming needed
+#### Decisions
 
-- **Deletion bar.** Define the evidence required to call a screen/module "dead" (no registry entry +
-  no `go()` caller + no import) vs. "keep". Output: a checklist the audit applies uniformly, so the
-  delete/keep decision is mechanical rather than judgment-by-judgment.
+- **Sweep boundary.** The green/gray sweep is **in scope** for: UI strings rendered to users,
+  i18n catalog values (`en.json`, `es.json`), lesson content JSON under `lessons/`, and CLI/script
+  output strings (stdout). **Out of scope**: code comments, variable names, identifiers, and
+  internal enum values.
+
+- **Deletion bar.** Use category-specific evidence to call a file "dead". The reachability model
+  is **transitive**: a file is live if it is reachable from the entrypoint roster via the transitive
+  import graph (not a single-hop check). If the only file importing X is itself unreachable from the
+  entrypoints, X is dead.
+
+  - **Screens** (`src/screens/*.jsx`, `src/pages/*.jsx`): dead when (1) not a key in `SCREENS` map
+    in `screenRegistry.jsx`, AND (2) not lazy-loaded in `App.jsx`, AND (3) not transitively
+    reachable from any production importer in `src/` (test-only imports do not count).
+  - **Components / lib utilities** (`src/components/**`, `src/lib/**`): dead when not transitively
+    reachable from any production importer in `src/` (or `server/` for shared utils). Test-only
+    imports do not count.
+  - **Server modules** (`server/**`): dead when not transitively reachable from the server
+    entrypoint roster. The **server entrypoint roster** is: `index.js`, `migrate.js`, all targets
+    listed in `package.json` `"scripts"`, all files that use `process.argv` or
+    `require.main === module`, and all `*.test.*` files.
+
+- **Verdict taxonomy.** Each audited file receives exactly one of three verdicts:
+  - **DELETE** — all dead checks pass; file is removed.
+  - **SURFACE** — ambiguous (e.g. a CLI tool with no importer and no entrypoint signal, or a file
+    whose purpose is unclear); logged in the inventory but not deleted; owner decides.
+  - **DEFER** — owner has explicitly added this file to a keep-list in the inventory; logged but not
+    deleted. DEFER is a deliberate owner decision, not inferred from source-code comments (there are
+    zero `// TODO:` comments in this codebase).
+
+  Each audited file is logged in the debt inventory with columns: File | Category | Verdict | Reason.
+
+  Rationale: Screens have two distinct alive paths (registry route + admin lazy-load in `App.jsx`)
+  that must both be absent; a single import-only rule would miss the registry contract and produce
+  false negatives. Transitive reachability prevents false "live" verdicts via dead-importer chains
+  and false "dead" verdicts on CLI scripts that have no importers. SURFACE gives a safe landing for
+  anything that can't be confidently binned as DELETE or DEFER.
 
 ---
 

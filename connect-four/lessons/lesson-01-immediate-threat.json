@@ -9,7 +9,7 @@
       "movestring": "33201",
       "coachMessages": [
         {
-          "text": "Look at the board. Can you find a four-cell window that already has three Yellow discs and one empty space?",
+          "text": "Look at the board. Can you find a four-cell window that already has three Gray discs and one empty space?",
           "mood": "think"
         }
       ],
@@ -190,7 +190,7 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Tempting Yellow build (wrong this turn)"
+          "label": "Tempting Gray build (wrong this turn)"
         },
         {
           "type": "td",

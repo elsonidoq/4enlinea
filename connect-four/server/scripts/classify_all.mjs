@@ -13,7 +13,7 @@ try {
   const board = new Board(moves);
 
   // ── Board state ─────────────────────────────────────────────────────────────
-  const playerName = p => p === 1 ? 'Red' : 'Yellow';
+  const playerName = p => p === 1 ? 'Green' : 'Gray';
   console.log('=== BOARD STATE ===');
   console.log('movestring:', moves);
   console.log('move_count:', moves.length);
@@ -42,7 +42,7 @@ try {
   console.log('');
 
   // ── Solver scores ─────────────────────────────────────────────────────────
-  console.log('=== SOLVER SCORES (positive=Red wins, negative=Yellow wins, 0=draw) ===');
+  console.log('=== SOLVER SCORES (positive=Green wins, negative=Gray wins, 0=draw) ===');
   console.log('col:   ', Array.from({length: COLS}, (_, i) => i).join('  '));
   console.log('score: ', scores.map(s => String(s).padStart(2)).join(' '));
   console.log('');
@@ -73,7 +73,7 @@ try {
   console.log('');
 
   // ── Major/minor threat cells ─────────────────────────────────────────────
-  console.log('=== THREAT MAP PER CELL (rm=Red major, rn=Red minor, ym=Yellow major, yn=Yellow minor) ===');
+  console.log('=== THREAT MAP PER CELL (rm=Green major, rn=Green minor, ym=Gray major, yn=Gray minor) ===');
   const threatCells = board.majorThreatCells();
   const entries = Object.entries(threatCells).sort(([a], [b]) => {
     const [ar, ac] = a.split(',').map(Number);
@@ -97,8 +97,8 @@ try {
   const yellowResult = await classifyPattern(moves, 2, solver);
   const redTags = [...new Set(redResult.keys())];
   const yellowTags = [...new Set(yellowResult.keys())];
-  console.log('Red (player 1):', redTags.length > 0 ? redTags.join(', ') : 'none');
-  console.log('Yellow (player 2):', yellowTags.length > 0 ? yellowTags.join(', ') : 'none');
+  console.log('Green (player 1):', redTags.length > 0 ? redTags.join(', ') : 'none');
+  console.log('Gray (player 2):', yellowTags.length > 0 ? yellowTags.join(', ') : 'none');
 } finally {
   solver.destroy();
 }

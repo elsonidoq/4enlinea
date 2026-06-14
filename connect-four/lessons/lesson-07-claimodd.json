@@ -5,43 +5,75 @@
   "userPerspective": "red",
   "slides": [
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "In a column with an odd number of empty cells, the last disc placed belongs to Red. That is the same logic as Z-Threats — odd count, Red goes last.",
+          "text": "In a column with an odd number of empty cells, the last disc placed belongs to Green. That is the same logic as Z-Threats — odd count, Green goes last.",
           "mood": "think"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show a single isolated column (col 3) with 3 empty cells remaining. Also show a Red horizontal major threat whose completing cell is at the top of those 3 empty cells. Use alternating 'tg' / 'td' overlays on the 3 empty cells from bottom to top: cell 1 = 'tg' (Red, move 1), cell 2 = 'td' (Yellow, move 2), cell 3 = 'tg' (Red, move 3 — the threat). Legend: 'tg' = Red's move in this column, 'td' = Yellow's move in this column.</board instructions>\n\nAn odd number of empty cells in a column means Red makes the last move in that column. This is the Z-Threat principle applied to the whole column: 3 empty cells → Red plays moves 1 and 3 → Red lands on the threat. Red wants columns with odd empty-cell counts where a Red major threat sits at the top."
+      "infoProse": "<board instructions>Show a single isolated column (col 3) with 3 empty cells remaining. Also show a Green horizontal major threat whose completing cell is at the top of those 3 empty cells. Use alternating 'tg' / 'td' overlays on the 3 empty cells from bottom to top: cell 1 = 'tg' (Green, move 1), cell 2 = 'td' (Gray, move 2), cell 3 = 'tg' (Green, move 3 — the threat). Legend: 'tg' = Green's move in this column, 'td' = Gray's move in this column.</board instructions>\n\nAn odd number of empty cells in a column means Green makes the last move in that column. This is the Z-Threat principle applied to the whole column: 3 empty cells → Green plays moves 1 and 3 → Green lands on the threat. Green wants columns with odd empty-cell counts where a Green major threat sits at the top."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "When every column has an even number of empty cells, Yellow's Claimeven response is available everywhere. Red cannot win this way — yet.",
+          "text": "When every column has an even number of empty cells, Gray's Claimeven response is available everywhere. Green cannot win this way — yet.",
           "mood": "think"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game board where every column has an even number of empty cells (e.g., 6, 4, 2, or 0 empty cells per column). Label each column's empty-cell count above the column. Show one example: Red plays into col 2, Yellow responds directly above (Claimeven). Mark the Red disc with 'td' and Yellow's response cell with 'tg'. Repeat the pairing for one or two other columns to show the symmetry. Legend: 'td' = Red plays here, 'tg' = Yellow claims directly above (Claimeven).</board instructions>\n\nWhen every column has an even number of empty cells, Yellow has a Claimeven response available for every move Red makes. Whatever column Red plays, Yellow responds directly above, claiming the odd-indexed row. Red cannot build a Z-Threat because every column Red touches becomes even-height again after Yellow's response.\n\nRed needs to break this symmetry by creating at least one column with an odd number of empty cells — a column Yellow cannot mirror."
+      "infoProse": "<board instructions>Show a mid-game board where every column has an even number of empty cells (e.g., 6, 4, 2, or 0 empty cells per column). Label each column's empty-cell count above the column. Show one example: Green plays into col 2, Gray responds directly above (Claimeven). Mark the Green disc with 'td' and Gray's response cell with 'tg'. Repeat the pairing for one or two other columns to show the symmetry. Legend: 'td' = Green plays here, 'tg' = Gray claims directly above (Claimeven).</board instructions>\n\nWhen every column has an even number of empty cells, Gray has a Claimeven response available for every move Green makes. Whatever column Green plays, Gray responds directly above, claiming the odd-indexed row. Green cannot build a Z-Threat because every column Green touches becomes even-height again after Gray's response.\n\nGreen needs to break this symmetry by creating at least one column with an odd number of empty cells — a column Gray cannot mirror."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "Red plays center column first. That column now has an odd number of empty cells. Yellow cannot mirror this move — and cannot neutralise the Z-Threat it creates.",
+          "text": "Green plays center column first. That column now has an odd number of empty cells. Gray cannot mirror this move — and cannot neutralise the Z-Threat it creates.",
           "mood": "happy"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show the same all-even board from slide 2, then show it AFTER Red plays center column (col 3). Center now has an odd number of empty cells (was 6, now 5). Mark the center column's empty cells to show the odd count. Mark the Red disc just placed with 'tg'. Show that if Yellow responds in any other column, Red's center column remains odd-height. If Yellow responds in center too, Yellow lands on an even-indexed row (Red's territory) — mark that cell 'td' to show it benefits Red. Legend: 'tg' = Red's center move (creates odd-height anchor), 'td' = Yellow's response in center (puts Yellow on Red's natural row — wrong for Yellow).</board instructions>\n\nRed breaks the all-even lock by playing center column first. Center goes from even-height to odd-height in one move. Yellow cannot mirror this: if Yellow also plays center, Yellow lands on an even-indexed row (Red's territory), which does nothing to restore the Claimeven lock. If Yellow plays anywhere else, center remains odd-height — a live Z-Threat for Red.\n\nOne move dismantles Yellow's entire Claimeven system."
+      "infoProse": "<board instructions>Show the same all-even board from slide 2, then show it AFTER Green plays center column (col 3). Center now has an odd number of empty cells (was 6, now 5). Mark the center column's empty cells to show the odd count. Mark the Green disc just placed with 'tg'. Show that if Gray responds in any other column, Green's center column remains odd-height. If Gray responds in center too, Gray lands on an even-indexed row (Green's territory) — mark that cell 'td' to show it benefits Green. Legend: 'tg' = Green's center move (creates odd-height anchor), 'td' = Gray's response in center (puts Gray on Green's natural row — wrong for Gray).</board instructions>\n\nGreen breaks the all-even lock by playing center column first. Center goes from even-height to odd-height in one move. Gray cannot mirror this: if Gray also plays center, Gray lands on an even-indexed row (Green's territory), which does nothing to restore the Claimeven lock. If Gray plays anywhere else, center remains odd-height — a live Z-Threat for Green.\n\nOne move dismantles Gray's entire Claimeven system."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
           "text": "What if center is already full? 'Always play center' is not the rule — the rule is 'create an odd-height column'. Find the nearest available one.",
@@ -55,8 +87,16 @@
   ],
   "socratic": {
     "_boardInstructions": "Show an all-even mid-game position where Red has three discs forming a horizontal major threat completing at col 3 row 5 (the top cell of an otherwise empty center column). Every column currently has an even number of empty cells — col 3 has 6, so Yellow would make the sixth and final move there, not Red. Red must play col 3 first: that converts it from 6 empty cells to 5 (odd), guaranteeing Red makes the last move in that column and lands on the threat. Mark col 3's top cell (row 5) with 'tg' to indicate Red's winning target. Mark the top empty cells of two flanking columns (e.g., cols 1 and 5) with 'td' to show that playing elsewhere leaves col 3 even-count — Yellow would claim row 5 instead.",
-    "goalPrompt": "Every column has an even number of empty cells. Where does Red play to guarantee that column will end with Red's move?",
-    "boardSpec": ["gd", "gd", "gd", "gd", "gd", "gd", "gd"],
+    "goalPrompt": "Every column has an even number of empty cells. Where does Green play to guarantee that column will end with Green's move?",
+    "boardSpec": [
+      "gd",
+      "gd",
+      "gd",
+      "gd",
+      "gd",
+      "gd",
+      "gd"
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "claimodd",

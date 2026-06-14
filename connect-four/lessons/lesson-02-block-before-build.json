@@ -8,7 +8,7 @@
       "movestring": "3332324445",
       "coachMessages": [
         {
-          "text": "Red has three discs in a row with one empty square to complete the four. What is Yellow's only safe move?",
+          "text": "Green has three discs in a row with one empty square to complete the four. What is Gray's only safe move?",
           "mood": "think"
         }
       ],
@@ -141,13 +141,13 @@
           "label": "User threat"
         }
       ],
-      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Red discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
+      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Green discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
     },
     {
       "movestring": "3333332122454422126151",
       "coachMessages": [
         {
-          "text": "Red has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
+          "text": "Green has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
           "mood": "think"
         }
       ],
@@ -215,30 +215,51 @@
           "label": "Empty cells below the threat"
         }
       ],
-      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for yellow?"
+      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for gray?"
     }
   ],
   "socratic": {
-    "_boardInstructions": "Show a minimal board where Red has three horizontal discs across the bottom of columns 0, 1, and 2 (row 0), leaving column 3 row 0 as the only empty cell that completes Red's four-in-a-row — it is immediately playable since nothing is below it. Yellow has two discs at row 0 in columns 5 and 6, making column 4 look like a tempting building move. Mark Red's completing cell at col 3 row 0 with 'tg' (this is the mandatory block) and the tempting Yellow building cell at col 4 row 0 with 'td' (the trap — playing here hands Red the win). No other overlays are needed. The student must choose col 3 to block Red's immediate threat rather than extend their own position.",
-    "movestring": "",
+    "movestring": "04142",
     "boardSpec": [
+      "g",
+      "g",
+      "g",
       "",
-      "",
-      "",
-      "",
-      "",
+      "dd",
       "",
       ""
     ],
-    "overlays": [],
-    "correctCol": 3
+    "overlays": [
+      {
+        "c": 3,
+        "r": 0,
+        "type": "tg"
+      },
+      {
+        "c": 2,
+        "r": 0,
+        "type": "win"
+      },
+      {
+        "c": 1,
+        "r": 0,
+        "type": "win"
+      },
+      {
+        "c": 0,
+        "r": 0,
+        "type": "win"
+      }
+    ],
+    "correctCol": 3,
+    "_boardInstructions": "Show a minimal board where Red has three horizontal discs across the bottom of columns 0, 1, and 2 (row 0), leaving column 3 row 0 as the only empty cell that completes Red's four-in-a-row — it is immediately playable since nothing is below it. Yellow has two discs at row 0 in columns 5 and 6, making column 4 look like a tempting building move. Mark Red's completing cell at col 3 row 0 with 'tg' (this is the mandatory block) and the tempting Yellow building cell at col 4 row 0 with 'td' (the trap — playing here hands Red the win). No other overlays are needed. The student must choose col 3 to block Red's immediate threat rather than extend their own position."
   },
   "confirmationCategory": "forced_block",
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "4374d30f-1628-44b8-9d09-2f38974e1294",
-      "moveString": "356565531316241",
+      "puzzleId": "7d335e8c-549a-4364-b052-6aa2086ce8c3",
+      "moveString": "236343326044152605",
       "goalPrompt": "Block your opponent's threat.",
       "goalPredicateType": "forced_block",
       "goalPredicateParams": {},
@@ -246,11 +267,11 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 1
     },
     {
-      "puzzleId": "123808a5-dbe6-4013-bfcf-b31a824f3645",
-      "moveString": "20433326204",
+      "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",
+      "moveString": "3211362341106",
       "goalPrompt": "Block your opponent's threat.",
       "goalPredicateType": "forced_block",
       "goalPredicateParams": {},

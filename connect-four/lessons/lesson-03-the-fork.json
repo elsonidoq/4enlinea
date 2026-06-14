@@ -8,7 +8,7 @@
       "movestring": "33212303",
       "coachMessages": [
         {
-          "text": "Yellow has one strong threat. Red blocks it. What did Yellow accomplish?",
+          "text": "Gray has one strong threat. Green blocks it. What did Gray accomplish?",
           "mood": "think"
         }
       ],
@@ -59,7 +59,7 @@
       "movestring": "3333332444441",
       "coachMessages": [
         {
-          "text": "One move, two threats. Red must answer — but there is only one answer, and it only covers one.",
+          "text": "One move, two threats. Green must answer — but there is only one answer, and it only covers one.",
           "mood": "happy"
         }
       ],
@@ -96,7 +96,7 @@
       "movestring": "3333322422111",
       "coachMessages": [
         {
-          "text": "Forks don't have to point left and right. Two threats can stack vertically in the same column — blocking the bottom one hands Yellow the top.",
+          "text": "Forks don't have to point left and right. Two threats can stack vertically in the same column — blocking the bottom one hands Gray the top.",
           "mood": "think"
         }
       ],
@@ -172,19 +172,35 @@
     }
   ],
   "socratic": {
-    "_boardInstructions": "Show a position where Yellow has two discs at row 0 in columns 1 and 2, and two more discs at row 0 in columns 4 and 5 — forming two incomplete horizontal lines that both pass through column 3. Column 3 is empty, as are columns 0 and 6 at row 0. Add two Red discs at row 1 in columns 2 and 4 to make the board plausible. Playing column 3 lands Yellow at row 0 and instantly creates two threats: the line across columns 1–2–3 needs only column 0 to win, and the line across columns 3–4–5 needs only column 6 to win. Mark column 0 row 0 with 'tg' and column 6 row 0 with 'tg' so the student can see the two fork targets before clicking.",
-    "movestring": "",
+    "movestring": "44442222224333",
     "boardSpec": [
       "",
       "",
-      "",
-      "",
-      "",
+      "gdgdgd",
+      "dgd",
+      "gdgdg",
       "",
       ""
     ],
-    "overlays": [],
-    "correctCol": 3
+    "overlays": [
+      {
+        "c": 3,
+        "r": 2,
+        "type": "claim"
+      },
+      {
+        "c": 1,
+        "r": 0,
+        "type": "win"
+      },
+      {
+        "c": 5,
+        "r": 0,
+        "type": "win"
+      }
+    ],
+    "correctCol": 3,
+    "_boardInstructions": "Show a position where Yellow has two discs at row 0 in columns 1 and 2, and two more discs at row 0 in columns 4 and 5 — forming two incomplete horizontal lines that both pass through column 3. Column 3 is empty, as are columns 0 and 6 at row 0. Add two Red discs at row 1 in columns 2 and 4 to make the board plausible. Playing column 3 lands Yellow at row 0 and instantly creates two threats: the line across columns 1–2–3 needs only column 0 to win, and the line across columns 3–4–5 needs only column 6 to win. Mark column 0 row 0 with 'tg' and column 6 row 0 with 'tg' so the student can see the two fork targets before clicking."
   },
   "confirmationCategory": "double_threat",
   "confirmationCount": 4,

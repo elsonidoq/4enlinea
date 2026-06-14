@@ -21,7 +21,7 @@ export const CATEGORY_NAMES = {
   j_shape:           'J-Shape',
 };
 
-// Chip styling used by PuzzlesPage, CandidateDashboard, CurationWorkspace.
+// Chip styling used by CandidateDashboard, CurationWorkspace.
 export const CATEGORY_CHIPS = {
   immediate_threat:  { label: 'Immediate', color: '#60a5fa', bg: 'rgba(37,99,235,.2)',   border: 'rgba(37,99,235,.4)'  },
   forced_block:      { label: 'Block',     color: '#f87171', bg: 'rgba(220,38,38,.2)',   border: 'rgba(220,38,38,.4)'  },

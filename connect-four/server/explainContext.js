@@ -127,7 +127,7 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
 export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const board = new Board(movestring);
   const perspective = movestring.length % 2 === 0 ? 1 : 2;
-  const playerName = perspective === 1 ? 'Green' : 'Grey';
+  const playerName = perspective === 1 ? 'Green' : 'Gray';
   const opponentPerspective = perspective === 1 ? 2 : 1;
 
   // ── Step 1: Solver scores + settled check + contrast move ─────────────────
@@ -152,7 +152,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   // Return a canned message instead.
   const positionTier = getPositionTier(preScores, board);
   if (isOptimal && gapBucket === 'small') {
-    const opponentName = perspective === 1 ? 'Grey' : 'Green';
+    const opponentName = perspective === 1 ? 'Gray' : 'Green';
     let trivialExplanation;
     if (positionTier === 'WINNING') {
       trivialExplanation = `All available moves maintain ${playerName}'s winning position — this is solid. No single column decisively outperforms the others here.`;

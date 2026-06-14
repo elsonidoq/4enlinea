@@ -5,58 +5,98 @@
   "userPerspective": "yellow",
   "slides": [
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "Yellow has a threat above Red's threat in the same column. The column has an odd number of empty cells and it is Yellow's turn. Which column should Yellow play?",
+          "text": "Gray has a threat above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column should Gray play?",
           "mood": "think"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game position where Yellow has a horizontal major threat completing at col C row R (e.g., row 3) and Red has a horizontal major threat completing at col C row R-1 (e.g., row 2 — directly below Yellow's threat). The column has an odd number of empty cells remaining and it is Yellow's turn. Do NOT yet explain what happens — just show the structural pattern: Yellow's threat above, Red's threat below, same column. Mark Yellow's threat cell with 'tg' and Red's threat cell with 'td'. Legend: 'tg' = Yellow's upper threat, 'td' = Red's lower threat (same column).</board instructions>\n\nThe overcut setup: Yellow's major threat sits directly above Red's major threat in the same column, and it is Yellow's turn. Before reading on — think about what happens when Yellow plays that column."
+      "infoProse": "<board instructions>Show a mid-game position where Gray has a horizontal major threat completing at col C row R (e.g., row 3) and Green has a horizontal major threat completing at col C row R-1 (e.g., row 2 — directly below Gray's threat). The column has an odd number of empty cells remaining and it is Gray's turn. Do NOT yet explain what happens — just show the structural pattern: Gray's threat above, Green's threat below, same column. Mark Gray's threat cell with 'tg' and Green's threat cell with 'td'. Legend: 'tg' = Gray's upper threat, 'td' = Green's lower threat (same column).</board instructions>\n\nThe overcut setup: Gray's major threat sits directly above Green's major threat in the same column, and it is Gray's turn. Before reading on — think about what happens when Gray plays that column."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "Yellow plays col C. The disc lands on Red's threat cell at row R-1 — blocking Red. The next empty cell in that column is now row R: Yellow's threat fires immediately.",
+          "text": "Gray plays col C. The disc lands on Green's threat cell at row R-1 — blocking Green. The next empty cell in that column is now row R: Gray's threat fires immediately.",
           "mood": "happy"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show the same position as slide 1 but now show the result AFTER Yellow has played col C. Yellow's disc lands at row R-1 (blocking Red's threat cell). Row R is now the top of the stack — Yellow's threat is immediately live. Mark the Yellow disc just placed at row R-1 with 'td' overlay ('Blocks Red's threat') and the now-live Yellow threat cell at row R with 'tg' ('Yellow's threat — now active'). Legend: 'td' = Yellow's disc blocks Red, 'tg' = Yellow's threat now fires (overcut).</board instructions>\n\nOne move does two things: (1) Yellow's disc lands on Red's threat cell, physically blocking it; (2) row R is now the next available cell in the column, making Yellow's threat immediately live. Red must now respond to Yellow's threat — but Yellow already forced the situation. This is the overcut: a single move that defends and attacks simultaneously.\n\nThe odd-column condition is what makes it work: Yellow enters the column first, so Yellow's disc lands at row R-1 rather than Yellow's opponent reaching it first."
+      "infoProse": "<board instructions>Show the same position as slide 1 but now show the result AFTER Gray has played col C. Gray's disc lands at row R-1 (blocking Green's threat cell). Row R is now the top of the stack — Gray's threat is immediately live. Mark the Gray disc just placed at row R-1 with 'td' overlay ('Blocks Green's threat') and the now-live Gray threat cell at row R with 'tg' ('Gray's threat — now active'). Legend: 'td' = Gray's disc blocks Green, 'tg' = Gray's threat now fires (overcut).</board instructions>\n\nOne move does two things: (1) Gray's disc lands on Green's threat cell, physically blocking it; (2) row R is now the next available cell in the column, making Gray's threat immediately live. Green must now respond to Gray's threat — but Gray already forced the situation. This is the overcut: a single move that defends and attacks simultaneously.\n\nThe odd-column condition is what makes it work: Gray enters the column first, so Gray's disc lands at row R-1 rather than Gray's opponent reaching it first."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "Same structural setup — but now the column has an even number of empty cells. Red enters first. What changes?",
+          "text": "Same structural setup — but now the column has an even number of empty cells. Green enters first. What changes?",
           "mood": "sad"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show the same structural position as slides 1–2 (Yellow threat at row R, Red threat at row R-1, same column) but change the column to have an even number of empty cells and show it as Red's turn to enter the column first. Red plays col C, Red's disc lands at row R-1 — completing Red's own threat. Mark Red's disc at row R-1 with 'win' ('Red wins — completes their threat'). Yellow's threat at row R is now irrelevant. Legend: 'win' = Red completes their threat (Yellow's overcut failed).</board instructions>\n\nEven empty cells, Red's turn to enter: Red plays first into the column and lands on row R-1 — completing Red's own threat. Yellow never gets to use the overcut. The mechanism is the same as Z-Threats: the parity of the column determines who gets the last word. For the overcut to work, you need an odd number of empty cells in the column AND it must be your turn to enter first."
+      "infoProse": "<board instructions>Show the same structural position as slides 1–2 (Gray threat at row R, Green threat at row R-1, same column) but change the column to have an even number of empty cells and show it as Green's turn to enter the column first. Green plays col C, Green's disc lands at row R-1 — completing Green's own threat. Mark Green's disc at row R-1 with 'win' ('Green wins — completes their threat'). Gray's threat at row R is now irrelevant. Legend: 'win' = Green completes their threat (Gray's overcut failed).</board instructions>\n\nEven empty cells, Green's turn to enter: Green plays first into the column and lands on row R-1 — completing Green's own threat. Gray never gets to use the overcut. The mechanism is the same as Z-Threats: the parity of the column determines who gets the last word. For the overcut to work, you need an odd number of empty cells in the column AND it must be your turn to enter first."
     },
     {
-      "boardSpec": ["", "", "", "", "", "", ""],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "You land on row R-1 and block Red — but Red responds by playing col C again, this time at row R. That is Red's threat too. Double-check that row R belongs only to you.",
+          "text": "You land on row R-1 and block Green — but Green responds by playing col C again, this time at row R. That is Green's threat too. Double-check that row R belongs only to you.",
           "mood": "think"
         }
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "<board instructions>Show a position similar to slide 1 (Yellow upper threat at row R, Red lower threat at row R-1, odd-height column, Yellow's turn) BUT the cell at row R is marked as a [*] cell — both Yellow AND Red have a major threat passing through it. Yellow plays col C, blocks Red's row R-1 threat — but now Red plays col C again, landing at row R and completing Red's own threat through that cell. Mark the shared threat cell at row R with a special 'both players' overlay (or use two overlapping markers). Label it 'Shared threat cell — belongs to both!'. Legend: mixed overlay = Both players have a major threat through this cell (overcut backfires here).</board instructions>\n\nBefore committing to an overcut, verify that the cell at row R is exclusively your threat. If both players have a major threat passing through that cell, your opponent can respond by playing into col C themselves — landing at row R and completing their own threat through the same cell. The overcut only works cleanly when row R belongs to you alone."
+      "infoProse": "<board instructions>Show a position similar to slide 1 (Gray upper threat at row R, Green lower threat at row R-1, odd-height column, Gray's turn) BUT the cell at row R is marked as a [*] cell — both Gray AND Green have a major threat passing through it. Gray plays col C, blocks Green's row R-1 threat — but now Green plays col C again, landing at row R and completing Green's own threat through that cell. Mark the shared threat cell at row R with a special 'both players' overlay (or use two overlapping markers). Label it 'Shared threat cell — belongs to both!'. Legend: mixed overlay = Both players have a major threat through this cell (overcut backfires here).</board instructions>\n\nBefore committing to an overcut, verify that the cell at row R is exclusively your threat. If both players have a major threat passing through that cell, your opponent can respond by playing into col C themselves — landing at row R and completing their own threat through the same cell. The overcut only works cleanly when row R belongs to you alone."
     }
   ],
   "socratic": {
-    "goalPrompt": "Yellow's threat sits directly above Red's threat in the same column. The column has an odd number of empty cells and it is Yellow's turn. Which column wins?",
+    "goalPrompt": "Gray's threat sits directly above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column wins?",
     "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat completing at col C at an odd-indexed row R, and Red has a horizontal major threat completing in the same col C at the even-indexed row R-1 directly below. Col C must have an odd number of empty cells and it must be Yellow's turn. Row R belongs exclusively to Yellow — Red has no threat through that cell. Mark Yellow's threat cell at row R with 'tg' and Red's threat cell at row R-1 with 'td'. Yellow wins by playing col C: the disc lands at R-1 (blocking Red's threat), and row R immediately becomes the next available cell, turning Yellow's threat into a direct check. No same-parity complications or shared-cell gotchas — keep the position clean so the active-forcing mechanic is the only thing at work.",
-    "boardSpec": ["", "", "", "", "", "", ""],
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
     "correctCol": 3
   },
   "confirmationCategory": "overcut",

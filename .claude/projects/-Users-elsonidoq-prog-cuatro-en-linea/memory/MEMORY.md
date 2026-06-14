@@ -111,6 +111,7 @@
 - [Local Supabase setup](project_local_supabase_setup.md) — URL/key config, Mailpit, service_role grants, dev workflow
 - [Migrate endpoint fixes](project_migration_endpoint_fixes.md) — 3 bugs fixed: silent failures, null device_uuid, FK violation fallback
 - [Spec 031 — staging/production deploy](project_spec031_staging_production_deploy.md) — Railway + two Supabase projects + migrate.js; 24 tasks; existing Supabase = production; c4solver must compile from source
+- [Spec 032 — repo hygiene & tech-debt sweep](project_spec032_repo_hygiene.md) — 25 tasks; dead-code audit (npx dependency-cruiser) + green/gray sweep; PuzzlesPage/PlaceholderScreen pre-confirmed DELETE; lint gate = ≤ baseline (not exit 0)
 
 ## Project — implementation details
 
@@ -152,6 +153,9 @@
 - [Magic link auth: Navigator strips hash before GoTrueClient processes it](project_magic_link_auth_race.md) — React useEffect race condition; fixed by preserving window.location.hash in replaceState
 - [Service worker cache-first breaks app after deploy](bug_service_worker_stale_cache.md) — SW cached index.html permanently → stale JS references → MIME error; fixed with network-first for HTML
 - [Deep reveal zone validation fixes](deep_reveal_zone_validation_fixes.md) — P5Strong played-col whitelist, LLM zone tag normalization, prompt format improvements; played-cell whitelist pending
+
+- [Railway trust proxy — express-rate-limit 500](bug_railway_trust_proxy.md) — must set `app.set('trust proxy', 1)`; Railway injects X-Forwarded-For and rate-limit throws without it
+- [Supabase trigger doesn't fire — public.users rows missing](bug_supabase_trigger_not_firing.md) — GoTrue bypasses on_auth_user_created; loadUser now auto-creates the row
 
 ## Project — open bugs
 

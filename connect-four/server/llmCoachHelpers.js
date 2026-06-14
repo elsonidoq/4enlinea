@@ -551,7 +551,7 @@ export function buildBlunderExplainPrompt({
   playedCol,          // 0-indexed; undefined = not provided
   contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
 }) {
-  const opponentName = playerName === 'Green' ? 'Grey' : 'Green';
+  const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
   const winningParity = perspective === 1 ? 'ODD' : 'EVEN';
   const winningRows = perspective === 1 ? '1,3,5' : '2,4,6';
@@ -586,7 +586,7 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   boardLines.push('### After the move');
   boardLines.push(postBoardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('Note: In the board, Gn = Green discs, Gy = Grey discs.');
+  boardLines.push('Note: In the board, Gn = Green discs, Gy = Gray discs.');
   sections.push(boardLines.join('\n'));
 
   // ── Move context ──────────────────────────────────────────────────────────

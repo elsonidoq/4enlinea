@@ -1,4 +1,4 @@
-// Shared board utility — used by PuzzlesPage and ChallengeScreen.
+// Shared board utility — used by ChallengeScreen and other screens.
 // Row 0 = bottom, row 5 = top. Cell values: 'empty', 'red', 'yellow'.
 
 const COLS = 7;
