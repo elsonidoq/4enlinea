@@ -170,7 +170,7 @@ After the global flip, component-level CSS that existed solely to fight the dark
 - **SC-003**: Zero unexpected references to `--border`, `--border-dim`, `--surface`, `--surface-2`, `--surface-3`, `--text`, `--text-sub`, `--text-muted` exist in user-facing JSX files after the change. The grep MUST explicitly exclude `Board.jsx` and the curation components (`CurationWorkspace`, `CandidateDashboard`, `MultiMoveSequencer`, `PredicateChecklist`, `RejectModal`). The allowed non-zero remainder is exactly 2 uses in `Board.jsx` shimStyle() (`var(--bg)` and `var(--border-dim)`), which resolve correctly via the `.dark-surface` ancestor.
 - **SC-004**: Zero references to the removed dark token names exist in `:root` after the change (they live only in `.dark-surface`).
 - **SC-005**: The global `:root` CSS block sets `color-scheme: light`, `color: var(--ink)`, and `background: #fbf4e8` after the change.
-- **SC-006**: The root flip, `.dark-surface` definition, `AdminCuratePage` wrapper, and all 16 user-facing dark-token replacements (FR-013) all land in a single commit (verified by git log).
+- **SC-006**: The root flip, `.dark-surface` definition, `AdminCuratePage` wrapper, and all 16 user-facing dark-token replacements (FR-013) all land in a single commit (verified by git log). Post-merge regressions are new defects tracked separately; this commit is never amended. The QA-before-commit gate (T017–T020 must all pass before T016 commits) is the safeguard that makes this policy viable.
 
 ## Assumptions
 

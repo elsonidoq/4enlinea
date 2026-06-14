@@ -156,7 +156,8 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
 Indexes:
 - `idx_blunders_user_unresolved` — `(user_id, created_at) WHERE resolved_at IS NULL`
 - `idx_blunders_severity` — `(user_id, severity DESC) WHERE resolved_at IS NULL`
-- `idx_blunders_game_unique` — UNIQUE `(user_id, board_state, move_played) WHERE puzzle_id IS NULL` (migration 030; atomic dedup for game blunders)
+
+> `idx_blunders_game_unique` was **dropped** in migration 041. It was a UNIQUE partial index on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`. It caused bulk imports to silently discard entire batches when any single row was a duplicate — the whole transaction rolled back, the error was treated as benign, and 0 rows were written. Duplicate blunder rows are now acceptable.
 
 `severity` = `round((best_score − score) / 36 * 10)` — instant score-spread measure, [0, 10]. Computed at insert time; never recomputed on read.
 `blunder_severity` = fraction of 3-ply post-blunder continuations ending in opponent win — graduated loss-of-control measure, [0, 1]. Computed by `computeBlunderSeverity()`.

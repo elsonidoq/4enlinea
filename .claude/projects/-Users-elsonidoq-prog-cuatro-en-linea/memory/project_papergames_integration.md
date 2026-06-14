@@ -23,6 +23,8 @@ metadata:
 
 Accuracy is computed in the same solver pass as blunder extraction (optimal/scored ratio). Re-import needed for rows before migration 039.
 
+**Bulk insert dedup bug (fixed 2026-06-14)**: the script used a single `insert(allBlunders)` per game. If any row was a duplicate (same board_state played in a prior game), the entire batch rolled back. The script treated the "unique constraint" error as benign and counted all rows as inserted — leaving 0 blunders in the DB while `accuracy` on the game row was correct. Fixed by dropping `idx_blunders_game_unique` (migration 041). Re-run the import script against affected games to backfill.
+
 ## GET /api/games
 
 Queries both `games` and `papergames_games` in parallel, fetches blunder counts via `game_id` and `papergames_game_id` respectively, merges + sorts by date, paginates with `offset`/`limit`. Returns `{ games, total }`. AI rows include `difficulty`; papergames rows include `opponent_name`, `opponent_avatar`.

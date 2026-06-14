@@ -1592,7 +1592,7 @@ app.post('/api/games/analyze', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
   // Fetch game row — check AI sparring games first, then papergames imports
-  let moves, side, difficulty, created_at;
+  let moves, side, difficulty, created_at, isPapergames = false;
   {
     const { data: aiGame } = await supabase
       .from('games')
@@ -1613,6 +1613,7 @@ app.post('/api/games/analyze', async (req, res) => {
       side = pgGame.side;
       difficulty = null;
       created_at = pgGame.played_at;
+      isPapergames = true;
     }
   }
 
@@ -1710,7 +1711,8 @@ app.post('/api/games/analyze', async (req, res) => {
           direction,
           severity: computeSeverity(bestScore, score),
           blunder_severity: blunderSeverity,
-          game_id: gameId,
+          game_id: isPapergames ? null : gameId,
+          papergames_game_id: isPapergames ? gameId : null,
         });
       }
 

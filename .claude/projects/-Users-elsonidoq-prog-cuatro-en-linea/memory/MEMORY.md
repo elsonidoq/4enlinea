@@ -37,6 +37,7 @@
 - [Audit all code paths before writing an epic](feedback_audit_all_paths_before_epic.md) — grep all usages of affected key/function prefix and read every call site
 - [Use explicit server flags, not absent-field branching](feedback_explicit_server_flags.md) — send an explicit flag (e.g. `aiMove: true`); other callers may also lack the "distinguishing" field
 - [Quarantine before delete](feedback_quarantine_before_delete.md) — move suspected-dead files to quarantine folder first, QA the site, then delete if clean
+- [Bulk insert + unique constraint = silent full-batch loss](feedback_bulk_insert_unique_constraint.md) — one duplicate row rolls back the whole batch; treating that error as benign leaves 0 rows written
 
 ## References — solver and board mechanics
 
@@ -145,7 +146,9 @@
 - [challengeSets.js is server-side only](project_challenge_sets_server_only.md) — no frontend mirror; SetPickerScreen reads from API response
 - [ChallengeScreen evaluation shape — polymorphic](project_challenge_evaluation_shape.md) — standard: summaryLineKey; forbidden_columns: summaryLine (pre-rendered)
 - [Sparring games table design](project_sparring_games_table.md) — side='first'/'second' enum; anonymous users DO write server rows; GRANT required
-- [Dark global theme — light component overrides](project_dark_global_theme.md) — index.css sets dark color-scheme globally; light-bg cards need color-scheme:light + scoped overrides
+- [Light global theme — .dark-surface scoped block](project_light_global_theme.md) — post-spec-033: :root is light, .dark-surface for admin holdout pages; token pairing rule unchanged
+- [Spec 033 — global light color scheme](project_spec033_light_color_scheme.md) — IMPLEMENTED 2026-06-14; 22 tasks; .dark-surface for admin holdout; 16 JSX fixes; key traps documented
+- [AdminLessonsPage is dark](project_admin_lessons_dark.md) — overrides spec FR-015; user requested dark background during QA; same wrapper pattern as AdminCuratePage
 
 - [Papergames integration](project_papergames_integration.md) — papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips
 

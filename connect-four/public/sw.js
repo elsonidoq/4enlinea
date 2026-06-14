@@ -17,6 +17,11 @@ self.addEventListener('activate', event => {
 
 // ── Fetch ────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
+  // In local dev (Vite), never intercept — the SW caches transformed source
+  // files that embed dep URLs with a specific ?v= hash; when Vite rebuilds
+  // deps that hash changes, causing two React instances and invalid hook errors.
+  if (self.location.hostname === 'localhost') return;
+
   // Pass through API requests and cross-origin requests (e.g. Supabase)
   if (event.request.url.includes('/api/')) return;
   if (!event.request.url.startsWith(self.location.origin)) return;

@@ -2,10 +2,10 @@
   "epic_path": "TODOs_epics.md",
   "epic_section": "Epic 4 — Global Light Color Scheme",
   "spec_dir": "specs/033-global-light-color-scheme",
-  "stage": "tasks_create",
+  "stage": "done",
   "pending_brainstorming_decisions": null,
   "pending_critique": null,
   "pending_answers": null,
-  "pending_handoff": "## Handoff context from plan_fix\n\nChanges made to plan.md:\n1. Commit 1: move index.css :root warning comment above new .dark-surface block; drop one-line light-default note above :root. Remove comment work from Commit 2 entirely.\n2. Commit 2: now touches only frontend-conventions.md (not tokens.css — pairing rule is still accurate, no change needed).\n3. Acceptance grep: explicitly exclude Board.jsx and curation components; document expected non-zero remainder (Board.jsx shimStyle has 2 allowed dark-token uses).\n4. body background-image: delete the entire property declaration, not just the value lines.\n5. AdminCuratePage wrapper: ternary refactor — const content = selection !== null ? <CurationWorkspace/> : <CandidateDashboard/>; return <div className='dark-surface' style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>{content}</div>.\n\nOrdering constraints that must be preserved in tasks:\n- Task 0 (grep-verify): mandatory first step before any edits\n- Atomic commit: :root flip + .dark-surface block + AdminCuratePage wrapper (ternary) + all 16 JSX replacements + index.css comment restructure — all one commit\n- Post-atomic: visual regression sweep across all 17 screenRegistry.jsx screens\n- Separate commit: frontend-conventions.md update only (tokens.css untouched)\n- Board.jsx shimStyle() must NOT be modified — it is an intentional allow-listed exception",
+  "pending_handoff": null,
   "pending_deferrals": []
 }

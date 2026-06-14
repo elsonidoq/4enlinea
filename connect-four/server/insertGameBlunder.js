@@ -7,8 +7,10 @@ import { VALID_BLUNDER_TAGS } from './blunderTags.js';
  *
  * @param {object} supabase - Supabase client
  * @param {object} row - { user_id, board_state, move_played, correct_move,
- *   pattern_category, reason, direction, severity, blunder_severity, game_id }
- *   game_id is nullable — omit or pass null for puzzle blunders.
+ *   pattern_category, reason, direction, severity, blunder_severity, game_id,
+ *   papergames_game_id }
+ *   Pass game_id for AI sparring games, papergames_game_id for papergames imports.
+ *   Both are nullable — omit or pass null for puzzle blunders.
  * @returns {Promise<void>}
  */
 export async function insertGameBlunder(supabase, row) {
@@ -33,6 +35,7 @@ export async function insertGameBlunder(supabase, row) {
       blunder_severity: row.blunder_severity ?? null,
       puzzle_id: null,
       game_id: row.game_id ?? null,
+      papergames_game_id: row.papergames_game_id ?? null,
     });
 
     if (error) {

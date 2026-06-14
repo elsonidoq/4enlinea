@@ -250,14 +250,7 @@ async function main() {
         .from('blunders')
         .insert(toInsert);
       if (error) {
-        // Partial unique index (idx_blunders_game_unique) prevents duplicates at DB level;
-        // PostgREST onConflict doesn't support partial indexes, so we use plain insert.
-        // Duplicate-key errors on re-runs are expected and benign.
-        if (!error.message?.includes('duplicate key') && !error.message?.includes('unique constraint')) {
-          process.stderr.write(`\nInsert error ${room.uid}: ${error.message}\n`);
-        } else {
-          totalInserted += toInsert.length; // best-effort count; some may be dupes
-        }
+        process.stderr.write(`\nInsert error ${room.uid}: ${error.message}\n`);
       } else {
         totalInserted += toInsert.length;
       }
