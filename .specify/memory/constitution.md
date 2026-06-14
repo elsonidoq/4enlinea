@@ -1,27 +1,24 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.3.0 → 1.3.1
-Bump type: PATCH — clarification and pointer update; no new principle.
+Version change: 1.3.1 → 1.3.2
+Bump type: PATCH — quota values updated to reflect weekly reset; anonymous quota clarified.
 
 Modified sections:
-  - Principle VIII: Documentation as First-Class Deliverable
-      · "Before planning" paragraph: added docs/architecture/ to the required reading list.
-      · "Concretely" bullet list: replaced with per-file mapping under docs/architecture/.
-      · "During implementation" paragraph: updated artifact pointer to docs/architecture/.
+  - Tier & Access Control Constraints (tier table):
+      · Free-tier Deep Reveals: "3 Deep Reveals per day" → "20 Deep Reveals per week (resets Monday 00:00 UTC)"
+      · Quota bullet: "3/day for free users" → "20/week (resets Monday 00:00 UTC) for free users"
+      · Anonymous bullet: replaced "Anonymous quota is keyed to the device-bound UUID and is not migrated on signup"
+        with "Anonymous users have no Deep Reveal quota — they see the AuthModal when they tap Learn more"
 
-Rationale: docs/architecture/ was created and populated as of 2026-05-15 and is now the
-single source of truth for conventions. Principle VIII was written before that directory
-existed, so all pointers still referenced data-model.md, contracts/, and plan.md directly.
+Rationale: Epic 7 (spec 012) changed the Deep Reveal quota from a daily cap of 3 to a
+weekly cap of 20 resetting on Monday 00:00 UTC, and removed the anonymous quota path entirely
+(anonymous users are gated behind AuthModal, not a quota counter).
 
 Added sections: N/A
 Removed sections: N/A
 
-Templates requiring updates:
-  ✅ .specify/templates/plan-template.md — Constitution Check Principle VIII bullet updated
-     to include docs/architecture/ in the required reading list.
-  ✅ .specify/templates/tasks-template.md — Phase N: Polish architecture doc tasks updated
-     to reference docs/architecture/ files per the new mapping.
+Templates requiring updates: N/A — no template references the quota numbers directly.
 
 Deferred TODOs: none
 -->
@@ -215,12 +212,12 @@ gating is presentational only.
 | Tier | Capabilities |
 |---|---|
 | Anonymous | Basic puzzles (`immediate_threat`, `forced_block`, `double_threat`), Sparring, one-line summaries only |
-| Signed-in (free) | Same as anonymous + 3 Deep Reveals per day |
+| Signed-in (free) | Same as anonymous + 20 Deep Reveals per week (resets Monday 00:00 UTC) |
 | Paid | All pattern categories beyond the three free ones: `forced_win`, `forbidden_columns`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape` (8 total as of spec 008); unlimited Deep Reveals, Personal AI Coach, Premium Analytics, Advanced Training Paths, cross-device sync |
 
 - The free/paid split is a single configuration value. No feature may hard-code tier logic.
-- Deep Reveal quota (3/day for free users) is tracked server-side, keyed to the Supabase
-  user ID. Anonymous quota is keyed to the device-bound UUID and is not migrated on signup.
+- Deep Reveal quota (20/week (resets Monday 00:00 UTC) for free users) is tracked server-side, keyed to the Supabase
+  user ID. Anonymous users have no Deep Reveal quota — they see the AuthModal when they tap Learn more.
 - Local IndexedDB state MUST migrate to the backend seamlessly on signup with no data loss.
 
 ## Governance
@@ -240,4 +237,4 @@ Any practice that conflicts with a principle stated here MUST be updated to comp
 verify each principle before implementation begins, and again after Phase 1 design is
 complete.
 
-**Version**: 1.3.1 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-05-15
+**Version**: 1.3.2 | **Ratified**: 2026-04-30 | **Last Amended**: 2026-05-30

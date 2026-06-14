@@ -1,0 +1,10 @@
+{
+  "epic_path": "docs/mvp/server-mediated-data-access-epic.md",
+  "spec_dir": "specs/030-server-mediated-data-access",
+  "stage": "done",
+  "pending_brainstorming_decisions": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}

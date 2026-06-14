@@ -1,0 +1,121 @@
+/* ============================================================
+   DecodeC4 — Design tokens (FR-001–FR-008)
+   CSS custom properties + @keyframes
+
+   ⚠️  TWO TOKEN SYSTEMS — never mix across surfaces:
+   - THIS FILE (light surfaces): --ink, --ink-soft, --ink-faint, --card
+     → pair with white/light backgrounds (#fff or --card)
+   - index.css (dark surfaces): --surface, --surface-2, --text, --text-sub
+     → pair with dark backgrounds (--surface / --surface-2)
+
+   Rule: dark bg → --text family.  light bg → --ink family.
+   Mixing them = invisible text.  See docs/architecture/frontend-conventions.md
+   ============================================================ */
+
+:root {
+  /* Typography (FR-006) */
+  --font-display: 'Baloo 2', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+
+  /* Disc palette — pieces ONLY (FR-001) */
+  --disc-green:    #2faa5a;
+  --disc-green-hi: #43c673;
+  --disc-gray:     #3c4250;
+  --disc-gray-hi:  #525a6b;
+
+  /* Board (FR-002) */
+  --board:      #ecd9ad;
+  --board-edge: #d9c089;
+  --hole:       #fbf4e3;
+  --hole-in:    #efe3c7;
+
+  /* Eval / feedback — RESERVED, never on discs (FR-003) */
+  --eval-good:    #2bb462;
+  --eval-good-bg: #e3f7ea;
+  --eval-mid:     #f5a623;
+  --eval-mid-bg:  #fdf0d9;
+  --eval-bad:     #e8543e;
+  --eval-bad-bg:  #fbe4df;
+
+  /* Coach-mention zone highlight (Phase 1: Tap-to-Toggle) */
+  --zone-highlight: #5B9BD5;
+  --zone-color-0: #5B9BD5;
+  --zone-color-1: #E8543E;
+  --zone-color-2: #2FAA5A;
+  --zone-color-3: #8B5CF6;
+
+  /* Threat overlay tokens (FR-004) */
+  --threat-green: rgba(47,170,90,0.30);
+  --threat-gray:  rgba(60,66,80,0.26);
+  --threat-red:   rgba(232,84,62,0.30);
+  --claim:        rgba(245,166,35,0.40);
+
+  /* Lock tokens (FR-005) */
+  --lock:    #c7c2b8;
+  --lock-bg: #efece6;
+
+  /* Per-surface tints (FR-005) */
+  --bg-home:    #fbf4e8;
+  --bg-lessons: #e8f0fb;
+  --bg-chal:    #fdeede;
+  --bg-spar:    #efe9fb;
+
+  /* Layout (FR-007) */
+  --radius:    22px;
+  --radius-sm: 14px;
+  --shadow:    0 8px 24px rgba(58,52,40,0.10), 0 2px 6px rgba(58,52,40,0.06);
+  --shadow-sm: 0 3px 10px rgba(58,52,40,0.10);
+
+  /* Ink scale (for components) */
+  --ink:       #2b2a28;
+  --ink-soft:  #6b6862;
+  --ink-faint: #a6a299;
+  --line:      #ece7dd;
+  --card:      #ffffff;
+}
+
+/* FR-008: @keyframes */
+
+@keyframes drop {
+  from { transform: translateY(-320px) scale(0.82); opacity: 0.6; }
+  to   { transform: none; opacity: 1; }
+}
+
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(43,180,98,.9); }
+  50%     { box-shadow: 0 0 0 6px rgba(43,180,98,.25); }
+}
+
+@keyframes bubbleIn {
+  from { transform: translateY(8px); opacity: 0.6; }
+  to   { transform: none; opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes popIn {
+  from { transform: scale(.92); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(60px); }
+  to   { transform: none; }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ring {
+  0%   { transform: scale(1);   opacity: .7; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes zhPulse {
+  0%, 100% { box-shadow: 0 0 0 2.5px var(--zh-color, var(--zone-highlight)); }
+  50%      { box-shadow: 0 0 0 5px var(--zh-color-soft, rgba(91, 155, 213, 0.35)); }
+}

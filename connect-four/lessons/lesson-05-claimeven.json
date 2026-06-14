@@ -1,0 +1,130 @@
+{
+  "id": "claimeven",
+  "title": "Claimeven",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "From lesson 4: Green owns rows 0, 2, 4 in a fresh column (0-indexed). Gray owns rows 1, 3, 5. Gray's natural home is the row directly above Green's.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a single empty column (col 3). Mark rows 0, 2, 4 with 'td' overlays labelled 'Green' and rows 1, 3, 5 with 'tg' overlays labelled 'Gray'. All other columns empty. Legend: 'td' = Green's natural rows (0, 2, 4), 'tg' = Gray's natural rows (1, 3, 5).</board instructions>\n\nRecall from lesson 4: in any empty column, Green owns rows 0, 2, 4 (0-indexed) and Gray owns rows 1, 3, 5. Gray's natural home is always the cell directly above Green's natural cell.\n\nThis is the foundation of Claimeven: whenever Green plays on their natural even-indexed row, Gray can immediately respond above to lock in Gray's natural odd-indexed row in that column."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Green plays col 3 and lands on row 0. Gray responds directly above at row 1. What threat did Gray just neutralise?",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Green has played col 3 (Green disc at row 0) and Gray has just responded at row 1 in col 3 (Gray disc). Also show a Green horizontal three-in-a-row threat whose completing cell passes through col 3 row 1 — that cell is now occupied by Gray. Mark the Gray disc at row 1 col 3 with a 'tg' overlay ('Claimed'). Mark the Green threat discs with 'win' overlays and draw a visual cross or 'td' through the now-blocked threat cell to show the threat is dead. Legend: 'tg' = Gray's claimed cell, 'win' = Green's threat discs (now neutralised), 'td' = Green's threat cell (claimed by Gray).</board instructions>\n\nGreen plays col 3 and lands on row 0 (their natural even row). Gray responds immediately above, claiming row 1 (Gray's natural odd row). A Green horizontal threat whose completing cell passed through row 1 of col 3 is now gone — Gray owns that cell. This is Claimeven: respond above Green's even-row play to neutralise every Green threat that passes through the row above."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Gray doesn't need to calculate threats one by one. Every time Green plays on an even row, respond directly above — Green's threat network collapses column by column.",
+          "mood": "happy"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position where Green has played on row 0 in multiple columns (e.g., cols 0, 2, 3, 4) and Gray has responded directly above in each (Gray discs at row 1 in those same columns). Each column now has a Green-Gray pair at rows 0–1. Mark each Gray row-1 disc with a 'tg' overlay ('Claimed'). Also show one or two Green horizontal threat windows that are neutralised because their completing cells in row 1 are already occupied by Gray. Legend: 'tg' = Gray's claimed cells.</board instructions>\n\nGray doesn't need to calculate threats one by one. Every time Green plays on an even-indexed row, respond directly above. Green's even-row threat network in every such column is automatically neutralised — Gray claimed the row above, and every threat that passed through those cells is now dead.\n\nThis board-wide strategy is Claimeven: a systematic response that collapses Green's threat infrastructure without needing to identify each individual threat."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Careful — Claimeven only applies when Green plays on their natural even row. If Green plays on an odd row, responding above puts you on an even row. That's Green's territory.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position where Green has just played on row 1 (an odd-indexed row — not Green's natural even row). If Gray blindly responds 'above' at row 2 (an even-indexed row, Green's natural territory), Gray hands Green a cell on Green's natural row. Mark Green's disc at row 1 with a neutral marker. Mark row 2 above it with 'td' ('Wrong — hands Green an even-row cell'). Then show the correct response: Gray should NOT play directly above here. Legend: 'td' = Row 2 here is Green's natural row — do not play here blindly.</board instructions>\n\nClaimeven only works when Green plays on their natural even-indexed row (0, 2, 4…). If Green plays on an odd-indexed row, responding directly above would place Gray on an even-indexed row — Green's territory. That hands Green a cell on their natural row, which is the opposite of Claimeven.\n\nThe rule: check the row Green landed on. If it is even-indexed (0, 2, 4…), respond above. If it is odd-indexed (1, 3, 5…), do not apply Claimeven here — a different strategy applies."
+    }
+  ],
+  "socratic": {
+    "goalPrompt": "Green just played in one column, landing on an even-indexed row. Which column should Gray play to claim the cell directly above and neutralise Green's threat?",
+    "_boardInstructions": "Show a mid-game board (8–10 discs total) where two columns each have a Red disc on row 0. In col 3, the cell at row 1 directly above Red is empty — this is the valid Claimeven target. In a second column (e.g., col 1), the cell at row 1 above Red is already occupied by Yellow, ruling it out as a Claimeven play. Include a horizontal Red three-in-a-row threat whose completing cell passes through col 3 row 1, making the Claimeven motivation concrete. The student must play col 3 as the only open column where Yellow can claim the row directly above Red's even-row disc.",
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "correctCol": 3
+  },
+  "confirmationCategory": "claimeven",
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "fc5ff387-e4e9-46e0-8fd0-66a2dcc2d3be",
+      "moveString": "033524632333656655640",
+      "goalPrompt": "Use the Claimeven strategy — identify which columns Gray can claim to guarantee a draw.",
+      "goalPredicateType": "claimeven",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 6,
+      "userPlayer": 2
+    },
+    {
+      "puzzleId": "d9095b68-a72a-4d5b-ad5f-540ebef8e250",
+      "moveString": "33333530054551041",
+      "goalPrompt": "Use the Claimeven strategy — identify which columns Gray can claim to guarantee a draw.",
+      "goalPredicateType": "claimeven",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 0,
+      "userPlayer": 2
+    }
+  ]
+}

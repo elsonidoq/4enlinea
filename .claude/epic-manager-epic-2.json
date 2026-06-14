@@ -1,0 +1,11 @@
+{
+  "epic_path": "TODOs_epics.md",
+  "epic_section": "Epic 2 — Staging/Production Infrastructure & Deploy",
+  "spec_dir": "specs/031-staging-production-deploy",
+  "stage": "done",
+  "pending_brainstorming_decisions": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}

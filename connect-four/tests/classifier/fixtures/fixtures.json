@@ -96,11 +96,11 @@
     ]
   },
   {
-    "description": "forced_win: col 7 is the least bad move in a losing position",
+    "description": "lost position best move: col 7 is the least bad move — no forcing chain, not forced_win",
     "moves": "3333344455",
     "candidateCol": 6,
-    "expectedCategory": 4,
-    "expectedTag": "forced_win",
+    "expectedCategory": null,
+    "expectedTag": "suboptimal_move",
     "scores": [
       -16,
       -16,

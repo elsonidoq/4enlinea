@@ -1,4 +1,4 @@
-import { classifyAll, Board } from '../classifier.js';
+import { classifyPattern, Board } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 
 const ROWS = 6;
@@ -7,14 +7,13 @@ const COLS = 7;
 const moves = process.argv[2] ?? '';
 
 const solver = createSolverProcess();
-let scores, detectorResults;
+let scores;
 try {
   scores = await solver.query(moves);
   const board = new Board(moves);
-  detectorResults = await classifyAll(moves, scores, solver);
 
   // ── Board state ─────────────────────────────────────────────────────────────
-  const playerName = p => p === 1 ? 'Red' : 'Yellow';
+  const playerName = p => p === 1 ? 'Green' : 'Gray';
   console.log('=== BOARD STATE ===');
   console.log('movestring:', moves);
   console.log('move_count:', moves.length);
@@ -43,7 +42,7 @@ try {
   console.log('');
 
   // ── Solver scores ─────────────────────────────────────────────────────────
-  console.log('=== SOLVER SCORES (positive=Red wins, negative=Yellow wins, 0=draw) ===');
+  console.log('=== SOLVER SCORES (positive=Green wins, negative=Gray wins, 0=draw) ===');
   console.log('col:   ', Array.from({length: COLS}, (_, i) => i).join('  '));
   console.log('score: ', scores.map(s => String(s).padStart(2)).join(' '));
   console.log('');
@@ -74,7 +73,7 @@ try {
   console.log('');
 
   // ── Major/minor threat cells ─────────────────────────────────────────────
-  console.log('=== THREAT MAP PER CELL (rm=Red major, rn=Red minor, ym=Yellow major, yn=Yellow minor) ===');
+  console.log('=== THREAT MAP PER CELL (rm=Green major, rn=Green minor, ym=Gray major, yn=Gray minor) ===');
   const threatCells = board.majorThreatCells();
   const entries = Object.entries(threatCells).sort(([a], [b]) => {
     const [ar, ac] = a.split(',').map(Number);
@@ -92,11 +91,14 @@ try {
   }
   console.log('');
 
-  // ── Pattern detectors ─────────────────────────────────────────────────────
+  // ── Pattern detectors (both perspectives) ────────────────────────────────
   console.log('=== PATTERN DETECTORS ===');
-  for (const { detectorName, result } of detectorResults) {
-    console.log(`${detectorName}:`, JSON.stringify(result));
-  }
+  const redResult = await classifyPattern(moves, 1, solver);
+  const yellowResult = await classifyPattern(moves, 2, solver);
+  const redTags = [...new Set(redResult.keys())];
+  const yellowTags = [...new Set(yellowResult.keys())];
+  console.log('Green (player 1):', redTags.length > 0 ? redTags.join(', ') : 'none');
+  console.log('Gray (player 2):', yellowTags.length > 0 ? yellowTags.join(', ') : 'none');
 } finally {
   solver.destroy();
 }

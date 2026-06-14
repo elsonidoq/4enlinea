@@ -42,6 +42,7 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
     case 'overcut': return evalOvercut(candidateCol, puzzle);
     case 'figure_7': return evalFigure7(candidateCol, puzzle);
     case 'j_shape': return evalJShape(candidateCol, puzzle);
+    case 'odd_even_threat': return evalOddEvenThreat(candidateCol, puzzle);
     default: return { result: 'wrong' };
   }
 }
@@ -271,6 +272,14 @@ function evalFigure7(candidateCol, puzzle) {
 
 // j_shape: correct column stored as correctCol on puzzle
 function evalJShape(candidateCol, puzzle) {
+  const correctCol = puzzle.correctCol;
+  if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
+  if (candidateCol === correctCol) return { result: 'correct', correctCol };
+  return { result: 'wrong', correctCol };
+}
+
+// odd_even_threat: correct column stored as correctCol on puzzle
+function evalOddEvenThreat(candidateCol, puzzle) {
   const correctCol = puzzle.correctCol;
   if (correctCol === undefined || correctCol === null) return { result: 'wrong' };
   if (candidateCol === correctCol) return { result: 'correct', correctCol };

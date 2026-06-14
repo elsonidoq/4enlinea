@@ -1,0 +1,286 @@
+{
+  "id": "block-before-build",
+  "title": "Block Before Build",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "movestring": "3332324445",
+      "coachMessages": [
+        {
+          "text": "Green has three discs in a row with one empty square to complete the four. What is Gray's only safe move?",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "dd",
+        "gdgg",
+        "gdg",
+        "d",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Winning move"
+        },
+        {
+          "type": "td",
+          "label": "The only safe move (block here)"
+        }
+      ],
+      "infoProse": "When your opponent can complete four-in-a-row on their very next move, you must block that square. There is no better move — building your own position while your opponent wins is not strategy, it is a loss."
+    },
+    {
+      "movestring": "333232444525",
+      "coachMessages": [
+        {
+          "text": "You built — but Gray didn't wait. See what happens when Green ignores the threat.",
+          "mood": "sad"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "ddg",
+        "gdgg",
+        "gdg",
+        "dd",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray winning four-in-a-row"
+        }
+      ],
+      "infoProse": "This is the consequence of building instead of blocking: your opponent completes four-in-a-row on the very next turn. No matter how promising your own move looked, the game is over before you get to use it. Block first, always."
+    },
+    {
+      "movestring": "33333321222421",
+      "coachMessages": [
+        {
+          "text": "Threats don't only run sideways. A vertical or diagonal three-in-a-row is just as urgent — the same rule applies.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "dd",
+        "ggdgg",
+        "gdgdgd",
+        "d",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 0,
+          "r": 0,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "td",
+          "label": "Opponent's immediate threat (block this)"
+        },
+        {
+          "type": "tg",
+          "label": "User threat"
+        }
+      ],
+      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Green discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
+    },
+    {
+      "movestring": "3333332122454422126151",
+      "coachMessages": [
+        {
+          "text": "Green has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "dgdd",
+        "ggdgdd",
+        "gdgdgd",
+        "ggd",
+        "dg",
+        "g"
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 5,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 4,
+          "type": "win"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "win"
+        },
+        {
+          "c": 0,
+          "r": 2,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "claim"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray's connected disks"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell"
+        },
+        {
+          "type": "tg",
+          "label": "Green should build here instead"
+        },
+        {
+          "type": "claim",
+          "label": "Empty cells below the threat"
+        }
+      ],
+      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for gray?"
+    }
+  ],
+  "socratic": {
+    "movestring": "04142",
+    "boardSpec": [
+      "g",
+      "g",
+      "g",
+      "",
+      "dd",
+      "",
+      ""
+    ],
+    "overlays": [
+      {
+        "c": 3,
+        "r": 0,
+        "type": "tg"
+      },
+      {
+        "c": 2,
+        "r": 0,
+        "type": "win"
+      },
+      {
+        "c": 1,
+        "r": 0,
+        "type": "win"
+      },
+      {
+        "c": 0,
+        "r": 0,
+        "type": "win"
+      }
+    ],
+    "correctCol": 3,
+    "_boardInstructions": "Show a minimal board where Red has three horizontal discs across the bottom of columns 0, 1, and 2 (row 0), leaving column 3 row 0 as the only empty cell that completes Red's four-in-a-row — it is immediately playable since nothing is below it. Yellow has two discs at row 0 in columns 5 and 6, making column 4 look like a tempting building move. Mark Red's completing cell at col 3 row 0 with 'tg' (this is the mandatory block) and the tempting Yellow building cell at col 4 row 0 with 'td' (the trap — playing here hands Red the win). No other overlays are needed. The student must choose col 3 to block Red's immediate threat rather than extend their own position."
+  },
+  "confirmationCategory": "forced_block",
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "7d335e8c-549a-4364-b052-6aa2086ce8c3",
+      "moveString": "236343326044152605",
+      "goalPrompt": "Block your opponent's threat.",
+      "goalPredicateType": "forced_block",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",
+      "moveString": "3211362341106",
+      "goalPrompt": "Block your opponent's threat.",
+      "goalPredicateType": "forced_block",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 2
+    }
+  ],
+  "order": 2
+}

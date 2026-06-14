@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DecodeC4 — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+
+<template id="__bundler_thumbnail" data-bg-color="#efe9fb">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <!-- board -->
+    <rect x="20" y="18" width="80" height="50" rx="8" fill="#ecd9ad"/>
+    <!-- 4 discs in a row (win) -->
+    <circle cx="34" cy="50" r="7" fill="#2faa5a"/>
+    <circle cx="48" cy="50" r="7" fill="#2faa5a"/>
+    <circle cx="62" cy="50" r="7" fill="#2faa5a"/>
+    <circle cx="76" cy="50" r="7" fill="#2faa5a"/>
+    <!-- top row sparse -->
+    <circle cx="34" cy="34" r="7" fill="#3c4250"/>
+    <circle cx="48" cy="34" r="7" fill="#3c4250"/>
+  </svg>
+</template>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="primitives.jsx"></script>
+<script type="text/babel" src="coach.jsx"></script>
+<script type="text/babel" src="board.jsx"></script>
+<script type="text/babel" src="screens_home.jsx"></script>
+<script type="text/babel" src="screens_lessons.jsx"></script>
+<script type="text/babel" src="screens_challenges.jsx"></script>
+<script type="text/babel" src="screens_sparring.jsx"></script>
+<script type="text/babel" src="screens_mistakes.jsx"></script>
+<script type="text/babel" src="screens_games.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

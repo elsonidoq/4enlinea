@@ -27,7 +27,7 @@ export const TIER_ORDER = {
   'IMMEDIATE LOSS': 4,
 };
 
-// Placeholder outcomes for IMMEDIATE WIN columns — we skip explainSimulate for
+// Placeholder outcomes for IMMEDIATE WIN columns — we skip processing for
 // these because the game ends on the very next move and c4solver rejects positions
 // reached through a winning alignment (it would error on the children).
 export const IMMEDIATE_WIN_OUTCOMES = {
@@ -35,14 +35,27 @@ export const IMMEDIATE_WIN_OUTCOMES = {
   perspectiveLeaves: 0, winRate: 1, lossRate: 0, drawRate: 0,
 };
 
+// User-facing display names for internal pattern labels.
+// Internal names are used for KB lookups; display names appear in LLM prompts.
+const PATTERN_DISPLAY = {
+  forced_win: 'losing_position',
+};
+
+function displayName(name) {
+  return PATTERN_DISPLAY[name] ?? name;
+}
+
 // Maps each pattern name to a KB article slug under docs/knowledge-base/,
 // or to an inline string for patterns that have no dedicated KB entry.
 // Only entries for patterns with ratio > 0 in any column are loaded at runtime.
 export const PATTERN_KB = {
   double_threat:  { inline: 'A double threat (or fork) occurs when a player creates two simultaneous winning threats in a single move that the opponent cannot both block. The two threats may be in different columns (the opponent can only play one column per turn) or in adjacent rows of the same column (T1: adjacent threats win unconditionally). The double-threat move is decisive because it guarantees a win on the very next move.' },
+  immediate_threat: { inline: 'An immediate threat is a move that creates four-in-a-row on the very next turn. When a player has three discs in a row with an open space at either end, that space is their winning cell. Immediate threats are decisive because they end the game before the opponent can respond.' },
   j_shape:        { id: 'allen-j-configuration' },
   figure_7:       { id: 'community-figure-7' },
+  forced_block: { inline: 'A forced block occurs when the opponent has an immediate winning threat and only a specific set of columns can neutralise it. All other legal moves leave the threat unanswered and lose immediately. Blocking a forced threat is the only legal good move.' },
   claimeven:      { id: 'allis-claimeven' },
+  claimodd:       { id: 'community-claimodd' },
   baseclaim:      { id: 'allis-baseclaim' },
   before:         { id: 'allis-before' },
   specialbefore:  { id: 'allis-specialbefore' },
@@ -50,6 +63,7 @@ export const PATTERN_KB = {
   overcut:        { id: 'community-overcut' },
   z_threat:       { id: 'community-z-threat' },
   forced_win:     { id: 'derived-lost-position' },
+  odd_even_threat: { inline: 'An odd-even threat position occurs when Red has two candidate moves each creating an immediate threat, but one lands on an odd row (rows 0, 2, or 4 — Red\'s natural parity) and the other on an even row. The odd-row threat is strategically superior because Yellow\'s claimeven strategy cannot neutralise threats on odd rows. Red must always prefer the odd-row threat move.' },
 };
 
 /**
@@ -95,7 +109,7 @@ export function buildKBSection(patternNames) {
       statement = loadKBStatement(kb.id);
       if (!statement) continue;
     }
-    entries.push(`### ${name}\n${statement}`);
+    entries.push(`### ${displayName(name)}\n${statement}`);
   }
   if (entries.length === 0) return '';
   return `## Pattern definitions\n\n${entries.join('\n\n')}`;
@@ -264,13 +278,13 @@ export function buildFlatTable(colData, rounds) {
     const [firstName, firstEntry] = nonZero[0];
     rows.push(
       `${colStr} ${tierStr} ${outStr}` +
-      `${firstName.padEnd(PATTERN_W)} ${firstEntry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(firstEntry)}`
+      `${displayName(firstName).padEnd(PATTERN_W)} ${firstEntry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(firstEntry)}`
     );
 
     for (let i = 1; i < nonZero.length; i++) {
       const [name, entry] = nonZero[i];
       rows.push(
-        `${blankPrefix}${name.padEnd(PATTERN_W)} ${entry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(entry)}`
+        `${blankPrefix}${displayName(name).padEnd(PATTERN_W)} ${entry.ratio.toFixed(2).padStart(RATIO_W)}  ${top2String(entry)}`
       );
     }
   }
@@ -283,15 +297,6 @@ export function buildFlatTable(colData, rounds) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Explain-move helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Ordered list of tactical pattern names used by computeDeltaTable.
- */
-export const PATTERN_NAMES = [
-  'double_threat', 'j_shape', 'figure_7', 'claimeven',
-  'baseclaim', 'before', 'specialbefore',
-  'undercut', 'overcut', 'z_threat', 'forced_win',
-];
 
 /**
  * Returns { contrastCol, isOptimal } or null if all legal scores are equal
@@ -326,45 +331,6 @@ export function selectContrastMove(scores, userCol, board) {
   }
 }
 
-/**
- * Compare user move patterns vs contrast move patterns.
- * Returns { rows, insufficientTacticalData }.
- *
- * Each row: { name, userRatio, contrastRatio, delta, userTop2, contrastTop2 }
- * where Top2 is a short string of the top-2 histogram entries.
- * Rows are sorted by delta descending.
- */
-export function computeDeltaTable(userPatterns, contrastPatterns) {
-  function top2String(entry) {
-    const h = entry.cellHistogram ?? entry.colHistogram;
-    if (!h || Object.keys(h).length === 0) return '';
-    return Object.entries(h)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([k, v]) => `${k}×${v}`)
-      .join(' ');
-  }
-
-  const rows = [];
-  for (const name of PATTERN_NAMES) {
-    const u = userPatterns[name];
-    const c = contrastPatterns[name];
-    if (!u || !c) continue;
-    const userRatio = u.ratio;
-    const contrastRatio = c.ratio;
-    if (Math.max(userRatio, contrastRatio) <= 0) continue;
-    rows.push({
-      name,
-      userRatio,
-      contrastRatio,
-      delta: Math.abs(userRatio - contrastRatio),
-      userTop2: top2String(u),
-      contrastTop2: top2String(c),
-    });
-  }
-  rows.sort((a, b) => b.delta - a.delta);
-  return { rows, insufficientTacticalData: rows.length === 0 };
-}
 
 /**
  * Derives the game-theoretic tier of a position from the pre-move solver scores.
@@ -386,153 +352,365 @@ export function getPositionTier(scores, board) {
 }
 
 /**
- * Returns the movestring after the opponent plays their best response to postMovestring,
- * or null if the game is already over or the board is full.
+ * Scans all 4-windows (horizontal, vertical, diagonal-up, diagonal-down) across the full
+ * 7x6 board and returns windows with exactly 3 discs of one color and 1 empty cell.
  *
- * - If the player who just moved has won: no response (returns null).
- * - If the opponent has an immediate win (blunder): plays the first winning col.
- * - Otherwise: queries the solver and picks the opponent's highest-scored legal col,
- *   tie-breaking toward the center (col 3).
+ * NOT to use: getMajorThreatCells returns a per-cell flag map {rm, rn, ym, yn} — it
+ * cannot yield 4-cell group objects with owners. This helper is the correct tool for all
+ * group-level major-threat operations.
  *
- * @param {string}   postMovestring   movestring after the user's move
- * @param {Board}    postBoard        Board object for postMovestring
- * @param {number[]} opponentWinCols  0-indexed cols where opponent wins immediately (may be empty)
- * @param {number}   perspective      1 or 2 — the player who just moved
- * @param {object}   solver           c4solver wrapper with .query()
- * @returns {Promise<string|null>}
+ * Cell format: wire format c${col+1}r${row+1} (1-indexed) for ALL cells in the window
+ * (occupied cells included). This matches allowedSet.cells format.
+ *
+ * Deterministic ordering: horizontally first (cols inner, rows outer), then vertically,
+ * diag-up, diag-down.
+ *
+ * @param {Board} board  Board instance with board.board[row][col] (0 = empty, 1 = Red, 2 = Yellow)
+ * @param {number} perspective  1 = Red, 2 = Yellow (coached player's color)
+ * @returns {Array<{cells: string[], owner: 'player'|'opponent'}>}
  */
-export async function getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver) {
-  if (postBoard.hasWon(perspective)) return null;
-  if (postBoard.colHeights.every(h => h >= 6)) return null;
-  if (opponentWinCols.length > 0) return postMovestring + opponentWinCols[0];
-  const scores = await solver.query(postMovestring);
-  const legalCols = [0, 1, 2, 3, 4, 5, 6].filter(c => postBoard.colHeights[c] < 6);
-  const bestScore = Math.max(...legalCols.map(c => scores[c]));
-  const bestCols = legalCols.filter(c => scores[c] === bestScore);
-  const opponentBestCol = [...bestCols].sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3))[0];
-  return postMovestring + opponentBestCol;
+export function findMajorThreatWindows(board, perspective) {
+  const ROWS = 6;
+  const COLS = 7;
+  const opponent = 3 - perspective;
+  const results = [];
+
+  /** Checks a 4-cell window and pushes a record if it qualifies as a major threat. */
+  function checkWindow(cells) {
+    let playerCount = 0;
+    let oppCount = 0;
+    let emptyCount = 0;
+
+    for (const { r, c } of cells) {
+      const val = board.board[r][c];
+      if (val === perspective) playerCount++;
+      else if (val === opponent) oppCount++;
+      else if (val === 0) emptyCount++;
+      // mixed disc colors — skip without checking
+    }
+
+    if (playerCount === 3 && emptyCount === 1) {
+      results.push({
+        cells: cells.map(({ r, c }) => `c${c + 1}r${r + 1}`),
+        owner: 'player',
+      });
+    } else if (oppCount === 3 && emptyCount === 1) {
+      results.push({
+        cells: cells.map(({ r, c }) => `c${c + 1}r${r + 1}`),
+        owner: 'opponent',
+      });
+    }
+  }
+
+  // Direction order: horizontal, vertical, diagonal-up, diagonal-down
+
+  // Horizontal (same row, col +1)
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      checkWindow([
+        { r, c }, { r, c: c + 1 }, { r, c: c + 2 }, { r, c: c + 3 },
+      ]);
+    }
+  }
+
+  // Vertical (row +1, same col)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c < COLS; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c }, { r: r + 2, c }, { r: r + 3, c },
+      ]);
+    }
+  }
+
+  // Diagonal-up (row +1, col +1)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 0; c <= COLS - 4; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c: c + 1 }, { r: r + 2, c: c + 2 }, { r: r + 3, c: c + 3 },
+      ]);
+    }
+  }
+
+  // Diagonal-down (row +1, col -1)
+  for (let r = 0; r <= ROWS - 4; r++) {
+    for (let c = 3; c < COLS; c++) {
+      checkWindow([
+        { r, c }, { r: r + 1, c: c - 1 }, { r: r + 2, c: c - 2 }, { r: r + 3, c: c - 3 },
+      ]);
+    }
+  }
+
+  return results;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Explain-move gap/framing helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * T04 — checkAllMovesEqual
+ * Determines if all legal moves have the same solver score for the coached player.
+ *
+ * @param {number[]} preScores  raw solver scores (current-player perspective)
+ * @param {Board} board         Board instance
+ * @returns {{ isSettled: boolean, allMovesEqual: boolean }}
+ */
+export function checkAllMovesEqual(preScores, board) {
+  const legalCols = [0, 1, 2, 3, 4, 5, 6].filter(c => board.colHeights[c] < 6);
+  if (legalCols.length === 0) return { isSettled: false, allMovesEqual: false };
+  const legalScoresCoached = legalCols.map(c => -preScores[c]);
+  const allMovesEqual = legalScoresCoached.every(s => s === legalScoresCoached[0]);
+  const isSettled = allMovesEqual && legalCols.every(c => preScores[c] === 0);
+  return { isSettled, allMovesEqual };
 }
 
 /**
- * Builds the full LLM prompt string for the explain-move endpoint.
+ * T04 — getGapAndFraming
+ * Computes the eval gap between the user's column and the contrast column.
  *
- * All column references shown to the LLM are 1-indexed (col+1).
- * Solver scores are intentionally excluded — the LLM reasons from
- * tactical patterns and KB definitions only.
- *
- * boardViz              — board BEFORE the user's move
- * postBoardViz          — board AFTER the user's move
- * afterOpponentBoardViz — board after opponent's best response (null if game over)
- * opponentResponseCol   — 0-indexed col the opponent played (null if game over)
- * playerName            — 'Red' or 'Yellow' (the player who just moved)
- * positionTier          — 'WINNING' | 'DRAWING' | 'LOSING' (derived from pre-move scores)
+ * @param {number[]} preScores    raw solver scores (current-player perspective)
+ * @param {number} col            user's column (0-indexed)
+ * @param {number} contrastCol    contrast column (0-indexed)
+ * @returns {{ gap: number, inverted: boolean, forceBucket: 'moderate'|'large'|null, gapBucket: 'small'|'moderate'|'large' }}
  */
-export function buildExplainPrompt({
-  boardViz, postBoardViz, afterOpponentBoardViz, opponentResponseCol,
-  userCol, contrastCol, isOptimal,
-  deltaRows, insufficientTacticalData, allLinesDecided,
-  rounds, totalLeaves, userOutcomes, contrastOutcomes,
-  kbSection, playerName, positionTier,
-  forcedBlockNote, blunderNote,
-  userExamplesByPattern,
+export function getGapAndFraming(preScores, col, contrastCol) {
+  const scoreA = -preScores[col];
+  const scoreB = -preScores[contrastCol];
+  const gap = scoreB - scoreA;
+  const inverted = scoreA >= scoreB;
+
+  let forceBucket = null;
+  const signA = Math.sign(preScores[col]);
+  const signB = Math.sign(preScores[contrastCol]);
+  if (signA !== signB) {
+    // Sign change: at least one outcome crosses a game-theoretic boundary
+    const bothNonZero = (signA !== 0 && signB !== 0);
+    forceBucket = bothNonZero ? 'large' : 'moderate';
+  }
+
+  let gapBucket;
+  if (forceBucket) {
+    gapBucket = forceBucket;
+  } else {
+    const absGap = Math.abs(gap);
+    if (absGap <= 3) gapBucket = 'small';
+    else if (absGap <= 9) gapBucket = 'moderate';
+    else gapBucket = 'large';
+  }
+
+  return { gap, inverted, forceBucket, gapBucket };
+}
+
+// classifyExplanationType, selectTopGroups, buildAllowedSet, buildType1AllowedSet,
+// buildGroupContextBlock, buildType4Prompt, buildType12Prompt, buildType3Prompt
+// were removed in Epic 3 Batch 3 (T013). The old type1/2/3/4 dispatch is no
+// longer needed — the unified blunder/optimal flow in explainContext.js replaced it.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Blunder/Optimal explain prompt builder (Epic 3, Batch 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Builds the LLM prompt for the unified blunder/optimal explain-move endpoint.
+ *
+ * Blunder path (tag + direction + humanReason non-null, positiveReason null):
+ *   Frame the explanation around what went wrong, using humanReason as the key sentence.
+ *
+ * Optimal path (tag/direction/humanReason null, positiveReason non-null):
+ *   Frame the explanation positively using positiveReason.
+ *
+ * P1–P6 annotation constraints are preserved via the grounding section.
+ * Solver scores MUST NOT appear in the prompt (FR-015).
+ *
+ * @param {object} params
+ * @param {string|null} params.tag               — null on optimal-move path
+ * @param {string|null} params.direction         — null on optimal-move path
+ * @param {string|null} params.humanReason       — human-readable reason from REASON_TEMPLATES
+ * @param {string|null} params.positiveReason    — from POSITIVE_TEMPLATES (null on blunder path)
+ * @param {Map<string,{cells:string[]}>} params.correctMovePatterns — patterns after best move
+ * @param {string} params.boardViz               — pre-move board visualization (scr stripped)
+ * @param {string} params.postBoardViz           — post-move board visualization (scr stripped)
+ * @param {'Green'|'Grey'} params.playerName
+ * @param {number} params.gap
+ * @param {'small'|'moderate'|'large'} params.gapBucket
+ * @param {Array|null} params.allowedSet         — AllowedSetEntry[] or null
+ * @returns {string}
+ */
+export function buildBlunderExplainPrompt({
+  tag,
+  direction,
+  humanReason,
+  positiveReason,
+  correctMovePatterns,
+  boardViz,
+  postBoardViz,
+  playerName,
+  gap,
+  gapBucket,
+  allowedSet,
+  playedCol,          // 0-indexed; undefined = not provided
+  contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
 }) {
-  const opponentName = playerName === 'Red' ? 'Yellow' : 'Red';
+  const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
+  const perspective = playerName === 'Green' ? 1 : 2;
+  const winningParity = perspective === 1 ? 'ODD' : 'EVEN';
+  const winningRows = perspective === 1 ? '1,3,5' : '2,4,6';
+  const losingRows  = perspective === 1 ? '2,4,6' : '1,3,5';
 
-  function outcomeStr(outcomes) {
-    const parts = [];
-    if (outcomes.winRate  > 0) parts.push(`wins ${(outcomes.winRate  * 100).toFixed(0)}%`);
-    if (outcomes.lossRate > 0) parts.push(`loses ${(outcomes.lossRate * 100).toFixed(0)}%`);
-    if (outcomes.drawRate > 0) parts.push(`draws ${(outcomes.drawRate * 100).toFixed(0)}%`);
-    return parts.length > 0 ? parts.join(', ') : 'no decisive lines';
-  }
-  const outcomeLine =
-    `${playerName} (user move col ${userCol + 1}): ${outcomeStr(userOutcomes)} | ` +
-    `${playerName} (contrast col ${contrastCol + 1}): ${outcomeStr(contrastOutcomes)}`;
+  const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  let patternSection;
-  if (allLinesDecided) {
-    patternSection =
-      `All ${totalLeaves} simulated lines are decided before the depth limit — ` +
-      `no open positions remain for ${playerName} to analyze tactically.\n` +
-      outcomeLine;
-  } else if (insufficientTacticalData) {
-    patternSection =
-      `No tactical patterns detected across ${userOutcomes.perspectiveLeaves} open leaf positions.\n` +
-      outcomeLine;
+  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+
+  const sections = [];
+
+  // ── Role ──────────────────────────────────────────────────────────────────
+  if (isBlunder) {
+    sections.push(`## Role
+You are a Connect Four coach explaining why a move was a mistake and what the better move would have accomplished.`);
   } else {
-    const header = `${'PATTERN'.padEnd(18)} ${'USER'.padStart(6)} ${'CONTRAST'.padStart(9)} ${'ΔRATIO'.padStart(8)}  USER_TOP2           CONTRAST_TOP2`;
-    const sep = '-'.repeat(header.length);
-    const tableRows = deltaRows.map(r => {
-      const n  = r.name.padEnd(18);
-      const ur = r.userRatio.toFixed(2).padStart(6);
-      const cr = r.contrastRatio.toFixed(2).padStart(9);
-      const d  = r.delta.toFixed(2).padStart(8);
-      const u2 = (r.userTop2 || '—').padEnd(20);
-      const c2 = r.contrastTop2 || '—';
-      return `${n} ${ur} ${cr} ${d}  ${u2} ${c2}`;
-    });
-    patternSection = [outcomeLine, header, sep, ...tableRows].join('\n');
+    sections.push(`## Role
+You are a Connect Four coach explaining why a move was a strong choice.`);
   }
 
-  // Move quality label depends on both optimality and game-theoretic position tier.
-  // A move is only "strong" if it comes from a winning position; when losing,
-  // even the best option cannot be called strong.
-  let moveQualityDesc;
-  let roleGoal;
-  if (positionTier === 'WINNING') {
-    moveQualityDesc = isOptimal
-      ? `a strong move`
-      : `a weaker move than col ${contrastCol + 1}`;
-    roleGoal = `give a grounded, concise explanation of why a specific move is ${isOptimal ? 'strong' : 'weak'}`;
-  } else if (positionTier === 'DRAWING') {
-    moveQualityDesc = isOptimal
-      ? `a solid move that preserves the draw`
-      : `a move that gives up the drawing advantage (col ${contrastCol + 1} keeps the draw)`;
-    roleGoal = `explain how this move ${isOptimal ? 'maintains' : 'throws away'} a drawable position`;
+  sections.push(LANGUAGE_RULE);
+
+  // ── Players ───────────────────────────────────────────────────────────────
+  sections.push(`## Players
+${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${winningParity} rows (${winningRows}); ${opponentName}'s on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows}). Use only Connect Four terms.`);
+
+  // ── Boards ────────────────────────────────────────────────────────────────
+  const boardLines = ['## Boards'];
+  boardLines.push('### Before the move');
+  boardLines.push(boardViz || '[unavailable]');
+  boardLines.push('');
+  boardLines.push('### After the move');
+  boardLines.push(postBoardViz || '[unavailable]');
+  boardLines.push('');
+  boardLines.push('Note: In the board, Gn = Green discs, Gy = Gray discs.');
+  sections.push(boardLines.join('\n'));
+
+  // ── Move context ──────────────────────────────────────────────────────────
+  const contextLines = ['## Move context'];
+  contextLines.push(`- Player: ${playerName} (winning parity = ${winningParity} rows ${winningRows})`);
+  contextLines.push(`- Eval gap: ${gapBucket}`);
+  if (playedCol !== undefined) {
+    contextLines.push(`- Move played: column ${playedCol + 1}`);
+  }
+  if (isBlunder && contrastCol !== undefined) {
+    contextLines.push(`- Better move: column ${contrastCol + 1}`);
+  }
+  if (isBlunder) {
+    contextLines.push(`- Key insight: ${humanReason}`);
   } else {
-    // LOSING — no move can be called "strong"
-    moveQualityDesc = isOptimal
-      ? `the best available move in a losing position`
-      : `a weaker choice in an already losing position (col ${contrastCol + 1} resists longer)`;
-    roleGoal = `explain what this move does in an already losing position — do NOT call any move strong`;
+    contextLines.push(`- Key insight: ${positiveReason ?? 'This was the strongest move available.'}`);
+  }
+  sections.push(contextLines.join('\n'));
+
+  // ── Best-move patterns (grounding evidence) ───────────────────────────────
+  if (correctMovePatterns && correctMovePatterns.size > 0) {
+    const patternLines = ['## Best-move tactical evidence'];
+    patternLines.push('The following tactical patterns were present after the best move:');
+    for (const [patternTag, { cells }] of correctMovePatterns) {
+      if (cells.length > 0) {
+        patternLines.push(`- ${patternTag}: cells [${cells.join(', ')}]`);
+      } else {
+        patternLines.push(`- ${patternTag} (position-level pattern)`);
+      }
+    }
+    sections.push(patternLines.join('\n'));
   }
 
-  const forcedWinExamples = userExamplesByPattern?.forced_win ?? [];
-  let exampleBoardsSection = '';
-  if (forcedWinExamples.length > 0) {
-    const boards = forcedWinExamples.map((ms, i) => {
-      const viz = getBoardVisualization(ms);
-      return `### Leaf board ${i + 1} (movestring: ${ms})\n${viz}`;
-    });
-    exampleBoardsSection =
-      `\n## Example boards — forced_win\n` +
-      `The simulation reached these positions where ${playerName} faced a forced-win (losing) situation:\n\n` +
-      boards.join('\n\n') +
-      `\n\nLook at these boards: identify the concrete threats (columns, rows, directions) that leave ${playerName} without a defense. Name them in your explanation.\n`;
+  // ── Hard grounding rules ──────────────────────────────────────────────────
+  const groundingLines = ['## Hard grounding rules'];
+  // Collect allowed columns for the prompt
+  const allowedCols = [];
+  if (playedCol !== undefined) allowedCols.push(playedCol);
+  if (contrastCol !== undefined && contrastCol !== playedCol) allowedCols.push(contrastCol);
+
+  if (allowedSet !== null) {
+    // Add pattern-derived columns
+    for (const entry of allowedSet) {
+      if (entry.col !== undefined && !allowedCols.includes(entry.col)) {
+        allowedCols.push(entry.col);
+      }
+    }
+    groundingLines.push('You may reference these columns using zone tags:');
+    groundingLines.push(allowedCols.map(c => `[zone:col${c + 1}]column ${c + 1}[/zone:col${c + 1}]`).join(', '));
+    groundingLines.push('');
+    // Build strategic cells list (non-validationOnly, cell-type entries only)
+    const strategicCells = [];
+    for (const entry of allowedSet) {
+      if (entry.validationOnly) continue;
+      if (entry.cells && entry.cells.length > 0) {
+        strategicCells.push(...entry.cells);
+      }
+    }
+    if (strategicCells.length > 0) {
+      groundingLines.push('### Strategic reference cells');
+      groundingLines.push('These cells are tactical reference points for your explanation.');
+      groundingLines.push(`- Concrete cells: [${strategicCells.join(', ')}]`);
+    } else {
+      groundingLines.push('(no specific cell references — use the allowed columns above and describe patterns in general terms)');
+    }
+  } else {
+    groundingLines.push('Column numbers (1–7) are always valid to reference — they appear in every board header.');
+    groundingLines.push('Only omit specific CELL references (e.g. c4r3) if the cell is not listed in the boards above.');
+  }
+  sections.push(groundingLines.join('\n'));
+
+  // ── Tone ──────────────────────────────────────────────────────────────────
+  if (isBlunder) {
+    let toneText;
+    if (gapBucket === 'small') {
+      toneText = 'This was a minor inaccuracy; frame it gently, not as a severe blunder.';
+    } else if (gapBucket === 'moderate') {
+      toneText = 'This move gave away a real advantage; explain the concrete consequence.';
+    } else {
+      toneText = 'This was a significant mistake; explain clearly what was lost.';
+    }
+    sections.push(`## Tone\n${toneText}`);
+  } else {
+    let toneText;
+    if (gap === 0) {
+      toneText = 'Both this move and the alternative are equivalent; the move is fine.';
+    } else {
+      toneText = 'This was the strongest move here; explain what it builds or preserves.';
+    }
+    sections.push(`## Tone\n${toneText}`);
   }
 
-  const afterOpponentSection = afterOpponentBoardViz
-    ? `\n## Board position (AFTER ${opponentName} responds col ${opponentResponseCol + 1})\n${afterOpponentBoardViz}\n`
-    : '';
+  // ── Output format ─────────────────────────────────────────────────────────
+  const formatLines = ['## Output format'];
+  formatLines.push('When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets.');
+  formatLines.push('The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag\'s spec).');
+  formatLines.push('');
+  formatLines.push('Syntax (use EXACTLY these patterns — the closing tag MUST repeat the same spec as the opening tag):');
+  formatLines.push('  [zone:colN]column N[/zone:colN] — for a column (N = column number 1–7). Example: [zone:col3]column 3[/zone:col3]');
+  formatLines.push('  [zone:cNrM]that cell[/zone:cNrM] — for a single cell. Example: [zone:c5r2]that cell[/zone:c5r2]');
+  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] — for multiple cells');
+  formatLines.push('  [zone:rowN]row N[/zone:rowN] — for an entire row. Example: [zone:row3]row 3[/zone:row3]');
+  formatLines.push('');
+  formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
+  formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
+  formatLines.push('');
+  formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
+  formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
+  sections.push(formatLines.join('\n'));
 
-  return `## Role
-You are an expert Connect Four coach. Your goal is to ${roleGoal}.
+  // ── Task ──────────────────────────────────────────────────────────────────
+  if (isBlunder) {
+    sections.push(`## Task
+In 2–3 sentences: explain the mistake using the key insight above as your starting point.
+Name the tactical pattern that was missed or given away. Say what the better move would have
+accomplished. Do not use the internal tag names or direction labels — explain using board concepts only.`);
+  } else {
+    sections.push(`## Task
+In 2–3 sentences: explain why this was a strong move, using the key insight as your starting point.
+Name the tactical pattern or strategic benefit it creates. Scaled to the eval gap: for a small gap,
+acknowledge both moves have merit; for a large gap, highlight what this move uniquely achieves.`);
+  }
 
-## Move context
-**${playerName}** just played **col ${userCol + 1}**. The boards below show the position before the move, after the move, and after ${opponentName}'s best response. All pattern data and your explanation must be from **${playerName}'s perspective**.
-${forcedBlockNote ? `\n⚠️ ${forcedBlockNote}\n` : ''}${blunderNote ? `\n${blunderNote}\n` : ''}
-## Board position (BEFORE ${playerName} plays col ${userCol + 1})
-${boardViz}
-
-## Board position (AFTER ${playerName} plays col ${userCol + 1})
-${postBoardViz}
-${afterOpponentSection}
-## Pattern comparison (${rounds} round${rounds !== 1 ? 's' : ''} of optimal play, ${totalLeaves} total leaves / ${userOutcomes.perspectiveLeaves} perspective-to-move samples)
-${patternSection}
-${kbSection ? '\n' + kbSection + '\n' : ''}${exampleBoardsSection}
-## Task
-Explain in 2–4 sentences why col ${userCol + 1} is ${moveQualityDesc} for **${playerName}**.
-Ground your explanation first in the concrete board positions shown above — name specific columns and rows where decisive threats exist. Use the tactical pattern labels as supporting vocabulary, not as the explanation itself. If no pattern data is available, say so honestly and give only a high-level observation from the board position.`;
+  return sections.join('\n\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -573,10 +751,12 @@ export function buildRecommendPrompt({
 
   const tableStr = buildFlatTable(colData, rounds);
 
+  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, numerical evaluation. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+
   return `## Role
 You are an expert Connect Four coach. Your goal is to recommend which column(s) to play next and explain the strategic reasoning to the player.
 
-Do not mention solver scores or numerical evaluations — reason purely from tactical patterns, score tiers, and the board position.
+${LANGUAGE_RULE}
 
 ## Move context
 - Current player: **${playerName}**

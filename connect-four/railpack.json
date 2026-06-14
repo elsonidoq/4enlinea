@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "buildAptPackages": ["g++", "gcc", "make"],
+  "steps": {
+    "build": {
+      "commands": [
+        "cd solver-src && make SERVER_DIR=../server",
+        "npm run build"
+      ]
+    }
+  },
+  "deploy": {
+    "startCommand": "node server/migrate.js && node server/index.js"
+  }
+}

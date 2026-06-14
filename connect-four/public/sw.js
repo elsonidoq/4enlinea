@@ -1,15 +1,11 @@
-const CACHE_NAME = 'decodec4-shell-v1';
+const CACHE_NAME = 'decodec4-shell-v2';
 
-// Cache only the app shell assets — not puzzle content or API responses
-const SHELL_URLS = ['/', '/puzzles', '/coach', '/manifest.json'];
-
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS)).catch(() => {})
-  );
+// ── Install: pre-cache nothing eagerly — cache on first use instead ──────────
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
+// ── Activate: purge old caches ───────────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -19,12 +15,49 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+// ── Fetch ────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
+  // In local dev (Vite), never intercept — the SW caches transformed source
+  // files that embed dep URLs with a specific ?v= hash; when Vite rebuilds
+  // deps that hash changes, causing two React instances and invalid hook errors.
+  if (self.location.hostname === 'localhost') return;
+
   // Pass through API requests and cross-origin requests (e.g. Supabase)
   if (event.request.url.includes('/api/')) return;
   if (!event.request.url.startsWith(self.location.origin)) return;
 
+  const { pathname } = new URL(event.request.url);
+
+  // Navigation requests (HTML pages): network-first so the app always gets the
+  // latest index.html after a deploy. Fall back to cache only when offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Hashed assets (JS, CSS, fonts from /assets/): cache-first — immutable URLs
+  // mean a cached response is always the correct one.
+  if (pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => cached || fetch(event.request))
+    );
+    return;
+  }
+
+  // Everything else (manifest, favicon, icons, etc.): cache-first, network fallback
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+      const cloned = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
+      return response;
+    }))
   );
 });

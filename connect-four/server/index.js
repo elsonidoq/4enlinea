@@ -2,25 +2,30 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'crypto';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, classifyAll, Board, getImmediateThreats } from './classifier.js';
-import { explainSimulate } from './explainSimulate.js';
-import {
-  TIER_ORDER, IMMEDIATE_WIN_OUTCOMES,
-  isMajorThreatForPlayer, getScoreTier,
-  getBoardVisualization, buildKBSection,
-  buildFlatTable, buildRecommendPrompt, callLLM,
-  selectContrastMove, computeDeltaTable, buildExplainPrompt,
-  getPositionTier, getOpponentResponseMs,
-} from './llmCoachHelpers.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, classifyPattern } from './classifier.js';
+import { classifyAiMove } from './classifyAiMove.js';
+import { buildExplainContext } from './explainContext.js';
+import { VALID_BLUNDER_TAGS } from './blunderTags.js';
+import { insertGameBlunder } from './insertGameBlunder.js';
+import { callLLM } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
+import { registerUserRoutes } from './userRoutes.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { CHALLENGE_SETS } from './challengeSets.js';
+import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
+import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
+import { requireAdmin } from './adminAuth.js';
+import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
+import { validateAnnotation } from './annotationGate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -33,11 +38,16 @@ if (process.env.SENTRY_DSN) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
 app.use(express.json());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
   next();
 });
+
+// ── Lesson loader ──────────────────────────────────────────────────────────────
+loadLessons(join(__dirname, '../lessons'));
+const LESSONS_DIR = join(__dirname, '../lessons');
 
 // ── Rate limiting (T068) ───────────────────────────────────────────────────────
 
@@ -71,7 +81,6 @@ function validateHighlightMetadata(hm) {
 }
 
 app.use('/api/explain-move', makeLimit(30));
-app.use('/api/recommend-move', makeLimit(5));
 app.use('/api/explain-move-llm', makeLimit(5));
 app.use('/api/llm-feedback', makeLimit(10));
 app.use('/api/scores', makeLimit(60));
@@ -89,7 +98,7 @@ const MOVES_RE = /^[0-6]{0,42}$/;
 
 function validateMoves(moves) {
   if (typeof moves !== 'string') return 'moves must be a string';
-  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 1–7';
+  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 0–6';
   return null;
 }
 
@@ -138,6 +147,15 @@ if (process.env.ANTHROPIC_API_KEY) {
   anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
+// ── SPA index.html (read at startup for catch-all route) ──────────────────────
+
+let indexHtml = null;
+try {
+  indexHtml = readFileSync(join(__dirname, '../dist/index.html'), 'utf8');
+} catch {
+  console.log('[server] dist/index.html not found — SPA catch-all will return 500');
+}
+
 // ── Auth middleware (T020) ─────────────────────────────────────────────────────
 
 async function loadUser(req, _res, next) {
@@ -150,11 +168,17 @@ async function loadUser(req, _res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return next();
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('users')
       .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid')
       .eq('id', data.user.id)
       .single();
+
+    if (!profile) {
+      // Trigger on auth.users may not have fired — create the row now.
+      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid').single()
+        .then(({ data: created }) => { if (created) profile = created; });
+    }
 
     req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString() };
   } catch {
@@ -165,7 +189,21 @@ async function loadUser(req, _res, next) {
 
 app.use(loadUser);
 
+// ── User data endpoints (/api/user/*) ──
+registerUserRoutes(app, supabase);
+
 // ── Deep Reveal quota helper ──────────────────────────────────────────────────
+
+/** Returns the strictly next future Monday 00:00:00 UTC as a Date.
+ * If now is exactly Monday 00:00:00 UTC, returns the Monday 7 days later. */
+function nextMondayUtcMidnight(now) {
+  const dayOfWeek = now.getUTCDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+  const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+  const next = new Date(now);
+  next.setUTCDate(now.getUTCDate() + daysUntilMonday);
+  next.setUTCHours(0, 0, 0, 0);
+  return next;
+}
 
 async function checkAndDecrementQuota(user) {
   if (!user) return { allowed: false, reason: 'anonymous' };
@@ -173,28 +211,34 @@ async function checkAndDecrementQuota(user) {
   if (user.tier !== 'free') return { allowed: false, reason: 'anonymous' };
 
   const now = new Date();
-  const resetAt = new Date(user.deep_reveal_reset_at);
 
-  // Reset quota if past midnight UTC
-  let count = user.deep_reveal_count;
+  // Treat null deep_reveal_reset_at as already expired
+  const resetAtRaw = user.deep_reveal_reset_at;
+  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+
+  // Reset quota if past the weekly reset time (or null)
+  let count = user.deep_reveal_count ?? 0;
+  let resetsAt;
   if (now > resetAt) {
     count = 0;
-    const nextMidnight = new Date(now);
-    nextMidnight.setUTCHours(24, 0, 0, 0);
+    const nextMonday = nextMondayUtcMidnight(now);
+    resetsAt = nextMonday.toISOString();
     await supabase
       .from('users')
-      .update({ deep_reveal_count: 0, deep_reveal_reset_at: nextMidnight.toISOString() })
+      .update({ deep_reveal_count: 0, deep_reveal_reset_at: resetsAt })
       .eq('id', user.id);
+  } else {
+    resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 3) return { allowed: false, reason: 'quota_exceeded', quotaRemaining: 0 };
+  if (count >= 20) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
     .update({ deep_reveal_count: count + 1 })
     .eq('id', user.id);
 
-  return { allowed: true, quotaRemaining: 3 - count - 1 };
+  return { allowed: true, resetsAt };
 }
 
 // ── LLM explanation composer ──────────────────────────────────────────────────
@@ -245,6 +289,88 @@ FULL_TEXT: <text>`;
 // ── Routes (existing — unchanged) ─────────────────────────────────────────────
 
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
+
+// ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
+app.get('/api/lessons', (req, res) => res.json(getLessons()));
+app.get('/api/lessons/:id', (req, res) => {
+  const lesson = getLesson(req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  res.json(lesson);
+});
+
+// ── Admin lesson endpoints ─────────────────────────────────────────────────────
+
+app.get('/api/admin/lessons', requireAdmin, (req, res) => {
+  res.json(getLessonsAll());
+});
+
+app.get('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  const all = getLessonsAll();
+  const lesson = all.find(l => l.id === req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  res.json(lesson);
+});
+
+app.post('/api/admin/lessons', requireAdmin, (req, res) => {
+  const lesson = req.body;
+  const err = validateLesson(lesson);
+  if (err) return res.status(400).json({ error: err });
+  try {
+    saveLessonFile(LESSONS_DIR, lesson);
+    reloadLessons();
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  const lesson = req.body;
+  const err = validateLesson(lesson);
+  if (err) return res.status(400).json({ error: err });
+  try {
+    const oldId = req.params.id !== lesson.id ? req.params.id : null;
+    saveLessonFile(LESSONS_DIR, lesson, oldId);
+    reloadLessons();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+  try {
+    deleteLessonFile(LESSONS_DIR, req.params.id);
+    reloadLessons();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin puzzle picker ──────────────────────────────────────────────────────────
+
+app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
+  const { category } = req.query;
+  if (!category || typeof category !== 'string') {
+    return res.status(400).json({ error: 'category query parameter is required' });
+  }
+  if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: `invalid category: ${category}` });
+  }
+  try {
+    const { data: puzzles, error } = await supabase
+      .from('puzzles')
+      .select('id, category, move_string, goal_prompt, goal_predicate_type, goal_predicate_params, cooperative_ai_moves, interaction_mode, highlight_metadata, correct_col, user_player, created_at')
+      .eq('is_active', true)
+      .eq('category', category)
+      .order('created_at', { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ puzzles: puzzles || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.post('/api/scores', async (req, res) => {
   const { moves, depth } = req.body;
@@ -409,169 +535,86 @@ app.post('/api/explain-move', async (req, res) => {
     }
   }
 
-  // Handle Deep Reveal quota
+  // Handle Deep Reveal — no quota gate on this endpoint (quota is on /api/explain-move-llm)
   let deepReveal = null;
-  let quotaRemaining = null;
 
   if (requestDeepReveal && req.user) {
-    const quota = await checkAndDecrementQuota(req.user);
-    if (!quota.allowed) {
-      return res.status(429).json({
-        error: quota.reason === 'anonymous' ? 'Deep Reveals require a free account' : 'Daily Deep Reveal limit reached',
-        quotaRemaining: 0,
-      });
-    }
     deepReveal = deepRevealData;
-    quotaRemaining = quota.quotaRemaining ?? null;
   }
 
-  res.json({ oneLiner, patternTag, deepReveal, quotaRemaining });
+  res.json({ oneLiner, patternTag, deepReveal });
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
 
-// POST /api/recommend-move — LLM move recommendation for a given board position.
-// Returns { recommendation: string, prompt: string }.
-// No auth required. Rate-limited to 5 req/min (LLM cost guard).
-app.post('/api/recommend-move', async (req, res) => {
-  const { movestring = '', rounds = 1 } = req.body;
-
-  if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring)) {
-    return res.status(400).json({ error: 'movestring must be 0–42 digits 0–6' });
-  }
-  const r = Number(rounds);
-  if (!Number.isInteger(r) || r < 1 || r > 2) {
-    return res.status(400).json({ error: 'rounds must be 1 or 2' });
-  }
-  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL) {
-    return res.status(503).json({ error: 'LLM service not configured' });
-  }
-
-  const ROWS = 6;
-  const numPlies = 2 * r + 1;
-
-  let board;
-  try {
-    board = new Board(movestring);
-  } catch (e) {
-    return res.status(400).json({ error: `Invalid movestring: ${e.message}` });
-  }
-
-  const playableCols = [0,1,2,3,4,5,6].filter(c => board.colHeights[c] < ROWS);
-  if (playableCols.length === 0) {
-    return res.status(400).json({ error: 'Board is full — no moves available' });
-  }
-
-  const perspective  = movestring.length % 2 === 0 ? 1 : 2;
-  const opponent     = perspective === 1 ? 2 : 1;
-  const playerName   = perspective === 1 ? 'Red' : 'Yellow';
-  const opponentName = perspective === 1 ? 'Yellow' : 'Red';
-
-  try {
-    // ── 1. Solver scores (for tier labeling of non-immediate columns) ──────────
-    let scores = EMPTY_BOARD_SCORES;
-    if (movestring.length > 0) {
-      scores = await solver.query(movestring);
-    }
-
-    // ── 2. Special case detection via board logic (NOT solver scores) ──────────
-    //
-    // IMMEDIATE WIN and IMMEDIATE LOSS must use board logic — solver scores have
-    // false positives at these boundaries (flat at forced-win terminals, off-by-1
-    // for odd moveCount). See reference_cat5_forced_block_detection memory.
-    const immediateWinSet = new Set(
-      getImmediateThreats(board.board, board.colHeights, perspective)
-    );
-
-    const forcedBlockCols = playableCols.filter(c =>
-      isMajorThreatForPlayer(board, c, board.colHeights[c], opponent)
-    );
-
-    const immediateLossSet = new Set();
-    for (const c of playableCols) {
-      if (immediateWinSet.has(c)) continue;
-      const postBoard = new Board(movestring + c);
-      const oppThreats = getImmediateThreats(postBoard.board, postBoard.colHeights, opponent);
-      if (oppThreats.length > 0) immediateLossSet.add(c);
-    }
-
-    // ── 3. explainSimulate in parallel for non-immediate-win columns ───────────
-    const simResults = await Promise.all(
-      playableCols.map(c => {
-        if (immediateWinSet.has(c)) {
-          return Promise.resolve({ patterns: {}, outcomes: IMMEDIATE_WIN_OUTCOMES });
-        }
-        const anchorCell = { col: c, row: board.colHeights[c] };
-        return explainSimulate(movestring + c, numPlies, anchorCell, perspective, solver);
-      })
-    );
-
-    // ── 4. Assemble per-column data and sort ───────────────────────────────────
-    const colData = playableCols.map((c, i) => ({
-      col:      c,
-      score:    scores[c],
-      tier:     getScoreTier(c, scores[c], immediateWinSet, immediateLossSet),
-      outcomes: simResults[i].outcomes,
-      patterns: simResults[i].patterns,
-    }));
-
-    colData.sort((a, b) =>
-      (TIER_ORDER[a.tier] - TIER_ORDER[b.tier]) || (a.col - b.col)
-    );
-
-    // ── 5. Overall position assessment ────────────────────────────────────────
-    let positionAssessment;
-    if (immediateWinSet.size > 0) {
-      positionAssessment = 'winning (an immediate winning move is available)';
-    } else {
-      const bestScore = Math.max(
-        ...playableCols.map(c => scores[c]).filter(s => s > -1000)
-      );
-      if (bestScore > 0)        positionAssessment = 'in a winning position';
-      else if (bestScore === 0) positionAssessment = 'in a drawing position';
-      else                      positionAssessment = 'in a losing position';
-    }
-
-    // ── 6. Board visualization ─────────────────────────────────────────────────
-    const boardViz = getBoardVisualization(movestring || '');
-
-    // ── 7. KB section for all patterns with ratio > 0 ─────────────────────────
-    const activePatternSet = new Set();
-    for (const { patterns } of colData) {
-      for (const [name, entry] of Object.entries(patterns)) {
-        if (entry.ratio > 0) activePatternSet.add(name);
-      }
-    }
-    const kbSection = buildKBSection([...activePatternSet]);
-
-    // ── 8. Build prompt and call LLM ──────────────────────────────────────────
-    const prompt = buildRecommendPrompt({
-      boardViz, playerName, opponentName,
-      positionAssessment, colData,
-      immediateWinSet, forcedBlockCols, immediateLossSet,
-      kbSection, rounds: r,
-    });
-
-    const recommendation = await callLLM(prompt);
-    res.json({
-      recommendation,
-      prompt,
-      colRankings: (() => {
-        const bestTier = colData[0]?.tier;
-        return colData.filter(({ tier }) => tier === bestTier).map(({ col, tier }) => ({ col, tier }));
-      })(),
-    });
-
-  } catch (err) {
-    console.error('[recommend-move] error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Delegates to the unified explainContext.js flow (Epic 3).
+// The module-level solver is injected here; tests pass their own solver via explainContext.js.
+async function buildExplainContextActive(movestring, col, rounds = 1) {
+  return buildExplainContext(movestring, col, rounds, solver);
+}
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
-// Returns { explanation: string, prompt: string }.
-// No auth required. Rate-limited to 5 req/min (LLM cost guard).
+// Returns { explanation: string, cached?: boolean }.
+// Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
+// Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
+/**
+ * Normalize common LLM malformations in zone tags before validation.
+ *
+ * Common mistakes:
+ *   [zone:column 2]...[/zone:column]  → [zone:col2]...[/zone:col2]
+ *   [zone:col 2]...[/zone:col]        → [zone:col2]...[/zone:col2]
+ *   [zone:column 6]...[/zone:col6]    → [zone:col6]...[/zone:col6] (already ok)
+ *
+ * Strategy: first normalize all opening tags to [zone:colN], then pair each
+ * opening tag with the following closing tag and fix the closing tag to match.
+ *
+ * @param {string} text  Raw LLM output
+ * @returns {string}  Normalized text
+ */
+function normalizeZoneTags(text) {
+  // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
+  text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
+
+  // Step 2: Pair each opening [zone:colN] with the nearest following closing tag
+  // and fix the closing tag to be [/zone:colN].
+  // Matches any closing tag: [/zone:col], [/zone:column], [/zone:colN], [/zone:column N]
+  const CLOSE_RE = /\[\/zone:col(?:umn)?(?:\s+\d+)?\]/gi;
+
+  // We need to pair correctly: find [zone:colN], then find the next [/zone:...]
+  // and replace it with [/zone:colN].
+  const OPEN_RE = /\[zone:col(\d+)\]/gi;
+  const resultParts = [];
+  let lastIndex = 0;
+  let openMatch;
+
+  while ((openMatch = OPEN_RE.exec(text)) !== null) {
+    // Text before this opening tag
+    resultParts.push(text.slice(lastIndex, openMatch.index + openMatch[0].length));
+    const colNum = openMatch[1];
+
+    // Find the next closing tag after this opening tag
+    CLOSE_RE.lastIndex = openMatch.index + openMatch[0].length;
+    const closeMatch = CLOSE_RE.exec(text);
+    if (closeMatch) {
+      // Text between opening and closing
+      resultParts.push(text.slice(openMatch.index + openMatch[0].length, closeMatch.index));
+      // Fixed closing tag
+      resultParts.push(`[/zone:col${colNum}]`);
+      lastIndex = closeMatch.index + closeMatch[0].length;
+    } else {
+      // No closing tag found — leave remaining text as-is
+      lastIndex = openMatch.index + openMatch[0].length;
+    }
+  }
+  // Remaining text after the last processed zone
+  resultParts.push(text.slice(lastIndex));
+
+  return resultParts.join('');
+}
+
 app.post('/api/explain-move-llm', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
   const { movestring, col, rounds } = req.body;
 
   if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
@@ -594,108 +637,129 @@ app.post('/api/explain-move-llm', async (req, res) => {
   if (board.colHeights[col] >= 6)
     return res.status(400).json({ error: 'column is full' });
 
-  const numPlies = 2 * r + 1;
-  const perspective = movestring.length % 2 === 0 ? 1 : 2;
-  const playerName  = perspective === 1 ? 'Red' : 'Yellow';
-  const opponentPlayer = perspective === 1 ? 2 : 1;
-  const postMovestring = movestring + col;
-
-  try {
-    // ── 1. Pre-move solver scores for contrast selection ──────────────────────
-    const preScores = movestring.length > 0
-      ? await solver.query(movestring)
-      : EMPTY_BOARD_SCORES;
-
-    // ── 2. Derive position tier and select contrast move ─────────────────────
-    const positionTier = getPositionTier(preScores, board);
-    const contrast = selectContrastMove(preScores, col, board);
-    if (contrast === null) {
+  // ── 1. Cache check (before quota decrement) ──────────────────────────────
+  const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
+  if (supabase) {
+    const { data: cached } = await supabase
+      .from('explanation_cache')
+      .select('deep_reveal_json')
+      .eq('position_hash', positionHash)
+      .single();
+    if (cached?.deep_reveal_json) {
       return res.json({
-        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
-        prompt: null,
+        explanation: cached.deep_reveal_json.explanation,
+        prompt: cached.deep_reveal_json.prompt ?? '',
+        cached: true,
       });
     }
-    const { contrastCol, isOptimal } = contrast;
+  }
 
-    // ── 3. Run explainSimulate concurrently ───────────────────────────────────
-    const anchorRow        = board.colHeights[col];
-    const contrastAnchorRow = board.colHeights[contrastCol];
-
-    const [userResult, contrastResult] = await Promise.all([
-      explainSimulate(postMovestring, numPlies, { col, row: anchorRow }, perspective, solver),
-      explainSimulate(movestring + contrastCol, numPlies, { col: contrastCol, row: contrastAnchorRow }, perspective, solver),
-    ]);
-
-    // ── 4. Compute delta table ────────────────────────────────────────────────
-    const { rows: deltaRows, insufficientTacticalData } =
-      computeDeltaTable(userResult.patterns, contrastResult.patterns);
-    const allLinesDecided = userResult.outcomes.perspectiveLeaves === 0;
-
-    // ── 5. Board visualizations ───────────────────────────────────────────────
-    const [boardViz, postBoardViz] = await Promise.all([
-      getBoardVisualization(movestring || ''),
-      getBoardVisualization(postMovestring),
-    ]);
-
-    // ── 6. Forced-block and blunder detection ─────────────────────────────────
-    const forcedBlock = isMajorThreatForPlayer(board, col, anchorRow, opponentPlayer);
-    const opponentName = perspective === 1 ? 'Yellow' : 'Red';
-    const forcedBlockNote = forcedBlock
-      ? `Before this move, ${opponentName} had an immediate winning threat at col ${col + 1} row ${anchorRow + 1}. ${playerName} playing col ${col + 1} was a forced block — without it, ${opponentName} would have won on the very next move.`
-      : null;
-
-    const postBoard = new Board(postMovestring);
-    const opponentWinCols = getImmediateThreats(postBoard.board, postBoard.colHeights, opponentPlayer);
-    const blunderNote = opponentWinCols.length > 0
-      ? `⚠️ After ${playerName} plays col ${col + 1}, ${opponentName} can immediately win by playing col${opponentWinCols.length > 1 ? 's' : ''} ${opponentWinCols.map(c => c + 1).join(' or ')}. This move is a blunder — it hands ${opponentName} a free win on the very next move.`
-      : null;
-
-    // ── 6b. Board after opponent's best response ──────────────────────────────
-    const opponentResponseMovestring = await getOpponentResponseMs(
-      postMovestring, postBoard, opponentWinCols, perspective, solver,
-    );
-    const afterOpponentBoardViz = opponentResponseMovestring
-      ? getBoardVisualization(opponentResponseMovestring)
-      : null;
-    const opponentResponseCol = opponentResponseMovestring != null
-      ? parseInt(opponentResponseMovestring[opponentResponseMovestring.length - 1], 10)
-      : null;
-
-    // ── 7. KB section for active patterns ────────────────────────────────────
-    const activePatterns = deltaRows.map(row => row.name);
-    const kbSection = buildKBSection(activePatterns);
-
-    // ── 7b. Collect example movestrings per pattern from userResult ───────────
-    const userExamplesByPattern = {};
-    for (const [name, entry] of Object.entries(userResult.patterns)) {
-      if (entry.examples?.length > 0) userExamplesByPattern[name] = entry.examples;
+  // ── 2. LLM call + annotation gate + retry ────────────────────────────────
+  try {
+    const context = await buildExplainContextActive(movestring, col, r);
+    if (!context) {
+      // No quota consumed for the "all-moves-equal" early exit path
+      return res.json({
+        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
+        prompt: '',
+      });
     }
 
-    // ── 8. Build prompt and call LLM ─────────────────────────────────────────
-    const prompt = buildExplainPrompt({
-      boardViz,
-      postBoardViz,
-      afterOpponentBoardViz,
-      opponentResponseCol,
-      userCol: col,
-      contrastCol,
-      isOptimal,
-      positionTier,
-      deltaRows,
-      insufficientTacticalData,
-      allLinesDecided,
-      rounds: r,
-      totalLeaves: userResult.totalLeaves,
-      userOutcomes: userResult.outcomes,
-      contrastOutcomes: contrastResult.outcomes,
-      kbSection,
-      playerName,
-      forcedBlockNote,
-      blunderNote,
-      userExamplesByPattern,
-    });
+    if (context.allMovesEqual) {
+      // All moves genuinely settled (all scores zero). FR-007 frozen string.
+      return res.json({
+        explanation: 'All moves are roughly equivalent here — no single best move stands out.',
+        prompt: '',
+      });
+    }
 
-    const explanation = await callLLM(prompt);
+    if (context.trivial) {
+      // optimal move + small gap: all alternatives are negligibly different.
+      // No LLM call — canned message prevents fabricated nuance.
+      return res.json({
+        explanation: context.trivialExplanation,
+        prompt: '',
+      });
+    }
+
+    const { prompt, allowedSet } = context;
+
+    // First attempt
+    console.log('[DEBUG explain-move-llm] allowedSet passed to validateAnnotation:', JSON.stringify(allowedSet));
+    const rawExplanation = await callLLM(prompt);
+    let explanation = normalizeZoneTags(rawExplanation);
+    console.log('[DEBUG explain-move-llm] rawExplanation:', rawExplanation);
+    let result = validateAnnotation(explanation, board, allowedSet);
+    console.log('[DEBUG explain-move-llm] validateAnnotation result (attempt 1):', JSON.stringify(result));
+
+    if (!result.valid) {
+      // ── Retry (same prompt, bypasses cache and quota) ──────────────────
+      const retryRaw = await callLLM(prompt);
+      const retryExplanation = normalizeZoneTags(retryRaw);
+      console.log('[DEBUG explain-move-llm] retryExplanation:', retryExplanation);
+      const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
+      console.log('[DEBUG explain-move-llm] validateAnnotation result (retry):', JSON.stringify(retryResult));
+
+      if (retryResult.valid) {
+        explanation = retryExplanation;
+        result = retryResult;
+      } else {
+        // ── Fallback path: double failure ──────────────────────────────
+        // Read Tier-1 fallback from explanation_cache
+        let fallbackText = 'Detailed explanation unavailable.';
+        if (supabase) {
+          const { data: fallbackRow } = await supabase
+            .from('explanation_cache')
+            .select('deep_reveal_json')
+            .eq('position_hash', positionHash)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (fallbackRow?.deep_reveal_json?.fullText) {
+            fallbackText = fallbackRow.deep_reveal_json.fullText;
+          }
+        }
+
+        // Log failure to deep_reveal_failures
+        if (supabase) {
+          try {
+            await supabase.from('deep_reveal_failures').insert({
+              position_hash: positionHash,
+              movestring,
+              col,
+              endpoint: '/api/explain-move-llm',
+              llm_prompt: prompt,
+              raw_llm_output: retryExplanation,
+              failure_reason: JSON.stringify(retryResult.failures),
+              created_at: new Date().toISOString(),
+            });
+          } catch (insertErr) {
+            console.error('[deep_reveal_failures insert]', insertErr.message);
+          }
+        }
+
+        // No quota consumed for fallback
+        return res.json({ explanation: fallbackText, prompt: null, cached: false });
+      }
+    }
+
+    // ── Valid path: decrement quota (if free-tier), cache, and respond ──
+    if (req.user.tier === 'free' && supabase) {
+      const quota = await checkAndDecrementQuota(req.user);
+      if (!quota.allowed) {
+        return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
+      }
+    }
+
+    if (supabase) {
+      supabase.from('explanation_cache').insert({
+        position_hash: positionHash,
+        one_liner: '',
+        deep_reveal_json: { explanation, prompt },
+        template_version: 'v2',
+      }).then(() => {}).catch(err => console.error('[cache write]', err.message));
+    }
+
     res.json({ explanation, prompt });
 
   } catch (err) {
@@ -707,26 +771,152 @@ app.post('/api/explain-move-llm', async (req, res) => {
 // POST /api/llm-feedback — record a flagged LLM response.
 // Returns { id: string }.
 // No auth required.
+// col (integer) is optional — when provided and llm_prompt is empty, the prompt is rebuilt
+// from the simulation pipeline so the full context is always captured.
 app.post('/api/llm-feedback', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
 
-  const { movestring, llm_prompt, llm_response, human_note, feature } = req.body;
+  const { movestring, col, llm_prompt, llm_response, human_note, feature } = req.body;
 
-  for (const [field, value] of Object.entries({ movestring, llm_prompt, llm_response, feature })) {
+  for (const [field, value] of Object.entries({ movestring, llm_response, feature })) {
     if (typeof value !== 'string' || value.trim() === '') {
       return res.status(400).json({ error: `${field} must be a non-empty string` });
+    }
+  }
+
+  // Resolve prompt: use what the client sent; if empty and col is available, rebuild it.
+  let resolvedPrompt = typeof llm_prompt === 'string' ? llm_prompt : '';
+  if (!resolvedPrompt && typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6) {
+    try {
+      // Check cache first (fast path — entry must exist since the user just saw the explanation)
+      const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
+      const { data: cached } = await supabase
+        .from('explanation_cache')
+        .select('deep_reveal_json')
+        .eq('position_hash', positionHash)
+        .single();
+
+      if (cached?.deep_reveal_json?.prompt) {
+        resolvedPrompt = cached.deep_reveal_json.prompt;
+      } else {
+        // Cache entry predates prompt storage — rebuild from simulation pipeline
+        const context = await buildExplainContextActive(movestring, col);
+        if (context?.prompt) {
+          resolvedPrompt = context.prompt;
+          // Backfill cache entry with prompt so future flags don't need to rebuild
+          if (cached?.deep_reveal_json) {
+            supabase.from('explanation_cache')
+              .update({ deep_reveal_json: { ...cached.deep_reveal_json, prompt: resolvedPrompt } })
+              .eq('position_hash', positionHash)
+              .then(() => {}).catch(() => {});
+          }
+        }
+      }
+    } catch {
+      // Non-fatal — proceed with whatever prompt we have
     }
   }
 
   try {
     const { data, error } = await supabase
       .from('llm_feedback')
-      .insert({ movestring, llm_prompt, llm_response, human_note, feature })
+      .insert({ movestring, llm_prompt: resolvedPrompt, llm_response, human_note, feature })
       .select('id')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json({ id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Severity of a blunder on a 0–10 scale.
+ * Raw diff (best_score − score) is normalized by 36 (the maximum possible spread on a 7×6
+ * board, from +18 to −18) and scaled to 10, then rounded to the nearest integer.
+ * Both scores use the c4solver convention (current-player perspective, range ±18).
+ * Stored at write time so the queue endpoint never needs to re-run the solver.
+ * Returns 0 when solver data is unavailable.
+ * @param {number} bestScore - solver score of the optimal column
+ * @param {number} score - solver score of the column actually played
+ * @returns {number} integer in [0, 10]
+ */
+function computeSeverity(bestScore, score) {
+  if (typeof bestScore !== 'number' || typeof score !== 'number') return 0;
+  return Math.round((bestScore - score) / 36 * 10);
+}
+
+// POST /api/blunders — record a sparring blunder for the authenticated user
+// Auth required: returns 401 silently if no user (client fire-and-forgets this call).
+app.post('/api/blunders', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  const { board_state, move_played, correct_move, pattern_category, score, best_score } = req.body;
+
+  // Validate required fields are present
+  if (board_state === undefined || move_played === undefined || correct_move === undefined || pattern_category === undefined) {
+    return res.status(400).json({ error: 'board_state, move_played, correct_move, and pattern_category are required' });
+  }
+
+  // board_state must match /^[0-6]{0,42}$/
+  if (typeof board_state !== 'string' || !/^[0-6]{0,42}$/.test(board_state)) {
+    return res.status(400).json({ error: 'board_state must be 0–42 characters of digits 0–6' });
+  }
+
+  // move_played and correct_move must be integers 0–6
+  if (!Number.isInteger(move_played) || move_played < 0 || move_played > 6) {
+    return res.status(400).json({ error: 'move_played must be an integer 0–6' });
+  }
+  if (!Number.isInteger(correct_move) || correct_move < 0 || correct_move > 6) {
+    return res.status(400).json({ error: 'correct_move must be an integer 0–6' });
+  }
+
+  // pattern_category must be a non-empty string
+  if (typeof pattern_category !== 'string' || pattern_category.trim() === '') {
+    return res.status(400).json({ error: 'pattern_category must be a non-empty string' });
+  }
+
+  // Auth required
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Blunders from losing positions are no longer skipped — the blunder_severity
+  // field provides the graduated measure of how much the move worsens the position.
+  // A move that drops from -2 to -15 is a meaningful blunder even if the position
+  // was already theoretically lost (as all second-player positions are).
+
+  try {
+    // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
+    const safeCategory = VALID_BLUNDER_TAGS.has(pattern_category)
+      ? pattern_category
+      : 'suboptimal_move';
+    if (!VALID_BLUNDER_TAGS.has(pattern_category)) {
+      console.warn(`POST /api/blunders: unrecognized pattern_category '${pattern_category}' substituted with 'suboptimal_move'`);
+    }
+
+    // Plain insert — the partial unique index (migration 030) guards against
+    // duplicates on (user_id, board_state, move_played) WHERE puzzle_id IS NULL.
+    // Supabase upsert can't resolve conflicts against partial indexes, so we
+    // insert and treat unique-violation (23505) as success.
+    const { data, error } = await supabase
+      .from('blunders')
+      .insert({
+        user_id: req.user.id,
+        puzzle_id: null,
+        board_state,
+        move_played,
+        correct_move,
+        pattern_category: safeCategory,
+        severity: computeSeverity(best_score, score),
+        blunder_severity: req.body.blunder_severity ?? null,
+      })
+      .select('id');
+
+    if (error) {
+      if (error.code === '23505') return res.status(200).json({ deduplicated: true });
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(201).json({ id: data[0].id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -738,6 +928,47 @@ function userCanAccessCategory(user, categoryId) {
   if (!PAID_CATEGORIES.has(categoryId)) return true;
   return user?.tier === 'paid';
 }
+
+// GET /api/stats — per-user accuracy stats aggregated from puzzle_attempts
+app.get('/api/stats', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { data, error } = await supabase
+    .from('puzzle_attempts')
+    .select('first_attempt_correct, puzzles!inner(category)')
+    .eq('user_id', req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const byPattern = {};
+  let totalCorrect = 0;
+  for (const row of data) {
+    const category = row.puzzles?.category;
+    if (!category) continue;
+    if (!byPattern[category]) byPattern[category] = { correct: 0, attempted: 0 };
+    byPattern[category].attempted++;
+    if (row.first_attempt_correct) {
+      byPattern[category].correct++;
+      totalCorrect++;
+    }
+  }
+
+  const totalPuzzles = data.length;
+  for (const cat of Object.keys(byPattern)) {
+    const e = byPattern[cat];
+    byPattern[cat] = {
+      accuracy: e.attempted > 0 ? Math.round((e.correct / e.attempted) * 100) : 0,
+      attempted: e.attempted,
+    };
+  }
+
+  res.json({
+    accuracy: totalPuzzles > 0 ? Math.round((totalCorrect / totalPuzzles) * 100) : 0,
+    totalPuzzles,
+    byPattern,
+  });
+});
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
 app.get('/api/puzzles', async (req, res) => {
@@ -782,6 +1013,742 @@ app.get('/api/puzzles', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// NOTE: /api/puzzles/counts, /api/puzzles/draw, and /api/evaluate-move MUST remain
+// above /api/puzzles/:id — Express first-match ordering swallows 'counts' and 'draw'
+// as /:id params if registered after.
+
+// GET /api/puzzles/counts — return per-category puzzle counts and challenge set metadata
+app.get('/api/puzzles/counts', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  try {
+    const { data, error } = await supabase
+      .from('puzzles')
+      .select('category')
+      .eq('is_active', true);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Build counts map starting from CATEGORY_ORDER (all categories default to 0)
+    const counts = {};
+    for (const slug of CATEGORY_ORDER) {
+      counts[slug] = 0;
+    }
+    for (const row of (data || [])) {
+      if (row.category in counts) {
+        counts[row.category] += 1;
+      }
+    }
+
+    res.json({ counts, sets: CHALLENGE_SETS });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/puzzles/draw — draw N random puzzles from a category
+app.get('/api/puzzles/draw', async (req, res) => {
+  const { category } = req.query;
+  let n = req.query.n !== undefined ? parseInt(req.query.n, 10) : 8;
+
+  // mixed is not in VALID_CATEGORIES — must be checked first
+  if (category === 'mixed') {
+    if (req.user?.tier !== 'paid') {
+      return res.status(403).json({ error: 'Pro subscription required' });
+    }
+  } else if (!VALID_CATEGORIES.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
+  } else if (PAID_CATEGORIES.has(category) && req.user?.tier !== 'paid') {
+    return res.status(403).json({ error: 'Pro subscription required' });
+  }
+
+  // Validate n
+  if (req.query.n !== undefined && (isNaN(n) || n < 1 || n > 8)) {
+    return res.status(400).json({ error: 'invalid n' });
+  }
+  if (isNaN(n) || n < 1 || n > 8) n = 8;
+
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  try {
+    let puzzles;
+    if (category === 'mixed') {
+      // Sample across all CATEGORY_ORDER categories (all accessible to Pro users)
+      const { data, error } = await supabase
+        .from('puzzles')
+        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .in('category', CATEGORY_ORDER)
+        .eq('is_active', true)
+        .limit(n * 4); // oversample then pick
+      if (error) return res.status(500).json({ error: error.message });
+      // Shuffle and take n
+      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
+      puzzles = shuffled;
+    } else {
+      const { data, error } = await supabase
+        .from('puzzles')
+        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .eq('category', category)
+        .eq('is_active', true)
+        .limit(n * 4); // oversample, shuffle in JS since Supabase JS client doesn't support ORDER BY RANDOM()
+      if (error) return res.status(500).json({ error: error.message });
+      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
+      puzzles = shuffled;
+    }
+
+    // Session handling for authenticated users
+    if (req.user) {
+      const { data: existing } = await supabase
+        .from('challenge_sessions')
+        .select('id, puzzle_ids, completed_count')
+        .eq('user_id', req.user.id)
+        .eq('category', category)
+        .is('completed_at', null)
+        .maybeSingle();
+
+      if (existing) {
+        // Resume — re-fetch puzzles in original draw order
+        const { data: rows } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+          .in('id', existing.puzzle_ids)
+          .eq('is_active', true);
+        const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
+        const ordered = existing.puzzle_ids.map(id => map[id]).filter(Boolean);
+        return res.json({ puzzles: ordered, session_id: existing.id, resume_idx: existing.completed_count });
+      }
+
+      // New session
+      const { data: newSess, error: sessErr } = await supabase
+        .from('challenge_sessions')
+        .insert({ user_id: req.user.id, category, puzzle_ids: puzzles.map(p => p.id) })
+        .select('id')
+        .single();
+
+      if (sessErr) {
+        console.error('[challenge-sessions] insert error', sessErr.message);
+        return res.json({ puzzles }); // degrade gracefully — still playable, no resume
+      }
+      return res.json({ puzzles, session_id: newSess.id, resume_idx: 0 });
+    }
+
+    // Anonymous — unchanged
+    res.json({ puzzles });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/challenge-sessions/:id/advance — increment completed_count; mark done when all finished
+app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  const { id } = req.params;
+  try {
+    const { data: sess } = await supabase
+      .from('challenge_sessions')
+      .select('id, user_id, puzzle_ids, completed_count, completed_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (!sess) return res.status(404).json({ error: 'session not found' });
+    if (sess.user_id !== req.user.id) return res.status(403).json({ error: 'forbidden' });
+    if (sess.completed_at) return res.status(204).send(); // idempotent — already complete
+    const newCount = sess.completed_count + 1;
+    const isComplete = newCount >= sess.puzzle_ids.length;
+    await supabase.from('challenge_sessions').update({
+      completed_count: newCount,
+      ...(isComplete ? { completed_at: new Date().toISOString() } : {}),
+    }).eq('id', id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── i18n pool helper ──────────────────────────────────────────────────────────
+
+/**
+ * Navigate a nested translations object by dot-separated prefix and return
+ * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * Returns null if the prefix resolves to a non-object or empty object.
+ */
+/**
+ * Convert a 0-indexed movestring to cols array (7 strings in g/d encoding).
+ * g = first-player disc (even indices), d = second-player disc (odd indices).
+ * Each string represents one column's discs from bottom to top.
+ * O(moves.length) — no solver calls.
+ * @param {string} moves — 0-indexed movestring (digits 0–6)
+ * @returns {string[7]} cols array, bottom-to-top per column
+ */
+function movesToCols(moves) {
+  const cols = ['', '', '', '', '', '', ''];
+  for (let i = 0; i < moves.length; i++) {
+    cols[parseInt(moves[i], 10)] += (i % 2 === 0) ? 'g' : 'd';
+  }
+  return cols;
+}
+
+function pickFromPool(translations, prefix) {
+  const parts = prefix.split('.');
+  let node = translations;
+  for (const part of parts) {
+    if (!node || typeof node !== 'object') return null;
+    node = node[part];
+  }
+  if (!node || typeof node !== 'object') return null;
+  const keys = Object.keys(node);
+  if (keys.length === 0) return null;
+  const idx = Math.floor(Math.random() * keys.length);
+  return `${prefix}.${keys[idx]}`;
+}
+
+// POST /api/evaluate-move — score a played move and return coach phrase keys
+app.post('/api/evaluate-move', async (req, res) => {
+  const { movestring, col, category } = req.body;
+
+  // Validate movestring
+  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
+    return res.status(400).json({ error: 'invalid movestring' });
+  }
+
+  // Validate col
+  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
+  if (!isValidCol0(colInt)) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+
+  try {
+    // Get solver scores
+    let scores;
+    if (movestring === '' || movestring.length === 0) {
+      scores = EMPTY_BOARD_SCORES;
+    } else {
+      scores = await solver.query(movestring);
+    }
+
+    // Score the move
+    const { badge, quality, bestCol } = scoreMove(scores, colInt);
+
+    // Classify for pattern tag
+    let patternTag;
+    if (req.body.aiMove === true) {
+      patternTag = await classifyAiMove(movestring, colInt, solver);
+    } else {
+      const classifyResult = classify(movestring, colInt, scores);
+      patternTag = classifyResult?.tag ?? null;
+    }
+
+    // Determine phrase pool key (request category takes priority)
+    const phrasePoolKey = category || patternTag;
+
+    // Pick i18n keys from pools
+    const coachPhraseKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      : null;
+
+    const summaryLineKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+      : null;
+
+    // Determine coach mood
+    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+    const coachMood = coachMoodMap[quality] ?? 'think';
+
+    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
+// Returns richer results (correctCol, threatCells) than /api/evaluate-move.
+app.post('/api/evaluate-move/inline', async (req, res) => {
+  const { movestring, col, puzzle } = req.body;
+
+  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
+    return res.status(400).json({ error: 'invalid movestring' });
+  }
+  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
+  if (!isValidCol0(colInt)) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+  if (!puzzle || typeof puzzle !== 'object') {
+    return res.status(400).json({ error: 'puzzle object is required' });
+  }
+  const category = puzzle.category || puzzle.goalPredicateType;
+  if (!category || !VALID_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `invalid puzzle category: ${category}` });
+  }
+
+  try {
+    // Get solver scores
+    let scores;
+    if (movestring === '' || movestring.length === 0) {
+      scores = EMPTY_BOARD_SCORES;
+    } else {
+      scores = await solver.query(movestring);
+    }
+
+    // Score the move
+    const { badge, quality, bestCol } = scoreMove(scores, colInt);
+
+    // Classify for pattern tag
+    const classifyResult = classify(movestring, colInt, scores);
+    const patternTag = classifyResult?.tag ?? null;
+
+    // Run predicate evaluation for richer results
+    const predicatePuzzle = {
+      moveString: puzzle.moveString || movestring,
+      category,
+      goalPredicateType: puzzle.goalPredicateType || category,
+      goalPredicateParams: puzzle.goalPredicateParams ?? null,
+      highlightMetadata: puzzle.highlightMetadata ?? null,
+      correctCol: puzzle.correctCol,
+    };
+    const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
+
+    // Determine phrase pool key
+    const phrasePoolKey = category || patternTag;
+
+    const coachPhraseKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      : null;
+
+    const summaryLineKey = phrasePoolKey
+      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
+      : null;
+
+    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+    const coachMood = coachMoodMap[quality] ?? 'think';
+
+    res.json({
+      badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag,
+      correctCol: predicateResult.correctCol ?? null,
+      threatCells: predicateResult.threatCells ?? null,
+      forbiddenCols: predicateResult.forbiddenCols ?? null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sparring game endpoints (Epic 3a) ───────────────────────────────────────────
+
+// POST /api/games — save a completed sparring game record
+app.post('/api/games', async (req, res) => {
+  const { device_uuid, moves, difficulty, side, result, accuracy } = req.body;
+
+  // device_uuid may be null for authenticated users; the other fields are required
+  if (!moves || !difficulty || !side || !result) {
+    return res.status(400).json({ error: 'moves, difficulty, side, and result are required' });
+  }
+
+  if (typeof moves !== 'string' || !/^[0-6]{0,42}$/.test(moves)) {
+    return res.status(400).json({ error: 'moves must be 0–42 characters of digits 0–6' });
+  }
+
+  const validDifficulties = ['easy', 'medium', 'hard', 'perfect'];
+  if (!validDifficulties.includes(difficulty)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
+  }
+
+  if (side !== 'first' && side !== 'second') {
+    return res.status(400).json({ error: 'side must be first or second' });
+  }
+
+  if (!['win', 'loss', 'draw'].includes(result)) {
+    return res.status(400).json({ error: 'result must be win, loss, or draw' });
+  }
+
+  if (accuracy !== undefined) {
+    if (typeof accuracy !== 'number' || accuracy < 0 || accuracy > 100) {
+      return res.status(400).json({ error: 'accuracy must be a number between 0 and 100' });
+    }
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    const insertPayload = {
+      user_id: req.user?.id ?? null,
+      device_uuid: device_uuid || req.user?.id || 'anonymous',
+      moves,
+      difficulty,
+      side,
+      result,
+    };
+    if (accuracy !== undefined) {
+      insertPayload.accuracy = accuracy;
+    }
+
+    const { data, error } = await supabase
+      .from('games')
+      .insert(insertPayload)
+      .select('id')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ id: data.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/games/from-position — spawn a new sparring game from a truncated position
+// Returns { moves, side, difficulty } — does NOT insert a row; GameScreen.saveGame does that when the game ends.
+app.post('/api/games/from-position', async (req, res) => {
+  const { gameId, N, difficulty } = req.body;
+
+  // Validate required fields
+  if (!gameId || typeof gameId !== 'string') {
+    return res.status(400).json({ error: 'gameId must be a non-empty string' });
+  }
+  if (N === undefined || N === null || !Number.isInteger(N) || N < 0 || N > 42) {
+    return res.status(400).json({ error: 'N must be an integer 0–42' });
+  }
+  const validDifficulties = ['easy', 'medium', 'hard', 'perfect'];
+  if (!difficulty || !validDifficulties.includes(difficulty)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    let moves, side;
+    const { data: aiGame } = await supabase
+      .from('games')
+      .select('moves, side')
+      .eq('id', gameId)
+      .single();
+
+    if (aiGame) {
+      ({ moves, side } = aiGame);
+    } else {
+      const { data: pgGame } = await supabase
+        .from('papergames_games')
+        .select('moves, side')
+        .eq('id', gameId)
+        .single();
+      if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      ({ moves, side } = pgGame);
+    }
+
+    const truncated = moves.slice(0, N);
+    res.json({ moves: truncated, side, difficulty });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/games — list past games for the authenticated user (AI sparring + papergames imports).
+// Returns { games: GameRecord[], total: number } sorted by date descending, paginated.
+// Auth required — 401 for anonymous users.
+app.get('/api/games', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  let limit = 20;
+  if (req.query.limit !== undefined) {
+    const parsed = parseInt(req.query.limit, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+      return res.status(400).json({ error: 'limit must be 1–50' });
+    }
+    limit = parsed;
+  }
+
+  let offset = 0;
+  if (req.query.offset !== undefined) {
+    const parsed = parseInt(req.query.offset, 10);
+    if (isNaN(parsed) || parsed < 0) {
+      return res.status(400).json({ error: 'offset must be a non-negative integer' });
+    }
+    offset = parsed;
+  }
+
+  // outcome filter: API accepts 'won'/'lost'/'draw', DB stores 'win'/'loss'/'draw'
+  const outcomeApiToDb = { won: 'win', lost: 'loss', draw: 'draw' };
+  let outcomeFilter = null;
+  if (req.query.outcome !== undefined) {
+    outcomeFilter = outcomeApiToDb[req.query.outcome];
+    if (!outcomeFilter) return res.status(400).json({ error: 'invalid outcome' });
+  }
+
+  let hasBlunder = false;
+  if (req.query.has_blunder === 'true') hasBlunder = true;
+  else if (req.query.has_blunder !== undefined) return res.status(400).json({ error: 'invalid has_blunder' });
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  try {
+    const userId = req.user.id;
+    const outcomeMap = { win: 'won', loss: 'lost', draw: 'draw' };
+
+    // Fetch all matching rows from both tables in parallel; sort/paginate in JS.
+    // Both tables are bounded per user so this avoids complex UNION SQL.
+    let aiQuery = supabase
+      .from('games')
+      .select('id, result, created_at, difficulty, accuracy, moves, side')
+      .eq('user_id', userId);
+    let pgQuery = supabase
+      .from('papergames_games')
+      .select('id, result, played_at, moves, side, opponent_name, opponent_avatar, accuracy')
+      .eq('user_id', userId);
+
+    if (outcomeFilter) {
+      aiQuery = aiQuery.eq('result', outcomeFilter);
+      pgQuery = pgQuery.eq('result', outcomeFilter);
+    }
+
+    const [{ data: aiGames, error: aiError }, { data: pgGames, error: pgError }] = await Promise.all([
+      aiQuery,
+      pgQuery,
+    ]);
+
+    if (aiError) return res.status(500).json({ error: aiError.message });
+    if (pgError) return res.status(500).json({ error: pgError.message });
+
+    // Fetch blunder counts for both game sets in parallel
+    const aiIds = (aiGames || []).map(g => g.id);
+    const pgIds = (pgGames || []).map(g => g.id);
+
+    // Use not-null filter instead of .in() to avoid URL-length limits (>~200 IDs causes 400 Bad Request)
+    const [aiBlundersRes, pgBlundersRes] = await Promise.all([
+      aiIds.length > 0
+        ? supabase.from('blunders').select('game_id').not('game_id', 'is', null).eq('user_id', userId)
+        : Promise.resolve({ data: [], error: null }),
+      pgIds.length > 0
+        ? supabase.from('blunders').select('papergames_game_id').not('papergames_game_id', 'is', null).eq('user_id', userId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (aiBlundersRes.error) return res.status(500).json({ error: aiBlundersRes.error.message });
+    if (pgBlundersRes.error) return res.status(500).json({ error: pgBlundersRes.error.message });
+
+    const aiBlunderMap = {};
+    for (const b of (aiBlundersRes.data || [])) {
+      aiBlunderMap[b.game_id] = (aiBlunderMap[b.game_id] || 0) + 1;
+    }
+    const pgBlunderMap = {};
+    for (const b of (pgBlundersRes.data || [])) {
+      pgBlunderMap[b.papergames_game_id] = (pgBlunderMap[b.papergames_game_id] || 0) + 1;
+    }
+
+    // Normalise both sets to a unified shape
+    const unified = [];
+
+    for (const g of (aiGames || [])) {
+      const blunderCount = aiBlunderMap[g.id] || 0;
+      if (hasBlunder && blunderCount === 0) continue;
+      unified.push({
+        id: g.id,
+        outcome: outcomeMap[g.result] || g.result,
+        created_at: g.created_at,
+        source: 'ai',
+        difficulty: g.difficulty,
+        accuracy: g.accuracy ?? null,
+        blunder_count: blunderCount,
+        cols: movesToCols(g.moves),
+      });
+    }
+
+    for (const g of (pgGames || [])) {
+      const blunderCount = pgBlunderMap[g.id] || 0;
+      if (hasBlunder && blunderCount === 0) continue;
+      unified.push({
+        id: g.id,
+        outcome: outcomeMap[g.result] || g.result,
+        created_at: g.played_at,
+        source: 'papergames',
+        opponent_name: g.opponent_name,
+        opponent_avatar: g.opponent_avatar ?? null,
+        accuracy: g.accuracy ?? null,
+        blunder_count: blunderCount,
+        cols: movesToCols(g.moves),
+      });
+    }
+
+    // Sort by date descending, paginate
+    unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const total = unified.length;
+    const page = unified.slice(offset, offset + limit);
+
+    res.json({ games: page, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/games/analyze — analyze all user plies in a completed game
+// Returns move-by-move quality breakdown, accuracy, and a summary phrase key.
+// No auth required — anonymous users can analyze games.
+app.post('/api/games/analyze', async (req, res) => {
+  const { gameId } = req.body;
+
+  if (!gameId || typeof gameId !== 'string') {
+    return res.status(400).json({ error: 'gameId is required' });
+  }
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  // Fetch game row — check AI sparring games first, then papergames imports
+  let moves, side, difficulty, created_at, isPapergames = false;
+  {
+    const { data: aiGame } = await supabase
+      .from('games')
+      .select('id, moves, side, difficulty, created_at')
+      .eq('id', gameId)
+      .single();
+
+    if (aiGame) {
+      ({ moves, side, difficulty, created_at } = aiGame);
+    } else {
+      const { data: pgGame } = await supabase
+        .from('papergames_games')
+        .select('id, moves, side, played_at')
+        .eq('id', gameId)
+        .single();
+      if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      moves = pgGame.moves;
+      side = pgGame.side;
+      difficulty = null;
+      created_at = pgGame.played_at;
+      isPapergames = true;
+    }
+  }
+
+  // Counters
+  let scored = 0;
+  let optimalCount = 0;
+  let suboptimalCount = 0;
+  let blunderCount = 0;
+  const analyzedMoves = [];
+  let userMoveOrdinal = 0;
+
+  try {
+    for (let i = 0; i < moves.length; i++) {
+      // Determine if this ply belongs to the user
+      const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
+      if (!isUserPly) continue;
+
+      userMoveOrdinal++;
+      const col = parseInt(moves[i], 10);
+      const movesBeforeThisPly = moves.slice(0, i);
+
+      // Query solver (serialized — one at a time)
+      let scores;
+      if (movesBeforeThisPly === '') {
+        scores = EMPTY_BOARD_SCORES;
+      } else {
+        scores = await solver.query(movesBeforeThisPly);
+      }
+
+      const legalCount = scores.filter(s => s > -1000).length;
+
+      const { quality, bestCol } = scoreMove(scores, col);
+      const score = scores[col];
+      const bestScore = scores[bestCol];
+
+      // Classify the position
+      // tagBlunder replaces the old classify() call for blunder tagging.
+      // It may issue 60+ solver queries per blunder ply — acceptable because
+      // this endpoint is called post-game, not during interactive play.
+      let patternTag = null;
+      let reason = null;
+      let direction = null;
+      if (quality === 'blunder') {
+        try {
+          const tagResult = await tagBlunder(movesBeforeThisPly, col, bestCol, solver);
+          patternTag = tagResult.tag;
+          reason = tagResult.reason;
+          direction = tagResult.direction;
+        } catch (_e) {
+          patternTag = 'suboptimal_move';
+          reason = 'solver error: tagBlunder threw';
+          direction = 'missed_own';
+        }
+      }
+
+      // Scan 3 plies of the post-blunder tree to compute what fraction of
+      // continuations end in an opponent win. Run for ALL blunders (including
+      // losing positions) — blunder_severity is the graduated measure that
+      // distinguishes minor mistakes from catastrophic ones regardless of
+      // whether the position was already theoretically lost.
+      let blunderSeverity = null;
+      if (quality === 'blunder') {
+        const postBlunderMs = movesBeforeThisPly + String(col);
+        try {
+          const sv = await computeBlunderSeverity(solver, postBlunderMs, 3);
+          blunderSeverity = sv.severity;
+        } catch (_e) {
+          // non-fatal: leave null
+        }
+      }
+
+      analyzedMoves.push({
+        moveIndex: userMoveOrdinal,
+        col,
+        quality,
+        score,
+        bestScore,
+        bestCol,
+        patternTag,
+        reason,
+        direction,
+        blunderSeverity,
+      });
+
+      // Server-side blunder INSERT — fire-and-forget relative to the HTTP response.
+      // Anonymous users skip the INSERT (user_id would be NULL).
+      if (req.user && quality === 'blunder') {
+        await insertGameBlunder(supabase, {
+          user_id: req.user.id,
+          board_state: movesBeforeThisPly,
+          move_played: col,
+          correct_move: bestCol,
+          pattern_category: patternTag,
+          reason,
+          direction,
+          severity: computeSeverity(bestScore, score),
+          blunder_severity: blunderSeverity,
+          game_id: isPapergames ? null : gameId,
+          papergames_game_id: isPapergames ? gameId : null,
+        });
+      }
+
+      // Only count non-forced moves toward accuracy
+      if (legalCount > 1) {
+        scored++;
+        if (quality === 'optimal') optimalCount++;
+        else if (quality === 'suboptimal') suboptimalCount++;
+        else blunderCount++;
+      }
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+
+  const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
+
+  // Pick summary phrase key
+  const phrasePool = blunderCount === 0
+    ? 'coach.sparring.review.clean'
+    : 'coach.sparring.review.mistakes';
+  const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+
+  res.json({
+    moves: analyzedMoves,
+    accuracy,
+    optimalCount,
+    suboptimalCount,
+    blunderCount,
+    scored,
+    summaryPhraseKey,
+    fullMovestring: moves,
+    difficulty,
+    side,
+    gameDate: created_at,
+  });
 });
 
 // GET /api/puzzles/:id — return full puzzle data for solving
@@ -890,13 +1857,15 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
     // Insert blunder for signed-in users on first-attempt failure only
     const attemptNumber = typeof req.body.attemptNumber === 'number' ? req.body.attemptNumber : 1;
     if (req.user && !isSuccess && attemptNumber === 1) {
+      const correctCol = evaluation.correctCol ?? candidateCol;
       supabase.from('blunders').insert({
         user_id: req.user.id,
         puzzle_id: puzzleId,
         board_state: puzzle.move_string,
         move_played: candidateCol,
-        correct_move: evaluation.correctCol ?? candidateCol,
+        correct_move: correctCol,
         pattern_category: puzzle.category,
+        severity: computeSeverity(scores[correctCol], scores[candidateCol]),
       }).then(() => {}).catch(err => console.error('[blunder]', err.message));
     }
   }
@@ -971,7 +1940,11 @@ app.post('/api/puzzles/:id/sequence/move', async (req, res) => {
 
   const threatsAfter = countThreatsAfterMove(position, col);
   if (threatsAfter >= 2) {
-    return res.json({ outcome: 'success' });
+    const positionAfter = position + String(col);
+    const { board: boardAfter, colHeights: heightsAfter } = parseBoardState(positionAfter);
+    const threatCols = getImmediateThreats(boardAfter, heightsAfter, learner);
+    const threatCells = threatCols.map(tc => ({ c: tc, r: heightsAfter[tc] }));
+    return res.json({ outcome: 'success', threatCells });
   }
 
   const positionAfterLearnerMove = position + String(col);
@@ -1024,35 +1997,93 @@ app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
 });
 
 // GET /api/coach/queue
-app.get('/api/coach/queue', requirePaid, async (req, res) => {
+app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
 
-  const { data: blunders, error } = await supabase
+  console.log('[DEBUG coach/queue] raw query:', JSON.stringify(req.query));
+
+  const status = req.query.status || 'all';
+  if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
+    return res.status(400).json({ error: 'invalid status' });
+  }
+
+  const category = req.query.category || null;
+  if (category && !VALID_BLUNDER_TAGS.has(category)) {
+    return res.status(400).json({ error: 'invalid category' });
+  }
+
+  const gameId = req.query.game_id || null;
+  if (gameId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gameId)) {
+    return res.status(400).json({ error: 'invalid game_id' });
+  }
+
+  let query = supabase
     .from('blunders')
-    .select('id, puzzle_id, pattern_category, created_at, puzzles(move_string, goal_prompt, category)')
+    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id')
     .eq('user_id', req.user.id)
-    .is('resolved_at', null)
+    // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
+    .order('severity', { ascending: false })
     .order('created_at', { ascending: true })
     .limit(50);
 
+  if (status === 'unreviewed') {
+    query = query.is('resolved_at', null);
+  } else if (status === 'reviewed') {
+    query = query.not('resolved_at', 'is', null);
+  }
+
+  if (category) {
+    query = query.eq('pattern_category', category);
+  }
+
+  if (gameId) {
+    query = query.eq('game_id', gameId);
+  }
+
+  const { data: blunders, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
+  console.log('[DEBUG coach/queue] category param:', JSON.stringify(req.query.category), '| rows returned:', blunders?.length, '| categories in result:', [...new Set((blunders||[]).map(b=>b.pattern_category))]);
 
-  const queueCount = blunders?.length ?? 0;
-  const nextPuzzle = blunders?.[0] ? {
-    blunderId: blunders[0].id,
-    puzzleId: blunders[0].puzzle_id,
-    category: blunders[0].pattern_category,
-    moveString: blunders[0].puzzles?.move_string,
-    goalPrompt: blunders[0].puzzles?.goal_prompt,
-  } : null;
+  function computeThreatCells(board_state, move_played) {
+    try {
+      const postBoard = new Board(board_state + String(move_played));
+      const opponent = postBoard.currentPlayer;
+      const threatMap = postBoard.majorThreatCells();
+      return Object.entries(threatMap)
+        .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
+        .map(([key]) => {
+          const [row, col] = key.split(',').map(Number);
+          return { col, row };
+        });
+    } catch {
+      return [];
+    }
+  }
 
-  res.json({ queueCount, puzzle: nextPuzzle });
+  const enriched = (blunders || []).map(b => ({
+    id: b.id,
+    board_state: b.board_state,
+    move_played: b.move_played,
+    correct_move: b.correct_move,
+    pattern_category: b.pattern_category,
+    created_at: b.created_at,
+    resolved_at: b.resolved_at,
+    severity: b.severity,
+    blunder_severity: b.blunder_severity ?? null,
+    threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+    game_id: b.game_id ?? null,
+    moveIndex: (b.board_state || '').length,
+  }));
+
+  res.json({ blunders: enriched, total: enriched.length });
 });
 
 // POST /api/coach/queue/:blunderId/resolve
-app.post('/api/coach/queue/:blunderId/resolve', requirePaid, async (req, res) => {
-  const blunderId = parseInt(req.params.blunderId, 10);
-  if (isNaN(blunderId)) return res.status(400).json({ error: 'invalid blunder id' });
+app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  const blunderId = req.params.blunderId;
+  if (!blunderId || typeof blunderId !== 'string') return res.status(400).json({ error: 'invalid blunder id' });
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { error } = await supabase
@@ -1063,27 +2094,6 @@ app.post('/api/coach/queue/:blunderId/resolve', requirePaid, async (req, res) =>
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(204).end();
-});
-
-// POST /api/coach/explain-simulate
-app.post('/api/coach/explain-simulate', async (req, res) => {
-  const { moves, numPlies = 2, anchorCell, perspective } = req.body;
-  if (typeof moves !== 'string') return res.status(400).json({ error: 'moves must be a string' });
-  if (!anchorCell || typeof anchorCell.col !== 'number' || typeof anchorCell.row !== 'number') {
-    return res.status(400).json({ error: 'anchorCell must be { col: number, row: number }' });
-  }
-  if (perspective !== 1 && perspective !== 2) {
-    return res.status(400).json({ error: 'perspective must be 1 or 2' });
-  }
-  if (!Number.isInteger(numPlies) || numPlies < 0 || numPlies > 6) {
-    return res.status(400).json({ error: 'numPlies must be an integer 0–6' });
-  }
-  try {
-    const result = await explainSimulate(moves, numPlies, anchorCell, perspective, solver);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────
@@ -1206,11 +2216,14 @@ app.post('/api/debug/classify-all', async (req, res) => {
   if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
     return res.status(403).json({ error: 'Debug endpoints are localhost-only' });
   }
-  const { moves = '' } = req.body;
+  const { moves: ms = '' } = req.body;
   try {
-    const scores = moves.length > 0 ? await solver.query(moves) : EMPTY_BOARD_SCORES;
-    const detectors = await classifyAll(moves, scores, solver);
-    const board = new Board(moves);
+    const scores = ms.length > 0 ? await solver.query(ms) : EMPTY_BOARD_SCORES;
+    const redResult = await classifyPattern(ms, 1, solver);
+    const yellowResult = await classifyPattern(ms, 2, solver);
+    const red = [...new Set(redResult.keys())];
+    const yellow = [...new Set(yellowResult.keys())];
+    const board = new Board(ms);
 
     const reachableRed = board.reachableThreats(1);
     const reachableYellow = board.reachableThreats(2);
@@ -1221,7 +2234,7 @@ app.post('/api/debug/classify-all', async (req, res) => {
     };
 
     const boardState = {
-      moveCount: moves.length,
+      moveCount: ms.length,
       currentPlayer: board.currentPlayer === 1 ? 'Red' : 'Yellow',
       colHeights: board.colHeights,
       immediateThreatsRed: board.immediateThreats(1),
@@ -1232,7 +2245,7 @@ app.post('/api/debug/classify-all', async (req, res) => {
       doubleThreatsYellow: board.hasActiveDoubleThreat(2),
     };
 
-    res.json({ detectors, boardState, scores });
+    res.json({ red, yellow, boardState, scores });
   } catch (err) {
     console.error('[debug/classify-all]', err);
     res.status(500).json({ error: err.message });
@@ -1729,6 +2742,41 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json({ id: data.id, verified: false });
+});
+
+// ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
+
+app.use(express.static(join(__dirname, '../dist')));
+
+app.get('/{*path}', async (req, res) => {
+  if (!indexHtml) return res.status(500).send('App not built');
+
+  // FR-014: inject OG meta tags for /game/:id paths
+  const gameMatch = req.path.match(/^\/game\/([^/]+)$/);
+  if (gameMatch && supabase) {
+    const gameId = gameMatch[1];
+    try {
+      const { data } = await supabase
+        .from('games')
+        .select('id, difficulty, result')
+        .eq('id', gameId)
+        .single();
+
+      if (data) {
+        const capitalize = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+        const ogTitle = `Connect Four game — ${capitalize(data.difficulty)} — ${capitalize(data.result)}`;
+        const ogDesc = 'Review this Connect Four game on DecodeC4.';
+        const ogTags = `<meta property="og:title" content="${ogTitle}">
+<meta property="og:description" content="${ogDesc}">`;
+        const patched = indexHtml.replace('</head>', `${ogTags}\n</head>`);
+        return res.type('html').send(patched);
+      }
+    } catch (e) {
+      // fall through to serve plain index.html
+    }
+  }
+
+  res.type('html').send(indexHtml);
 });
 
 // ── Server start ───────────────────────────────────────────────────────────────

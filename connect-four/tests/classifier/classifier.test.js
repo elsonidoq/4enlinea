@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   classify, parseBoardState, hasActiveDoubleThreat,
-  classifyAll, Board,
+  Board,
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
   detectZThreat, detectUndercut, detectOvercut,
-  detectFigure7, detectJShape, detectClaimeven,
+  detectFigure7, detectJShape, detectClaimodd, detectClaimeven,
+  detectOddEvenThreat,
 } from '../../server/classifier.js';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';
 
@@ -91,6 +92,17 @@ describe('classify() false-positive regressions', () => {
   });
 });
 
+describe('classify() forced_block', () => {
+  // Regression: 4435451225, blunder col=1 (0-indexed).
+  // Yellow has an immediate vertical threat at col5 (0-indexed). Red played col1
+  // (failed to block). The import script must classify bestCol (col5), not the
+  // blunder column, to correctly tag the puzzle category as forced_block.
+  test('4435451225 bestCol=5 in forced-block position — must be tagged forced_block', () => {
+    const result = classify('4435451225', 5, [-16, -16, -16, -16, -16, 2, -16]);
+    assert.equal(result.tag, 'forced_block');
+  });
+});
+
 describe('classify() double_threat', () => {
   // Existing fixtures kept
   test('3344 col2 → double_threat', () => {
@@ -122,6 +134,14 @@ describe('classify() double_threat', () => {
   // Also: movestring that is Cat 3 via the new Cat 1 regression position
   test('3133101113201232540 col2 → double_threat (not immediate_threat)', () => {
     const result = classify('3133101113201232540', 2, [2, -1000, 11, 4, 9, 8, 7]);
+    assert.equal(result.tag, 'double_threat');
+  });
+
+  // Regression: blunder record 5b0db593 — classifying the CORRECT move (col3)
+  // must return double_threat. The bug was an upstream stale DB row tagged
+  // 'unknown'; the classifier itself returns the right tag for the correct col.
+  test('444432655223 col3 → double_threat (blunder correct-move classification)', () => {
+    const result = classify('444432655223', 3, [-14, -15, -14, 14, -14, 14, -14]);
     assert.equal(result.tag, 'double_threat');
   });
 
@@ -160,6 +180,40 @@ describe('classify() edge cases', () => {
   });
 });
 
+describe('detectForcedWin()', () => {
+  test('double_threat board does NOT match — that is Category 3', () => {
+    // '33442': Red played col2, creating a double_threat. detectForcedWin must return false.
+    const board = new Board('33442');
+    assert.equal(detectForcedWin(board, 1).matched, false);
+  });
+
+  test('"33" (both played center) does NOT match — no immediate threat on post-move board', () => {
+    // Yellow just played col3 after Red's center. No forcing chain exists.
+    const board = new Board('33');
+    assert.equal(detectForcedWin(board, 2).matched, false);
+  });
+
+  test('forcing chain position matches — 1 immediate threat → block → double_threat', () => {
+    // '662345230545562635626452': Yellow (player 2) just played col2.
+    // Chain: immediate threat → opp blocks col3 → user plays col3 → opp blocks col4 → user wins col4.
+    const board = new Board('662345230545562635626452');
+    assert.equal(detectForcedWin(board, 2).matched, true);
+  });
+
+  test('classify() lost position falls through to suboptimal_move, not forced_win', () => {
+    // All-negative scores, col6 is least bad — no forcing chain on the board.
+    const result = classify('3333344455', 6, [-16, -16, -16, -16, -16, -16, -2]);
+    assert.equal(result.tag, 'suboptimal_move');
+  });
+
+  test('classify() col3 after "3" falls through to suboptimal_move, not forced_win', () => {
+    // Yellow plays center vs Red's center. All Yellow scores negative but no tactical chain.
+    const scores = [-4, -2, -2, -1, -2, -2, -4];
+    const result = classify('3', 3, scores);
+    assert.notEqual(result.tag, 'forced_win');
+  });
+});
+
 // SC-002: classify() constructs Board exactly once (no direct parseBoardState calls)
 describe('SC-002: classify() single Board construction', () => {
   test('classify() body contains zero parseBoardState calls', () => {
@@ -175,86 +229,8 @@ describe('SC-002: classify() single Board construction', () => {
   });
 });
 
-// SC-008: classifyAll returns results matching individual detectors for representative positions
-describe('classifyAll()', () => {
-  let solver;
-  before(() => { solver = createSolverProcess(); });
-  after(() => { solver.destroy(); });
-
-  const DETECTOR_MAP = [
-    { name: 'immediate_threat',  fn: (b, s, sv) => detectImmediateThreat(b) },
-    { name: 'double_threat',     fn: (b, s, sv) => detectDoubleThreat(b) },
-    { name: 'forced_block',      fn: (b, s, sv) => detectForcedBlock(b, s) },
-    { name: 'forced_win',        fn: (b, s, sv) => detectForcedWin(b, s) },
-    { name: 'forbidden_columns', fn: (b, s, sv) => detectForbiddenColumns(b, s) },
-    { name: 'z_threat',          fn: (b, s, sv) => detectZThreat(b, s) },
-    { name: 'undercut',          fn: (b, s, sv) => detectUndercut(b, s) },
-    { name: 'overcut',           fn: (b, s, sv) => detectOvercut(b, s) },
-    { name: 'figure_7',          fn: (b, s, sv) => detectFigure7(b, s) },
-    { name: 'j_shape',           fn: (b, s, sv) => detectJShape(b, s) },
-    { name: 'claimeven',         fn: (b, s, sv) => detectClaimeven(b, sv) },
-  ];
-
-  async function assertClassifyAllMatchesDetectors(ms, scores, solverInstance) {
-    const allResults = await classifyAll(ms, scores, solverInstance);
-    assert.equal(allResults.length, 11, 'classifyAll must return 11 entries');
-
-    for (let i = 0; i < DETECTOR_MAP.length; i++) {
-      const { name, fn } = DETECTOR_MAP[i];
-      const entry = allResults[i];
-      assert.equal(entry.detectorName, name, `entry[${i}].detectorName must be "${name}"`);
-
-      const expected = await fn(new Board(ms), scores, solverInstance);
-      assert.deepEqual(entry.result, expected, `classifyAll entry "${name}" must match standalone detector`);
-    }
-  }
-
-  test('empty board: all entries match standalone detectors', async () => {
-    const ms = '';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('simple opening (001122): all entries match standalone detectors', async () => {
-    // z_threat detector type
-    const ms = '001122';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('claimeven position (3233333556): all entries match standalone detectors', async () => {
-    // claimeven detector type — subtype B known fixture
-    const ms = '3233333556';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 120_000 });
-
-  test('figure-7 position (021353342445): all entries match standalone detectors', async () => {
-    // figure_7 detector type
-    const ms = '021353342445';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('j-shape position (30321143442): all entries match standalone detectors', async () => {
-    // j_shape detector type
-    const ms = '30321143442';
-    const scores = await solver.query(ms);
-    await assertClassifyAllMatchesDetectors(ms, scores, solver);
-  }, { timeout: 30_000 });
-
-  test('returns array of objects with detectorName and result keys', async () => {
-    const ms = '3344';
-    const scores = await solver.query(ms);
-    const allResults = await classifyAll(ms, scores, solver);
-    assert.ok(Array.isArray(allResults));
-    for (const entry of allResults) {
-      assert.ok('detectorName' in entry, 'each entry must have detectorName');
-      assert.ok('result' in entry, 'each entry must have result');
-      assert.ok('matched' in entry.result, 'each result must have matched field');
-    }
-  }, { timeout: 30_000 });
-});
+// classifyAll() tests removed in Epic 3 Batch 3 (T016) — classifyAll was deleted
+// from classifier.js. The debug endpoint and CLI script now use classifyPattern.
 
 describe('hasActiveDoubleThreat()', () => {
   // col5(viz)/col4(code) carries two stacked Yellow wins:
@@ -277,5 +253,41 @@ describe('hasActiveDoubleThreat()', () => {
     const { board, colHeights } = parseBoardState(ms);
     const player = ms.length % 2 === 0 ? 1 : 2; // Red (1)
     assert.equal(hasActiveDoubleThreat(board, colHeights, player), false);
+  });
+});
+
+describe('detectOddEvenThreat()', () => {
+  // Positive fixture: '05061332' (Red's turn, 8 moves).
+  // Red has col0 (row 2, odd) threatening col0 vertically, AND col1 (row 1, even)
+  // threatening col2 via the pattern R at col0,1,3 on row 0.
+  test('positive: Red turn with odd and even threats from distinct columns', () => {
+    const board = new Board('05061332');
+    const result = detectOddEvenThreat(board, []);
+    assert.ok(result.matched, 'should match odd_even_threat');
+    assert.equal(result.correctCol, 0, 'correctCol should be col0 (odd-row landing)');
+    assert.ok(result.categoryEvidence, 'should include categoryEvidence');
+    assert.equal(result.categoryEvidence.oddRowCol, 0);
+    assert.equal(result.categoryEvidence.evenRowCol, 1);
+  });
+
+  // Negative: Yellow's turn (player 2) — must not match per FR-009
+  test('negative: Yellow turn — must not match', () => {
+    const board = new Board('050613325');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match on Yellow turn');
+  });
+
+  // Negative: all threats on odd rows only — evenRowMoves empty -> no match
+  test('negative: all threats on odd rows — must not match', () => {
+    const board = new Board('3344');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match when all threats are on odd rows');
+  });
+
+  // Negative: no candidate columns create a threat
+  test('negative: no threats created by any column — must not match', () => {
+    const board = new Board('');
+    const result = detectOddEvenThreat(board, []);
+    assert.equal(result.matched, false, 'should not match on empty board');
   });
 });

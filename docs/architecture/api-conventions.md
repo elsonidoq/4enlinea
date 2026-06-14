@@ -6,6 +6,7 @@
 **MUST**: Curation and admin routes use `/api/admin/<resource>` (e.g., `/api/admin/candidates`).
 **MUST**: Stripe routes use `/api/stripe/<action>` (e.g., `/api/stripe/create-checkout`).
 **MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
+**MUST**: Authenticated user-data routes use `/api/user/<resource>` (e.g., `/api/user/profile`, `/api/user/streak`). Established in spec 030; full endpoint contracts at `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
 ## Error Response Shape
 
@@ -30,9 +31,20 @@
 
 ## Access Guards
 
-- **`requirePaid`**: Middleware for coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`.
+- **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
 - **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
+  Threat model: the server is expected to run behind a firewall or on a private network without port forwarding. `requireLocalhost` is the sole access control layer — there is no API key, session token, or other authentication for admin routes. If the deployment model changes (e.g. cloud-hosted server with a remote admin UI), admin routes must be migrated to token-based auth before deployment.
+
+### `/api/user/*` ownership invariants (spec 030)
+
+**MUST**: Every `/api/user/*` endpoint MUST check `req.user` at the top of the handler and return `401 { "error": "Unauthorized" }` if null. The `loadUser` middleware runs globally, but the explicit inline guard is required — do not rely on middleware ordering alone.
+
+**MUST**: Every `/api/user/*` endpoint MUST filter all DB queries with `user_id = req.user.id` (or `id = req.user.id` for the `users` table). No endpoint may read or write another user's data.
+
+**MUST**: `device_uuid` MUST be sourced from `req.user.device_uuid` (populated by `loadUser`). Client request bodies MUST NOT include `device_uuid` — the server derives it, never trusts it from the wire.
+
+Full endpoint contracts: `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
 ## Supabase Usage Pattern
 
@@ -66,6 +78,37 @@ Rationale: Constitution §V — analytics writes MUST NOT block user-facing oper
 **MUST**: Validate `category` against `VALID_CATEGORIES` (Set from `server/categories.js`).
 All validation happens at the route handler, before any solver or DB call.
 
+## i18n Key Selection Pattern (`pickFromPool`)
+
+**MUST**: When a server endpoint needs to return a localizable string to the client, it MUST return an i18n **key string** (e.g. `"coach.immediate_threat.optimal.0"`), never resolved English text. The client calls `t(key)` to resolve it.
+
+The `pickFromPool(translations, prefix)` helper (defined in `server/index.js`) navigates the imported `en.json` object by dot-path, collects leaf keys, and returns a randomly selected full key string. Returns `null` if the prefix resolves to nothing.
+
+Example usage in `POST /api/evaluate-move`:
+```js
+const coachPhraseKey = pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`);
+// → "coach.immediate_threat.optimal.0"
+```
+
+The `eval.*` i18n namespace is the canonical location for Tier-1 summary lines:
+`eval.<category>.<quality>.summary.<index>` (e.g. `eval.immediate_threat.optimal.summary.0`).
+
+## Route Registration Ordering Constraint
+
+Express uses first-match routing for parameterized path segments. Any new `/api/puzzles/<literal-path>` route (e.g. `/counts`, `/draw`) MUST be registered **before** `GET /api/puzzles/:id` in `server/index.js`. If registered after, Express silently treats the literal path as the `:id` parameter.
+
+Add a comment at the registration point as a guard:
+```js
+// NOTE: /counts and /draw MUST remain above /:id — Express first-match ordering
+```
+
+## Pseudo-Category Pre-Check Pattern
+
+Pseudo-categories not in `VALID_CATEGORIES` (e.g. `mixed`) MUST be checked **before** the `VALID_CATEGORIES.has(category)` guard in route handlers. If the order is reversed, any pseudo-category always falls through to the 400 branch. Add a comment at the branch:
+```js
+// mixed is not in VALID_CATEGORIES — must be checked first
+```
+
 ## Empty Board Special Case
 
 The solver hangs on empty input. The server returns `EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0]` (center-favoring, approximate) for empty-board queries without invoking the solver.
@@ -74,9 +117,98 @@ The solver hangs on empty input. The server returns `EMPTY_BOARD_SCORES = [0, 0,
 
 Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 - `/api/explain-move`: 30 req/min
+- `/api/recommend-move`, `/api/explain-move-llm`: 5 req/min
+- `/api/llm-feedback`: 10 req/min
 - `/api/scores`, `/api/explain`: 60 req/min
 - `/api/stripe/create-checkout`: 10 req/min
 - All other `/api/` routes: 120 req/min
+
+## Explanation Engine Endpoint
+
+`POST /api/explain-move` — returns a one-liner explanation of a candidate move. Optionally returns a full deep-reveal if the user has quota.
+
+**Request body**: `{ moves: string, candidateCol: number, humanFirst?: boolean, requestDeepReveal?: boolean }`
+- `moves`: 0-indexed move string for the current position (before the candidate move).
+- `candidateCol`: 0-indexed column being evaluated.
+- `requestDeepReveal`: if `true` and the user is authenticated, decrements the daily Deep Reveal quota and returns full explanation text.
+
+**Response**:
+```json
+{
+  "oneLiner": "<short explanation string>",
+  "patternTag": "<classifier tag slug>",
+  "deepReveal": { "patternTag": "...", "fullText": "...", "continuationLine": [], "boardAnnotation": [] } | null,
+  "quotaRemaining": number | null
+}
+```
+- `deepReveal` is `null` unless `requestDeepReveal: true` and the user has remaining quota.
+- `quotaRemaining` reflects the user's remaining Deep Reveal count after this request; `null` for anonymous requests.
+- Anonymous users receive `oneLiner` only; `requestDeepReveal: true` from an anonymous user returns 403.
+- Results are cached in `explanation_cache` keyed by `sha256(moves:candidateCol)`; cache hits skip the solver and classifier.
+
+**Errors**: 400 for invalid params, 403 if anon requests deep reveal or quota exhausted with `{ quotaRemaining: 0 }`, 429 when rate limit hit.
+
+**Rate limit**: 30 req/min.
+
+## Coach Endpoints: weakness-map, queue, resolve
+
+`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue and resolve endpoints now use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
+
+### `GET /api/coach/weakness-map`
+
+Returns per-category miss rates for the authenticated user.
+
+**Response**: `{ "weaknessMap": [{ "category": string, "attempted": number, "missRate": number }] }`
+- Sorted by `missRate` descending. Empty array if the user has no attempts.
+
+### `GET /api/coach/queue`
+
+Returns the authenticated user's blunders with server-computed threat cell locations.
+
+**Query params**:
+- `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
+- `category`: optional string, must be a valid blunder tag slug. Filters blunders to a single pattern category.
+- `game_id`: optional UUID string. Filters blunders to those linked to a specific game.
+
+**Response**: `{ "blunders": [...], "total": number }`
+
+Each blunder object:
+```json
+{
+  "id": "uuid",
+  "board_state": "<movestring>",
+  "move_played": 3,
+  "correct_move": 4,
+  "pattern_category": "immediate_threat",
+  "created_at": "2026-05-01T12:00:00Z",
+  "resolved_at": null,
+  "severity": 12,
+  "game_id": "<uuid>" | null,
+  "moveIndex": 8,
+  "threat_cells": [{ "col": 4, "row": 2 }]
+}
+```
+
+- `game_id`: UUID of the related game, or `null` if the blunder is not linked to a game.
+- `moveIndex`: integer equal to `board_state.length` — the global 0-indexed ply count for this blunder position.
+
+- `threat_cells` is computed server-side via `Board.majorThreatCells()`, filtering for the opponent's major threats after the played move.
+- `severity` is `round((best_score − score) / 36 * 10)`, an integer in [0, 10]. Normalized by 36 (max possible spread on a 7×6 board) and scaled to 10. Stored at insert time; 0 for legacy rows. UI buckets: Minor=1, Moderate=2–3, Critical=4–10 (chosen from empirical simulation data — ~58% / 28% / 14% of non-zero blunders).
+- Capped at 50 rows, ordered by `severity DESC, created_at ASC` (worst mistakes first; ties broken by oldest-first).
+- Auth: inline `requireAuth` (401).
+- Errors: 400 `{ "error": "invalid category" }` when `?category=` is not a valid blunder tag; 400 `{ "error": "invalid game_id" }` when `?game_id=` is not a valid UUID.
+
+### `POST /api/coach/queue/:blunderId/resolve`
+
+Marks a blunder as resolved. Ownership-checked: the blunder must belong to the authenticated user.
+
+**Path param**: `blunderId` is a UUID string (not integer).
+
+**Response**: `204 No Content` on success.
+
+**Errors**: 400 for missing/invalid `blunderId`, 401 (unauthenticated), 500 for DB errors.
+
+**Auth**: inline `requireAuth` (401).
 
 ## Coach Endpoint: explain-simulate
 
@@ -143,14 +275,86 @@ Provides a pre-move recommendation for the current board position.
 
 Explains a specific move the human just played (post-move reflection).
 
-**Request body**: `{ movestring: string, col: number, rounds: number }`
+**Request body**: `{ movestring: string, col: number, rounds?: number }`
 - `movestring`: position **before** the human's move
 - `col`: 0-indexed column the human played
-- `rounds`: 1–5
+- `rounds`: optional integer 1–5 (default 1)
 
-**Response**: `{ "explanation": "<LLM text>", "prompt": "<raw prompt>" }`
+**Response**:
+```json
+{
+  "explanation": "<LLM-generated explanation paragraph>",
+  "prompt": "<LLM prompt used to generate the explanation>",
+  "cached": true
+}
+```
+- `cached`: `true` when served from `explanation_cache`. Absent (undefined) on cache miss.
+- `prompt`: the LLM prompt used to generate the explanation. Used by the `POST /api/llm-feedback` flag feature. Empty string `''` on the no-contrast fallback path.
+
+**Processing order**:
+1. Auth gate: 401 for unauthenticated
+2. Input validation: 400 for invalid movestring/col/rounds
+3. LLM service check: 503 if `OPENAI_API_KEY`/`OPENAI_MODEL` absent
+4. Cache check: `SHA256(movestring + ":" + col)` → `explanation_cache` lookup → return `{ explanation, prompt, cached: true }` on hit (quota NOT decremented)
+5. Quota decrement (cache miss only): 429 when free-tier quota exhausted; paid tier skips
+6. LLM call → `explanation` string
+7. Fire-and-forget cache write: `{ position_hash, one_liner: '', deep_reveal_json: { explanation, prompt } }`
+8. Response: `{ explanation, prompt }`
+
+**Quota note**: Cache hits do NOT decrement quota. A user with 0 quota remaining can still receive a cached explanation.
+
+**Errors**: 400 for invalid params, 401 (unauthenticated), 429 (quota exceeded), 503 (LLM not configured), 500 (internal error).
 
 **Rate limit**: 5 req/min.
+
+## Move Evaluation Endpoint
+
+`POST /api/evaluate-move` — scores a move and returns i18n keys for the Coach dialog and Tier-1 strip. Supports two paths: **user-move** (default, for puzzle attempts and sparring user clicks) and **AI-move** (for sparring AI move commentary).
+
+### User-Move Path (default, `aiMove` absent or false)
+
+**Request body**: `{ movestring: string, col: number, category?: string, aiMove?: false }`
+- `movestring`: position **before** the move (0-indexed, 0–42 chars).
+- `col`: 0-indexed column played.
+- `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position via `classify()` (synchronous, pre-move board).
+- `aiMove`: absent or `false`.
+
+### AI-Move Path (`aiMove: true`)
+
+When `req.body.aiMove === true`, the server classifies the **post-move** board from the AI player's perspective:
+
+1. Computes `postMoveMovestring = movestring + col` and `aiPlayerInt = (movestring.length % 2) + 1`.
+2. Calls `await classifyPattern(postMoveMovestring, aiPlayerInt, solver)` — async, returns a `Map<tag, details>`.
+3. Applies the fixed priority ordering to select a single `patternTag`:
+   `immediate_threat` > `double_threat` > `forced_win` > `forced_block` > `forbidden_columns` > `z_threat` > `odd_even_threat` > `claimeven` > `figure_7` > `j_shape` > `overcut` > `undercut` > `claimodd`
+4. If no tags match, `patternTag` is `null`.
+
+The `coachPhraseKey` in the AI-move response is ignored by the client. The client uses `quality` and `patternTag` from the response to select phrases from `coach.ai_move.*` pools (see FR-007 in spec 029).
+
+**Latency note**: The AI-path evaluate-move call may exceed the 2 s latency guideline on `forced_win` positions due to `classifyPattern`'s solver queries (re-evaluates the board for each of 13 detectors). This is a known, tracked exception — caching is deferred to a future performance pass.
+
+### Response Shape (both paths)
+
+```json
+{
+  "badge": "good" | "mid" | "bad",
+  "quality": "optimal" | "suboptimal" | "blunder",
+  "coachPhraseKey": "coach.immediate_threat.optimal.0" | null,
+  "coachMood": "happy" | "think" | "oops",
+  "summaryLineKey": "eval.immediate_threat.optimal.summary.0" | null,
+  "patternTag": "<category slug>" | null
+}
+```
+- `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
+- `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
+- `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
+- No auth required; anonymous calls are accepted.
+
+**Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.
+
+**Rate limit**: 120 req/min (default).
+
+**Routing note**: registered before `GET /api/puzzles/:id` — see Route Registration Ordering Constraint above.
 
 ## Puzzle Check Endpoint
 
@@ -175,6 +379,70 @@ Explains a specific move the human just played (post-move reflection).
 
 Returns 400 for `interaction_mode = 'sequence'` puzzles — use `/sequence/move` instead.
 
+## GET /api/games
+
+Lists past sparring games for the authenticated user.
+
+**Auth**: Required (401 if `req.user` is null).
+
+**Query params**:
+- `limit`: positive integer ≤ 50 (default 20). Returns 400 if non-numeric, zero, negative, or > 50.
+- `outcome`: `'won'` or `'lost'`. Returns 400 for any other value (including `'draw'`). When omitted, all outcomes are returned.
+- `has_blunder`: `'true'` (string). Returns 400 for any other value. When omitted, all games are returned.
+
+**Response** (`200 OK`):
+```json
+{
+  "games": [
+    {
+      "id": "<uuid>",
+      "outcome": "won" | "lost" | "draw",
+      "date": "<ISO timestamp>",
+      "source": "ai",
+      "difficulty": "easy | medium | hard | perfect",
+      "accuracy": 82 | null,
+      "blunder_count": 2,
+      "move_count": 22,
+      "cols": ["gdg", "", "d", ...]
+    }
+  ]
+}
+```
+
+- `outcome`: DB values `win`/`loss`/`draw` are mapped to `won`/`lost`/`draw` in the response.
+- `accuracy`: from the `games.accuracy` column (written by `POST /api/games/analyze`); `null` if the game has not been analyzed.
+- `blunder_count`: count of `blunders` rows linked to this game via `game_id`.
+- `cols`: 7-element array of per-column move encoding (`g` = current player, `d` = opponent), produced by `movesToCols`.
+- Games with `blunder_count === 0` are excluded when `has_blunder=true`.
+
+**Errors**: 400 (invalid params), 401 (unauthenticated), 503 (Supabase not configured), 500 (DB error).
+
+## POST /api/games
+
+Saves a completed sparring game record.
+
+**Request body**:
+```json
+{
+  "device_uuid": "<string>",
+  "moves": "<0-indexed movestring [0-6]>",
+  "difficulty": "easy | medium | hard | perfect",
+  "side": "first | second",
+  "result": "win | loss | draw"
+}
+```
+
+- `moves`: 0-indexed column movestring, validated against `^/^[0-6]{0,42}$/`
+- `side`: `'first'` = user moves first (Green), `'second'` = user moves second (Gray)
+- Auth: Optional. `user_id` = `req.user?.id ?? null`
+
+**Response** (201):
+```json
+{ "id": "<uuid>" }
+```
+
+**Errors**: 400 for validation failures; 503 if Supabase not configured.
+
 ## Puzzle GET Endpoint
 
 `GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
@@ -187,3 +455,104 @@ Accepts `{ position, col }` where `position` is the current move string (before 
 Returns `{ outcome: 'success' | 'fail' | 'continue', aiCol?, reason? }`.
 All validation is bitboard-only — no solver calls.
 `POST /api/puzzles/:id/check` returns 400 for sequence-mode puzzles; callers must use the `/sequence/move` endpoint instead.
+
+## Game Analysis & Explorer Endpoints
+
+### `POST /api/games/analyze`
+
+Scores every user ply in a completed game and returns a quality summary.
+
+**Request body**: `{ gameId: string }`
+
+**Response** (`200 OK`):
+```json
+{
+  "moves": [
+    {
+      "moveIndex": 1,
+      "col": 3,
+      "quality": "optimal" | "suboptimal" | "blunder",
+      "score": 5,
+      "bestScore": 5,
+      "bestCol": 3,
+      "patternTag": "double_threat" | null
+    }
+  ],
+  "accuracy": 82,
+  "optimalCount": 17,
+  "suboptimalCount": 3,
+  "blunderCount": 2,
+  "scored": 22,
+  "summaryPhraseKey": "coach.sparring.review.mistakes.1",
+  "fullMovestring": "334441...",
+  "difficulty": "easy | medium | hard | perfect",
+  "side": "first | second"
+}
+```
+
+- `moves`: all user plies (odd indices if `side = 'first'`, even indices if `side = 'second'`). Forced moves (only 1 legal column) are included in `moves` with a quality label but excluded from `scored`.
+- `patternTag`: classifier slug for the position at that ply; `null` if no pattern matched.
+- `accuracy`: percentage of scored plies that were optimal.
+- `scored`: number of plies that were not forced (i.e., denominator for `accuracy`).
+- `summaryPhraseKey`: i18n key selected from the coach phrase pool based on blunder/suboptimal counts.
+- Auth: Optional (`loadUser` runs; `req.user` may be null).
+
+**Errors**: 400 (missing `gameId`), 404 (game not found), 500 (solver error), 503 (Supabase not configured).
+
+### `POST /api/games/from-position`
+
+Returns a truncated movestring for spawning a new game from a specific position in a past game. Does **not** insert a new `games` row — the caller navigates to the game screen and the row is created by `saveGame` when the spawned game ends.
+
+**Request body**: `{ gameId: string, N: number, difficulty: "easy" | "medium" | "hard" | "perfect" }`
+- `N`: number of plies to keep (must be a positive integer ≤ length of the stored movestring).
+- `difficulty`: difficulty for the new game session.
+
+**Response** (`200 OK`):
+```json
+{ "moves": "<truncated movestring>", "side": "first | second", "difficulty": "easy | medium | hard | perfect" }
+```
+
+- `side`: carried over from the original game row unchanged.
+- Auth: Optional.
+
+**Errors**: 400 (invalid or missing params, `N` out of range), 404 (game not found), 503.
+
+## Blunders Endpoint
+
+### `POST /api/blunders`
+
+Records a blunder detected during post-game review. Fire-and-forget from the client — the response is not awaited before navigation.
+
+**Request body**:
+```json
+{
+  "board_state": "<movestring at the point of the blunder>",
+  "move_played": 3,
+  "correct_move": 4,
+  "pattern_category": "<slug>",
+  "score": -4,
+  "best_score": 8
+}
+```
+- `pattern_category`: must be one of the valid slugs (see Data Model — `blunders` constraint). Use `"unknown"` when the classifier returns no pattern.
+- `score`: c4solver score of the column actually played (current-player perspective, range ±18). Optional; defaults to 0.
+- `best_score`: c4solver score of the optimal column. Optional; defaults to 0.
+- The server computes `severity = best_score − score` and stores it. Do not send `severity` directly.
+- Auth: **Required** (401 if `req.user` is null).
+
+**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key.
+
+**Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
+
+**Errors**: 400 (missing or invalid fields), 401 (not authenticated), 500 (DB error), 503 (Supabase not configured).
+
+## LLM Feedback Endpoint
+
+`POST /api/llm-feedback` — records a flagged LLM response for human review. No auth required.
+
+**Request body**: `{ movestring, llm_prompt, llm_response, human_note, feature }`
+- `feature`: string identifying which LLM feature produced the response (e.g. `"explain-move-llm"`).
+
+**Response**: `204 No Content` on success.
+
+**Rate limit**: 10 req/min.

@@ -1,5 +1,15 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__list_pages"
+    ]
+  },
   "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
   }
 }

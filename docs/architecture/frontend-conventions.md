@@ -1,5 +1,28 @@
 # Frontend Conventions
 
+## CSS Token Systems
+
+The codebase has **two separate CSS custom property systems** defined in different files. They MUST be paired with the correct background color.
+
+| File | Surface type | Background tokens | Text tokens |
+|---|---|---|---|
+| `src/index.css` | Dark surfaces (`.dark-surface` only) | `--surface`, `--surface-2`, `--surface-3` | `--text`, `--text-sub`, `--text-muted` |
+| `src/styles/tokens.css` | Light surfaces (`:root` default) | `--card` (#fff) | `--ink`, `--ink-soft`, `--ink-faint` |
+
+**Global default:** `:root` is now `color-scheme: light` with `background: #fbf4e8` and `color: var(--ink)`. All user-facing surfaces inherit these light defaults.
+
+**`.dark-surface`:** Defined in `index.css`, this is the sole home of the 9 dark tokens and `color-scheme: dark`. Any component that must render on a dark surface MUST be a descendant of a `.dark-surface` element. Currently applied to `AdminCuratePage` and `AdminLessonsPage` wrapper divs.
+
+**Pairing rule:** Dark background → dark-theme text. Light background → light-theme text. Never mix across systems.
+- `var(--surface)` (dark) + `var(--ink)` (dark) = invisible text
+- `#fff` (light) + `var(--text)` (light) = invisible text
+
+**Dark component in light context:** If a dark-surface component is placed in a light context without a `.dark-surface` ancestor, its `--text`/`--surface` tokens will be unresolved (visible failure, not silent). Always wrap dark components in `.dark-surface`.
+
+**Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
+
+See also: [[reference_token_pairing]], [[project_dark_global_theme]]
+
 ## State Management
 
 **MUST**: App-level state lives in `ProfileStore` (React Context, `src/store/ProfileStore.jsx`).
@@ -19,17 +42,25 @@ On first sign-in, `IndexedDBStore.migrateToSupabase(supabaseStore, supabaseClien
 **Required store interface** (both implementations must provide):
 | Method | Returns |
 |---|---|
-| `getProfile()` | `{ device_uuid, tier, deep_reveal_count, deep_reveal_reset_at }` |
+| `getProfile()` | `{ device_uuid, tier }` (IndexedDB only — does NOT return `deep_reveal_count` or `deep_reveal_reset_at`; `SupabaseStore.getProfile()` still returns those fields from the `users` table) |
 | `saveSessionStats(stats)` | `void` |
 | `getSessionStats(date)` | stats object or `null` |
 | `recordPuzzleAttempt(attempt)` | `void` |
+| `saveLessonProgress(lessonId, status)` | `void` |
+| `getLessonProgress()` | `Array<{lessonId, status}>` |
+| `saveSparringRecord(result)` | `void` |
+| `getSparringRecord()` | `{W, L, D}` |
+| `saveChallengeSession(session)` | `void` |
+| `getLastChallengeSession()` | session object or `null` |
+| `recordActivityDay()` | `void` |
+| `getStreak()` | `{streak_count, last_active_date}` |
 
 `IndexedDBStore` additionally provides `getAllPuzzleAttempts()` (used only during migration) and `migrateToSupabase(supabaseStore, supabaseClient)`. `SupabaseStore.migrateToSupabase()` exists but throws — it is not part of the shared interface and must never be called on a `SupabaseStore` instance.
 
 ## IndexedDB Schema
 
-Database name: `decodec4`, version 1.
-Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrement), `session_stats` (keyPath: `date`).
+Database name: `decodec4`, version 2.
+Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrement), `session_stats` (keyPath: `date`), `lesson_progress` (keyPath: `lessonId`), `sparring_record` (keyPath: `id`), `streak` (keyPath: `id`).
 
 ## Auth Integration
 
@@ -53,43 +84,100 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 ## Board Component API
 
-`Board` accepts:
-- `board`: 2D array (default: empty 6×7 board of `'empty'`)
-- `onColumnClick`: callback receiving 0-indexed column
-- `canPlay`: boolean — controls whether columns are interactive
-- `highlightedCells`: `[row, col, role]` tuples
-- `highlightMetadata`: structured object from the server — two formats:
-  - `{ type: 'cells', cells: [{ column, row, role }] }` — merged into `highlightedCells`
-  - `{ type: 'capsule', column, fromRow, toRow, badgeCount }` — vertical capsule overlay on one column
+`Board` accepts the following props (defined in `src/components/Board.jsx`; cross-epic contract in `specs/010-design-tokens-component-library/contracts/board-api.md`):
 
-### Piece highlight roles
-
-All valid `role` values for `highlightedCells` / `highlightMetadata.cells[].role`, defined in `src/components/Piece.jsx`:
-
-| Role | Applies to | Color | Purpose |
+| Prop | Type | Default | Description |
 |---|---|---|---|
-| `winning` | any color | green glow | Correct answer disc or winning move |
-| `wrong_move` | red / yellow disc | red glow | User's incorrect placed disc (puzzle feedback) |
-| `correct_reveal` | red / yellow disc | gold ring | Correct answer disc shown after reveal |
-| `hint` | empty | green fill | Pre-move hint cell |
-| `selected` | empty | yellow outline | Column hover / multi-select marker |
-| `threat` | empty | purple fill | Immediate threat cell |
-| `support` | empty | purple dashed | Supporting threat cell |
-| `loser` | empty | red fill | Losing candidate cell |
-| `winner` | empty | yellow fill | Winning candidate cell |
-| `killing_threat` | empty | orange fill | Threat that kills opponent's line |
-| `neutralised_threat` | empty | orange fill | Neutralised threat cell |
-| `dead_threat` | empty | purple fill | Dead threat cell |
-| `major_threat` | empty | purple fill | Major threat (3-in-row + 1 empty) |
-| `pattern_piece` | any color | teal ring | Piece that is part of a named pattern |
-| `figure7_threat` | empty | amber fill | Figure-7 shape threat cell |
-| `z_range` | empty | yellow dashed | Z-threat column range |
-| `ghost_mirror` | empty | yellow semi-transparent dashed | Claimeven mirror preview (Yellow mirrors Red in same column) |
+| `board` | `board[row][col]` 2D array | 6×7 `'empty'` | Cell values: `'red'` → green disc, `'yellow'` → gray disc |
+| `onColumnClick` | `(col: number) => void` | — | Tap handler (0-indexed). Not called when `canPlay=false`, column full, or `onColToggle` provided. |
+| `canPlay` | boolean | `false` | Global interactivity gate |
+| `overlays` | `Array<{c, r, type: OverlayType}>` | `[]` | Cell overlays. Replaces retired `highlightedCells` + `highlightMetadata`. |
+| `badge` | `{col, type: BadgeType, label}` | — | Single column evaluation badge |
+| `lastDrop` | `{c, r}` | — | Triggers `drop` CSS animation on that disc |
+| `compact` | boolean | `false` | 9px/6px padding/gap instead of 11px/7px |
+| `fullCols` | `Array<number>` | `[]` | Columns treated as full regardless of board state |
+| `selectedCols` | `Array<number>` | `[]` | Multi-select mode: columns show red tint + ✕ badge |
+| `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
+| `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 
-**Rules**:
-- `wrong_move` and `correct_reveal` are puzzle-only roles — they apply to **placed discs** (red/yellow), not empty cells. Both are set client-side by `PuzzlesPage` after a check response; they are never stored in `highlight_metadata`.
-- `highlightMetadata` from the DB is suppressed before the answer is revealed for `figure_7` and `j_shape` puzzles (the shape must not spoil the puzzle). Other categories show `highlightMetadata` unconditionally.
-- No new color roles may be added without updating this table first (Constitution §IV).
+### OverlayType enum (LOCKED — cross-epic contract)
+
+| Value | Visual | Usage |
+|---|---|---|
+| `tg` | green translucent ring | current-player threat highlight |
+| `td` | gray translucent ring | opponent threat highlight |
+| `tr` | red translucent ring | user's last committed column / wrong-move indicator |
+| `claim` | amber translucent fill | claimeven cell |
+| `win` | pulsing green outline | winning-line flash |
+
+### BadgeType enum (LOCKED — cross-epic contract)
+
+| Value | Background | Default glyph |
+|---|---|---|
+| `good` | `--eval-good` (green) | ✓ |
+| `mid` | `--eval-mid` (amber) | ? |
+| `bad` | `--eval-bad` (red) | ✕ |
+
+### Deprecated prop (curation shim — do not use in game surfaces)
+
+`highlightedCells: Array<[row, col, role, step?]>` — retained solely to keep `CurationWorkspace.jsx` functional without migration. Accepts the old tuple format from `Piece.jsx` and renders curation-specific roles (`z_range`, `hint`, `ghost_mirror`, `wrong_move`, `correct_reveal`, `pattern_piece`, `figure7_threat`, etc.).
+
+**Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
+
+`highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` and `SequenceHandler.jsx` used it; both are now on `overlays`.
+
+## Shared Board Utility
+
+`src/lib/board.js` is the canonical location for `buildBoard(moves)`. Do not inline this function in individual screens or pages — import it instead:
+```js
+import { buildBoard } from '../lib/board.js';
+```
+`buildBoard(moves)` accepts a 0-indexed move string and returns a `board[row][col]` 2D array using `'empty'`/`'red'`/`'yellow'` cell values (matching the Board component's expected format).
+
+`boardSpecToBoard(boardSpec)` — converts a lesson `boardSpec` (Array[7] of `'g'`/`'d'` strings,
+bottom→top per column) to the `Board` component's `board` prop format (`board[row][col]` 6×7
+array with `'empty'`/`'red'`/`'yellow'` values). `'g'`→`'red'` (renders green disc),
+`'d'`→`'yellow'` (renders gray disc). Exported from `src/lib/board.js`. Used by ConceptScreen
+and SocraticScreen.
+
+## Challenge Session State Machine
+
+Multi-puzzle challenge sessions (`ChallengeScreen`) follow a three-phase state machine driven by a `phase` string:
+
+| Phase | Description |
+|---|---|
+| `'loading'` | Fetching puzzles from `GET /api/puzzles/draw`. Board and controls not yet visible. |
+| `'pre-move'` | Puzzle displayed, board interactive. CoachDialog shows a prompt. |
+| `'post-move'` | Move committed (commit-first: disc placed before server responds). Board locked. Evaluation arrives asynchronously; Tier-1 strip renders once it arrives. |
+
+Transitions: `loading → pre-move` (on draw response), `pre-move → post-move` (on column tap, immediately — no confirmation step), `post-move → pre-move` (on "Next →", advance `currentIdx`) or `post-move → summary` (on "Next →" when all puzzles exhausted).
+
+New challenge-type screens MUST follow this phase machine. Do not add a `'confirm'` phase — the project uses commit-first with no confirmation step (see project memory `project_commit_first_no_confirm.md`).
+
+### Forbidden Columns branch (`category === 'forbidden_columns'`)
+
+When the drawn puzzle has `category === 'forbidden_columns'`, the `'pre-move'` phase uses multi-select mode instead of single-column commit:
+
+- The Board is rendered with `onColToggle` (not `onColumnClick`) and `selectedCols` state.
+- The Toolbar shows a "Submit" button (disabled when `selectedCols.length === 0`) in place of the Hint button.
+- After submit, `handleForbiddenSubmit()` calls `POST /api/puzzles/:id/check` with the selected columns and transitions to `'post-move'`.
+- The "Learn more ▼" Tier-1 strip button is suppressed for this category.
+
+### Forced Win / sequence branch (`puzzle.interaction_mode === 'sequence'`)
+
+When the drawn puzzle has `interaction_mode === 'sequence'`, `ChallengeScreen` renders `<SequenceHandler>` in place of the standard Board + CoachDialog + Toolbar + Tier-1 strip:
+
+- `SequenceHandler` owns its own Board, banners, and "Next" button (see `project_sequence_handler_ui.md`).
+- `SequenceHandler.onNext` is wired as `() => handleSequenceComplete(true)` (success-only in MVP).
+- The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzles.
+
+### Deep Reveal bottom-sheet panel
+
+After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the LLM explanation inside the sheet.
+
+### `challengeSets.js` i18n-key shape convention
+
+All entries in `connect-four/server/challengeSets.js` use `displayNameKey` and `descriptionKey` fields (i18n key strings, e.g. `'challengeSet.immediate_threat.displayName'`). No literal `displayName`/`description` strings are stored. `SetPickerScreen` resolves display names via `t(set.displayNameKey) ?? set.slug`.
 
 ## Category Constants
 
@@ -109,7 +197,17 @@ All valid `role` values for `highlightedCells` / `highlightMetadata.cells[].role
 
 ## Pages Structure
 
-Pages live in `src/pages/`. Current pages: `PuzzlesPage` (main puzzle flow).
+Pages live in `src/pages/`. Router is defined in `src/App.jsx` using `react-router-dom` with lazy imports.
+
+| Route | File | Purpose |
+|---|---|---|
+| `/` | `DashboardPage.jsx` | Home / stats overview |
+| `/sparring` | `HomePage.jsx` | Sparring (lazy-imported as `SparringPage`) |
+| `/puzzles` | `PuzzlesPage.jsx` | Puzzle training flow |
+| `/coach` | `CoachPage.jsx` | Coach queue + weakness map (paid) |
+| `/admin/curate` | `AdminCuratePage.jsx` | Candidate curation (localhost-only) |
+
+**MUST**: Add new routes in `App.jsx` alongside the existing `<Routes>` block.
 Components shared across pages live in `src/components/`.
 
 ## RecommendCoach + BadgeRow Pattern
@@ -177,3 +275,88 @@ const aiMovestring = moveHistory.length < 2 ? '' : buildMovesString(
 ```
 
 For pages where only one perspective exists (e.g. Puzzles, where the position is fixed), pass the same string for both props or pass `''` for whichever is not applicable.
+
+## Screen Navigation
+
+**Sole navigation mechanism**: `go(screenKey, params)` is the only way to navigate between screens. Do not call any router API (no `BrowserRouter`, `navigate()`, `Link`, etc.).
+
+**`setActiveScreen` ordering**: `setActiveScreen(key)` (from `src/lib/track.js`) MUST be called before `track()` on every navigation so the correct `path` is recorded in analytics. The Navigator mount effect calls `setActiveScreen('home')` and then `track('session_start', ...)` in that exact sequential order.
+
+**Surface group → background token mapping**: Each screen key maps to a CSS custom property token via `SURFACE_BG` in `src/lib/surfaceGroups.js`:
+
+| Surface group | Token | Screens |
+|---|---|---|
+| Home | `--bg-home` | home, stats, mistakes, mistakeDetail, blunderDetail |
+| Lessons | `--bg-lessons` | saga, concept, socratic, clchallenge |
+| Challenges | `--bg-challenges` | setpicker, challenge, summary |
+| Sparring | `--bg-sparring` | difficulty, game, review, explorer |
+
+### Three-level Mistakes route hierarchy
+
+The mistakes feature has three independent screen routes:
+
+- **Level 1**: `mistakes` -- `CategoryListScreen` -- entry point, groups blunders by tactical category sorted by severity. Requires auth (gated by `MistakesGate` with `renderSignedOut`).
+- **Level 2**: `mistakeDetail` -- `MistakesListScreen` with `category` prop -- filtered blunder list for one category. Shows Unreviewed/Reviewed tabs.
+- **Level 3**: `blunderDetail` -- `MistakeDetailScreen` with `blunderNavList`, `index`, `mistakeContext` (`'list'` | `'game'`), and `mistakeSource` (`{ date, gameId, totalMoves }` | null) -- individual blunder detail with Prev/Next nav. Contextual Back: from a game review the Back button returns to `review`; from the list it calls `goBack()`.
+
+**Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 15 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
+
+**Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.
+
+## URL Sync & Navigation
+
+**`react-router-dom` is permanently absent** — spec 011 FR-001 invariant. Do NOT reintroduce it.
+
+### Single source of truth: `urlMapping.js`
+
+`src/lib/urlMapping.js` exports:
+- `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
+- `SESSION_ONLY_SCREENS` — `Set` of 5 screen keys whose state cannot survive a cold page load: `summary`, `explorer`, `mistakeDetail`, `game`, `blunderDetail`. On cold boot, these screens redirect to `home`.
+- `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
+- `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
+
+### Navigation API
+
+| Function | History effect | When to use |
+|---|---|---|
+| `go(screenKey, params)` | `pushState` — adds a history entry | Normal forward navigation |
+| `goReplace(screenKey, params)` | `replaceState` — no new history entry | Replacing current entry (e.g., after saving a game) |
+| `goBack()` | `window.history.back()` | Back button / back gesture |
+
+### Event handling
+
+The `popstate` handler in `App.jsx` is the **canonical place** for back-navigation tracking. `goBack()` itself does NOT call `track()` — tracking fires inside the `popstate` listener so it covers both programmatic back navigation and browser back-button gestures.
+
+### Cold-boot behaviour
+
+On initial page load, `App.jsx` calls `parseUrl(location.pathname)` and calls `replaceState` to normalise the URL. Screens in `SESSION_ONLY_SCREENS` cannot be loaded from a cold URL (their required state is absent); the mount effect redirects them to `home`.
+
+### `clchallenge` cold-boot fetch pattern
+
+The `clchallenge` screen encodes only `lessonId` in the URL. On cold boot (when `lessonTitle` is absent from navigation params), `CLChallengeScreen` fetches the remaining props from `GET /api/lessons/:lessonId`. Components that require data beyond what fits in a URL path parameter MUST follow this same fetch-on-missing-props pattern.
+
+## Service Worker (`public/sw.js`)
+
+The service worker provides offline support and performance caching. Critical rules for modifying it:
+
+### Caching strategy per request type
+
+| Request type | Strategy | Rationale |
+|---|---|---|
+| Navigation (HTML pages) | **Network-first** | `index.html` changes every deploy (new hashed JS filenames). Cache-first would serve stale HTML → broken app. |
+| Hashed assets (`/assets/*`) | **Cache-first** | Vite generates content-hashed filenames. Immutable — a cached version is always correct. |
+| Other static (manifest, favicon, fonts) | **Cache-first with network update** | Rarely changes; cache for speed, update in background. |
+| API requests (`/api/*`) | **Bypass** | Never cache API responses — they must be fresh. |
+| Cross-origin requests | **Bypass** | Supabase, Google Fonts etc. are handled by their own CDNs. |
+
+### Important: bump CACHE_NAME on any SW logic change
+
+The `CACHE_NAME` constant (e.g., `'decodec4-shell-v2'`) must be bumped whenever the caching strategy changes. This purges all stale cached entries from old SW versions. Failing to bump it means users with the old SW installed will continue serving stale content.
+
+### Never cache index.html with cache-first
+
+**Doing so will break the app after every deploy.** The cached index.html references old hashed JS files that no longer exist on the server, causing MIME type errors ("Expected a JavaScript module but the server responded with text/html").
+
+### SW lifecycle
+
+`skipWaiting()` is called on install — the new SW activates immediately without waiting for all tabs to close. `clients.claim()` is called on activate — the SW takes control of all clients immediately. This means SW updates apply on the next navigation, not the next full page load.
