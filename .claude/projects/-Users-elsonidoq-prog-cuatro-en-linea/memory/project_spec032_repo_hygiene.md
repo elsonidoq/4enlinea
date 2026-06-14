@@ -1,31 +1,31 @@
 ---
 name: project_spec032_repo_hygiene
-description: Spec/plan/tasks done at specs/032-repo-hygiene-tech-debt/; 25 tasks across two independent tracks; dead-code audit + green/gray terminology sweep
-metadata:
+description: "Spec/plan/tasks done; implemented 2026-06-13; 2 files deleted, 6 quarantined, green/gray sweep complete"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 82299498-e078-4575-8559-f3166f8918ca
 ---
 
-Spec, plan, and tasks complete at `specs/032-repo-hygiene-tech-debt/`. 25 tasks total; not yet implemented.
+Spec 032 implementation done 2026-06-13 via 3-batch `/coordinate-implementation` run.
 
-**Why:** Epic 3 of TODOs_epics.md — remove dead screens/components and normalize user-facing disc color terminology to green/gray.
+**Track A — Dead-code audit & removal:**
+- `debt-inventory.md` created at `specs/032-repo-hygiene-tech-debt/debt-inventory.md` — 121 files audited across 8 directories
+- 2 files deleted: `src/pages/PuzzlesPage.jsx`, `src/screens/PlaceholderScreen.jsx`
+- 6 files moved to `connect-four/src/_quarantine/` for owner QA: BadgeRow.jsx, ClassifyAllPanel.jsx, DeepRevealButton.jsx, ExplainMoveButton.jsx, SequenceHandler.jsx, StatusBar.jsx
+- If QA confirms no breakage, `rm -rf connect-four/src/_quarantine/` finalizes Track A
+- ESLint baseline: 176 problems (170 errors, 6 warnings); post-deletion: 171 (lower is fine)
+- Pre-existing test failure: `classifier.test.js` forbidden_columns board-based test — `'suboptimal_move'` vs expected `'forbidden_columns'` (NOT caused by this epic)
 
-**Two independent tracks:**
+**Track B — Green/gray sweep:**
+- 4 server files fixed: `visualize_board.mjs`, `explainContext.js`, `llmCoachHelpers.js`, `classify_all.mjs`
+- 11 lesson JSON files normalized — 281 replacements in `text`, `infoProse`, `label`, `title`, `goalPrompt` fields
+- `es.json` and `en.json` confirmed no-ops (already canonical)
+- Internal board cell enum `'red'`/`'yellow'` untouched (verified via SC-006)
 
-- **Track A (T001–T015):** Dead-code audit → debt-inventory.md → deletion. T001/T002 (import graph + lint baseline) gate all subsequent steps. T010/T011 auto-delete the two pre-confirmed dead files; T012 requires owner sign-off before removing any additional DELETE candidates.
-- **Track B (T016–T024):** Green/gray terminology sweep across i18n, lesson JSON, and CLI scripts. Fully independent of Track A; can run in parallel.
+**Key discovery:** `DeepRevealButton.jsx` calls `POST /api/explain-move-llm` — an endpoint that doesn't exist. Real production deep reveal uses `CoachDialog.jsx` + `POST /api/n`. DeepRevealButton is genuinely dead (wrong endpoint, zero importers, parent PuzzlesPage deleted).
 
-**Key architectural decisions locked in spec:**
+**User preference — quarantine before delete:** Move suspected-dead files to a quarantine folder first, QA the site, then delete if clean. See `connect-four/src/_quarantine/`.
 
-- **Three-verdict system:** DELETE (all dead-checks pass, auto-remove) / SURFACE (ambiguous, owner decides) / DEFER (owner-explicit keep-list). No `// TODO:` comment trigger (zero exist in codebase).
-- **Dead-code reachability:** Transitive import graph from entrypoint roster via `npx dependency-cruiser` (or `npx madge`). Entrypoints = `index.js` + `migrate.js` + `package.json` scripts + `process.argv` files + `*.test.*` files.
-- **Screen deletion needs 4 signals:** not in SCREENS map AND not lazy-loaded in App.jsx AND no production importer AND no `go()` call AND no URL_MAP entry.
-- **Admin screens are live:** `AdminLessonEditorScreen.jsx` and `AdminLessonListScreen.jsx` are NOT in SCREENS but ARE reachable via `AdminLessonsPage.jsx` (lazy-loaded in App.jsx at `/admin/lessons`). Must NOT get DELETE verdict.
-- **Pre-confirmed DELETE files:** `src/pages/PuzzlesPage.jsx` and `src/screens/PlaceholderScreen.jsx` — zero production importers confirmed.
-- **Lint gate:** error count ≤ pre-epic baseline (captured in T002); NOT exit 0. Codebase has ~170 pre-existing ESLint errors on files this epic doesn't touch.
-- **Canonical disc color:** "gray" (American English). `en.json` has 16 uses of "gray", zero "grey".
-- **`explainContext.js` + `llmCoachHelpers.js` both need Grey→Gray:** `explainContext.js` is where `playerName` ('Green'/'Grey') is constructed and passed to `llmCoachHelpers.js`. Both files must be updated (FR-020).
-- **CLI sweep targets:** `server/scripts/visualize_board.mjs` and `server/scripts/classify_all.mjs` both emit 'Red'/'Yellow' player labels to stdout. Only full player name strings change; threat map abbreviations (rm/rn/ym/yn) are identifiers — out of scope.
-- **`_boardInstructions` lesson JSON fields:** Admin-only authoring notes (rendered in AdminLessonEditorScreen, not in player runtime). Out of scope for the green/gray sweep; excluded from the final verification grep.
-- **`es.json` sweep:** Conditional — grep first; if Spanish disc-color strings found, normalize to 'verde'/'gris'. Expected no-op (zero hits currently).
-
-**How to apply:** Run `/coordinate-implementation specs/032-repo-hygiene-tech-debt` to start implementation.
+**Why:** Implementation complete. Owner needs to QA quarantined components before final deletion.
+**How to apply:** Run QA on the site. If no regressions, delete `_quarantine/`. If breakage found, move individual files back from quarantine to `components/`.

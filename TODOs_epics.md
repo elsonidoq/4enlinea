@@ -305,12 +305,50 @@ global dark scheme.
 **NOT included:** A new design language, dark-mode toggle, restyling individual components beyond
 token plumbing, or changing the Board disc colors.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Token mapping & dark holdouts.** Decide the canonical light palette and which surfaces (if any)
-  stay intentionally dark. Output: a token map (old dark token → new light token) and the explicit
-  list of dark-holdout surfaces, since this is a cross-cutting CSS change with high rework risk.
-  Recommend ASCII/screenshot before-after for the highest-traffic screens.
+- **Approach: Root flip + scoped dark admin tool (Approach A).** Flip `:root` in `index.css` to
+  `color-scheme: light`; change body background from `#060c14` to `#fbf4e8`; change global text
+  from `color: var(--text)` to `color: var(--ink)`. Fix the ~10 scattered dark-token uses in
+  user-facing JSX. Add a `.dark-surface` scoped CSS block that re-declares the dark tokens, and
+  apply it to `AdminCuratePage`'s root div. The `:root` flip and the `.dark-surface` block must
+  land in the same commit so the curation tool is never left visually broken.
+
+- **Token map (dark → light replacement):**
+  | Dark token (old) | Light replacement |
+  |---|---|
+  | `--border` (#2d4060) | `--line` (#ece7dd) |
+  | `--border-dim` (#1a2840) | `--line` |
+  | `--surface` (#162032) | `--card` (#ffffff) |
+  | `--surface-2` (#1e2d42) | `--line` |
+  | `--surface-3` (#253347) | `--line` |
+  | `--text` (#e2eaf5) | `--ink` (#2b2a28) |
+  | `--text-sub` (#8ba3c0) | `--ink-soft` (#6b6862) |
+  | `--text-muted` (#4a6480) | `--ink-faint` (#a6a299) |
+  | `--bg` (#0d1520) body/root | `#fbf4e8` |
+
+- **Dark holdout (permanent):** `AdminCuratePage` and its sub-components (`CandidateDashboard`,
+  `CurationWorkspace`, `MultiMoveSequencer`, `PredicateChecklist`, `RejectModal`) are the only
+  intentionally-dark surface. They are localhost-only internal tools. This is a permanent decision —
+  migrating them to light is explicitly out of scope now and in the future. All user-facing screens
+  stay light. `AdminLessonsPage` (the `/admin/lessons` route) has no dark-token dependencies and
+  goes light by default without any code change.
+
+- **Dark token definitions removed from `:root`:** After the flip, dark token definitions
+  (`--bg`, `--surface`, `--surface-2`, `--surface-3`, `--border`, `--border-dim`, `--text`,
+  `--text-sub`, `--text-muted`) are deleted from `:root` and declared only inside `.dark-surface`.
+  Any missed dark-token use will render obviously broken during testing rather than silently
+  producing invisible text.
+
+- **`#root` background included in the flip:** `index.css` sets the dark base in three places —
+  `:root { background }`, `body { background }`, and `#root { background: var(--bg) }`. All three
+  must be updated. `#root` gets `background: #fbf4e8` (or `var(--bg-home)`) to match.
+
+- **Board.jsx — no code change needed:** `Board.jsx`'s `--bg`/`--border-dim` uses are confined to
+  a deprecated `shimStyle()` function called exclusively by `CurationWorkspace` (a dark holdout).
+  Once `CurationWorkspace` renders inside `.dark-surface`, those tokens resolve correctly. The spec
+  task is to verify the curation board renders correctly inside `.dark-surface`, not to change
+  Board.jsx props or code.
 
 ---
 
@@ -418,8 +456,8 @@ puzzles never repeat the same visual shape.
 
 ### Epic 7 — Auth & Onboarding
 
-**Goal:** A new user can register with more than just a magic link, and the auth emails they receive
-look professional.
+**Goal:** Remove the magic link method to register into the app. A new user can register with a better method TBD.
+The emails they receive look professional.
 
 **Scope:**
 

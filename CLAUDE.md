@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/032-repo-hygiene-tech-debt/plan.md
+specs/033-global-light-color-scheme/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

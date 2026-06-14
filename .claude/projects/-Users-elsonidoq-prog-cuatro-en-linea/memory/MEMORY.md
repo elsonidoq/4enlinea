@@ -36,6 +36,7 @@
 - [Express 5 wildcard catch-all syntax](feedback_express5_wildcard.md) — use `app.get('/{*path}', ...)` not `app.get('*', ...)`; bare `*` throws PathError
 - [Audit all code paths before writing an epic](feedback_audit_all_paths_before_epic.md) — grep all usages of affected key/function prefix and read every call site
 - [Use explicit server flags, not absent-field branching](feedback_explicit_server_flags.md) — send an explicit flag (e.g. `aiMove: true`); other callers may also lack the "distinguishing" field
+- [Quarantine before delete](feedback_quarantine_before_delete.md) — move suspected-dead files to quarantine folder first, QA the site, then delete if clean
 
 ## References — solver and board mechanics
 
