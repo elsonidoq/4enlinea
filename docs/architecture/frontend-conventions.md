@@ -6,16 +6,20 @@ The codebase has **two separate CSS custom property systems** defined in differe
 
 | File | Surface type | Background tokens | Text tokens |
 |---|---|---|---|
-| `src/index.css` | Dark surfaces | `--surface`, `--surface-2`, `--surface-3` | `--text`, `--text-sub`, `--text-muted` |
-| `src/styles/tokens.css` | Light surfaces | `--card` (#fff) | `--ink`, `--ink-soft`, `--ink-faint` |
+| `src/index.css` | Dark surfaces (`.dark-surface` only) | `--surface`, `--surface-2`, `--surface-3` | `--text`, `--text-sub`, `--text-muted` |
+| `src/styles/tokens.css` | Light surfaces (`:root` default) | `--card` (#fff) | `--ink`, `--ink-soft`, `--ink-faint` |
+
+**Global default:** `:root` is now `color-scheme: light` with `background: #fbf4e8` and `color: var(--ink)`. All user-facing surfaces inherit these light defaults.
+
+**`.dark-surface`:** Defined in `index.css`, this is the sole home of the 9 dark tokens and `color-scheme: dark`. Any component that must render on a dark surface MUST be a descendant of a `.dark-surface` element. Currently applied to `AdminCuratePage` and `AdminLessonsPage` wrapper divs.
 
 **Pairing rule:** Dark background → dark-theme text. Light background → light-theme text. Never mix across systems.
 - `var(--surface)` (dark) + `var(--ink)` (dark) = invisible text
 - `#fff` (light) + `var(--text)` (light) = invisible text
 
-**Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
+**Dark component in light context:** If a dark-surface component is placed in a light context without a `.dark-surface` ancestor, its `--text`/`--surface` tokens will be unresolved (visible failure, not silent). Always wrap dark components in `.dark-surface`.
 
-**White cards on dark pages:** When placing a white card inside the dark-themed app, set `color: var(--ink)` on the card container so all children inherit dark text. The global `:root` sets `color: var(--text)` (light), so without an explicit override, text on white cards will be invisible.
+**Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
 
 See also: [[reference_token_pairing]], [[project_dark_global_theme]]
 
