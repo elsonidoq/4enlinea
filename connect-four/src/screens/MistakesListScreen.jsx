@@ -166,7 +166,7 @@ export function MistakesListScreen({ go, goBack, category }) {
                 style={{
                   padding: '7px 16px',
                   borderRadius: 20,
-                  border: '1.5px solid var(--border)',
+                  border: '1.5px solid var(--line)',
                   background: active ? 'var(--green)' : 'transparent',
                   color: active ? '#fff' : 'var(--ink-soft)',
                   fontWeight: 700,

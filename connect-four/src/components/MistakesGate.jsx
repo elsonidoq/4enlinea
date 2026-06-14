@@ -78,7 +78,7 @@ export function MistakesGate({
           style={{
             padding: '10px 24px',
             borderRadius: 'var(--radius-sm)',
-            border: '1.5px solid var(--border)',
+            border: '1.5px solid var(--line)',
             background: 'transparent',
             color: 'var(--ink)',
             fontWeight: 700,

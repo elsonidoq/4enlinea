@@ -50,7 +50,7 @@ function OpponentAvatar({ name, avatarUuid }) {
   }
   return (
     <span style={{
-      width: 22, height: 22, borderRadius: '50%', background: 'var(--surface-2)',
+      width: 22, height: 22, borderRadius: '50%', background: 'var(--line)',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 10, fontWeight: 800, color: 'var(--ink-soft)', flexShrink: 0,
     }}>
@@ -224,7 +224,7 @@ export function PastGamesListScreen({ go, goBack }) {
               style={{
                 padding: '7px 14px',
                 borderRadius: 20,
-                border: '1.5px solid var(--border)',
+                border: '1.5px solid var(--line)',
                 background: active ? 'var(--disc-green)' : 'transparent',
                 color: active ? '#fff' : 'var(--ink-soft)',
                 fontWeight: 700,
@@ -275,7 +275,7 @@ export function PastGamesListScreen({ go, goBack }) {
                   marginTop: 4,
                   padding: '12px 20px',
                   borderRadius: 'var(--radius-sm)',
-                  border: '1.5px solid var(--border)',
+                  border: '1.5px solid var(--line)',
                   background: 'transparent',
                   color: 'var(--ink)',
                   fontWeight: 700,

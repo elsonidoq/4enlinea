@@ -111,7 +111,7 @@ export function StatsScreen({ go, goBack }) {
                   return (
                     <div key={pattern} style={{ marginBottom: 8 }}>
                       <div style={{ fontSize: 13, color: 'var(--ink)', marginBottom: 4, fontWeight: 600 }}>{pattern}</div>
-                      <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ height: 8, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor(pct), borderRadius: 4 }} />
                       </div>
                     </div>
@@ -147,7 +147,7 @@ export function StatsScreen({ go, goBack }) {
         {isAuthenticated && (
           <button
             onClick={() => supabase.auth.signOut()}
-            style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', marginTop: 8, WebkitTapHighlightColor: 'transparent' }}
+            style={{ background: 'transparent', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', marginTop: 8, WebkitTapHighlightColor: 'transparent' }}
           >
             Log out
           </button>

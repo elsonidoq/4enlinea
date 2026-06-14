@@ -196,7 +196,7 @@ export function DeepRevealPane({
                   style={{
                     width: '100%', boxSizing: 'border-box', resize: 'none',
                     fontFamily: 'var(--font-body)', fontSize: 13,
-                    border: '1px solid var(--border-dim)', borderRadius: 8,
+                    border: '1px solid var(--line)', borderRadius: 8,
                     padding: '6px 8px', colorScheme: 'light',
                   }}
                 />

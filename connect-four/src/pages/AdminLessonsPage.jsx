@@ -6,19 +6,21 @@ export default function AdminLessonsPage() {
   const [view, setView] = useState('list'); // 'list' | 'edit' | 'new'
   const [editingId, setEditingId] = useState(null);
 
-  if (view === 'edit' || view === 'new') {
-    return (
-      <AdminLessonEditorScreen
-        lessonId={view === 'edit' ? editingId : null}
-        onBack={() => setView('list')}
-      />
-    );
-  }
-
-  return (
+  const content = (view === 'edit' || view === 'new') ? (
+    <AdminLessonEditorScreen
+      lessonId={view === 'edit' ? editingId : null}
+      onBack={() => setView('list')}
+    />
+  ) : (
     <AdminLessonListScreen
       onEdit={(id) => { setEditingId(id); setView('edit'); }}
       onNew={() => { setEditingId(null); setView('new'); }}
     />
+  );
+
+  return (
+    <div className="dark-surface" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {content}
+    </div>
   );
 }
