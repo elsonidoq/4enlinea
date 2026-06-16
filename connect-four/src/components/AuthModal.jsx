@@ -35,8 +35,10 @@ export function AuthModal({ onClose, reason }) {
           style={{ width: '100%' }}
           onClick={() => {
             track('signup_initiated', { method: 'google' });
-            // full-page nav: must target server directly — Vite proxy only covers fetch/XHR
-            window.location.href = `${API || 'http://localhost:3001'}/api/auth/oauth/google`;
+            // full-page nav: in dev, Vite proxy doesn't cover navigation, so target Express directly.
+            // In prod/staging, same origin works — Express serves both SPA and API.
+            const oauthBase = import.meta.env.DEV ? 'http://localhost:3001' : API;
+            window.location.href = `${oauthBase}/api/auth/oauth/google`;
           }}
         >
           {t('auth.continueWithGoogle')}

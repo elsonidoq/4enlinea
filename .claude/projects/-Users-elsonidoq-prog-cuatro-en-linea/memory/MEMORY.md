@@ -5,6 +5,7 @@
 ## Feedback — behavioral rules
 
 - [Supabase config is modifiable](feedback_supabase_config_modifiable.md) — production Supabase settings can be changed via dashboard; never assume they're locked
+- [Epic sizing for speckit](feedback_epic_sizing_speckit.md) — run pipeline only when 8+ tasks + unresolved design decision + multiple subsystems; merge epics when B's plan depends on A's design output
 
 - [Spec redesigns: audit existing APIs first](feedback_spec_existing_apis.md) — read current component props before writing spec prop shapes; only change what is strictly necessary
 - [AskUserQuestion requires min 2 options](feedback_ask_user_question_min_options.md) — single-option questions throw InputValidationError; always provide at least 2 distinct options

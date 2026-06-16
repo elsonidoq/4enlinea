@@ -30,3 +30,5 @@
 
 
 - Current npm install reports this 15 vulnerabilities (1 low, 10 moderate, 2 high, 2 critical)
+
+- language should be determined by browser's language. Everything should be translated if the translation is available. Otherwise it should be displayed in english
