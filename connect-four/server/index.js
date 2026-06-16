@@ -180,15 +180,19 @@ app.post('/api/auth/magic-link', async (req, res) => {
     return res.status(400).json({ error: 'email is required' });
   }
   try {
+    const redirectTo = process.env.FRONTEND_URL || 'http://localhost:5173';
+    console.log('[auth/magic-link] emailRedirectTo=', redirectTo, 'NODE_ENV=', process.env.NODE_ENV);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: process.env.FRONTEND_URL || 'http://localhost:5173',
-      },
+      options: { emailRedirectTo: redirectTo },
     });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      console.error('[auth/magic-link] supabase error:', error.message, error);
+      return res.status(400).json({ error: error.message });
+    }
     res.json({ ok: true });
   } catch (err) {
+    console.error('[auth/magic-link] unexpected error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -200,8 +204,13 @@ app.post('/api/auth/callback', async (req, res) => {
   if (!access_token) return res.status(400).json({ error: 'access_token is required' });
 
   try {
+    console.log('[auth/callback] verifying access_token, length=', access_token?.length);
     const { data, error } = await supabase.auth.getUser(access_token);
-    if (error || !data?.user) return res.status(401).json({ error: 'Invalid token' });
+    if (error || !data?.user) {
+      console.error('[auth/callback] token invalid:', error?.message);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    console.log('[auth/callback] user verified:', data.user.id, 'NODE_ENV=', process.env.NODE_ENV);
 
     // Set httpOnly cookies
     res.cookie('sb_access_token', access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });

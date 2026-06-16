@@ -16,6 +16,7 @@ export function ProfileStoreProvider({ children }) {
   async function checkSession() {
     // Handle magic-link callback: tokens come in the URL hash
     const hash = window.location.hash;
+    console.log('[store] checkSession hash=', hash ? hash.slice(0, 40) + '…' : '(empty)');
     if (hash && hash.includes('access_token=')) {
       try {
         const params = new URLSearchParams(hash.slice(1));
@@ -30,12 +31,16 @@ export function ProfileStoreProvider({ children }) {
             body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
           });
 
+          console.log('[store] callback response status=', res.status);
           if (res.ok) {
             const { user } = await res.json();
             // Clear the hash from the URL without reload
             window.history.replaceState(null, '', window.location.pathname);
             await switchToSupabase({ user });
             return;
+          } else {
+            const body = await res.text();
+            console.error('[store] callback failed:', res.status, body);
           }
         }
       } catch (err) {
