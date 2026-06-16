@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'crypto';
+import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
@@ -40,6 +41,7 @@ if (process.env.SENTRY_DSN) {
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
 app.use(express.json());
+app.use(cookieParser());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
   next();
@@ -156,14 +158,145 @@ try {
   console.log('[server] dist/index.html not found — SPA catch-all will return 500');
 }
 
+// ── Auth proxy endpoints ──────────────────────────────────────────────────────
+
+function cookieOpts() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  };
+}
+
+const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
+const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
+
+// POST /api/auth/magic-link — proxy Supabase magic-link send
+app.post('/api/auth/magic-link', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'email is required' });
+  }
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: process.env.FRONTEND_URL || 'http://localhost:5173',
+      },
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/callback — exchange magic-link tokens for httpOnly cookies
+app.post('/api/auth/callback', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const { access_token, refresh_token } = req.body;
+  if (!access_token) return res.status(400).json({ error: 'access_token is required' });
+
+  try {
+    const { data, error } = await supabase.auth.getUser(access_token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid token' });
+
+    // Set httpOnly cookies
+    res.cookie('sb_access_token', access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (refresh_token) {
+      res.cookie('sb_refresh_token', refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    // Fetch user profile to return tier info
+    let tier = 'free';
+    if (supabase) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', data.user.id)
+        .single();
+      if (profile) tier = profile.tier;
+    }
+
+    res.json({ user: { id: data.user.id, tier } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/refresh — refresh the access token using the refresh token cookie
+app.post('/api/auth/refresh', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const refreshToken = req.cookies?.sb_refresh_token;
+  if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
+
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data?.session) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Refresh failed' });
+    }
+
+    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (data.session.refresh_token) {
+      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/signout — clear auth cookies
+app.post('/api/auth/signout', (_req, res) => {
+  res.clearCookie('sb_access_token', cookieOpts());
+  res.clearCookie('sb_refresh_token', cookieOpts());
+  res.json({ ok: true });
+});
+
+// GET /api/auth/session — return current user from cookie token
+app.get('/api/auth/session', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const token = req.cookies?.sb_access_token;
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Token invalid' });
+    }
+
+    let tier = 'free';
+    const { data: profile } = await supabase
+      .from('users')
+      .select('tier')
+      .eq('id', data.user.id)
+      .single();
+    if (profile) tier = profile.tier;
+
+    res.json({ user: { id: data.user.id, tier } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Auth middleware (T020) ─────────────────────────────────────────────────────
 
 async function loadUser(req, _res, next) {
   req.user = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ') || !supabase) return next();
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.sb_access_token;
 
-  const token = authHeader.slice(7);
+  if (!token || !supabase) return next();
+
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return next();

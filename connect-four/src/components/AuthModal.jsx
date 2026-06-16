@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 
+const API = import.meta.env.VITE_API_BASE_URL || '';
+
 export function AuthModal({ onClose, reason }) {
   const { t } = useTranslation();
-  const { supabase } = useStore();
+  const { refetchSession } = useStore();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,12 +18,14 @@ export function AuthModal({ onClose, reason }) {
     setLoading(true);
     setError(null);
     try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.location.origin },
+      const res = await fetch(`${API}/api/auth/magic-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
-      if (authError) {
-        setError(authError.message || t('auth.sendError'));
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error || t('auth.sendError'));
       } else {
         setSent(true);
         track('signup_initiated', { method: 'magic_link' });
@@ -117,10 +121,9 @@ export function AuthModal({ onClose, reason }) {
             {import.meta.env.DEV && (
               <button
                 type="button"
-                onClick={async () => {
-                  const { error: e } = await supabase.auth.signInAnonymously();
-                  if (!e) onClose();
-                  else setError(e.message);
+                onClick={() => {
+                  onClose();
+                  refetchSession();
                 }}
                 style={{
                   marginTop: 8, width: '100%', padding: '10px 0',

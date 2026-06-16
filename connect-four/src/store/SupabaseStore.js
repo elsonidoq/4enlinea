@@ -1,32 +1,24 @@
 export class SupabaseStore {
-  constructor(supabaseClient, userId) {
-    this._supabase = supabaseClient;
+  constructor(userId) {
     this._userId = userId;
   }
 
   // ── Private fetch helpers ──────────────────────────────────────────────────
 
   async _fetchGet(path, defaultVal) {
-    const { data: { session } } = await this._supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) return defaultVal;
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
-    const res = await fetch(`${apiBase}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`${apiBase}${path}`, { credentials: 'include' });
     if (!res.ok) return defaultVal;
     return res.json();
   }
 
   async _fetchPost(path, body) {
-    const { data: { session } } = await this._supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) return; // silent no-op
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
     const res = await fetch(`${apiBase}${path}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      credentials: 'include',
     });
     // Silent no-op on non-ok — callers expect void return
   }
@@ -49,8 +41,6 @@ export class SupabaseStore {
   }
 
   async saveSessionStats(stats) {
-    // stats has shape { date, stats: {...} } — POST the whole object.
-    // Server extracts req.body.date and req.body.stats (inner).
     return this._fetchPost('/api/user/session-stats', stats);
   }
 
@@ -68,7 +58,6 @@ export class SupabaseStore {
       first_attempt_correct: attempt.first_attempt_correct,
       time_ms: attempt.time_ms,
     };
-    // Never send device_uuid, user_id, or created_at — server sets those.
     return this._fetchPost('/api/user/puzzle-attempts', body);
   }
 
@@ -95,12 +84,10 @@ export class SupabaseStore {
   // ── Challenge sessions ─────────────────────────────────────────────────────
 
   async getLastChallengeSession() {
-    // Server already returns row.stats directly, not a row wrapper.
     return this._fetchGet('/api/user/challenge-session', null);
   }
 
   async saveChallengeSession(session) {
-    // POST the whole session object — server stores req.body verbatim.
     return this._fetchPost('/api/user/challenge-session', session);
   }
 
@@ -111,20 +98,14 @@ export class SupabaseStore {
   }
 
   async recordActivityDay() {
-    // Server handles today/yesterday logic — client just pings.
     return this._fetchPost('/api/user/streak/record-day', {});
   }
 
-  // ── Aggregate stats (UNCHANGED — already uses fetch) ───────────────────────
+  // ── Aggregate stats ────────────────────────────────────────────────────────
 
   async getStats() {
-    const { data: { session } } = await this._supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) return null;
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
-    const res = await fetch(`${apiBase}/api/stats`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`${apiBase}/api/stats`, { credentials: 'include' });
     if (!res.ok) return null;
     return res.json();
   }

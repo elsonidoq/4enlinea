@@ -204,7 +204,7 @@ export class IndexedDBStore {
   }
 
   // T033 — migrateToSupabase via POST /api/user/migrate (all-or-nothing)
-  async migrateToSupabase(_supabaseStore, supabaseClient) {
+  async migrateToSupabase(_supabaseStore) {
     // Step 1: Read ALL data from IndexedDB in parallel
     const db = await this._db();
     const [attempts, lessonRows, sparringRecord, sessionRows, streak] = await Promise.all([
@@ -219,19 +219,12 @@ export class IndexedDBStore {
       this.getStreak(),
     ]);
 
-    // Step 2: Get auth token from supabaseClient (not supabaseStore)
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const token = session?.access_token;
-    if (!token) throw new Error('Migration failed: not authenticated');
-
-    // Step 3: POST all data to /api/user/migrate — single atomic request
+    // Step 2: POST all data to /api/user/migrate — single atomic request
+    // Auth is handled via httpOnly cookie (credentials: 'include')
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
     const res = await fetch(`${apiBase}/api/user/migrate`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         puzzle_attempts: attempts,
         session_stats: sessionRows,
@@ -239,6 +232,7 @@ export class IndexedDBStore {
         sparring_record: sparringRecord,
         streak,
       }),
+      credentials: 'include',
     });
 
     // Step 4: Throw on non-204 — do NOT clear IndexedDB
