@@ -19,14 +19,15 @@
     "@sentry/react": "^10.51.0",
     "@supabase/supabase-js": "^2.105.1",
     "concurrently": "^9.2.1",
+    "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
     "i18next": "^26.0.8",
+    "pg": "^8.21.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.6",
     "react-markdown": "^10.1.0",
-    "pg": "^8.21.0",
     "stripe": "^22.1.0"
   },
   "devDependencies": {

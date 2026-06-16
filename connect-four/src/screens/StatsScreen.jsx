@@ -13,7 +13,7 @@ function barColor(pct) {
 
 export function StatsScreen({ go, goBack }) {
   const { t } = useTranslation();
-  const { store, session, supabase } = useStore();
+  const { store, session, signOut } = useStore();
   const isAuthenticated = !!session;
 
   const [accuracy, setAccuracy] = useState('--');
@@ -146,7 +146,7 @@ export function StatsScreen({ go, goBack }) {
 
         {isAuthenticated && (
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => signOut()}
             style={{ background: 'transparent', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', marginTop: 8, WebkitTapHighlightColor: 'transparent' }}
           >
             Log out
