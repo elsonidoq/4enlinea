@@ -467,36 +467,44 @@ puzzles never repeat the same visual shape.
 
 ### Epic 7 — Auth & Onboarding
 
-**Goal:** Remove the magic link method to register into the app. A new user can register with a better method TBD.
-The emails they receive look professional.
+**Goal:** Replace magic-link registration with Google OAuth. Auth emails look professional.
+
+> Brainstorming decisions: [`docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md`](docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md)
 
 **Scope:**
 
-- **Auth email redesign.** Replace the current ugly auth email with a branded, legible template
-  (magic-link and any other transactional auth emails). Configured in Supabase email templates.
-- **Additional sign-in methods.** Add at least one alternative to the magic link (e.g. email +
-  password and/or an OAuth provider). Integrate via `supabase.auth.*` on the client
-  (`frontend-conventions.md` — auth stays client-side via the anon key) and surface the options in
-  `AuthModal`.
-- Note the known open bug `bug_auth_magic_link_redirect.md` (Supabase rejects unlisted
-  `emailRedirectTo` URLs) — allowlist the redirect URLs as part of this work.
+- **Auth email redesign.** Replace the current auth email template with a branded, legible template.
+  Configured in Supabase email templates (transactional auth emails only — Google OAuth does not send
+  app-side auth emails).
+- **Replace magic-link with Google OAuth.** Remove the magic-link sign-in flow from `AuthModal` and
+  replace it with a "Sign in with Google" button. Integrate via `supabase.auth.signInWithOAuth({
+  provider: 'google' })` on the client (`frontend-conventions.md` — auth stays client-side via the
+  anon key). Magic-link is removed entirely; no email+password.
+- Note the known open bug `bug_auth_magic_link_redirect.md` — the same allowlist fix applies: add
+  `FRONTEND_URL` to each Supabase project's Auth → URL Configuration → Redirect URLs.
 
 **Acceptance criteria:**
 
 - Auth emails render with brand styling in major mail clients (no raw/unstyled template).
-- A user can complete registration and sign-in via at least one non-magic-link method end-to-end.
-- The magic-link redirect bug is resolved (redirect URLs allowlisted for staging and prod).
+- A user can complete registration and sign-in via Google OAuth end-to-end.
+- Magic-link sign-in is removed from the UI.
+- The redirect-URL allowlist is configured for staging and production.
 
 **NOT included:** Account linking/merging across providers, profile/settings redesign, or 2FA.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Which providers.** TODO names "password? gmail? meta?". Decide the exact set (password, Google,
-  Meta/Facebook, …) weighing setup cost and audience. Output: the chosen provider list and, for each
-  OAuth provider, the app-registration prerequisites (client IDs, redirect URIs per environment).
-- **Anonymous-→-account migration.** Decide whether the existing IndexedDB→Supabase migration
-  (`IndexedDBStore.migrateToSupabase`) needs changes for password/OAuth signups vs. magic link.
-  Output: a yes/no with any required store-path adjustments.
+- **Which providers.** Google OAuth only. Magic-link removed entirely. No email+password.
+  Prerequisites per environment (staging and production):
+  - Google Cloud Console: create OAuth 2.0 credential (Client ID + Secret); authorized redirect URI
+    = `https://<supabase-project-ref>.supabase.co/auth/v1/callback`.
+  - Supabase dashboard: Auth → Providers → Google → enable, paste Client ID + Secret.
+  - `FRONTEND_URL` added to Auth → URL Configuration → Redirect URLs in each Supabase project.
+
+- **Anonymous-→-account migration.** No changes needed. Google OAuth returns `#access_token=` in
+  the URL hash after redirect — the existing `checkSession` in `ProfileStore.jsx` handles this
+  identically to the old magic-link path, calling `switchToSupabase()` which triggers
+  `migrateToSupabase`. The migration code has no auth-method dependency.
 
 ---
 
