@@ -36,7 +36,7 @@ export function MistakesListScreen({ go, goBack, category }) {
     setLoading(true);
     setError(null);
     fetch(`${API}/api/coach/queue?status=all&category=${encodeURIComponent(category)}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      credentials: 'include',
     })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load');

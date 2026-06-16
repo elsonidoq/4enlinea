@@ -143,10 +143,9 @@ export function ChallengeScreen({
         }
 
         // Legacy random draw
-        const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
         const drawCategory = lessonMode ? confirmationCategory : category;
         const drawN        = lessonMode ? confirmationCount    : 8;
-        const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { headers });
+        const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { credentials: 'include' });
         const data = await res.json();
         const loaded = data.puzzles || [];
         sessionIdRef.current = data.session_id ?? null;
@@ -262,7 +261,7 @@ export function ChallengeScreen({
     if (!sessionIdRef.current || !session) return;
     fetch(`${API}/api/challenge-sessions/${sessionIdRef.current}/advance`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      credentials: 'include',
     }).catch(() => {});
   }
 
@@ -315,15 +314,12 @@ export function ChallengeScreen({
     const current = puzzles[currentIdx];
     const cols = [...selectedCols];
     const diskColor = (current.move_string || '').length % 2 === 0 ? 'red' : 'yellow';
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    };
+    const headers = { 'Content-Type': 'application/json' };
 
     // Evaluate all selected columns in parallel
     const checkResults = await Promise.all(cols.map(col =>
       fetch(`${API}/api/puzzles/${current.id}/check`, {
-        method: 'POST', headers,
+        method: 'POST', headers, credentials: 'include',
         body: JSON.stringify({ candidateCol: col, moveHistory: [], attemptNumber: 1 }),
       }).then(r => r.json()).then(data => ({ col, data }))
     ));
@@ -406,13 +402,10 @@ export function ChallengeScreen({
 
     setIsSubmitting(true);
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      };
       const res = await fetch(`${API}/api/puzzles/${current.id}/sequence/move`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ position: seqPosition, col }),
       });
       const data = await res.json();

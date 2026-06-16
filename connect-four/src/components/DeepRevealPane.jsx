@@ -83,10 +83,8 @@ export function DeepRevealPane({
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       signal: controller.signal,
       body: JSON.stringify({ movestring: moveString, col }),
     })

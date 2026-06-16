@@ -154,7 +154,7 @@ export function PastGamesListScreen({ go, goBack }) {
 
     try {
       const res = await fetch(`${API}/api/games?${params}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to load');
       const data = await res.json();

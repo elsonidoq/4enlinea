@@ -33,7 +33,7 @@ export function CategoryListScreen({ go, goBack }) {
     setLoading(true);
     setError(null);
     fetch(`${API}/api/coach/queue?status=all`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      credentials: 'include',
     })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load');

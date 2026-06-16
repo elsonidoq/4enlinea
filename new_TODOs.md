@@ -27,3 +27,6 @@
 - Need to translate everything to spanish
 
 - Several Supabase queries fetch all rows and aggregate in JS instead of using DB-side count(); affected endpoints: GET /api/puzzles/counts, GET /api/stats, GET /api/games (blunder counting), GET /api/coach/weakness-map fallback. All are missing .limit() and will silently truncate at 1000 rows.
+
+
+- Current npm install reports this 15 vulnerabilities (1 low, 10 moderate, 2 high, 2 critical)

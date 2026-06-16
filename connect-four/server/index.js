@@ -286,6 +286,24 @@ app.get('/api/auth/session', async (req, res) => {
   }
 });
 
+// POST /api/auth/anonymous — create anonymous session (dev only)
+app.post('/api/auth/anonymous', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  try {
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error || !data?.session) return res.status(400).json({ error: error?.message || 'Anonymous sign-in failed' });
+
+    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (data.session.refresh_token) {
+      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    res.json({ user: { id: data.user.id, tier: 'free' } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Auth middleware (T020) ─────────────────────────────────────────────────────
 
 async function loadUser(req, _res, next) {
@@ -1159,19 +1177,18 @@ app.get('/api/puzzles/counts', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('puzzles')
-      .select('category')
+      .select('category, count()')
       .eq('is_active', true);
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Build counts map starting from CATEGORY_ORDER (all categories default to 0)
     const counts = {};
     for (const slug of CATEGORY_ORDER) {
       counts[slug] = 0;
     }
     for (const row of (data || [])) {
       if (row.category in counts) {
-        counts[row.category] += 1;
+        counts[row.category] = Number(row.count);
       }
     }
 

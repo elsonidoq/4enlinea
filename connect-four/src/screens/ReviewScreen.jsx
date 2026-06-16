@@ -48,14 +48,10 @@ export function ReviewScreen({ go, goBack, id }) {
     setLoading(true);
     setError(null);
 
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
-    };
-
     fetch(`${API}/api/games/analyze`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ gameId: id }),
     })
       .then(async (res) => {
@@ -88,9 +84,9 @@ export function ReviewScreen({ go, goBack, id }) {
         track('game_reviewed', { gameId: id, accuracy, blunderCount: data.blunderCount });
 
         // Fire-and-forget: fetch game blunder list for ✕-node navigation
-        if (session?.access_token) {
+        if (session) {
           fetch(`${API}/api/coach/queue?game_id=${id}`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
+            credentials: 'include',
           })
             .then(r => r.ok ? r.json() : { blunders: [] })
             .then(d => {

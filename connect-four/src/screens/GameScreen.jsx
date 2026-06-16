@@ -29,10 +29,10 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     // 2. POST /api/games (fire-and-forget)
     let gameId = null;
     try {
-      const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}) };
       const res = await fetch(`${API}/api/games`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           device_uuid,
           moves: movesStr,

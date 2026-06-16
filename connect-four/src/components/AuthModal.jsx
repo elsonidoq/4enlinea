@@ -121,7 +121,10 @@ export function AuthModal({ onClose, reason }) {
             {import.meta.env.DEV && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await fetch(`${API}/api/auth/anonymous`, { method: 'POST', credentials: 'include' });
+                  } catch (_) { /* ignore */ }
                   onClose();
                   refetchSession();
                 }}
