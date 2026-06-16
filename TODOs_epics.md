@@ -641,10 +641,15 @@ correct/re-enter their Papergames username). No new table needed; `papergames_ga
 
 ---
 
-### Epic 10 — Audio & Coach Pacing
+### Epic 10 — Audio & Interactive Coach
 
-**Goal:** The app has sound and a spoken coach, and coach messages are paced so the user can read
-both their own and the coach's commentary.
+*(formerly Epic 10 "Audio & Coach Pacing" + Epic 12 "Coach Text Interactivity" — merged because
+Epic 12's narration half directly depends on Epic 10's TTS decision; running them as separate specs
+would require rewriting Epic 12's plan after Epic 10 resolved TTS approach.)*
+
+**Goal:** The app has sound and a spoken coach; coach messages are paced for readability; tactical
+terms in coach text are tappable for definitions; and the coach can narrate a deep reveal with
+board-synced highlighting.
 
 **Scope:**
 
@@ -656,6 +661,14 @@ both their own and the coach's commentary.
 - **Coach message pacing.** Insert a deliberate pause between the player-move commentary and the
   coach/AI-move commentary so the user has time to read both (today the gap is too short). This is a
   timing change in the coach-message sequencing on the sparring/challenge surfaces.
+- **KB term glossary popups.** Words like "fork" / "double threat" are marked distinctly in coach
+  text; tapping / hovering shows a small popup explaining the term, sourced from the knowledge base
+  (`docs/knowledge-base/`). Reuse the annotated-text rendering infra (`src/lib/annotatedText.js`
+  parses `[zone:...]` specs today; extend it — or add a sibling parser — for KB term spans).
+- **Coach reads deep reveal with synced board highlighting** *(explicitly low priority).* As the
+  coach narrates a deep reveal, the board highlights the row/column/cell/region being referenced;
+  in the text, those references are tappable/hoverable to trigger the same board highlight. Builds
+  on `zoneToOverlays` (already in `annotatedText.js`) and the spoken-coach work above.
 
 **Acceptance criteria:**
 
@@ -664,20 +677,30 @@ both their own and the coach's commentary.
 - Coach messages can be played as speech; toggling speech on/off works and persists.
 - Between a player-move message and the following coach/AI message there is a perceptible,
   configurable pause; both messages are readable before the next state change.
+- Designated tactical terms in coach text are visually marked and show a KB-sourced definition popup
+  on tap/hover.
+- During a deep-reveal narration, the board highlights the referenced zone in sync with the spoken
+  text; tapping a reference in the text highlights the same zone.
 
 **NOT included:** Voice input, multilingual TTS tuning beyond the default locale, custom-recorded
-voice acting, or a full audio settings panel beyond mute + speech toggles.
+voice acting, a full audio settings panel beyond mute + speech toggles, authoring new KB content
+(use existing entries), a full glossary screen, or narration for surfaces other than deep reveal.
 
 #### Brainstorming needed
 
 - **TTS approach.** Decide between the browser `SpeechSynthesis` API (free, offline, variable
   quality) and a hosted TTS service (cost, latency, quality). Output: the chosen approach and, if
   hosted, the provider + caching strategy (coach lines are largely templated/i18n keys and could be
-  pre-rendered).
+  pre-rendered). **This decision gates the narration half of the glossary/deep-reveal scope.**
 - **Sound assets & licensing.** Decide where the four SFX + background music come from and their
   license. Output: the asset source list and license clearance.
 - **Pacing values.** Decide the default pause duration and whether it is user-configurable. Output:
   the default ms value and the config surface (if any).
+- **Term-detection source.** Decide how a term in free coach text is recognized and linked to a KB
+  entry — server-side annotation that emits term spans (like `[zone:...]`), a client-side dictionary
+  match against KB titles/aliases, or KB-author-tagged terms. Output: the term→KB-entry resolution
+  mechanism and where it runs (server vs client). This gates the glossary feature and should be
+  settled before speckit-specify.
 
 ---
 
@@ -718,38 +741,9 @@ a UI consolidation of the localhost-only admin tool.
 
 ---
 
-### Epic 12 — Coach Text Interactivity *(lowest priority)*
+### Epic 12 — *Merged into Epic 10*
 
-**Goal:** Tactical terms in coach text are tappable for a definition, and the coach can read a deep
-reveal aloud while the board highlights the regions it mentions.
-
-**Scope:**
-
-- **KB term glossary popups.** Words like "fork" / "double threat" are marked distinctly; tapping /
-  hovering shows a small popup explaining the term, sourced from the knowledge base
-  (`docs/knowledge-base/`). Reuse the annotated-text rendering infra (`src/lib/annotatedText.js`
-  parses `[zone:...]` specs today; extend it — or add a sibling parser — for KB term spans).
-- **Coach reads deep reveal with synced highlighting** *(explicitly low priority in TODO).* As the
-  coach narrates a deep reveal, the board highlights the row/column/cell/region being referenced;
-  in the text, those references are tappable/hoverable to trigger the same board highlight. Builds
-  on `zoneToOverlays` (already in `annotatedText.js`) and the spoken-coach work in Epic 10.
-
-**Acceptance criteria:**
-
-- Designated tactical terms in coach text are visually marked and show a KB-sourced definition popup
-  on tap/hover.
-- During a deep-reveal narration, the board highlights the referenced zone in sync with the spoken
-  text; tapping a reference in the text highlights the same zone.
-
-**NOT included:** Authoring new KB content (use existing entries), a full glossary screen, or
-narration for surfaces other than deep reveal.
-
-**Depends on:** Epic 10 (spoken coach) for the read-aloud half; the glossary half is independent.
-
-#### Brainstorming needed
-
-- **Term-detection source.** Decide how a term in free coach text is recognized and linked to a KB
-  entry — server-side annotation that emits term spans (like `[zone:...]`), a client-side
-  dictionary match against KB titles/aliases, or KB-author-tagged terms. Output: the term→KB-entry
-  resolution mechanism and where it runs (server vs client). This gates the whole glossary feature
-  and should be settled before speckit-specify.
+This epic's scope (KB term glossary popups and coach-narrated deep reveal with board-synced
+highlighting) has been merged into **Epic 10 — Audio & Interactive Coach**. The merge was made
+because the narration half depends on Epic 10's TTS decision, and running them as separate speckit
+pipelines would have required rewriting Epic 12's plan after Epic 10 resolved that choice.

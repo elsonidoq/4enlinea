@@ -118,6 +118,7 @@
 - [Spec 031 — staging/production deploy](project_spec031_staging_production_deploy.md) — Railway + two Supabase projects + migrate.js; 24 tasks; existing Supabase = production; c4solver must compile from source
 - [Spec 032 — repo hygiene & tech-debt sweep](project_spec032_repo_hygiene.md) — 25 tasks; dead-code audit (npx dependency-cruiser) + green/gray sweep; PuzzlesPage/PlaceholderScreen pre-confirmed DELETE; lint gate = ≤ baseline (not exit 0)
 - [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — IMPLEMENTED 2026-06-16; 10/10 tasks; Board animation gate, staged continue render, finally→explicit isSubmitting
+- [Spec 036 — Google OAuth auth](project_spec036_google_oauth.md) — spec/plan/tasks complete; server-redirect OAuth, DeepRevealPane slug trap, encodeURIComponent load-bearing
 
 ## Project — implementation details
 

@@ -14,6 +14,7 @@ export function CandidateDashboard({ onSelectCategory }) {
   const [genForms, setGenForms] = useState({});
   const [genResults, setGenResults] = useState({});
   const [genLoading, setGenLoading] = useState({});
+  const [reindexLoading, setReindexLoading] = useState({});
 
   async function loadStats() {
     try {
@@ -102,6 +103,25 @@ export function CandidateDashboard({ onSelectCategory }) {
     }
   }
 
+  async function handleReindex(cat) {
+    setReindexLoading(prev => ({ ...prev, [cat]: true }));
+    try {
+      const res = await fetch(`${API}/api/admin/puzzles/reindex`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: cat }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      alert(`Reindexed ${data.indexed} puzzles in ${data.shapeGroups} shape groups.`);
+      await loadStats();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setReindexLoading(prev => ({ ...prev, [cat]: false }));
+    }
+  }
+
   if (loading) return <div style={centred}>Loading…</div>;
   if (error) return <div style={centred}>Error: {error}</div>;
 
@@ -137,6 +157,16 @@ export function CandidateDashboard({ onSelectCategory }) {
                     <td style={td}>
                       <span style={catNum}>{CATEGORY_ORDER.indexOf(row.category) + 1}</span>
                       <span style={{ color: 'var(--text)', fontSize: 13 }}>{CATEGORY_NAMES[row.category]}</span>
+                      {row.unindexed_count > 0 && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          minWidth: 20, height: 20, borderRadius: 10,
+                          background: '#ff9800', color: '#fff', fontSize: 11, fontWeight: 700,
+                          marginLeft: 8, padding: '0 6px',
+                        }} title="Puzzles need reindexing">
+                          {row.unindexed_count}
+                        </span>
+                      )}
                     </td>
                     <td style={{ ...td, fontWeight: 700, color: row.pending > 0 ? 'var(--text)' : 'var(--text-muted)' }}>
                       {row.pending}
@@ -167,6 +197,18 @@ export function CandidateDashboard({ onSelectCategory }) {
                         ) : (
                           <button style={reviewBtnDisabled} disabled>Review</button>
                         )}
+                        <button
+                          style={{
+                            padding: '5px 10px', borderRadius: 6,
+                            border: '1.5px solid var(--border)', background: 'transparent',
+                            color: 'var(--text)', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                          onClick={() => handleReindex(row.category)}
+                          disabled={reindexLoading[row.category]}
+                        >
+                          {reindexLoading[row.category] ? '…' : 'Reindex'}
+                        </button>
                         {row.approved > 0 ? (
                           <button style={reviewApprovedBtn} onClick={() => onSelectCategory(row.category, 'approved')}>
                             Approved ({row.approved})

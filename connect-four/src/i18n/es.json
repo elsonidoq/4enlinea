@@ -1,1 +1,7 @@
-{}
+{
+  "setcard": {
+    "progress": "Progreso del puzzle",
+    "cleared": "Completado"
+  }
+}
+

@@ -253,7 +253,7 @@ export function DeepRevealPane({
       {authOpen && (
         <AuthModal
           onClose={() => { setAuthOpen(false); onClose?.(); }}
-          reason="deep_reveal"
+          reason={t('auth.deepRevealGate')}
         />
       )}
       {upgradeOpen && (

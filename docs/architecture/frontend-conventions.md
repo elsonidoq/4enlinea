@@ -64,17 +64,27 @@ Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrem
 
 ## Auth Integration
 
-The frontend uses the Supabase anon key (`VITE_SUPABASE_ANON_KEY`) for auth only.
-`getSupabaseClient()` (exported from `ProfileStore.jsx`) is the sole source of the Supabase client instance.
-On auth state change, `ProfileStore` automatically swaps the store and tracks the `signup_completed` event.
+The frontend has no Supabase SDK dependency. Auth is entirely server-mediated via httpOnly cookies:
+
+1. **Sign-in initiation**: The "Sign in with Google" button navigates the browser to
+   `GET /api/auth/oauth/google`, which issues a 302 redirect to Supabase's OAuth authorize endpoint.
+2. **Return leg**: After Google consent, Supabase redirects to the app with `#access_token=…`
+   in the URL hash. `ProfileStore.checkSession` detects the hash, calls `POST /api/auth/callback`
+   with the token, and the server sets httpOnly `sb_access_token` and `sb_refresh_token` cookies.
+3. **Session restore**: On page load, `checkSession` calls `GET /api/auth/session` to read the
+   cookie and restore signed-in state.
+4. **Sign-out**: `POST /api/auth/signout` clears the cookies.
+5. **Store swap**: On successful sign-in, `ProfileStore` swaps `IndexedDBStore` for `SupabaseStore`
+   and calls `migrateToSupabase` to migrate locally-recorded puzzle attempts.
+
+The only frontend environment variable required for auth is `VITE_API_BASE_URL`.
+There is no `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, or client-side Supabase SDK.
 
 ## Environment Variables
 
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Server base URL (default: `''` = same origin) |
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key for frontend auth |
 
 ## Board Representation (Frontend)
 

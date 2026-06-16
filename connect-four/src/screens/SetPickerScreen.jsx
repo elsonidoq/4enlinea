@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { SetCard } from '../components/SetCard.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
@@ -8,21 +9,47 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SetPickerScreen({ go, goBack }) {
   const { t } = useTranslation();
+  const { session } = useStore();
+  const isAuthenticated = !!session;
   const [sets, setSets] = useState([]);
   const [counts, setCounts] = useState({});
+  const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${API}/api/puzzles/counts`);
-        const data = await res.json();
-        const allSets = data.sets || [];
-        const allCounts = data.counts || {};
+        const fetches = [
+          fetch(`${API}/api/puzzles/counts`),
+        ];
+        if (isAuthenticated) {
+          fetches.push(
+            fetch(`${API}/api/user/challenge-progress`, {
+              credentials: 'include',
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }),
+          );
+        }
+
+        const results = await Promise.all(fetches);
+
+        const countsData = await results[0].json();
+        const allSets = countsData.sets || [];
+        const allCounts = countsData.counts || {};
         // FR-002: hide sets where count === 0
         setSets(allSets.filter(s => (allCounts[s.slug] ?? 0) > 0));
         setCounts(allCounts);
+
+        if (isAuthenticated && results[1]) {
+          try {
+            const progressData = await results[1].json();
+            setProgressData(progressData);
+          } catch (err) {
+            console.error('Failed to fetch challenge progress', err);
+            setProgressData(null);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch puzzle counts', err);
       } finally {
@@ -30,7 +57,7 @@ export function SetPickerScreen({ go, goBack }) {
       }
     }
     fetchData();
-  }, []);
+  }, [isAuthenticated, session?.access_token]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -63,6 +90,8 @@ export function SetPickerScreen({ go, goBack }) {
               stars={set.stars}
               positionCount={counts[set.slug] ?? 0}
               locked={!set.free}
+              isAuthenticated={isAuthenticated}
+              progress={progressData?.progress?.[set.slug]}
               onClick={
                 set.free
                   ? () => go('challenge', { category: set.slug })

@@ -5,6 +5,7 @@
 // All routes require auth (req.user set by loadUser middleware).
 // All DB-accessing routes also require supabase to be initialized.
 
+import { CHALLENGE_SETS } from './challengeSets.js';
 import {
   writeSessionStats,
   writeLessonProgress,
@@ -167,7 +168,71 @@ export function registerUserRoutes(app, supabase) {
     res.json(data?.stats ?? null);
   });
 
-  // T015: Streak
+  // T015: Challenge progress — per-category accuracy, cleared status
+  app.get('/api/user/challenge-progress', async (req, res) => {
+    if (!requireUser(req, res)) return;
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+
+    try {
+      const slugs = CHALLENGE_SETS.map((s) => s.slug);
+
+      // Query 1: active puzzles per category
+      const { data: activePuzzles, error: err1 } = await supabase
+        .from('puzzles')
+        .select('id, category')
+        .eq('is_active', true);
+
+      if (err1) return res.status(500).json({ error: err1.message });
+
+      // Build { [category]: total } and active puzzle ID set
+      const totalByCategory = Object.fromEntries(slugs.map((s) => [s, 0]));
+      const activePuzzleIds = new Set();
+      for (const p of activePuzzles || []) {
+        totalByCategory[p.category] = (totalByCategory[p.category] || 0) + 1;
+        activePuzzleIds.add(p.id);
+      }
+
+      // Query 2: user attempts with puzzle category via inner join
+      const { data: attempts, error: err2 } = await supabase
+        .from('puzzle_attempts')
+        .select('puzzle_id, first_attempt_correct, puzzles!inner(category)')
+        .eq('user_id', req.user.id);
+
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      // Group attempts by category, only for active puzzles
+      const attemptedByCategory = {};
+      const correctByCategory = {};
+      for (const a of attempts || []) {
+        if (!activePuzzleIds.has(a.puzzle_id)) continue;
+        const cat = a.puzzles?.category;
+        if (!cat) continue;
+        if (!attemptedByCategory[cat]) attemptedByCategory[cat] = new Set();
+        if (!correctByCategory[cat]) correctByCategory[cat] = new Set();
+        attemptedByCategory[cat].add(a.puzzle_id);
+        if (a.first_attempt_correct) {
+          correctByCategory[cat].add(a.puzzle_id);
+        }
+      }
+
+      // Merge
+      const progress = {};
+      for (const slug of slugs) {
+        const total = totalByCategory[slug] || 0;
+        const attempted = attemptedByCategory[slug]?.size || 0;
+        const correct = correctByCategory[slug]?.size || 0;
+        const accuracy = attempted > 0 ? correct / attempted : 0;
+        const cleared = correct >= total && total > 0;
+        progress[slug] = { attempted, correct, total, accuracy, cleared };
+      }
+
+      res.json({ progress });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // T016: Streak
   app.get('/api/user/streak', async (req, res) => {
     if (!requireUser(req, res)) return;
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });

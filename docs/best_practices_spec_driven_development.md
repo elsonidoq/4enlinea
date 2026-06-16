@@ -193,6 +193,52 @@ As the startup transitions from a "one-person unicorn" to a growing company, the
 
 The leverage provided by the SDD-Claude-SpecKit stack allows a founder to maintain an "infinite runway" by keeping operating costs extremely low while shipping at the velocity of a 20-person team.2 This speed is the new competitive moat.48 By treating software development as a disciplined, specification-first process, solo founders can build production-grade, venture-scale applications that are robust, maintainable, and ready to scale.2
 
+## **Epic Sizing: When the Pipeline Earns Its Overhead**
+
+The speckit pipeline (specify → clarify → plan → tasks → implement) has real overhead: brainstorming rounds, spec review, plan generation, and task decomposition can easily cost more time than a small feature takes to implement directly. The pipeline pays off only when that overhead is cheaper than the cost of implementing with wrong assumptions.
+
+### The speckit sweet spot
+
+Run the full pipeline when **all three conditions hold**:
+
+1. **8+ expected tasks** — fewer tasks means pipeline overhead exceeds implementation time.
+2. **At least one unresolved design decision** — a question where the answer meaningfully changes the implementation shape (auth model, data storage location, algorithm choice). If all decisions are already settled, the clarification and brainstorming phases produce no value.
+3. **Multiple subsystems touched** — server + frontend + DB, or two independent workstreams with a shared contract. Single-subsystem changes rarely generate enough cross-cutting coordination value to justify the pipeline.
+
+### When to skip speckit
+
+| Situation | Why to skip | What to do instead |
+|---|---|---|
+| ≤ 4 tasks, mechanically obvious | Pipeline overhead > implementation time | Write a task list directly and implement |
+| Single component / internal tool | No cross-subsystem contract to specify | Implement directly; capture decisions in commit message |
+| Design already resolved in brainstorming | Clarify and plan phases add no new information | Write tasks directly from brainstorming output |
+
+### When to merge epics before speckit
+
+Merge two epics into one speckit run when:
+
+- **Cross-dependency on a design decision**: Epic B's implementation plan would need to be rewritten after Epic A resolves a brainstorming question. Running them separately guarantees rework.
+- **Shared execution surface**: Both epics touch the same component in interleaved ways, making separate task lists harder to merge than a single coordinated list.
+- **Combined task count lands in the sweet spot**: Two 3-task epics that individually don't justify the pipeline become a natural 6–8 task epic when merged.
+
+### Red flags during epic writing
+
+- The scope section is a single bullet point → likely too small for speckit.
+- The brainstorming section is empty → design is already resolved; skip clarify/plan, write tasks directly.
+- The "NOT included" list is longer than the scope → the epic is probably a sub-task of a larger feature; consider merging up.
+- Two epics share a "Depends on" arrow where the dependency is a *design output* (not just a deployed API) → merge them.
+
+### Concrete examples from this project
+
+| Epic | Task count | Verdict | Reason |
+|---|---|---|---|
+| Epic 7 — Google OAuth | 3 | **Too small** — ran speckit anyway | Swap one endpoint + rewrite one modal; design was resolved in brainstorming before spec was written |
+| Epic 11 — Curation Category Selector | ~3–4 | **Too small** — skip speckit | Single component (dropdown replacing a list), internal admin tool |
+| Epic 10 + 12 — Audio & Interactive Coach | ~12–16 | **Merge, then speckit** | Epic 12's narration half depends on Epic 10's TTS decision; running separately guaranteed plan rework |
+| Epic 8 — Review & Blunder Sharing | ~6–9 | **Good standalone fit** | 3 stories, real brainstorming (permalink visibility model), server + frontend + routing touched |
+
+---
+
 #### **Works cited**
 
 1. From Vibe Coding to Spec-Driven Development \- Test Collab, accessed May 12, 2026, [https://testcollab.com/blog/from-vibe-coding-to-spec-driven-development](https://testcollab.com/blog/from-vibe-coding-to-spec-driven-development)  

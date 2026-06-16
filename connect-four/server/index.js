@@ -27,6 +27,8 @@ import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, valid
 import { requireAdmin } from './adminAuth.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation } from './annotationGate.js';
+import { shapeKeyForPuzzle } from './shapeDescriptor.js';
+import { buildGoogleAuthorizeUrl } from './authUtils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -172,32 +174,15 @@ function cookieOpts() {
 const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
 
-// POST /api/auth/magic-link — proxy Supabase magic-link send
-app.post('/api/auth/magic-link', async (req, res) => {
+// GET /api/auth/oauth/google — redirect to Supabase Google OAuth
+app.get('/api/auth/oauth/google', (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
-  const { email } = req.body;
-  if (!email || typeof email !== 'string') {
-    return res.status(400).json({ error: 'email is required' });
-  }
-  try {
-    const redirectTo = process.env.FRONTEND_URL || 'http://localhost:5173';
-    console.log('[auth/magic-link] emailRedirectTo=', redirectTo, 'NODE_ENV=', process.env.NODE_ENV);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-    if (error) {
-      console.error('[auth/magic-link] supabase error:', error.message, error);
-      return res.status(400).json({ error: error.message });
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('[auth/magic-link] unexpected error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  const redirectTo = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const authorizeUrl = buildGoogleAuthorizeUrl(process.env.SUPABASE_URL, redirectTo);
+  res.redirect(authorizeUrl);
 });
 
-// POST /api/auth/callback — exchange magic-link tokens for httpOnly cookies
+// POST /api/auth/callback — exchange OAuth tokens for httpOnly cookies
 app.post('/api/auth/callback', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
   const { access_token, refresh_token } = req.body;
@@ -1234,27 +1219,71 @@ app.get('/api/puzzles/draw', async (req, res) => {
   try {
     let puzzles;
     if (category === 'mixed') {
-      // Sample across all CATEGORY_ORDER categories (all accessible to Pro users)
-      const { data, error } = await supabase
-        .from('puzzles')
-        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
-        .in('category', CATEGORY_ORDER)
-        .eq('is_active', true)
-        .limit(n * 4); // oversample then pick
-      if (error) return res.status(500).json({ error: error.message });
-      // Shuffle and take n
-      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
-      puzzles = shuffled;
+      // Interleave: fetch position-ordered pools per category, then take one from each
+      const pools = {};
+      for (const cat of CATEGORY_ORDER) {
+        const { data: catPuzzles } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .eq('category', cat)
+          .eq('is_active', true)
+          .not('position', 'is', null)
+          .order('position', { ascending: true })
+          .limit(n);
+        pools[cat] = catPuzzles || [];
+      }
+
+      // Interleave: take one from each category per position index
+      puzzles = [];
+      for (let posIdx = 0; posIdx < n && puzzles.length < n; posIdx++) {
+        for (const cat of CATEGORY_ORDER) {
+          if (posIdx < pools[cat].length && puzzles.length < n) {
+            puzzles.push(pools[cat][posIdx]);
+          }
+        }
+      }
     } else {
-      const { data, error } = await supabase
+      // Single-category: position-based ordering with random offset
+      const { count: totalIndexed, error: countErr } = await supabase
         .from('puzzles')
-        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .select('*', { count: 'exact', head: true })
         .eq('category', category)
         .eq('is_active', true)
-        .limit(n * 4); // oversample, shuffle in JS since Supabase JS client doesn't support ORDER BY RANDOM()
-      if (error) return res.status(500).json({ error: error.message });
-      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
-      puzzles = shuffled;
+        .not('position', 'is', null);
+
+      if (countErr) return res.status(500).json({ error: countErr.message });
+
+      if (totalIndexed === 0) {
+        puzzles = [];
+      } else {
+        const offset = Math.floor(Math.random() * Math.max(0, totalIndexed - n + 1));
+        const { data: result, error: resultErr } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .eq('category', category)
+          .eq('is_active', true)
+          .not('position', 'is', null)
+          .order('position', { ascending: true })
+          .range(offset, offset + n - 1);
+
+        if (resultErr) return res.status(500).json({ error: resultErr.message });
+
+        puzzles = result || [];
+
+        // Wrap around if needed
+        if (puzzles.length < n && totalIndexed > puzzles.length) {
+          const remaining = n - puzzles.length;
+          const { data: wrap } = await supabase
+            .from('puzzles')
+            .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+            .eq('category', category)
+            .eq('is_active', true)
+            .not('position', 'is', null)
+            .order('position', { ascending: true })
+            .range(0, remaining - 1);
+          puzzles = puzzles.concat(wrap || []);
+        }
+      }
     }
 
     // Session handling for authenticated users
@@ -1271,7 +1300,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         // Resume — re-fetch puzzles in original draw order
         const { data: rows } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
           .in('id', existing.puzzle_ids)
           .eq('is_active', true);
         const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
@@ -2476,12 +2505,97 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   const stats = {};
-  for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0 };
+  for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0, unindexed_count: 0 };
   for (const row of (data || [])) {
     if (stats[row.category]) stats[row.category][row.status] = Number(row.count);
   }
 
+  // Add unindexed_count per category
+  const { data: unindexedData, error: unindexedErr } = await supabase
+    .from('puzzles')
+    .select('category')
+    .eq('is_active', true)
+    .is('position', null);
+
+  if (!unindexedErr && unindexedData) {
+    for (const row of unindexedData) {
+      if (stats[row.category]) stats[row.category].unindexed_count++;
+    }
+  }
+
   res.json({ categories: Object.values(stats) });
+});
+
+// POST /api/admin/puzzles/reindex
+app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { category } = req.body;
+  if (!VALID_CATEGORIES.has(category)) {
+    if (category === 'mixed') {
+      return res.status(400).json({ error: 'mixed is a pseudo-category and cannot be reindexed' });
+    }
+    return res.status(400).json({ error: 'invalid category' });
+  }
+
+  const { data: puzzles, error } = await supabase
+    .from('puzzles')
+    .select('id, move_string, highlight_metadata, correct_col, highlight_cells')
+    .eq('category', category)
+    .eq('is_active', true);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  if (!puzzles || puzzles.length === 0) {
+    return res.json({ category, indexed: 0, shapeGroups: 0 });
+  }
+
+  // Compute shape_key and group by it
+  const groups = new Map();
+  const groupKeys = [];
+  for (const puzzle of puzzles) {
+    const key = shapeKeyForPuzzle(puzzle);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      groupKeys.push(key);
+    }
+    groups.get(key).push(puzzle);
+  }
+
+  // Shuffle within each group
+  for (const key of groupKeys) {
+    groups.get(key).sort(() => Math.random() - 0.5);
+  }
+
+  // Round-robin position assignment
+  const numGroups = groupKeys.length;
+  const maxGroupSize = Math.max(...groupKeys.map(k => groups.get(k).length));
+
+  const updates = [];
+  for (let sortedGroupPosition = 0; sortedGroupPosition < maxGroupSize; sortedGroupPosition++) {
+    for (let groupIndex = 0; groupIndex < numGroups; groupIndex++) {
+      if (sortedGroupPosition < groups.get(groupKeys[groupIndex]).length) {
+        const puzzle = groups.get(groupKeys[groupIndex])[sortedGroupPosition];
+        const position = groupIndex + sortedGroupPosition * numGroups;
+        puzzle.shape_key = groupKeys[groupIndex];
+        puzzle.position = position;
+        updates.push(puzzle);
+      }
+    }
+  }
+
+  // Batch update sequentially
+  for (const puzzle of updates) {
+    const { error: upErr } = await supabase
+      .from('puzzles')
+      .update({ shape_key: puzzle.shape_key, position: puzzle.position })
+      .eq('id', puzzle.id);
+    if (upErr) {
+      console.error('[puzzles/reindex] update error', puzzle.id, upErr.message);
+    }
+  }
+
+  res.json({ category, indexed: updates.length, shapeGroups: numGroups });
 });
 
 // T008: GET /api/admin/candidates
@@ -2623,7 +2737,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
     .eq('id', id)
     .single();
 
@@ -2655,6 +2769,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
       interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
       highlight_metadata: candidate.highlight_metadata ?? null,
       correct_col: candidate.correct_col ?? null,
+      highlight_cells: candidate.highlight_cells ?? null,
       user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
       simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
     })
@@ -2684,7 +2799,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
   const { data: candidates, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
     .eq('category', category)
     .eq('status', 'pending');
 
@@ -2720,6 +2835,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
         interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
         highlight_metadata: candidate.highlight_metadata ?? null,
         correct_col: candidate.correct_col ?? null,
+        highlight_cells: candidate.highlight_cells ?? null,
         user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
         simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
       });

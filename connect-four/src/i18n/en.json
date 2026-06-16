@@ -70,17 +70,11 @@
   "auth": {
     "signIn": "Sign in",
     "signUp": "Create free account",
-    "email": "Email address",
-    "sendLink": "Send magic link",
-    "checkEmail": "Check your email for the sign-in link.",
     "deepRevealGate": "Create a free account to unlock 20 Deep Reveals per week.",
     "signOut": "Sign out",
     "dismiss": "Maybe later",
     "subtitle": "Save your progress, streaks, and stats across devices.",
-    "checkInbox": "Check your inbox",
-    "magicLinkSent": "We sent a magic link to your email. Tap it to sign in.",
-    "continueWithEmail": "Continue with email",
-    "sendError": "Something went wrong. Please try again."
+    "continueWithGoogle": "Sign in with Google"
   },
   "upgrade": {
     "heading": "Become Pro",
@@ -649,6 +643,10 @@
     "title": "Challenges",
     "subtitle": "Choose a set. No labels on the board — you still have to find the move.",
     "positions_count": "{{count}} positions"
+  },
+  "setcard": {
+    "progress": "Puzzle progress",
+    "cleared": "Cleared"
   },
   "challenge": {
     "playing_gray": "You're playing Gray",
