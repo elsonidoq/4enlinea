@@ -2313,13 +2313,13 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
 app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
-  const { data, error } = await supabase.from('candidates').select('category, status');
+  const { data, error } = await supabase.from('candidates').select('category, status, count()');
   if (error) return res.status(500).json({ error: error.message });
 
   const stats = {};
   for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0 };
   for (const row of (data || [])) {
-    if (stats[row.category]) stats[row.category][row.status]++;
+    if (stats[row.category]) stats[row.category][row.status] = Number(row.count);
   }
 
   res.json({ categories: Object.values(stats) });
@@ -2426,7 +2426,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
 
   let predicatePass;
   if (category === 'forced_win') {
-    const { correctCols } = await checkForcedWinPredicate(preClickMoves, solver);
+    const { correctCols } = checkForcedWinPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else if (category === 'forbidden_columns') {
     const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);

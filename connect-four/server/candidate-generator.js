@@ -4,6 +4,7 @@ import {
   hasActiveDoubleThreat, Board, hasWon,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
   detectFigure7, detectJShape, detectOddEvenThreat,
+  detectDoubleThreat, detectForcedWin,
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -63,106 +64,173 @@ function computeLowCategoryHighlight(moveString, correctCols) {
   return [{ column: col, row: heights[col], role: 'hint' }];
 }
 
-// Recursively trace a forced-win sequence starting with Red playing redCol on ms.
-// Returns an array [redCol, yellowCol, ..., finalWinnerCol] or null.
-// depth = number of Red plays so far (starts at 1, max 4).
-//
-// Two cases after Red plays redCol → ms1 (Yellow's turn):
-//   Case A (double/multi-threat terminal): ALL Yellow legal cols score == oiw1.
-//     Yellow plays any col → ms2 → Red wins immediately.  ← terminal
-//   Case B (single forced block): EXACTLY ONE Yellow col scores > oiw1, others == oiw1.
-//     Yellow must play that col → ms2 → recurse at ms2.
-//
-// Case A is the terminal: after any Yellow move Red wins immediately (sign-flip: oiw1 = -winScore2).
-// Case B recurses, building up forced moves until Case A is reached.
-async function traceForcedWin(ms, redCol, depth, solver) {
-  const indent = '  '.repeat(depth);
-  console.log(`${indent}[depth=${depth}] traceForcedWin ms="${ms}" redCol=${redCol+1}`);
+// ── Trace connectedness ──────────────────────────────────────────────────────
+// Ensures each initiator move in the forcing chain builds toward the eventual win,
+// rather than creating a disconnected side threat whose block column is never
+// involved in any later step.
 
-  const ms1 = ms + redCol;
-  if (isGameOver(ms1)) { console.log(`${indent}  → game over after redCol, return null`); return null; }
-  let scores1;
-  try { scores1 = await solver.query(ms1); } catch { console.log(`${indent}  → solver error, return null`); return null; }
-
-  const oiw1 = -Math.floor((41 - ms1.length) / 2);
-  const heights1 = new Board(ms1).colHeights;
-  console.log(`${indent}  ms1="${ms1}" oiw1=${oiw1} scores1=[${scores1.join(', ')}]`);
-
-  // Classify each legal opponent col.
-  // score >= oiw1: opponent has at least one immediate threat to deal with (possible forced block).
-  // score < oiw1: initiator already has multiple threats — no block is possible.
-  const betterCols = [];
-  let allForced = true;
-  let hasLegal = false;
-  for (let c = 0; c < COLS; c++) {
-    if (heights1[c] >= ROWS) continue;
-    hasLegal = true;
-    if (scores1[c] >= oiw1) { betterCols.push(c); allForced = false; }
+// Returns true if every initiator move's threat column (which the opponent blocks
+// at trace[i+1]) appears again later in the trace — as a later initiator move or
+// as a later block. This catches traces where the initiator plays in an unrelated
+// column, forces a block elsewhere, and then wins through completely different columns.
+function isTraceConnected(trace) {
+  // Walk initiator steps: i = 0, 2, 4, ... (even indices, up to third-to-last).
+  for (let i = 0; i < trace.length - 2; i += 2) {
+    const threatCol = trace[i + 1];  // opponent blocks the initiator's sole threat column
+    const rest = trace.slice(i + 2);  // everything after the block
+    if (!rest.includes(threatCol)) {
+      return false;  // threat column never used again — disconnected
+    }
   }
-  console.log(`${indent}  allForced=${allForced} betterCols(1-indexed)=[${betterCols.map(x=>x+1).join(', ')}]`);
-  if (!hasLegal) return null;
+  return true;
+}
 
-  // Case A: all opponent cols score < oiw1 → multi-threat terminal, initiator wins after any reply.
-  // Find initiator's immediate winning threat directly on the board: the opponent is forced to
-  // play into that column, and the initiator wins by playing there next (one row higher).
-  if (allForced) {
-    console.log(`${indent}  → Case A`);
-    const board1 = new Board(ms1).board;
-    const redPlayer = ms.length % 2 === 0 ? 1 : 2;
-    for (let wc = 0; wc < COLS; wc++) {
-      if (heights1[wc] >= ROWS) continue;
-      board1[heights1[wc]][wc] = redPlayer;
-      const wins = checkWin(board1, heights1[wc], wc, redPlayer);
-      board1[heights1[wc]][wc] = 0;
-      if (wins) {
-        console.log(`${indent}    Red threat at col ${wc+1}, opponent forced there, initiator wins`);
-        return [redCol, wc, wc];
+// Recursively trace a forced-win sequence starting with initiator playing initiatorCol on ms.
+// Returns an array [initiatorCol, opponentBlockCol, ..., finalWinnerCol] or null.
+// depth = number of initiator plays so far (starts at 1, max 4).
+//
+// Board-based (no solver): mirrors detectForcedWin's logic exactly.
+//   After initiator plays initiatorCol → must have exactly 1 immediate threat.
+//   Opponent blocks it → must NOT gain a counter-threat.
+//   Initiator continues → terminal (win or double threat) or recurse.
+//
+// Traces are always odd-length, always ending with the initiator's winning move:
+//   Immediate-win terminal:  [I1, O1, I2]  (3 elements — I2 wins)
+//   Double-threat terminal:  [I1, O1, I2, O2, I3]  (5 elements — I3 wins after O2 blocks one threat)
+//   Deeper chains grow by 2 elements per forcing step.
+//
+// Backtracking: collects all structurally valid traces across all continuation columns,
+// then returns the first one where every initiator move's threat column is reused later
+// in the chain (not a disconnected side threat).
+//
+// Works for both Red and Yellow as initiator.
+function traceForcedWin(ms, initiatorCol, depth, maxInitiatorMoves = 4) {
+  const ms1 = ms + initiatorCol;
+  if (isGameOver(ms1)) return null;
+
+  const board = new Board(ms1);
+  // After initiator's move, currentPlayer is the opponent.
+  const initiator = board.opponent;
+  const opponent = board.currentPlayer;
+
+  // Must have exactly 1 immediate threat for the chain to continue.
+  const threats = board.immediateThreats(initiator);
+  if (threats.length !== 1) return null;
+
+  // Must not already be a double threat (shouldn't happen with length === 1, but defensive).
+  if (detectDoubleThreat(board, initiator).matched) return null;
+
+  const blockCol = threats[0];
+  if (board.colHeights[blockCol] >= ROWS) return null;
+
+  // Opponent is forced to block.
+  const afterBlock = board.withMove(blockCol);
+  if (isGameOver(afterBlock.movestring)) return null;
+
+  // Opponent's block must NOT create a counter-threat (chain is broken if it does).
+  if (afterBlock.immediateThreats(opponent).length > 0) return null;
+
+  if (depth >= maxInitiatorMoves) return null;
+
+  // Collect all structurally valid traces across all continuation columns,
+  // then pick the first one where every initiator disc is geometrically connected
+  // to a later threat or winning line (backtracking — not greedy).
+  const candidates = [];
+  for (let c = 0; c < COLS; c++) {
+    if (afterBlock.colHeights[c] >= ROWS) continue;
+
+    const row = afterBlock.colHeights[c];
+    const afterInit = afterBlock.withMove(c);
+
+    // Terminal 1: initiator wins immediately with this continuation.
+    if (afterInit.checkWin(row, c, initiator)) {
+      candidates.push([initiatorCol, blockCol, c]);
+      continue;
+    }
+
+    // Terminal 2: initiator creates a double threat.
+    // Extend the trace past the double threat: opponent blocks one threat column,
+    // initiator wins in the other (or one row higher for same-column consecutive threats).
+    // Note: counter-threats from the opponent's block are irrelevant — the game ends
+    // on the initiator's next move, so the opponent never gets to use their threat.
+    const dtResult = detectDoubleThreat(afterInit, initiator);
+    if (dtResult.matched) {
+      const dtCols = dtResult.cols;
+      if (dtCols.length >= 2) {
+        // Case A: gravity-top threats in ≥2 distinct columns.
+        // Opponent blocks dtCols[0]; initiator wins in dtCols[1].
+        const oppBlockBoard = afterInit.withMove(dtCols[0]);
+        const winRow = oppBlockBoard.colHeights[dtCols[1]];
+        if (winRow < ROWS &&
+            oppBlockBoard.withMove(dtCols[1]).checkWin(winRow, dtCols[1], initiator)) {
+          candidates.push([initiatorCol, blockCol, c, dtCols[0], dtCols[1]]);
+        }
+        continue;
+      }
+      if (dtCols.length === 1) {
+        // Case B: consecutive-row threats in the same column.
+        // Opponent blocks the lower threat; initiator wins one row higher.
+        const oppBlockBoard = afterInit.withMove(dtCols[0]);
+        const winRow = oppBlockBoard.colHeights[dtCols[0]];
+        if (winRow < ROWS &&
+            oppBlockBoard.withMove(dtCols[0]).checkWin(winRow, dtCols[0], initiator)) {
+          candidates.push([initiatorCol, blockCol, c, dtCols[0], dtCols[0]]);
+        }
+        continue;
       }
     }
-    console.log(`${indent}  → Case A: no direct threat found, return null`);
-    return null;
+
+    // Recurse: continue the forcing chain.
+    const subTrace = traceForcedWin(ms1 + blockCol, c, depth + 1, maxInitiatorMoves);
+    if (subTrace !== null) candidates.push([initiatorCol, blockCol, ...subTrace]);
   }
 
-  // Case B: exactly one opponent col avoids immediate multi-threat → forced block, recurse.
-  if (betterCols.length !== 1) {
-    console.log(`${indent}  → Case B fail: ${betterCols.length} betterCols, return null`);
-    return null;
+  // Return the first connected trace.
+  for (const t of candidates) {
+    if (isTraceConnected(t)) return t;
   }
-  const yellowCol = betterCols[0];
-  console.log(`${indent}  → Case B: forced block col ${yellowCol+1}`);
-
-  const ms2 = ms1 + yellowCol;
-  if (isGameOver(ms2)) { console.log(`${indent}  → game over after forced block, return null`); return null; }
-  if (depth >= 4) { console.log(`${indent}  → max depth, return null`); return null; }
-
-  const heights2 = new Board(ms2).colHeights;
-  for (let c = 0; c < COLS; c++) {
-    if (heights2[c] >= ROWS) continue;
-    const subTrace = await traceForcedWin(ms2, c, depth + 1, solver);
-    if (subTrace !== null) return [redCol, yellowCol, ...subTrace];
-  }
-  console.log(`${indent}  → no sub-trace found, return null`);
   return null;
 }
 
 // forced_win predicate: exactly one column initiates a valid forced-win sequence.
-export async function checkForcedWinPredicate(ms, solver) {
-  const heights = new Board(ms).colHeights;
-  const redPlayer = ms.length % 2 === 0 ? 1 : 2;
+// Board-based: uses detectForcedWin for exhaustive validation and traceForcedWin for
+// trace generation. Works for both Red and Yellow as initiator.
+export function checkForcedWinPredicate(ms) {
+  const board = new Board(ms);
+  const heights = board.colHeights;
+  const initiator = board.currentPlayer;
   const correctCols = [];
+
   for (let c = 0; c < COLS; c++) {
     if (heights[c] >= ROWS) continue;
-    const trace = await traceForcedWin(ms, c, 1, solver);
+
+    const row = heights[c];
+    const afterMove = board.withMove(c);
+
+    // Immediate win is not a forced win — that's immediate_threat.
+    if (afterMove.checkWin(row, c, initiator)) continue;
+
+    // First move creates double threat — that's Category 3 (double_threat).
+    if (detectDoubleThreat(afterMove, initiator).matched) continue;
+
+    // Exhaustive check: does this column initiate a forced-win chain?
+    if (!detectForcedWin(afterMove, initiator).matched) continue;
+
+    // Generate the specific trace for highlight purposes.
+    const trace = traceForcedWin(ms, c, 1);
     if (trace === null) continue;
-    // Require at least 5-ply sequence: [R1, Y1, R2, Y2, R3].
-    // A 3-element trace means Case A fired at depth 1 — the first move already creates
-    // an immediate double threat, making the puzzle trivially easy.
-    if (trace.length < 5) continue;
+
+    // Require at least 3-ply sequence: [I1, O1, I2].
+    // A 3-element trace is the minimum valid forced win: initiator move →
+    // opponent forced block → initiator terminal (win or double threat).
+    if (trace.length < 3) continue;
+
+    // Verify the final position is a win for the initiator.
     let msEnd = ms;
     for (const col of trace) msEnd += col;
-    const boardEnd = new Board(msEnd).board;
-    if (hasWon(boardEnd, redPlayer)) correctCols.push(c);
+    if (new Board(msEnd).hasWon(initiator)) correctCols.push(c);
   }
+
   return { passes: correctCols.length === 1, correctCols };
 }
 
@@ -197,11 +265,11 @@ export function checkForbiddenColumnsPredicate(ms) {
 }
 
 // forced_win highlight — trace forced sequence from the initiating move.
-export async function computeForcedWinHighlight(solver, moveString, correctCols) {
+export function computeForcedWinHighlight(moveString, correctCols) {
   if (correctCols.length === 0) return [];
 
-  const redCol = correctCols[0];
-  const trace = await traceForcedWin(moveString, redCol, 1, solver);
+  const initiatorCol = correctCols[0];
+  const trace = traceForcedWin(moveString, initiatorCol, 1);
   if (!trace) return [];
 
   const cells = [];
@@ -213,11 +281,11 @@ export async function computeForcedWinHighlight(solver, moveString, correctCols)
     if (h[col] >= ROWS) break;
 
     const isLast = (i === trace.length - 1);
-    const isRedTurn = (i % 2 === 0);
+    const isInitiatorTurn = (i % 2 === 0);  // index 0 is always initiator, regardless of color
 
     if (isLast) {
       cells.push({ column: col, row: h[col], role: 'winner' });
-    } else if (isRedTurn) {
+    } else if (isInitiatorTurn) {
       cells.push({ column: col, row: h[col], role: 'hint' });
     } else {
       cells.push({ column: col, row: h[col], role: 'loser' });
@@ -247,7 +315,7 @@ function computeForbiddenColumnsHighlight(moveString, correctCols) {
 // These are never both populated for the same candidate. New categories → use highlight_metadata.
 async function computeHighlightCells(category, moveString, scores, correctCols, solver) {
   if (['immediate_threat', 'forced_block', 'double_threat'].includes(category)) return computeLowCategoryHighlight(moveString, correctCols);
-  if (category === 'forced_win') return computeForcedWinHighlight(solver, moveString, correctCols);
+  if (category === 'forced_win') return computeForcedWinHighlight(moveString, correctCols);
   if (category === 'forbidden_columns') return computeForbiddenColumnsHighlight(moveString, correctCols);
   if (category === 'odd_even_threat') return []; // No cell highlights needed
   return [];
@@ -255,7 +323,7 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
 
 // Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
 // after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
-async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
+async function solverWeightedPositionSoftmax(solver, maxMoves, rng, onPosition) {
   const T1 = rng() * 4 + 0.1;
   const T2 = rng() * 4 + 0.1;
   const temps = [T1, T2];
@@ -286,6 +354,68 @@ async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
 
     const col = softmaxSample(legal, scores, T, rng);
     plies.push({ ply: i, player, scores: [...scores], weights: probs, sampled_col: col });
+
+    board[heights[col]][col] = player;
+    heights[col]++;
+    moveString += col.toString();
+    if (hasWon(board, player)) return null;
+    player = 3 - player;
+  }
+  return null;
+}
+
+// Simulate a mistake-probability-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
+// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
+// Each player gets a random mistake probability in [0, 0.5). On each move:
+//   - With probability mp: play the second-best column (deliberate mistake).
+//   - Otherwise: pick uniformly at random among the best columns.
+async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
+  const MP1 = rng() * 0.25;
+  const MP2 = rng() * 0.25;
+  const mistakeProbs = [MP1, MP2];
+  let moveString = '';
+  const heights = Array(COLS).fill(0);
+  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  let player = 1;
+  const plies = [];
+
+  for (let i = 0; i < maxMoves; i++) {
+    const legal = [];
+    for (let c = 0; c < COLS; c++) {
+      if (heights[c] < ROWS) legal.push(c);
+    }
+    if (legal.length === 0) return null;
+
+    const scores = await solver.query(moveString);
+
+    if (await onPosition(moveString, scores)) {
+      return { moveString, scores, trace: { mistake_prob_p1: MP1, mistake_prob_p2: MP2, termination: 'predicate_match', plies } };
+    }
+
+    const mp = mistakeProbs[player - 1];
+    let col;
+    let mistakeMade = false;
+
+    if (legal.length > 1 && rng() < mp) {
+      // Deliberate mistake: pick second-best column among legal columns.
+      const maxScore = Math.max(...legal.map(c => scores[c]));
+      const belowMax = legal.filter(c => scores[c] < maxScore);
+      if (belowMax.length > 0) {
+        const secondBestScore = Math.max(...belowMax.map(c => scores[c]));
+        const tiedSecond = belowMax.filter(c => scores[c] === secondBestScore);
+        col = tiedSecond[Math.floor(rng() * tiedSecond.length)];
+        mistakeMade = true;
+      }
+    }
+
+    if (!mistakeMade) {
+      // No mistake: pick uniformly at random among the best columns.
+      const maxScore = Math.max(...legal.map(c => scores[c]));
+      const tiedBest = legal.filter(c => scores[c] === maxScore);
+      col = tiedBest[Math.floor(rng() * tiedBest.length)];
+    }
+
+    plies.push({ ply: i, player, scores: [...scores], sampled_col: col, mistake: mistakeMade });
 
     board[heights[col]][col] = player;
     heights[col]++;
@@ -394,7 +524,7 @@ export function checkOddEvenThreatPredicate(ms, scores) {
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
 async function checkPredicate(category, moveString, scores, solver) {
-  if (category === 'forced_win') return checkForcedWinPredicate(moveString, solver);
+  if (category === 'forced_win') return checkForcedWinPredicate(moveString);
   if (category === 'forbidden_columns') return checkForbiddenColumnsPredicate(moveString);
 
   // New tactical categories — priority order per Decision 5
@@ -444,6 +574,12 @@ function isClean(category, ms) {
       !hasActiveDoubleThreat(board, colHeights, opponent);
   }
 
+  if (category === 'forced_win') {
+    // Opponent must NOT have any immediate threat — they would just win instead of being forced.
+    const opponent = 3 - player;
+    return getImmediateThreats(board, colHeights, opponent).length === 0;
+  }
+
   if (category === 'forbidden_columns') {
     // Current player must not be in a position where the opponent already has a double threat
     const opponent = 3 - player;
@@ -484,8 +620,9 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const rawMinMoves = 8 + Math.floor(rng() * 5);
-      const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
+      const rawMinMoves = 8 + Math.floor(rng() * 10);
+      // const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
+      const maxMoves = Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
       let matchedCorrectCols = null;

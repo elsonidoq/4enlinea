@@ -1,16 +1,19 @@
 ---
 name: project_sequence_handler_ui
-description: SequenceHandler owns its entire UI — dropping it inside another screen produces duplicated controls and SC-007 violations
+description: SequenceHandler component is GONE — forced_win sequence logic lives inline in ChallengeScreen.handleSequenceClick
 metadata:
   type: project
 ---
 
-`SequenceHandler.jsx` renders a complete self-contained UI: its own `Board`, goal-prompt header, success/fail banners, Reset button, and "Next puzzle →" button. The banners are **hardcoded English strings** (SC-007 violation, tracked as known deviation). `onNext` is a plain `onClick` with zero arguments — it fires only on success.
+`SequenceHandler.jsx` no longer exists. All forced_win multi-move interaction is handled inline in `ChallengeScreen.handleSequenceClick`.
 
-**Why:** Epic 2b discovered this when T006 planned to drop SequenceHandler inside `ChallengeScreen`'s full Toolbar/Coach/strip layout, which produced duplicated Next buttons and prompts.
+`handleSequenceClick` drives a server-side state machine via `POST /api/puzzles/:id/sequence/move`:
+- **`outcome === 'continue'`**: user's move correct but sequence unfinished. Rebuilds board, will animate both user's disc and AI's response disc via staged `setLastDrop` (spec 034 adds this behavior).
+- **`outcome === 'success'`**: double-threat reached. Reads `data.threatCells` and maps them to `win` overlays. `win` overlays render as pulsing rings.
+- **`outcome === 'wrong'`**: incorrect move.
 
-**How to apply:** Any epic reusing SequenceHandler must decide on an integration boundary:
-- **Takeover mode (MVP default):** ChallengeScreen suppresses its Toolbar, Tier-1 strip, and CoachDialog when `interaction_mode === 'sequence'`. SequenceHandler renders standalone.
-- **Refactor mode:** Add i18n'd prompt/banner props and an external `onComplete(passed)` callback to SequenceHandler — removes its internal Next button and English banners. Required if the fail path needs to be recorded.
+`threatCells` from `/sequence/move` uses `{ c, r }` — **not** `{ col, row }` as the `/check` endpoint uses.
 
-The fail path (`onNext(false)`) is unimplementable without refactoring — `onNext` has no args. Fail-recording for sequence puzzles is deferred post-MVP.
+**Why:** SequenceHandler was removed during a prior refactor; `ChallengeScreen` absorbed its UI. The old memory described SequenceHandler as a live component with takeover-mode integration — that is fully stale.
+
+**How to apply:** Any epic or spec touching forced_win interaction must look at `ChallengeScreen.handleSequenceClick`, not a standalone component. `frontend-conventions.md` was updated 2026-06-16 to document this. See also [[project_spec034_board_interaction]].

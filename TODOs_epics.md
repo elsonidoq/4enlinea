@@ -354,40 +354,36 @@ token plumbing, or changing the Board disc colors.
 
 ### Epic 5 — Board Interaction Feedback
 
-**Goal:** Every board interaction gives the same drop animation and correct/incorrect feedback, and
-key tactical moments are highlighted on the board.
+**Goal:** Key tactical moments are highlighted on the board, and disc drop animations play only
+during live gameplay — not on static board loads.
 
 **Scope:**
 
-- **Socratic/practice disc drop + verdict (bug).** On the Socratic board, clicking the correct
-  column must drop a disc and show correct/incorrect feedback exactly like the challenges board.
-  The first board in a lesson currently doesn't drop on click; the second works. Trace
-  `SocraticScreen.handleColumnClick` and `ConceptScreen` (the "practice boards") to find why the
-  first board's `lastDrop`/overlay path doesn't fire on first interaction.
-- **forced_win double-threat highlight.** When a `forced_win` sequence reaches the double threat,
-  highlight the two created threats on the board. `SequenceHandler` currently passes `overlays={[]}`;
-  this is a **frontend-only change** — no server modification needed. The
-  `POST /api/puzzles/:id/sequence/move` endpoint already returns
-  `{ outcome: 'success', threatCells: [{ c: number, r: number }] }` when the learner's move creates
-  ≥ 2 threats (verified in `server/index.js`). `SequenceHandler` must read `response.threatCells`
-  on a `success` response and convert each entry to an `overlays` item of type `tg`
-  (current-player threat highlight): `{ c, r, type: 'tg' }`. Note: `threatCells` uses `{ c, r }`
-  — **not** `{ col, row }` as the `/check` endpoint uses — do not mix the two shapes.
-- **Challenge-set advance animation.** When advancing to the next board in a challenge set, discs
-  shared with the previous board must just appear (no animation); only the newly introduced discs
-  drop. On the first board, all discs drop. Diff consecutive boards to compute the "new since
-  previous" disc set and gate the drop animation on it.
+- **forced_win double-threat highlight (verification).** When a `forced_win` sequence reaches the
+  double-threat step, both created threat cells must be visibly highlighted. This is a
+  **verification task, not a build task** — `ChallengeScreen` / `handleSequenceClick` already reads
+  `data.threatCells` on a `success` response and renders `win`-type overlays. Confirm in a live
+  forced_win sequence that both cells light up correctly. No code change is expected. Note:
+  `threatCells` uses `{ c, r }` — **not** `{ col, row }` as the `/check` endpoint uses — do not
+  mix the two shapes.
+- **Challenge-set advance animation.** Discs must animate (drop) only when the user or coach makes
+  a move during live gameplay. When a board is loaded statically — challenge-set advance, lesson
+  board load, or any other `ChallengeScreen`-driven board swap — **all discs must appear instantly
+  with no drop animation**. `Board` owns this logic internally (via internal state or ref); no new
+  caller prop is needed. This applies uniformly to standalone challenge sets and
+  lesson-confirmation challenges.
 
 **Acceptance criteria:**
 
-- Clicking the correct column on any Socratic/practice board drops a disc and shows the same
-  correct/incorrect feedback as the challenges board, including the first board of a lesson.
-- At the `forced_win` double-threat step, both threat cells are visibly highlighted via `overlays`.
-- Advancing within a challenge set animates only the newly added discs; shared discs appear without
-  animation; the first board animates all discs.
+- At the `forced_win` double-threat step, both threat cells are visibly highlighted with `win`-type
+  overlays (verified, no code change needed).
+- When advancing within a challenge set or loading a new board statically, all discs appear
+  instantly with no drop animation.
+- During live gameplay (user or coach move), the placed disc drops with the standard animation.
 
 **NOT included:** New sound effects (Epic 10), new overlay types beyond the existing
-`OverlayType` enum, or changes to puzzle correctness logic.
+`OverlayType` enum, changes to puzzle correctness logic, or any fixes to `SocraticScreen` /
+`ConceptScreen` disc-drop behavior (that bug has already been resolved).
 
 ---
 
@@ -402,10 +398,25 @@ puzzles never repeat the same visual shape.
   (2) a clear visual "cleared" state when the set is complete, (3) accuracy expressed visually
   (not a number). The screen currently renders only `set.stars`. Source per-set progress/accuracy
   from the new `GET /api/user/challenge-progress` endpoint (auth-required; defined below), post-Epic 1.
-- **No back-to-back same-shape puzzles.** Add a per-puzzle "shape" extractor and a ranker that
-  orders a drawn set so no two adjacent puzzles share a shape (e.g. immediate-threat: the
-  orientation + coarse position of the group of three; double-threat: the union of involved pieces
-  normalized to a corner). Apply the ordering where puzzle sets are drawn (`GET /api/puzzles/draw`).
+- **No back-to-back same-shape puzzles (curation-time reindex).** A per-category shape descriptor
+  `{orientation, subtype, col_zone, row_zone}` is computed once at curation time and stored in new
+  `shape_key` and `position` columns on the puzzles table. A "reindex puzzles" button on the
+  curation tool runs a round robin algorithm per category: group puzzles by `shape_key`, then
+  interleave (A, B, C, A, B, C...) to assign sequential `position` values (0, 1, 2, ...). Puzzles
+  with null `position` are skipped by the draw endpoint. Unindexed puzzles trigger a warning in
+  the curation tool. Draw time uses sequential position ordering with NO shape algorithm at serve
+  time — the reorder is purely a curation-time operation. The adjacency constraint is within-draw
+  only; cross-draw adjacency is not guaranteed and is out of scope. `double_threat` shape uses a sorted pair of arm descriptors.
+- **New DB columns on puzzles table**: `shape_key TEXT` (category-specific shape bucket identifier)
+  and `position INTEGER` (global round-robin index within the category). A new migration adds both
+  columns; `position` defaults to `NULL` (puzzles are not served until indexed).
+- **forced_win highlight cells migration.** New migration to store `highlight_cells` on the
+  puzzles table at curation time (populated from `computeForcedWinHighlight`) so the shape
+  descriptor can derive from stored data without board replay. The puzzles table currently has no
+  `highlight_cells` column; forced_win `highlight_metadata` is always `null`.
+- **Curation tool: reindex puzzles button.** A button per category on the curation admin page that
+  triggers the round robin reindex. The tool also warns when a category has puzzles with null
+  `position`. The endpoint is server-side (POST-style, admin-only).
 
 **Acceptance criteria:**
 
@@ -443,14 +454,14 @@ puzzles never repeat the same visual shape.
     `{ attempted: 0, correct: 0, total: <live count>, accuracy: 0, cleared: false }`.
 - **Errors**: 401, 503 (Supabase not configured), 500.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Shape descriptor & ranker.** The shape-extraction function is per-category and currently
-  unspecified. Decide the canonical descriptor for each category (what is normalized, how position
-  is coarse-grained, how equality is defined) and the ranking/greedy-reorder algorithm. This is a
-  hard-to-derive algorithm — per project policy it should be **fully specified in the spec, not
-  deferred to plan.md**. Output: the descriptor definition per category + the reorder algorithm,
-  with worked examples sourced from real DB puzzles (never hand-built movestrings).
+- **Shape descriptor: curation-time, not draw-time.** The shape descriptor `{orientation, subtype, col_zone, row_zone}` is computed once at curation time from stored puzzle fields (`highlight_metadata`, `correct_col`, `move_string`, `highlight_cells` for forced_win). Categories with stored metadata (z_threat, undercut, overcut, figure_7, j_shape) derive the descriptor directly from stored fields. forced_win derives from the new `highlight_cells` column on puzzles (populated by a new migration from `computeForcedWinHighlight`). Categories without spatial metadata (immediate_threat, forced_block, double_threat, claimeven, claimodd, forbidden_columns, odd_even_threat) compute the descriptor at curation time via board analysis using the existing `Board` class. The result is stored in `shape_key TEXT` and `position INTEGER` columns on the puzzles table.
+- **Reindex algorithm: round robin.** Group puzzles within a category by `shape_key`, then interleave (A, B, C, A, B, C...) to assign sequential `position` values. This guarantees no adjacent same-shape puzzles within a draw. Cross-draw adjacency is not guaranteed and is out of scope. Reindex is triggered from the curation tool via a "reindex puzzles" button (admin-only POST endpoint). The formula: `position = groupIndex + sortedGroupPosition * numGroups`, where groups are ordered by first-seen and positions within each group are shuffled per reindex.
+- **Draw endpoint: sequential by position, no serve-time algorithm.** `GET /api/puzzles/draw` selects puzzles ordered by `position ASC`, skipping any with null `position`. The shape reorder was removed from draw time entirely (architectural pivot from the original design doc). The draw endpoint becomes simpler: sequential position ordering, no heap, no shape comparison at serve time.
+- **forced_win: store highlight_cells on puzzles.** A new migration adds `highlight_cells` to the puzzles table. At candidate curation/approval time, `computeForcedWinHighlight` populates it (same 5-cell structure with roles hint/loser/hint/loser/winner currently stored only on the candidates table). This makes forced_win shape extraction consistent with other stored-metadata categories. Without this migration, `puzzle.highlight_metadata` is always null for forced_win — a null-dereference if the shape extractor tries to read it.
+- **Visual accuracy on SetPickerScreen: colored bar fill.** Each SetCard shows a thin horizontal bar with width proportional to accuracy (0–100%). Color encoding: green (#4caf50) for accuracy >= 80%, yellow (#ffc107) for 50–79%, red (#f44336) for < 50%. No numeric text is shown — purely visual, respecting the constitution's "no raw scores surfaced" rule.
+- **Design doc superseded.** The original design doc `docs/superpowers/specs/2026-06-16-shape-descriptor-ranker-design.md` described a draw-time greedy max-heap reorder. That architecture is superseded by the curation-time round robin approach described here. The shape descriptor taxonomy (orientation, subtype, col_zone, row_zone) from that doc remains valid; only the timing and algorithm changed.
 
 ---
 

@@ -156,16 +156,12 @@ export function ReviewScreen({ go, goBack, id }) {
   }
 
   // Build frozen board when analysis is ready
+  // T003: lastDrop computation removed — ReviewScreen passes lastDrop={null}
+  // to prevent drop animations on every step-back through a reviewed game.
   let frozenBoard = null;
-  let lastDrop = null;
   if (analysis?.fullMovestring) {
-    const { board, heights } = buildBoard(analysis.fullMovestring);
+    const { board } = buildBoard(analysis.fullMovestring);
     frozenBoard = board;
-    if (analysis.fullMovestring.length > 0) {
-      const lastCol = parseInt(analysis.fullMovestring[analysis.fullMovestring.length - 1], 10);
-      const lastRow = heights[lastCol] - 1;
-      lastDrop = { c: lastCol, r: lastRow };
-    }
   }
 
   // Coach messages
@@ -200,11 +196,14 @@ export function ReviewScreen({ go, goBack, id }) {
       >
         <div style={{ width: '100%', maxWidth: 380 }}>
           {frozenBoard ? (
+            // lastDrop audit (034): lastDrop is computed from analysis.fullMovestring
+            // (last move of the displayed position). BUG: stepping backward through a game
+            // would animate every disc at every step. Fixed: pass lastDrop={null} — T003.
             <Board
               board={frozenBoard}
               canPlay={false}
               compact={true}
-              lastDrop={lastDrop}
+              lastDrop={null}
             />
           ) : (
             <div style={{

@@ -1177,7 +1177,11 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
     return { matched: true, cols, cells };
   }
 
-  // Case B: consecutive-row threats in the same column
+  // Case B: consecutive-row threats in the same column.
+  // The lower threat must be at the gravity-top (colHeights[col]), so the opponent
+  // is forced to block it. After the block, the upper threat becomes gravity-top and
+  // the initiator wins there. Without this constraint, reachable threats buried under
+  // empty cells would produce false positives.
   const byCol = {};
   for (const t of threatCells) {
     if (!byCol[t.col]) byCol[t.col] = [];
@@ -1186,7 +1190,8 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
   for (const [colStr, rows] of Object.entries(byCol)) {
     const sorted = rows.sort((a, b) => a - b);
     for (let i = 0; i < sorted.length - 1; i++) {
-      if (sorted[i + 1] === sorted[i] + 1) {
+      if (sorted[i + 1] === sorted[i] + 1 &&
+          sorted[i] === board.colHeights[parseInt(colStr)]) {
         const col = parseInt(colStr);
         const cells = [`c${col + 1}r${board.colHeights[col] + 1}`];
         return { matched: true, cols: [col], cells };

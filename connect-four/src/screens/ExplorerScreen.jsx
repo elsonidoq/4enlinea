@@ -64,6 +64,11 @@ function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, mov
             {t('sparring.terminalPosition')}
           </p>
         )}
+        {/*
+          lastDrop audit (034): lastDrop={gameBoard.lastDrop} from useGameBoard hook.
+          Explorer is an interactive replay tool — user clicks columns to replay moves.
+          Drop animation on each replay step is intentional. OK.
+        */}
         <Board
           board={gameBoard.board}
           onColumnClick={gameBoard.handleColumnClick}
