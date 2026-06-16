@@ -63,7 +63,7 @@ export function DeepRevealPane({
       return;
     }
 
-    if (!session?.access_token) {
+    if (!session?.user) {
       setAuthOpen(true);
       return;
     }
