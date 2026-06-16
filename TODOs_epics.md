@@ -467,30 +467,36 @@ puzzles never repeat the same visual shape.
 
 ### Epic 7 — Auth & Onboarding
 
-**Goal:** Replace magic-link registration with Google OAuth. Auth emails look professional.
+**Goal:** Replace magic-link registration with Google OAuth as the sole sign-in method.
 
 > Brainstorming decisions: [`docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md`](docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md)
 
 **Scope:**
 
-- **Auth email redesign.** Replace the current auth email template with a branded, legible template.
-  Configured in Supabase email templates (transactional auth emails only — Google OAuth does not send
-  app-side auth emails).
 - **Replace magic-link with Google OAuth.** Remove the magic-link sign-in flow from `AuthModal` and
-  replace it with a "Sign in with Google" button. Integrate via `supabase.auth.signInWithOAuth({
-  provider: 'google' })` on the client (`frontend-conventions.md` — auth stays client-side via the
-  anon key). Magic-link is removed entirely; no email+password.
-- Note the known open bug `bug_auth_magic_link_redirect.md` — the same allowlist fix applies: add
-  `FRONTEND_URL` to each Supabase project's Auth → URL Configuration → Redirect URLs.
+  replace it with a "Sign in with Google" button. Magic-link is removed entirely; no email+password.
+  **Integration (server-mediated — no client Supabase SDK):** Add `GET /api/auth/oauth/google` on
+  the server; it 302-redirects to
+  `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${FRONTEND_URL}`. The "Sign in
+  with Google" button in `AuthModal` navigates the browser to `/api/auth/oauth/google`. The return
+  leg (`#access_token=` hash → `/api/auth/callback` → httpOnly cookie) is unchanged. Real contracts
+  are the `/api/auth/*` endpoints in `server/index.js` and `ProfileStore.jsx`; there is no client
+  Supabase SDK or anon key in the frontend.
+- **Redirect-URL allowlist.** Add `FRONTEND_URL` to each Supabase project's Auth → URL
+  Configuration → Redirect URLs (staging and production). Required for the Google OAuth callback to
+  land correctly. (Same fix noted in open bug `bug_auth_magic_link_redirect.md`.)
+- **Update `frontend-conventions.md` auth section** to reflect the current server-mediated
+  httpOnly-cookie model, replacing the now-stale client-SDK description.
 
 **Acceptance criteria:**
 
-- Auth emails render with brand styling in major mail clients (no raw/unstyled template).
 - A user can complete registration and sign-in via Google OAuth end-to-end.
 - Magic-link sign-in is removed from the UI.
 - The redirect-URL allowlist is configured for staging and production.
 
-**NOT included:** Account linking/merging across providers, profile/settings redesign, or 2FA.
+**NOT included:** Auth email redesign (Google OAuth sends no app-side auth emails; a styled template
+with no live trigger is untestable — cut entirely). Account linking/merging across providers,
+profile/settings redesign, or 2FA.
 
 #### Decisions
 
@@ -500,6 +506,8 @@ puzzles never repeat the same visual shape.
     = `https://<supabase-project-ref>.supabase.co/auth/v1/callback`.
   - Supabase dashboard: Auth → Providers → Google → enable, paste Client ID + Secret.
   - `FRONTEND_URL` added to Auth → URL Configuration → Redirect URLs in each Supabase project.
+  - **Initiation via server redirect endpoint** (`GET /api/auth/oauth/google`), not via
+    `supabase.auth.signInWithOAuth()` — the client Supabase SDK was removed in commit `87f2818`.
 
 - **Anonymous-→-account migration.** No changes needed. Google OAuth returns `#access_token=` in
   the URL hash after redirect — the existing `checkSession` in `ProfileStore.jsx` handles this
