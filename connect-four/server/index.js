@@ -3019,6 +3019,10 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
   res.status(201).json({ id: data.id, verified: false });
 });
 
+// ── Legal pages (required by Google OAuth consent screen) ────────────────────
+app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html')));
+app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html')));
+
 // ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
 
 app.use(express.static(join(__dirname, '../dist')));
