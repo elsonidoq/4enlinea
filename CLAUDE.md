@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/036-google-oauth-auth/plan.md
+specs/037-review-blunder-sharing/plan.md
 <!-- SPECKIT END -->
 
 ## Documentation index

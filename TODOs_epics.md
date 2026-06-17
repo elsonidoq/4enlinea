@@ -528,28 +528,43 @@ games are sortable by usefulness, and any blunder has a shareable permalink.
   user played Green or Gray (the `side`/`userPlayer` data already exists; surface it as a persistent
   chip/label).
 - **Game-navigation sorting.** Sort the past-games list (`PastGamesListScreen` / `GET /api/games`)
-  by: games played well, games with horrible blunders, and recent. Sorting is **server-side** so it
-  applies before the `limit` cap. Add a `?sort=` query param to `GET /api/games`:
-  - `sort=recent` (default, current behavior): `ORDER BY date DESC`
-  - `sort=played_well`: `ORDER BY accuracy DESC NULLS LAST, date DESC`
-  - `sort=worst_blunders`: `ORDER BY blunder_count DESC, date DESC`
+  by: games played well, games with horrible blunders, and recent. Add a `?sort=` query param to
+  `GET /api/games`. Because `GET /api/games` fetches from `games` and `papergames_games` separately
+  and merges them into a unified JS array before slicing, sorting happens in JS on the merged array
+  (not via a single SQL `ORDER BY`). Implementation:
+  - Each table query computes `blunder_count` via a `LEFT JOIN` aggregate at query time — no new
+    column is added to either table.
+  - The two result sets are concatenated, then JS-sorted by the requested key before slicing.
+  - Secondary sort field is `created_at` (not `date`).
+  - Sort semantics:
+    - `sort=recent` (default, current behavior): by `created_at DESC`
+    - `sort=played_well`: by `accuracy DESC NULLS LAST, created_at DESC` — null-accuracy games are
+      included but sort after non-null games (JS comparator: null values treated as −∞), then by
+      `created_at DESC` among themselves.
+    - `sort=worst_blunders`: by `blunder_count DESC, created_at DESC`
   - Any other value returns `400 { "error": "invalid sort" }`.
-  All three values use the existing `accuracy`, `blunder_count`, and `date` columns — no new columns
-  or joins required.
+  No new columns required; `blunder_count` is computed via aggregate JOIN at query time.
 - **Blunder permalinks.** Make a blunder a shareable nugget. Add `GET /api/blunders/:id` and
   refactor `MistakeDetailScreen` to cold-boot from a single blunder id (today it requires a
   `blunderNavList[]` + `index` and is in `SESSION_ONLY_SCREENS`). Add a routable URL and OG meta
   (the SPA catch-all already injects OG tags for `/game/:id`; mirror for `/blunder/:id`).
 
   **`GET /api/blunders/:id` contract (auth/visibility rules resolved in brainstorming below):**
-  - Path param: `blunderId` — UUID string.
-  - Response (`200 OK`): blunder object matching the shape used by `GET /api/coach/queue` (see
-    `api-conventions.md` — `id`, `board_state`, `move_played`, `correct_move`, `pattern_category`,
-    `created_at`, `resolved_at`, `severity`, `game_id`, `moveIndex`, `threat_cells`).
-  - Errors: 400 (invalid UUID format), 401 (if visibility rule requires auth), 403 (not owner, if
-    owner-only), 404 (not found), 503, 500.
+  - Path param: `id` — UUID string.
+  - Response (`200 OK`): blunder object **field-for-field equal to a `GET /api/coach/queue` item**
+    so `MistakeDetailScreen` needs no adapter. Fields: `id`, `board_state`, `move_played`,
+    `correct_move`, `pattern_category`, `created_at`, `resolved_at`, `severity`,
+    `blunder_severity`, `game_id`, `moveIndex`, `threat_cells`.
+  - Errors: 400 (invalid UUID format), 404 (not found), 500, 503. No 401/403 — this endpoint is
+    public (no auth check, no `user_id` filter).
   - **`blunderDetail` removed from `SESSION_ONLY_SCREENS`** once this endpoint exists; `/blunder/:id`
-    added to `URL_MAP` in `urlMapping.js`.
+    added to `URL_MAP` in `urlMapping.js` using path param name `id`.
+
+  **Non-owner / signed-out render path on `/blunder/:id`:**
+  When the page is visited by a non-owner or a signed-out user the view is read-only:
+  - "Mark as reviewed" is hidden (it is a write action scoped to the owner).
+  - Deep Reveal is visible but shows a **"Sign in to unlock"** prompt for unauthenticated users
+    (deliberate conversion hook — do not hide Deep Reveal entirely).
 
 **Acceptance criteria:**
 
@@ -558,17 +573,20 @@ games are sortable by usefulness, and any blunder has a shareable permalink.
   producing the expected order on a fixture set.
 - `GET /api/blunders/:id` returns a single blunder; visiting `/blunder/:id` cold (no prior nav
   state) renders `MistakeDetailScreen` fully; the URL has correct OG title/description.
+- Visiting `/blunder/:id` while signed out renders a read-only view — "Mark as reviewed" is
+  hidden; Deep Reveal shows a sign-in prompt.
 
 **NOT included:** Public/unauthenticated blunder viewing if brainstorming rules it out, social
 auto-posting, or a new sharing UI beyond a copyable link.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Permalink visibility model.** Decide whether a blunder permalink is owner-only (auth required),
-  unlisted-but-public (anyone with the link), or public. This drives the `GET /api/blunders/:id`
-  auth rule and the OG/SEO behavior. "Shareable across social networks" implies public, which
-  conflicts with the current owner-scoped blunder model — resolve explicitly. Output: the
-  visibility rule and its auth/endpoint implications.
+- **Permalink visibility model.** Blunder permalinks are **unlisted-but-public**: anyone with the
+  UUID-based URL can view without authentication; the page is not indexed (`noindex` injected).
+  `GET /api/blunders/:id` has no `req.user` check and no `user_id` filter — returns the blunder
+  row to any caller who knows the UUID. No 401/403; errors are 400 (bad UUID), 404, 500, 503.
+  OG tags injected server-side mirroring the existing `/game/:id` pattern.
+  Full design: `docs/superpowers/specs/2026-06-16-blunder-permalink-visibility-design.md`
 
 ---
 

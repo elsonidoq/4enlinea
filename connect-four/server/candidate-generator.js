@@ -2,7 +2,7 @@ import { evaluatePredicate } from './predicates.js';
 import {
   classify, checkWin, getImmediateThreats, parseBoardState,
   hasActiveDoubleThreat, Board, hasWon,
-  detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
+  detectZThreat, detectClaimeven, detectClaimodd, detectUndercut, detectOvercut,
   detectFigure7, detectJShape, detectOddEvenThreat,
   detectDoubleThreat, detectForcedWin,
 } from './classifier.js';
@@ -454,6 +454,19 @@ export async function checkClaimevenPredicate(ms, scores, solver) {
   };
 }
 
+export function checkClaimoddPredicate(ms, scores) {
+  const b = new Board(ms);
+  const result = detectClaimodd(b, scores);
+  if (!result.matched) return { passes: false, correctCols: [] };
+  return {
+    passes: true,
+    correctCols: [result.correctCol],
+    correct_col: result.correctCol,
+    highlight_metadata: null,
+    category_evidence: result.categoryEvidence,
+  };
+}
+
 export function checkUndercutPredicate(ms, scores) {
   const b = new Board(ms);
   const result = detectUndercut(b, scores);
@@ -533,6 +546,7 @@ async function checkPredicate(category, moveString, scores, solver) {
   if (category === 'undercut') return checkUndercutPredicate(moveString, scores);
   if (category === 'overcut') return checkOvercutPredicate(moveString, scores);
   if (category === 'claimeven') return checkClaimevenPredicate(moveString, scores, solver);
+  if (category === 'claimodd') return checkClaimoddPredicate(moveString, scores);
   if (category === 'figure_7') return checkFigure7Predicate(moveString, scores);
   if (category === 'j_shape') return checkJShapePredicate(moveString, scores);
   if (category === 'odd_even_threat') return checkOddEvenThreatPredicate(moveString, scores);
