@@ -159,7 +159,8 @@
 - [Papergames integration](project_papergames_integration.md) — papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips
 - [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — spec/plan/tasks done; lastDrop wiring in Board.jsx; staged continue render; isSubmitting trap; 11 tasks
 - [Candidate generator — mistake probability experiment](project_candidate_generator_mistake_probability.md) — solverWeightedPosition refactored from softmax to MP-based sampling 2026-06-14
-- [Epic 6 architecture decisions](project_epic6_architecture.md) — curation-time round robin reindex, shape_key + position columns, canonical key=value serializer, random-offset draw
+- [Epic 6 architecture decisions](project_epic6_architecture.md) — IMPLEMENTED 2026-06-16; 14/15 tasks done; curation-time round robin reindex, shape_key + position columns, canonical key=value serializer, random-offset draw
+- [Shape descriptor module](project_shape_descriptor_module.md) — server/shapeDescriptor.js; 5 exports; dispatches all 14 categories; canonical serializer with sorted keys
 - [highlight_metadata null per category](reference_highlight_metadata_null_categories.md) — which categories have null vs non-null highlight_metadata on puzzles table; forced_win trap; claimodd gap
 
 ## Project — bugs fixed

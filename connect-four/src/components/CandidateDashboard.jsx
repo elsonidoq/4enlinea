@@ -15,6 +15,8 @@ export function CandidateDashboard({ onSelectCategory }) {
   const [genResults, setGenResults] = useState({});
   const [genLoading, setGenLoading] = useState({});
   const [reindexLoading, setReindexLoading] = useState({});
+  const [reindexAllLoading, setReindexAllLoading] = useState(false);
+  const [reindexAllResult, setReindexAllResult] = useState(null);
 
   async function loadStats() {
     try {
@@ -103,6 +105,34 @@ export function CandidateDashboard({ onSelectCategory }) {
     }
   }
 
+  async function handleReindexAll() {
+    const categories = stats.map(r => r.category).filter(c => c !== 'mixed');
+    if (!confirm(`Reindex all ${categories.length} categories?`)) return;
+    setReindexAllLoading(true);
+    setReindexAllResult(null);
+    const results = [];
+    for (const cat of categories) {
+      setReindexLoading(prev => ({ ...prev, [cat]: true }));
+      try {
+        const res = await fetch(`${API}/api/admin/puzzles/reindex`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: cat }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed');
+        results.push({ cat, indexed: data.indexed, shapeGroups: data.shapeGroups });
+      } catch (e) {
+        results.push({ cat, error: e.message });
+      } finally {
+        setReindexLoading(prev => ({ ...prev, [cat]: false }));
+      }
+    }
+    setReindexAllResult(results);
+    setReindexAllLoading(false);
+    await loadStats();
+  }
+
   async function handleReindex(cat) {
     setReindexLoading(prev => ({ ...prev, [cat]: true }));
     try {
@@ -128,8 +158,36 @@ export function CandidateDashboard({ onSelectCategory }) {
   return (
     <div style={page}>
       <div style={header}>
-        <div style={title}>Puzzle Factory</div>
-        <div style={subtitle}>Candidate Dashboard</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={title}>Puzzle Factory</div>
+            <div style={subtitle}>Candidate Dashboard</div>
+          </div>
+          <button
+            style={{
+              padding: '7px 14px', borderRadius: 6,
+              border: '1.5px solid var(--border)', background: 'transparent',
+              color: 'var(--text)', fontSize: 12, fontWeight: 700,
+              cursor: reindexAllLoading ? 'default' : 'pointer', fontFamily: 'inherit',
+              opacity: reindexAllLoading ? 0.6 : 1,
+            }}
+            onClick={handleReindexAll}
+            disabled={reindexAllLoading}
+          >
+            {reindexAllLoading ? 'Reindexing…' : 'Reindex All'}
+          </button>
+        </div>
+        {reindexAllResult && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            {reindexAllResult.map(r => (
+              <span key={r.cat} style={{ marginRight: 12 }}>
+                {r.error
+                  ? <span style={{ color: 'var(--red)' }}>{r.cat}: {r.error}</span>
+                  : <span>{r.cat}: {r.indexed} puzzles / {r.shapeGroups} groups</span>}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={tableWrapper}>

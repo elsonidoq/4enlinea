@@ -7,8 +7,8 @@
 // use highlight_metadata. Board-replay categories replay the move_string.
 // forced_win uses highlight_cells with a board-replay fallback.
 
-import { Board, checkWin } from './classifier.js';
-import { computeForcedWinHighlight } from './candidate-generator.js';
+import { Board, checkWin, getImmediateThreats } from './classifier.js';
+import { computeForcedWinHighlight, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -335,7 +335,17 @@ export function descriptorForPuzzle(puzzle) {
   const player = board.currentPlayer;
 
   if (category === 'immediate_threat' || category === 'forced_block') {
-    return descriptorForImmediateOrForcedBlock(board, puzzle.correct_col, player);
+    let correctCol = puzzle.correct_col;
+    if (correctCol == null) {
+      // Fallback for puzzles approved before correct_col was stored:
+      // immediate_threat → column where current player wins immediately
+      // forced_block → column where opponent wins immediately (must be blocked)
+      const searchPlayer = category === 'immediate_threat' ? player : board.opponent;
+      const threats = getImmediateThreats(board.board, board.colHeights, searchPlayer);
+      correctCol = threats[0] ?? null;
+    }
+    if (correctCol == null) return { orientation: null, subtype: null, col_zone: null, row_zone: null };
+    return descriptorForImmediateOrForcedBlock(board, correctCol, player);
   }
 
   if (category === 'double_threat') {
@@ -343,7 +353,14 @@ export function descriptorForPuzzle(puzzle) {
   }
 
   if (category === 'forbidden_columns' || category === 'claimeven' || category === 'claimodd' || category === 'odd_even_threat') {
-    return descriptorForPositional(board, puzzle.correct_col);
+    let correctCol = puzzle.correct_col;
+    if (correctCol == null && category === 'forbidden_columns') {
+      // Fallback: derive a safe col from the board (any col that isn't forbidden)
+      const result = checkForbiddenColumnsPredicate(puzzle.move_string);
+      correctCol = result.correctCols[0] ?? null;
+    }
+    if (correctCol == null) return { orientation: null, subtype: null, col_zone: null, row_zone: null };
+    return descriptorForPositional(board, correctCol);
   }
 
   // Unknown category

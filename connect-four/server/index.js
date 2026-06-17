@@ -2540,7 +2540,7 @@ app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
 
   const { data: puzzles, error } = await supabase
     .from('puzzles')
-    .select('id, move_string, highlight_metadata, correct_col, highlight_cells')
+    .select('id, category, move_string, highlight_metadata, correct_col, highlight_cells')
     .eq('category', category)
     .eq('is_active', true);
 

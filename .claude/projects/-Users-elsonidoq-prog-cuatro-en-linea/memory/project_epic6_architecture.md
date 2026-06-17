@@ -1,37 +1,58 @@
 ---
 name: project_epic6_architecture
-description: Epic 6 (Challenge Progression & Variety) — key architectural decisions from the full speckit pipeline
-metadata:
+description: "Epic 6 (Challenge Progression & Variety) — IMPLEMENTED 2026-06-16; all 14/15 tasks done, only manual verification remains"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 8e7f98dd-1a31-40fd-9f3a-a9839cc9bdbe
 ---
 
-Epic 6 spec/plan/tasks are complete at `specs/035-challenge-progression-variety/`.
+Epic 6 spec/plan/tasks are complete at `specs/035-challenge-progression-variety/`. Implementation completed 2026-06-16 across 3 batches.
 
-## Core architecture
+## Implementation status
 
-- **Shape reindex runs at curation time, not draw time.** The user explicitly rejected the original draw-time greedy max-heap design. A "reindex puzzles" button on the curation tool runs a round robin algorithm per category: group puzzles by `shape_key`, interleave (A, B, C, A, B, C...), assign sequential `position` values (0, 1, 2, ...).
-- **Draw endpoint is sequential by position with random offset.** `ORDER BY position ASC` with a random starting offset per session (so different sessions see different puzzle sequences). No shape algorithm at serve time.
-- **`shape_key` uses canonical `key=value` serializer**, NOT `JSON.stringify`. Keys sorted alphabetically, joined by `|`, nested objects (double_threat arms) recursively serialized in parentheses. Example: `col_zone=center|orientation=H|row_zone=top|subtype=run3`. This is deterministic regardless of property insertion order.
-- **New puzzle columns**: `shape_key TEXT`, `position INTEGER` (NULL = unindexed), `highlight_cells jsonb` (for forced_win). Migration 044.
-- **`position` formula**: `groupIndex + sortedGroupPosition * numGroups`. Outer loop over sortedGroupPosition, inner over groupIndex. Produces A0, B0, C0, A1, B1, C1... (round-robin).
+All 14 implementation tasks (T001–T014) done. T015 (manual verification) remaining.
 
-**Why:** The user wanted zero shape-computation logic at serve time. Pre-computing shape + position at curation time keeps the draw endpoint trivially simple and avoids all the edge cases (resume path ordering, board replay for forced_win, canonical serialization races).
+## Files created
+- `server/migrations/044_shape_key_position.sql` — `shape_key TEXT`, `position INTEGER DEFAULT NULL`, `highlight_cells JSONB` + GRANTs
+- `server/shapeDescriptor.js` — 5 exports: `bucketColZone`, `bucketRowZone`, `serialize`, `descriptorForPuzzle`, `shapeKeyForPuzzle`
+- `tests/unit/shapeDescriptor.test.js` — 33 unit tests
+- `tests/integration/challenge-progress.test.js` — 8 integration tests
+- `tests/integration/puzzles-reindex.test.js` — 9 integration tests
 
-## Endpoints
+## Files modified
+- `server/index.js` — draw endpoint (position-based ordering + random offset at line 1222), reindex endpoint (line 2543), stats endpoint (unindexed_count at line 2524), candidate approval copies highlight_cells (lines 2740/2772/2802/2838), import shapeKeyForPuzzle (line 30)
+- `server/userRoutes.js` — `GET /api/user/challenge-progress` at line 172
+- `src/components/SetCard.jsx` — progress bar, accuracy bar (color-coded), cleared badge; new props: `progress`, `isAuthenticated`
+- `src/screens/SetPickerScreen.jsx` — fetches progress in parallel with counts, passes to SetCards
+- `src/components/CandidateDashboard.jsx` — reindex button + orange unindexed warning badge
+- `src/i18n/en.json`, `src/i18n/es.json` — `setcard.progress`, `setcard.cleared` keys
+- `connect-four/package.json` — 3 new test files added to `test` and `test:fast`
 
-- `GET /api/user/challenge-progress` — in `userRoutes.js` (NOT inline in index.js), two supabase-js queries + JS merge
-- `POST /api/admin/puzzles/reindex` — admin-only, `requireLocalhost` (existing `GET /api/admin/puzzles` uses `requireAdmin` — split is intentional)
-- Draw endpoint modified: `WHERE position IS NOT NULL ORDER BY position ASC` with random offset
+## Core architecture (unchanged from spec)
+
+- **Shape reindex runs at curation time, not draw time.** Round-robin algorithm per category: group puzzles by `shape_key`, interleave, assign sequential `position` values.
+- **Draw endpoint is sequential by position with random offset.** `ORDER BY position ASC` with `.not('position', 'is', null)`. Un-reindexed categories return empty arrays (by design).
+- **`shape_key` uses canonical `key=value` serializer**, NOT `JSON.stringify`. Keys sorted alphabetically, joined by `|`, nested objects recursively serialized in parentheses.
+- **New puzzle columns**: `shape_key TEXT`, `position INTEGER` (NULL = unindexed), `highlight_cells jsonb`.
+
+## Key endpoints
+
+- `GET /api/user/challenge-progress` — in `userRoutes.js:172`, two supabase-js queries + JS merge, returns `{ progress: { [slug]: { attempted, correct, total, accuracy, cleared } } }`
+- `POST /api/admin/puzzles/reindex` — at `index.js:2543`, `requireLocalhost`, returns `{ category, indexed, shapeGroups }`
+- Draw endpoint modified at `index.js:1222-1280` — position-based with random offset + wrap-around for single-category, interleaved pools for mixed.
 
 ## Key traps
 
-- **forced_win `highlight_metadata` is always null** on the puzzles table. The 5-cell structure (`computeForcedWinHighlight`) exists only on `candidates.highlight_cells`. The approval endpoint discards it. Epic 6 adds `highlight_cells` to puzzles and fixes the approval copy.
-- **claimodd has no candidate generation infrastructure.** `detectClaimodd` exists in classifier.js but `candidate-generator.js` has no `checkClaimoddPredicate`. Treated as manual-curation-only in this epic.
-- **CHALLENGE_SETS is in `server/challengeSets.js`**, not `server/categories.js`. Separate modules.
-- **Cross-draw adjacency is NOT guaranteed.** Every fresh draw starts from position 0 with no cursor. Within-draw only.
+- **Plan line numbers are all wrong.** File grew ~150 lines since plan was written. Stats endpoint is at 2524 (plan said 2313), single approve at 2738/2770 (plan said 2467/2487), batch at 2800/2836 (plan said 2528/2552).
+- **Un-reindexed categories return empty draws.** All positions are NULL → `.not('position', 'is', null)` filters everything out. Admin must reindex first.
+- **Accuracy bar hidden when `attempted === 0`** (SetCard line 91). Category with no attempts shows only the progress bar.
+- **Locked (paid) cards never show progress UI** — `showProgress = isAuthenticated && progress && !locked`.
+- **`requireLocalhost` is inline** in `index.js`, not a separate module like `requireAdmin`.
+- **Batch 3 sub-agent registered reindex endpoint at line 2545**, which pushed the existing `GET /api/admin/candidates` route from line 2487 to line 2601.
 
 ## Related
 
-- [[project_new_puzzle_categories]] — highlight_metadata schema for z_threat, undercut, overcut, figure_7, j_shape
-- [[project_forced_win_refactor]] — forced_win CompletionStrategy and sequence mode
-- [[reference_puzzles_table_columns]] — puzzles table column reference
+- [[project_new_puzzle_categories]] — highlight_metadata schema
+- [[project_forced_win_refactor]] — forced_win CompletionStrategy
+- [[reference_highlight_metadata_null_categories]] — which categories have null highlight_metadata

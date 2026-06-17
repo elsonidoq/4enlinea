@@ -32,3 +32,12 @@
 - Current npm install reports this 15 vulnerabilities (1 low, 10 moderate, 2 high, 2 critical)
 
 - language should be determined by browser's language. Everything should be translated if the translation is available. Otherwise it should be displayed in english
+
+
+- claimodd does not generate candidates
+
+- Cannot approve odd & event threats candidates new row for relation "puzzles" violates check constraint "puzzles_goal_predicate_type_check"
+
+- Except for forced_block, no puzzles can have a forced_block, unless the forced block is the move that creates the pattern / move
+
+- For double threat we should not check against correct col, but wether the position generated a double threat (there are boards where there are more than one way to generate the double threat)

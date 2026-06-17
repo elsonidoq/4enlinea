@@ -231,7 +231,7 @@ export function checkForcedWinPredicate(ms) {
     if (new Board(msEnd).hasWon(initiator)) correctCols.push(c);
   }
 
-  return { passes: correctCols.length === 1, correctCols };
+  return { passes: correctCols.length === 1, correctCols, correct_col: correctCols[0] ?? null };
 }
 
 // Forbidden columns predicate: a column is forbidden if Red plays there (without winning),
@@ -261,6 +261,7 @@ export function checkForbiddenColumnsPredicate(ms) {
   return {
     passes: forbiddenCols.length >= 1 && safeCols.length >= 1,
     correctCols: safeCols,
+    correct_col: safeCols[0] ?? null,
   };
 }
 
@@ -549,7 +550,7 @@ async function checkPredicate(category, moveString, scores, solver) {
     const r = evaluatePredicate(puzzle, c, scores);
     return r.result === 'correct';
   });
-  return { passes: correctCols.length === 1, correctCols };
+  return { passes: correctCols.length === 1, correctCols, correct_col: correctCols[0] ?? null };
 }
 
 // Reject positions that violate per-category board-quality constraints.
