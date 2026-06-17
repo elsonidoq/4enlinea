@@ -1,8 +1,10 @@
 ---
-name: reference_classify_vs_classifyPattern
+name: reference-classify-vs-classifypattern
 description: "classify() vs classifyPattern() — scope, tags, sync/async, perspective, and which endpoints use which"
-metadata:
+metadata: 
+  node_type: memory
   type: reference
+  originSessionId: e2c1cdc1-0979-476c-b4f4-7486ff14dfb3
 ---
 
 Two classifier entry points with very different scopes:
@@ -15,9 +17,9 @@ Two classifier entry points with very different scopes:
 - Used by: `POST /api/evaluate-move` (user-move path), `POST /api/evaluate-move/inline`, and the sparring game analysis endpoint
 
 **`classifyPattern(ms, perspective, solver)`** — `classifier.js:1354`
-- Async — runs 13 detectors in parallel via `Promise.all`
+- Async — runs 12 detectors in parallel via `Promise.all`
 - Returns a `Map` of ALL matched tags (multiple can fire simultaneously)
-- Full 12-tag set including parity/shape patterns: `claimeven`, `z_threat`, `odd_even_threat`, `claimodd`, `figure_7`, `j_shape`, `overcut`, `undercut` (plus the 4 from classify)
+- Full 11-tag set including parity/shape patterns: `claimeven`, `z_threat`, `odd_even_threat`, `figure_7`, `j_shape`, `overcut`, `undercut` (plus the 4 from classify); `claimodd` was removed 2026-06-17
 - Perspective-aware — `forced_win` correctly detects when the specified `perspective` player is winning
 - `detectClaimeven` makes ~20 additional solver calls (expensive)
 - Used by: blunder-analysis path (`tagBlunder`), and — after coach commentary epic ships — `POST /api/evaluate-move` when `req.body.aiMove === true`

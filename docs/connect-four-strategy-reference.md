@@ -209,17 +209,9 @@ When a column has odd empty spaces, Black's correction is:
 
 This reduces the position to a simpler claimeven configuration.
 
-### 4.4 Claimodd (Red's Variant) → KB: [community-claimodd](knowledge-base/community-claimodd.md)
+### 4.4 Role in Allis's Proof
 
-*Note: "Claimodd" is not one of Allis's nine original strategic rules, nor does the term appear in Allen or any other canonical source. The label was coined by the WeakC4 project (2swap.github.io/WeakC4/explanation/) as part of its Steady-State Language. The underlying concept — Red forcing an odd-row threat while Black takes even rows — is canonical and appears in Allis under "odd threats," Baseinverse, and Vertical. "Claimodd" is used here as a compact label for that idea, but it is a WeakC4 term.*
-
-When Red faces an all-even position, simple claimeven would give Red even rows — the wrong parity. Red's strategy is **"claimeven everywhere except claimodd in the center column."**
-
-By responding above Black in all columns *except* column D, and playing *below* Black's moves in column D (or playing first in D), Red secures an odd-row threat in the center column while Black gets even rows everywhere else. Red then wins via the center column threat before the even-row resolution is needed.
-
-### 4.5 Role in Allis's Proof
-
-Claimeven and claimodd positions form an "island of simplicity" in Connect Four's enormous game tree. Allis's 1988 proof uses claimeven positions as **footholds**: once a position is recognized as claimeven, the entire subtree collapses to a simple pairing argument without search. Positions not directly claimeven are reduced toward claimeven configurations through forced sequences.
+Claimeven positions form an "island of simplicity" in Connect Four's enormous game tree. Allis's 1988 proof uses claimeven positions as **footholds**: once a position is recognized as claimeven, the entire subtree collapses to a simple pairing argument without search. Positions not directly claimeven are reduced toward claimeven configurations through forced sequences.
 
 ---
 

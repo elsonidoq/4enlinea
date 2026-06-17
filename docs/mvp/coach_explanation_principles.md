@@ -367,7 +367,7 @@ softening for Types 1–2, where the crime scene is explicit.
 | Stage | Load-bearing KB entries | Role in the prompt |
 |---|---|---|
 | Early (Type 4) | `derived-parity-formula`, `allen-v1`, `allen-v3` (Red), `allen-v2`, `allen-v4` (Yellow) | Parity label on each group's key cell — the "why" for sparse groups |
-| Early (Type 4) | `community-claimodd`, `allis-claimeven` | Center-column / odd-even race; why central groups matter early |
+| Early (Type 4) | `allis-claimeven` | Odd-even race; why central groups matter early |
 | Early→mid | `community-z-threat` | The buildable parity-aware unit bridging empty group → winning group |
 | Mid (Type 2) | `allen-j-configuration`, `community-figure-7` | Named scaffolds the better move builds toward; same-column double threat |
 | Late (Type 2/3) | `allen-t1`–`t7`, `community-parity-trap`, `community-ghost-threat` | Threat simplification & zugzwang — **only** when threats already exist |
