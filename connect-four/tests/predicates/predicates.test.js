@@ -39,12 +39,11 @@ describe('evaluatePredicate() edge cases', () => {
     assert.equal(result.correctCol, 3);
   });
 
-  test('forced_win handles all-equal negative scores as tied', () => {
+  test('forced_win returns wrong when no column initiates a forced win', () => {
+    // Position "33333" has no forced-win chain for any column.
     const puzzle = { id: 5, category: 'forced_win', moveString: '33333', goalPredicateType: 'forced_win' };
-    const scores = [-1, -1, -1, -1, -1, -1, -1];
-    const result = evaluatePredicate(puzzle, 0, scores);
-    // All equal: any move is "correct" (tied)
-    assert.ok(result.result === 'correct' || result.result === 'tied');
+    const result = evaluatePredicate(puzzle, 0, []);
+    assert.equal(result.result, 'wrong');
   });
 
   // Regression: evalForcedBlock false positive — all non-blocking cols scored opponentImmediateWin

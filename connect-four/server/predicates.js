@@ -1,6 +1,8 @@
 // Goal predicate evaluator for puzzle categories.
 // Each category defines what "correct" means for a puzzle.
 
+import { Board, detectDoubleThreat, detectForcedWin } from './classifier.js';
+
 const ROWS = 6;
 const COLS = 7;
 
@@ -34,7 +36,7 @@ export function evaluatePredicate(puzzle, candidateCol, scores) {
     case 'immediate_threat': return evalImmediateThreat(candidateCol, scores, puzzle.moveString);
     case 'forced_block': return evalForcedBlock(candidateCol, puzzle.moveString);
     case 'double_threat': return evalDoubleThreat(candidateCol, scores, puzzle.moveString);
-    case 'forced_win': return evalForcedWin(candidateCol, scores);
+    case 'forced_win': return evalForcedWin(candidateCol, puzzle);
     case 'forbidden_columns': return evalForbiddenColumns(candidateCol, scores, puzzle.moveString);
     case 'z_threat': return evalZThreat(candidateCol, puzzle);
     case 'claimeven': return evalClaimeven(candidateCol, puzzle);
@@ -180,23 +182,48 @@ function evalDoubleThreat(candidateCol, scores, moveString) {
   return { result: 'wrong', correctCol: doubleThreatCols[0], threatCells };
 }
 
-// forced_win: Choose the initiating move in a forced-win sequence (all moves losing, pick the one that forces the win).
-function evalForcedWin(candidateCol, scores) {
-  if (Math.max(...scores) >= 0) return { result: 'wrong' };
+// forced_win: Does candidateCol initiate a forced-win chain?
+// Board-based: the move must create exactly 1 immediate threat (not 0, not 2+),
+// and from there a chain of single-threat forcing steps must reach a terminal
+// (immediate win or double threat). Works for both Red and Yellow as initiator.
+function evalForcedWin(candidateCol, puzzle) {
+  const board = new Board(puzzle.moveString);
+  const player = board.currentPlayer;
+  const row = board.colHeights[candidateCol];
+  if (row >= ROWS) return { result: 'wrong' };
 
-  const maxScore = Math.max(...scores);
-  const bestCols = scores.reduce((acc, s, i) => {
-    if (s === maxScore) acc.push(i);
-    return acc;
-  }, []);
+  const afterMove = board.withMove(candidateCol);
 
-  if (bestCols.includes(candidateCol)) {
-    const others = bestCols.filter(c => c !== candidateCol);
-    return others.length > 0
-      ? { result: 'tied', tiedWith: others, correctCol: bestCols[0] }
-      : { result: 'correct', correctCol: candidateCol };
+  // Cannot initiate a forced win by winning immediately — that's immediate_threat.
+  if (afterMove.checkWin(row, candidateCol, player)) return { result: 'wrong' };
+
+  // First move already creates a double threat — that's Category 3 (double_threat).
+  if (detectDoubleThreat(afterMove, player).matched) return { result: 'wrong' };
+
+  // Core check: does candidateCol initiate a forced-win chain?
+  const candidateMatches = detectForcedWin(afterMove, player).matched;
+
+  // Scan all columns to find every forced-win initiator.
+  const initCols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (board.colHeights[c] >= ROWS) continue;
+    const otherAfter = board.withMove(c);
+    const otherRow = board.colHeights[c];
+    if (otherAfter.checkWin(otherRow, c, player)) continue;
+    if (detectDoubleThreat(otherAfter, player).matched) continue;
+    if (detectForcedWin(otherAfter, player).matched) initCols.push(c);
   }
-  return { result: 'wrong', correctCol: bestCols[0] };
+
+  if (initCols.length === 0) return { result: 'wrong' };  // no column initiates a forced win
+  const correctCol = initCols[0];
+
+  if (!candidateMatches) return { result: 'wrong', correctCol };
+
+  if (initCols.length > 1) {
+    const others = initCols.filter(c => c !== candidateCol);
+    return { result: 'tied', tiedWith: others, correctCol: candidateCol };
+  }
+  return { result: 'correct', correctCol: candidateCol };
 }
 
 // forbidden_columns: Identify columns that would hand the opponent an immediate win.

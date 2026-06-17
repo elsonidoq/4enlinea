@@ -291,7 +291,9 @@ export function Board({
                         ? { background: 'radial-gradient(circle at 35% 28%, var(--disc-green-hi), var(--disc-green) 70%)', boxShadow: 'inset 0 -3px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,.15)' }
                         : { background: 'radial-gradient(circle at 35% 28%, var(--disc-gray-hi), var(--disc-gray) 70%)', boxShadow: 'inset 0 -3px 4px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,.18)' }
                       ),
-                      animation: 'drop 0.5s ease-out',
+                      animation: lastDrop && col === lastDrop.c && r === lastDrop.r
+                        ? 'drop 0.5s ease-out'
+                        : 'none',
                     }}>
                       {/* Specular highlight */}
                       <span style={{ position: 'absolute', inset: '22% 22% auto 22%', height: '26%', borderRadius: '50%', background: 'rgba(255,255,255,0.22)' }} />

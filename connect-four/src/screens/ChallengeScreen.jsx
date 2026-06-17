@@ -143,10 +143,9 @@ export function ChallengeScreen({
         }
 
         // Legacy random draw
-        const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
         const drawCategory = lessonMode ? confirmationCategory : category;
         const drawN        = lessonMode ? confirmationCount    : 8;
-        const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { headers });
+        const res = await fetch(`${API}/api/puzzles/draw?category=${drawCategory}&n=${drawN}`, { credentials: 'include' });
         const data = await res.json();
         const loaded = data.puzzles || [];
         sessionIdRef.current = data.session_id ?? null;
@@ -262,7 +261,7 @@ export function ChallengeScreen({
     if (!sessionIdRef.current || !session) return;
     fetch(`${API}/api/challenge-sessions/${sessionIdRef.current}/advance`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      credentials: 'include',
     }).catch(() => {});
   }
 
@@ -315,15 +314,12 @@ export function ChallengeScreen({
     const current = puzzles[currentIdx];
     const cols = [...selectedCols];
     const diskColor = (current.move_string || '').length % 2 === 0 ? 'red' : 'yellow';
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    };
+    const headers = { 'Content-Type': 'application/json' };
 
     // Evaluate all selected columns in parallel
     const checkResults = await Promise.all(cols.map(col =>
       fetch(`${API}/api/puzzles/${current.id}/check`, {
-        method: 'POST', headers,
+        method: 'POST', headers, credentials: 'include',
         body: JSON.stringify({ candidateCol: col, moveHistory: [], attemptNumber: 1 }),
       }).then(r => r.json()).then(data => ({ col, data }))
     ));
@@ -406,23 +402,40 @@ export function ChallengeScreen({
 
     setIsSubmitting(true);
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      };
       const res = await fetch(`${API}/api/puzzles/${current.id}/sequence/move`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ position: seqPosition, col }),
       });
       const data = await res.json();
 
       if (data.outcome === 'continue') {
-        const newPos = seqPosition + String(col) + String(data.aiCol);
-        setSeqPosition(newPos);
-        const { board: b, heights: h } = buildBoard(newPos);
-        setBoard(b);
-        setHeights(h);
+        // T005 + T006: Staged two-step render.
+        // Option B: isSubmitting cleared inside setTimeout callback (not in finally).
+        // finally block removed — setIsSubmitting(false) is explicit in every other branch.
+
+        // Step (a): render user's disc with animation; isSubmitting stays true
+        const userPos = seqPosition + String(col);
+        const { board: bUser, heights: hUser } = buildBoard(userPos);
+        setBoard(bUser);
+        setHeights(hUser);
+        // heights[col] is pre-move heights from React state — still valid
+        // because setHeights hasn't fired yet (React state updates are batched).
+        setLastDrop({ c: col, r: heights[col] });
+
+        // Step (b): render AI's disc with animation after user's drop animation has ~settled
+        const aiRow = hUser[data.aiCol]; // captured from locally-returned hUser — avoids stale-closure trap
+        const fullPos = userPos + String(data.aiCol);
+        setTimeout(() => {
+          const { board: bFull, heights: hFull } = buildBoard(fullPos);
+          setSeqPosition(fullPos);
+          setBoard(bFull);
+          setHeights(hFull);
+          setLastDrop({ c: data.aiCol, r: aiRow });
+          setIsSubmitting(false); // T006: clear re-entry guard HERE, not in finally
+        }, 300);
+        return; // T006: skip synchronous isSubmitting=false for this branch
       } else if (data.outcome === 'success') {
         const newPos = seqPosition + String(col);
         setSeqPosition(newPos);
@@ -448,16 +461,17 @@ export function ChallengeScreen({
         store?.recordActivityDay().catch(() => {});
         track('puzzle_solved_correct', { puzzleId: current.id, category });
         setPhase('post-move');
+        setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       } else {
         setCoachMessages(prev => [...prev, {
           text: data.reason ?? t('coach.forced_win.blunder.0'),
           mood: 'oops',
         }]);
+        setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       }
     } catch {
       setCoachMessages(prev => [...prev, { text: t('error.generic'), mood: 'oops' }]);
-    } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // T006: explicit clear (option B, no finally)
     }
   }
 
@@ -584,7 +598,10 @@ export function ChallengeScreen({
                   canPlay={phase === 'pre-move' && !isSubmitting}
                   overlays={overlays}
                   badge={badge}
-                  lastDrop={lastDrop}
+                  // T004: canPlay is always false when Deep Reveal is open
+                  // (phase === 'post-move'), so this board is non-interactive.
+                  // Pass null to prevent drop animations on a static reference view.
+                  lastDrop={null}
                   fullCols={fullCols}
                   interactionMode={puzzles[currentIdx]?.interaction_mode === 'sequence' ? 'sequence' : 'single_move'}
                   zhCells={zhCells}

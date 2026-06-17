@@ -1,7 +1,30 @@
+import { useTranslation } from 'react-i18next';
 import { Stars } from './Stars.jsx';
 import { Icon } from './Icon.jsx';
 
-export function SetCard({ title, stars, positionCount, locked, onClick }) {
+const BAR_HEIGHT = 4;
+const BAR_RADIUS = 2;
+
+function getAccuracyColor(accuracy) {
+  if (accuracy >= 0.8) return '#4caf50';
+  if (accuracy >= 0.5) return '#ffc107';
+  return '#f44336';
+}
+
+export function SetCard({ title, stars, positionCount, locked, onClick, progress, isAuthenticated }) {
+  const { t } = useTranslation();
+  const showProgress = isAuthenticated && progress && !locked;
+
+  const rightSlot = showProgress && progress.cleared ? (
+    <div style={{
+      width: 24, height: 24, borderRadius: '50%',
+      background: '#4caf50', display: 'grid', placeItems: 'center',
+      flexShrink: 0,
+    }} aria-label={t('setcard.cleared')}>
+      <Icon name="check" size={14} color="#fff" />
+    </div>
+  ) : (!locked ? <Icon name="chevR" size={18} color="var(--ink-faint)" /> : null);
+
   return (
     <button
       onClick={onClick}
@@ -14,7 +37,11 @@ export function SetCard({ title, stars, positionCount, locked, onClick }) {
         display: 'flex',
         alignItems: 'center',
         gap: 13,
-        border: locked ? '1px solid #e6e2d9' : '1px solid #f0ebe1',
+        border: locked
+          ? '1px solid #e6e2d9'
+          : showProgress && progress.cleared
+            ? '2px solid #4caf50'
+            : '1px solid #f0ebe1',
         width: '100%',
         textAlign: 'left',
         transition: 'transform .1s, box-shadow .15s',
@@ -43,8 +70,41 @@ export function SetCard({ title, stars, positionCount, locked, onClick }) {
           <Stars n={stars} />
           {positionCount != null && <span>· {positionCount} positions</span>}
         </div>
+        {showProgress && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Progress bar */}
+            <div
+              style={{
+                width: '100%', height: BAR_HEIGHT, borderRadius: BAR_RADIUS,
+                background: 'var(--line)',
+              }}
+              aria-label={t('setcard.progress')}
+            >
+              <div style={{
+                width: `${progress.total > 0 ? (progress.correct / progress.total) * 100 : 0}%`,
+                height: '100%', borderRadius: BAR_RADIUS,
+                background: 'var(--ink)',
+                transition: 'width .3s',
+              }} />
+            </div>
+            {/* Accuracy bar — hidden when no attempts */}
+            {progress.attempted > 0 && (
+              <div style={{
+                width: '100%', height: BAR_HEIGHT, borderRadius: BAR_RADIUS,
+                background: 'var(--line)',
+              }}>
+                <div style={{
+                  width: `${progress.accuracy * 100}%`,
+                  height: '100%', borderRadius: BAR_RADIUS,
+                  background: getAccuracyColor(progress.accuracy),
+                  transition: 'width .3s',
+                }} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {!locked && <Icon name="chevR" size={18} color="var(--ink-faint)" />}
+      {rightSlot}
     </button>
   );
 }

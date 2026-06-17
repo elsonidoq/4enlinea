@@ -14,6 +14,11 @@ export function CandidateDashboard({ onSelectCategory }) {
   const [genForms, setGenForms] = useState({});
   const [genResults, setGenResults] = useState({});
   const [genLoading, setGenLoading] = useState({});
+  const [reindexLoading, setReindexLoading] = useState({});
+  const [reindexAllLoading, setReindexAllLoading] = useState(false);
+  const [reindexAllResult, setReindexAllResult] = useState(null);
+  const [approveAllGlobalLoading, setApproveAllGlobalLoading] = useState(false);
+  const [approveAllGlobalResult, setApproveAllGlobalResult] = useState(null);
 
   async function loadStats() {
     try {
@@ -102,14 +107,146 @@ export function CandidateDashboard({ onSelectCategory }) {
     }
   }
 
+  async function handleApproveAllGlobal() {
+    const pending = stats.filter(r => r.pending > 0);
+    if (pending.length === 0) { alert('No pending candidates.'); return; }
+    const total = pending.reduce((s, r) => s + r.pending, 0);
+    if (!confirm(`Approve all ${total} pending candidates across ${pending.length} categories?`)) return;
+    setApproveAllGlobalLoading(true);
+    setApproveAllGlobalResult(null);
+    const results = [];
+    for (const row of pending) {
+      setApproveAllLoading(prev => ({ ...prev, [row.category]: true }));
+      const goalPrompt = GOAL_PROMPTS[row.category] ?? '';
+      try {
+        const res = await fetch(`${API}/api/admin/candidates/approve-batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: row.category, goal_prompt: goalPrompt, difficulty: 2 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed');
+        results.push({ cat: row.category, approved: data.approved, errors: data.errors?.length ?? 0 });
+      } catch (e) {
+        results.push({ cat: row.category, error: e.message });
+      } finally {
+        setApproveAllLoading(prev => ({ ...prev, [row.category]: false }));
+      }
+    }
+    setApproveAllGlobalResult(results);
+    setApproveAllGlobalLoading(false);
+    await loadStats();
+  }
+
+  async function handleReindexAll() {
+    const categories = stats.map(r => r.category).filter(c => c !== 'mixed');
+    if (!confirm(`Reindex all ${categories.length} categories?`)) return;
+    setReindexAllLoading(true);
+    setReindexAllResult(null);
+    const results = [];
+    for (const cat of categories) {
+      setReindexLoading(prev => ({ ...prev, [cat]: true }));
+      try {
+        const res = await fetch(`${API}/api/admin/puzzles/reindex`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: cat }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed');
+        results.push({ cat, indexed: data.indexed, shapeGroups: data.shapeGroups });
+      } catch (e) {
+        results.push({ cat, error: e.message });
+      } finally {
+        setReindexLoading(prev => ({ ...prev, [cat]: false }));
+      }
+    }
+    setReindexAllResult(results);
+    setReindexAllLoading(false);
+    await loadStats();
+  }
+
+  async function handleReindex(cat) {
+    setReindexLoading(prev => ({ ...prev, [cat]: true }));
+    try {
+      const res = await fetch(`${API}/api/admin/puzzles/reindex`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: cat }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      alert(`Reindexed ${data.indexed} puzzles in ${data.shapeGroups} shape groups.`);
+      await loadStats();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setReindexLoading(prev => ({ ...prev, [cat]: false }));
+    }
+  }
+
   if (loading) return <div style={centred}>Loading…</div>;
   if (error) return <div style={centred}>Error: {error}</div>;
 
   return (
     <div style={page}>
       <div style={header}>
-        <div style={title}>Puzzle Factory</div>
-        <div style={subtitle}>Candidate Dashboard</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={title}>Puzzle Factory</div>
+            <div style={subtitle}>Candidate Dashboard</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              style={{
+                padding: '7px 14px', borderRadius: 6,
+                border: '1.5px solid rgba(34,197,94,.3)', background: 'rgba(34,197,94,.08)',
+                color: 'var(--green)', fontSize: 12, fontWeight: 700,
+                cursor: approveAllGlobalLoading ? 'default' : 'pointer', fontFamily: 'inherit',
+                opacity: approveAllGlobalLoading ? 0.6 : 1,
+              }}
+              onClick={handleApproveAllGlobal}
+              disabled={approveAllGlobalLoading}
+            >
+              {approveAllGlobalLoading ? 'Approving…' : 'Approve All'}
+            </button>
+            <button
+              style={{
+                padding: '7px 14px', borderRadius: 6,
+                border: '1.5px solid var(--border)', background: 'transparent',
+                color: 'var(--text)', fontSize: 12, fontWeight: 700,
+                cursor: reindexAllLoading ? 'default' : 'pointer', fontFamily: 'inherit',
+                opacity: reindexAllLoading ? 0.6 : 1,
+              }}
+              onClick={handleReindexAll}
+              disabled={reindexAllLoading}
+            >
+              {reindexAllLoading ? 'Reindexing…' : 'Reindex All'}
+            </button>
+          </div>
+        </div>
+        {approveAllGlobalResult && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            {approveAllGlobalResult.map(r => (
+              <span key={r.cat} style={{ marginRight: 12 }}>
+                {r.error
+                  ? <span style={{ color: 'var(--red)' }}>{r.cat}: {r.error}</span>
+                  : <span style={{ color: 'var(--green)' }}>{r.cat}: {r.approved} approved{r.errors > 0 ? `, ${r.errors} err` : ''}</span>}
+              </span>
+            ))}
+          </div>
+        )}
+        {reindexAllResult && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            {reindexAllResult.map(r => (
+              <span key={r.cat} style={{ marginRight: 12 }}>
+                {r.error
+                  ? <span style={{ color: 'var(--red)' }}>{r.cat}: {r.error}</span>
+                  : <span>{r.cat}: {r.indexed} puzzles / {r.shapeGroups} groups</span>}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={tableWrapper}>
@@ -137,6 +274,16 @@ export function CandidateDashboard({ onSelectCategory }) {
                     <td style={td}>
                       <span style={catNum}>{CATEGORY_ORDER.indexOf(row.category) + 1}</span>
                       <span style={{ color: 'var(--text)', fontSize: 13 }}>{CATEGORY_NAMES[row.category]}</span>
+                      {row.unindexed_count > 0 && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          minWidth: 20, height: 20, borderRadius: 10,
+                          background: '#ff9800', color: '#fff', fontSize: 11, fontWeight: 700,
+                          marginLeft: 8, padding: '0 6px',
+                        }} title="Puzzles need reindexing">
+                          {row.unindexed_count}
+                        </span>
+                      )}
                     </td>
                     <td style={{ ...td, fontWeight: 700, color: row.pending > 0 ? 'var(--text)' : 'var(--text-muted)' }}>
                       {row.pending}
@@ -167,6 +314,18 @@ export function CandidateDashboard({ onSelectCategory }) {
                         ) : (
                           <button style={reviewBtnDisabled} disabled>Review</button>
                         )}
+                        <button
+                          style={{
+                            padding: '5px 10px', borderRadius: 6,
+                            border: '1.5px solid var(--border)', background: 'transparent',
+                            color: 'var(--text)', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                          onClick={() => handleReindex(row.category)}
+                          disabled={reindexLoading[row.category]}
+                        >
+                          {reindexLoading[row.category] ? '…' : 'Reindex'}
+                        </button>
                         {row.approved > 0 ? (
                           <button style={reviewApprovedBtn} onClick={() => onSelectCategory(row.category, 'approved')}>
                             Approved ({row.approved})

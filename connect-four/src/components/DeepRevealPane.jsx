@@ -63,7 +63,7 @@ export function DeepRevealPane({
       return;
     }
 
-    if (!session?.access_token) {
+    if (!session?.user) {
       setAuthOpen(true);
       return;
     }
@@ -83,10 +83,8 @@ export function DeepRevealPane({
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       signal: controller.signal,
       body: JSON.stringify({ movestring: moveString, col }),
     })
@@ -255,7 +253,7 @@ export function DeepRevealPane({
       {authOpen && (
         <AuthModal
           onClose={() => { setAuthOpen(false); onClose?.(); }}
-          reason="deep_reveal"
+          reason={t('auth.deepRevealGate')}
         />
       )}
       {upgradeOpen && (

@@ -25,7 +25,7 @@ describe('pickPriorityTag — priority ordering', () => {
   it('picks immediate_threat over all lower-priority tags', () => {
     const tags = new Set(['immediate_threat', 'double_threat', 'forced_win', 'forced_block',
       'forbidden_columns', 'z_threat', 'odd_even_threat', 'claimeven',
-      'figure_7', 'j_shape', 'overcut', 'undercut', 'claimodd']);
+      'figure_7', 'j_shape', 'overcut', 'undercut']);
     assert.equal(pickPriorityTag(tags), 'immediate_threat');
   });
 
@@ -35,18 +35,13 @@ describe('pickPriorityTag — priority ordering', () => {
   });
 
   it('picks forced_win when higher-priority tags are absent', () => {
-    const tags = new Set(['forced_win', 'claimeven', 'claimodd']);
+    const tags = new Set(['forced_win', 'claimeven']);
     assert.equal(pickPriorityTag(tags), 'forced_win');
   });
 
   it('picks forced_block when only it exists', () => {
     const tags = new Set(['forced_block']);
     assert.equal(pickPriorityTag(tags), 'forced_block');
-  });
-
-  it('picks the lowest-priority tag when it is the only match', () => {
-    const tags = new Set(['claimodd']);
-    assert.equal(pickPriorityTag(tags), 'claimodd');
   });
 
   it('returns null for empty tag set', () => {
@@ -62,10 +57,10 @@ describe('pickPriorityTag — priority ordering', () => {
     const expected = [
       'immediate_threat', 'double_threat', 'forced_win', 'forced_block',
       'forbidden_columns', 'z_threat', 'odd_even_threat', 'claimeven',
-      'figure_7', 'j_shape', 'overcut', 'undercut', 'claimodd',
+      'figure_7', 'j_shape', 'overcut', 'undercut',
     ];
     assert.deepEqual(AI_PATTERN_PRIORITY, expected);
-    assert.equal(AI_PATTERN_PRIORITY.length, 13);
+    assert.equal(AI_PATTERN_PRIORITY.length, 12);
   });
 });
 

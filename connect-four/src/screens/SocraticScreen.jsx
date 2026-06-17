@@ -159,6 +159,11 @@ export function SocraticScreen({ go, goBack, lessonId }) {
       <CoachDialog messages={coachMessages} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
+        {/*
+          lastDrop audit (034): SocraticScreen has its own lastDrop state.
+          Set at line 88 when user places a disc during interactive phases
+          (ask, wrong1). Drop animation on user-placed disc is intentional. OK.
+        */}
         <Board
           board={board}
           canPlay={canPlay}

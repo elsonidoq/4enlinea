@@ -140,16 +140,14 @@ describe('tagBlunder - solver error', () => {
 // T-004 / T030 — Red-only patterns not in Yellow perspective
 // ─────────────────────────────────────────────────────────────────────────────
 describe('classifyPattern - player-only guards', () => {
-  it('odd_even_threat and claimodd are not in Yellow perspective results', async () => {
+  it('odd_even_threat is not in Yellow perspective results', async () => {
     const solver = await createSolverProcess();
     try {
       // "05061332": Red perspective has odd_even_threat and forced_block;
-      // Yellow perspective has immediate_threat but NOT odd_even_threat/claimodd
+      // Yellow perspective has immediate_threat but NOT odd_even_threat
       const tags = await classifyPattern('05061332', 2, solver);
       assert.ok(!tags.has('odd_even_threat'),
         'odd_even_threat is Red-only, must not appear from Yellow perspective');
-      assert.ok(!tags.has('claimodd'),
-        'claimodd is Red-only, must not appear from Yellow perspective');
 
       // Sanity check: Red perspective does see odd_even_threat (proves detection works)
       const redTags = await classifyPattern('05061332', 1, solver);

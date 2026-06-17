@@ -64,17 +64,27 @@ Object stores: `profile` (keyPath: `device_uuid`), `puzzle_attempts` (autoIncrem
 
 ## Auth Integration
 
-The frontend uses the Supabase anon key (`VITE_SUPABASE_ANON_KEY`) for auth only.
-`getSupabaseClient()` (exported from `ProfileStore.jsx`) is the sole source of the Supabase client instance.
-On auth state change, `ProfileStore` automatically swaps the store and tracks the `signup_completed` event.
+The frontend has no Supabase SDK dependency. Auth is entirely server-mediated via httpOnly cookies:
+
+1. **Sign-in initiation**: The "Sign in with Google" button navigates the browser to
+   `GET /api/auth/oauth/google`, which issues a 302 redirect to Supabase's OAuth authorize endpoint.
+2. **Return leg**: After Google consent, Supabase redirects to the app with `#access_token=…`
+   in the URL hash. `ProfileStore.checkSession` detects the hash, calls `POST /api/auth/callback`
+   with the token, and the server sets httpOnly `sb_access_token` and `sb_refresh_token` cookies.
+3. **Session restore**: On page load, `checkSession` calls `GET /api/auth/session` to read the
+   cookie and restore signed-in state.
+4. **Sign-out**: `POST /api/auth/signout` clears the cookies.
+5. **Store swap**: On successful sign-in, `ProfileStore` swaps `IndexedDBStore` for `SupabaseStore`
+   and calls `migrateToSupabase` to migrate locally-recorded puzzle attempts.
+
+The only frontend environment variable required for auth is `VITE_API_BASE_URL`.
+There is no `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, or client-side Supabase SDK.
 
 ## Environment Variables
 
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Server base URL (default: `''` = same origin) |
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key for frontend auth |
 
 ## Board Representation (Frontend)
 
@@ -124,7 +134,7 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 
 **Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
 
-`highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` and `SequenceHandler.jsx` used it; both are now on `overlays`.
+`highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` used it (the old `SequenceHandler.jsx` no longer exists); all callers are now on `overlays`.
 
 ## Shared Board Utility
 
@@ -165,11 +175,17 @@ When the drawn puzzle has `category === 'forbidden_columns'`, the `'pre-move'` p
 
 ### Forced Win / sequence branch (`puzzle.interaction_mode === 'sequence'`)
 
-When the drawn puzzle has `interaction_mode === 'sequence'`, `ChallengeScreen` renders `<SequenceHandler>` in place of the standard Board + CoachDialog + Toolbar + Tier-1 strip:
+When the drawn puzzle has `interaction_mode === 'sequence'`, `ChallengeScreen` handles the multi-move interaction **inline** via `handleSequenceClick` — there is no standalone `SequenceHandler` component. The standard Board, CoachDialog, and Toolbar are still rendered; `ChallengeScreen` wires `onColumnClick` to `handleSequenceClick` instead of `handleColumnClick`.
 
-- `SequenceHandler` owns its own Board, banners, and "Next" button (see `project_sequence_handler_ui.md`).
-- `SequenceHandler.onNext` is wired as `() => handleSequenceComplete(true)` (success-only in MVP).
-- The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzles.
+`handleSequenceClick` (defined in `ChallengeScreen.jsx`) drives a server-side state machine via `POST /api/puzzles/:id/sequence/move`:
+
+- **`outcome === 'continue'`**: The user's move was correct but the sequence is not finished. The function appends both `col` and `data.aiCol` to `seqPosition`, rebuilds the board, and animates both the user's placed disc and the AI's response disc using a staged `setLastDrop` call (user disc first, AI disc after ~300 ms delay).
+- **`outcome === 'success'`**: The sequence is complete (double-threat reached). `setLastDrop` is called for the user's final disc. `data.threatCells` is mapped to `win` overlays. The phase transitions to `'post-move'`.
+- **`outcome === 'wrong'`**: An incorrect move. A coach message is shown; the board is not updated; the user can retry.
+
+The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzles.
+
+**Note:** Any reference in memory docs or older specs to a `SequenceHandler` component is stale. The component was removed; its logic lives entirely in `ChallengeScreen.handleSequenceClick`.
 
 ### Deep Reveal bottom-sheet panel
 

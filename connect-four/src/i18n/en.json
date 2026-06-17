@@ -70,17 +70,11 @@
   "auth": {
     "signIn": "Sign in",
     "signUp": "Create free account",
-    "email": "Email address",
-    "sendLink": "Send magic link",
-    "checkEmail": "Check your email for the sign-in link.",
     "deepRevealGate": "Create a free account to unlock 20 Deep Reveals per week.",
     "signOut": "Sign out",
     "dismiss": "Maybe later",
     "subtitle": "Save your progress, streaks, and stats across devices.",
-    "checkInbox": "Check your inbox",
-    "magicLinkSent": "We sent a magic link to your email. Tap it to sign in.",
-    "continueWithEmail": "Continue with email",
-    "sendError": "Something went wrong. Please try again."
+    "continueWithGoogle": "Sign in with Google"
   },
   "upgrade": {
     "heading": "Become Pro",
@@ -287,34 +281,6 @@
       },
       "optimal": { "0": "You forced the win — well played.", "1": "Perfect sequence — your opponent had no escape." },
       "blunder": { "0": "That move breaks the forcing line.", "1": "The sequence fails here — your opponent can escape." }
-    },
-    "claimodd": {
-      "prompt": {
-        "0": "As Green, break the claimeven lock — find the odd-row anchor.",
-        "1": "Green is stuck on even rows. Create an odd-row threat.",
-        "2": "All columns have even height — Green needs to break the pattern."
-      },
-      "hint": {
-        "0": "Look for a column where playing gives Green an odd-row anchor.",
-        "1": "Check if center column creates a parity shift for Green."
-      },
-      "optimal": {
-        "0": "Perfect — you broke the claimeven lock with that odd-row anchor.",
-        "1": "That odd-row anchor shifts the parity. Gray's claimeven is broken.",
-        "2": "Well played — Green now has a winning threat Gray cannot claim.",
-        "3": "Exactly — the center column anchor gives Green the advantage."
-      },
-      "suboptimal": {
-        "0": "You're staying on even rows — try center column for an odd-row anchor.",
-        "1": "Good effort, but an odd-row anchor was the stronger defensive idea.",
-        "2": "That column keeps Green on even rows. Break the pattern instead."
-      },
-      "blunder": {
-        "0": "That keeps Green on even rows — Gray's claimeven still dominates.",
-        "1": "You need an odd-row anchor — this column doesn't provide one.",
-        "2": "Green stays trapped on even parity. Look for the center column.",
-        "3": "That move doesn't break the claimeven lock. Try center column."
-      }
     },
     "figure_7": {
       "prompt": {
@@ -530,10 +496,6 @@
         "0": "I can force you to lose from here — let's see if you can find the escape.",
         "1": "The path is forced — find the escape if you can."
       },
-      "claimodd": {
-        "0": "Breaking the claimeven lock — I'm anchoring on an odd row.",
-        "1": "Claimodd. Your even-row strategy just lost its grip."
-      },
       "figure_7": {
         "0": "Figure-7 trap set — two threats you can't both stop.",
         "1": "I've completed the Figure-7. Two threats incoming."
@@ -607,7 +569,6 @@
       "forbidden_columns": "Forbidden columns",
       "z_threat": "Z-threat",
       "claimeven": "Claimeven",
-      "claimodd": "Claimodd",
       "undercut": "Undercut",
       "overcut": "Overcut",
       "figure_7": "Figure 7",
@@ -649,6 +610,10 @@
     "title": "Challenges",
     "subtitle": "Choose a set. No labels on the board — you still have to find the move.",
     "positions_count": "{{count}} positions"
+  },
+  "setcard": {
+    "progress": "Puzzle progress",
+    "cleared": "Cleared"
   },
   "challenge": {
     "playing_gray": "You're playing Gray",
@@ -779,7 +744,6 @@
     "claimeven":        { "displayName": "Claimeven", "description": "Use Gray's Claimeven strategy to secure a draw." },
     "z_threat":         { "displayName": "Z-Threat", "description": "Exploit Z-threat parity to guarantee the win." },
     "odd_even_threat":  { "displayName": "Odd & Even Threats", "description": "Green has two threat moves. Pick the one that lands on an odd row — Green's natural parity — to guarantee control." },
-    "claimodd":         { "displayName": "Claimodd", "description": "Break the parity lock — find Green's odd-row anchor against Claimeven." },
     "mixed":            { "displayName": "Mixed", "description": "A mix of all challenge types." },
     "undercut":         { "displayName": "Undercut", "description": "Take the square below your opponent's threat." },
     "overcut":          { "displayName": "Overcut", "description": "Play above your opponent's intended threat." },
@@ -822,7 +786,6 @@
       "forbidden_columns": "Forbidden columns",
       "z_threat": "Z-threat",
       "claimeven": "Claimeven",
-      "claimodd": "Claimodd",
       "undercut": "Undercut",
       "overcut": "Overcut",
       "figure_7": "Figure 7",

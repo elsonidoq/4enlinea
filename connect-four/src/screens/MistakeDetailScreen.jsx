@@ -139,7 +139,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
     try {
       const res = await fetch(`${API}/api/coach/queue/${blunder.id}/resolve`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        credentials: 'include',
       });
       if (res.status === 204) {
         setReviewedMap(prev => ({ ...prev, [index]: true }));

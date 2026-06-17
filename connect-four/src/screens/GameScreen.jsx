@@ -29,10 +29,10 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     // 2. POST /api/games (fire-and-forget)
     let gameId = null;
     try {
-      const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}) };
       const res = await fetch(`${API}/api/games`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           device_uuid,
           moves: movesStr,
@@ -106,6 +106,11 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         }}
       >
         <div style={{ width: '100%', maxWidth: 380 }}>
+          {/*
+            lastDrop audit (034): lastDrop comes from useGameBoard hook.
+            It is set on both user moves (line 299) and AI moves (line 136).
+            Intentional — sparring gameplay always animates the just-placed disc. OK.
+          */}
           <Board
             board={board}
             onColumnClick={handleColumnClick}

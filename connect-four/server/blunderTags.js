@@ -18,7 +18,6 @@ export const VALID_BLUNDER_TAGS = new Set([
   'z_threat',
   'odd_even_threat',
   'claimeven',
-  'claimodd',
   'drawing_move',
   'suboptimal_move',
   'forbidden_columns',

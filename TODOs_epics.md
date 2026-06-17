@@ -354,40 +354,36 @@ token plumbing, or changing the Board disc colors.
 
 ### Epic 5 — Board Interaction Feedback
 
-**Goal:** Every board interaction gives the same drop animation and correct/incorrect feedback, and
-key tactical moments are highlighted on the board.
+**Goal:** Key tactical moments are highlighted on the board, and disc drop animations play only
+during live gameplay — not on static board loads.
 
 **Scope:**
 
-- **Socratic/practice disc drop + verdict (bug).** On the Socratic board, clicking the correct
-  column must drop a disc and show correct/incorrect feedback exactly like the challenges board.
-  The first board in a lesson currently doesn't drop on click; the second works. Trace
-  `SocraticScreen.handleColumnClick` and `ConceptScreen` (the "practice boards") to find why the
-  first board's `lastDrop`/overlay path doesn't fire on first interaction.
-- **forced_win double-threat highlight.** When a `forced_win` sequence reaches the double threat,
-  highlight the two created threats on the board. `SequenceHandler` currently passes `overlays={[]}`;
-  this is a **frontend-only change** — no server modification needed. The
-  `POST /api/puzzles/:id/sequence/move` endpoint already returns
-  `{ outcome: 'success', threatCells: [{ c: number, r: number }] }` when the learner's move creates
-  ≥ 2 threats (verified in `server/index.js`). `SequenceHandler` must read `response.threatCells`
-  on a `success` response and convert each entry to an `overlays` item of type `tg`
-  (current-player threat highlight): `{ c, r, type: 'tg' }`. Note: `threatCells` uses `{ c, r }`
-  — **not** `{ col, row }` as the `/check` endpoint uses — do not mix the two shapes.
-- **Challenge-set advance animation.** When advancing to the next board in a challenge set, discs
-  shared with the previous board must just appear (no animation); only the newly introduced discs
-  drop. On the first board, all discs drop. Diff consecutive boards to compute the "new since
-  previous" disc set and gate the drop animation on it.
+- **forced_win double-threat highlight (verification).** When a `forced_win` sequence reaches the
+  double-threat step, both created threat cells must be visibly highlighted. This is a
+  **verification task, not a build task** — `ChallengeScreen` / `handleSequenceClick` already reads
+  `data.threatCells` on a `success` response and renders `win`-type overlays. Confirm in a live
+  forced_win sequence that both cells light up correctly. No code change is expected. Note:
+  `threatCells` uses `{ c, r }` — **not** `{ col, row }` as the `/check` endpoint uses — do not
+  mix the two shapes.
+- **Challenge-set advance animation.** Discs must animate (drop) only when the user or coach makes
+  a move during live gameplay. When a board is loaded statically — challenge-set advance, lesson
+  board load, or any other `ChallengeScreen`-driven board swap — **all discs must appear instantly
+  with no drop animation**. `Board` owns this logic internally (via internal state or ref); no new
+  caller prop is needed. This applies uniformly to standalone challenge sets and
+  lesson-confirmation challenges.
 
 **Acceptance criteria:**
 
-- Clicking the correct column on any Socratic/practice board drops a disc and shows the same
-  correct/incorrect feedback as the challenges board, including the first board of a lesson.
-- At the `forced_win` double-threat step, both threat cells are visibly highlighted via `overlays`.
-- Advancing within a challenge set animates only the newly added discs; shared discs appear without
-  animation; the first board animates all discs.
+- At the `forced_win` double-threat step, both threat cells are visibly highlighted with `win`-type
+  overlays (verified, no code change needed).
+- When advancing within a challenge set or loading a new board statically, all discs appear
+  instantly with no drop animation.
+- During live gameplay (user or coach move), the placed disc drops with the standard animation.
 
 **NOT included:** New sound effects (Epic 10), new overlay types beyond the existing
-`OverlayType` enum, or changes to puzzle correctness logic.
+`OverlayType` enum, changes to puzzle correctness logic, or any fixes to `SocraticScreen` /
+`ConceptScreen` disc-drop behavior (that bug has already been resolved).
 
 ---
 
@@ -402,10 +398,25 @@ puzzles never repeat the same visual shape.
   (2) a clear visual "cleared" state when the set is complete, (3) accuracy expressed visually
   (not a number). The screen currently renders only `set.stars`. Source per-set progress/accuracy
   from the new `GET /api/user/challenge-progress` endpoint (auth-required; defined below), post-Epic 1.
-- **No back-to-back same-shape puzzles.** Add a per-puzzle "shape" extractor and a ranker that
-  orders a drawn set so no two adjacent puzzles share a shape (e.g. immediate-threat: the
-  orientation + coarse position of the group of three; double-threat: the union of involved pieces
-  normalized to a corner). Apply the ordering where puzzle sets are drawn (`GET /api/puzzles/draw`).
+- **No back-to-back same-shape puzzles (curation-time reindex).** A per-category shape descriptor
+  `{orientation, subtype, col_zone, row_zone}` is computed once at curation time and stored in new
+  `shape_key` and `position` columns on the puzzles table. A "reindex puzzles" button on the
+  curation tool runs a round robin algorithm per category: group puzzles by `shape_key`, then
+  interleave (A, B, C, A, B, C...) to assign sequential `position` values (0, 1, 2, ...). Puzzles
+  with null `position` are skipped by the draw endpoint. Unindexed puzzles trigger a warning in
+  the curation tool. Draw time uses sequential position ordering with NO shape algorithm at serve
+  time — the reorder is purely a curation-time operation. The adjacency constraint is within-draw
+  only; cross-draw adjacency is not guaranteed and is out of scope. `double_threat` shape uses a sorted pair of arm descriptors.
+- **New DB columns on puzzles table**: `shape_key TEXT` (category-specific shape bucket identifier)
+  and `position INTEGER` (global round-robin index within the category). A new migration adds both
+  columns; `position` defaults to `NULL` (puzzles are not served until indexed).
+- **forced_win highlight cells migration.** New migration to store `highlight_cells` on the
+  puzzles table at curation time (populated from `computeForcedWinHighlight`) so the shape
+  descriptor can derive from stored data without board replay. The puzzles table currently has no
+  `highlight_cells` column; forced_win `highlight_metadata` is always `null`.
+- **Curation tool: reindex puzzles button.** A button per category on the curation admin page that
+  triggers the round robin reindex. The tool also warns when a category has puzzles with null
+  `position`. The endpoint is server-side (POST-style, admin-only).
 
 **Acceptance criteria:**
 
@@ -443,49 +454,65 @@ puzzles never repeat the same visual shape.
     `{ attempted: 0, correct: 0, total: <live count>, accuracy: 0, cleared: false }`.
 - **Errors**: 401, 503 (Supabase not configured), 500.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Shape descriptor & ranker.** The shape-extraction function is per-category and currently
-  unspecified. Decide the canonical descriptor for each category (what is normalized, how position
-  is coarse-grained, how equality is defined) and the ranking/greedy-reorder algorithm. This is a
-  hard-to-derive algorithm — per project policy it should be **fully specified in the spec, not
-  deferred to plan.md**. Output: the descriptor definition per category + the reorder algorithm,
-  with worked examples sourced from real DB puzzles (never hand-built movestrings).
+- **Shape descriptor: curation-time, not draw-time.** The shape descriptor `{orientation, subtype, col_zone, row_zone}` is computed once at curation time from stored puzzle fields (`highlight_metadata`, `correct_col`, `move_string`, `highlight_cells` for forced_win). Categories with stored metadata (z_threat, undercut, overcut, figure_7, j_shape) derive the descriptor directly from stored fields. forced_win derives from the new `highlight_cells` column on puzzles (populated by a new migration from `computeForcedWinHighlight`). Categories without spatial metadata (immediate_threat, forced_block, double_threat, claimeven, claimodd, forbidden_columns, odd_even_threat) compute the descriptor at curation time via board analysis using the existing `Board` class. The result is stored in `shape_key TEXT` and `position INTEGER` columns on the puzzles table.
+- **Reindex algorithm: round robin.** Group puzzles within a category by `shape_key`, then interleave (A, B, C, A, B, C...) to assign sequential `position` values. This guarantees no adjacent same-shape puzzles within a draw. Cross-draw adjacency is not guaranteed and is out of scope. Reindex is triggered from the curation tool via a "reindex puzzles" button (admin-only POST endpoint). The formula: `position = groupIndex + sortedGroupPosition * numGroups`, where groups are ordered by first-seen and positions within each group are shuffled per reindex.
+- **Draw endpoint: sequential by position, no serve-time algorithm.** `GET /api/puzzles/draw` selects puzzles ordered by `position ASC`, skipping any with null `position`. The shape reorder was removed from draw time entirely (architectural pivot from the original design doc). The draw endpoint becomes simpler: sequential position ordering, no heap, no shape comparison at serve time.
+- **forced_win: store highlight_cells on puzzles.** A new migration adds `highlight_cells` to the puzzles table. At candidate curation/approval time, `computeForcedWinHighlight` populates it (same 5-cell structure with roles hint/loser/hint/loser/winner currently stored only on the candidates table). This makes forced_win shape extraction consistent with other stored-metadata categories. Without this migration, `puzzle.highlight_metadata` is always null for forced_win — a null-dereference if the shape extractor tries to read it.
+- **Visual accuracy on SetPickerScreen: colored bar fill.** Each SetCard shows a thin horizontal bar with width proportional to accuracy (0–100%). Color encoding: green (#4caf50) for accuracy >= 80%, yellow (#ffc107) for 50–79%, red (#f44336) for < 50%. No numeric text is shown — purely visual, respecting the constitution's "no raw scores surfaced" rule.
+- **Design doc superseded.** The original design doc `docs/superpowers/specs/2026-06-16-shape-descriptor-ranker-design.md` described a draw-time greedy max-heap reorder. That architecture is superseded by the curation-time round robin approach described here. The shape descriptor taxonomy (orientation, subtype, col_zone, row_zone) from that doc remains valid; only the timing and algorithm changed.
 
 ---
 
 ### Epic 7 — Auth & Onboarding
 
-**Goal:** Remove the magic link method to register into the app. A new user can register with a better method TBD.
-The emails they receive look professional.
+**Goal:** Replace magic-link registration with Google OAuth as the sole sign-in method.
+
+> Brainstorming decisions: [`docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md`](docs/superpowers/specs/2026-06-16-epic7-auth-onboarding-design.md)
 
 **Scope:**
 
-- **Auth email redesign.** Replace the current ugly auth email with a branded, legible template
-  (magic-link and any other transactional auth emails). Configured in Supabase email templates.
-- **Additional sign-in methods.** Add at least one alternative to the magic link (e.g. email +
-  password and/or an OAuth provider). Integrate via `supabase.auth.*` on the client
-  (`frontend-conventions.md` — auth stays client-side via the anon key) and surface the options in
-  `AuthModal`.
-- Note the known open bug `bug_auth_magic_link_redirect.md` (Supabase rejects unlisted
-  `emailRedirectTo` URLs) — allowlist the redirect URLs as part of this work.
+- **Replace magic-link with Google OAuth.** Remove the magic-link sign-in flow from `AuthModal` and
+  replace it with a "Sign in with Google" button. Magic-link is removed entirely; no email+password.
+  **Integration (server-mediated — no client Supabase SDK):** Add `GET /api/auth/oauth/google` on
+  the server; it 302-redirects to
+  `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${FRONTEND_URL}`. The "Sign in
+  with Google" button in `AuthModal` navigates the browser to `/api/auth/oauth/google`. The return
+  leg (`#access_token=` hash → `/api/auth/callback` → httpOnly cookie) is unchanged. Real contracts
+  are the `/api/auth/*` endpoints in `server/index.js` and `ProfileStore.jsx`; there is no client
+  Supabase SDK or anon key in the frontend.
+- **Redirect-URL allowlist.** Add `FRONTEND_URL` to each Supabase project's Auth → URL
+  Configuration → Redirect URLs (staging and production). Required for the Google OAuth callback to
+  land correctly. (Same fix noted in open bug `bug_auth_magic_link_redirect.md`.)
+- **Update `frontend-conventions.md` auth section** to reflect the current server-mediated
+  httpOnly-cookie model, replacing the now-stale client-SDK description.
 
 **Acceptance criteria:**
 
-- Auth emails render with brand styling in major mail clients (no raw/unstyled template).
-- A user can complete registration and sign-in via at least one non-magic-link method end-to-end.
-- The magic-link redirect bug is resolved (redirect URLs allowlisted for staging and prod).
+- A user can complete registration and sign-in via Google OAuth end-to-end.
+- Magic-link sign-in is removed from the UI.
+- The redirect-URL allowlist is configured for staging and production.
 
-**NOT included:** Account linking/merging across providers, profile/settings redesign, or 2FA.
+**NOT included:** Auth email redesign (Google OAuth sends no app-side auth emails; a styled template
+with no live trigger is untestable — cut entirely). Account linking/merging across providers,
+profile/settings redesign, or 2FA.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Which providers.** TODO names "password? gmail? meta?". Decide the exact set (password, Google,
-  Meta/Facebook, …) weighing setup cost and audience. Output: the chosen provider list and, for each
-  OAuth provider, the app-registration prerequisites (client IDs, redirect URIs per environment).
-- **Anonymous-→-account migration.** Decide whether the existing IndexedDB→Supabase migration
-  (`IndexedDBStore.migrateToSupabase`) needs changes for password/OAuth signups vs. magic link.
-  Output: a yes/no with any required store-path adjustments.
+- **Which providers.** Google OAuth only. Magic-link removed entirely. No email+password.
+  Prerequisites per environment (staging and production):
+  - Google Cloud Console: create OAuth 2.0 credential (Client ID + Secret); authorized redirect URI
+    = `https://<supabase-project-ref>.supabase.co/auth/v1/callback`.
+  - Supabase dashboard: Auth → Providers → Google → enable, paste Client ID + Secret.
+  - `FRONTEND_URL` added to Auth → URL Configuration → Redirect URLs in each Supabase project.
+  - **Initiation via server redirect endpoint** (`GET /api/auth/oauth/google`), not via
+    `supabase.auth.signInWithOAuth()` — the client Supabase SDK was removed in commit `87f2818`.
+
+- **Anonymous-→-account migration.** No changes needed. Google OAuth returns `#access_token=` in
+  the URL hash after redirect — the existing `checkSession` in `ProfileStore.jsx` handles this
+  identically to the old magic-link path, calling `switchToSupabase()` which triggers
+  `migrateToSupabase`. The migration code has no auth-method dependency.
 
 ---
 
@@ -501,28 +528,43 @@ games are sortable by usefulness, and any blunder has a shareable permalink.
   user played Green or Gray (the `side`/`userPlayer` data already exists; surface it as a persistent
   chip/label).
 - **Game-navigation sorting.** Sort the past-games list (`PastGamesListScreen` / `GET /api/games`)
-  by: games played well, games with horrible blunders, and recent. Sorting is **server-side** so it
-  applies before the `limit` cap. Add a `?sort=` query param to `GET /api/games`:
-  - `sort=recent` (default, current behavior): `ORDER BY date DESC`
-  - `sort=played_well`: `ORDER BY accuracy DESC NULLS LAST, date DESC`
-  - `sort=worst_blunders`: `ORDER BY blunder_count DESC, date DESC`
+  by: games played well, games with horrible blunders, and recent. Add a `?sort=` query param to
+  `GET /api/games`. Because `GET /api/games` fetches from `games` and `papergames_games` separately
+  and merges them into a unified JS array before slicing, sorting happens in JS on the merged array
+  (not via a single SQL `ORDER BY`). Implementation:
+  - Each table query computes `blunder_count` via a `LEFT JOIN` aggregate at query time — no new
+    column is added to either table.
+  - The two result sets are concatenated, then JS-sorted by the requested key before slicing.
+  - Secondary sort field is `created_at` (not `date`).
+  - Sort semantics:
+    - `sort=recent` (default, current behavior): by `created_at DESC`
+    - `sort=played_well`: by `accuracy DESC NULLS LAST, created_at DESC` — null-accuracy games are
+      included but sort after non-null games (JS comparator: null values treated as −∞), then by
+      `created_at DESC` among themselves.
+    - `sort=worst_blunders`: by `blunder_count DESC, created_at DESC`
   - Any other value returns `400 { "error": "invalid sort" }`.
-  All three values use the existing `accuracy`, `blunder_count`, and `date` columns — no new columns
-  or joins required.
+  No new columns required; `blunder_count` is computed via aggregate JOIN at query time.
 - **Blunder permalinks.** Make a blunder a shareable nugget. Add `GET /api/blunders/:id` and
   refactor `MistakeDetailScreen` to cold-boot from a single blunder id (today it requires a
   `blunderNavList[]` + `index` and is in `SESSION_ONLY_SCREENS`). Add a routable URL and OG meta
   (the SPA catch-all already injects OG tags for `/game/:id`; mirror for `/blunder/:id`).
 
   **`GET /api/blunders/:id` contract (auth/visibility rules resolved in brainstorming below):**
-  - Path param: `blunderId` — UUID string.
-  - Response (`200 OK`): blunder object matching the shape used by `GET /api/coach/queue` (see
-    `api-conventions.md` — `id`, `board_state`, `move_played`, `correct_move`, `pattern_category`,
-    `created_at`, `resolved_at`, `severity`, `game_id`, `moveIndex`, `threat_cells`).
-  - Errors: 400 (invalid UUID format), 401 (if visibility rule requires auth), 403 (not owner, if
-    owner-only), 404 (not found), 503, 500.
+  - Path param: `id` — UUID string.
+  - Response (`200 OK`): blunder object **field-for-field equal to a `GET /api/coach/queue` item**
+    so `MistakeDetailScreen` needs no adapter. Fields: `id`, `board_state`, `move_played`,
+    `correct_move`, `pattern_category`, `created_at`, `resolved_at`, `severity`,
+    `blunder_severity`, `game_id`, `moveIndex`, `threat_cells`.
+  - Errors: 400 (invalid UUID format), 404 (not found), 500, 503. No 401/403 — this endpoint is
+    public (no auth check, no `user_id` filter).
   - **`blunderDetail` removed from `SESSION_ONLY_SCREENS`** once this endpoint exists; `/blunder/:id`
-    added to `URL_MAP` in `urlMapping.js`.
+    added to `URL_MAP` in `urlMapping.js` using path param name `id`.
+
+  **Non-owner / signed-out render path on `/blunder/:id`:**
+  When the page is visited by a non-owner or a signed-out user the view is read-only:
+  - "Mark as reviewed" is hidden (it is a write action scoped to the owner).
+  - Deep Reveal is visible but shows a **"Sign in to unlock"** prompt for unauthenticated users
+    (deliberate conversion hook — do not hide Deep Reveal entirely).
 
 **Acceptance criteria:**
 
@@ -531,17 +573,20 @@ games are sortable by usefulness, and any blunder has a shareable permalink.
   producing the expected order on a fixture set.
 - `GET /api/blunders/:id` returns a single blunder; visiting `/blunder/:id` cold (no prior nav
   state) renders `MistakeDetailScreen` fully; the URL has correct OG title/description.
+- Visiting `/blunder/:id` while signed out renders a read-only view — "Mark as reviewed" is
+  hidden; Deep Reveal shows a sign-in prompt.
 
 **NOT included:** Public/unauthenticated blunder viewing if brainstorming rules it out, social
 auto-posting, or a new sharing UI beyond a copyable link.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Permalink visibility model.** Decide whether a blunder permalink is owner-only (auth required),
-  unlisted-but-public (anyone with the link), or public. This drives the `GET /api/blunders/:id`
-  auth rule and the OG/SEO behavior. "Shareable across social networks" implies public, which
-  conflicts with the current owner-scoped blunder model — resolve explicitly. Output: the
-  visibility rule and its auth/endpoint implications.
+- **Permalink visibility model.** Blunder permalinks are **unlisted-but-public**: anyone with the
+  UUID-based URL can view without authentication; the page is not indexed (`noindex` injected).
+  `GET /api/blunders/:id` has no `req.user` check and no `user_id` filter — returns the blunder
+  row to any caller who knows the UUID. No 401/403; errors are 400 (bad UUID), 404, 500, 503.
+  OG tags injected server-side mirroring the existing `/game/:id` pattern.
+  Full design: `docs/superpowers/specs/2026-06-16-blunder-permalink-visibility-design.md`
 
 ---
 
@@ -614,10 +659,15 @@ correct/re-enter their Papergames username). No new table needed; `papergames_ga
 
 ---
 
-### Epic 10 — Audio & Coach Pacing
+### Epic 10 — Audio & Interactive Coach
 
-**Goal:** The app has sound and a spoken coach, and coach messages are paced so the user can read
-both their own and the coach's commentary.
+*(formerly Epic 10 "Audio & Coach Pacing" + Epic 12 "Coach Text Interactivity" — merged because
+Epic 12's narration half directly depends on Epic 10's TTS decision; running them as separate specs
+would require rewriting Epic 12's plan after Epic 10 resolved TTS approach.)*
+
+**Goal:** The app has sound and a spoken coach; coach messages are paced for readability; tactical
+terms in coach text are tappable for definitions; and the coach can narrate a deep reveal with
+board-synced highlighting.
 
 **Scope:**
 
@@ -629,6 +679,14 @@ both their own and the coach's commentary.
 - **Coach message pacing.** Insert a deliberate pause between the player-move commentary and the
   coach/AI-move commentary so the user has time to read both (today the gap is too short). This is a
   timing change in the coach-message sequencing on the sparring/challenge surfaces.
+- **KB term glossary popups.** Words like "fork" / "double threat" are marked distinctly in coach
+  text; tapping / hovering shows a small popup explaining the term, sourced from the knowledge base
+  (`docs/knowledge-base/`). Reuse the annotated-text rendering infra (`src/lib/annotatedText.js`
+  parses `[zone:...]` specs today; extend it — or add a sibling parser — for KB term spans).
+- **Coach reads deep reveal with synced board highlighting** *(explicitly low priority).* As the
+  coach narrates a deep reveal, the board highlights the row/column/cell/region being referenced;
+  in the text, those references are tappable/hoverable to trigger the same board highlight. Builds
+  on `zoneToOverlays` (already in `annotatedText.js`) and the spoken-coach work above.
 
 **Acceptance criteria:**
 
@@ -637,20 +695,30 @@ both their own and the coach's commentary.
 - Coach messages can be played as speech; toggling speech on/off works and persists.
 - Between a player-move message and the following coach/AI message there is a perceptible,
   configurable pause; both messages are readable before the next state change.
+- Designated tactical terms in coach text are visually marked and show a KB-sourced definition popup
+  on tap/hover.
+- During a deep-reveal narration, the board highlights the referenced zone in sync with the spoken
+  text; tapping a reference in the text highlights the same zone.
 
 **NOT included:** Voice input, multilingual TTS tuning beyond the default locale, custom-recorded
-voice acting, or a full audio settings panel beyond mute + speech toggles.
+voice acting, a full audio settings panel beyond mute + speech toggles, authoring new KB content
+(use existing entries), a full glossary screen, or narration for surfaces other than deep reveal.
 
 #### Brainstorming needed
 
 - **TTS approach.** Decide between the browser `SpeechSynthesis` API (free, offline, variable
   quality) and a hosted TTS service (cost, latency, quality). Output: the chosen approach and, if
   hosted, the provider + caching strategy (coach lines are largely templated/i18n keys and could be
-  pre-rendered).
+  pre-rendered). **This decision gates the narration half of the glossary/deep-reveal scope.**
 - **Sound assets & licensing.** Decide where the four SFX + background music come from and their
   license. Output: the asset source list and license clearance.
 - **Pacing values.** Decide the default pause duration and whether it is user-configurable. Output:
   the default ms value and the config surface (if any).
+- **Term-detection source.** Decide how a term in free coach text is recognized and linked to a KB
+  entry — server-side annotation that emits term spans (like `[zone:...]`), a client-side dictionary
+  match against KB titles/aliases, or KB-author-tagged terms. Output: the term→KB-entry resolution
+  mechanism and where it runs (server vs client). This gates the glossary feature and should be
+  settled before speckit-specify.
 
 ---
 
@@ -691,38 +759,9 @@ a UI consolidation of the localhost-only admin tool.
 
 ---
 
-### Epic 12 — Coach Text Interactivity *(lowest priority)*
+### Epic 12 — *Merged into Epic 10*
 
-**Goal:** Tactical terms in coach text are tappable for a definition, and the coach can read a deep
-reveal aloud while the board highlights the regions it mentions.
-
-**Scope:**
-
-- **KB term glossary popups.** Words like "fork" / "double threat" are marked distinctly; tapping /
-  hovering shows a small popup explaining the term, sourced from the knowledge base
-  (`docs/knowledge-base/`). Reuse the annotated-text rendering infra (`src/lib/annotatedText.js`
-  parses `[zone:...]` specs today; extend it — or add a sibling parser — for KB term spans).
-- **Coach reads deep reveal with synced highlighting** *(explicitly low priority in TODO).* As the
-  coach narrates a deep reveal, the board highlights the row/column/cell/region being referenced;
-  in the text, those references are tappable/hoverable to trigger the same board highlight. Builds
-  on `zoneToOverlays` (already in `annotatedText.js`) and the spoken-coach work in Epic 10.
-
-**Acceptance criteria:**
-
-- Designated tactical terms in coach text are visually marked and show a KB-sourced definition popup
-  on tap/hover.
-- During a deep-reveal narration, the board highlights the referenced zone in sync with the spoken
-  text; tapping a reference in the text highlights the same zone.
-
-**NOT included:** Authoring new KB content (use existing entries), a full glossary screen, or
-narration for surfaces other than deep reveal.
-
-**Depends on:** Epic 10 (spoken coach) for the read-aloud half; the glossary half is independent.
-
-#### Brainstorming needed
-
-- **Term-detection source.** Decide how a term in free coach text is recognized and linked to a KB
-  entry — server-side annotation that emits term spans (like `[zone:...]`), a client-side
-  dictionary match against KB titles/aliases, or KB-author-tagged terms. Output: the term→KB-entry
-  resolution mechanism and where it runs (server vs client). This gates the whole glossary feature
-  and should be settled before speckit-specify.
+This epic's scope (KB term glossary popups and coach-narrated deep reveal with board-synced
+highlighting) has been merged into **Epic 10 — Audio & Interactive Coach**. The merge was made
+because the narration half depends on Epic 10's TTS decision, and running them as separate speckit
+pipelines would have required rewriting Epic 12's plan after Epic 10 resolved that choice.

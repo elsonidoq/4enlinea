@@ -4,6 +4,9 @@
 
 ## Feedback — behavioral rules
 
+- [Supabase config is modifiable](feedback_supabase_config_modifiable.md) — production Supabase settings can be changed via dashboard; never assume they're locked
+- [Epic sizing for speckit](feedback_epic_sizing_speckit.md) — run pipeline only when 8+ tasks + unresolved design decision + multiple subsystems; merge epics when B's plan depends on A's design output
+
 - [Spec redesigns: audit existing APIs first](feedback_spec_existing_apis.md) — read current component props before writing spec prop shapes; only change what is strictly necessary
 - [AskUserQuestion requires min 2 options](feedback_ask_user_question_min_options.md) — single-option questions throw InputValidationError; always provide at least 2 distinct options
 - [Run a critical subagent review after speckit-specify](feedback_spec_review_before_plan.md) — Sonnet subagent vs best_practices_spec_driven_development.md catches blocking issues before plan
@@ -55,6 +58,7 @@
 - [Claimeven detection algorithm](reference_claimeven_detection.md) — simulation-based (Red solver, Black same-column); exact, no false positives; ~20 solver queries
 - [Z-threat detection + visualization](reference_z_threat_detection.md) — parity count odd=Z-threat; vertical capsule highlight; count badge above board
 - [T4 Case A example movestring](reference_t4_example_movestring.md) — `1115222555577773663636617` solver-verified; two Red odd-row threats at col4, demonstrates T4 no-bonus rule
+- [T4 movestring is NOT forced_win](reference_t4_vs_forced_win_trap.md) — `1115222555577773663636617` is 1-indexed and fails ForcedWinStrategy; do not use for forced_win puzzles
 - [Allen V-rule example movestrings](reference_allen_v_rule_examples.md) — ALL V1–V5 verified; V1=`44452556366`, V4=`2134124321317273`
 - [Allis rule example movestrings](reference_allis_rule_examples.md) — all 9/9 rules verified; baseclaim=`263223362`, specialbefore=`2365555`
 - [External reference PDFs](reference_external_pdfs.md) — Allis (91p), Bagan (30p), Allen (276p); pdfminer.six for extraction; key page ranges recorded
@@ -108,12 +112,16 @@
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category
 - [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert
 
+- [Spec 037 — review & blunder sharing](project_spec037_review_blunder_sharing.md) — pipeline at tasks_critique; key decisions: is_owner boolean, computeThreatCells hoist, URL_MAP replace-not-add, is_owner!==false gate
+
 ## Project — local dev / deploy
 
 - [Local Supabase setup](project_local_supabase_setup.md) — URL/key config, Mailpit, service_role grants, dev workflow
 - [Migrate endpoint fixes](project_migration_endpoint_fixes.md) — 3 bugs fixed: silent failures, null device_uuid, FK violation fallback
 - [Spec 031 — staging/production deploy](project_spec031_staging_production_deploy.md) — Railway + two Supabase projects + migrate.js; 24 tasks; existing Supabase = production; c4solver must compile from source
 - [Spec 032 — repo hygiene & tech-debt sweep](project_spec032_repo_hygiene.md) — 25 tasks; dead-code audit (npx dependency-cruiser) + green/gray sweep; PuzzlesPage/PlaceholderScreen pre-confirmed DELETE; lint gate = ≤ baseline (not exit 0)
+- [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — IMPLEMENTED 2026-06-16; 10/10 tasks; Board animation gate, staged continue render, finally→explicit isSubmitting
+- [Spec 036 — Google OAuth auth](project_spec036_google_oauth.md) — spec/plan/tasks complete; server-redirect OAuth, DeepRevealPane slug trap, encodeURIComponent load-bearing
 
 ## Project — implementation details
 
@@ -140,7 +148,7 @@
 - [Supabase explicit grants — migration 012](project_supabase_grants.md) — new frontend tables need explicit GRANTs or PostgREST returns 42501
 - [Integration test slowness — use test:fast](project_integration_test_slowness.md) — omits candidate-generator.test.js; `npm test` hangs 10+ min due to solver IPC deadlock
 - [recordPuzzleAttempt canonical shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case: puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms
-- [SequenceHandler owns its entire UI](project_sequence_handler_ui.md) — self-contained Board/prompt/banners/Next; hardcoded English; onNext has no args (success-only)
+- [SequenceHandler is GONE — logic in ChallengeScreen](project_sequence_handler_ui.md) — SequenceHandler.jsx deleted; forced_win handled inline in ChallengeScreen.handleSequenceClick
 - [PAID_CATEGORIES in two files](project_paid_categories_two_files.md) — server/categories.js AND src/lib/categories.js; update both atomically
 - [/draw returns snake_case fields](project_draw_endpoint_snake_case.md) — move_string, interaction_mode etc.; components expecting camelCase need a callsite adapter
 - [challengeSets.js is server-side only](project_challenge_sets_server_only.md) — no frontend mirror; SetPickerScreen reads from API response
@@ -151,6 +159,11 @@
 - [AdminLessonsPage is dark](project_admin_lessons_dark.md) — overrides spec FR-015; user requested dark background during QA; same wrapper pattern as AdminCuratePage
 
 - [Papergames integration](project_papergames_integration.md) — papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips
+- [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — spec/plan/tasks done; lastDrop wiring in Board.jsx; staged continue render; isSubmitting trap; 11 tasks
+- [Candidate generator — mistake probability experiment](project_candidate_generator_mistake_probability.md) — solverWeightedPosition refactored from softmax to MP-based sampling 2026-06-14
+- [Epic 6 architecture decisions](project_epic6_architecture.md) — IMPLEMENTED 2026-06-16; 14/15 tasks done; curation-time round robin reindex, shape_key + position columns, canonical key=value serializer, random-offset draw
+- [Shape descriptor module](project_shape_descriptor_module.md) — server/shapeDescriptor.js; 5 exports; dispatches all 14 categories; canonical serializer with sorted keys
+- [highlight_metadata null per category](reference_highlight_metadata_null_categories.md) — which categories have null vs non-null highlight_metadata on puzzles table; forced_win trap; claimodd gap
 
 ## Project — bugs fixed
 

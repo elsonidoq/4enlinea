@@ -55,7 +55,6 @@ export const PATTERN_KB = {
   figure_7:       { id: 'community-figure-7' },
   forced_block: { inline: 'A forced block occurs when the opponent has an immediate winning threat and only a specific set of columns can neutralise it. All other legal moves leave the threat unanswered and lose immediately. Blocking a forced threat is the only legal good move.' },
   claimeven:      { id: 'allis-claimeven' },
-  claimodd:       { id: 'community-claimodd' },
   baseclaim:      { id: 'allis-baseclaim' },
   before:         { id: 'allis-before' },
   specialbefore:  { id: 'allis-specialbefore' },

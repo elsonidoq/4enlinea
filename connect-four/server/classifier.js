@@ -973,48 +973,6 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
 }
 
 /**
- * Claimodd detection — Red's response to Claimeven (synchronous, no solver needed).
- * Detection predicate: all columns have even colHeights, it is Red's turn,
- * the center column (col 3) is not full, and the solver score for col 3
- * is positive and ties the maximum legal score.
- * @param {Board} board
- * @param {number[]} scores  c4solver scores per column
- * @returns {{ matched: boolean, correctCol?: number }}
- * @complexity O(7)
- * @cache not cached
- */
-export function detectClaimodd(board, scores, perspective = board.currentPlayer) {
-  // Claimodd is Red-only (FR-009)
-  if (perspective !== 1) return { matched: false, cells: [] };
-
-  // All columns must have even heights
-  for (let col = 0; col < board.colHeights.length; col++) {
-    if (board.colHeights[col] % 2 !== 0) return { matched: false, cells: [] };
-  }
-
-  // Center column must not be full
-  if (board.colHeights[3] >= 6) return { matched: false, cells: [] };
-
-  // scores[3] must be positive and tie the maximum legal score
-  if (!scores || scores[3] <= 0) return { matched: false, cells: [] };
-
-  const legalScores = [];
-  for (let col = 0; col < 7; col++) {
-    if (board.colHeights[col] < 6) legalScores.push(scores[col]);
-  }
-  const maxLegal = Math.max(...legalScores);
-
-  if (scores[3] !== maxLegal) return { matched: false, cells: [] };
-
-  const correctCol = 3;
-  return {
-    matched: true,
-    correctCol,
-    cells: [`c${correctCol + 1}r${board.colHeights[correctCol] + 1}`],
-  };
-}
-
-/**
  * T006 — Claimeven detection (async — runs solver simulation).
  * Subtype A: exactly 1 odd column → unique equalising move.
  * Subtype B: exactly 2 odd columns → opponent just played in one, current player responds in the other.
@@ -1177,7 +1135,11 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
     return { matched: true, cols, cells };
   }
 
-  // Case B: consecutive-row threats in the same column
+  // Case B: consecutive-row threats in the same column.
+  // The lower threat must be at the gravity-top (colHeights[col]), so the opponent
+  // is forced to block it. After the block, the upper threat becomes gravity-top and
+  // the initiator wins there. Without this constraint, reachable threats buried under
+  // empty cells would produce false positives.
   const byCol = {};
   for (const t of threatCells) {
     if (!byCol[t.col]) byCol[t.col] = [];
@@ -1186,7 +1148,8 @@ export function detectDoubleThreat(board, perspective = board.currentPlayer) {
   for (const [colStr, rows] of Object.entries(byCol)) {
     const sorted = rows.sort((a, b) => a - b);
     for (let i = 0; i < sorted.length - 1; i++) {
-      if (sorted[i + 1] === sorted[i] + 1) {
+      if (sorted[i + 1] === sorted[i] + 1 &&
+          sorted[i] === board.colHeights[parseInt(colStr)]) {
         const col = parseInt(colStr);
         const cells = [`c${col + 1}r${board.colHeights[col] + 1}`];
         return { matched: true, cols: [col], cells };
@@ -1376,7 +1339,6 @@ export async function classifyPattern(ms, perspective, solver) {
     ['overcut',           () => detectOvercut(board, scores, perspective)],
     ['figure_7',          () => detectFigure7(board, scores, perspective)],
     ['j_shape',           () => detectJShape(board, scores, perspective)],
-    ['claimodd',          () => detectClaimodd(board, scores, perspective)],
     // Async detector (uses solver internally for simulation)
     ['claimeven',         () => detectClaimeven(board, solver, perspective)],
   ];
@@ -1457,7 +1419,7 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
     // Step 3: Missed own — tags the blunderer had before but lost after playing
     const MISSED_OWN_PRIORITY = [
       'immediate_threat', 'forced_win', 'double_threat', 'z_threat', 'odd_even_threat',
-      'figure_7', 'j_shape', 'overcut', 'claimeven', 'claimodd',
+      'figure_7', 'j_shape', 'overcut', 'claimeven',
     ];
     for (const t of MISSED_OWN_PRIORITY) {
       if (pMovesBlunderer.has(t) && !pAfterPlayedBlunderer.has(t)) {
@@ -1492,7 +1454,6 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
       // per FR-024/FR-025: undercut names the blunderer's exposure, not an opponent gain
       { tag: 'undercut',        check: () => pAfterBlunderBlunderer.has('undercut')       && !pAfterCorrectBlunderer.has('undercut') },
       { tag: 'claimeven',       check: () => pAfterBlunderOpponent.has('claimeven')       && !pAfterCorrectOpponent.has('claimeven') },
-      { tag: 'claimodd',        check: () => pAfterBlunderOpponent.has('claimodd')        && !pAfterCorrectOpponent.has('claimodd') },
     ];
     for (const { tag, check } of STEP4_PRIORITY) {
       if (check()) {

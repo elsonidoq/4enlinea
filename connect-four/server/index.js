@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'crypto';
+import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
@@ -26,6 +27,8 @@ import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, valid
 import { requireAdmin } from './adminAuth.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation } from './annotationGate.js';
+import { shapeKeyForPuzzle } from './shapeDescriptor.js';
+import { buildGoogleAuthorizeUrl } from './authUtils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -40,6 +43,7 @@ if (process.env.SENTRY_DSN) {
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
 app.use(express.json());
+app.use(cookieParser());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
   next();
@@ -156,14 +160,155 @@ try {
   console.log('[server] dist/index.html not found — SPA catch-all will return 500');
 }
 
+// ── Auth proxy endpoints ──────────────────────────────────────────────────────
+
+function cookieOpts() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  };
+}
+
+const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
+const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
+
+// GET /api/auth/oauth/google — redirect to Supabase Google OAuth
+app.get('/api/auth/oauth/google', (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const redirectTo = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const authorizeUrl = buildGoogleAuthorizeUrl(process.env.SUPABASE_URL, redirectTo);
+  res.redirect(authorizeUrl);
+});
+
+// POST /api/auth/callback — exchange OAuth tokens for httpOnly cookies
+app.post('/api/auth/callback', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const { access_token, refresh_token } = req.body;
+  if (!access_token) return res.status(400).json({ error: 'access_token is required' });
+
+  try {
+    console.log('[auth/callback] verifying access_token, length=', access_token?.length);
+    const { data, error } = await supabase.auth.getUser(access_token);
+    if (error || !data?.user) {
+      console.error('[auth/callback] token invalid:', error?.message);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    console.log('[auth/callback] user verified:', data.user.id, 'NODE_ENV=', process.env.NODE_ENV);
+
+    // Set httpOnly cookies
+    res.cookie('sb_access_token', access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (refresh_token) {
+      res.cookie('sb_refresh_token', refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    // Fetch user profile to return tier info
+    let tier = 'free';
+    if (supabase) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', data.user.id)
+        .single();
+      if (profile) tier = profile.tier;
+    }
+
+    res.json({ user: { id: data.user.id, tier } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/refresh — refresh the access token using the refresh token cookie
+app.post('/api/auth/refresh', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const refreshToken = req.cookies?.sb_refresh_token;
+  if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
+
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data?.session) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Refresh failed' });
+    }
+
+    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (data.session.refresh_token) {
+      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/signout — clear auth cookies
+app.post('/api/auth/signout', (_req, res) => {
+  res.clearCookie('sb_access_token', cookieOpts());
+  res.clearCookie('sb_refresh_token', cookieOpts());
+  res.json({ ok: true });
+});
+
+// GET /api/auth/session — return current user from cookie token
+app.get('/api/auth/session', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  const token = req.cookies?.sb_access_token;
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Token invalid' });
+    }
+
+    let tier = 'free';
+    const { data: profile } = await supabase
+      .from('users')
+      .select('tier')
+      .eq('id', data.user.id)
+      .single();
+    if (profile) tier = profile.tier;
+
+    res.json({ user: { id: data.user.id, tier } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/anonymous — create anonymous session (dev only)
+app.post('/api/auth/anonymous', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
+  try {
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error || !data?.session) return res.status(400).json({ error: error?.message || 'Anonymous sign-in failed' });
+
+    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (data.session.refresh_token) {
+      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
+
+    res.json({ user: { id: data.user.id, tier: 'free' } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Auth middleware (T020) ─────────────────────────────────────────────────────
 
 async function loadUser(req, _res, next) {
   req.user = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ') || !supabase) return next();
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.sb_access_token;
 
-  const token = authHeader.slice(7);
+  if (!token || !supabase) return next();
+
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return next();
@@ -1026,19 +1171,18 @@ app.get('/api/puzzles/counts', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('puzzles')
-      .select('category')
+      .select('category, count()')
       .eq('is_active', true);
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Build counts map starting from CATEGORY_ORDER (all categories default to 0)
     const counts = {};
     for (const slug of CATEGORY_ORDER) {
       counts[slug] = 0;
     }
     for (const row of (data || [])) {
       if (row.category in counts) {
-        counts[row.category] += 1;
+        counts[row.category] = Number(row.count);
       }
     }
 
@@ -1075,27 +1219,71 @@ app.get('/api/puzzles/draw', async (req, res) => {
   try {
     let puzzles;
     if (category === 'mixed') {
-      // Sample across all CATEGORY_ORDER categories (all accessible to Pro users)
-      const { data, error } = await supabase
-        .from('puzzles')
-        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
-        .in('category', CATEGORY_ORDER)
-        .eq('is_active', true)
-        .limit(n * 4); // oversample then pick
-      if (error) return res.status(500).json({ error: error.message });
-      // Shuffle and take n
-      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
-      puzzles = shuffled;
+      // Interleave: fetch position-ordered pools per category, then take one from each
+      const pools = {};
+      for (const cat of CATEGORY_ORDER) {
+        const { data: catPuzzles } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .eq('category', cat)
+          .eq('is_active', true)
+          .not('position', 'is', null)
+          .order('position', { ascending: true })
+          .limit(n);
+        pools[cat] = catPuzzles || [];
+      }
+
+      // Interleave: take one from each category per position index
+      puzzles = [];
+      for (let posIdx = 0; posIdx < n && puzzles.length < n; posIdx++) {
+        for (const cat of CATEGORY_ORDER) {
+          if (posIdx < pools[cat].length && puzzles.length < n) {
+            puzzles.push(pools[cat][posIdx]);
+          }
+        }
+      }
     } else {
-      const { data, error } = await supabase
+      // Single-category: position-based ordering with random offset
+      const { count: totalIndexed, error: countErr } = await supabase
         .from('puzzles')
-        .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+        .select('*', { count: 'exact', head: true })
         .eq('category', category)
         .eq('is_active', true)
-        .limit(n * 4); // oversample, shuffle in JS since Supabase JS client doesn't support ORDER BY RANDOM()
-      if (error) return res.status(500).json({ error: error.message });
-      const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, n);
-      puzzles = shuffled;
+        .not('position', 'is', null);
+
+      if (countErr) return res.status(500).json({ error: countErr.message });
+
+      if (totalIndexed === 0) {
+        puzzles = [];
+      } else {
+        const offset = Math.floor(Math.random() * Math.max(0, totalIndexed - n + 1));
+        const { data: result, error: resultErr } = await supabase
+          .from('puzzles')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+          .eq('category', category)
+          .eq('is_active', true)
+          .not('position', 'is', null)
+          .order('position', { ascending: true })
+          .range(offset, offset + n - 1);
+
+        if (resultErr) return res.status(500).json({ error: resultErr.message });
+
+        puzzles = result || [];
+
+        // Wrap around if needed
+        if (puzzles.length < n && totalIndexed > puzzles.length) {
+          const remaining = n - puzzles.length;
+          const { data: wrap } = await supabase
+            .from('puzzles')
+            .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
+            .eq('category', category)
+            .eq('is_active', true)
+            .not('position', 'is', null)
+            .order('position', { ascending: true })
+            .range(0, remaining - 1);
+          puzzles = puzzles.concat(wrap || []);
+        }
+      }
     }
 
     // Session handling for authenticated users
@@ -1112,7 +1300,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         // Resume — re-fetch puzzles in original draw order
         const { data: rows } = await supabase
           .from('puzzles')
-          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player')
+          .select('id, category, move_string, interaction_mode, highlight_metadata, correct_col, user_player, shape_key, highlight_cells')
           .in('id', existing.puzzle_ids)
           .eq('is_active', true);
         const map = Object.fromEntries((rows || []).map(p => [p.id, p]));
@@ -2313,16 +2501,101 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
 app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
-  const { data, error } = await supabase.from('candidates').select('category, status');
+  const { data, error } = await supabase.from('candidates').select('category, status, count()');
   if (error) return res.status(500).json({ error: error.message });
 
   const stats = {};
-  for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0 };
+  for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0, unindexed_count: 0 };
   for (const row of (data || [])) {
-    if (stats[row.category]) stats[row.category][row.status]++;
+    if (stats[row.category]) stats[row.category][row.status] = Number(row.count);
+  }
+
+  // Add unindexed_count per category
+  const { data: unindexedData, error: unindexedErr } = await supabase
+    .from('puzzles')
+    .select('category')
+    .eq('is_active', true)
+    .is('position', null);
+
+  if (!unindexedErr && unindexedData) {
+    for (const row of unindexedData) {
+      if (stats[row.category]) stats[row.category].unindexed_count++;
+    }
   }
 
   res.json({ categories: Object.values(stats) });
+});
+
+// POST /api/admin/puzzles/reindex
+app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+
+  const { category } = req.body;
+  if (!VALID_CATEGORIES.has(category)) {
+    if (category === 'mixed') {
+      return res.status(400).json({ error: 'mixed is a pseudo-category and cannot be reindexed' });
+    }
+    return res.status(400).json({ error: 'invalid category' });
+  }
+
+  const { data: puzzles, error } = await supabase
+    .from('puzzles')
+    .select('id, category, move_string, highlight_metadata, correct_col, highlight_cells')
+    .eq('category', category)
+    .eq('is_active', true);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  if (!puzzles || puzzles.length === 0) {
+    return res.json({ category, indexed: 0, shapeGroups: 0 });
+  }
+
+  // Compute shape_key and group by it
+  const groups = new Map();
+  const groupKeys = [];
+  for (const puzzle of puzzles) {
+    const key = shapeKeyForPuzzle(puzzle);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      groupKeys.push(key);
+    }
+    groups.get(key).push(puzzle);
+  }
+
+  // Shuffle within each group
+  for (const key of groupKeys) {
+    groups.get(key).sort(() => Math.random() - 0.5);
+  }
+
+  // Round-robin position assignment
+  const numGroups = groupKeys.length;
+  const maxGroupSize = Math.max(...groupKeys.map(k => groups.get(k).length));
+
+  const updates = [];
+  for (let sortedGroupPosition = 0; sortedGroupPosition < maxGroupSize; sortedGroupPosition++) {
+    for (let groupIndex = 0; groupIndex < numGroups; groupIndex++) {
+      if (sortedGroupPosition < groups.get(groupKeys[groupIndex]).length) {
+        const puzzle = groups.get(groupKeys[groupIndex])[sortedGroupPosition];
+        const position = groupIndex + sortedGroupPosition * numGroups;
+        puzzle.shape_key = groupKeys[groupIndex];
+        puzzle.position = position;
+        updates.push(puzzle);
+      }
+    }
+  }
+
+  // Batch update sequentially
+  for (const puzzle of updates) {
+    const { error: upErr } = await supabase
+      .from('puzzles')
+      .update({ shape_key: puzzle.shape_key, position: puzzle.position })
+      .eq('id', puzzle.id);
+    if (upErr) {
+      console.error('[puzzles/reindex] update error', puzzle.id, upErr.message);
+    }
+  }
+
+  res.json({ category, indexed: updates.length, shapeGroups: numGroups });
 });
 
 // T008: GET /api/admin/candidates
@@ -2426,7 +2699,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
 
   let predicatePass;
   if (category === 'forced_win') {
-    const { correctCols } = await checkForcedWinPredicate(preClickMoves, solver);
+    const { correctCols } = checkForcedWinPredicate(preClickMoves);
     predicatePass = correctCols.includes(candidateCol);
   } else if (category === 'forbidden_columns') {
     const { correctCols } = checkForbiddenColumnsPredicate(preClickMoves);
@@ -2464,7 +2737,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
 
   const { data: candidate, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
     .eq('id', id)
     .single();
 
@@ -2496,6 +2769,7 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
       interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
       highlight_metadata: candidate.highlight_metadata ?? null,
       correct_col: candidate.correct_col ?? null,
+      highlight_cells: candidate.highlight_cells ?? null,
       user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
       simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
     })
@@ -2525,7 +2799,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
 
   const { data: candidates, error: fetchErr } = await supabase
     .from('candidates')
-    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence')
+    .select('id, category, move_string, status, highlight_metadata, correct_col, category_evidence, highlight_cells')
     .eq('category', category)
     .eq('status', 'pending');
 
@@ -2561,6 +2835,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
         interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move',
         highlight_metadata: candidate.highlight_metadata ?? null,
         correct_col: candidate.correct_col ?? null,
+        highlight_cells: candidate.highlight_cells ?? null,
         user_player: candidate.move_string.length % 2 === 0 ? 1 : 2,
         simulation_trace: candidate.category_evidence?.simulation_trace ?? [],
       });
@@ -2743,6 +3018,11 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json({ id: data.id, verified: false });
 });
+
+// ── Legal pages (required by Google OAuth consent screen) ────────────────────
+app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html')));
+app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html')));
+app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html')));
 
 // ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
 

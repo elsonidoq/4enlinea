@@ -140,43 +140,27 @@
     "expectedResult": "wrong"
   },
   {
-    "description": "forced_win: correct (least bad move)",
+    "description": "forced_win: correct (initiates board-detectable forced-win chain)",
     "puzzle": {
       "id": 6,
       "category": "forced_win",
-      "moveString": "3333344455",
+      "moveString": "251333303644104632500",
       "goalPredicateType": "forced_win"
     },
     "candidateCol": 6,
-    "scores": [
-      -16,
-      -16,
-      -16,
-      -16,
-      -16,
-      -16,
-      -2
-    ],
+    "scores": [],
     "expectedResult": "correct"
   },
   {
-    "description": "forced_win: wrong (not the least bad)",
+    "description": "forced_win: wrong (does not initiate forced-win chain)",
     "puzzle": {
       "id": 6,
       "category": "forced_win",
-      "moveString": "3333344455",
+      "moveString": "251333303644104632500",
       "goalPredicateType": "forced_win"
     },
     "candidateCol": 0,
-    "scores": [
-      -16,
-      -16,
-      -16,
-      -16,
-      -16,
-      -16,
-      -2
-    ],
+    "scores": [],
     "expectedResult": "wrong"
   },
   {

@@ -36,8 +36,6 @@ export const REASON_TEMPLATES = new Map([
   ['odd_even_threat:enabled_opponent',  "Your move gave Red threats on both row parities."],
   ['claimeven:missed_own',              "You had a claimeven endgame — the pairing was yours — and threw it away."],
   ['claimeven:enabled_opponent',        "You gave Yellow a claimeven endgame — they now control the pairing."],
-  ['claimodd:missed_own',               "You had the claimodd control — all even columns, center command — and lost it."],
-  ['claimodd:enabled_opponent',         "Your move gave Red the claimodd endgame control."],
   ['drawing_move:missed_own',           "You had a forced win available with best play — the position was winning — but this move settled for a draw."],
   ['suboptimal_move:missed_own',        "There was a stronger move — this one gives ground."],
 ]);
@@ -53,6 +51,5 @@ export const POSITIVE_TEMPLATES = new Map([
   ['z_threat',         "You secured the parity advantage — an odd vertical capsule that forces the endgame."],
   ['odd_even_threat',  "You built threats on both row parities, creating a fork the opponent can't fully answer."],
   ['claimeven',        "You locked in the claimeven endgame — the pairing of empty cells is now yours."],
-  ['claimodd',         "You claimed the claimodd endgame control — center column, even parity, commanding position."],
   ['drawing_move',     "You found the drawing resource — the only move that prevents a loss."],
 ]);

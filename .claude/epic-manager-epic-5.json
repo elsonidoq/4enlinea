@@ -1,8 +1,8 @@
 {
   "epic_path": "TODOs_epics.md",
   "epic_section": "Epic 5 — Board Interaction Feedback",
-  "spec_dir": null,
-  "stage": "epic_critique",
+  "spec_dir": "specs/034-board-interaction-feedback",
+  "stage": "done",
   "pending_brainstorming_decisions": null,
   "pending_critique": null,
   "pending_answers": null,
