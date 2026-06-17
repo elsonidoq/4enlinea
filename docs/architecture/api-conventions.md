@@ -168,7 +168,7 @@ Returns the authenticated user's blunders with server-computed threat cell locat
 **Query params**:
 - `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
 - `category`: optional string, must be a valid blunder tag slug. Filters blunders to a single pattern category.
-- `game_id`: optional UUID string. Filters blunders to those linked to a specific game.
+- `game_id`: optional UUID string. Filters blunders to those linked to a specific **AI sparring game** via the `game_id` column. Does NOT match papergames blunders — those use `papergames_game_id` and are not filterable via this param.
 
 **Response**: `{ "blunders": [...], "total": number }`
 
@@ -389,6 +389,7 @@ Lists past sparring games for the authenticated user.
 - `limit`: positive integer ≤ 50 (default 20). Returns 400 if non-numeric, zero, negative, or > 50.
 - `outcome`: `'won'` or `'lost'`. Returns 400 for any other value (including `'draw'`). When omitted, all outcomes are returned.
 - `has_blunder`: `'true'` (string). Returns 400 for any other value. When omitted, all games are returned.
+- `sort`: `'recent'` (default), `'played_well'` (highest accuracy first), or `'worst_blunders'` (most blunders first). Returns 400 for any other value. When omitted, defaults to `'recent'`.
 
 **Response** (`200 OK`):
 ```json
@@ -397,6 +398,7 @@ Lists past sparring games for the authenticated user.
     {
       "id": "<uuid>",
       "outcome": "won" | "lost" | "draw",
+      "side": "first" | "second",
       "date": "<ISO timestamp>",
       "source": "ai",
       "difficulty": "easy | medium | hard | perfect",
@@ -410,6 +412,7 @@ Lists past sparring games for the authenticated user.
 ```
 
 - `outcome`: DB values `win`/`loss`/`draw` are mapped to `won`/`lost`/`draw` in the response.
+- `side`: `'first'` (user moves first, plays Green) or `'second'` (user moves second, plays Gray).
 - `accuracy`: from the `games.accuracy` column (written by `POST /api/games/analyze`); `null` if the game has not been analyzed.
 - `blunder_count`: count of `blunders` rows linked to this game via `game_id`.
 - `cols`: 7-element array of per-column move encoding (`g` = current player, `d` = opponent), produced by `movesToCols`.
@@ -545,6 +548,41 @@ Records a blunder detected during post-game review. Fire-and-forget from the cli
 **Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
 
 **Errors**: 400 (missing or invalid fields), 401 (not authenticated), 500 (DB error), 503 (Supabase not configured).
+
+### `GET /api/blunders/:id`
+
+Returns a single blunder by UUID. No auth required — this is the public permalink endpoint.
+
+**Path param**: `id` is a UUID string, validated against `UUID_REGEX` (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`).
+
+**Response** (`200 OK`):
+```json
+{
+  "id": "<uuid>",
+  "board_state": "<movestring>",
+  "move_played": 3,
+  "correct_move": 4,
+  "pattern_category": "immediate_threat",
+  "created_at": "2026-05-01T12:00:00Z",
+  "resolved_at": null,
+  "severity": 12,
+  "blunder_severity": 7.50,
+  "game_id": "<uuid>" | null,
+  "moveIndex": 8,
+  "threat_cells": [{ "col": 4, "row": 2 }],
+  "is_owner": true
+}
+```
+
+- `is_owner`: `true` when the authenticated user owns the blunder; `false` when a different user or an anonymous visitor fetches it. Computed server-side as `req.user?.id === row.user_id`.
+- `user_id` is **never** exposed in the response.
+- Response shape is field-for-field identical to coach queue items, plus the `is_owner` boolean.
+- Threat cells are computed server-side via `computeThreatCells(board_state, move_played)`.
+
+**Errors**:
+- `400` — `{ "error": "invalid blunder id" }` when `id` is not a valid UUID.
+- `404` — `{ "error": "blunder not found" }` when no row matches the UUID.
+- `503` — `{ "error": "internal error" }` when Supabase is not configured.
 
 ## LLM Feedback Endpoint
 

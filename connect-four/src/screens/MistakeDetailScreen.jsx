@@ -12,16 +12,41 @@ import { track } from '../lib/track.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index: initialIndex, mistakeContext, mistakeSource }) {
+export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, index: initialIndex, mistakeContext, mistakeSource, id }) {
   const { t } = useTranslation();
   const { session } = useStore();
 
-  const blunders = navList ?? [];
   const [index, setIndex] = useState(initialIndex ?? 0);
   const [resolving, setResolving] = useState(false);
   const [highlightCol, setHighlightCol] = useState(null);
   const [zhCells, setZhCells] = useState([]);
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
+  const [coldNavList, setColdNavList] = useState(null);
+  const [coldBootState, setColdBootState] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'not_found' | 'error'
+
+  // Cold-boot fetch: when id is present and navListProp is empty, fetch the blunder
+  useEffect(() => {
+    if (!id || (navListProp && navListProp.length > 0)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setColdBootState('loading');
+    fetch(`${API}/api/blunders/${encodeURIComponent(id)}`)
+      .then(async res => {
+        if (res.status === 404) { setColdBootState('not_found'); return; }
+        if (!res.ok) { setColdBootState('error'); return; }
+        const data = await res.json();
+        setColdNavList([data]);
+        setColdBootState('ready');
+      })
+      .catch(() => setColdBootState('error'));
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive the effective navList: prefer in-app navListProp, fall back to cold-boot fetch
+  const navList = useMemo(() => {
+    if (navListProp && navListProp.length > 0) return navListProp;
+    return coldNavList ?? [];
+  }, [navListProp, coldNavList]);
+
+  const blunders = navList ?? [];
 
   const blunder = blunders[index];
   const isReviewed = blunder?.resolved_at != null;
@@ -65,6 +90,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
 
   // Back navigation: contextual based on mistakeContext
   function handleBack() {
+    if (!mistakeContext && !mistakeSource) { go('home'); return; }
     if (mistakeContext === 'game' && mistakeSource?.gameId) {
       go('review', { id: mistakeSource.gameId });
     } else {
@@ -72,47 +98,39 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
     }
   }
 
-  if (!blunder) {
-    return (
-      <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-        <TopBar title={t('mistakes.detail.topbarTitle')} onBack={handleBack} />
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--ink-soft)' }}>
-          {t('mistakes.detail.noBlunderFound', 'no blunder found')}
-        </div>
-      </div>
-    );
-  }
+  // Display move number — only meaningful when blunder exists
+  const displayMoveNumber = blunder ? (blunder.moveIndex ?? 0) + 1 : 0;
 
-  const displayMoveNumber = (blunder.moveIndex ?? 0) + 1;
-
-  // TopBar meta content
-  let metaContent;
-  if (mistakeSource) {
-    metaContent = (
-      <button
-        onClick={() => go('review', { id: mistakeSource.gameId })}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--ink-soft)',
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: 'pointer',
-          padding: 0,
-          fontFamily: 'inherit',
-          textDecoration: 'underline',
-          textUnderlineOffset: 2,
-        }}
-      >
-        {`Move ${displayMoveNumber} / ${mistakeSource.totalMoves} · ${mistakeSource.date} ›`}
-      </button>
-    );
-  } else {
-    metaContent = (
-      <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
-        {`Move ${displayMoveNumber} / ${blunders.length}`}
-      </span>
-    );
+  // TopBar meta content — only when blunder exists
+  let metaContent = null;
+  if (blunder) {
+    if (mistakeSource) {
+      metaContent = (
+        <button
+          onClick={() => go('review', { id: mistakeSource.gameId })}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--ink-soft)',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: 0,
+            fontFamily: 'inherit',
+            textDecoration: 'underline',
+            textUnderlineOffset: 2,
+          }}
+        >
+          {`Move ${displayMoveNumber} / ${mistakeSource.totalMoves} · ${mistakeSource.date} ›`}
+        </button>
+      );
+    } else {
+      metaContent = (
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
+          {`Move ${displayMoveNumber} / ${blunders.length}`}
+        </span>
+      );
+    }
   }
 
   function handlePrev() {
@@ -154,8 +172,16 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
     }
   }
 
+  const isGreenPlayer = blunder ? (blunder.board_state || '').length % 2 === 0 : null;
   const coachMessages = [
-    { text: t('mistakes.detail.coach.line1', { n: blunder.move_played + 1 }), mood: 'think' },
+    {
+      text: t('mistakes.detail.coach.line1', { n: (blunder?.move_played ?? 0) + 1 }),
+      mood: 'think',
+      ...(isGreenPlayer != null ? {
+        disc: isGreenPlayer ? 'green' : 'gray',
+        discLabel: isGreenPlayer ? 'You played Green' : 'You played Gray',
+      } : {}),
+    },
     { text: t('mistakes.detail.coach.line2'), mood: 'think' },
   ];
 
@@ -164,9 +190,68 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
       <TopBar
         title={t('mistakes.detail.topbarTitle')}
         onBack={handleBack}
-        meta={metaContent}
+        meta={blunder ? metaContent : undefined}
       />
 
+      {/* Cold-boot loading state */}
+      {coldBootState === 'loading' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
+          <div style={{
+            width: 32, height: 32,
+            border: '3px solid var(--line)',
+            borderTopColor: 'var(--ink-soft)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          <span style={{ color: 'var(--ink-soft)', fontSize: 15 }}>{t('common.loading', 'Loading…')}</span>
+        </div>
+      )}
+
+      {/* Cold-boot not-found state */}
+      {coldBootState === 'not_found' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
+          <span style={{ color: 'var(--ink)', fontSize: 18, fontWeight: 700 }}>{t('mistakes.detail.notFound', 'Blunder not found')}</span>
+          <button onClick={handleBack} style={{
+            padding: '10px 24px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1.5px solid var(--line)',
+            background: 'transparent',
+            color: 'var(--ink)',
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}>{t('common.back', 'Back')}</button>
+        </div>
+      )}
+
+      {/* Cold-boot error state */}
+      {coldBootState === 'error' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
+          <span style={{ color: 'var(--ink)', fontSize: 18, fontWeight: 700 }}>{t('common.error', 'Something went wrong')}</span>
+          <button onClick={handleBack} style={{
+            padding: '10px 24px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1.5px solid var(--line)',
+            background: 'transparent',
+            color: 'var(--ink)',
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}>{t('common.back', 'Back')}</button>
+        </div>
+      )}
+
+      {/* In-app empty navList state */}
+      {(coldBootState === 'ready' || coldBootState === 'idle') && !blunder && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--ink-soft)' }}>
+          {t('mistakes.detail.noBlunderFound', 'no blunder found')}
+        </div>
+      )}
+
+      {(coldBootState === 'ready' || coldBootState === 'idle') && blunder && (
+        <>
       {deepRevealOpen ? (
         <>
           <CoachDialog messages={coachMessages} />
@@ -225,12 +310,6 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
               {t('mistakes.detail.legend.opponentThreat')}
             </div>
           </div>
-          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)', fontWeight: 600 }}>
-            {(() => {
-              const userColor = (blunder.board_state || '').length % 2 === 0 ? 'green' : 'gray';
-              return <>You played: <strong>{userColor}</strong></>;
-            })()}
-          </div>
           <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: 'var(--ink-soft)', opacity: 0.5, fontFamily: 'monospace' }}>
               {blunder.board_state || ''}
@@ -244,9 +323,29 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
         </div>
 
         {/* Deep reveal trigger */}
-        <button
-          onClick={() => setDeepRevealOpen(true)}
-          style={{
+        {session ? (
+          <button
+            onClick={() => setDeepRevealOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              padding: '13px 20px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: 'none',
+              background: 'var(--disc-green, #2e9e57)',
+              color: '#fff',
+              fontFamily: 'inherit',
+            }}
+          >
+            {t('mistakes.detail.whatShouldIHave')}
+          </button>
+        ) : (
+          <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -255,65 +354,67 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
             borderRadius: 'var(--radius-sm)',
             fontSize: 14,
             fontWeight: 700,
-            cursor: 'pointer',
-            border: 'none',
-            background: 'var(--disc-green, #2e9e57)',
-            color: '#fff',
+            border: '1.5px solid var(--line)',
+            color: 'var(--ink-soft)',
             fontFamily: 'inherit',
-          }}
-        >
-          {t('mistakes.detail.whatShouldIHave')}
-        </button>
+          }}>
+            {t('mistakes.detail.signInToUnlock', 'Sign in to unlock')}
+          </div>
+        )}
 
         {/* Mark as reviewed */}
-        {effectiveReviewed ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            padding: '13px 20px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1.5px solid var(--line)',
-            background: 'transparent',
-            color: 'var(--ink-soft)',
-            fontWeight: 700,
-            fontSize: 14,
-            fontFamily: 'inherit',
-            opacity: 0.6,
-          }}>
-            <Icon name="check" size={16} color="var(--ink-soft)" />
-            {t('mistakes.detail.markedReviewed')}
-          </div>
-        ) : (
-          <button
-            onClick={handleMarkReviewed}
-            disabled={resolving}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              padding: '13px 20px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: resolving ? 'var(--line)' : 'var(--green)',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: resolving ? 'default' : 'pointer',
-              fontFamily: 'inherit',
-              transition: 'background .12s',
-            }}
-          >
-            {resolving ? '...' : t('mistakes.detail.markReviewed')}
-          </button>
+        {session && blunder.is_owner !== false && (
+          <>
+            {effectiveReviewed ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '13px 20px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1.5px solid var(--line)',
+                background: 'transparent',
+                color: 'var(--ink-soft)',
+                fontWeight: 700,
+                fontSize: 14,
+                fontFamily: 'inherit',
+                opacity: 0.6,
+              }}>
+                <Icon name="check" size={16} color="var(--ink-soft)" />
+                {t('mistakes.detail.markedReviewed')}
+              </div>
+            ) : (
+              <button
+                onClick={handleMarkReviewed}
+                disabled={resolving}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  padding: '13px 20px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  background: resolving ? 'var(--line)' : 'var(--green)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: resolving ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'background .12s',
+                }}
+              >
+                {resolving ? '...' : t('mistakes.detail.markReviewed')}
+              </button>
+            )}
+          </>
         )}
       </div>
-      )}
+          )}
 
-      {/* Toolbar: Prev / Next */}
-      <Toolbar>
+          {/* Toolbar: Prev / Next */}
+          <Toolbar>
         <button
           onClick={handlePrev}
           disabled={index === 0}
@@ -372,6 +473,8 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navList, index
           <Icon name="chevR" size={20} />
         </button>
       </Toolbar>
+        </>
+      )}
     </div>
   );
 }

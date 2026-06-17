@@ -202,7 +202,7 @@ export function MistakesListScreen({ go, goBack, category }) {
               return (
                 <button
                   key={b.id}
-                  onClick={() => go('blunderDetail', { blunderNavList: filteredBlunders, index: i, mistakeContext: 'list', mistakeSource: null })}
+                  onClick={() => go('blunderDetail', { id: filteredBlunders[i].id, blunderNavList: filteredBlunders, index: i, mistakeContext: 'list', mistakeSource: null })}
                   style={{
                     display: 'flex',
                     gap: 12,
@@ -235,6 +235,28 @@ export function MistakesListScreen({ go, goBack, category }) {
                         </div>
                       )}
                       <SeverityMeter score={b.severity} />
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        borderRadius: 10,
+                        padding: '1px 8px',
+                        background: 'var(--card)',
+                        boxShadow: 'var(--shadow-sm)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: 'var(--ink-soft)',
+                        fontFamily: 'inherit',
+                      }}>
+                        <span style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: (b.board_state || '').length % 2 === 0 ? 'var(--disc-green)' : 'var(--disc-gray)',
+                          flexShrink: 0,
+                        }} />
+                        {(b.board_state || '').length % 2 === 0 ? 'Green' : 'Gray'}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
                       {new Date(b.created_at).toLocaleDateString()}

@@ -16,6 +16,7 @@ function getQualityColor(quality) {
   return 'var(--eval-bad)';
 }
 
+
 export function ReviewScreen({ go, goBack, id }) {
   const { t } = useTranslation();
   const { session } = useStore();
@@ -85,7 +86,10 @@ export function ReviewScreen({ go, goBack, id }) {
 
         // Fire-and-forget: fetch game blunder list for ✕-node navigation
         if (session) {
-          fetch(`${API}/api/coach/queue?game_id=${id}`, {
+          const queueParam = data.source === 'papergames'
+            ? `papergames_game_id=${id}`
+            : `game_id=${id}`;
+          fetch(`${API}/api/coach/queue?${queueParam}`, {
             credentials: 'include',
           })
             .then(r => r.ok ? r.json() : { blunders: [] })
@@ -118,6 +122,7 @@ export function ReviewScreen({ go, goBack, id }) {
       const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
       if (matchedIdx !== -1) {
         go('blunderDetail', {
+          id: gameBlunderList[matchedIdx].id,
           blunderNavList: gameBlunderList,
           index: matchedIdx,
           mistakeContext: 'game',
@@ -167,7 +172,9 @@ export function ReviewScreen({ go, goBack, id }) {
   } else if (error) {
     coachMessages = [{ text: error, mood: 'sad' }];
   } else if (analysis) {
-    coachMessages = [{ text: t(analysis.summaryPhraseKey), mood: 'happy' }];
+    const disc = analysis.side === 'first' ? 'green' : 'gray';
+    const discLabel = analysis.side === 'first' ? 'You played Green' : 'You played Gray';
+    coachMessages = [{ text: t(analysis.summaryPhraseKey), mood: 'happy', disc, discLabel }];
   }
 
   // Accuracy display
@@ -312,6 +319,7 @@ export function ReviewScreen({ go, goBack, id }) {
                           const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
                           if (matchedIdx !== -1) {
                             go('blunderDetail', {
+                              id: gameBlunderList[matchedIdx].id,
                               blunderNavList: gameBlunderList,
                               index: matchedIdx,
                               mistakeContext: 'game',

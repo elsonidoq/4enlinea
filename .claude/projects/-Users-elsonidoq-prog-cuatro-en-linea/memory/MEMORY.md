@@ -112,7 +112,7 @@
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category
 - [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert
 
-- [Spec 037 — review & blunder sharing](project_spec037_review_blunder_sharing.md) — pipeline DONE; run /coordinate-implementation; key traps: computeThreatCells needs 2 args, T011 owns all call sites, T009 must deploy before T011/T012, OG title humanizes enum
+- [Spec 037 — review & blunder sharing](project_spec037_review_blunder_sharing.md) — IMPLEMENTED 2026-06-17; 4 QA bugs open: chip above coach, blunder click→explorer (papergames game_id mismatch), chip below board in MistakeDetail, coach missing color label
 - [claimodd removal — 2026-06-17](project_claimodd_removal.md) — removed entirely; wrong implementation (center-col-specific) + generation rate ~2/400; 20 files edited/deleted
 
 ## Project — local dev / deploy
@@ -180,3 +180,4 @@
 - [Server parity bug — AI-first games](project_parity_bug_ai_first.md) — human/ai heatmaps swapped when AI opens the game; not yet fixed
 - [visualize_board.mjs broken import](bug_visualize_board_broken.md) — imports `buildThreatMap` (renamed to `getMajorThreatCells`); crashes on startup; fix: update import
 - [Magic link email broken — emailRedirectTo not allowlisted](bug_auth_magic_link_redirect.md) — Supabase rejects unlisted redirect URLs; needs dashboard fix
+- [papergames_games missing grants — permission denied](bug_papergames_games_grants.md) — migration 046 adds GRANT SELECT TO anon, authenticated; apply via SQL editor when GET /api/games 403s locally
