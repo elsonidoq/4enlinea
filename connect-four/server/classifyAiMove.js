@@ -6,7 +6,7 @@
 // FR-005a: classify the post-move board from the AI player's perspective.
 // Priority ordering: double_threat > immediate_threat > forced_win > forced_block >
 // forbidden_columns > z_threat > odd_even_threat > claimeven >
-// figure_7 > j_shape > overcut > undercut > claimodd.
+// figure_7 > j_shape > overcut > undercut.
 // double_threat before immediate_threat: a double threat (≥2 gravity-top threats)
 // always also fires immediate_threat; the more specific tag must win.
 
@@ -15,7 +15,7 @@ import { classifyPattern } from './classifier.js';
 export const AI_PATTERN_PRIORITY = [
   'double_threat', 'immediate_threat', 'forced_win', 'forced_block',
   'forbidden_columns', 'z_threat', 'odd_even_threat', 'claimeven',
-  'figure_7', 'j_shape', 'overcut', 'undercut', 'claimodd',
+  'figure_7', 'j_shape', 'overcut', 'undercut',
 ];
 
 /**

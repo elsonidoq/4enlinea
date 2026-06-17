@@ -20,7 +20,7 @@ const CATEGORIES = [
   'immediate_threat', 'forced_block', 'double_threat',
   'forced_win', 'forbidden_columns',
   'odd_even_threat',
-  'z_threat', 'claimeven', 'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ];
 
 const args = process.argv.slice(2);

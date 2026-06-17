@@ -197,7 +197,6 @@ describe('GET /api/user/challenge-progress', () => {
 
     // All CHALLENGE_SETS categories are present
     assert.ok(body.progress.claimeven);
-    assert.ok(body.progress.claimodd);
     assert.ok(body.progress.double_threat);
     assert.ok(body.progress.figure_7);
     assert.ok(body.progress.forced_win);

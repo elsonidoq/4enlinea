@@ -1,0 +1,11 @@
+{
+  "epic_path": "TODOs_epics.md",
+  "epic_section": "Epic 8 — Review & Blunder Sharing",
+  "spec_dir": "specs/037-review-blunder-sharing",
+  "stage": "done",
+  "pending_brainstorming_decisions": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": "## Handoff context\n\n**What changed in the plan and why:**\n\n1. `computeThreatCells` refactor is now a named prerequisite in Step 3a. Must be extracted to module scope before the new route is written — should be its own sub-task (refactor commit before new-route commit).\n\n2. DB `.select()` column list corrected — removed `moveIndex` and `threat_cells` (not DB columns). Corrected list is coach/queue column set plus `user_id`. `moveIndex` = `board_state.length`, `threat_cells` computed in JS.\n\n3. Cold-boot JSX structure is now explicit: single `return` with conditional branches, not multiple early returns.\n\n4. `is_owner !== false` gate replaces `is_owner` gate — `undefined !== false` is `true`, so button renders for all existing in-app nav paths unchanged. Only explicit `false` from API suppresses it.\n\n5. `handleBack` cold-boot branch added: if both `mistakeContext` and `mistakeSource` are absent, navigate to `home`.\n\n**Phase boundaries and sequencing constraints:**\n\n- Step 3a (hoist + new endpoint) must land before Step 3e (cold-boot frontend).\n- Steps 3c and 3d are atomic (URL_MAP + call site updates in one commit).\n- OG injection (Step 3b) shares `UUID_REGEX` with Step 3a — same commit or Step 3b after.\n\n**Steps likely complex to break into tasks:**\n\n- Step 3a — two sub-tasks: 'hoist computeThreatCells' and 'add GET /api/blunders/:id'.\n- Step 3e — modifying existing component with complex internal state; reference existing 'no blunder' guard block as structural template.\n\n**Non-obvious things:**\n\n- `computeThreatCells` may have a different name in source — grep before writing task.\n- `handleBack` may be inline or useCallback — task should say 'add branch at top of existing handleBack definition'.\n- `session` variable is already available in MistakeDetailScreen (used for Deep Reveal gate) — no new import needed.",
+  "pending_deferrals": []
+}

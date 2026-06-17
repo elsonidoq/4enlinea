@@ -34,14 +34,13 @@ const POSITIVE_CASCADE = [
   'z_threat',
   'odd_even_threat',
   'claimeven',
-  'claimodd',
   'drawing_move',
   'suboptimal_move',
 ];
 
 // Tier 1 tags: detectors that return concrete cells[].
 const TIER1_TAGS = new Set([
-  'immediate_threat', 'double_threat', 'claimodd',
+  'immediate_threat', 'double_threat',
   'undercut', 'overcut', 'figure_7', 'j_shape',
 ]);
 
@@ -66,7 +65,7 @@ async function safeClassifyPattern(ms, perspective, solver) {
 /**
  * Build allowedSet from the union of all classifyPattern Map results.
  *
- * Tier 1 (concrete cells): immediate_threat, double_threat, claimodd, undercut, overcut, figure_7, j_shape
+ * Tier 1 (concrete cells): immediate_threat, double_threat, undercut, overcut, figure_7, j_shape
  *   → emit { cells, zoneSpec: 'tg' }
  * Tier 2 (z_threat, cells []): derive capsuleCol from the board at `boardForCapsule`
  *   → emit { col: capsuleCol, parity: 'odd', zoneSpec: 'tg' }

@@ -112,6 +112,8 @@
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category
 - [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert
 
+- [Spec 037 — review & blunder sharing](project_spec037_review_blunder_sharing.md) — pipeline at tasks_critique; key decisions: is_owner boolean, computeThreatCells hoist, URL_MAP replace-not-add, is_owner!==false gate
+
 ## Project — local dev / deploy
 
 - [Local Supabase setup](project_local_supabase_setup.md) — URL/key config, Mailpit, service_role grants, dev workflow

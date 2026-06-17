@@ -23,8 +23,6 @@ const EXPECTED_REASON_KEYS = [
   'odd_even_threat:enabled_opponent',
   'claimeven:missed_own',
   'claimeven:enabled_opponent',
-  'claimodd:missed_own',
-  'claimodd:enabled_opponent',
   'drawing_move:missed_own',
   'suboptimal_move:missed_own',
 ];
@@ -41,12 +39,11 @@ const EXPECTED_POSITIVE_KEYS = [
   'z_threat',
   'odd_even_threat',
   'claimeven',
-  'claimodd',
   'drawing_move',
 ];
 
-test('REASON_TEMPLATES has exactly 23 entries', () => {
-  assert.equal(REASON_TEMPLATES.size, 23);
+test('REASON_TEMPLATES has exactly 21 entries', () => {
+  assert.equal(REASON_TEMPLATES.size, 21);
 });
 
 test('REASON_TEMPLATES — all 23 keys map to non-empty strings', () => {
@@ -78,8 +75,6 @@ test('REASON_TEMPLATES — all expected values match exactly', () => {
     ['odd_even_threat:enabled_opponent',  "Your move gave Red threats on both row parities."],
     ['claimeven:missed_own',              "You had a claimeven endgame — the pairing was yours — and threw it away."],
     ['claimeven:enabled_opponent',        "You gave Yellow a claimeven endgame — they now control the pairing."],
-    ['claimodd:missed_own',               "You had the claimodd control — all even columns, center command — and lost it."],
-    ['claimodd:enabled_opponent',         "Your move gave Red the claimodd endgame control."],
     ['drawing_move:missed_own',           "You had a forced win available with best play — the position was winning — but this move settled for a draw."],
     ['suboptimal_move:missed_own',        "There was a stronger move — this one gives ground."],
   ]);
@@ -95,11 +90,11 @@ test('REASON_TEMPLATES spot-check: drawing_move:missed_own', () => {
   );
 });
 
-test('POSITIVE_TEMPLATES has exactly 12 entries', () => {
-  assert.equal(POSITIVE_TEMPLATES.size, 12);
+test('POSITIVE_TEMPLATES has exactly 11 entries', () => {
+  assert.equal(POSITIVE_TEMPLATES.size, 11);
 });
 
-test('POSITIVE_TEMPLATES — all 12 keys map to non-empty strings', () => {
+test('POSITIVE_TEMPLATES — all 11 keys map to non-empty strings', () => {
   for (const key of EXPECTED_POSITIVE_KEYS) {
     const value = POSITIVE_TEMPLATES.get(key);
     assert.ok(value !== undefined, `Missing key: ${key}`);
@@ -119,7 +114,6 @@ test('POSITIVE_TEMPLATES — all expected values match exactly', () => {
     ['z_threat',         "You secured the parity advantage — an odd vertical capsule that forces the endgame."],
     ['odd_even_threat',  "You built threats on both row parities, creating a fork the opponent can't fully answer."],
     ['claimeven',        "You locked in the claimeven endgame — the pairing of empty cells is now yours."],
-    ['claimodd',         "You claimed the claimodd endgame control — center column, even parity, commanding position."],
     ['drawing_move',     "You found the drawing resource — the only move that prevents a loss."],
   ]);
   for (const [key, value] of expected) {

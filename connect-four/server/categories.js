@@ -4,7 +4,7 @@ export const VALID_CATEGORIES = new Set([
   'immediate_threat', 'forced_block', 'double_threat',
   'forced_win', 'forbidden_columns',
   'odd_even_threat',
-  'z_threat', 'claimeven', 'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ]);
 
 export const PAID_CATEGORIES = new Set([
@@ -15,7 +15,7 @@ export const CATEGORY_ORDER = [
   'immediate_threat', 'forced_block', 'double_threat',
   'forced_win', 'forbidden_columns',
   'odd_even_threat',
-  'z_threat', 'claimeven', 'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
+  'z_threat', 'claimeven', 'undercut', 'overcut', 'figure_7', 'j_shape',
 ];
 
 export const CATEGORY_NAMES = {
@@ -27,7 +27,6 @@ export const CATEGORY_NAMES = {
   odd_even_threat:   'Odd & Even Threats',
   z_threat:          'Z-Threat',
   claimeven:         'Claimeven',
-  claimodd:          'Claimodd',
   undercut:          'Undercut',
   overcut:           'Overcut',
   figure_7:          'Figure 7',

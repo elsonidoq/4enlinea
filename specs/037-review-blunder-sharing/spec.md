@@ -149,7 +149,7 @@ The blunder URL is not indexed by search engines.
 
 **Ownership determination**
 
-- **FR-029**: Ownership is signalled by the `is_owner` boolean in the `GET /api/blunders/:id` response (see FR-020). The server MUST compute `is_owner = (req.user?.id === row.user_id)` and include it in the response. No `user_id` UUID is exposed to the client. `MistakeDetailScreen` MUST gate the "Mark as reviewed" button and Deep Reveal state on `blunderItem.is_owner` (from the `blunderNavList` entry) rather than performing any client-side user-id comparison.
+- **FR-029**: Ownership is signalled by the `is_owner` boolean in the `GET /api/blunders/:id` response (see FR-020). The server MUST compute `is_owner = (req.user?.id === row.user_id)` and include it in the response. No `user_id` UUID is exposed to the client. `MistakeDetailScreen` MUST gate the "Mark as reviewed" button on `session && blunderItem.is_owner !== false`: this preserves the button for in-app nav paths where `is_owner` is `undefined` (not set by the coach/queue response), and hides it only when `is_owner` is explicitly `false` (non-owner via permalink) or the user is signed out. Deep Reveal is gated on `session` only (FR-028), not on `is_owner`.
 
 ### Key Entities
 

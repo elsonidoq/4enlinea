@@ -183,6 +183,10 @@ In `PastGamesListScreen`:
 
 Registration position: before the `app.get('/{*path}', ...)` catch-all (and before `app.use(express.static(...))`). Follows api-conventions.md route ordering rules (literals before params).
 
+**Pre-requisite — hoist `computeThreatCells` to module scope**: The existing `computeThreatCells` function (used in the coach/queue handler) is currently defined inside that handler's closure and is unreachable from the new route. Before adding the new route, move it to module scope so both handlers share the same implementation. No logic change — pure refactor.
+
+`moveIndex` and `threat_cells` are **not** DB columns; they are computed in JS. The `.select()` must match the actual coach/queue column set plus `user_id` only:
+
 ```js
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -194,7 +198,7 @@ app.get('/api/blunders/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('blunders')
-      .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, moveIndex, threat_cells, user_id')
+      .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
       .eq('id', id)
       .single();
 
@@ -202,19 +206,19 @@ app.get('/api/blunders/:id', async (req, res) => {
 
     const is_owner = req.user?.id != null && req.user.id === data.user_id;
 
-    // Compute threat_cells server-side (same as GET /api/coach/queue)
-    // threat_cells may already be stored; if not, compute from board_state
-    const threatCells = data.threat_cells ?? [];
+    // Compute derived fields exactly as the coach/queue handler does
+    const moveIndex = data.board_state ? data.board_state.length : 0;
+    const threat_cells = computeThreatCells(data.board_state, data.move_played); // now at module scope — must pass both args
 
     const { user_id: _omit, ...blunderPublic } = data;
-    res.json({ ...blunderPublic, threat_cells: threatCells, is_owner });
+    res.json({ ...blunderPublic, moveIndex, threat_cells, is_owner });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 ```
 
-Note: `threat_cells` handling — if already stored in DB (as with `POST /api/coach/queue`), use stored value. If null, compute via `Board.majorThreatCells()`. Audit the existing blunders table to confirm whether `threat_cells` is a stored column. If it's not stored, compute it using the same logic as `GET /api/coach/queue`.
+The `computeThreatCells` refactor and the new route should land in the same commit to keep the move-to-module-scope change and its first consumer together.
 
 #### Step 3b: Server — OG meta injection (FR-021, FR-022)
 
@@ -240,7 +244,16 @@ if (blunderMatch) {
         .single();
 
       if (data) {
-        const ogTitle = `Connect Four blunder — ${data.pattern_category}`;
+        // Humanize enum: immediate_threat → "Immediate Threat"
+        const CATEGORY_LABELS = {
+          immediate_threat: 'Immediate Threat', forced_win: 'Forced Win',
+          missed_win: 'Missed Win', zugzwang: 'Zugzwang',
+          claimeven: 'Claimeven', figure_7: 'Figure 7',
+          j_shape: 'J-Shape', undercut: 'Undercut', overcut: 'Overcut',
+        };
+        const humanCategory = CATEGORY_LABELS[data.pattern_category]
+          ?? data.pattern_category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const ogTitle = `Connect Four blunder — ${humanCategory}`;
         const ogDesc = 'See this Connect Four mistake on DecodeC4.';
         const ogTags = `<meta property="og:title" content="${ogTitle}">
 <meta property="og:description" content="${ogDesc}">
@@ -296,12 +309,18 @@ go('blunderDetail', { blunderNavList: gameBlunderList, index: matchedIdx, id: ga
 
 #### Step 3e: Frontend — MistakeDetailScreen cold-boot path (FR-025, FR-026)
 
-Add an `id` prop to `MistakeDetailScreen`. When `id` is present and `navList` is absent/empty, fetch `GET /api/blunders/:id`:
+Add an `id` prop to `MistakeDetailScreen`. When `id` is present and `navList` is absent/empty, fetch `GET /api/blunders/:id`.
+
+**React rules-of-hooks constraint**: the loading/error early-return guards MUST NOT appear before any existing hook call. Place all existing hooks first, then derive `navList`, then render loading/error/not-found states as JSX conditionals inside the existing return — mirroring the existing no-blunder guard pattern already in the component. Do not introduce new sub-components just for these states.
+
+`handleBack` when `mistakeContext` and `mistakeSource` are both absent (cold-boot via permalink): navigate to `home`. For all other paths the existing back logic is unchanged.
 
 ```jsx
 export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, index: initialIndex, mistakeContext, mistakeSource, id }) {
+  // --- ALL existing hook calls first (useState, useEffect, useStore, etc.) ---
   const [coldNavList, setColdNavList] = useState(null);
-  const [coldBootState, setColdBootState] = useState(navListProp?.length > 0 ? 'ready' : id ? 'loading' : 'ready');
+  const [coldBootState, setColdBootState] = useState('idle');
+  // ... all other existing hooks ...
 
   useEffect(() => {
     if (!id || navListProp?.length > 0) return;
@@ -319,24 +338,34 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
 
   const navList = navListProp?.length > 0 ? navListProp : (coldNavList ?? []);
 
-  if (coldBootState === 'loading') {
-    return <LoadingState onBack={handleBack} />;
-  }
-  if (coldBootState === 'not_found') {
-    return <NotFoundState onBack={handleBack} message={t('mistakes.detail.notFound', 'Blunder not found')} />;
-  }
-  if (coldBootState === 'error') {
-    return <ErrorState onBack={handleBack} />;
-  }
-  // ... rest of existing render using navList
+  // handleBack: cold-boot permalink path has no mistakeContext/mistakeSource → go home
+  const handleBack = () => {
+    if (!mistakeContext && !mistakeSource) { go('home'); return; }
+    // ... existing back logic ...
+  };
+
+  // --- Loading / error states as JSX (no early return before hooks) ---
+  return (
+    <>
+      {coldBootState === 'loading' && <LoadingState onBack={handleBack} />}
+      {coldBootState === 'not_found' && (
+        <NotFoundState onBack={handleBack} message={t('mistakes.detail.notFound', 'Blunder not found')} />
+      )}
+      {coldBootState === 'error' && <ErrorState onBack={handleBack} />}
+      {(coldBootState === 'ready' || coldBootState === 'idle') && (
+        /* ... existing render using navList ... */
+      )}
+    </>
+  );
 }
 ```
 
-`handleBack` in cold-boot: when `mistakeContext` and `mistakeSource` are absent (cold-boot scenario), go to `home`.
-
 #### Step 3f: Frontend — is_owner gates (FR-027, FR-028, FR-029)
 
-In `MistakeDetailScreen`, gate the "Mark as reviewed" button:
+In `MistakeDetailScreen`, gate the "Mark as reviewed" button using `session && blunder.is_owner !== false`. This expression:
+- Is `true` when the user is signed in AND `is_owner` is `true` (permalink owner) or `undefined` (in-app nav where `is_owner` was never set — preserves today's button)
+- Is `false` when `is_owner` is explicitly `false` (signed-in non-owner from permalink) OR when `session` is absent
+
 ```jsx
 // Before:
 {effectiveReviewed ? (...reviewed state...) : (
@@ -344,7 +373,7 @@ In `MistakeDetailScreen`, gate the "Mark as reviewed" button:
 )}
 
 // After:
-{blunder.is_owner && (
+{session && blunder.is_owner !== false && (
   effectiveReviewed ? (...reviewed state...) : (
     <button onClick={handleMarkReviewed} ...>...</button>
   )

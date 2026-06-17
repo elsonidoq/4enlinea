@@ -94,7 +94,7 @@ function descriptorForImmediateOrForcedBlock(board, correctCol, player) {
   };
 }
 
-// ─── Board-replay: positional categories (forbidden_columns, claimeven, claimodd, odd_even_threat)
+// ─── Board-replay: positional categories (forbidden_columns, claimeven, odd_even_threat)
 
 function descriptorForPositional(board, correctCol) {
   const landingRow = board.colHeights[correctCol];
@@ -352,7 +352,7 @@ export function descriptorForPuzzle(puzzle) {
     return descriptorForDoubleThreat(board, puzzle.correct_col, player);
   }
 
-  if (category === 'forbidden_columns' || category === 'claimeven' || category === 'claimodd' || category === 'odd_even_threat') {
+  if (category === 'forbidden_columns' || category === 'claimeven' || category === 'odd_even_threat') {
     let correctCol = puzzle.correct_col;
     if (correctCol == null && category === 'forbidden_columns') {
       // Fallback: derive a safe col from the board (any col that isn't forbidden)

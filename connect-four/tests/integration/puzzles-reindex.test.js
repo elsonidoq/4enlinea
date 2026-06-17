@@ -202,7 +202,7 @@ function createApp(mockSupabase) {
     const VALID_CATEGORIES = new Set([
       'immediate_threat', 'forced_block', 'double_threat', 'forced_win',
       'forbidden_columns', 'odd_even_threat', 'z_threat', 'claimeven',
-      'claimodd', 'undercut', 'overcut', 'figure_7', 'j_shape',
+      'undercut', 'overcut', 'figure_7', 'j_shape',
     ]);
     if (!VALID_CATEGORIES.has(category)) {
       if (category === 'mixed') {

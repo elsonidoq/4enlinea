@@ -3022,6 +3022,7 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
 // ── Legal pages (required by Google OAuth consent screen) ────────────────────
 app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html')));
 app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html')));
+app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html')));
 
 // ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
 
