@@ -147,31 +147,6 @@ category = 'z_threat'
 
 ---
 
-### Lesson 7: Claimodd — Red Takes the Center
-
-**Concept**
-When the board reaches an "all-even" state — every column has an even number of empty cells — Yellow's claimeven strategy would give Red even rows everywhere, which are the wrong rows for Red. Red's answer is "claimodd": play in the center column first to establish an odd-row anchor. This creates a Z-Threat in the center column that Yellow cannot replicate, giving Red control while Yellow controls all the even rows elsewhere.
-
-**KB entries used**
-- `community-claimodd` — definition, all-even precondition, center-column anchor, failure when col D is full
-- `community-z-threat` — the Z-Threat the center anchor creates (taught in Lesson 6)
-
-**Puzzle filter**
-No classifier category exists. Requires a new synchronous detector:
-```
-all columns have colHeight % 2 === 0 (all-even parity)
-AND it is Red's turn
-AND center column (col 3, 0-indexed) is not full
-AND scores[3] === max(legal_scores) and scores[3] > 0
-```
-
-**Explanation coverage**
-No `PATTERN_KB` entry exists for `claimodd`. The KB statement in `community-claimodd.md` provides the prose. Both a new `detectClaimodd` detector and a new `PATTERN_KB` entry are needed.
-
-**Implementation difficulty: Medium** — the detector is ~25 lines of synchronous code (O(7) parity check + scores comparison, no extra solver calls). Simpler than it sounds; originally labelled Hard in a previous draft.
-
----
-
 ### Lesson 8: The Undercut — When Your Threat Disappears
 
 **Concept**

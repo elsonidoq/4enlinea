@@ -104,6 +104,40 @@ function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, mov
  *   side                 — 'first' | 'second'
  *   fullMovestring       — complete game movestring
  */
+function PlayerColorChip({ side }) {
+  const isGreen = side === 'first';
+  const discColor = isGreen ? 'var(--disc-green)' : 'var(--disc-gray)';
+  const label = isGreen ? 'You played Green' : 'You played Gray';
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 20,
+      padding: '4px 12px',
+      background: 'var(--card)',
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      <span style={{
+        width: 12,
+        height: 12,
+        borderRadius: '50%',
+        background: discColor,
+        flexShrink: 0,
+      }} />
+      <span style={{
+        fontFamily: "'Baloo 2', cursive, var(--font-body)",
+        fontWeight: 600,
+        fontSize: 13,
+        color: 'var(--ink)',
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function ExplorerScreen({
   go,
   goBack,
@@ -210,6 +244,17 @@ export function ExplorerScreen({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar title={t('sparring.explorerTitle')} onBack={goBack} />
+
+      {/* Player color chip */}
+      {side && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '4px 16px 0',
+        }}>
+          <PlayerColorChip side={side} />
+        </div>
+      )}
 
       {/* ExplorerBoard is keyed on selectedMistakeIdx — React remounts it (and its
           useGameBoard hook) whenever the user navigates to a different mistake. */}

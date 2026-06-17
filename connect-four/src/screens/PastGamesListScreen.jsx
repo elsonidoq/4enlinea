@@ -119,6 +119,12 @@ function GameCard({ game, t, onClick }) {
   );
 }
 
+const SORTS = [
+  { key: 'recent',          label: 'Recent' },
+  { key: 'played_well',     label: 'Played Well' },
+  { key: 'worst_blunders',  label: 'Worst Blunders' },
+];
+
 const FILTERS = [
   { key: 'all',         label: 'games.filter_all' },
   { key: 'won',         label: 'games.filter_won' },
@@ -136,13 +142,14 @@ export function PastGamesListScreen({ go, goBack }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('recent');
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     track('screen_view', { screen: 'pastGames' });
   }, []);
 
-  const fetchGames = useCallback(async (activeFilter, currentOffset, append = false) => {
+  const fetchGames = useCallback(async (activeFilter, activeSort, currentOffset, append = false) => {
     if (!session) return;
 
     const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentOffset });
@@ -150,6 +157,9 @@ export function PastGamesListScreen({ go, goBack }) {
       params.set('has_blunder', 'true');
     } else if (activeFilter !== 'all') {
       params.set('outcome', activeFilter);
+    }
+    if (activeSort !== 'recent') {
+      params.set('sort', activeSort);
     }
 
     try {
@@ -177,8 +187,8 @@ export function PastGamesListScreen({ go, goBack }) {
     setError(null);
     setGames([]);
     setOffset(0);
-    fetchGames(filter, 0, false);
-  }, [filter, session]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchGames(filter, sort, 0, false);
+  }, [filter, sort, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleFilterChange(key) {
     if (key === filter) return;
@@ -189,7 +199,7 @@ export function PastGamesListScreen({ go, goBack }) {
     const nextOffset = offset + PAGE_SIZE;
     setOffset(nextOffset);
     setLoadingMore(true);
-    fetchGames(filter, nextOffset, true);
+    fetchGames(filter, sort, nextOffset, true);
   }
 
   // Anonymous gate
@@ -212,6 +222,36 @@ export function PastGamesListScreen({ go, goBack }) {
   return (
     <div style={{ background: 'var(--bg-spar)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} />
+
+      {/* Sort picker */}
+      <div style={{ padding: '6px 16px 0', display: 'flex', gap: 6, flexShrink: 0 }}>
+        {SORTS.map(({ key, label }) => {
+          const active = sort === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { if (key !== sort) { setSort(key); setOffset(0); } }}
+              style={{
+                flex: 1,
+                padding: '7px 0',
+                borderRadius: 10,
+                border: active ? 'none' : '1.5px solid var(--line)',
+                background: active ? 'var(--disc-green)' : 'transparent',
+                color: active ? '#fff' : 'var(--ink-soft)',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+                transition: 'background .12s, color .12s',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Filter pills */}
       <div style={{ padding: '8px 16px 4px', display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>

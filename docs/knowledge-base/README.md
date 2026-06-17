@@ -38,9 +38,9 @@ Markdown with YAML frontmatter. Frontmatter holds structured fields; the body ho
 
 **Allis nine strategic rules:** allis-claimeven, allis-baseinverse, allis-vertical, allis-aftereven, allis-lowinverse, allis-highinverse, allis-baseclaim, allis-before, allis-specialbefore
 
-**Project-local heuristics (community- / derived-):** community-z-threat, community-ghost-threat, community-parity-trap, community-claimodd, community-figure-7, community-sextuple-threat, derived-parity-formula, derived-dead-space-parity, derived-lost-position
+**Project-local heuristics (community- / derived-):** community-z-threat, community-ghost-threat, community-parity-trap, community-figure-7, community-sextuple-threat, derived-parity-formula, derived-dead-space-parity, derived-lost-position
 
-**Status:** T1–T7 and V1–V5 have verbatim quotes and formal predicates. All nine Allis rules have verbatim quotes and formal predicates. All 8 project-local entries created 2026-05-17 with formal predicates; figure-7 and claimodd have solver-verified worked examples; remaining entries have PENDING worked examples. T4 is the only template-quality entry (all fields complete, fully solver verified).
+**Status:** T1–T7 and V1–V5 have verbatim quotes and formal predicates. All nine Allis rules have verbatim quotes and formal predicates. All 7 project-local entries created 2026-05-17 with formal predicates; figure-7 has solver-verified worked examples; remaining entries have PENDING worked examples. T4 is the only template-quality entry (all fields complete, fully solver verified). (community-claimodd was removed 2026-06-17 — the implementation was based on an incorrect reading of the WeakC4 source.)
 
 ## Schema
 

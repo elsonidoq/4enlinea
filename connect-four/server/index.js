@@ -96,6 +96,32 @@ app.use('/api/', makeLimit(120));
 // Center-favoring, symmetric, approximate.
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
+// Shared UUID regex for blunder permalink endpoint + OG injection
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Compute opponent major threat cells after a move is played.
+ * Hoisted from coach/queue so the blunder permalink endpoint can share it.
+ * @param {string} board_state - move string before the move
+ * @param {number} move_played - 0-indexed column played
+ * @returns {{col: number, row: number}[]}
+ */
+function computeThreatCells(board_state, move_played) {
+  try {
+    const postBoard = new Board(board_state + String(move_played));
+    const opponent = postBoard.currentPlayer;
+    const threatMap = postBoard.majorThreatCells();
+    return Object.entries(threatMap)
+      .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
+      .map(([key]) => {
+        const [row, col] = key.split(',').map(Number);
+        return { col, row };
+      });
+  } catch {
+    return [];
+  }
+}
+
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const MOVES_RE = /^[0-6]{0,42}$/;
@@ -1736,6 +1762,7 @@ app.get('/api/games', async (req, res) => {
         difficulty: g.difficulty,
         accuracy: g.accuracy ?? null,
         blunder_count: blunderCount,
+        side: g.side ?? null,
         cols: movesToCols(g.moves),
       });
     }
@@ -1752,12 +1779,37 @@ app.get('/api/games', async (req, res) => {
         opponent_avatar: g.opponent_avatar ?? null,
         accuracy: g.accuracy ?? null,
         blunder_count: blunderCount,
+        side: g.side ?? null,
         cols: movesToCols(g.moves),
       });
     }
 
-    // Sort by date descending, paginate
-    unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    // Sort
+    const VALID_SORTS = new Set(['recent', 'played_well', 'worst_blunders']);
+    let sortBy = 'recent';
+    if (req.query.sort !== undefined) {
+      if (!VALID_SORTS.has(req.query.sort)) {
+        return res.status(400).json({ error: 'invalid sort' });
+      }
+      sortBy = req.query.sort;
+    }
+
+    if (sortBy === 'played_well') {
+      unified.sort((a, b) => {
+        const aAcc = a.accuracy ?? -Infinity;
+        const bAcc = b.accuracy ?? -Infinity;
+        if (bAcc !== aAcc) return bAcc - aAcc;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    } else if (sortBy === 'worst_blunders') {
+      unified.sort((a, b) => {
+        if (b.blunder_count !== a.blunder_count) return b.blunder_count - a.blunder_count;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    } else {
+      unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
     const total = unified.length;
     const page = unified.slice(offset, offset + limit);
 
@@ -1936,6 +1988,7 @@ app.post('/api/games/analyze', async (req, res) => {
     difficulty,
     side,
     gameDate: created_at,
+    source: isPapergames ? 'papergames' : 'ai',
   });
 });
 
@@ -2206,9 +2259,14 @@ app.get('/api/coach/queue', async (req, res) => {
     return res.status(400).json({ error: 'invalid game_id' });
   }
 
+  const papergamesGameId = req.query.papergames_game_id || null;
+  if (papergamesGameId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(papergamesGameId)) {
+    return res.status(400).json({ error: 'invalid papergames_game_id' });
+  }
+
   let query = supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id')
+    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
     .eq('user_id', req.user.id)
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
     .order('severity', { ascending: false })
@@ -2229,25 +2287,13 @@ app.get('/api/coach/queue', async (req, res) => {
     query = query.eq('game_id', gameId);
   }
 
+  if (papergamesGameId) {
+    query = query.eq('papergames_game_id', papergamesGameId);
+  }
+
   const { data: blunders, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   console.log('[DEBUG coach/queue] category param:', JSON.stringify(req.query.category), '| rows returned:', blunders?.length, '| categories in result:', [...new Set((blunders||[]).map(b=>b.pattern_category))]);
-
-  function computeThreatCells(board_state, move_played) {
-    try {
-      const postBoard = new Board(board_state + String(move_played));
-      const opponent = postBoard.currentPlayer;
-      const threatMap = postBoard.majorThreatCells();
-      return Object.entries(threatMap)
-        .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
-        .map(([key]) => {
-          const [row, col] = key.split(',').map(Number);
-          return { col, row };
-        });
-    } catch {
-      return [];
-    }
-  }
 
   const enriched = (blunders || []).map(b => ({
     id: b.id,
@@ -2261,6 +2307,7 @@ app.get('/api/coach/queue', async (req, res) => {
     blunder_severity: b.blunder_severity ?? null,
     threat_cells: computeThreatCells(b.board_state || '', b.move_played),
     game_id: b.game_id ?? null,
+    papergames_game_id: b.papergames_game_id ?? null,
     moveIndex: (b.board_state || '').length,
   }));
 
@@ -2282,6 +2329,40 @@ app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(204).end();
+});
+
+// GET /api/blunders/:id — public blunder permalink (no auth required)
+app.get('/api/blunders/:id', async (req, res) => {
+  const { id } = req.params;
+
+  // FR-018: validate UUID format
+  if (!UUID_REGEX.test(id)) return res.status(400).json({ error: 'invalid id' });
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  // FR-017: no user_id filter — public endpoint
+  const { data, error } = await supabase
+    .from('blunders')
+    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    if (error && error.code === 'PGRST116') return res.status(404).json({ error: 'not found' });
+    return res.status(error ? 500 : 404).json({ error: error?.message || 'not found' });
+  }
+
+  // FR-029: compute ownership boolean, then strip user_id from response
+  const is_owner = req.user?.id != null && req.user.id === data.user_id;
+
+  // FR-020: derive moveIndex and threat_cells in JS (not DB columns)
+  const moveIndex = (data.board_state || '').length;
+  const threat_cells = computeThreatCells(data.board_state, data.move_played);
+
+  // Strip user_id — must never be exposed to clients
+  const { user_id: _omit, ...blunderPublic } = data;
+
+  res.json({ ...blunderPublic, moveIndex, threat_cells, is_owner });
 });
 
 // ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────
@@ -3054,6 +3135,51 @@ app.get('/{*path}', async (req, res) => {
     } catch (e) {
       // fall through to serve plain index.html
     }
+  }
+
+  // FR-021, FR-022: inject OG meta tags + noindex for /blunder/:id paths
+  const blunderMatch = req.path.match(/^\/blunder\/([^/]+)$/);
+  if (blunderMatch) {
+    const blunderId = blunderMatch[1];
+    const noindexTag = '<meta name="robots" content="noindex, nofollow">';
+
+    if (supabase && UUID_REGEX.test(blunderId)) {
+      try {
+        const { data } = await supabase
+          .from('blunders')
+          .select('id, pattern_category')
+          .eq('id', blunderId)
+          .single();
+
+        if (data) {
+          const CATEGORY_LABELS = {
+            immediate_threat: 'Immediate Threat',
+            forced_win: 'Forced Win',
+            missed_win: 'Missed Win',
+            zugzwang: 'Zugzwang',
+            claimeven: 'Claimeven',
+            figure_7: 'Figure 7',
+            j_shape: 'J-Shape',
+            undercut: 'Undercut',
+            overcut: 'Overcut',
+          };
+          const humanCategory = CATEGORY_LABELS[data.pattern_category]
+            ?? data.pattern_category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const ogTitle = `Connect Four blunder — ${humanCategory}`;
+          const ogDesc = 'See this Connect Four mistake on DecodeC4.';
+          const ogTags = `<meta property="og:title" content="${ogTitle}">
+<meta property="og:description" content="${ogDesc}">
+${noindexTag}`;
+          const patched = indexHtml.replace('</head>', `${ogTags}\n</head>`);
+          return res.type('html').send(patched);
+        }
+      } catch (e) {
+        // fall through to noindex-only
+      }
+    }
+    // Always inject noindex for /blunder/* even on error/404/non-UUID — FR-022
+    const patched = indexHtml.replace('</head>', `${noindexTag}\n</head>`);
+    return res.type('html').send(patched);
   }
 
   res.type('html').send(indexHtml);

@@ -327,7 +327,7 @@ The mistakes feature has three independent screen routes:
 
 `src/lib/urlMapping.js` exports:
 - `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
-- `SESSION_ONLY_SCREENS` — `Set` of 5 screen keys whose state cannot survive a cold page load: `summary`, `explorer`, `mistakeDetail`, `game`, `blunderDetail`. On cold boot, these screens redirect to `home`.
+- `SESSION_ONLY_SCREENS` — `Set` of 4 screen keys whose state cannot survive a cold page load: `summary`, `explorer`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`.
 - `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
 - `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
 
@@ -350,6 +350,10 @@ On initial page load, `App.jsx` calls `parseUrl(location.pathname)` and calls `r
 ### `clchallenge` cold-boot fetch pattern
 
 The `clchallenge` screen encodes only `lessonId` in the URL. On cold boot (when `lessonTitle` is absent from navigation params), `CLChallengeScreen` fetches the remaining props from `GET /api/lessons/:lessonId`. Components that require data beyond what fits in a URL path parameter MUST follow this same fetch-on-missing-props pattern.
+
+### `blunderDetail` cold-boot fetch pattern
+
+The `blunderDetail` screen encodes only `id` (UUID) in the URL (`/blunder/:id`). On cold boot (when `blunderNavList` is absent from navigation params), `MistakeDetailScreen` fetches the blunder from `GET /api/blunders/:id` (no auth required), constructs a single-item `navList` array, and renders normally using the existing `blunderNavList + index` prop API. While fetching, a loading spinner is shown; on 404, a "Blunder not found" message; on network errors, a generic error state. The cold-boot render omits the "Mark as reviewed" button (no session) and shows a "Sign in to unlock" prompt in place of the Deep Reveal trigger.
 
 ## Service Worker (`public/sw.js`)
 

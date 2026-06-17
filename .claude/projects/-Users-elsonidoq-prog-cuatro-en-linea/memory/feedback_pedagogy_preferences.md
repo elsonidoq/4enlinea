@@ -15,7 +15,7 @@ Don't teach lost-position play (damage control, forbidden columns, survival mode
 
 ---
 
-Don't include abstract Allis rules as lessons (baseclaim, before, specialbefore, baseinverse, vertical, aftereven, lowinverse, highinverse). Exception: Claimeven and Claimodd are fine — they are concrete and visual.
+Don't include abstract Allis rules as lessons (baseclaim, before, specialbefore, baseinverse, vertical, aftereven, lowinverse, highinverse). Exception: Claimeven is fine — it is concrete and visual. (Claimodd was also listed as an exception but was removed from the codebase entirely on 2026-06-17.)
 
 **Why:** User called them "too abstract and academic" for 1000–1500 Elo players.
 
