@@ -23,6 +23,13 @@ export async function insertGameBlunder(supabase, row) {
     : 'suboptimal_move';
 
   try {
+    // ── Diagnostic: probe what the client can do on blunders ──────────────
+    const { error: selErr, count } = await supabase
+      .from('blunders')
+      .select('id', { count: 'exact', head: true })
+      .limit(0);
+    console.log('[insertGameBlunder:diag] blunders SELECT head:', selErr ? `ERR ${selErr.code} ${selErr.message}` : `ok count=${count}`);
+
     const { error } = await supabase.from('blunders').insert({
       user_id: row.user_id,
       board_state: row.board_state,
@@ -33,6 +40,7 @@ export async function insertGameBlunder(supabase, row) {
       direction: row.direction,
       severity: row.severity,
       blunder_severity: row.blunder_severity ?? null,
+      move_index: row.board_state?.length ?? null,
       puzzle_id: null,
       game_id: row.game_id ?? null,
       papergames_game_id: row.papergames_game_id ?? null,
@@ -42,10 +50,11 @@ export async function insertGameBlunder(supabase, row) {
       if (error.code === '23505') {
         // Dedup — silent success
       } else {
-        console.error('[insertGameBlunder]', error.message);
+        console.error('[insertGameBlunder] code:', error.code, 'msg:', error.message,
+          'details:', error.details, 'hint:', error.hint);
       }
     }
   } catch (e) {
-    console.error('[insertGameBlunder]', e.message);
+    console.error('[insertGameBlunder] caught:', e.message, e.code);
   }
 }

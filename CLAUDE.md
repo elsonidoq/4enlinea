@@ -1,8 +1,23 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-specs/037-review-blunder-sharing/plan.md
+specs/038-papergames-self-service-import/plan.md
 <!-- SPECKIT END -->
+
+## Subagents — always foreground
+
+When the user asks for a subagent, spawn it via the Agent tool but ALWAYS in the
+foreground, in-process mode so I can wait for its result and so its edits land in
+the current working tree:
+
+- NEVER use `subagent_type: "fork"` — it runs in the background and hides its tool
+  output. Use a normal agent type (e.g. `general-purpose`, `Explore`, `Plan`).
+- NEVER pass `isolation: "worktree"` or `isolation: "remote"`. Worktree agents edit
+  a separate checkout, so their edits never reach the real working tree; remote
+  always runs in the background.
+
+This does not mean "don't use subagents" — it means use them only in the plain,
+foreground form.
 
 ## Documentation index
 

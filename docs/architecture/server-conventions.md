@@ -324,27 +324,32 @@ This function MUST be called on both the first attempt and retry LLM output befo
 
 ## Game Blunder Writes (`insertGameBlunder`)
 
-`insertGameBlunder(supabase, row)` in `server/insertGameBlunder.js` is the sole write path for blunders detected during post-game analysis (i.e., from `POST /api/games/analyze`). The client no longer writes these directly via `POST /api/blunders`.
+`insertGameBlunder(supabase, row)` in `server/insertGameBlunder.js` is the sole write path for all blunders — post-game analysis, puzzle attempts, and papergames imports. The client no longer writes blunders directly.
 
 The `row` shape:
 ```js
 {
-  user_id,         // required — anonymous users are silently skipped
-  board_state,     // movestring at the point of the blunder
-  move_played,     // 0-indexed column actually played
-  correct_move,    // 0-indexed best column
-  pattern_category,// blunder tag slug; unrecognized tags are substituted with 'suboptimal_move'
-  reason,          // human-readable reason string
-  direction,       // 'defensive_miss' | 'enabled_opponent' | 'missed_own'
-  severity,        // integer [0,10] score-spread measure
-  blunder_severity,// real [0,1] tree-scan fraction, or null
-  game_id,         // uuid FK → games(id), nullable — links the blunder to its sparring game
+  user_id,          // required — anonymous users are silently skipped
+  board_state,      // movestring at the point of the blunder
+  move_played,      // 0-indexed column actually played
+  correct_move,     // 0-indexed best column
+  pattern_category, // blunder tag slug; unrecognized tags are substituted with 'suboptimal_move'
+  reason,           // human-readable reason string
+  direction,        // 'defensive_miss' | 'enabled_opponent' | 'missed_own'
+  severity,         // integer [0,10] score-spread measure
+  blunder_severity, // real [0,1] tree-scan fraction, or null
+  game_id,          // uuid FK → games(id), nullable — AI sparring game
+  papergames_game_id, // uuid FK → papergames_games(id), nullable — papergames imported game
 }
 ```
 
-- `game_id` is nullable. Pass `null` (or omit) for blunders that do not originate from a sparring game row.
+**Dual game-link columns**: `game_id` links to AI sparring games (`games` table); `papergames_game_id` links to imported papergames games (`papergames_games` table). Exactly one should be non-null for a given blunder row; both can be null for puzzle blunders. `insertGameBlunder` stamps whichever is provided — it does not enforce the "exactly one" constraint (that is left to the caller).
+
+**`move_index` stamping**: `insertGameBlunder` computes `move_index` as `row.board_state?.length ?? null`. This is the 0-indexed global ply number where the blunder occurred. Callers do NOT pass `move_index` — the function derives it from `board_state`. The column and its partial unique index (`idx_blunders_papergames_unique`) are used for idempotent papergames re-import: `INSERT ... ON CONFLICT DO NOTHING` per `(papergames_game_id, move_index)`.
+
+- `game_id` and `papergames_game_id` are both nullable. Pass `null` (or omit) when the blunder does not originate from that source.
 - The function is fire-and-forget — it never throws or rejects; all errors are logged via `console.error`.
-- Deduplication is handled by a DB unique index; `23505` constraint violations are silently swallowed.
+- Deduplication is handled by DB unique indexes; `23505` constraint violations are silently swallowed.
 
 ## Annotation Gate (`POST /api/explain-move-llm`)
 
@@ -447,7 +452,33 @@ registerUserRoutes(app, supabase);
 
 **MUST**: When adding a new `/api/user/*` endpoint that writes to one of the 5 covered tables, call the existing helper rather than reimplementing the write inline.
 
-**MUST**: New route groups with ≥5 related endpoints SHOULD follow the `register<Feature>Routes(app, supabase)` extraction pattern rather than inlining in `index.js`. The module should be testable without the real DB or solver.
+**MUST**: New route groups with >=5 related endpoints SHOULD follow the `register<Feature>Routes(app, supabase)` extraction pattern rather than inlining in `index.js`. The module should be testable without the real DB or solver.
+
+## In-Memory Job Map Pattern (spec 038)
+
+The papergames import endpoints (`POST /api/user/papergames/import` and `GET /api/user/papergames/import/status`) use a **module-level `Map`** for job state:
+
+```js
+// Module-level in userRoutes.js — persists for process lifetime
+const jobMap = new Map();
+```
+
+**Key**: `jobId` (UUID string, generated via `crypto.randomUUID()`).
+**Value**: `{ jobId, userId, status, imported, skipped, capReached, error }` where `status` is one of `pending | running | done | error`.
+
+**Lifecycle**:
+1. **Created** when `POST` spawns a new job (C2d) — status `pending`.
+2. **Updated to `running`** immediately before `importForUser` is called in the async path.
+3. **Updated to `done` or `error`** when `importForUser` resolves or rejects.
+4. **Never deleted** — entries accumulate in the Map for the server process lifetime.
+
+**Persistence**: None. Jobs exist ONLY in memory. A server restart clears all entries, and any in-flight import is lost without recovery. The `last_import_at` timestamp on the `users` table provides a partial recovery mechanism — on next import, the incremental stop (`room.createdAt < lastImportAt`) prevents re-processing already-imported games.
+
+**Concurrency**: The one-in-flight guard (C2c) iterates all Map values looking for an entry with the same `userId` and status `pending` or `running`. This prevents concurrent imports for the same user. The Map is not locked — concurrent modifications are possible in theory but practically impossible because:
+- A user cannot issue two `POST` requests before the first returns (single-threaded browser)
+- The async path uses `Promise.resolve().then(...)`, not a separate thread
+
+**Ownership verification**: The `GET /api/user/papergames/import/status` handler checks `job.userId !== req.user.id` and returns 404 (not 403) — a privacy-preserving pattern that prevents attackers from probing whether a given jobId exists.
 
 ---
 

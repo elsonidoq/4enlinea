@@ -597,32 +597,54 @@ one click.
 
 **Scope:**
 
-- Add a `papergames_id` (or username) field to the user profile, written **through the server**
-  (Epic 1 rule — no client-side DB write) and surfaced in the profile/settings UI.
-- Add a user-triggered import endpoint that runs the existing PoC importer
-  (`server/scripts/import_papergames_blunders.mjs`) for the signed-in user. Free tier imports the
-  last 5 games; imported games carry their Papergames metadata into `papergames_games` (table and
-  the `GET /api/games` merge already exist).
-- An "Import" affordance in the UI with progress/result feedback.
+- Add a `papergames_id` field (internal Papergames hex account ID — not a username) to the user
+  profile, written **through the server** (Epic 1 rule — no client-side DB write) and surfaced in
+  the UI. **There is no existing profile/settings screen** — the spec must either create a new
+  `profile` screen registered in `screenRegistry.jsx`, or embed the input in `PastGamesListScreen`
+  (the most natural host, as it already renders papergames content). Next to the input field, add a
+  "Find your account ID" link that opens `https://papergames.io/en/account` in a new tab (that
+  page shows the account ID when the user is logged into Papergames). The user pastes the hex ID
+  manually — no server-side username resolution.
+- Add a user-triggered import endpoint. The import runs as a **background job**: `POST
+  /api/user/papergames/import` returns `202 Accepted` immediately with a job id; the client polls
+  `GET /api/user/papergames/import/status` for completion. The import runs full solver analysis
+  (accuracy % computed, blunder rows written to the `blunders` table) and populates
+  `papergames_games` rows. Free tier: up to 15 games lifetime (see Decisions). Imported games carry
+  their Papergames metadata into `papergames_games` (table and the `GET /api/games` merge already
+  exist). **`server/scripts/import_papergames_blunders.mjs` is a standalone CLI with module-level
+  side effects and zero exports — it cannot be `import()`-ed from the server.** The spec must
+  mandate extracting its core logic into `server/papergamesImporter.js` (a new importable module
+  exporting `importForUser(...)`) before the background job handler can call it.
+- An "Import" affordance in the UI with progress/result feedback (polling the status endpoint).
 
 **Acceptance criteria:**
 
-- A user can enter and persist their Papergames id from the profile (write goes through the server).
-- Clicking Import fetches and stores the user's games; free-tier users get exactly the last 5;
-  imported games appear in the past-games list with Papergames metadata and a source chip.
+- A user can enter and persist their Papergames hex account ID from the profile (write goes through
+  the server); a "Find your account ID" link next to the input opens
+  `https://papergames.io/en/account` in a new tab.
+- Clicking Import returns `202 Accepted` immediately with a job id; polling the status endpoint
+  reports progress; once complete, imported games appear in the past-games list with Papergames
+  metadata and a source chip, and blunder rows are written to the `blunders` table.
+- Free-tier users are capped at 15 lifetime imported games.
 - Re-importing is idempotent (no duplicate game rows).
 
 **NOT included:** Real-time/auto sync, importing opponents' analyses, or paid-tier import limits
-beyond the free-tier 5 (define the paid number in brainstorming if needed).
+beyond the free-tier 15 (define the paid number in brainstorming if needed).
 
 #### DB Change
 
-Add column `papergames_id text NULLABLE` to the `users` table (no unique constraint — a user may
-correct/re-enter their Papergames username). No new table needed; `papergames_games` already exists.
+Add two columns to the `users` table in a single migration:
+- `papergames_id text NULLABLE` — no unique constraint; a user may correct/re-enter their account ID.
+- `last_import_at timestamptz NULLABLE` — used by incremental import to stop pagination once rooms
+  older than this timestamp are encountered (see Decisions — Incremental import).
+
+No new table needed; `papergames_games` already exists (migration `038_papergames_games.sql`).
+Note: `papergames_games` is absent from `docs/architecture/db-schema.md` — the spec should include
+a task to add it.
 
 #### API Contracts
 
-**`PUT /api/user/profile` — save Papergames id**
+**`PUT /api/user/profile` — save Papergames id** *(new endpoint — not yet registered in `userRoutes.js`)*
 
 - **Auth**: required (401)
 - **Body**: `{ "papergames_id": "<string>" }` — only this field is writable initially; validate as
@@ -636,26 +658,52 @@ correct/re-enter their Papergames username). No new table needed; `papergames_ga
 - **Auth**: required (401)
 - **Body**: `{}` — uses `papergames_id` from the authenticated user's profile row; no client-supplied
   Papergames id (prevents importing on behalf of other users).
-- **Processing**: runs the existing importer logic from
-  `server/scripts/import_papergames_blunders.mjs` scoped to `req.user`; free-tier cap applied
-  (limit defined in brainstorming); newly fetched games upserted into `papergames_games` keyed on
-  the Papergames game id (idempotency).
+- **Processing**: enqueues a background job that calls `importForUser(...)` from the new
+  `server/papergamesImporter.js` module (extracted from the CLI script) scoped to `req.user`;
+  free-tier cap applied (15 lifetime games); newly fetched games upserted into `papergames_games`
+  keyed on `papergames_room_uid` (idempotency key); blunder rows written to the `blunders` table.
+- **Response** (`202 Accepted`):
+  ```json
+  { "jobId": "<uuid>" }
+  ```
+- **Errors**: 400 `{ "error": "no papergames_id configured" }` if profile has no `papergames_id`,
+  401, 503, 500.
+
+**`GET /api/user/papergames/import/status` — poll import job**
+
+- **Auth**: required (401)
+- **Query param**: `jobId` — UUID string returned by the `POST` above.
 - **Response** (`200 OK`):
   ```json
-  { "imported": 3, "skipped": 2 }
+  { "status": "pending"|"running"|"done"|"error", "imported": 3, "skipped": 2, "error": "<message>" }
   ```
-  `imported` = new rows written; `skipped` = rows already present (idempotent re-import).
-- **Errors**: 400 `{ "error": "no papergames_id configured" }` if profile has no `papergames_id`,
-  429 `{ "error": "import limit reached" }` if rate-limit/cooldown applies (values from
-  brainstorming), 401, 503, 500.
+  `imported` and `skipped` are `0` while in-progress; populated once `status` is `"done"`. `error`
+  field is present only when `status` is `"error"`.
+- **Errors**: 400 (invalid or missing `jobId`), 404 (job not found), 401, 500.
 
-#### Brainstorming needed
+#### Decisions
 
-- **Tier limits & rate.** Confirm the free-tier cap (TODO says 5) and decide the paid-tier import
-  count and any rate limit / cooldown. Output: the per-tier import caps and rate-limit rule.
-- **Import trust & validation.** The PoC importer was written as an offline script; decide what
-  validation/sanitization is needed when it runs on user-supplied input in a request path (ties into
-  Epic 1's security posture). Output: the input-validation contract for the import endpoint.
+- **Tier limits & rate.** Free tier is capped at **15 total imported games** (lifetime, across all
+  imports). Each import run processes up to `max(0, 15 - current_count)` new games; if the user
+  already has 15 or more `papergames_games` rows, the import is a no-op and returns
+  `{ imported: 0, skipped: 0 }`. Paid tier is controlled by a single `IMPORT_GAME_LIMIT` config
+  constant (currently `50`); setting it to `Infinity` enables full-history import with no code
+  change. No per-run cooldown — redundant imports are self-limiting because incremental fetch finds
+  0 new rooms and returns immediately.
+
+- **Incremental import.** A `last_import_at` timestamp is stored on the `users` row. Each import
+  fetches rooms from the Papergames API newest-first and stops pagination once it encounters a room
+  older than `last_import_at`. After a successful import, `last_import_at` is updated to now
+  (even if 0 new games were found, to avoid re-scanning old rooms on the next call).
+
+- **Import trust & validation.** `papergames_id` is read from the authenticated user's DB row at
+  import time; the client supplies nothing at the import call. Movestrings parsed from Papergames
+  API responses must be validated explicitly before being passed to the solver — the `Board` class
+  from `classifier.js` cannot be used for this: it silently skips out-of-range and overfull columns
+  and never signals invalidity. Instead, validate by replaying the sequence move-by-move: each
+  character must be in `'0'–'6'`; track per-column heights to detect overfull columns; call
+  `hasWon()` after each ply to detect moves-after-game-over. Invalid games are silently skipped and
+  counted in the `skipped` response field alongside idempotent re-imports.
 
 ---
 

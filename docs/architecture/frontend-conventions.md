@@ -150,6 +150,36 @@ array with `'empty'`/`'red'`/`'yellow'` values). `'g'`→`'red'` (renders green 
 `'d'`→`'yellow'` (renders gray disc). Exported from `src/lib/board.js`. Used by ConceptScreen
 and SocraticScreen.
 
+## Shared Board State Hook (`useBoardState`)
+
+`src/lib/useBoardState.js` is the lower-level board-mechanics hook shared by `useGameBoard` (sparring, which layers AI/hints/coach on top) and `PlayOnlineScreen` (live online play, which feeds it moves from a WebSocket). It owns only pure board state — no AI, no side effects.
+
+**Signature:**
+```js
+const {
+  moveHistory,   // number[] — column indices committed so far
+  board,         // string[][] 6×7 — 'empty'|'red'|'yellow', row 0 = bottom
+  heights,       // number[7] — discs per column
+  fullCols,      // number[] — full columns
+  lastDrop,      // {c, r} | null — for the drop animation
+  gameOver,      // {result:'win'|'loss'|'draw', winnerColor?} | null
+  userTurn,      // boolean
+  userColor,     // 'red' | 'yellow'
+  commitMove,    // (col) => {won, draw, row, color}
+  reset,         // (newSide?) => void
+} = useBoardState({ initialMoves = '', side });
+```
+
+**`commitMove(col)` contract — pure mechanics, no side effects.** It appends the move, rebuilds the board via `buildBoard`, runs `checkWin`, sets `gameOver` on a win/draw, and **returns `{ won, draw, row, color }`**. There is no `onGameEnd` callback — the caller inspects the return value to decide what to do next (e.g. navigate to review, show a coach message). This avoids the interleaved-async double-fire problem that arises when win handling lives inside the hook.
+
+**The `boardApiRef` rule (load-bearing).** Any code that runs inside a long-lived closure — a WebSocket `onmessage` handler, a `setTimeout`/`setInterval`, an animation-frame callback — must **not** close over hook values (`commitMove`, `heights`, `gameOver`, `moveHistory`) or any non-stable callback that depends on them (e.g. a `saveAndReview` with `[go, store]` deps) directly from render scope. Those are recreated each render; a closure created once captures the first render's frozen values (empty board, `gameOver=null`). Instead, mirror the live values into a single ref refreshed every render and read through it:
+```js
+const boardApiRef = useRef(null);
+boardApiRef.current = { commitMove, heights, gameOver, moveHistory, saveAndReview };
+// inside ws.onmessage: boardApiRef.current.commitMove(...), boardApiRef.current.saveAndReview(...)
+```
+Handlers invoked by React's event system (e.g. an `onClick`) are re-created each render and may close over hook values directly — the ref is only required for closures that outlive the render that created them. See `PlayOnlineScreen.jsx` for the canonical usage.
+
 ## Challenge Session State Machine
 
 Multi-puzzle challenge sessions (`ChallengeScreen`) follow a three-phase state machine driven by a `phase` string:
@@ -203,7 +233,7 @@ All entries in `connect-four/server/challengeSets.js` use `displayNameKey` and `
 ## API Calls
 
 **MUST**: All fetch calls use `const API = import.meta.env.VITE_API_BASE_URL || ''` as the base.
-**MUST**: Authenticated requests include `Authorization: Bearer <session.access_token>` in the header.
+**MUST**: Authenticated requests use `credentials: 'include'` so the browser sends the httpOnly `sb_access_token` cookie. The `loadUser` middleware reads the token from the cookie as a fallback (see server-conventions.md). Do NOT send an `Authorization` header — `session.access_token` is `undefined` (the session stores only `{ user }`; the token never leaves the httpOnly cookie).
 
 ## Analytics
 

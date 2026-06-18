@@ -9,7 +9,7 @@ import {
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
   detectZThreat, detectUndercut, detectOvercut,
-  detectFigure7, detectJShape, detectClaimodd, detectClaimeven,
+  detectFigure7, detectJShape, detectClaimeven,
   detectOddEvenThreat,
 } from '../../server/classifier.js';
 import { createSolverProcess } from '../../server/c4solver-wrapper.js';

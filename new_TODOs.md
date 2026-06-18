@@ -43,3 +43,5 @@
 - For double threat we should not check against correct col, but wether the position generated a double threat (there are boards where there are more than one way to generate the double threat)
 
 - I don't like that "no mistakes" means no blunders. Performing a sub-optimal move is also a mistake. Also it is inconsistent to read that a game was lost and i performed no mistakes.
+
+- The browser forgets i have signed in very quickly. I want the app to remember me

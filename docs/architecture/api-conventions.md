@@ -22,10 +22,12 @@
 ## Auth Threading
 
 **MUST**: All routes run through the `loadUser` middleware, which:
-1. Reads `Authorization: Bearer <token>` from the request header.
+1. Reads the token from two sources in priority order: `Authorization: Bearer <token>` header first, then the `sb_access_token` httpOnly cookie as a fallback.
 2. Validates the JWT with `supabase.auth.getUser(token)`.
-3. Fetches the user's `tier`, `deep_reveal_count`, `deep_reveal_reset_at`, `device_uuid` from `public.users`.
+3. Fetches the user's `tier`, `deep_reveal_count`, `deep_reveal_reset_at`, `device_uuid`, `papergames_id`, `last_import_at` from `public.users`.
 4. Populates `req.user` (null for anonymous/invalid token).
+
+**Frontend auth**: The client uses `credentials: 'include'` (not `Authorization` header). The session object stores only `{ user }` — no `access_token` field. The token lives exclusively in the httpOnly cookie and is never exposed to client-side JS. Sending `Authorization: Bearer` with a stale/undefined value shadows the cookie fallback.
 
 **MUST NOT**: Any route skip `loadUser` — it is registered globally via `app.use(loadUser)`.
 
@@ -594,3 +596,95 @@ Returns a single blunder by UUID. No auth required — this is the public permal
 **Response**: `204 No Content` on success.
 
 **Rate limit**: 10 req/min.
+
+## Papergames Import Endpoints (spec 038)
+
+### `PUT /api/user/profile`
+
+Saves the user's Papergames account ID for self-service import.
+
+**Request body**: `{ papergames_id: "<string>" }`
+- `papergames_id`: non-empty string, max 64 characters.
+
+**Response**: `204 No Content` on success.
+
+**Errors**: 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` for missing/invalid input; 401 for unauthenticated; 503 if Supabase not configured.
+
+**Auth**: Required (inline `requireUser` -> 401).
+
+---
+
+### `POST /api/user/papergames/import`
+
+Starts an asynchronous background import of the user's papergames.io games and blunders. Returns immediately with a `jobId` for polling.
+
+**Request body**: empty `{}` (the `papergames_id` is read from `req.user.papergames_id` server-side).
+
+**Response** (`202 Accepted`):
+```json
+{ "jobId": "<uuid>" }
+```
+
+**Processing order** (enforced in exact sub-step order):
+
+1. **C2a** -- `papergames_id` guard: returns `400 { "error": "no papergames_id configured" }` if `req.user.papergames_id` is null or empty. This is the FIRST check, before the cap query.
+2. **C2b** -- Cap check: counts existing `papergames_games` rows for the user. Free tier: `gameLimit = max(0, 15 - count)`; paid tier: `gameLimit = 50`. If `gameLimit === 0`, returns `202` with a synthetic done-job (`capReached: true`) -- no import is started.
+3. **C2c** -- One-in-flight guard: iterates the in-memory job Map. If any entry has `userId === req.user.id` and status is `pending` or `running`, returns `202 { jobId: entry.jobId }` (resume polling the existing job).
+4. **C2d** -- Spawn: generates a `jobId` via `crypto.randomUUID()`, inserts a job entry with status `pending`, returns `202 { jobId }`. Then **asynchronously** (via `Promise.resolve().then(...)`):
+   - Updates status to `running`
+   - Calls `importForUser(supabase, userId, papergamesId, gameLimit, lastImportAt)`
+   - On success: updates status to `done`, writes `last_import_at` to the `users` table
+   - On failure: updates status to `error`, sets `error: err.message`; does NOT update `last_import_at`
+
+**Jobs are in-memory only**: Stored in a module-level `Map` keyed by `jobId`. Server restarts clear all jobs. There is no database persistence for job state.
+
+**Auth**: Required (inline `requireUser` -> 401).
+**Rate limit**: 120 req/min (default `/api/` bucket).
+
+---
+
+### `GET /api/user/papergames/import/status`
+
+Polls the status of an import job.
+
+**Query params**: `jobId=<uuid>` (required, validated against UUID regex).
+
+**Response** (`200 OK`):
+```json
+{
+  "status": "pending | running | done | error",
+  "imported": 0,
+  "skipped": 0,
+  "capReached": false
+}
+```
+- `capReached`: `true` when the import was short-circuited because the user had already reached the 15-game free-tier limit.
+- `error`: present only when `status === "error"` -- contains the error message string.
+
+**Errors**: 400 `{ "error": "invalid jobId" }` for missing or non-UUID `jobId`; 401 for unauthenticated.
+
+**Privacy-preserving 404 convention**: Both "job not found" and "job belongs to a different user" return `404 { "error": "job not found" }`. An attacker cannot distinguish "the jobId exists but belongs to someone else" from "the jobId does not exist." Clients poll every 2 seconds; transient network errors are silently retried on the next tick.
+
+**Auth**: Required (inline `requireUser` -> 401).
+
+---
+
+### `POST /api/user/papergames/save-live-game`
+
+Saves a single live game (played via the Play Online screen against a random papergames.io opponent) immediately after it finishes, then runs blunder extraction fire-and-forget.
+
+**Request body**: `{ roomUid: string, papergamesAccountId: string }`
+- `roomUid`: the papergames room UID from the `room:join-auto` WebSocket event.
+- `papergamesAccountId`: the socket-level user ID from the `user:connect` event. This is the same value used as `action.userId` in the replay API, and is sent from the client because it is the guest session's socket ID — not derivable from `req.user.papergames_id` (which holds the user's configured permanent account, not the guest ID).
+
+**Response** (`201 Created`):
+```json
+{ "id": "<uuid>" }
+```
+The `papergames_games` row UUID. The client navigates to `ReviewScreen` with this id; analysis is produced by `POST /api/games/analyze`, same as sparring.
+
+**Save-fast strategy**: `saveLiveGame()` writes the game row (no blunder analysis) and returns quickly. After the response is sent, `extractAndSaveBlunders()` runs as a fire-and-forget background task — it spawns a dedicated solver, writes blunder rows, and updates the row's `accuracy`. Failures are logged, never surfaced to the client. Blunders are only consumed by the coach queue, not required for the review summary.
+
+**Errors**: 400 `{ "error": "roomUid is required" }` / `{ "error": "papergamesAccountId is required" }` for missing/invalid input; 401 for unauthenticated (the client shows a "Log in to save" prompt and stays on the screen); 503 if Supabase not configured; 500 on save failure.
+
+**Auth**: Required (inline `requireUser` -> 401).

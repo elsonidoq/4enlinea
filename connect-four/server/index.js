@@ -341,17 +341,17 @@ async function loadUser(req, _res, next) {
 
     let { data: profile } = await supabase
       .from('users')
-      .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid')
+      .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at')
       .eq('id', data.user.id)
       .single();
 
     if (!profile) {
       // Trigger on auth.users may not have fired — create the row now.
-      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid').single()
+      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at').single()
         .then(({ data: created }) => { if (created) profile = created; });
     }
 
-    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString() };
+    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString(), papergames_id: null, last_import_at: null };
   } catch {
     // Non-fatal: treat as anonymous
   }
@@ -460,6 +460,36 @@ FULL_TEXT: <text>`;
 // ── Routes (existing — unchanged) ─────────────────────────────────────────────
 
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
+
+// ── Papergames proxy (PoC — no auth required) ───────────────────────────────
+
+const PAPERGAMES_API = 'https://papergames.io';
+
+app.post('/api/papergames/guest-registration', async (req, res) => {
+  try {
+    const pgRes = await fetch(`${PAPERGAMES_API}/api/authentication/guest-registration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-app-platform': 'web' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await pgRes.json();
+    res.status(pgRes.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Papergames unavailable' });
+  }
+});
+
+app.get('/api/papergames/tournament/open', async (req, res) => {
+  try {
+    const pgRes = await fetch(`${PAPERGAMES_API}/api/tournament/open?type=Connect4&_t=${Date.now()}`, {
+      headers: { 'x-app-platform': 'web', ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}) },
+    });
+    const data = await pgRes.json();
+    res.status(pgRes.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: 'Papergames unavailable' });
+  }
+});
 
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
 app.get('/api/lessons', (req, res) => res.json(getLessons()));

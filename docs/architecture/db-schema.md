@@ -19,6 +19,8 @@ Unique: `device_uuid`, `stripe_customer_id`
 | deep_reveal_count | integer | NO | `0` |
 | deep_reveal_reset_at | timestamptz | YES | (nullable, no default — null treated as "already expired") |
 | stripe_customer_id | text | YES | |
+| papergames_id | text | YES | |
+| last_import_at | timestamptz | YES | |
 | streak_count | integer | NO | `0` |
 | last_active_date | date | YES | |
 | sparring_record | jsonb | NO | `'{"W":0,"L":0,"D":0}'` |
@@ -132,10 +134,48 @@ FK: `puzzle_id` → `puzzles.id`, `user_id` → `users.id`
 
 ---
 
+## `papergames_games`
+
+Games imported from papergames.io. Separate from `games` (AI sparring) because the data shape differs: no `difficulty`, opponent metadata is stored.
+
+PK: `id`
+Unique: `papergames_room_uid`
+FK: `user_id` → `auth.users(id) ON DELETE SET NULL`
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| id | uuid | NO | `gen_random_uuid()` |
+| user_id | uuid | YES | |
+| papergames_room_uid | text | NO | |
+| papergames_account_id | text | NO | |
+| moves | text | NO | |
+| side | text | NO | |
+| result | text | NO | |
+| opponent_name | text | NO | |
+| opponent_account_id | text | NO | |
+| opponent_avatar | text | YES | |
+| opponent_country_code | text | YES | |
+| opponent_elo | integer | YES | |
+| finish_reason | text | YES | |
+| duration_ms | integer | YES | |
+| tournament_uid | text | YES | |
+| played_at | timestamptz | NO | |
+| accuracy | real | YES | |
+| created_at | timestamptz | NO | `now()` |
+
+Index: `(user_id, played_at DESC)` for per-user game listing.
+RLS: Disabled (server accesses via service-role key).
+`papergames_room_uid` is the deduplication key (papergames.io room identifier).
+`accuracy` is percentage of optimal user plies (0–100), computed during import; null for rows imported before migration 039.
+
+The `blunders` table links via `papergames_game_id uuid nullable FK → papergames_games(id) ON DELETE SET NULL`.
+
+---
+
 ## `blunders`
 
 PK: `id`  
-FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
+FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`, `papergames_game_id` → `papergames_games.id`
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
@@ -148,6 +188,9 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
 | pattern_category | text | NO | |
 | severity | integer | NO | `0` |
 | blunder_severity | real | YES | |
+| move_index | integer | YES | |
+| papergames_game_id | uuid | YES | |
+| game_id | uuid | YES | |
 | reason | text | YES | |
 | direction | text | YES | |
 | resolved_at | timestamptz | YES | |
@@ -156,6 +199,7 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`
 Indexes:
 - `idx_blunders_user_unresolved` — `(user_id, created_at) WHERE resolved_at IS NULL`
 - `idx_blunders_severity` — `(user_id, severity DESC) WHERE resolved_at IS NULL`
+- `idx_blunders_papergames_unique` — UNIQUE `(papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (deduplication per papergames game + ply; idempotent re-import)
 
 > `idx_blunders_game_unique` was **dropped** in migration 041. It was a UNIQUE partial index on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`. It caused bulk imports to silently discard entire batches when any single row was a duplicate — the whole transaction rolled back, the error was treated as benign, and 0 rows were written. Duplicate blunder rows are now acceptable.
 

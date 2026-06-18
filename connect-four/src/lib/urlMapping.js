@@ -22,6 +22,8 @@ export const URL_MAP = [
   { pattern: '/mistakeDetail',       screenKey: 'mistakeDetail', paramNames: [] },
   { pattern: '/blunder/:id',         screenKey: 'blunderDetail', paramNames: ['id'] },
   { pattern: '/pastGames',           screenKey: 'pastGames',     paramNames: [] },
+  { pattern: '/play-online',         screenKey: 'playOnline',    paramNames: [] },
+  { pattern: '/settings',            screenKey: 'settings',      paramNames: [] },
 ];
 
 /**

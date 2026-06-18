@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildBoard, checkWin } from './board.js';
+import { buildBoard } from './board.js';
+import { useBoardState } from './useBoardState.js';
 import {
   INVALID_MOVE,
   DIFFICULTY_TEMPERATURES,
@@ -27,28 +28,33 @@ function delay(ms) {
 export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, introKey = 'coach.sparring.intro' }) {
   const { t } = useTranslation();
 
-  // ── State ──────────────────────────────────────────────────────
-  const [moveHistory, setMoveHistory] = useState(
-    () => initialMoves ? initialMoves.split('').map(Number) : []
-  );
+  // ── Board state (pure mechanics, extracted to useBoardState) ───
+  const {
+    moveHistory,
+    board,
+    heights,
+    fullCols,
+    lastDrop,
+    gameOver: boardGameOver,
+    userTurn,
+    userColor,
+    commitMove,
+  } = useBoardState({ initialMoves, side });
+
+  // ── Additional state ───────────────────────────────────────────
   const [coachMessages, setCoachMessages] = useState([]); // {text, mood}[]
   const [hintOverlays, setHintOverlays] = useState([]);   // {c, r, type}[]
-  const [gameOver, setGameOver] = useState(null);         // {result, winnerColor} | null
   const [aiThinking, setAiThinking] = useState(false);
-  const [lastDrop, setLastDrop] = useState(null);         // {c, r} | null
   const [hintActive, setHintActive] = useState(false);
   const [preHintCoach, setPreHintCoach] = useState(null); // snapshot before hint toggle
+  // Resign sets gameOver externally (useBoardState only sets it on win/draw)
+  const [resignedOver, setResignedOver] = useState(null);
+
+  // Effective gameOver: resign layered on top of board-detected win/draw
+  const gameOver = resignedOver ?? boardGameOver;
 
   // ── Derived values ─────────────────────────────────────────────
-  const userColor = side === 'first' ? 'red' : 'yellow';
   const aiColor = side === 'first' ? 'yellow' : 'red';
-  const userTurn =
-    moveHistory.length % 2 === (side === 'first' ? 0 : 1);
-
-  const { board, heights } = buildBoard(moveHistory.join(''));
-  const fullCols = heights
-    .map((h, i) => (h >= 6 ? i : -1))
-    .filter((i) => i !== -1);
 
   // Tracks phrase keys used in this game to avoid repetition within a session.
   const usedPhraseKeysRef = useRef(new Set());
@@ -124,16 +130,13 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   }, []);
 
   // ── AI move logic ──────────────────────────────────────────────
+  // commitAiMove uses commitMove which is STABLE (reads via internal refs),
+  // so calling it with any currentMoves is safe from async closures.
   async function commitAiMove(currentMoves, aiCol, classificationPromise) {
+    // commitMove reads live state via internal refs in useBoardState —
+    // no stale-closure risk even though this runs after an async await.
+    const { won, draw, row } = commitMove(aiCol);
     const newHistory = [...currentMoves, aiCol];
-    const { board: newBoard, heights: newHeights } = buildBoard(
-      newHistory.join(''),
-    );
-    const row = newHeights[aiCol] - 1;
-
-    // Board state mutations run BEFORE awaiting classification (FR-006)
-    setMoveHistory(newHistory);
-    setLastDrop({ c: aiCol, r: row });
 
     // Await classification result (null on network error / HTTP error / auto-play skip)
     const classification = await classificationPromise;
@@ -173,17 +176,15 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     const replace = currentMoves.length === 0 && side === 'second';
     updateCoach(t(phraseKey), mood, replace);
 
-    // Check AI win
-    if (checkWin(newBoard, row, aiCol, aiColor)) {
-      setGameOver({ result: 'loss', winnerColor: aiColor });
+    // Check AI win — from commitMove return value
+    if (won) {
       updateCoach(t('sparring.aiWon'), 'oops');
       onGameEnd?.('loss', newHistory);
       return;
     }
 
     // Check draw
-    if (newHistory.length === 42) {
-      setGameOver({ result: 'draw' });
+    if (draw) {
       updateCoach(t('sparring.draw'), 'think');
       onGameEnd?.('draw', newHistory);
       return;
@@ -289,17 +290,14 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     setHintActive(false);
     setPreHintCoach(null);
 
-    // 2. Compute pre-move movestring and commit the move
+    // 2. Capture pre-move state for coach feedback and AI
     const preMoveString = moveHistory.join('');
     const newHistory = [...moveHistory, col];
-    const row = heights[col]; // landing row before disc is placed
 
-    // 3. Commit-first — show disc immediately
-    setMoveHistory(newHistory);
-    setLastDrop({ c: col, r: row });
+    // 3. Commit via useBoardState — sets moveHistory, lastDrop, gameOver atomically
+    const { won, draw } = commitMove(col);
 
     // 4. Call evaluate-move for Coach feedback
-    const { board: newBoard } = buildBoard(newHistory.join(''));
     try {
       const res = await fetch(`${API}/api/evaluate-move`, {
         method: 'POST',
@@ -331,17 +329,15 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       // Silently handle network errors
     }
 
-    // 5. Check win
-    if (checkWin(newBoard, row, col, userColor)) {
-      setGameOver({ result: 'win', winnerColor: userColor });
+    // 5. Check win (from commitMove return value)
+    if (won) {
       updateCoach(t('sparring.youWon'), 'happy');
       onGameEnd?.('win', newHistory);
       return;
     }
 
     // 6. Check draw
-    if (newHistory.length === 42) {
-      setGameOver({ result: 'draw' });
+    if (draw) {
       updateCoach(t('sparring.draw'), 'think');
       onGameEnd?.('draw', newHistory);
       return;
@@ -358,7 +354,8 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   function handleResign() {
     if (gameOver) return;
     setAiThinking(false);
-    setGameOver({ result: 'loss' });
+    // useBoardState only sets gameOver on win/draw — resign uses local override
+    setResignedOver({ result: 'loss' });
     updateCoach(t('sparring.aiWon'), 'oops');
     onGameEnd?.('loss', moveHistory);
   }

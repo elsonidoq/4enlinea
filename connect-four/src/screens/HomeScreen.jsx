@@ -24,6 +24,8 @@ export function HomeScreen({ go }) {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
         title={<>Decode<span style={{ color: 'var(--disc-green)' }}>C4</span></>}
+        right2="gear"
+        onRight2={() => session ? go('settings') : setAuthOpen(true)}
         rightIcon="user"
         onRight={handleProfile}
       />
@@ -80,13 +82,15 @@ export function HomeScreen({ go }) {
 
         <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />
 
-        <button
-          className="btn btn-ghost"
-          onClick={() => go('stats')}
-          style={{ fontSize: 15 }}
-        >
-          <Icon name="chart" size={18} /> {t('home.stats_button')}
-        </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => go('stats')}
+            style={{ fontSize: 15 }}
+          >
+            <Icon name="chart" size={18} /> {t('home.stats_button')}
+          </button>
+        </div>
       </div>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}

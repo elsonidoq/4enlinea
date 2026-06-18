@@ -39,6 +39,7 @@
 - [Express 5 wildcard catch-all syntax](feedback_express5_wildcard.md) — use `app.get('/{*path}', ...)` not `app.get('*', ...)`; bare `*` throws PathError
 - [Audit all code paths before writing an epic](feedback_audit_all_paths_before_epic.md) — grep all usages of affected key/function prefix and read every call site
 - [Use explicit server flags, not absent-field branching](feedback_explicit_server_flags.md) — send an explicit flag (e.g. `aiMove: true`); other callers may also lack the "distinguishing" field
+- [Background subagents get Edit/Write denied](feedback_subagent_write_permissions.md) — they can't get interactive write approval; implement directly or have them return a ready-to-apply design
 - [Quarantine before delete](feedback_quarantine_before_delete.md) — move suspected-dead files to quarantine folder first, QA the site, then delete if clean
 - [Bulk insert + unique constraint = silent full-batch loss](feedback_bulk_insert_unique_constraint.md) — one duplicate row rolls back the whole batch; treating that error as benign leaves 0 rows written
 
@@ -75,6 +76,7 @@
 
 - [Supabase connection details](reference_supabase_connection.md) — sb_publishable/sb_secret key format; direct DB host fails, use pooler; Node inline query pattern
 - [Open Chrome with remote debugging](reference_open_chrome.md) — must use binary directly; `open -a` fails to bind port 9222 on macOS/Chrome 147
+- [Papergames auth API](reference_papergames_auth.md) — login needs domain-bound reCAPTCHA (blocks server-side login); refresh works without it; access≈30min/refresh≈366d
 - [ReviewScreen navigation contract](reference_review_screen_nav.md) — `go('review', { id: game.id })`; URL is `/game/:id`; screen takes `id` prop (UUID)
 - [ReviewScreen.navigateToMistake API](reference_review_screen_navigate_to_mistake.md) — takes a number (user-move ordinal), not a move object; branch on quality via `analysis.moves.find()` first
 - [VALID_BLUNDER_TAGS vs VALID_CATEGORIES](reference_valid_blunder_tags.md) — different sets; `server/blunderTags.js` is source of truth for `mistakes.pattern.*` i18n keys
@@ -113,6 +115,7 @@
 - [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert
 
 - [Spec 037 — review & blunder sharing](project_spec037_review_blunder_sharing.md) — IMPLEMENTED 2026-06-17; 4 QA bugs open: chip above coach, blunder click→explorer (papergames game_id mismatch), chip below board in MistakeDetail, coach missing color label
+- [Spec 038 — Papergames self-service import](project_spec038_papergames_self_service_import.md) — spec/plan/tasks done 2026-06-17; 17 tasks; background-job 202+poll, 15-game free cap, gear icon→settings screen, dedicated solver per import
 - [claimodd removal — 2026-06-17](project_claimodd_removal.md) — removed entirely; wrong implementation (center-col-specific) + generation rate ~2/400; 20 files edited/deleted
 
 ## Project — local dev / deploy
@@ -160,6 +163,7 @@
 - [AdminLessonsPage is dark](project_admin_lessons_dark.md) — overrides spec FR-015; user requested dark background during QA; same wrapper pattern as AdminCuratePage
 
 - [Papergames integration](project_papergames_integration.md) — papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips
+- [Papergames live-game integration (PlayOnlineScreen)](project_papergames_live_game_integration.md) — guest play + room-UID import (real-account shelved); useBoardState; save-live-game endpoint in userRoutes.js; known bugs (2nd-player win/loss inversion, identity mismatch)
 - [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — spec/plan/tasks done; lastDrop wiring in Board.jsx; staged continue render; isSubmitting trap; 11 tasks
 - [Candidate generator — mistake probability experiment](project_candidate_generator_mistake_probability.md) — solverWeightedPosition refactored from softmax to MP-based sampling 2026-06-14
 - [Epic 6 architecture decisions](project_epic6_architecture.md) — IMPLEMENTED 2026-06-16; 14/15 tasks done; curation-time round robin reindex, shape_key + position columns, canonical key=value serializer, random-offset draw

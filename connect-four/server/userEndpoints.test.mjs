@@ -97,6 +97,8 @@ describe('GET /api/user/* endpoints', () => {
         tier: TEST_USER.tier,
         deep_reveal_count: TEST_USER.deep_reveal_count,
         deep_reveal_reset_at: TEST_USER.deep_reveal_reset_at,
+        papergames_id: null,
+        last_import_at: null,
       });
       // Must NOT leak id
       assert.equal(body.id, undefined);

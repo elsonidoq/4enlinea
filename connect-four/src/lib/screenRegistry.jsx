@@ -15,6 +15,8 @@ import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
 import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 import { PastGamesListScreen } from '../screens/PastGamesListScreen.jsx';
+import { PlayOnlineScreen } from '../screens/PlayOnlineScreen.jsx';
+import { SettingsScreen } from '../screens/SettingsScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -34,4 +36,6 @@ export const SCREENS = {
   mistakeDetail: (p) => <MistakesListScreen {...p} />,
   blunderDetail: MistakeDetailScreen,
   pastGames: PastGamesListScreen,
+  playOnline: PlayOnlineScreen,
+  settings: SettingsScreen,
 };
