@@ -45,3 +45,5 @@
 - I don't like that "no mistakes" means no blunders. Performing a sub-optimal move is also a mistake. Also it is inconsistent to read that a game was lost and i performed no mistakes.
 
 - The browser forgets i have signed in very quickly. I want the app to remember me
+
+- There is a bug in the back button. Context: navigate to past games, click on a game, click a blunder move, then click in the game link (top right showing something like Move 10 / 16 · Jun 17), then clicking back switches back and forth between the game and the blunder, you never return home. The expected behaviour would be going from the blunder to the game to the past games to the home
