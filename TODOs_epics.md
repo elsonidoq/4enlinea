@@ -713,9 +713,8 @@ a task to add it.
 Epic 12's narration half directly depends on Epic 10's TTS decision; running them as separate specs
 would require rewriting Epic 12's plan after Epic 10 resolved TTS approach.)*
 
-**Goal:** The app has sound and a spoken coach; coach messages are paced for readability; tactical
-terms in coach text are tappable for definitions; and the coach can narrate a deep reveal with
-board-synced highlighting.
+**Goal:** The app has sound and a spoken coach; coach messages are paced for readability; and
+tactical terms in deep-reveal text are tappable for definitions.
 
 **Scope:**
 
@@ -723,18 +722,24 @@ board-synced highlighting.
   disc-hits-board-bottom sounds. Wire to the Board drop lifecycle (`lastDrop` / drop animation).
   Provide a mute control and respect it app-wide.
 - **Spoken coach (TTS).** Make the coach speak its messages aloud (reading on-screen while playing
-  is hard). Applies to coach dialog during play and review.
+  is hard). Applies to non-interpolated static coach i18n keys only (strings containing `{{...}}`
+  placeholders are excluded from TTS in MVP). Applies to coach dialog during play and review.
 - **Coach message pacing.** Insert a deliberate pause between the player-move commentary and the
   coach/AI-move commentary so the user has time to read both (today the gap is too short). This is a
   timing change in the coach-message sequencing on the sparring/challenge surfaces.
-- **KB term glossary popups.** Words like "fork" / "double threat" are marked distinctly in coach
-  text; tapping / hovering shows a small popup explaining the term, sourced from the knowledge base
-  (`docs/knowledge-base/`). Reuse the annotated-text rendering infra (`src/lib/annotatedText.js`
-  parses `[zone:...]` specs today; extend it — or add a sibling parser — for KB term spans).
-- **Coach reads deep reveal with synced board highlighting** *(explicitly low priority).* As the
-  coach narrates a deep reveal, the board highlights the row/column/cell/region being referenced;
-  in the text, those references are tappable/hoverable to trigger the same board highlight. Builds
-  on `zoneToOverlays` (already in `annotatedText.js`) and the spoken-coach work above.
+- **KB term glossary popups (deep reveal only).** Words like "fork" / "double threat" are marked
+  distinctly in deep-reveal text; tapping shows a small popup explaining the term, sourced from the
+  knowledge base (`docs/knowledge-base/`). Requires a new KB injection step in `explainContext.js`
+  (the deep-reveal prompt builder) that injects only position-relevant KB entries as explicit
+  `kb-id → statement` pairs so the LLM can emit `[term:kb-id]` tags. The `/api/explain-move-llm`
+  response adds a `terms: { [kbId]: statement }` map alongside `explanation`. `parseAnnotatedText`
+  in `annotatedText.js` is extended to return a `terms` array alongside `zones`; render targets are
+  `AnnotatedExplanation.jsx` and `AnnotatedText.jsx`. Term spans are visually distinct from zone
+  spans (zone = board highlight toggle; term = popup). The popup shows a 1–2 sentence concept
+  summary and, if a lesson/practice exists for that concept, a CTA ("Go to lesson" if not yet
+  completed, "Go to practice" if completed). KB entries that lack a short summary must have one
+  added as part of this epic. Visual tap-to-highlight for zone tags (`[zone:...]`) remains in scope
+  via existing `zoneToOverlays` infrastructure; audio narration of deep reveal is NOT in scope.
 
 **Acceptance criteria:**
 
@@ -743,30 +748,26 @@ board-synced highlighting.
 - Coach messages can be played as speech; toggling speech on/off works and persists.
 - Between a player-move message and the following coach/AI message there is a perceptible,
   configurable pause; both messages are readable before the next state change.
-- Designated tactical terms in coach text are visually marked and show a KB-sourced definition popup
-  on tap/hover.
-- During a deep-reveal narration, the board highlights the referenced zone in sync with the spoken
-  text; tapping a reference in the text highlights the same zone.
+- In deep-reveal text, `[term:kb-id]` spans are visually distinct from `[zone:...]` spans; tapping
+  a term span shows a popup with a 1–2 sentence concept summary and a lesson/practice CTA where
+  applicable.
+- Tapping a zone reference in deep-reveal text highlights the corresponding board region (visual
+  tap-to-highlight via existing zone infrastructure).
 
 **NOT included:** Voice input, multilingual TTS tuning beyond the default locale, custom-recorded
-voice acting, a full audio settings panel beyond mute + speech toggles, authoring new KB content
-(use existing entries), a full glossary screen, or narration for surfaces other than deep reveal.
+voice acting, a full audio settings panel beyond mute + speech toggles, a full glossary screen,
+KB term popups outside of deep reveal, TTS for interpolated i18n strings (those containing
+`{{...}}` placeholders), spoken/audio narration of deep-reveal text (visual tap-to-highlight
+remains; audio narration of deep reveal is deferred indefinitely).
 
-#### Brainstorming needed
+#### Decisions
 
-- **TTS approach.** Decide between the browser `SpeechSynthesis` API (free, offline, variable
-  quality) and a hosted TTS service (cost, latency, quality). Output: the chosen approach and, if
-  hosted, the provider + caching strategy (coach lines are largely templated/i18n keys and could be
-  pre-rendered). **This decision gates the narration half of the glossary/deep-reveal scope.**
-- **Sound assets & licensing.** Decide where the four SFX + background music come from and their
-  license. Output: the asset source list and license clearance.
-- **Pacing values.** Decide the default pause duration and whether it is user-configurable. Output:
-  the default ms value and the config surface (if any).
-- **Term-detection source.** Decide how a term in free coach text is recognized and linked to a KB
-  entry — server-side annotation that emits term spans (like `[zone:...]`), a client-side dictionary
-  match against KB titles/aliases, or KB-author-tagged terms. Output: the term→KB-entry resolution
-  mechanism and where it runs (server vs client). This gates the glossary feature and should be
-  settled before speckit-specify.
+See design doc: [`docs/superpowers/specs/2026-06-18-epic10-audio-interactive-coach-design.md`](docs/superpowers/specs/2026-06-18-epic10-audio-interactive-coach-design.md)
+
+- **TTS approach.** OpenAI TTS (`tts-1`), pre-generated static MP3s committed to the repo and served from Railway. Provider-agnostic interface so the provider can be swapped. Localhost admin UI (`/admin/audio`) for generate/listen/approve workflow. Registry JSON tracks approval state.
+- **Sound assets & licensing.** 7 assets: `disc_fall`, `disc_land_disc`, `disc_land_bottom`, `bg_music`, `win`, `correct_move`, `wrong_move`. User sources CC0/royalty-free files. During implementation, use `~/Downloads/zapsplat_leisure_game_connect_4_disc_drop_into_grid_tower_game_play_single_008_52315.mp3` as a placeholder for all sounds.
+- **Pacing values.** 1200ms hardcoded constant (`COACH_PACING_MS`). Not user-configurable in MVP.
+- **Term-detection source.** Glossary applies to deep reveal only (not static coach dialog). A new KB injection step in `explainContext.js` injects position-relevant KB entries (`kb-id → statement`) so the LLM can emit `[term:kb-id]word[/term:kb-id]` tags. The explain response adds a `terms` map to the client. `parseAnnotatedText` in `annotatedText.js` is extended to return a `terms` array alongside `zones`; `AnnotatedExplanation.jsx` and `AnnotatedText.jsx` are the render targets. Term spans show a popup with a 1–2 sentence summary and lesson/practice CTA; zone spans trigger board highlight toggle. KB entries without a short summary must have one added as part of this epic.
 
 ---
 

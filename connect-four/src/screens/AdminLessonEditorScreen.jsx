@@ -20,7 +20,7 @@ function authHeaders() {
 
 const VALID_CATEGORIES = [
   'immediate_threat', 'forced_block', 'double_threat', 'claimeven', 'z_threat',
-  'undercut', 'overcut', 'figure_7', 'j_shape',
+  'undercut', 'overcut', 'figure_7', 'j_shape', 'odd_even_threat',
 ];
 
 function emptyLesson() {

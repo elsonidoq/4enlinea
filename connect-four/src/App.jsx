@@ -95,6 +95,10 @@ function Navigator() {
 }
 
 function App() {
+  if (window.location.pathname.startsWith('/admin/audio')) {
+    const AdminAudioPage = lazy(() => import('./pages/AdminAudioPage.jsx'));
+    return <Suspense fallback={null}><AdminAudioPage /></Suspense>;
+  }
   if (window.location.pathname.startsWith('/admin/lessons')) {
     const AdminLessonsPage = lazy(() => import('./pages/AdminLessonsPage.jsx'));
     return <Suspense fallback={null}><AdminLessonsPage /></Suspense>;

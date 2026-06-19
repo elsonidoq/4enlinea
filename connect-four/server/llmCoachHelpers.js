@@ -93,6 +93,33 @@ export function loadKBStatement(id) {
 }
 
 /**
+ * Extracts the `short_summary` field from a KB article's YAML frontmatter.
+ * Returns null if the file cannot be read or the field is missing.
+ */
+export function loadKBShortSummary(id) {
+  try {
+    const text = readFileSync(join(KB_DIR, `${id}.md`), 'utf8');
+    const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return null;
+    const fm = fmMatch[1];
+    const lines = fm.split('\n');
+    let inSummary = false;
+    const summaryLines = [];
+    for (const line of lines) {
+      if (!inSummary) {
+        if (/^short_summary:\s*\|/.test(line)) { inSummary = true; }
+        continue;
+      }
+      if (line.length > 0 && !/^\s/.test(line)) break;
+      summaryLines.push(line.replace(/^  /, ''));
+    }
+    return summaryLines.join('\n').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Builds a "## Pattern definitions" section for the given pattern names.
  * Only loads KB content for patterns that have a KB entry.
  */
@@ -549,6 +576,7 @@ export function buildBlunderExplainPrompt({
   allowedSet,
   playedCol,          // 0-indexed; undefined = not provided
   contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
+  kbTermsSection,     // pre-formatted KB term definitions section (from buildExplainContext)
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -678,6 +706,11 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
     sections.push(`## Tone\n${toneText}`);
   }
 
+  // ── KB term definitions (pre-formatted by buildExplainContext) ─────────────
+  if (kbTermsSection) {
+    sections.push(kbTermsSection);
+  }
+
   // ── Output format ─────────────────────────────────────────────────────────
   const formatLines = ['## Output format'];
   formatLines.push('When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets.');
@@ -691,6 +724,10 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   formatLines.push('');
   formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
   formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
+  formatLines.push('');
+  formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
+  formatLines.push('  [term:kbId]concept name[/term:kbId] — for a KB-defined term. Example: [term:community-z-threat]Z-threat[/term:community-z-threat]');
+  formatLines.push('  Use the exact kbId from the KB term definitions. Only tag terms that appear in the definitions above.');
   formatLines.push('');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');

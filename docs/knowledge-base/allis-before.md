@@ -31,6 +31,11 @@ statement: |
   Aftereven when possible (it draws stronger conclusions); use Before only when a
   Vertical is needed instead of a Claimeven.
 
+short_summary: |
+  A White group with no opponent discs whose empty squares are each covered by a
+  Claimeven or Vertical pair, guaranteeing the controller will eventually complete it
+  and refuting all groups that require successors of its empty squares.
+
 preconditions:
   - "A group G without opponent discs exists (the 'Before group')."
   - "All empty squares of G are not in the top row (row 6) of the board."

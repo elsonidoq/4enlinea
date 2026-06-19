@@ -56,7 +56,8 @@ Every entry MUST have every field. Use `null` (not omission) when a field genuin
 | `source.doc` | string | Document identifier (e.g., `allen_2010`, `allis_1988`, `tromp_c4_resources`, or `project:docs/...` for project-local). |
 | `source.location` | string | Chapter/section/page (e.g., `Ch. 4, p. 98`). |
 | `source.verbatim_quote` | string (multi-line) | **Exact** wording from the source, including any italics noted with `_..._`. Not paraphrased. If the source uses diagrams, describe them in a `notes:` field; do not summarize them into this field. |
-| `statement` | string | One-paragraph restatement for LLM consumption. Keep declarative and unambiguous. |
+| `short_summary` | string | 1-2 sentence plain-language definition of the concept. Shorter and simpler than `statement` — aimed at learners, not LLMs. Sent to the client in the `terms` map of `/api/explain-move-llm` responses. Only entries with a real `.md` file AND a populated `short_summary` are eligible to appear in KB term popups. `statement` is LLM-prompt-only (never sent to the client); `short_summary` is client-facing. Use YAML literal block scalar: `short_summary: \|`. |
+| `statement` | string | One-paragraph restatement for LLM consumption. Keep declarative and unambiguous. Never sent to the client — `short_summary` serves that role. |
 | `preconditions` | list[string] | Bulleted conditions that must hold for the rule to apply. Each bullet must be checkable from board state alone. |
 | `formal_predicate` | string (multi-line pseudocode) | Pseudocode that a competent engineer can translate to JavaScript/Python/C++ without further interpretation. Reference board coordinates as `(col, row)` with `col ∈ A..G` and `row ∈ 1..6`. |
 | `worked_examples` | list[object] | Each: `{movestring, description, expected_behavior, solver_verified: <date>, notes?}`. At least one entry required. `solver_verified` is the date the position was last cross-checked against `c4solver` output. |

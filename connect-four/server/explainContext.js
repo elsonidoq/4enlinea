@@ -16,6 +16,8 @@ import {
   selectContrastMove,
   getBoardVisualization,
   buildBlunderExplainPrompt,
+  loadKBShortSummary,
+  PATTERN_KB,
 } from './llmCoachHelpers.js';
 
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
@@ -257,7 +259,37 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     getBoardVisualization(postMovestring),
   ]);
 
-  // ── Step 7: Build prompt ───────────────────────────────────────────────────
+  // ── Step 7: KB terms section ───────────────────────────────────────────────
+  // Gather pattern keys that are present in either the played position or the
+  // best-move position. These are the tactical concepts relevant to this position.
+  const relevantPatternKeys = new Set();
+  for (const key of patPlayed.keys()) relevantPatternKeys.add(key);
+  for (const key of correctMovePatterns.keys()) relevantPatternKeys.add(key);
+
+  const kbTermLines = [];
+  for (const [patternKey, kbEntry] of Object.entries(PATTERN_KB)) {
+    // Only entries with a file-backed KB article (not inline definitions)
+    if (!kbEntry.id) continue;
+    // forced_win has no .md file and is excluded from term annotation
+    if (patternKey === 'forced_win') continue;
+    // Only include terms whose pattern key is actually present in the position
+    if (!relevantPatternKeys.has(patternKey)) continue;
+
+    const shortSummary = loadKBShortSummary(kbEntry.id);
+    if (!shortSummary) continue;
+
+    // Use the KB file slug (kbEntry.id) as the term tag identifier,
+    // NOT the internal pattern key. This is the PATTERN_KB slug bridge.
+    kbTermLines.push(
+      `- [term:${kbEntry.id}] **${kbEntry.id}** (${kbEntry.id}): ${shortSummary}`
+    );
+  }
+
+  const kbTermsSection = kbTermLines.length > 0
+    ? `## KB term definitions\n\nThe following tactical concepts apply to this position:\n\n${kbTermLines.join('\n')}`
+    : '';
+
+  // ── Step 8: Build prompt ───────────────────────────────────────────────────
   const prompt = buildBlunderExplainPrompt({
     tag,
     direction,
@@ -272,6 +304,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     allowedSet,
     playedCol: col,
     contrastCol: isOptimal ? undefined : contrastCol,
+    kbTermsSection: kbTermsSection || undefined,
   });
 
   return { prompt, allowedSet };

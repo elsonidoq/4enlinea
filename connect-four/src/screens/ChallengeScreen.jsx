@@ -4,6 +4,7 @@ import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { ToolButton } from '../components/ToolButton.jsx';
+import { Icon } from '../components/Icon.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -11,6 +12,9 @@ import { track } from '../lib/track.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 import { pickRandomKey } from '../lib/coachUtils.js';
+import { COACH_PACING_MS } from '../lib/constants.js';
+import { useAudio } from '../lib/useAudio.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -46,6 +50,8 @@ export function ChallengeScreen({
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
+  const { playSfx, playMusic, pauseMusic, sfxEnabled, musicEnabled, speechEnabled, toggleSfx, toggleMusic, toggleSpeech } = useAudio();
+  const { speakCoachMessage } = useCoachSpeech();
 
   const [phase, setPhase] = useState('loading'); // 'loading' | 'pre-move' | 'post-move'
   const [puzzles, setPuzzles] = useState([]);
@@ -70,6 +76,7 @@ export function ChallengeScreen({
   const startTimeRef = useRef(null);
   const sessionIdRef = useRef(null);
   const usedPhraseKeysRef = useRef(new Set());
+  const lastCoachKeyRef = useRef(null); // T021: for coach speech
 
   // Stable reference — avoids AnnotatedExplanation re-render loop.
   const userMajorThreats = useMemo(() => {
@@ -112,6 +119,7 @@ export function ChallengeScreen({
 
     const playerDisc = (puzzle.move_string || '').length % 2 === 0 ? 'green' : 'gray';
     const discLabel = t(playerDisc === 'gray' ? 'challenge.playing_gray' : 'challenge.playing_green');
+    lastCoachKeyRef.current = pickedKey;
     setCoachMessages([{ text: t(pickedKey), mood: 'happy', disc: playerDisc, discLabel }]);
     startTimeRef.current = Date.now();
   }
@@ -167,6 +175,20 @@ export function ChallengeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges]);
 
+  // ── Audio: coach speech playback ─────────────────────────────────
+  useEffect(() => {
+    if (lastCoachKeyRef.current) {
+      speakCoachMessage(lastCoachKeyRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachMessages.length]);
+
+  // ── Audio: background music lifecycle ────────────────────────────
+  useEffect(() => {
+    playMusic();
+    return () => pauseMusic();
+  }, [playMusic, pauseMusic]);
+
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
     const current = puzzles[currentIdx];
@@ -205,12 +227,20 @@ export function ChallengeScreen({
       .then(data => {
         setEvaluation(data);
 
+        // SFX feedback
+        if (data.quality === 'optimal') {
+          playSfx('correct_move');
+        } else {
+          playSfx('wrong_move');
+        }
+
         // Update coach — fall back to quality-aware generic pool when no category-specific key exists
         const used = usedPhraseKeysRef.current;
         let phraseKey = data.coachPhraseKey
           ?? pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+        lastCoachKeyRef.current = phraseKey;
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
           mood: data.coachMood ?? moodDefaults[data.quality] ?? 'think',
@@ -253,6 +283,7 @@ export function ChallengeScreen({
     const valid = keys.filter(k => t(k) !== k);
     if (valid.length === 0) return;
     const key = valid[Math.floor(Math.random() * valid.length)];
+    lastCoachKeyRef.current = key;
     setCoachMessages(prev => [...prev, { text: t(key), mood: 'think' }]);
     setHintUsed(true);
   }
@@ -375,8 +406,16 @@ export function ChallengeScreen({
 
     setEvaluation({ quality, badge, summaryLine });
 
+    // SFX feedback
+    if (quality === 'optimal') {
+      playSfx('correct_move');
+    } else {
+      playSfx('wrong_move');
+    }
+
     // Update coach
     const coachKey = `coach.forbidden_columns.${quality}.0`;
+    lastCoachKeyRef.current = coachKey;
     setCoachMessages(prev => [...prev, { text: t(coachKey, { missed: missedForbidden.length }), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
 
     store?.recordPuzzleAttempt({
@@ -424,6 +463,9 @@ export function ChallengeScreen({
         // because setHeights hasn't fired yet (React state updates are batched).
         setLastDrop({ c: col, r: heights[col] });
 
+        // Coach pacing: wait before AI continuation (FR-015)
+        await new Promise(r => setTimeout(r, COACH_PACING_MS));
+
         // Step (b): render AI's disc with animation after user's drop animation has ~settled
         const aiRow = hUser[data.aiCol]; // captured from locally-returned hUser — avoids stale-closure trap
         const fullPos = userPos + String(data.aiCol);
@@ -437,6 +479,7 @@ export function ChallengeScreen({
         }, 300);
         return; // T006: skip synchronous isSubmitting=false for this branch
       } else if (data.outcome === 'success') {
+        playSfx('correct_move');
         const newPos = seqPosition + String(col);
         setSeqPosition(newPos);
         const { board: b, heights: h } = buildBoard(newPos);
@@ -444,6 +487,7 @@ export function ChallengeScreen({
         setHeights(h);
         setLastDrop({ c: col, r: heights[col] });
         setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.forced_win.optimal.0' });
+        lastCoachKeyRef.current = 'coach.forced_win.optimal.0';
         setCoachMessages(prev => [...prev, { text: t('coach.forced_win.optimal.0'), mood: 'happy' }]);
         // Highlight both threat cells on double-threat success
         if (data.threatCells && data.threatCells.length > 0) {
@@ -463,6 +507,8 @@ export function ChallengeScreen({
         setPhase('post-move');
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       } else {
+        playSfx('wrong_move');
+        lastCoachKeyRef.current = data.reason ? null : 'coach.forced_win.blunder.0';
         setCoachMessages(prev => [...prev, {
           text: data.reason ?? t('coach.forced_win.blunder.0'),
           mood: 'oops',
@@ -470,6 +516,8 @@ export function ChallengeScreen({
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       }
     } catch {
+      playSfx('wrong_move');
+      lastCoachKeyRef.current = 'error.generic';
       setCoachMessages(prev => [...prev, { text: t('error.generic'), mood: 'oops' }]);
       setIsSubmitting(false); // T006: explicit clear (option B, no finally)
     }
@@ -553,6 +601,7 @@ export function ChallengeScreen({
           moveString={puzzles[currentIdx]?.move_string}
           col={lastDrop?.c}
           feature="challenges"
+          navigate={go}
           onReveal={d => track('deep_reveal_viewed', { puzzleId: puzzles[currentIdx]?.id, cached: d.cached ?? false })}
           onZhCellsChange={setZhCells}
           userMajorThreats={userMajorThreats}
@@ -764,6 +813,58 @@ export function ChallengeScreen({
             </button>
           )
         )}
+
+        {/* Audio toggle buttons */}
+        <button
+          type="button"
+          onClick={toggleSfx}
+          aria-label={sfxEnabled ? 'Mute sound effects' : 'Unmute sound effects'}
+          title={sfxEnabled ? 'SFX on' : 'SFX off'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={sfxEnabled ? 'speaker' : 'speakerOff'} size={22} color={sfxEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleMusic}
+          aria-label={musicEnabled ? 'Mute music' : 'Unmute music'}
+          title={musicEnabled ? 'Music on' : 'Music off'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={musicEnabled ? 'music' : 'musicOff'} size={22} color={musicEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleSpeech}
+          aria-label={speechEnabled ? 'Mute speech' : 'Unmute speech'}
+          title={speechEnabled ? 'Speech on' : 'Speech off'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={speechEnabled ? 'speaker' : 'speakerOff'} size={22} color={speechEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
       </Toolbar>
 
     </div>

@@ -486,28 +486,56 @@ export function checkOvercutPredicate(ms, scores) {
   };
 }
 
-export function checkFigure7Predicate(ms, scores) {
-  const result = detectFigure7(new Board(ms), scores);
-  if (!result.matched) return { passes: false, correctCols: [] };
-  return {
-    passes: true,
-    correctCols: [result.correctCol],
-    correct_col: result.correctCol,
-    highlight_metadata: result.highlightMetadata,
-    category_evidence: result.categoryEvidence,
-  };
+export function checkFigure7Predicate(ms, _scores) {
+  const board = new Board(ms);
+
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] >= 6) continue;
+    const nextMs = ms + col.toString();
+    const nextBoard = new Board(nextMs);
+    // Pattern belongs to the player who just moved (last mover)
+    const patternOwner = 3 - nextBoard.currentPlayer;
+    const result = detectFigure7(nextBoard, null, patternOwner);
+    if (!result.matched) continue;
+
+    // Guard: pattern must NOT have been present before the completing move
+    const prevResult = detectFigure7(board, null, patternOwner);
+    if (prevResult.matched) continue;
+
+    return {
+      passes: true,
+      correctCols: [col],
+      correct_col: col,
+      highlight_metadata: result.highlightMetadata,
+      category_evidence: result.categoryEvidence,
+    };
+  }
+  return { passes: false, correctCols: [] };
 }
 
-export function checkJShapePredicate(ms, scores) {
-  const result = detectJShape(new Board(ms), scores);
-  if (!result.matched) return { passes: false, correctCols: [] };
-  return {
-    passes: true,
-    correctCols: [result.correctCol],
-    correct_col: result.correctCol,
-    highlight_metadata: result.highlightMetadata,
-    category_evidence: result.categoryEvidence,
-  };
+export function checkJShapePredicate(ms, _scores) {
+  const board = new Board(ms);
+
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] >= 6) continue;
+    const nextMs = ms + col.toString();
+    const nextBoard = new Board(nextMs);
+    const patternOwner = 3 - nextBoard.currentPlayer;
+    const result = detectJShape(nextBoard, null, patternOwner);
+    if (!result.matched) continue;
+
+    const prevResult = detectJShape(board, null, patternOwner);
+    if (prevResult.matched) continue;
+
+    return {
+      passes: true,
+      correctCols: [col],
+      correct_col: col,
+      highlight_metadata: result.highlightMetadata,
+      category_evidence: result.categoryEvidence,
+    };
+  }
+  return { passes: false, correctCols: [] };
 }
 
 export function checkOddEvenThreatPredicate(ms, scores) {

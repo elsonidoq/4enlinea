@@ -40,6 +40,11 @@ statement: |
   is the same as for the all-even case: after the cross-column exchange, no White
   winning group on an odd row may remain unrefuted by a lower Yellow group.
 
+short_summary: |
+  A pair of vertically adjacent empty squares (lower odd, upper even) where the
+  zugzwang controller gets the upper even square at the cost of conceding the lower
+  odd one to the opponent. The most fundamental of Allis's nine rules.
+
 preconditions:
   - "The controller of Zugzwang (typically Black) is applying the rule."
   - "Two vertically adjacent empty squares exist at (col, row_odd) and (col, row_odd+1=even)."

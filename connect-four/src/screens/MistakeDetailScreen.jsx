@@ -261,6 +261,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             moveString={blunder.board_state || ''}
             col={blunder.move_played}
             feature="past_mistakes"
+            navigate={go}
             onReveal={d => {
               setHighlightCol(blunder.correct_move);
               track('deep_reveal_viewed', { context: 'past_mistakes', cached: d.cached ?? false });

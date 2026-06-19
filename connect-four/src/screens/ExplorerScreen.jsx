@@ -5,6 +5,7 @@ import { CoachDialog } from '../components/CoachDialog.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { useGameBoard } from '../lib/useGameBoard.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { track } from '../lib/track.js';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
@@ -38,10 +39,19 @@ function ExplorerBoard({ rewindedMoves, trOverlay, side, difficulty, gameId, mov
     onGameEnd: () => {},
     introKey: 'coach.sparring.explorer.intro',
   });
+  const { speakCoachMessage } = useCoachSpeech();
 
   useEffect(() => {
     track('mistake_reviewed', { gameId, moveIndex, category: patternTag ?? null });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Speak coach message whenever a new one arrives.
+  useEffect(() => {
+    if (gameBoard.lastCoachKeyRef.current) {
+      speakCoachMessage(gameBoard.lastCoachKeyRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameBoard.coachMessages.length]);
 
   // Expose coach messages to parent when coach is rendered externally.
   useEffect(() => {
@@ -268,6 +278,7 @@ export function ExplorerScreen({
             moveString={currentRewindedMoves}
             col={currentSelectedMove?.col}
             feature="position_explorer"
+            navigate={go}
             onReveal={d => track('deep_reveal_viewed', { context: 'position_explorer', cached: d.cached ?? false })}
             onZhCellsChange={setZhCells}
             userMajorThreats={userMajorThreats}

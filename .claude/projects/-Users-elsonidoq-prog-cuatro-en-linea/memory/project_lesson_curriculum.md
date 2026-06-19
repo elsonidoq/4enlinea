@@ -7,21 +7,31 @@ metadata:
   originSessionId: fc412ead-b83c-4db1-8238-d7666fa2182e
 ---
 
-Canonical curriculum doc: `docs/lesson-curriculum.md` (updated 2026-05-28). 11 MVP lessons + 2 post-MVP.
+Canonical curriculum doc: `docs/mvp/lesson-curriculum.md`. **9 MVP lessons + 2 post-MVP** (updated 2026-06-19 — restructured from 11).
 
 **Why:** Target audience is 1000–1500 Elo players for the MVP.
 
 **What was cut and the rationale:**
-- Lost-position lessons (original "Don't Make It Worse", "Survival Mode") — user decision: if you're losing you lose anyway, not worth teaching at this Elo.
-- Most Allis rules (baseclaim, before, specialbefore, baseinverse, vertical, aftereven, lowinverse, highinverse) — too abstract and academic for 1000–1500 Elo.
-- Allen V-rules full pipeline (T1–T7 + V1–V5) — build as a backend explanation primitive, not a learner lesson.
-- Ghost threats as a single lesson — broken into prerequisite pieces; zugzwang basics and ghost threats are post-MVP.
+- Lost-position lessons — user decision: if you're losing you lose anyway, not worth teaching at this Elo.
+- Most Allis rules (baseclaim, before, specialbefore, baseinverse, vertical, aftereven, lowinverse, highinverse) — too abstract and academic.
+- Allen V-rules full pipeline (T1–T7 + V1–V5) — backend primitive, not a learner lesson.
+- Ghost threats as a single lesson — broken into prerequisites; zugzwang basics and ghost threats remain post-MVP.
+- Claimodd — removed entirely (wrong implementation + ~2/400 generation rate).
+- Standalone "Odd Rows Belong to Red" parity lesson — merged into L4 Z-Threats. Parity slides are now the first half of the Z-Threats lesson, giving the conceptual intro an immediate practical payoff.
 
-**What was kept despite being Allis rules:** Claimeven and Claimodd — user explicitly wants these. They are concrete and visual, unlike the other Allis rules.
+**Current lesson order (lesson files in `connect-four/lessons/`):**
+1. Spot the Win (`immediate_threat`)
+2. Block Before You Build (`forced_block`)
+3. The Fork (`double_threat`)
+4. Z-Threats — Own the Column (`z_threat`) ← parity intro merged here
+5. Claimeven (`claimeven`)
+6. The Undercut (`undercut`)
+7. The Overcut (`overcut`)
+8. Figure-7 Trap (`figure_7`)
+9. J-Shape (`j_shape`)
 
-**MVP parity dependency chain (critical sequencing):**
-L4 (Odd Rows — reading lesson, zero code) → L5 (Claimeven) → L6 (Z-Threats) → L7 (Claimodd) → L8–9 (Undercut/Overcut) → L10–11 (Figure-7, J-Shape)
+**Post-MVP:** Zugzwang Basics (L10), Ghost Threats (L11)
 
-**Claimodd implementation note:** Originally labelled Hard; actually Medium. Detector is ~25 lines synchronous code (O(7) parity check + scores comparison, no extra solver calls). Build after Claimeven is stable.
+**Key sequencing dependency:** L4 Z-Threats (parity intro + capsule puzzle) → L5 Claimeven → L6–7 Undercut/Overcut → L8–9 shapes.
 
-**How to apply:** When adding new lessons or features, check against these cuts before proposing anything in the "lost position" or "abstract Allis rules" space. Claimeven/Claimodd are the only Allis exceptions.
+**How to apply:** When adding new lessons or features, check against these cuts. Claimeven is the only Allis exception. Do not propose standalone parity lesson — it is now the first half of Z-Threats. Do not propose Claimodd — it was removed.

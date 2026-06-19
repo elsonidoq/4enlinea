@@ -25,6 +25,10 @@ statement: |
   is equivalent to a major odd-row threat and wins in zugzwang analysis. Mirror J
   (columns reflected) is equally valid.
 
+short_summary: |
+  A four-disc L-shaped Red cluster generating three simultaneous minor threats that
+  is equivalent to a major odd-row threat; the opponent cannot block all three paths.
+
 preconditions:
   - "Red owns four discs at cells {(x,y), (x,y+2), (x+1,y+1), (x+1,y+2)} for some (x,y) with y≥1."
   - "The extension cell (x+2, y+2) [horizontal threat target] is empty and not blocked by a Black disc in the same row."

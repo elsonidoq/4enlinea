@@ -35,7 +35,7 @@ const PORT = portFlag >= 0 ? parseInt(args[portFlag + 1], 10) : 3001;
 
 const BASE = `http://localhost:${PORT}`;
 
-const MAX_BATCHES = 10; // safety limit per category
+const MAX_BATCHES = 2; // safety limit per category
 
 const categories = targetCategory ? [targetCategory] : CATEGORIES;
 

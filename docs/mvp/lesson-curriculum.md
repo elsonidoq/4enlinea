@@ -6,13 +6,15 @@ _Research document — no implementation. Based on the strategy KB, classifier, 
 
 ## Overview
 
-11 MVP lessons + 2 post-MVP lessons (flagged). Target audience: 1000–1500 Elo players.
+9 MVP lessons + 2 post-MVP lessons (flagged). Target audience: 1000–1500 Elo players.
 
 **What was cut and why:**
 - Lessons about playing in a losing position (original L4, L14) — removed. Damage control in a lost position is low value for the target audience.
 - Remaining Allis rules beyond Claimeven (baseclaim, before, specialbefore, baseinverse, vertical, aftereven, lowinverse, highinverse) — removed. Too abstract and academic for this Elo range.
 - Allen V-rules full pipeline (original L15) — removed. The T1–T7 + V1–V5 system is a backend primitive, not a learner-facing lesson.
-- Ghost threats as a single lesson (original L13) — broken into prerequisite pieces. Parity, Claimeven, Claimodd, and Z-Threats are MVP; Zugzwang Basics and Ghost Threats are post-MVP.
+- Ghost threats as a single lesson (original L13) — broken into prerequisite pieces. Claimeven, Z-Threats, Zugzwang Basics, and Ghost Threats were the successors; Zugzwang Basics and Ghost Threats remain post-MVP.
+- Standalone "Odd Rows Belong to Red" parity lesson — merged into the Z-Threats lesson. The parity slides now form the first half of L4, giving the conceptual intro an immediate practical payoff (Z-threat puzzles) in the same lesson.
+- Claimodd — removed entirely (wrong implementation + ~2/400 generation rate).
 
 **Difficulty key**
 - **Easy** — classifier tag exists, explainSimulate already tracks the pattern, LLM helper loads a KB statement. Puzzle filter + narration are production-ready.
@@ -21,7 +23,7 @@ _Research document — no implementation. Based on the strategy KB, classifier, 
 
 ---
 
-## MVP Lessons
+## MVP Lessons (9 total)
 
 ### Lesson 1: Spot the Win
 
@@ -83,21 +85,27 @@ Fully covered. `detectDoubleThreat` is in DETECTOR_REGISTRY; `PATTERN_KB.double_
 
 ---
 
-### Lesson 4: Odd Rows Belong to Red
+### Lesson 4: Z-Threats — Own the Column
 
 **Concept**
-Red always plays first, so if a column fills bottom-up, Red naturally lands on rows 1, 3, 5 (odd) and Yellow on rows 2, 4, 6 (even). A threat placed on your natural row is structurally aligned: all else equal, you reach it before your opponent. This is the foundation for Claimeven (Lesson 5), Z-Threats (Lesson 6), and the undercut/overcut (Lessons 8–9).
+Red always plays first, so the first disc in any empty column belongs to Red — row 1. Gray lands at row 2, Red at row 3, and so on. The shortcut: subtract the current column height from the row number; if the result is even, Red owns it. This parity principle directly powers Z-Threats: a threat where the number of empty cells from the column top to the threat cell is **odd** means Red will be the one to land on it. You "own" that column's destiny.
 
 **KB entries used**
 - `derived-parity-formula` — formal definition of row ownership and parity alignment
+- `community-z-threat` — definition, formal predicate, difference from raw row parity
 
 **Puzzle filter**
-None. This is a reading/diagram lesson — a short interactive board showing which rows belong to each player, with a few illustrative positions. No puzzle or detector needed for MVP.
+```sql
+category = 'z_threat'
+-- detectZThreat.matched === true for correct_col
+-- and scores[correct_col] > 0
+-- best puzzles: exactly one column has a Z-Threat, all others score ≤ 0
+```
 
 **Explanation coverage**
-No detector or PATTERN_KB entry needed. The `derived-parity-formula` KB statement provides the prose.
+`detectZThreat` is in DETECTOR_REGISTRY with `histType: 'cell'`; emits a capsule highlight. `PATTERN_KB.z_threat` loads `community-z-threat`. The narration template needs to explain why the odd count matters (the zugzwang toggle argument) and cite `badgeCount` from `highlightMetadata`.
 
-**Implementation difficulty: Easy** — zero new code; reading lesson only.
+**Implementation difficulty: Medium** — detector and KB loading exist; narration template citing the odd count and linking back to parity is the only gap.
 
 ---
 
@@ -123,31 +131,7 @@ category = 'claimeven'
 
 ---
 
-### Lesson 6: Z-Threats — Own the Column
-
-**Concept**
-A Z-Threat is a threat where the number of empty cells between the current column top and your threat cell is odd. This odd count means that if your opponent is ever forced to play into that column, they fill the odd cells leading up to your threat — and then you play the threat cell. You "own" that column's destiny. Z-Threats are the operational form of the parity principle from Lesson 4.
-
-**KB entries used**
-- `community-z-threat` — definition, formal predicate, difference from raw row parity
-- `derived-parity-formula` — the row-ownership formula (introduced in Lesson 4)
-
-**Puzzle filter**
-```sql
-category = 'z_threat'
--- detectZThreat.matched === true for correct_col
--- and scores[correct_col] > 0
--- best puzzles: exactly one column has a Z-Threat, all others score ≤ 0
-```
-
-**Explanation coverage**
-`detectZThreat` is in DETECTOR_REGISTRY with `histType: 'cell'`; emits a capsule highlight. `PATTERN_KB.z_threat` loads `community-z-threat`. The narration template needs to explain why the odd count matters (the zugzwang toggle argument) and cite `badgeCount` from `highlightMetadata`. The KB statement provides the prose — a template that cites the count explicitly is the main gap.
-
-**Implementation difficulty: Medium** — detector and KB loading exist; narration template citing the odd count and linking back to parity is the only gap.
-
----
-
-### Lesson 8: The Undercut — When Your Threat Disappears
+### Lesson 6: The Undercut — When Your Threat Disappears
 
 **Concept**
 You have a major threat at row 5 in column C. Your opponent has a threat at row 3 in the same column. Because gravity fills the column bottom-up, the opponent's row-3 threat is reached before yours at row 5. When your opponent plays into that column, they win first — your row-5 threat never fires. This is an undercut: a lower opposite-parity threat in the same column kills your upper threat.
@@ -169,7 +153,7 @@ You have a major threat at row 5 in column C. Your opponent has a threat at row 
 
 ---
 
-### Lesson 9: The Overcut — When Your Upper Threat Wins
+### Lesson 7: The Overcut — When Your Upper Threat Wins
 
 **Concept**
 The undercut has a mirror image: sometimes your threat at a high row beats the opponent's lower threat. This happens when the two threats share the same row parity (same-parity threats don't interact — Allen's T4 rule), or when column parity forces you to fill critical rows first. Recognising these overcut situations unlocks moves that look wrong but actually win.
@@ -192,7 +176,7 @@ category = 'overcut'
 
 ---
 
-### Lesson 10: The Figure-7 Trap
+### Lesson 8: The Figure-7 Trap
 
 **Concept**
 The Figure-7 is a five-disc configuration shaped like the digit "7." It creates two threats in the same column on adjacent rows, one of which is above the current column top. The opponent cannot block both threats in sequence. Recognising the Figure-7 shape lets you plan several moves ahead toward a structurally unblockable position.
@@ -213,7 +197,7 @@ category = 'figure_7'
 
 ---
 
-### Lesson 11: The J-Shape Cluster
+### Lesson 9: The J-Shape Cluster
 
 **Concept**
 The J-Shape is four discs arranged in an L-pattern (one tall column, one arm extending diagonally). It creates a triple threat: three possible winning continuations from the same cluster. Because all three threats interact with each other, the opponent cannot block all three in sequence. Allen showed that a J-Shape is strategically equivalent to a single major odd-row threat.
@@ -290,28 +274,26 @@ AND a specific opponent Z-Threat column can be identified as the zugzwang domina
 | 1: Spot the Win | Add `immediate_threat` inline entry to `PATTERN_KB` |
 | 2: Block Before You Build | Add `forced_block` inline entry to `PATTERN_KB` |
 | 3: Fork (Double Threat) | None — already complete |
-| 4: Odd Rows Belong to Red | Reading lesson; no code needed |
-| 10: Figure-7 Trap | Narration template citing both threat rows |
-| 11: J-Shape Cluster | Narration template citing triple-threat directions |
+| 8: Figure-7 Trap | Narration template citing both threat rows |
+| 9: J-Shape Cluster | Narration template citing triple-threat directions |
 
 ### Group B — Small additions needed (Medium) — Ship second
 
 | Lesson | Main gap |
 |--------|----------|
+| 4: Z-Threats | Narration template citing odd-count and zugzwang toggle |
 | 5: Claimeven | Pre-filter by parity count at generation time; basic narration prose |
-| 6: Z-Threats | Narration template citing odd-count and zugzwang toggle |
-| 7: Claimodd | New `detectClaimodd` (~25 lines sync) + `PATTERN_KB` inline entry |
-| 8: Undercut | Generation-time query tweak for trap-avoidance framing |
-| 9: Overcut | Add `reason` field (~10 lines) to `detectOvercut` result |
+| 6: Undercut | Generation-time query tweak for trap-avoidance framing |
+| 7: Overcut | Add `reason` field (~10 lines) to `detectOvercut` result |
 
 ### Group C — New work required (Post-MVP)
 
 | Lesson | Main gap |
 |--------|----------|
-| 12: Zugzwang Basics | New multi-column Z-Threat aggregation predicate at generation time |
-| 13: Ghost Threats | New async detector (Z-count comparison + solver confirmation) |
+| 10: Zugzwang Basics | New multi-column Z-Threat aggregation predicate at generation time |
+| 11: Ghost Threats | New async detector (Z-count comparison + solver confirmation) |
 
-**Suggested MVP ship order:** 1 → 2 → 3 → 4 (all Easy, no interdependencies), then 10 → 11 (Easy patterns), then 5 → 6 → 7 → 8 → 9 (Medium in dependency order: Claimeven before Claimodd; Z-Threats before Claimodd; parity context before undercut/overcut).
+**Suggested MVP ship order:** 1 → 2 → 3 (all Easy, no interdependencies), then 8 → 9 (Easy patterns), then 4 → 5 → 6 → 7 (Medium in dependency order: Z-Threats before Claimeven; parity context before undercut/overcut).
 
 **Note on lesson ordering for learners:**
-Natural progression is 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. The parity chain (L4 → L5 Claimeven → L6 Z-Threats → L7 Claimodd) is the key dependency. Undercut/overcut (L8–9) and the shape patterns (L10–11) have no strict dependencies between themselves and can be reordered or interleaved based on puzzle availability.
+Natural progression is 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. The parity chain (L4 Z-Threats → L5 Claimeven) is the key dependency. Undercut/overcut (L6–7) build on parity intuition from L4. Shape patterns (L8–9) have no strict dependencies and can be reordered or interleaved based on puzzle availability.

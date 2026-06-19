@@ -2,7 +2,7 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
@@ -13,7 +13,7 @@ import { classifyAiMove } from './classifyAiMove.js';
 import { buildExplainContext } from './explainContext.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { callLLM } from './llmCoachHelpers.js';
+import { callLLM, loadKBShortSummary } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
 import { registerUserRoutes } from './userRoutes.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
@@ -850,6 +850,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       return res.json({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
+        terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
       });
     }
@@ -863,6 +864,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       return res.json({
         explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
         prompt: '',
+        terms: {},
       });
     }
 
@@ -871,6 +873,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       return res.json({
         explanation: 'All moves are roughly equivalent here — no single best move stands out.',
         prompt: '',
+        terms: {},
       });
     }
 
@@ -880,26 +883,22 @@ app.post('/api/explain-move-llm', async (req, res) => {
       return res.json({
         explanation: context.trivialExplanation,
         prompt: '',
+        terms: {},
       });
     }
 
     const { prompt, allowedSet } = context;
 
     // First attempt
-    console.log('[DEBUG explain-move-llm] allowedSet passed to validateAnnotation:', JSON.stringify(allowedSet));
     const rawExplanation = await callLLM(prompt);
     let explanation = normalizeZoneTags(rawExplanation);
-    console.log('[DEBUG explain-move-llm] rawExplanation:', rawExplanation);
     let result = validateAnnotation(explanation, board, allowedSet);
-    console.log('[DEBUG explain-move-llm] validateAnnotation result (attempt 1):', JSON.stringify(result));
 
     if (!result.valid) {
       // ── Retry (same prompt, bypasses cache and quota) ──────────────────
       const retryRaw = await callLLM(prompt);
       const retryExplanation = normalizeZoneTags(retryRaw);
-      console.log('[DEBUG explain-move-llm] retryExplanation:', retryExplanation);
       const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
-      console.log('[DEBUG explain-move-llm] validateAnnotation result (retry):', JSON.stringify(retryResult));
 
       if (retryResult.valid) {
         explanation = retryExplanation;
@@ -940,7 +939,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         }
 
         // No quota consumed for fallback
-        return res.json({ explanation: fallbackText, prompt: null, cached: false });
+        return res.json({ explanation: fallbackText, prompt: null, terms: {}, cached: false });
       }
     }
 
@@ -952,16 +951,32 @@ app.post('/api/explain-move-llm', async (req, res) => {
       }
     }
 
+    // Scan explanation for [term:kbId] tags and build a terms map
+    // with short summaries for each distinct kbId.
+    const termTagRegex = /\[term:([^\]]+)\]/g;
+    const termsMap = {};
+    let termMatch;
+    const seenTermIds = new Set();
+    while ((termMatch = termTagRegex.exec(explanation)) !== null) {
+      const kbId = termMatch[1];
+      if (seenTermIds.has(kbId)) continue;
+      seenTermIds.add(kbId);
+      const shortSummary = loadKBShortSummary(kbId);
+      if (shortSummary) {
+        termsMap[kbId] = shortSummary;
+      }
+    }
+
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
         one_liner: '',
-        deep_reveal_json: { explanation, prompt },
+        deep_reveal_json: { explanation, prompt, terms: termsMap },
         template_version: 'v2',
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, prompt });
+    res.json({ explanation, prompt, terms: termsMap });
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -2272,8 +2287,6 @@ app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
 
-  console.log('[DEBUG coach/queue] raw query:', JSON.stringify(req.query));
-
   const status = req.query.status || 'all';
   if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
     return res.status(400).json({ error: 'invalid status' });
@@ -2323,7 +2336,6 @@ app.get('/api/coach/queue', async (req, res) => {
 
   const { data: blunders, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  console.log('[DEBUG coach/queue] category param:', JSON.stringify(req.query.category), '| rows returned:', blunders?.length, '| categories in result:', [...new Set((blunders||[]).map(b=>b.pattern_category))]);
 
   const enriched = (blunders || []).map(b => ({
     id: b.id,
@@ -3128,6 +3140,504 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json({ id: data.id, verified: false });
+});
+
+// ── Admin Audio (TTS management — localhost only) ─────────────────────────────
+
+/** Derive a slug from an i18n key (same logic as generate-tts.js). */
+function keyToAudioSlug(key) {
+  return key.replace(/[._]/g, '--');
+}
+
+const TTS_REGISTRY_PATH = join(__dirname, 'tts-registry.json');
+const TTS_AUDIO_DIR = join(__dirname, '../public/audio/coach');
+const TTS_MANIFEST_PATH = join(TTS_AUDIO_DIR, 'coach-audio-manifest.json');
+const TTS_PROMPT_PATH = join(__dirname, 'tts-prompt.json');
+
+const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
+
+function readTtsConfig() {
+  try {
+    const data = JSON.parse(readFileSync(TTS_PROMPT_PATH, 'utf8'));
+    return {
+      prompt: data.prompt || '',
+      speed: typeof data.speed === 'number' ? data.speed : 1.0,
+      voice: VALID_TTS_VOICES.includes(data.voice) ? data.voice : 'alloy',
+    };
+  } catch {
+    return { prompt: '', speed: 1.0, voice: 'alloy' };
+  }
+}
+
+function writeTtsConfig(prompt, speed, voice) {
+  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice }, null, 2) + '\n', 'utf8');
+}
+
+/**
+ * Strip annotation markers from LLM explanation text for TTS speech.
+ * Removes [zone:X]...[/zone:X] and [term:X]...[/term:X] tag wrappers,
+ * keeping only the inner text. Also strips any leftover unmatched bracket tokens.
+ *
+ * @param {string} raw - Raw LLM explanation from deep_reveal_json.explanation
+ * @returns {string} Clean prose suitable for TTS synthesis
+ */
+function stripAnnotationsForTTS(raw) {
+  if (!raw) return '';
+  return raw
+    // Remove opening zone/term tags: [zone:col3], [zone:tg], [term:kbId], etc.
+    .replace(/\[zone:[^\]]+\]/gi, '')
+    .replace(/\[term:[^\]]+\]/gi, '')
+    // Remove closing tags: [/zone:col3], [/term:kbId], etc.
+    .replace(/\[\/zone:[^\]]+\]/gi, '')
+    .replace(/\[\/term:[^\]]+\]/gi, '')
+    // Collapse multiple spaces and trim
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function readTtsRegistry() {
+  try {
+    return JSON.parse(readFileSync(TTS_REGISTRY_PATH, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function writeTtsRegistry(entries) {
+  mkdirSync(dirname(TTS_REGISTRY_PATH), { recursive: true });
+  writeFileSync(TTS_REGISTRY_PATH, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+}
+
+function writeTtsManifest(entries) {
+  const slugs = entries
+    .filter(e => e.status === 'approved')
+    .map(e => e.slug)
+    .sort();
+  mkdirSync(TTS_AUDIO_DIR, { recursive: true });
+  writeFileSync(TTS_MANIFEST_PATH, JSON.stringify(slugs, null, 2) + '\n', 'utf8');
+}
+
+// GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
+app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
+  res.json(readTtsConfig());
+});
+
+// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice)
+app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
+  const { prompt, speed, voice } = req.body;
+  if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt must be a string' });
+  const parsedSpeed = parseFloat(speed);
+  if (isNaN(parsedSpeed) || parsedSpeed < 0.25 || parsedSpeed > 4.0) {
+    return res.status(400).json({ error: 'speed must be a number between 0.25 and 4.0' });
+  }
+  if (!VALID_TTS_VOICES.includes(voice)) {
+    return res.status(400).json({ error: `voice must be one of: ${VALID_TTS_VOICES.join(', ')}` });
+  }
+  writeTtsConfig(prompt, parsedSpeed, voice);
+  res.json({ ok: true });
+});
+
+// GET /api/admin/audio/status — grouped key list for the admin page
+app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
+  try {
+    const registry = readTtsRegistry();
+    const approved = [];
+    const awaiting = [];
+    const needs = [];
+    const ineligible = [];
+
+    for (const entry of registry) {
+      // Resolve the i18n key to its English text for preview
+      let text = '';
+      try {
+        const parts = entry.key.split('.');
+        let node = i18nTranslations;
+        for (const p of parts) node = node[p];
+        text = typeof node === 'string' ? node : '';
+      } catch { /* key not found in en.json */ }
+
+      const item = { key: entry.key, slug: entry.slug, text, status: entry.status, reason: entry.reason || null, generated_at: entry.generated_at || null, approved_at: entry.approved_at || null };
+
+      switch (entry.status) {
+        case 'approved': approved.push(item); break;
+        case 'awaiting_approval': awaiting.push(item); break;
+        case 'needs_audio': needs.push(item); break;
+        case 'ineligible': ineligible.push(item); break;
+        default: needs.push(item); break;
+      }
+    }
+
+    res.json({ approved, awaiting_approval: awaiting, needs_audio: needs, ineligible, counts: { approved: approved.length, awaiting_approval: awaiting.length, needs_audio: needs.length, ineligible: ineligible.length, total: registry.length } });
+  } catch (err) {
+    console.error('[admin/audio/status]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/audio/generate — synthesize audio for a single key
+app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
+  const { key } = req.body;
+  if (!key || typeof key !== 'string') {
+    return res.status(400).json({ error: 'key is required' });
+  }
+
+  try {
+    const registry = readTtsRegistry();
+    const entry = registry.find(e => e.key === key);
+    if (!entry) return res.status(404).json({ error: 'key not found in registry' });
+    if (entry.status === 'ineligible') return res.status(400).json({ error: `key is ineligible: ${entry.reason}` });
+
+    // Resolve text from en.json
+    const parts = key.split('.');
+    let node = i18nTranslations;
+    for (const p of parts) node = node[p];
+    const text = typeof node === 'string' ? node : null;
+    if (!text || text.includes('{{')) {
+      return res.status(400).json({ error: 'key has interpolated text or is missing' });
+    }
+
+    const { synthesize } = await import('./ttsProvider.js');
+    const { prompt: instructions, speed, voice } = readTtsConfig();
+    console.log(`[admin/audio/generate] key=${key} voice=${voice} speed=${speed}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
+    mkdirSync(TTS_AUDIO_DIR, { recursive: true });
+    writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+
+    entry.status = 'awaiting_approval';
+    entry.generated_at = new Date().toISOString();
+    writeTtsRegistry(registry);
+
+    res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
+  } catch (err) {
+    console.error('[admin/audio/generate]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/audio/generate-all — synthesize all needs_audio keys
+app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
+  try {
+    const registry = readTtsRegistry();
+    const needsAudio = registry.filter(e => e.status === 'needs_audio');
+
+    if (needsAudio.length === 0) {
+      return res.json({ generated: 0, failed: 0, message: 'No keys need audio generation' });
+    }
+
+    const { synthesize } = await import('./ttsProvider.js');
+    const { prompt: instructions, speed, voice } = readTtsConfig();
+    let generated = 0;
+    const failed = [];
+    const total = needsAudio.length;
+
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (voice=${voice} speed=${speed})`);
+
+    for (const entry of needsAudio) {
+      try {
+        const parts = entry.key.split('.');
+        let node = i18nTranslations;
+        for (const p of parts) node = node[p];
+        const text = typeof node === 'string' ? node : null;
+        if (!text || text.includes('{{')) {
+          failed.push({ key: entry.key, error: 'interpolated or missing text' });
+          continue;
+        }
+
+        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
+        writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+        entry.status = 'awaiting_approval';
+        entry.generated_at = new Date().toISOString();
+        generated++;
+        const remaining = total - generated - failed.length;
+        console.log(`[admin/audio/generate-all] generated ${generated}/${total} — ${remaining} remaining | key=${entry.key}`);
+      } catch (err) {
+        failed.push({ key: entry.key, error: err.message });
+        console.error(`[admin/audio/generate-all] failed key=${entry.key}: ${err.message}`);
+      }
+    }
+
+    writeTtsRegistry(registry);
+    res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
+  } catch (err) {
+    console.error('[admin/audio/generate-all]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/audio/approve — approve a single key and regenerate manifest
+app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
+  const { key } = req.body;
+  if (!key || typeof key !== 'string') {
+    return res.status(400).json({ error: 'key is required' });
+  }
+
+  try {
+    const registry = readTtsRegistry();
+    const entry = registry.find(e => e.key === key);
+    if (!entry) return res.status(404).json({ error: 'key not found in registry' });
+    if (entry.status === 'ineligible') return res.status(400).json({ error: 'ineligible keys cannot be approved' });
+    if (entry.status === 'needs_audio') return res.status(400).json({ error: 'key has no generated audio — generate first' });
+
+    entry.status = 'approved';
+    entry.approved_at = new Date().toISOString();
+    writeTtsRegistry(registry);
+    writeTtsManifest(registry);
+
+    res.json({ key, slug: entry.slug, status: 'approved' });
+  } catch (err) {
+    console.error('[admin/audio/approve]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/audio/approve-all — approve all awaiting_approval keys
+app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
+  try {
+    const registry = readTtsRegistry();
+    const awaiting = registry.filter(e => e.status === 'awaiting_approval');
+
+    if (awaiting.length === 0) {
+      return res.json({ approved: 0, message: 'No keys awaiting approval' });
+    }
+
+    for (const entry of awaiting) {
+      entry.status = 'approved';
+      entry.approved_at = new Date().toISOString();
+    }
+
+    writeTtsRegistry(registry);
+    writeTtsManifest(registry);
+
+    res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
+  } catch (err) {
+    console.error('[admin/audio/approve-all]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/audio/play/:slug — serve a generated audio file for preview
+app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
+  const slug = req.params.slug;
+  // Sanitize: only allow alphanumeric + hyphens
+  if (!/^[a-zA-Z0-9--]+$/.test(slug)) {
+    return res.status(400).json({ error: 'invalid slug' });
+  }
+  const filePath = join(TTS_AUDIO_DIR, `${slug}.mp3`);
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: 'audio file not found' });
+  }
+  res.set('Content-Type', 'audio/mpeg');
+  res.sendFile(filePath);
+});
+
+// ── Deep Reveal TTS ─────────────────────────────────────────────────────────────
+
+// GET /api/user/tts/deep-reveal — speak a deep-reveal explanation via TTS.
+// Cache hit: 302 redirect to signed Supabase Storage URL.
+// Cache miss: streams OpenAI TTS directly to client, buffers for background upload.
+app.get('/api/user/tts/deep-reveal', async (req, res) => {
+  // Auth gate (401)
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Validate query params
+  const { moveString, col: colStr } = req.query;
+  if (!moveString || !/^[0-6]{0,42}$/.test(moveString)) {
+    return res.status(400).json({ error: 'invalid moveString' });
+  }
+  const col = parseInt(colStr, 10);
+  if (isNaN(col) || col < 0 || col > 6) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+
+  // Require Supabase
+  if (!supabase || !process.env.SUPABASE_URL) {
+    return res.status(503).json({ error: 'internal error' });
+  }
+
+  try {
+    // Look up explanation_cache
+    const positionHash = createHash('sha256').update(`${moveString}:${col}`).digest('hex');
+    const { data: cacheEntry, error: cacheErr } = await supabase
+      .from('explanation_cache')
+      .select('deep_reveal_json, audio_path')
+      .eq('position_hash', positionHash)
+      .maybeSingle();
+
+    if (cacheErr) {
+      console.error('[tts/deep-reveal] cache lookup error:', cacheErr.message);
+      return res.status(500).json({ error: 'internal error' });
+    }
+    if (!cacheEntry?.deep_reveal_json) {
+      return res.status(404).json({ error: 'no explanation cached for this position' });
+    }
+
+    // Extract raw explanation text (handle both post-Epic 3 "explanation" and pre-Epic 3 "fullText")
+    const rawText = cacheEntry.deep_reveal_json.explanation
+      || cacheEntry.deep_reveal_json.fullText
+      || '';
+    if (!rawText) return res.status(404).json({ error: 'no explanation text available' });
+
+    // Strip annotations for clean TTS speech
+    const cleanText = stripAnnotationsForTTS(rawText);
+    if (!cleanText) return res.status(404).json({ error: 'explanation text is empty after stripping annotations' });
+
+    // Compute deterministic audio path from the cleaned text
+    const textHash = createHash('sha256').update(cleanText).digest('hex');
+    const audioPath = `tts/deep-reveal/${textHash}.mp3`;
+
+    // Cache hit — redirect to signed URL
+    if (cacheEntry.audio_path === audioPath) {
+      const { data: signed, error: signedErr } = await supabase.storage
+        .from('coach-tts')
+        .createSignedUrl(audioPath, 60 * 60 * 24 * 7); // 1 week
+      if (signedErr || !signed?.signedUrl) {
+        console.error('[tts/deep-reveal] signed URL error:', signedErr?.message);
+        return res.status(500).json({ error: 'failed to generate signed URL' });
+      }
+      return res.redirect(302, signed.signedUrl);
+    }
+
+    // Cache miss — requires OpenAI TTS
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'TTS not configured — OPENAI_API_KEY missing' });
+    }
+
+    const { synthesizeStream } = await import('./ttsProvider.js');
+    const { prompt: instructions, speed, voice } = readTtsConfig();
+
+    let ttsResponse;
+    try {
+      ttsResponse = await synthesizeStream(cleanText, {
+        instructions: instructions || undefined,
+        speed,
+        voice,
+      });
+    } catch (ttsErr) {
+      console.error('[tts/deep-reveal] OpenAI TTS error:', ttsErr.message);
+      // If the body was already partially consumed, the header might be sent
+      if (!res.headersSent) {
+        return res.status(502).json({ error: 'TTS service error' });
+      }
+      return; // headers already sent — nothing we can do
+    }
+
+    // Stream to client while collecting chunks for background upload
+    res.set('Content-Type', 'audio/mpeg');
+    const chunks = [];
+    const reader = ttsResponse.body.getReader();
+    let streamComplete = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          streamComplete = true;
+          break;
+        }
+        chunks.push(value);
+        res.write(value);
+      }
+      res.end();
+    } catch (streamErr) {
+      console.error('[tts/deep-reveal] stream error:', streamErr.message);
+      if (!res.headersSent) {
+        return res.status(500).json({ error: 'stream error' });
+      }
+      return;
+    } finally {
+      // Only upload if the full stream completed (not truncated by client disconnect)
+      if (streamComplete && chunks.length > 0) {
+        const buffer = Buffer.concat(chunks);
+        supabase.storage
+          .from('coach-tts')
+          .upload(audioPath, buffer, {
+            contentType: 'audio/mpeg',
+            upsert: true,
+          })
+          .then(({ error: upErr }) => {
+            if (upErr) {
+              console.error('[tts/deep-reveal] storage upload error:', upErr.message);
+              return;
+            }
+            // Update explanation_cache row with the audio path
+            return supabase
+              .from('explanation_cache')
+              .update({ audio_path: audioPath, audio_generated_at: new Date().toISOString() })
+              .eq('position_hash', positionHash)
+              .then(({ error: updateErr }) => {
+                if (updateErr) {
+                  console.error('[tts/deep-reveal] cache update error:', updateErr.message);
+                }
+              });
+          })
+          .catch(err => console.error('[tts/deep-reveal] bg upload error:', err.message));
+      }
+    }
+  } catch (err) {
+    console.error('[tts/deep-reveal] unexpected error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'internal error' });
+    }
+  }
+});
+
+// POST /api/admin/tts/cleanup — delete TTS audio older than 30 days (localhost only)
+app.post('/api/admin/tts/cleanup', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'internal error' });
+
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Find rows with expired audio
+    const { data: expired, error: queryErr } = await supabase
+      .from('explanation_cache')
+      .select('position_hash, audio_path')
+      .lt('audio_generated_at', cutoff)
+      .not('audio_path', 'is', null);
+
+    if (queryErr) {
+      console.error('[tts/cleanup] query error:', queryErr.message);
+      return res.status(500).json({ error: 'query failed' });
+    }
+
+    if (!expired || expired.length === 0) {
+      return res.json({ cleaned: 0 });
+    }
+
+    // Delete Storage objects and null out the columns
+    let cleaned = 0;
+    const paths = expired.map(e => e.audio_path).filter(Boolean);
+    const hashes = expired.map(e => e.position_hash);
+
+    // Delete from Storage (batch — one call per path since Supabase Storage doesn't support bulk deletes)
+    for (const path of paths) {
+      const { error: delErr } = await supabase.storage
+        .from('coach-tts')
+        .remove([path]);
+      if (delErr) {
+        console.error(`[tts/cleanup] storage delete error for ${path}:`, delErr.message);
+        // Continue with DB cleanup anyway — orphaned storage objects are harmless
+      }
+    }
+
+    // Null out audio columns in DB
+    const { error: updateErr } = await supabase
+      .from('explanation_cache')
+      .update({ audio_path: null, audio_generated_at: null })
+      .in('position_hash', hashes);
+
+    if (updateErr) {
+      console.error('[tts/cleanup] update error:', updateErr.message);
+      return res.status(500).json({ error: 'update failed' });
+    }
+
+    cleaned = hashes.length;
+    console.log(`[tts/cleanup] cleaned ${cleaned} rows`);
+    res.json({ cleaned });
+  } catch (err) {
+    console.error('[tts/cleanup] unexpected error:', err.message);
+    res.status(500).json({ error: 'internal error' });
+  }
 });
 
 // ── Legal pages (required by Google OAuth consent screen) ────────────────────

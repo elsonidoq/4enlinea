@@ -287,11 +287,13 @@ Explains a specific move the human just played (post-move reflection).
 {
   "explanation": "<LLM-generated explanation paragraph>",
   "prompt": "<LLM prompt used to generate the explanation>",
+  "terms": { "community-z-threat": "<short_summary>", "allen-t4": "<short_summary>" },
   "cached": true
 }
 ```
 - `cached`: `true` when served from `explanation_cache`. Absent (undefined) on cache miss.
 - `prompt`: the LLM prompt used to generate the explanation. Used by the `POST /api/llm-feedback` flag feature. Empty string `''` on the no-contrast fallback path.
+- `terms`: always present (minimum `{}`). Map of `{ kbId: short_summary }` for KB concepts tagged in the explanation via `[term:kbId]` markup. Values carry `short_summary` (1-2 sentence plain-language definitions), never the full `statement` field. Present on both cache hits and cache misses. Cache hits from pre-feature rows return `terms: {}` (those rows lack the `terms` JSONB field).
 
 **Processing order**:
 1. Auth gate: 401 for unauthenticated
@@ -308,6 +310,36 @@ Explains a specific move the human just played (post-move reflection).
 **Errors**: 400 for invalid params, 401 (unauthenticated), 429 (quota exceeded), 503 (LLM not configured), 500 (internal error).
 
 **Rate limit**: 5 req/min.
+
+### `GET /api/user/tts/deep-reveal`
+
+Returns spoken (TTS) audio for a cached deep-reveal explanation. The client points an `<audio>` element at this endpoint. On a cache hit, the server redirects (302) to a signed Supabase Storage URL; on a miss, it streams OpenAI TTS audio directly while buffering for background upload to the cache.
+
+**Query params**: `moveString=<0-indexed movestring>&col=<0-indexed column>`
+- `moveString`: position **before** the move (0–42 chars, digits 0–6)
+- `col`: 0-indexed column played
+
+**Response — cache hit**: `302 Found` with `Location: <signed Supabase Storage URL>` (1-week lifetime). The client's `<audio>` element follows the redirect transparently.
+
+**Response — cache miss**: `200 OK` with `Content-Type: audio/mpeg` and chunked transfer encoding. OpenAI TTS audio streamed directly to the client (~300 ms to first byte).
+
+**Processing order**:
+1. Auth gate: 401 if `req.user` is null (inline check, not middleware)
+2. Input validation: 400 for invalid `moveString` or `col`
+3. Supabase check: 503 if not configured
+4. `explanation_cache` lookup by `SHA256(moveString + ":" + col)` → 404 if no cached explanation
+5. Annotation stripping: removes `[zone:X]...[/zone:X]` and `[term:X]...[/term:X]` tags (keeping inner text) for clean TTS speech
+6. Audio hash: `SHA256(stripped_text)` computes deterministic storage path `tts/deep-reveal/<hash>.mp3`
+7. Cache hit (`row.audio_path === computed path`): generate signed URL → 302 redirect
+8. Cache miss: call OpenAI TTS streaming API → pipe audio to response while collecting chunks → fire-and-forget upload to Supabase Storage + `explanation_cache` row update
+
+**No quota consumed**: The deep-reveal quota is decremented by `POST /api/explain-move-llm`. This TTS endpoint only converts text to speech — it does not generate new explanations.
+
+**Errors**: 400 (invalid params), 401 (unauthenticated), 404 (no explanation cached), 500 (internal), 502 (OpenAI TTS service error), 503 (Supabase not configured / `OPENAI_API_KEY` missing).
+
+**TTS config**: Uses the same voice, speed, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`).
+
+**Rate limit**: 120 req/min (default `/api/` bucket). No additional rate limiting.
 
 ## Move Evaluation Endpoint
 

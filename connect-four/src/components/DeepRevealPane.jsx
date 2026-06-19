@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SplitReveal } from './SplitReveal.jsx';
 import { AnnotatedExplanation } from './AnnotatedExplanation.jsx';
@@ -6,12 +6,17 @@ import { AuthModal } from './AuthModal.jsx';
 import { UpgradeModal } from './UpgradeModal.jsx';
 import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
+import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Shared deep-reveal split-pane component.
  * Owns fetch, loading, error, flag, and auth/upgrade gate state.
+ *
+ * When speechEnabled is true, adds a TTS phase: after the LLM explanation arrives,
+ * a TTS audio stream is fetched and the text is revealed at the moment audio
+ * is ready to play (canplay event) so the coach "speaks" the explanation.
  *
  * Props:
  *   isOpen           - boolean
@@ -40,11 +45,14 @@ export function DeepRevealPane({
   headerContent,
   timeoutContent,
   closeLabel,
+  navigate,
 }) {
   const { t } = useTranslation();
   const { session } = useStore();
+  const { speechEnabled } = useCoachSpeech();
 
   const [loading, setLoading] = useState(false);
+  const [loadingTts, setLoadingTts] = useState(false);
   const [data, setData] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -53,6 +61,9 @@ export function DeepRevealPane({
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagNote, setFlagNote] = useState('');
 
+  // Track TTS Audio element for cleanup
+  const ttsAudioRef = useRef(null);
+
   useEffect(() => {
     if (!isOpen) {
       setData(null);
@@ -60,6 +71,12 @@ export function DeepRevealPane({
       setFlagged(false);
       setFlagOpen(false);
       setFlagNote('');
+      setLoadingTts(false);
+      stopSpeech();
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.src = '';
+        ttsAudioRef.current = null;
+      }
       return;
     }
 
@@ -68,7 +85,11 @@ export function DeepRevealPane({
       return;
     }
 
+    // Stop any ongoing coach speech — deep-reveal replaces the evaluation context
+    stopSpeech();
+
     setLoading(true);
+    setLoadingTts(false);
     setData(null);
     setTimedOut(false);
     setFlagged(false);
@@ -78,6 +99,7 @@ export function DeepRevealPane({
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       setLoading(false);
+      setLoadingTts(false);
       setTimedOut(true);
     }, 6000);
 
@@ -94,9 +116,37 @@ export function DeepRevealPane({
         if (res.status === 429) { setLoading(false); setUpgradeOpen(true); return null; }
         return res.json();
       })
-      .then(d => {
+      .then(async d => {
         if (!d) return;
         setData(d);
+
+        // Phase 2: fetch TTS audio if speech is enabled
+        if (speechEnabled) {
+          setLoadingTts(true);
+          const ttsUrl = `${API}/api/user/tts/deep-reveal?moveString=${encodeURIComponent(moveString)}&col=${col}`;
+          const audio = new Audio(ttsUrl);
+          ttsAudioRef.current = audio;
+
+          let ttsOk = false;
+          await new Promise((resolve) => {
+            const ttsTimeout = setTimeout(() => resolve(), 5000);
+            const onCanPlay = () => { ttsOk = true; clearTimeout(ttsTimeout); resolve(); };
+            const onError = () => { clearTimeout(ttsTimeout); resolve(); };
+            audio.addEventListener('canplay', onCanPlay, { once: true });
+            audio.addEventListener('error', onError, { once: true });
+          });
+
+          if (ttsOk) {
+            stopSpeech(); // Kill any ongoing coach message so deep-reveal TTS plays immediately
+            speakDeepReveal(audio);
+          } else {
+            // TTS failed — clean up the audio element
+            audio.src = '';
+            ttsAudioRef.current = null;
+          }
+          setLoadingTts(false);
+        }
+
         setLoading(false);
         onReveal?.(d);
       })
@@ -104,17 +154,28 @@ export function DeepRevealPane({
         if (err.name === 'AbortError') return;
         clearTimeout(timeoutId);
         setLoading(false);
+        setLoadingTts(false);
         setTimedOut(true);
       });
 
     return () => {
       clearTimeout(timeoutId);
       controller.abort();
+      stopSpeech();
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.src = '';
+        ttsAudioRef.current = null;
+      }
     };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleClose() {
     onZhCellsChange?.([]);
+    stopSpeech();
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.src = '';
+      ttsAudioRef.current = null;
+    }
     onClose?.();
   }
 
@@ -138,7 +199,7 @@ export function DeepRevealPane({
 
   const revealContent = (
     <>
-      {loading && (
+      {(loading || loadingTts) && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
@@ -146,12 +207,14 @@ export function DeepRevealPane({
             animation: 'spin 0.7s linear infinite',
           }} />
           <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
-            {t('deepReveal.loading', 'Reading the position…')}
+            {loadingTts
+              ? t('deepReveal.preparingAudio', 'Preparing audio…')
+              : t('deepReveal.loading', 'Reading the position…')}
           </p>
         </div>
       )}
 
-      {!loading && timedOut && (
+      {!loading && !loadingTts && timedOut && (
         <div style={{ padding: '8px 0' }}>
           {timeoutContent}
           <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
@@ -160,15 +223,17 @@ export function DeepRevealPane({
         </div>
       )}
 
-      {!loading && !timedOut && data && (
+      {!loading && !loadingTts && !timedOut && data && (
         <div>
           {headerContent}
 
           <div style={{ margin: '0 0 14px', fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6, color: 'var(--ink)' }}>
             <AnnotatedExplanation
               text={data.explanation}
+              termsMap={data.terms ?? {}}
               userMajorThreats={userMajorThreats}
               onHighlightsChange={onZhCellsChange}
+              navigate={navigate}
             />
           </div>
 

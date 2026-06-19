@@ -483,6 +483,103 @@ export function classify(moves, candidateCol, scores) {
   return { tag: 'suboptimal_move' };
 }
 
+// ── Convolution helpers ───────────────────────────────────────────────
+
+/**
+ * Slides a binary kernel over every valid anchor position on the board.
+ * Returns all positions where playerCells are occupied by `perspective`
+ * and emptyCells are vacant (0).
+ *
+ * @param {Board} board
+ * @param {number} perspective  1 or 2 — player whose discs form the O cells
+ * @param {{ rows: number, cols: number,
+ *           playerCells: Array<{row: number, col: number}>,
+ *           emptyCells:  Array<{row: number, col: number}> }} kernel
+ * @returns {Array<{ anchorRow: number, anchorCol: number,
+ *                   playerCells: Array<{row: number, col: number}> }>}
+ */
+function convolve(board, perspective, kernel) {
+  const matches = [];
+  for (let ar = 0; ar <= ROWS - kernel.rows; ar++) {
+    for (let ac = 0; ac <= COLS - kernel.cols; ac++) {
+      let ok = true;
+      for (const {row, col} of kernel.playerCells) {
+        if (board.board[ar + row][ac + col] !== perspective) { ok = false; break; }
+      }
+      if (!ok) continue;
+      for (const {row, col} of kernel.emptyCells) {
+        if (board.board[ar + row][ac + col] !== 0) { ok = false; break; }
+      }
+      if (!ok) continue;
+      matches.push({
+        anchorRow: ar,
+        anchorCol: ac,
+        playerCells: kernel.playerCells.map(({row, col}) => ({row: ar + row, col: ac + col})),
+      });
+    }
+  }
+  return matches;
+}
+
+/** Returns the horizontal mirror of a kernel (col j → cols-1-j). */
+function flipKernel(kernel) {
+  return {
+    rows: kernel.rows,
+    cols: kernel.cols,
+    playerCells: kernel.playerCells.map(({row, col}) =>
+      ({row, col: kernel.cols - 1 - col})),
+    emptyCells: kernel.emptyCells.map(({row, col}) =>
+      ({row, col: kernel.cols - 1 - col})),
+  };
+}
+
+// ── Shape kernels ─────────────────────────────────────────────────────
+//
+// Kernel diagrams use row 0 = bottom.  "O" = must be the perspective
+// player's disc.  "F" = must be empty.  Blank = don't care.
+
+// Figure-7 canonical (ascending diagonal + horizontal back to the left)
+//   |   |   |   | F |    row r+3
+//   |O  |O  | O | F |    row r+2
+//   |   |O  |   |   |    row r+1
+//   |O  |   |   |   |    row r
+const F7 = {
+  rows: 4, cols: 4,
+  playerCells: [
+    {row: 0, col: 0},  // diagonal bottom
+    {row: 1, col: 1},  // diagonal middle
+    {row: 2, col: 0},  // horizontal left
+    {row: 2, col: 1},  // horizontal middle (junction)
+    {row: 2, col: 2},  // horizontal right (diagonal top)
+  ],
+  emptyCells: [
+    {row: 2, col: 3},  // right of horizontal terminus
+    {row: 3, col: 3},  // upper-right corner
+  ],
+};
+const F7_FLIPPED = flipKernel(F7);
+
+// J-shape canonical (tall column on the left, hook on the right)
+//   |   |   |   | F |    row r+3
+//   |O  |O  | F | F |    row r+2
+//   |   |O  |   |   |    row r+1
+//   |O  |   |   |   |    row r
+const J = {
+  rows: 4, cols: 4,
+  playerCells: [
+    {row: 0, col: 0},  // tall column bottom
+    {row: 1, col: 1},  // middle step
+    {row: 2, col: 0},  // tall column top
+    {row: 2, col: 1},  // hook
+  ],
+  emptyCells: [
+    {row: 2, col: 2},  // right of hook — distinguishes from Figure-7
+    {row: 2, col: 3},  // far right
+    {row: 3, col: 3},  // upper-right corner
+  ],
+};
+const J_FLIPPED = flipKernel(J);
+
 // ── New category detection functions (T005–T010) ──────────────────────────────
 
 /**
@@ -673,129 +770,31 @@ export function getWinningWindows(board, threatRow, threatCol, player) {
 
 /**
  * T009 — Figure-7 detection.
- * Checks all four structural variants; current player occupies 4 of 5 template cells,
- * the 5th is empty and playable, and scores confirm a win.
- * Threats are counted at any reachable empty cell in the column (row >= colHeight),
- * not only the gravity-top. Gravity-top restriction applies only to immediate_threat
- * and forced_block which act on the current move.
+ * Slides the Figure-7 kernel (canonical + flipped) over the board and returns
+ * the first match.  The pattern is detected as-is: all 5 cells of the 7-shape
+ * must be occupied by `perspective`.
+ *
  * @param {Board} board
- * @param {number[]} scores  c4solver scores per column
- * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
- * @complexity O(42)
- * @cache not cached
+ * @param {*} _scores  unused — kept for caller signature compatibility
+ * @param {number} [perspective]  1 or 2 (default: board.currentPlayer)
+ * @returns {{ matched: boolean, cells: string[], highlightMetadata?: object, categoryEvidence?: object }}
+ * @complexity O(ROWS × COLS) = O(42)
  */
-export function detectFigure7(board, scores, perspective = board.currentPlayer) {
-  const currentPlayer = perspective;
-
-  // Enumerate all Figure-7 templates (4 variants × all valid anchor positions)
-  for (let x = 0; x < COLS; x++) {
-    for (let y = 0; y < ROWS; y++) {
-      const variants = [];
-
-      // Variant 2: ascending diagonal + horizontal left (junction at index 2)
-      if (x + 2 < COLS && y + 2 < ROWS) {
-        variants.push([
-          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+2, row: y+2 },
-          { col: x+1, row: y+2 }, { col: x, row: y+2 },
-        ]);
-        // 2b: comp = arm cell adjacent to junction (x+1)
-        variants.push([
-          { col: x, row: y }, { col: x+1, row: y+1 }, { col: x+1, row: y+2 },
-          { col: x+2, row: y+2 }, { col: x, row: y+2 },
-        ]);
-      }
-      // Variant 3: descending diagonal + horizontal right (junction at index 2)
-      if (x - 2 >= 0 && y + 2 < ROWS) {
-        variants.push([
-          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-2, row: y+2 },
-          { col: x-1, row: y+2 }, { col: x, row: y+2 },
-        ]);
-        // 3b: comp = arm cell adjacent to junction (x-1)
-        variants.push([
-          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-1, row: y+2 },
-          { col: x-2, row: y+2 }, { col: x, row: y+2 },
-        ]);
-      }
-      // Variant 4: descending diagonal + horizontal left (junction at index 2)
-      if (x - 4 >= 0 && y + 2 < ROWS) {
-        variants.push([
-          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-2, row: y+2 },
-          { col: x-3, row: y+2 }, { col: x-4, row: y+2 },
-        ]);
-        // 4b: comp = arm cell adjacent to junction (x-3)
-        variants.push([
-          { col: x, row: y }, { col: x-1, row: y+1 }, { col: x-3, row: y+2 },
-          { col: x-2, row: y+2 }, { col: x-4, row: y+2 },
-        ]);
-      }
-
-      for (const template of variants) {
-        // Only the corner (index 2) is a valid completing cell: it is the junction where
-        // the diagonal arm meets the horizontal arm, so playing it creates both threats
-        // simultaneously. Allowing arm-end cells produces false positives where a
-        // horizontal already in place gets extended, which is not a figure-7 trap.
-        const comp = template[2];
-        const placed = template.filter((_, i) => i !== 2);
-
-        if (!placed.every(c => board.board[c.row][c.col] === currentPlayer)) continue;
-        if (board.board[comp.row][comp.col] !== 0) continue;
-        if (board.colHeights[comp.col] !== comp.row) continue;
-        if (!scores || scores[comp.col] <= 0) continue;
-
-        // withMove replaces outer mutation+undo; colHeights guard above ensures no throw.
-        const nextBoard = board.withMove(comp.col);
-        // The double threat must be generated by the figure-7 shape itself:
-        // after placing comp, count threats whose winning 4-in-a-row shares ≥3 cells
-        // with the template (the connect-4 is the 7-shape + 1 extra disk).
-        const templateSet = new Set([...placed, comp].map(c => `${c.row},${c.col}`));
-
-        const threatCells = [];
-        // nextBoard.reachableThreats replaces the inner mutation loop.
-        for (const [col, rows] of nextBoard.reachableThreats(currentPlayer)) {
-          for (const row of rows) {
-            const windows = nextBoard.winningWindows(row, col, currentPlayer);
-            if (windows.some(w => w.filter(cell => templateSet.has(`${cell.row},${cell.col}`)).length >= 3)) {
-              threatCells.push({ column: col, row });
-            }
-          }
-        }
-        // gravityTopCount uses nextBoard.colHeights (comp already placed) for accuracy.
-        // A figure-7 zugzwang has at most 1 gravity-top threat (the forcing move). Two or
-        // more gravity-top threats means the position is a direct fork, not a figure-7.
-        const gravityTopCount = threatCells.filter(t => t.row === nextBoard.colHeights[t.column]).length;
-        const hasAboveGravity = threatCells.some(t => t.row > nextBoard.colHeights[t.column]);
-        if (threatCells.length < 2) continue;
-        if (gravityTopCount >= 2) continue; // F1: two gravity-top threats = direct fork, not figure-7 zugzwang
-        if (!hasAboveGravity) continue; // F2: zugzwang requires at least one above-gravity threat
-        // Genuine figure-7 zugzwang: two threats in the same column at consecutive
-        // rows, with the lower threat at most 1 above the current gravity-top.
-        // "Blocking one immediately enables the other" (training material §E Q21):
-        // one opponent fill raises the column by 1, placing the lower threat at
-        // gravity-top; Red then plays there, leaving the upper threat exposed.
-        const hasConsecutivePair = threatCells.some(t1 =>
-          threatCells.some(t2 =>
-            t2.column === t1.column &&
-            t2.row === t1.row + 1 &&
-            t1.row <= nextBoard.colHeights[t1.column] + 1
-          )
-        );
-        if (!hasConsecutivePair) continue;
-
-        const hCells = placed.map(c => ({ column: c.col, row: c.row, role: 'pattern_piece' }));
-        return {
-          matched: true,
-          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
-          highlightMetadata: {
-            type: 'cells',
-            cells: hCells,
-          },
-          correctCol: comp.col,
-          categoryEvidence: {
-            pattern_cells: placed.map(c => ({ column: c.col, row: c.row })),
-            threat_cells: threatCells,
-          },
-        };
-      }
+export function detectFigure7(board, _scores, perspective = board.currentPlayer) {
+  for (const kernel of [F7, F7_FLIPPED]) {
+    const matches = convolve(board, perspective, kernel);
+    if (matches.length > 0) {
+      const m = matches[0];
+      const hCells = m.playerCells.map(({row, col}) =>
+        ({column: col, row, role: 'pattern_piece'}));
+      return {
+        matched: true,
+        cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
+        highlightMetadata: { type: 'cells', cells: hCells },
+        categoryEvidence: {
+          pattern_cells: m.playerCells.map(({row, col}) => ({column: col, row})),
+        },
+      };
     }
   }
   return { matched: false, cells: [] };
@@ -803,93 +802,33 @@ export function detectFigure7(board, scores, perspective = board.currentPlayer) 
 
 /**
  * T010 — J-Shape detection.
- * Canonical: {(c,r),(c,r+2),(c+1,r+1)} with (c+1,r+2) completing.
- * Mirror: {(c,r),(c,r+2),(c-1,r+1)} with (c-1,r+2) completing.
- * Threats are counted at any reachable empty cell in the column (row >= colHeight),
- * not only the gravity-top. Gravity-top restriction applies only to immediate_threat
- * and forced_block which act on the current move.
+ * Slides the J-shape kernel (canonical + flipped) over the board and returns
+ * the first match.  The pattern is detected as-is: all 4 cells of the J-shape
+ * must be occupied by `perspective`.
+ *
  * @param {Board} board
- * @param {number[]} scores  c4solver scores per column
- * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
- * @complexity O(42)
- * @cache not cached
+ * @param {*} _scores  unused — kept for caller signature compatibility
+ * @param {number} [perspective]  1 or 2 (default: board.currentPlayer)
+ * @returns {{ matched: boolean, cells: string[], highlightMetadata?: object, categoryEvidence?: object }}
+ * @complexity O(ROWS × COLS) = O(42)
  */
-export function detectJShape(board, scores, perspective = board.currentPlayer) {
-  function tryTemplate(placed, completing, farCol) {
-    if (!placed.every(cell => board.board[cell.row][cell.col] === perspective)) return false;
-    if (board.board[completing.row][completing.col] !== 0) return false;
-    if (board.colHeights[completing.col] !== completing.row) return false;
-    // J4: opponent must not occupy the far column at the completing row
-    if (board.board[completing.row][farCol] === 3 - perspective) return false;
-    if (!scores || scores[completing.col] <= 0) return false;
-    return true;
-  }
-
-  // Canonical variant: tall column c, short side c+1
-  for (let c = 0; c < COLS - 2; c++) { // J2: farCol=c+2 must be in bounds
-    for (let r = 0; r <= ROWS - 4; r++) { // J2: diagonal extension row r+3 must be in bounds
-      if (r % 2 !== 0) continue; // J1: anchor parity (0-indexed even = 1-indexed odd, load-bearing)
-      const placed = [{ col: c, row: r }, { col: c, row: r+2 }, { col: c+1, row: r+1 }];
-      const completing = { col: c+1, row: r+2 };
-      const farCol = c + 2;
-      if (tryTemplate(placed, completing, farCol)) {
-        // J3: parity cancellation — reject if opponent has an odd-1-indexed threat in farCol
-        // checkWin is mutation-free (never reads board[row][col]) — no placement needed
-        let oppOddInFarCol = false;
-        for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
-          if (board.board[row][farCol] !== 0 || row % 2 !== 0) continue; // even 0-indexed = odd 1-indexed
-          if (checkWin(board.board, row, farCol, 3 - perspective)) oppOddInFarCol = true;
-        }
-        if (oppOddInFarCol) continue;
-        const hCells = placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' }));
-        return {
-          matched: true,
-          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
-          highlightMetadata: {
-            type: 'cells',
-            cells: hCells,
-          },
-          correctCol: completing.col,
-          categoryEvidence: {
-            pattern_cells: placed.map(cell => ({ column: cell.col, row: cell.row })),
-          },
-        };
-      }
+export function detectJShape(board, _scores, perspective = board.currentPlayer) {
+  for (const kernel of [J, J_FLIPPED]) {
+    const matches = convolve(board, perspective, kernel);
+    if (matches.length > 0) {
+      const m = matches[0];
+      const hCells = m.playerCells.map(({row, col}) =>
+        ({column: col, row, role: 'pattern_piece'}));
+      return {
+        matched: true,
+        cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
+        highlightMetadata: { type: 'cells', cells: hCells },
+        categoryEvidence: {
+          pattern_cells: m.playerCells.map(({row, col}) => ({column: col, row})),
+        },
+      };
     }
   }
-
-  // Mirror variant: tall column c, short side c-1
-  for (let c = 2; c < COLS; c++) { // J2: farCol=c-2 must be in bounds
-    for (let r = 0; r <= ROWS - 4; r++) { // J2: diagonal extension row r+3 must be in bounds
-      if (r % 2 !== 0) continue; // J1: anchor parity
-      const placed = [{ col: c, row: r }, { col: c, row: r+2 }, { col: c-1, row: r+1 }];
-      const completing = { col: c-1, row: r+2 };
-      const farCol = c - 2;
-      if (tryTemplate(placed, completing, farCol)) {
-        // J3: parity cancellation (mutation-free checkWin)
-        let oppOddInFarCol = false;
-        for (let row = 0; row < ROWS && !oppOddInFarCol; row++) {
-          if (board.board[row][farCol] !== 0 || row % 2 !== 0) continue;
-          if (checkWin(board.board, row, farCol, 3 - perspective)) oppOddInFarCol = true;
-        }
-        if (oppOddInFarCol) continue;
-        const hCells = placed.map(cell => ({ column: cell.col, row: cell.row, role: 'pattern_piece' }));
-        return {
-          matched: true,
-          cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
-          highlightMetadata: {
-            type: 'cells',
-            cells: hCells,
-          },
-          correctCol: completing.col,
-          categoryEvidence: {
-            pattern_cells: placed.map(cell => ({ column: cell.col, row: cell.row })),
-          },
-        };
-      }
-    }
-  }
-
   return { matched: false, cells: [] };
 }
 

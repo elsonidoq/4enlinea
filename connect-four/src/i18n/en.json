@@ -465,6 +465,11 @@
           "2": "You played well. Let's find the edge.",
           "3": "Some tactical moments worth revisiting."
         }
+      },
+      "outcome": {
+        "win": "You won! Great game.",
+        "loss": "I won this one. Keep working at it.",
+        "draw": "It's a draw — well played."
       }
     },
     "ai_move": {
@@ -725,6 +730,7 @@
   },
   "deepReveal": {
     "loading": "Reading the position…",
+    "preparingAudio": "Preparing audio…",
     "unavailable": "Detailed explanation unavailable.",
     "flag": "Flag this explanation",
     "flagged": "Thanks — flagged"

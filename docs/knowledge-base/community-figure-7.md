@@ -18,6 +18,11 @@ statement: |
   zugzwang, not a direct fork: at least one threat must be above gravity (not
   immediately playable) so the opponent cannot simply block both in sequence.
 
+short_summary: |
+  A five-disc "7"-shaped configuration that generates two major threats in the same
+  column; the opponent cannot block both because one is above gravity, making it a
+  zugzwang trap rather than a direct fork.
+
 preconditions:
   - "Player P owns all five cells: diagonal arm {(x,y), (x+1,y+1), (x+2,y+2)} and horizontal arm {(x,y+2), (x+1,y+2), (x+2,y+2)}, with (x+2,y+2) as the shared hinge."
   - "Threat cells (x+3,y+2) [horizontal extension] and (x+3,y+3) [diagonal extension] are both in column x+3 — the same-column property."

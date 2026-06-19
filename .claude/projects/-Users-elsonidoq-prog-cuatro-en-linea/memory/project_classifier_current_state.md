@@ -1,63 +1,39 @@
 ---
 name: project_classifier_current_state
-description: "Classifier.js current design, post-008 code fixes, pending spec discrepancies (T037–T048), and FP rates from v2 candidate review"
+description: "Classifier.js current design, post-convolution refactor of detectFigure7/detectJShape, and remaining discrepancies"
 metadata: 
   node_type: memory
   type: project
-  originSessionId: 04c4bf45-005f-4617-8eae-aeefaab3b257
+  originSessionId: 78ca6d92-72fb-4121-b9ce-acf936d1b8e7
 ---
 
-## What was fixed (2026-05-21, branch 007-interaction-mode)
+## Convolution refactor (2026-06-19)
 
-Four structural fixes to `classifier.js`:
+`detectFigure7` and `detectJShape` were rewritten with a convolution-based approach. Key changes:
 
-- **Cat1 (immediate_threat)** — removed outer `score >= winScore` gate (fired on odd moveCount at win-in-2 score); removed dead `immediateWinScore()` and `isImmediateWin()`.
-- **Cat2 (forced_block)** — replaced score-equality heuristic with three board checks: (1) opponent has gravity-top threat before candidate, (2) placing candidate eliminates it, (3) placing any other column leaves it alive.
-- **Cat3 (double_threat)** — deleted `countAllReachableThreats`; rewritten with Case A (≥2 distinct gravity-top-threat columns) and Case B (two consecutive-row threats in same column, no gravity-top requirement). **Cat3 checked BEFORE Cat2** — figure-7 positions that simultaneously block a forced threat classify as `double_threat`, not `forced_block`.
-- **Cat5 (forbidden_columns)** — replaced `Math.ceil` score comparison with `countWinningThreats` board scan.
+- **Added `convolve(board, perspective, kernel)`** — slides a binary kernel over every valid anchor position. Kernel has `playerCells` (must be occupied by perspective) and `emptyCells` (must be vacant). Returns all matches.
+- **Added `flipKernel(kernel)`** — returns the horizontal mirror.
+- **Added 4 kernel constants**: `F7`, `F7_FLIPPED`, `J`, `J_FLIPPED` — each 4×4 template with ASCII diagrams.
+- **`detectFigure7`**: Now detects the **fully-formed 5-piece** Figure-7 shape (was: 4-of-5 with gravity-top completing cell). Removed gravity-top gate, score gate, placement simulation, zugzwang verification (F1/F2/consecutive-pair), `correctCol`, and `threat_cells`. Returns 5 `pattern_piece` highlight cells.
+- **`detectJShape`**: Now detects the **fully-formed 4-piece** J-shape (was: 3-of-4 with gravity-top completing cell). Removed gravity-top gate, score gate, anchor parity (J1), opponent far-col check (J4), opponent odd-threat scan (J3), and `correctCol`. Returns 4 `pattern_piece` highlight cells.
+- **`checkFigure7Predicate` and `checkJShapePredicate`** in `candidate-generator.js`: implement transition logic — iterate legal columns, simulate `ms + col`, run the new detector on the simulated position, verify pattern was absent on `ms`. Returns `correctCol` = completing column. Preserves puzzle semantics (pre-completion `move_string` + `correct_col` in DB).
+- **`diag_figure7.js`**: Simplified — no scores needed, no internal diag counters. isClean approximated via `board.immediateThreats(currentPlayer).length === 0`.
+- **`scores` parameter**: Kept as `_scores` in both detectors for caller signature compatibility (`classifyPattern` still passes it).
 
-**Board-check principle**: never use score arithmetic to infer immediate wins. `checkWin` at gravity-top is always the correct test. `countWinningThreats` is ground truth.
+## Spec 008 discrepancies — resolved
 
-**Category evaluation order** (matters): Cat3 > Cat2 > Cat4 > Cat5.
+The old T037–T048 discrepancies (J1–J4, F1–F3, U1–U3, O1) were in the old pre-completion detector code. With the convolution rewrite:
+- J1–J4: all resolved (replaced by kernel constraints)
+- F1–F3: all resolved (zugzwang verification removed)
+- U1–U3, O1: these were previously fixed, unaffected by this change
 
-## Spec 008 discrepancies — T037–T048 (pattern detectors, NOT yet applied to classifier.js)
+## Classifier purpose — changed
 
-11 spec discrepancies found in cross-check against KB (2026-05-19). Spec was fixed; `classifier.js` pattern detectors remain uncorrected. Phase 6 tasks T037–T048 in `specs/008-new-puzzle-categories/tasks.md`.
+The classifier previously operated in "pre-completion mode" (detecting one-move-away states for puzzle generation). `detectFigure7` and `detectJShape` now evaluate the board **as-is** — patterns are either present or they aren't. The transition logic for puzzle generation moved to `candidate-generator.js` predicates.
 
-**detectJShape** (T037–T040):
-- J1: Missing anchor parity — add `if (r % 2 !== 0) continue`
-- J2: Loop bounds allow off-board — fix `c < COLS - 2`, `r <= ROWS - 4`
-- J3: No opponent odd-row threat check in far column
-- J4: Wrong guard cell — should be `board[completing.row][c+2]` (far column), not row above completing
+## Pre-existing test failures
 
-**detectUndercut** (T041–T043):
-- U1: No parity check — add `if (R % 2 === kill % 2) continue` (same parity = T4, not undercut)
-- U2: No T5 exception — add `if (R === 5 && kill === 2) continue`
-- U3: No adjacency for sub-case 3
-
-**detectOvercut** (T044):
-- O1: No T2-blocking mechanism check; need to verify at least one of: (a) neutralised is minor threat, (b) same parity (T4), (c) T5 exception, (d) chain-T2
-
-**detectFigure7** (T045–T047):
-- F1: `gravityTopCount >= 2` check computed but never used
-- F2: `hasAboveGravity` check computed but never used
-- F3: Variants 1/1b are dead code (structurally wrong, self-filtered)
-
-## v2 candidate-review FP rates (2026-05-20)
-
-Full report at `reports/candidate-review-v2-2026-05-20.md`.
-
-| Category | FP/8 sampled | Status |
-|---|---|---|
-| j_shape | 8/8 | CRITICAL — all three J guards missing |
-| overcut | 2/8 | Moderate — T5 column-position bug |
-| claimeven | 1/8 + 1 uncertain | Low — wrong player guard missing |
-| z_threat | 0/8 | Healthy |
-| undercut | 0/8 | Healthy |
-| figure_7 | 0/8 | Healthy (KB/classifier framing misalignment: classifier implements `find_incomplete_figure7`, KB documents `find_figure7`) |
-
-**Candidates to reject**: 11 total — 2a729f66 (claimeven), af435cd2 + ae22abd4 (overcut), 8 j_shape IDs in §3 of the report.
-
-## Classifier purpose vs KB predicate
-
-The classifier's role is **puzzle generation** — finding positions where playing `correct_col` *creates* the pattern. The KB documents the complete strategic pattern. These are different predicates. For figure_7/j_shape: classifier correctly detects incomplete configurations (4/3 discs placed, completing disc at gravity-top); KB documents the full 5-disc pattern.
+The following tests were failing before this change and remain failing:
+- `insertGameBlunder` tests in `tests/blunder/insertGameBlunder.test.js`
+- `forbidden_columns` classifier test at `tests/classifier/classifier.test.js:85`
+- `suboptimal_move` tag guard test in `tests/blunder/insertGameBlunder.test.js:44`

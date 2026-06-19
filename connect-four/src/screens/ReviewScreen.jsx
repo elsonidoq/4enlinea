@@ -7,6 +7,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { buildBoard } from '../lib/board.js';
 import { PAID_CATEGORIES } from '../lib/categories.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -28,6 +29,15 @@ export function ReviewScreen({ go, goBack, id }) {
   const [copied, setCopied] = useState(false);
   const [gameBlunderList, setGameBlunderList] = useState([]);
   const [gameDate, setGameDate] = useState('');
+
+  const { speakCoachMessage } = useCoachSpeech();
+
+  useEffect(() => {
+    if (analysis?.summaryPhraseKey) {
+      speakCoachMessage(analysis.summaryPhraseKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis?.summaryPhraseKey]);
 
   function handleShare() {
     const url = window.location.href;

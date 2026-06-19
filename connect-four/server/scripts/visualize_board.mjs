@@ -10,6 +10,9 @@ const moves = process.argv[2] ?? '';
 
 // Raw board: 3-char cell (space-padded symbol).
 function rawCell(v) {
+//  if (v === 1) return ' R ';
+//  if (v === 2) return ' Y ';
+
   if (v === 1) return 'Gn ';
   if (v === 2) return 'Gy ';
   return '   ';

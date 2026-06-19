@@ -22,6 +22,10 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 2.
     chart:  <g {...p}><path d="M4 20V4M4 20h16" /><rect x="7" y="12" width="2.8" height="5" rx="1" fill={color} stroke="none" /><rect x="12" y="8" width="2.8" height="9" rx="1" fill={color} stroke="none" /><rect x="17" y="14" width="2.8" height="3" rx="1" fill={color} stroke="none" /></g>,
     play:   <path d="M8 5.5v13l10-6.5-10-6.5z" fill={color} stroke="none" />,
     clock: <g {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.2 3.2" /></g>,
+    speaker: <g {...p}><rect x="3" y="8" width="5" height="8" rx="1.5" /><path d="M8 14.5a5 5 0 0 0 0-5" /><path d="M11 16.5a8 8 0 0 0 0-9" /></g>,
+    speakerOff: <g {...p}><rect x="3" y="8" width="5" height="8" rx="1.5" /><path d="M8 14.5a5 5 0 0 0 0-5" /><path d="M15 8l4 8M19 8l-4 8" /></g>,
+    music: <g {...p}><path d="M9 18V5l10-2v13" /><circle cx="6.5" cy="17.5" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /></g>,
+    musicOff: <g {...p}><path d="M9 18V5l10-2v13" /><circle cx="6.5" cy="17.5" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /><path d="M15 8l5 6M20 8l-5 6" /></g>,
   };
 
   return (
