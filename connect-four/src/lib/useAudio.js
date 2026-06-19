@@ -47,7 +47,7 @@ function writeBool(key, value) {
 export function useAudio() {
   const [sfxEnabled, setSfxEnabled] = useState(() => readBool(STORAGE_KEY_SFX, true));
   const [musicEnabled, setMusicEnabled] = useState(() => readBool(STORAGE_KEY_MUSIC, false));
-  const [speechEnabled, setSpeechEnabled] = useState(() => readBool(STORAGE_KEY_SPEECH, false));
+  const [speechEnabled, setSpeechEnabled] = useState(() => readBool(STORAGE_KEY_SPEECH, true));
 
   /**
    * Play a one-shot sound effect from public/audio/sfx/<name>.mp3.
