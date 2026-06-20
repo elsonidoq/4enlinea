@@ -33,6 +33,8 @@
 
 - I don't like that "no mistakes" means no blunders. Performing a sub-optimal move is also a mistake. Also it is inconsistent to read that a game was lost and i performed no mistakes. Modify the number of mistakes to be the number of blunders + sub-optimal moves
 
+- unify sub-optimal move with blunder. The screens must be the same, a sub optimal move is a less severe blunder. The games analysis showing sub optimal moves and blunders should be seen the same, but the blunder view and the explorer view must be unified. The "start a game from here" and "what should I have played" and "mark as reviewed" buttons must be in the new merged window. No old dead code should remain from this merge
+
 - The browser forgets i have signed in very quickly. I want the app to remember me
 
 - There is a bug in the back button. Context: navigate to past games, click on a game, click a blunder move, then click in the game link (top right showing something like Move 10 / 16 · Jun 17), then clicking back switches back and forth between the game and the blunder, you never return home. The expected behaviour would be going from the blunder to the game to the past games to the home
@@ -41,7 +43,7 @@
 
 - Add a logo at the top saying DecodeC4. Clicking it takes you to the home
 
-- After importing a call to action / link to view the imported games
+- After importing a call to action to view the imported games
 
 # Tasks for me
 

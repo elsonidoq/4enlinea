@@ -257,37 +257,70 @@ describe('hasActiveDoubleThreat()', () => {
 });
 
 describe('detectOddEvenThreat()', () => {
-  // Positive fixture: '05061332' (Red's turn, 8 moves).
-  // Red has col0 (row 2, odd) threatening col0 vertically, AND col1 (row 1, even)
-  // threatening col2 via the pattern R at col0,1,3 on row 0.
-  test('positive: Red turn with odd and even threats from distinct columns', () => {
-    const board = new Board('05061332');
-    const result = detectOddEvenThreat(board, []);
+  // Positive fixture: '33333444446630664021' (Red's turn, 20 moves).
+  // Red has minor threats at both parities:
+  //   odd-row (Red's parity, row%2===0): (r2,c1),(r2,c5),(r4,c1),(r4,c5)
+  //   even-row (Yellow's parity, row%2===1): (r3,c2),(r5,c1),(r5,c2),(r5,c5),(r5,c6)
+  // Step 2: col5 can promote even-row minor (r3,c2) → wrong choice exists.
+  // Step 3: col2 (solver score=1) promotes only odd-row (r4,c5) without side effects.
+  test('positive: move promotes only odd-row (Red parity) minor to major', () => {
+    const board = new Board('33333444446630664021');
+    const mockScores = [-10, 1, 1, -999, -999, -10, -10];  // col1=1, col2=1
+    const result = detectOddEvenThreat(board, mockScores);
     assert.ok(result.matched, 'should match odd_even_threat');
-    assert.equal(result.correctCol, 0, 'correctCol should be col0 (odd-row landing)');
+    assert.equal(result.correctCol, 2, 'correctCol should be col2');
     assert.ok(result.categoryEvidence, 'should include categoryEvidence');
-    assert.equal(result.categoryEvidence.oddRowCol, 0);
-    assert.equal(result.categoryEvidence.evenRowCol, 1);
+    assert.equal(result.categoryEvidence.oddRow, 4, 'promoted odd-row threat at row4');
+    assert.equal(result.categoryEvidence.oddRowCol, 5, 'promoted odd-row threat at col5');
+    assert.equal(result.categoryEvidence.evenMinorRow, 3, 'wrong-choice even-row minor at row3');
+    assert.equal(result.categoryEvidence.evenMinorCol, 2, 'wrong-choice even-row minor at col2');
+  });
+
+  // Negative: all scores <= 0 — no solver-optimal move exists → no match
+  test('negative: no positive-score move — must not match', () => {
+    const board = new Board('33333444446630664021');
+    const result = detectOddEvenThreat(board, [0, 0, 0, 0, 0, 0, 0]);
+    assert.equal(result.matched, false, 'should not match when no move has positive score');
+  });
+
+  // Negative: '5444422336' col3 creates a double threat (wins at col1 and col5) — must filter
+  test('negative: correct_col creates double threat — must not match', () => {
+    const board = new Board('5444422336');
+    const result = detectOddEvenThreat(board, [1, 1, 1, 1, 1, 1, 1]);
+    assert.equal(result.matched, false, 'should not match when the converting move creates a double threat');
   });
 
   // Negative: Yellow's turn (player 2) — must not match per FR-009
   test('negative: Yellow turn — must not match', () => {
-    const board = new Board('050613325');
-    const result = detectOddEvenThreat(board, []);
+    const board = new Board('333334444466306640210'); // + one extra move → Yellow's turn
+    const result = detectOddEvenThreat(board, [1, 1, 1, 1, 1, 1, 1]);
     assert.equal(result.matched, false, 'should not match on Yellow turn');
   });
 
-  // Negative: all threats on odd rows only — evenRowMoves empty -> no match
-  test('negative: all threats on odd rows — must not match', () => {
-    const board = new Board('3344');
-    const result = detectOddEvenThreat(board, []);
-    assert.equal(result.matched, false, 'should not match when all threats are on odd rows');
+  // Negative: no candidate columns create threats at both parities
+  test('negative: no threats created at both parities — must not match', () => {
+    const board = new Board('');
+    const result = detectOddEvenThreat(board, [1, 1, 1, 1, 1, 1, 1]);
+    assert.equal(result.matched, false, 'should not match on empty board');
   });
 
-  // Negative: no candidate columns create a threat
-  test('negative: no threats created by any column — must not match', () => {
-    const board = new Board('');
-    const result = detectOddEvenThreat(board, []);
-    assert.equal(result.matched, false, 'should not match on empty board');
+  // Negative: '33425622443233412114024366' col6 creates two converted threats but Red
+  // already has pre-existing non-immediate major threats at both parities before the
+  // move — (row3,col0) and (row4,col5) — so the position was structurally won before
+  // the puzzle move. Must not match.
+  test('negative: pre-existing major threats at both parities before the move — must not match', () => {
+    const board = new Board('33425622443233412114024366');
+    const result = detectOddEvenThreat(board, [-3, -3, -999, -999, -999, -3, 6]);
+    assert.equal(result.matched, false, 'should not match when Red already has non-immediate major threats at both parities before the move');
+  });
+
+  // Negative: '33333443414415' has even-row minor Red threats (Step 1 passes), and
+  // solver-optimal moves exist (Step 3 would pass), but no column can promote any
+  // even-row minor to a non-immediate major — Step 2 fails. Without a promotable
+  // even-row minor, there is no genuine parity decision for the player to face.
+  test('negative: even-row minors exist but none are promotable — must not match', () => {
+    const board = new Board('33333443414415');
+    const result = detectOddEvenThreat(board, [2, 3, 2, -999, 2, 3, 2]);
+    assert.equal(result.matched, false, 'should not match when no even-row minor can be promoted');
   });
 });

@@ -55,4 +55,44 @@ export const KB_TERM_LESSON = {
     practiceCategory: null,
     displayName: 'Special Before',
   },
+  'community-double-threat': {
+    lessonId: null,
+    practiceCategory: 'double_threat',
+    displayName: 'Double Threat',
+  },
+  'community-immediate-threat': {
+    lessonId: null,
+    practiceCategory: 'immediate_threat',
+    displayName: 'Immediate Threat',
+  },
+  'community-forced-block': {
+    lessonId: null,
+    practiceCategory: null,
+    displayName: 'Forced Block',
+  },
+  'derived-odd-even-threat': {
+    lessonId: null,
+    practiceCategory: 'odd_even_threat',
+    displayName: 'Odd-Even Threat',
+  },
+  'allen-major-threat': {
+    lessonId: null,
+    practiceCategory: null,
+    displayName: 'Major Threat',
+  },
+  'allen-minor-threat': {
+    lessonId: null,
+    practiceCategory: null,
+    displayName: 'Minor Threat',
+  },
+  'community-gravity-top': {
+    lessonId: null,
+    practiceCategory: null,
+    displayName: 'Gravity-Top',
+  },
+  'allen-parity': {
+    lessonId: null,
+    practiceCategory: null,
+    displayName: 'Parity',
+  },
 };

@@ -25,10 +25,11 @@
 //   Source: tests/classifier/classifier.test.js (classifyAll figure-7 fixture)
 //   Expected: { tag: 'z_threat', direction: 'missed_own' }
 //
-// "05061332" — odd_even_threat positive fixture from classifier tests.
-//   Red perspective: odd_even_threat, forced_block.
-//   Yellow perspective: immediate_threat only (no odd_even_threat, no claimodd).
-//   Source: tests/classifier/classifier.test.js
+// "33333444446630664021" — odd_even_threat structural fixture (Red's turn, 20 moves).
+//   Minor Red threats exist at both parities with at least one even-row minor
+//   promotable (wrong choice). Col2 promotes only the odd-row minor at (r4,c5)
+//   without touching the even-row alternative. Used here only to verify the
+//   Yellow-only guard; Red positive detection is covered by classifier.test.js.
 //
 // "3233253335" — allis-claimeven KB worked example. Yellow's Claimeven strategy
 //   position. Red perspective does not see claimeven (guard). Both perspectives
@@ -143,16 +144,11 @@ describe('classifyPattern - player-only guards', () => {
   it('odd_even_threat is not in Yellow perspective results', async () => {
     const solver = await createSolverProcess();
     try {
-      // "05061332": Red perspective has odd_even_threat and forced_block;
-      // Yellow perspective has immediate_threat but NOT odd_even_threat
-      const tags = await classifyPattern('05061332', 2, solver);
+      // Use the structural fixture '33333444446630664021' with player=2 (Yellow).
+      // From Yellow's perspective the Red-only guard must suppress detection.
+      const tags = await classifyPattern('33333444446630664021', 2, solver);
       assert.ok(!tags.has('odd_even_threat'),
         'odd_even_threat is Red-only, must not appear from Yellow perspective');
-
-      // Sanity check: Red perspective does see odd_even_threat (proves detection works)
-      const redTags = await classifyPattern('05061332', 1, solver);
-      assert.ok(redTags.has('odd_even_threat'),
-        'odd_even_threat should be detected from Red perspective');
     } finally {
       solver.destroy();
     }

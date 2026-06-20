@@ -543,7 +543,7 @@ export function checkOddEvenThreatPredicate(ms, scores) {
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
-    correctCols: [result.correctCol],
+    correctCols: result.correctCols ?? [result.correctCol],
     correct_col: result.correctCol,
     highlight_metadata: result.highlightMetadata, // null for odd_even_threat
     category_evidence: result.categoryEvidence,

@@ -833,26 +833,52 @@ export function detectJShape(board, _scores, perspective = board.currentPlayer) 
 }
 
 /**
+ * Returns true if the player's major threat at (R, threatCol) is undercut by the opponent:
+ * the opponent has a reachable threat rp < R in the same column that is not neutralised
+ * by T4 (same parity), T5 (rows 5+2 exception), or U3 (odd-player / even-opponent / non-adjacent).
+ * Uses only board structure — no solver scores required.
+ */
+function isThreatUndercut(board, perspective, R, threatCol) {
+  const oppThreats = board.reachableThreats(3 - perspective);
+  const oppColRows = oppThreats.get(threatCol) ?? [];
+  for (const rp of oppColRows) {
+    if (rp >= R) continue;
+    if (isT4SameParity(R, rp)) continue;
+    if (isT5Exception(R, rp)) continue;
+    if (R % 2 === 1 && rp % 2 === 0 && R !== rp + 1) continue; // U3: not adjacent, T2 doesn't apply
+    return true;
+  }
+  return false;
+}
+
+/**
  * T011 — Odd-Even Threat detection (Red-only, FR-009).
  *
- * Detects positions where Red (currentPlayer=1) has ≥2 distinct legal moves
- * each creating a major threat, with one threat landing on an odd row
- * (0-indexed: 0, 2, 4 — Red's parity) and one on an even row (1, 3, 5).
- * correctCol = the column whose threat lands on the odd row (FR-007).
+ * Detects a decision point where Red has non-immediate minor threats (2+2 windows) at
+ * BOTH parities — at least one at an odd 0-indexed row (row%2===0, Red's parity) and
+ * at least one at an even 0-indexed row (row%2===1, Yellow's parity) — and a
+ * solver-optimal move (scores[col] > 0) promotes exactly one of them: the odd-row
+ * (Red's parity) one, WITHOUT also promoting any even-row minor threat.
  *
- * Per-move threat enumeration uses board.immediateThreats() as required by
- * FR-006 condition 2. getMajorThreatCells MUST NOT be used for this check.
+ * The promoted odd-row threat must be non-gravity-top (completing cell strictly above
+ * colHeights[col] in the post-move board). A gravity-top major is an immediate win,
+ * not a parity threat — the whole point is the non-immediate parity advantage.
  *
- * The `scores` parameter is accepted for signature consistency with other
- * detectors but never read (FR-008 was removed as unreachable — all odd-row
- * and even-row threats are both present by FR-006 conditions 3+4, so there is
- * no tie-break scenario where all threats are odd-row).
+ * The puzzle: Red must choose which minor threat to convert. Promoting the even-row
+ * threat surrenders parity to Yellow; the correct play promotes the odd-row threat,
+ * keeping parity for Red.
+ *
+ * The correct move must produce no pre-existing Red major threats and no double threat.
+ *
+ * correctCol = the column of the correct (odd-row-promoting) move.
+ * categoryEvidence.evenMinorCol/evenMinorRow = the wrong-choice minor threat (not promoted).
  *
  * interaction_mode = 'single_move' (R-006). No highlight_metadata needed.
  */
 export function detectOddEvenThreat(board, scores, perspective = board.currentPlayer, solver = null) {
   // FR-033: when perspective != current player, recurse into all child moves
   if (perspective !== board.currentPlayer && solver) {
+    console.log('asdfasdf')
     return (async () => {
       const playableCols = [];
       for (let c = 0; c < COLS; c++) {
@@ -874,40 +900,125 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
   // Odd-even threat is Red-only (FR-009)
   if (perspective !== 1) return { matched: false, cells: [] };
 
-  const oddRowMoves  = []; // { col, landingRow } where landingRow % 2 === 0 (Red parity)
-  const evenRowMoves = []; // { col, landingRow } where landingRow % 2 === 1 (Yellow parity)
+  const majorFlag = 'rm';
+  const minorFlag = 'rn';
+  const oldMajorCells = getMajorThreatCells(board.board);
 
-  for (let col = 0; col < 7; col++) {
-    if (board.colHeights[col] >= 6) continue;
-    const landingRow = board.colHeights[col];
-    // FR-006 condition 2: use immediateThreats, not getMajorThreatCells
-    const afterBoard = board.withMove(col);
-    if (afterBoard.immediateThreats(perspective).length > 0) {
-      if (landingRow % 2 === 0) oddRowMoves.push({ col, landingRow });
-      else                       evenRowMoves.push({ col, landingRow });
+  // Step 1: Both parities of non-immediate minor Red threats must already exist.
+  // Their simultaneous presence creates the parity choice for Red.
+  let firstEvenMinor = null;
+  let hasOddMinor = false;
+  for (const [key, flags] of Object.entries(oldMajorCells)) {
+    if (!flags[minorFlag] || flags[majorFlag]) continue;
+    const [row, col] = key.split(',').map(Number);
+    if (row <= board.colHeights[col]) continue; // immediate — not a parity choice
+    if (row % 2 === 0) { hasOddMinor = true; }
+    else if (!firstEvenMinor) { firstEvenMinor = { col, row }; }
+  }
+  if (!hasOddMinor || !firstEvenMinor) return { matched: false, cells: [] };
+
+  // Step 2: Verify there exists at least one playable column (any column, not just
+  // solver-optimal ones) that converts an even-row minor to a non-immediate major —
+  // the "wrong choice" whose completing cell does not align with Red's parity (odd
+  // 0-indexed rows). Without a promotable even-row minor, there is no genuine parity
+  // decision for the player to face.
+  {
+    let wrongChoiceExists = false;
+    for (let col = 0; col < COLS; col++) {
+      if (board.colHeights[col] >= ROWS) continue;
+      const afterBoard = board.withMove(col);
+      const afterCells = getMajorThreatCells(afterBoard.board);
+      for (const [key, afterFlags] of Object.entries(afterCells)) {
+        if (!afterFlags[majorFlag]) continue;
+        const oldFlags = oldMajorCells[key];
+        // Must be a converted minor: was minor (rn) but not major (rm) before
+        if (!oldFlags || !oldFlags[minorFlag] || oldFlags[majorFlag]) continue;
+        const [row, tc] = key.split(',').map(Number);
+        if (row <= afterBoard.colHeights[tc]) continue; // immediate — not a parity threat
+        if (row % 2 === 1) { wrongChoiceExists = true; break; } // even-row → wrong parity
+      }
+      if (wrongChoiceExists) break;
     }
+    if (!wrongChoiceExists) return { matched: false, cells: [] };
   }
 
-  // FR-006 conditions 3+4: need at least one odd-row AND one even-row threat
-  if (oddRowMoves.length === 0 || evenRowMoves.length === 0) return { matched: false, cells: [] };
+  // Step 3: Find all solver-optimal moves that promote at least one odd-row minor
+  // into a non-immediate, non-undercut major, without also promoting any even-row
+  // minor or creating a parity double-threat.
+  const correctCols = [];
+  for (let col = 0; col < COLS; col++) {
+    if (board.colHeights[col] >= ROWS) continue;
+    if (!scores || scores[col] <= 0) continue;
 
-  // FR-008 (both-on-odd-row tie-break) is unreachable: FR-006 condition 4 requires
-  // one even-row threat, so any position where all threats are odd-row is filtered above.
-  // The `scores` parameter is accepted for signature consistency but never read.
+    const afterBoard = board.withMove(col);
+    const newMajorCells = getMajorThreatCells(afterBoard.board);
 
-  // FR-007: correctCol = the column whose threat lands on the odd row (Red's parity)
-  const correctCol = oddRowMoves[0].col;
+    // Discard if any pre-existing Red major threat survives as non-immediate after the move
+    let hasPreexistingMajor = false;
+    for (const [key, newFlags] of Object.entries(newMajorCells)) {
+      if (!newFlags[majorFlag]) continue;
+      const [row, threatCol] = key.split(',').map(Number);
+      if (row <= afterBoard.colHeights[threatCol]) continue;
+      const oldFlags = oldMajorCells[key];
+      if (oldFlags && oldFlags[majorFlag]) { hasPreexistingMajor = true; break; }
+    }
+    if (hasPreexistingMajor) continue;
+
+    const convertedOdd = [];
+    let convertedEvenCount = 0;
+    for (const [key, newFlags] of Object.entries(newMajorCells)) {
+      if (!newFlags[majorFlag]) continue;
+      const oldFlags = oldMajorCells[key];
+      if (!oldFlags || !oldFlags[minorFlag] || oldFlags[majorFlag]) continue;
+      const [row, threatCol] = key.split(',').map(Number);
+      if (row <= afterBoard.colHeights[threatCol]) continue; // gravity-top = immediate win, not a parity threat
+      if (row % 2 === 1) { convertedEvenCount++; continue; } // even-row → wrong parity
+      if (isThreatUndercut(afterBoard, perspective, row, threatCol)) continue;
+      convertedOdd.push({ col: threatCol, row });
+    }
+
+    if (convertedOdd.length === 0) continue;
+    if (convertedEvenCount > 0) continue; // promoted even-row minor — no choice left
+    if (afterBoard.hasActiveDoubleThreat(perspective)) continue;
+
+    // Check for non-immediate parity double-threat: ≥2 non-imm majors at both parities
+    // means the opponent can't block both paths, making the position trivially won.
+    {
+      let nonImmOdd = 0, nonImmEven = 0;
+      for (const [key, flags] of Object.entries(newMajorCells)) {
+        if (!flags[majorFlag]) continue;
+        const [row, tc] = key.split(',').map(Number);
+        if (row <= afterBoard.colHeights[tc]) continue;
+        if (row % 2 === 0) nonImmOdd++; else nonImmEven++;
+      }
+      if (nonImmOdd >= 1 && nonImmEven >= 1) continue;
+    }
+
+    // Choose evidence: prefer converted odd threat in same column as the even
+    // minor (the parity-choice column), fall back to first converted.
+    const evidenceOdd = convertedOdd.find(e => e.col === firstEvenMinor.col) ?? convertedOdd[0];
+
+    correctCols.push({
+      col,
+      evidence: {
+        correctCol:    col,
+        oddRowCol:     evidenceOdd.col,
+        oddRow:        evidenceOdd.row,
+        evenMinorCol:  firstEvenMinor.col,
+        evenMinorRow:  firstEvenMinor.row,
+      },
+    });
+  }
+
+  if (correctCols.length === 0) return { matched: false, cells: [] };
+
   return {
     matched: true,
     cells: [],
-    correctCol,
+    correctCol:  correctCols[0].col,                  // backward compat
+    correctCols: correctCols.map(c => c.col),
     highlightMetadata: null,
-    categoryEvidence: {
-      oddRowCol: oddRowMoves[0].col,
-      oddRow: oddRowMoves[0].landingRow,
-      evenRowCol: evenRowMoves[0].col,
-      evenRow: evenRowMoves[0].landingRow,
-    },
+    categoryEvidence: correctCols[0].evidence,
   };
 }
 

@@ -267,13 +267,18 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   for (const key of correctMovePatterns.keys()) relevantPatternKeys.add(key);
 
   const kbTermLines = [];
+  const seenKbIds = new Set();
   for (const [patternKey, kbEntry] of Object.entries(PATTERN_KB)) {
-    // Only entries with a file-backed KB article (not inline definitions)
+    // Only entries with a file-backed KB article
     if (!kbEntry.id) continue;
-    // forced_win has no .md file and is excluded from term annotation
+    // forced_win is excluded from term annotation (LANGUAGE_RULE bans it from LLM output)
     if (patternKey === 'forced_win') continue;
-    // Only include terms whose pattern key is actually present in the position
-    if (!relevantPatternKeys.has(patternKey)) continue;
+    // Include if always_include (glossary terms visible on every board) OR if the
+    // pattern actually fired in this position
+    if (!kbEntry.always_include && !relevantPatternKeys.has(patternKey)) continue;
+
+    if (seenKbIds.has(kbEntry.id)) continue;
+    seenKbIds.add(kbEntry.id);
 
     const shortSummary = loadKBShortSummary(kbEntry.id);
     if (!shortSummary) continue;
