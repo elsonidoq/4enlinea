@@ -12,7 +12,14 @@ import { track } from '../lib/track.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, index: initialIndex, mistakeContext, mistakeSource, id }) {
+const DIFFICULTIES = [
+  { key: 'easy',    subtitleKey: 'sparring.easySub' },
+  { key: 'medium',  subtitleKey: 'sparring.mediumSub', isDefault: true },
+  { key: 'hard',    subtitleKey: 'sparring.hardSub' },
+  { key: 'perfect', subtitleKey: 'sparring.perfectSub' },
+];
+
+export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, index: initialIndex, mistakeContext, mistakeSource, id, difficulty: difficultyProp }) {
   const { t } = useTranslation();
   const { session } = useStore();
 
@@ -23,6 +30,11 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
   const [coldNavList, setColdNavList] = useState(null);
   const [coldBootState, setColdBootState] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'not_found' | 'error'
+
+  // Start-from-here state
+  const [fromPositionError, setFromPositionError] = useState(null);
+  const [diffPickerOpen, setDiffPickerOpen] = useState(false);
+  const [pickedDifficulty, setPickedDifficulty] = useState('medium');
 
   // Cold-boot fetch: when id is present and navListProp is empty, fetch the blunder
   useEffect(() => {
@@ -81,7 +93,6 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
     (blunder.threat_cells || []).forEach(tc => {
       result.push({ c: tc.col, r: tc.row, type: 'td' });
     });
-    // Highlight: show the recommended column (green, same alpha as blunder's red)
     if (highlightCol != null && boardObj.heights[highlightCol] < 6) {
       result.push({ c: highlightCol, r: boardObj.heights[highlightCol], type: 'tg' });
     }
@@ -95,6 +106,36 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
       go('review', { id: mistakeSource.gameId });
     } else {
       goBack();
+    }
+  }
+
+  // Start a new game from the position just before this mistake
+  async function doStartFromHere(diff) {
+    if (!blunder) return;
+    setFromPositionError(null);
+    const gameId = blunder.game_id ?? blunder.papergames_game_id ?? mistakeSource?.gameId ?? null;
+    if (!gameId) { setFromPositionError(t('sparring.reviewError')); return; }
+    const N = (blunder.board_state || '').length;
+    try {
+      const res = await fetch(`${API}/api/games/from-position`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId, N, difficulty: diff }),
+      });
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+      go('game', { initialMoves: data.moves, side: data.side, difficulty: data.difficulty });
+    } catch {
+      setFromPositionError(t('sparring.reviewError'));
+    }
+  }
+
+  function handleStartFromHere() {
+    const knownDifficulty = difficultyProp ?? blunder?.difficulty ?? null;
+    if (!knownDifficulty) {
+      setDiffPickerOpen(true);
+    } else {
+      doStartFromHere(knownDifficulty);
     }
   }
 
@@ -137,6 +178,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
     setHighlightCol(null);
     setDeepRevealOpen(false);
     setZhCells([]);
+    setFromPositionError(null);
     if (index > 0) {
       setIndex(index - 1);
     }
@@ -146,6 +188,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
     setHighlightCol(null);
     setDeepRevealOpen(false);
     setZhCells([]);
+    setFromPositionError(null);
     if (index < blunders.length - 1) {
       setIndex(index + 1);
     }
@@ -323,6 +366,37 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           </div>
         </div>
 
+        {/* Start a new game from here */}
+        {(blunder.game_id || blunder.papergames_game_id || mistakeSource?.gameId) && (
+          <button
+            onClick={handleStartFromHere}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              padding: '13px 20px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: '1.5px solid var(--line)',
+              background: 'transparent',
+              color: 'var(--ink)',
+              fontFamily: 'inherit',
+            }}
+          >
+            {t('sparring.startFromHere')}
+          </button>
+        )}
+
+        {/* Error for start-from-here */}
+        {fromPositionError && (
+          <p style={{ color: 'var(--eval-bad)', textAlign: 'center', fontSize: 13, margin: 0 }}>
+            {fromPositionError}
+          </p>
+        )}
+
         {/* Deep reveal trigger */}
         {session ? (
           <button
@@ -474,6 +548,133 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           <Icon name="chevR" size={20} />
         </button>
       </Toolbar>
+        </>
+      )}
+
+      {/* Difficulty picker bottom sheet — for papergames games with no known difficulty */}
+      {diffPickerOpen && (
+        <>
+          <div
+            onClick={() => setDiffPickerOpen(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.45)',
+              zIndex: 100,
+            }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            background: '#fff',
+            colorScheme: 'light',
+            borderRadius: '20px 20px 0 0',
+            padding: '20px 18px 32px',
+            zIndex: 101,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 15,
+              color: 'var(--ink-soft)',
+              marginBottom: 2,
+            }}>
+              {t('sparring.chooseDifficulty')}
+            </div>
+
+            {DIFFICULTIES.map(d => {
+              const selected = pickedDifficulty === d.key;
+              return (
+                <button
+                  key={d.key}
+                  onClick={() => setPickedDifficulty(d.key)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    padding: '16px 18px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--card)',
+                    border: '2px solid',
+                    borderColor: selected ? 'var(--disc-green)' : 'var(--line)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    transition: 'border-color .12s, box-shadow .12s',
+                    boxShadow: selected ? 'var(--shadow-sm)' : 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        fontSize: 17,
+                        color: 'var(--ink)',
+                      }}>
+                        {t(`sparring.${d.key}`)}
+                      </span>
+                      {d.isDefault && (
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          fontFamily: 'var(--font-display)',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: 'var(--eval-good-bg)',
+                          color: 'var(--disc-green)',
+                          letterSpacing: 0.3,
+                        }}>
+                          DEFAULT
+                        </span>
+                      )}
+                    </div>
+                    <div style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 13,
+                      color: 'var(--ink-soft)',
+                      marginTop: 3,
+                      lineHeight: 1.3,
+                    }}>
+                      {t(d.subtitleKey)}
+                    </div>
+                  </div>
+                  <div style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    border: '2.5px solid',
+                    borderColor: selected ? 'var(--disc-green)' : 'var(--ink-faint)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'border-color .12s',
+                  }}>
+                    {selected && (
+                      <div style={{
+                        width: 13,
+                        height: 13,
+                        borderRadius: '50%',
+                        background: 'var(--disc-green)',
+                      }} />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+
+            <button
+              className="btn btn-primary"
+              onClick={() => { setDiffPickerOpen(false); doStartFromHere(pickedDifficulty); }}
+              style={{ marginTop: 6 }}
+            >
+              {t('sparring.startGame')}
+            </button>
+          </div>
         </>
       )}
     </div>

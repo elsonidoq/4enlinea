@@ -1902,6 +1902,88 @@ app.post('/api/games/analyze', async (req, res) => {
     }
   }
 
+  // Cache check: if user is logged in and blunders already exist for this game,
+  // reconstruct the analysis from stored data instead of re-running the solver.
+  if (req.user) {
+    const gameFilter = isPapergames
+      ? { papergames_game_id: gameId }
+      : { game_id: gameId };
+
+    const { data: existingBlunders } = await supabase
+      .from('blunders')
+      .select('move_index, move_played, quality, pattern_category, reason, direction, blunder_severity')
+      .eq('user_id', req.user.id)
+      .match(gameFilter)
+      .order('move_index', { ascending: true });
+
+    if (existingBlunders && existingBlunders.length > 0) {
+      const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
+      const cachedMoves = [];
+      let cScored = 0, cOptimal = 0, cSuboptimal = 0, cBlunder = 0;
+      let cOrdinal = 0;
+
+      for (let i = 0; i < moves.length; i++) {
+        const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
+        if (!isUserPly) continue;
+        cOrdinal++;
+        cScored++;
+
+        const blunder = blunderMap.get(i);
+        if (blunder) {
+          cachedMoves.push({
+            moveIndex: cOrdinal,
+            col: blunder.move_played,
+            quality: blunder.quality,
+            score: null,
+            bestScore: null,
+            bestCol: null,
+            patternTag: blunder.pattern_category,
+            reason: blunder.reason,
+            direction: blunder.direction,
+            blunderSeverity: blunder.blunder_severity,
+          });
+          if (blunder.quality === 'suboptimal') cSuboptimal++;
+          else cBlunder++;
+        } else {
+          cachedMoves.push({
+            moveIndex: cOrdinal,
+            col: parseInt(moves[i], 10),
+            quality: 'optimal',
+            score: null,
+            bestScore: null,
+            bestCol: null,
+            patternTag: null,
+            reason: null,
+            direction: null,
+            blunderSeverity: null,
+          });
+          cOptimal++;
+        }
+      }
+
+      const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
+      const phrasePool = cBlunder === 0
+        ? 'coach.sparring.review.clean'
+        : 'coach.sparring.review.mistakes';
+      const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+
+      return res.json({
+        moves: cachedMoves,
+        accuracy: cAccuracy,
+        optimalCount: cOptimal,
+        suboptimalCount: cSuboptimal,
+        blunderCount: cBlunder,
+        scored: cScored,
+        summaryPhraseKey: cSummaryKey,
+        fullMovestring: moves,
+        difficulty,
+        side,
+        gameDate: created_at,
+        source: isPapergames ? 'papergames' : 'ai',
+      });
+    }
+  }
+
   // Counters
   let scored = 0;
   let optimalCount = 0;
@@ -1934,14 +2016,14 @@ app.post('/api/games/analyze', async (req, res) => {
       const score = scores[col];
       const bestScore = scores[bestCol];
 
-      // Classify the position
-      // tagBlunder replaces the old classify() call for blunder tagging.
-      // It may issue 60+ solver queries per blunder ply — acceptable because
-      // this endpoint is called post-game, not during interactive play.
+      const isMistake = quality === 'blunder' || quality === 'suboptimal';
+
+      // Classify the position — tagBlunder may issue 60+ solver queries per ply;
+      // acceptable here because this endpoint is called post-game, not during play.
       let patternTag = null;
       let reason = null;
       let direction = null;
-      if (quality === 'blunder') {
+      if (isMistake) {
         try {
           const tagResult = await tagBlunder(movesBeforeThisPly, col, bestCol, solver);
           patternTag = tagResult.tag;
@@ -1954,16 +2036,14 @@ app.post('/api/games/analyze', async (req, res) => {
         }
       }
 
-      // Scan 3 plies of the post-blunder tree to compute what fraction of
-      // continuations end in an opponent win. Run for ALL blunders (including
-      // losing positions) — blunder_severity is the graduated measure that
-      // distinguishes minor mistakes from catastrophic ones regardless of
-      // whether the position was already theoretically lost.
+      // Scan 3 plies of the post-mistake tree to compute what fraction of
+      // continuations end in an opponent win. blunder_severity is the graduated
+      // measure that distinguishes minor mistakes from catastrophic ones.
       let blunderSeverity = null;
-      if (quality === 'blunder') {
-        const postBlunderMs = movesBeforeThisPly + String(col);
+      if (isMistake) {
+        const postMistakeMs = movesBeforeThisPly + String(col);
         try {
-          const sv = await computeBlunderSeverity(solver, postBlunderMs, 3);
+          const sv = await computeBlunderSeverity(solver, postMistakeMs, 3);
           blunderSeverity = sv.severity;
         } catch (_e) {
           // non-fatal: leave null
@@ -1983,15 +2063,15 @@ app.post('/api/games/analyze', async (req, res) => {
         blunderSeverity,
       });
 
-      // Server-side blunder INSERT — fire-and-forget relative to the HTTP response.
-      // Anonymous users skip the INSERT (user_id would be NULL).
-      if (req.user && quality === 'blunder') {
+      // Server-side mistake INSERT — anonymous users skip (user_id would be NULL).
+      if (req.user && isMistake) {
         await insertGameBlunder(supabase, {
           user_id: req.user.id,
           board_state: movesBeforeThisPly,
           move_played: col,
           correct_move: bestCol,
           pattern_category: patternTag,
+          quality,
           reason,
           direction,
           severity: computeSeverity(bestScore, score),
@@ -2309,7 +2389,7 @@ app.get('/api/coach/queue', async (req, res) => {
 
   let query = supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
+    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
     .eq('user_id', req.user.id)
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
     .order('severity', { ascending: false })
@@ -2343,6 +2423,7 @@ app.get('/api/coach/queue', async (req, res) => {
     move_played: b.move_played,
     correct_move: b.correct_move,
     pattern_category: b.pattern_category,
+    quality: b.quality ?? 'blunder',
     created_at: b.created_at,
     resolved_at: b.resolved_at,
     severity: b.severity,
@@ -2385,7 +2466,7 @@ app.get('/api/blunders/:id', async (req, res) => {
   // FR-017: no user_id filter — public endpoint
   const { data, error } = await supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
+    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
     .eq('id', id)
     .single();
 

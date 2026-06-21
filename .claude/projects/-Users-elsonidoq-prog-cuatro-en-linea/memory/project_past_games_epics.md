@@ -38,7 +38,7 @@ Two epics defined in `docs/mvp/past_games_epics.md`. **Epic A** (Past Games Navi
 - `GET /api/coach/queue` extended with `?game_id=` and `?category=` optional filters; `moveIndex` (`board_state.length`) added to response.
 - `displayMoveNumber = board_state.length + 1` (1-indexed, preserving current behavior). Raw `board_state.length` is the internal join key only.
 - Timeline-to-blunder match: `globalPlyIndex = 2*(move.moveIndex-1)` for side='first', `2*(move.moveIndex-1)+1` for side='second'. Match blunder where `board_state.length === globalPlyIndex`.
-- `navigateToMistake(moveIndex)` in ReviewScreen takes a **number** (user-move ordinal). To branch on quality, resolve via `analysis.moves.find(m => m.moveIndex === moveIndex)` first.
+- `navigateToMistake(moveIndex)` in ReviewScreen takes a **number** (user-move ordinal). Since the 2026-06-21 unification, it routes ALL non-optimal moves to `blunderDetail` via globalPlyIndex match — no Explorer fallback. See [[reference-review-screen-navigate-to-mistake]].
 - US1 (screen registry repoint) + US2 (blunder card tap rewrite) must ship atomically.
 - Null-category flat-list view is OUT OF SCOPE per Epic B. `MistakesListScreen` requires `category` prop.
 - `SeverityMeter` extracted to `src/components/SeverityMeter.jsx`; `MistakesGate` extracted to `src/components/MistakesGate.jsx`.

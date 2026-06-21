@@ -11,7 +11,6 @@ import { SagaScreen } from '../screens/SagaScreen.jsx';
 import { ConceptScreen } from '../screens/ConceptScreen.jsx';
 import { SocraticScreen } from '../screens/SocraticScreen.jsx';
 import { CLChallengeScreen } from '../screens/CLChallengeScreen.jsx';
-import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
 import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 import { PastGamesListScreen } from '../screens/PastGamesListScreen.jsx';
@@ -31,7 +30,6 @@ export const SCREENS = {
   difficulty: DifficultyPickerScreen,
   game: GameScreen,
   review: ReviewScreen,
-  explorer: ExplorerScreen,
   mistakes: CategoryListScreen,
   mistakeDetail: (p) => <MistakesListScreen {...p} />,
   blunderDetail: MistakeDetailScreen,

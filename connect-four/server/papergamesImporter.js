@@ -112,7 +112,6 @@ async function extractBlunders(solver, moveString, side, userId) {
     scored++;
     const { quality, bestCol } = scoreMove(scores, col);
     if (quality === 'optimal') { optimalCount++; continue; }
-    if (quality !== 'blunder') continue;
 
     const score = scores[col];
     const bestScore = scores[bestCol];
@@ -140,6 +139,7 @@ async function extractBlunders(solver, moveString, side, userId) {
       move_played: col,
       correct_move: bestCol,
       pattern_category: patternTag,
+      quality,
       reason,
       direction,
       severity: computeSeverity(bestScore, score),

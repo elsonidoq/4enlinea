@@ -136,6 +136,7 @@
 - [Patterns-blunders Epics 1–3 done](project_patterns_blunders_done.md) — classifyPattern/tagBlunder/explainContext shipped; Epic 2 debug guide; Epic 3 traps
 - [Epic A + B annotation gate & coach rebuild — done](project_epic_a_annotation_gate.md) — specs 021+022 shipped; zoneParser, annotationGate, 4-type taxonomy; key contracts
 - [Past Games & Blunder Navigation epics](project_past_games_epics.md) — Epics A+B fully implemented; blunderDetail SESSION_ONLY; navigateToMistake takes a number; globalPlyIndex formula
+- [Suboptimal+blunder unification](project_suboptimal_blunder_unification.md) — 2026-06-21: blunders.quality column (051); both kinds persisted; ExplorerScreen deleted; single MistakeDetailScreen
 - [Coach commentary epic — board-grounded messages](project_coach_commentary_epic.md) — spec/plan/tasks complete at specs/029; 16 tasks; key architectural decisions locked
 - [Spec 030 — server-mediated data access](project_spec030_server_mediated_data_access.md) — spec/plan/tasks done; 43 tasks; session-stats write asymmetry, device_uuid server-derived, migrate covers 5 targets
 - [Spec 030 — byPattern computation mismatch](project_spec030_session_stats_bypattern_mismatch.md) — both old and new getAllSessionStats read non-existent fields; byPattern always empty in prod

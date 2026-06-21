@@ -122,34 +122,21 @@ export function ReviewScreen({ go, goBack, id }) {
     : [];
 
   function navigateToMistake(moveIndex) {
-    // Resolve the move object from analysis
-    const move = analysis.moves.find(m => m.moveIndex === moveIndex);
-
-    if (move?.quality === 'blunder') {
-      const globalPlyIndex = analysis.side === 'first'
-        ? 2 * (moveIndex - 1)
-        : 2 * (moveIndex - 1) + 1;
-      const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
-      if (matchedIdx !== -1) {
-        go('blunderDetail', {
-          id: gameBlunderList[matchedIdx].id,
-          blunderNavList: gameBlunderList,
-          index: matchedIdx,
-          mistakeContext: 'game',
-          mistakeSource: { date: gameDate, gameId: id, totalMoves: analysis.fullMovestring.length },
-        });
-        return;
-      }
+    const globalPlyIndex = analysis.side === 'first'
+      ? 2 * (moveIndex - 1)
+      : 2 * (moveIndex - 1) + 1;
+    const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
+    if (matchedIdx !== -1) {
+      go('blunderDetail', {
+        id: gameBlunderList[matchedIdx].id,
+        blunderNavList: gameBlunderList,
+        index: matchedIdx,
+        mistakeContext: 'game',
+        mistakeSource: { date: gameDate, gameId: id, totalMoves: analysis.fullMovestring.length },
+        difficulty: analysis.difficulty ?? null,
+      });
     }
-    // suboptimal nodes, or blunder with no match → Explorer fallback
-    go('explorer', {
-      gameId: id,
-      moveIndex,
-      moves: analysis.moves,
-      difficulty: analysis.difficulty,
-      side: analysis.side,
-      fullMovestring: analysis.fullMovestring,
-    });
+    // No match yet (queue still loading or anonymous user) — no-op
   }
 
   function handlePrev() {
@@ -320,38 +307,7 @@ export function ReviewScreen({ go, goBack, id }) {
                     <button
                       key={move.moveIndex}
                       type="button"
-                      onClick={isOptimal ? undefined : () => {
-                        if (move.quality === 'blunder') {
-                          const side = analysis.side; // 'first' | 'second'
-                          const globalPlyIndex = side === 'first'
-                            ? 2 * (move.moveIndex - 1)
-                            : 2 * (move.moveIndex - 1) + 1;
-                          const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
-                          if (matchedIdx !== -1) {
-                            go('blunderDetail', {
-                              id: gameBlunderList[matchedIdx].id,
-                              blunderNavList: gameBlunderList,
-                              index: matchedIdx,
-                              mistakeContext: 'game',
-                              mistakeSource: {
-                                date: gameDate,
-                                gameId: id,
-                                totalMoves: analysis.fullMovestring.length,
-                              },
-                            });
-                            return;
-                          }
-                        }
-                        // Fallback: suboptimal node, or blunder with no match
-                        go('explorer', {
-                          gameId: id,
-                          moveIndex: move.moveIndex,
-                          moves: analysis.moves,
-                          difficulty: analysis.difficulty,
-                          side: analysis.side,
-                          fullMovestring: analysis.fullMovestring,
-                        });
-                      }}
+                      onClick={isOptimal ? undefined : () => navigateToMistake(move.moveIndex)}
                       style={{
                         width: 36,
                         height: 36,

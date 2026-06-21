@@ -18,7 +18,6 @@ export const URL_MAP = [
   { pattern: '/difficulty',          screenKey: 'difficulty',    paramNames: [] },
   { pattern: '/game/:id',            screenKey: 'review',        paramNames: ['id'] },
   { pattern: '/game',                screenKey: 'game',          paramNames: [] },
-  { pattern: '/explorer',            screenKey: 'explorer',      paramNames: [] },
   { pattern: '/mistakeDetail',       screenKey: 'mistakeDetail', paramNames: [] },
   { pattern: '/blunder/:id',         screenKey: 'blunderDetail', paramNames: ['id'] },
   { pattern: '/pastGames',           screenKey: 'pastGames',     paramNames: [] },
@@ -31,7 +30,7 @@ export const URL_MAP = [
  * cannot be reconstructed from the URL alone. On cold boot at these URLs, the
  * app redirects to home at '/'.
  */
-export const SESSION_ONLY_SCREENS = new Set(['summary', 'explorer', 'mistakeDetail', 'game']);
+export const SESSION_ONLY_SCREENS = new Set(['summary', 'mistakeDetail', 'game']);
 
 /**
  * Build a URL string from a screen key and optional params.

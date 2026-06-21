@@ -1,19 +1,27 @@
 ---
 name: reference-review-screen-navigate-to-mistake
-description: ReviewScreen.navigateToMistake takes a number (user-move ordinal), not a move object — branching on quality requires a find() first
-metadata:
+description: ReviewScreen.navigateToMistake routes ALL non-optimal moves to blunderDetail (no explorer fallback since 2026-06-21 unification)
+metadata: 
+  node_type: memory
   type: reference
+  originSessionId: 08d189a6-0456-480f-895e-3cf14198c683
 ---
 
-`ReviewScreen.jsx` has a `navigateToMistake(moveIndex)` helper used by both Prev and Next mistake buttons. It takes a **number** — the user-move ordinal (`move.moveIndex` from `analysis.moves`, 1-indexed, counting user plies only).
+`ReviewScreen.jsx` has a `navigateToMistake(moveIndex)` helper used by both Prev/Next buttons and the timeline-node onClick. It takes a **number** — the user-move ordinal (`move.moveIndex` from `analysis.moves`, 1-indexed, counting user plies only).
 
-To branch on move quality (e.g. route blunders to `blunderDetail`, suboptimal to Explorer):
+Since the suboptimal+blunder unification (2026-06-21), the function routes **all** non-optimal moves to `blunderDetail` via the `gameBlunderList` DB match. There is no Explorer fallback:
+
 ```js
-const move = analysis.moves.find(m => m.moveIndex === moveIndex);
-if (move?.quality === 'blunder') { /* go to blunderDetail */ }
-else { /* go to Explorer */ }
+function navigateToMistake(moveIndex) {
+  const globalPlyIndex = analysis.side === 'first'
+    ? 2 * (moveIndex - 1)
+    : 2 * (moveIndex - 1) + 1;
+  const matchedIdx = gameBlunderList.findIndex(b => b.moveIndex === globalPlyIndex);
+  if (matchedIdx !== -1) {
+    go('blunderDetail', { ..., difficulty: analysis.difficulty ?? null });
+  }
+  // No match (queue loading or anon) — no-op
+}
 ```
 
-**Why this matters:** Passing a move object or trying `moveIndex.quality` always gives `undefined` — the branch silently never fires and all mistakes route to Explorer. The function signature is a number, not a move object.
-
-Also relevant: timeline tap handler currently uses `isOptimal ? undefined : () => go('explorer', ...)` — not a `quality === 'blunder'` check. Read the actual current code before writing the implementation task.
+`gameBlunderList` now includes both suboptimal and blunder rows (both are persisted to `blunders` since migration 051). The timeline-node onClick delegates directly to `navigateToMistake(move.moveIndex)` for non-optimal moves.

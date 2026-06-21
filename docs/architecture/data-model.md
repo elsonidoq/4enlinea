@@ -29,6 +29,8 @@ Rationale: Slug-keyed constraints are self-documenting; integer IDs required cro
 
 Migration 036 added `game_id uuid` (nullable FK → `games(id)`, `ON DELETE SET NULL`) to the `blunders` table. This links blunders created during post-game analysis to their originating sparring game row. Blunders from puzzle attempts continue to use `puzzle_id`; `game_id` is `null` for those. `GET /api/games` uses `game_id` to compute per-game `blunder_count` in a single query.
 
+Migration 051 added `quality text NOT NULL DEFAULT 'blunder' CHECK (quality IN ('suboptimal', 'blunder'))`. Both suboptimal and blunder plies from post-game analysis are now persisted. Existing rows (all blunders) default to `'blunder'`.
+
 ## Soft Delete
 
 **MUST**: Use `is_active boolean NOT NULL DEFAULT true` on `puzzles` for soft delete.
@@ -191,10 +193,12 @@ Screen navigation passes typed param objects via the screen registry. Contracts 
 | Screen key | Params | Source |
 |---|---|---|
 | `review` | `{ id: string }` — the `gameId` | `GameScreen.saveGame` after game ends |
-| `explorer` | `{ gameId: string, moveIndex: number, moves: string, difficulty: string, side: string, fullMovestring: string }` | `ReviewScreen` on "Explore from here" |
-| `game` | `{ initialMoves?: string, side?: string, difficulty?: string }` (additions) | `ExplorerScreen` on "Start from here"; original params (`difficulty`, `side`) remain supported |
+| `blunderDetail` | `{ id: string, blunderNavList: object[], index: number, mistakeContext: string, mistakeSource: object\|null, difficulty: string\|null }` | `ReviewScreen` on any non-optimal move node |
+| `game` | `{ initialMoves?: string, side?: string, difficulty?: string }` | `MistakeDetailScreen` on "Start new game from here"; original params remain supported |
 
 `initialMoves` on the `game` screen is the truncated movestring returned by `POST /api/games/from-position`. The `game` screen passes it to `useGameBoard` as `initialMoves` to pre-seed the board state before the AI/player moves begin.
+
+The `explorer` screen was removed. `ReviewScreen` now routes all non-optimal move nodes to `blunderDetail` (unified `MistakeDetailScreen`). Suboptimal and blunder plies are treated identically: both are persisted to `blunders`, both are navigated by prev/next, and both can be marked as reviewed.
 
 ## Interaction Mode
 

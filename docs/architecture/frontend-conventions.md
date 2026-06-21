@@ -396,7 +396,7 @@ For pages where only one perspective exists (e.g. Puzzles, where the position is
 | Home | `--bg-home` | home, stats, mistakes, mistakeDetail, blunderDetail |
 | Lessons | `--bg-lessons` | saga, concept, socratic, clchallenge |
 | Challenges | `--bg-challenges` | setpicker, challenge, summary |
-| Sparring | `--bg-sparring` | difficulty, game, review, explorer |
+| Sparring | `--bg-sparring` | difficulty, game, review |
 
 ### Three-level Mistakes route hierarchy
 
@@ -404,9 +404,9 @@ The mistakes feature has three independent screen routes:
 
 - **Level 1**: `mistakes` -- `CategoryListScreen` -- entry point, groups blunders by tactical category sorted by severity. Requires auth (gated by `MistakesGate` with `renderSignedOut`).
 - **Level 2**: `mistakeDetail` -- `MistakesListScreen` with `category` prop -- filtered blunder list for one category. Shows Unreviewed/Reviewed tabs.
-- **Level 3**: `blunderDetail` -- `MistakeDetailScreen` with `blunderNavList`, `index`, `mistakeContext` (`'list'` | `'game'`), and `mistakeSource` (`{ date, gameId, totalMoves }` | null) -- individual blunder detail with Prev/Next nav. Contextual Back: from a game review the Back button returns to `review`; from the list it calls `goBack()`.
+- **Level 3**: `blunderDetail` -- `MistakeDetailScreen` with `blunderNavList`, `index`, `mistakeContext` (`'list'` | `'game'`), `mistakeSource` (`{ date, gameId, totalMoves }` | null), and `difficulty` (string | null, passed from `ReviewScreen` for "Start a new game from here") -- individual mistake detail with Prev/Next nav. Both suboptimal and blunder quality rows use this screen. Prev/Next navigates the full `blunderNavList` (all non-optimal moves for the game). Actions: **What should I have played** (deep reveal, updates overlay), **Start a new game from here** (calls `POST /api/games/from-position`; shows difficulty picker when difficulty is null), **Mark as reviewed**. Contextual Back: from a game review the Back button returns to `review`; from the list it calls `goBack()`.
 
-**Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 15 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
+**Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 14 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
 
 **Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.
 
@@ -418,7 +418,7 @@ The mistakes feature has three independent screen routes:
 
 `src/lib/urlMapping.js` exports:
 - `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
-- `SESSION_ONLY_SCREENS` — `Set` of 4 screen keys whose state cannot survive a cold page load: `summary`, `explorer`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`.
+- `SESSION_ONLY_SCREENS` — `Set` of 3 screen keys whose state cannot survive a cold page load: `summary`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.)
 - `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
 - `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
 

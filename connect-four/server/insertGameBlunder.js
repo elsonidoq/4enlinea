@@ -22,20 +22,16 @@ export async function insertGameBlunder(supabase, row) {
     ? row.pattern_category
     : 'suboptimal_move';
 
-  try {
-    // ── Diagnostic: probe what the client can do on blunders ──────────────
-    const { error: selErr, count } = await supabase
-      .from('blunders')
-      .select('id', { count: 'exact', head: true })
-      .limit(0);
-    console.log('[insertGameBlunder:diag] blunders SELECT head:', selErr ? `ERR ${selErr.code} ${selErr.message}` : `ok count=${count}`);
+  const quality = row.quality === 'suboptimal' ? 'suboptimal' : 'blunder';
 
+  try {
     const { error } = await supabase.from('blunders').insert({
       user_id: row.user_id,
       board_state: row.board_state,
       move_played: row.move_played,
       correct_move: row.correct_move,
       pattern_category: safeTag,
+      quality,
       reason: row.reason,
       direction: row.direction,
       severity: row.severity,

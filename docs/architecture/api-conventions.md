@@ -182,6 +182,7 @@ Each blunder object:
   "move_played": 3,
   "correct_move": 4,
   "pattern_category": "immediate_threat",
+  "quality": "blunder" | "suboptimal",
   "created_at": "2026-05-01T12:00:00Z",
   "resolved_at": null,
   "severity": 12,
@@ -493,7 +494,7 @@ Returns `{ outcome: 'success' | 'fail' | 'continue', aiCol?, reason? }`.
 All validation is bitboard-only — no solver calls.
 `POST /api/puzzles/:id/check` returns 400 for sequence-mode puzzles; callers must use the `/sequence/move` endpoint instead.
 
-## Game Analysis & Explorer Endpoints
+## Game Analysis Endpoints
 
 ### `POST /api/games/analyze`
 
@@ -532,9 +533,13 @@ Scores every user ply in a completed game and returns a quality summary.
 - `accuracy`: percentage of scored plies that were optimal.
 - `scored`: number of plies that were not forced (i.e., denominator for `accuracy`).
 - `summaryPhraseKey`: i18n key selected from the coach phrase pool based on blunder/suboptimal counts.
-- Auth: Optional (`loadUser` runs; `req.user` may be null).
+- Auth: Optional (`loadUser` runs; `req.user` may be null). For authenticated users, **both suboptimal and blunder** plies are inserted into the `blunders` table with the appropriate `quality` value during analysis. Anonymous users get no persistence.
 
 **Errors**: 400 (missing `gameId`), 404 (game not found), 500 (solver error), 503 (Supabase not configured).
+
+**Cache path (authenticated users with existing blunders)**: If the `blunders` table already contains rows for this user + game, the endpoint reconstructs the response from stored data instead of re-running the solver. One SELECT replaces all solver + tagBlunder + blunderSeverity calls. The cached `moves` array has `score`, `bestScore`, `bestCol` set to `null` (the ReviewScreen does not use these fields; MistakeDetailScreen reads them from the coach queue, not from here).
+
+**Technical debt**: In the cached path, `scored` counts all user plies rather than only non-forced ones (legalCount > 1). Forced moves (only 1 legal column open) are excluded from `scored` in the live path to avoid inflating accuracy. In practice forced moves are extremely rare in real games (occur only on a near-full board), so the accuracy deviation is negligible. Fixing this properly would require storing `legalCount` per ply in the `blunders` table or a separate `game_analysis_cache` table.
 
 ### `POST /api/games/from-position`
 
@@ -604,11 +609,13 @@ Returns a single blunder by UUID. No auth required — this is the public permal
   "game_id": "<uuid>" | null,
   "moveIndex": 8,
   "threat_cells": [{ "col": 4, "row": 2 }],
+  "quality": "blunder" | "suboptimal",
   "is_owner": true
 }
 ```
 
 - `is_owner`: `true` when the authenticated user owns the blunder; `false` when a different user or an anonymous visitor fetches it. Computed server-side as `req.user?.id === row.user_id`.
+- `quality`: `'blunder'` for severe mistakes (sign-crossing score drop), `'suboptimal'` for same-sign but non-optimal moves. Legacy rows default to `'blunder'`.
 - `user_id` is **never** exposed in the response.
 - Response shape is field-for-field identical to coach queue items, plus the `is_owner` boolean.
 - Threat cells are computed server-side via `computeThreatCells(board_state, move_played)`.

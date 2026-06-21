@@ -193,6 +193,7 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`, `papergames_game_id`
 | game_id | uuid | YES | |
 | reason | text | YES | |
 | direction | text | YES | |
+| quality | text | NO | `'blunder'` |
 | resolved_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
 
@@ -205,6 +206,7 @@ Indexes:
 
 `severity` = `round((best_score − score) / 36 * 10)` — instant score-spread measure, [0, 10]. Computed at insert time; never recomputed on read.
 `blunder_severity` = fraction of 3-ply post-blunder continuations ending in opponent win — graduated loss-of-control measure, [0, 1]. Computed by `computeBlunderSeverity()`.
+`quality` = `'blunder'` (sign-crossing score drop) or `'suboptimal'` (same sign, strictly non-optimal). Added by migration 051. Both kinds are now persisted during `POST /api/games/analyze` and papergames import; previously only blunders were saved. Legacy rows default to `'blunder'`.
 
 **CHECK constraint on `pattern_category`**: Must be one of 15 valid values:
 `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns` (legacy),

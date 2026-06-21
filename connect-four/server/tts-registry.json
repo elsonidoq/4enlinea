@@ -1344,22 +1344,6 @@
     "approved_at": "2026-06-19T14:59:52.516Z"
   },
   {
-    "key": "coach.sparring.explorer.intro.0",
-    "slug": "coach--sparring--explorer--intro--0",
-    "status": "approved",
-    "reason": null,
-    "generated_at": "2026-06-19T14:58:18.439Z",
-    "approved_at": "2026-06-19T14:59:52.516Z"
-  },
-  {
-    "key": "coach.sparring.explorer.intro.1",
-    "slug": "coach--sparring--explorer--intro--1",
-    "status": "approved",
-    "reason": null,
-    "generated_at": "2026-06-19T14:58:19.472Z",
-    "approved_at": "2026-06-19T14:59:52.516Z"
-  },
-  {
     "key": "coach.sparring.hint.generic.0",
     "slug": "coach--sparring--hint--generic--0",
     "status": "approved",

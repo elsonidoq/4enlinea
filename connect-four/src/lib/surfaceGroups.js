@@ -6,6 +6,6 @@ export const SURFACE_BG = {
   setpicker: '--bg-chal', challenge: '--bg-chal',
   summary: '--bg-chal',
   difficulty: '--bg-spar', game: '--bg-spar',
-  review: '--bg-spar', explorer: '--bg-spar',
+  review: '--bg-spar',
   pastGames: '--bg-spar',
 };

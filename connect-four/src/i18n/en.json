@@ -62,8 +62,7 @@
     "terminalPosition": "This position is terminal — no moves available.",
     "startFromHere": "Start new game from here",
     "deepReveal": "Deep Reveal",
-    "explorerTitle": "Position Explorer",
-    "explanationFlagged": "Explanation flagged. Thank you!",
+"explanationFlagged": "Explanation flagged. Thank you!",
     "explanationUnavailable": "Detailed explanation unavailable.",
     "flagExplanation": "Flag this explanation"
   },
@@ -441,12 +440,6 @@
       "intro": {
         "0": "Ready to play? I'll give you a real fight.",
         "1": "Let's see what you've got. Good luck."
-      },
-      "explorer": {
-        "intro": {
-          "0": "What would you play instead?",
-          "1": "Explore the position. Try a different move."
-        }
       },
       "hint": {
         "generic": {
