@@ -254,17 +254,22 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
 
   // ── Step 6: Board visualizations ──────────────────────────────────────────
   const postMovestring = movestring + col;
-  const [boardViz, postBoardViz] = await Promise.all([
+  const bestMovestring = movestring + bestCol;
+  const [boardViz, bestMoveBoardViz, postBoardViz] = await Promise.all([
     getBoardVisualization(movestring || ''),
+    getBoardVisualization(bestMovestring),
     getBoardVisualization(postMovestring),
   ]);
 
   // ── Step 7: KB terms section ───────────────────────────────────────────────
-  // Gather pattern keys that are present in either the played position or the
-  // best-move position. These are the tactical concepts relevant to this position.
+  // Gather pattern keys from all three boards + the blunder tag itself.
+  const patPostBlunder = await safeClassifyPattern(postMovestring, perspective, solver);
+
   const relevantPatternKeys = new Set();
   for (const key of patPlayed.keys()) relevantPatternKeys.add(key);
   for (const key of correctMovePatterns.keys()) relevantPatternKeys.add(key);
+  for (const key of patPostBlunder.keys()) relevantPatternKeys.add(key);
+  if (tag) relevantPatternKeys.add(tag);
 
   const kbTermLines = [];
   const seenKbIds = new Set();
@@ -306,6 +311,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     positiveReason,
     correctMovePatterns,
     boardViz,
+    bestMoveBoardViz,
     postBoardViz,
     playerName,
     gap,

@@ -71,7 +71,7 @@ export const PATTERN_KB = {
   gravity_top:     { id: 'community-gravity-top',    always_include: true },
   parity:          { id: 'allen-parity',             always_include: true },
   // Alias: fork is a synonym for double_threat; shares the same KB article.
-  fork:            { id: 'community-double-threat',  always_include: true },
+  fork:            { id: 'community-double-threat' },
 };
 
 /**
@@ -581,6 +581,7 @@ export function buildBlunderExplainPrompt({
   positiveReason,
   correctMovePatterns,
   boardViz,
+  bestMoveBoardViz,   // board after the correct move (blunder path only)
   postBoardViz,
   playerName,
   gap,
@@ -598,7 +599,7 @@ export function buildBlunderExplainPrompt({
 
   const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, double threat, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
 
   const sections = [];
 
@@ -622,7 +623,12 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   boardLines.push('### Before the move');
   boardLines.push(boardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('### After the move');
+  if (isBlunder && bestMoveBoardViz) {
+    boardLines.push('### After the best move');
+    boardLines.push(bestMoveBoardViz);
+    boardLines.push('');
+  }
+  boardLines.push('### After the move played');
   boardLines.push(postBoardViz || '[unavailable]');
   boardLines.push('');
   boardLines.push('Note: In the board, Gn = Green discs, Gy = Gray discs.');
@@ -738,7 +744,7 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
   formatLines.push('');
   formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
-  formatLines.push('  [term:kbId]concept name[/term:kbId] — for a KB-defined term. Example: [term:community-z-threat]Z-threat[/term:community-z-threat]');
+  formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Example: [term:CONCEPT_ID]double threat[/term:CONCEPT_ID]');
   formatLines.push('  Use the exact kbId from the KB term definitions. Only tag terms that appear in the definitions above.');
   formatLines.push('');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
