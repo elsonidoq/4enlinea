@@ -24,7 +24,7 @@ metadata:
 
 ## explanation_cache schema
 
-`explanation_cache.deep_reveal_json` (JSONB): `{ explanation, prompt, terms }`. The `prompt` field allows `llm_feedback` to capture full LLM context. Old entries may lack `prompt` — the llm-feedback endpoint rebuilds it from `buildExplainContext` on cache miss. `terms` is a `{ [kbId]: shortSummary }` map for all `[term:kbId]` tags found in the explanation.
+`explanation_cache.deep_reveal_json` (JSONB): `{ explanation, prompt, terms }`. The `prompt` field allows `llm_feedback` to capture full LLM context. Old entries may lack `prompt` — the llm-feedback endpoint rebuilds it from `buildExplainContext` on cache miss. `terms` is a `{ [kbId]: shortSummary }` map for all `[term:kbId]` tags found in the explanation. The kbId used as the key is exactly what the LLM wrote (e.g. `fork`), not necessarily the KB file slug.
 
 Cache key: `SHA256(movestring + ":" + col)`. `template_version = 'v2'` set on all new inserts (migration 035 adds the column).
 

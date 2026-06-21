@@ -283,10 +283,14 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     const shortSummary = loadKBShortSummary(kbEntry.id);
     if (!shortSummary) continue;
 
-    // Use the KB file slug (kbEntry.id) as the term tag identifier,
-    // NOT the internal pattern key. This is the PATTERN_KB slug bridge.
+    // For alias entries (e.g. fork → community-double-threat), expose the alias as the tag id
+    // so the LLM writes [term:fork] — which matches what loadKBShortSummary can now resolve.
+    // For non-alias entries the tag id is the KB slug as before.
+    const isAlias = patternKey !== kbEntry.id;
+    const tagId = isAlias ? patternKey : kbEntry.id;
+    const displayName = isAlias ? `${kbEntry.id.replace(/-/g, ' ')} / ${patternKey}` : kbEntry.id;
     kbTermLines.push(
-      `- [term:${kbEntry.id}] **${kbEntry.id}** (${kbEntry.id}): ${shortSummary}`
+      `- [term:${tagId}] **${displayName}** (${tagId}): ${shortSummary}`
     );
   }
 

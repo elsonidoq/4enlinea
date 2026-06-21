@@ -105,7 +105,7 @@ export function loadKBStatement(id) {
  * Extracts the `short_summary` field from a KB article's YAML frontmatter.
  * Returns null if the file cannot be read or the field is missing.
  */
-export function loadKBShortSummary(id) {
+function _loadKBShortSummaryRaw(id) {
   try {
     const text = readFileSync(join(KB_DIR, `${id}.md`), 'utf8');
     const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
@@ -126,6 +126,14 @@ export function loadKBShortSummary(id) {
   } catch {
     return null;
   }
+}
+
+export function loadKBShortSummary(id) {
+  const result = _loadKBShortSummaryRaw(id);
+  if (result !== null) return result;
+  // Alias fallback: if id matches a PATTERN_KB key (e.g. 'fork'), resolve through to the real slug
+  const kb = PATTERN_KB[id];
+  return kb ? _loadKBShortSummaryRaw(kb.id) : null;
 }
 
 /**

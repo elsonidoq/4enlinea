@@ -110,6 +110,7 @@
 - [Auth mostly built; payments deferred](project_auth_payments_state.md) — ProfileStore/IndexedDBStore/SupabaseStore/AuthModal exist; Epic 7 is reskin + store extension
 - [Stats from puzzle_attempts, not session_stats](project_stats_architecture.md) — GET /api/stats aggregates puzzle_attempts JOIN puzzles; session_stats table orphaned
 - [Coach + Deep Reveal product docs](project_coach_deep_reveal_docs.md) — coach_explanation_principles.md + deep_reveal_product.md (AUTHORITATIVE); real new work = server-side validate-then-cache
+- [PATTERN_KB alias resolution](project_pattern_kb_alias_resolution.md) — fork→community-double-threat alias; prompt uses alias key as tag id; loadKBShortSummary resolves aliases via PATTERN_KB fallback
 - [Blunder tagging design decisions](project_blunder_tagging_design.md) — storage gate independent of tagging; forced_win first-class pattern; unknown→suboptimal_move; 4-epic plan
 - [Category naming — zugzwang vs forced_win](project_category_cleanup.md) — fork_setup/parity_control removed; future zugzwang will be a distinct category
 - [Blunder severity graduated measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed 2026-06-03; blunder_severity is the primary quality gate; atomic upsert

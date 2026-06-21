@@ -58,15 +58,12 @@ export function createSolverProcess() {
             callerReject(err);
           }, timeoutMs);
 
-          console.log(`[solver.query] START moveString="${moveString}" queueLen=${queue.length}`);
           queue.push({
             moveString,
             resolve: (result) => {
               if (settled) return;
               settled = true;
               clearTimeout(timer);
-              const elapsed = Date.now() - startTime;
-              console.log(`[solver.query] OK moveString="${moveString}" elapsed=${elapsed}ms`);
               chainResolve();
               callerResolve(result);
             },
