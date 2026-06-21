@@ -8,6 +8,7 @@ import { createSolverProcess } from './c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
+import { logError } from './logger.js';
 
 const ROOMS_PAGE_SIZE = 50;
 const INVALID_MOVE = -1000;
@@ -261,6 +262,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         apiOk = true;
       } catch (e) {
         if (attempt === 2) throw new Error(`Papergames API unreachable: ${e.message}`);
+        console.log('[importForUser] API probe attempt', attempt, 'failed, retrying:', e.message);
         await new Promise(r => setTimeout(r, 1000));
       }
     }
@@ -292,7 +294,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         try {
           replayData = await fetchReplay(room.uid);
         } catch (e) {
-          console.log('[importForUser] fetchReplay failed — uid:', room.uid, 'error:', e.message);
+          logError('[importForUser/fetchReplay]', e, { uid: room.uid });
           skipped++;
           continue;
         }
@@ -303,7 +305,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
           moveString = parseMoves(replayData);
           side = getUserSide(replayData, papergamesId);
         } catch (e) {
-          console.log('[importForUser] parse failed — uid:', room.uid, 'error:', e.message);
+          logError('[importForUser/parse]', e, { uid: room.uid });
           skipped++;
           continue;
         }
@@ -319,7 +321,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         try {
           ({ blunders, accuracy } = await extractBlunders(solver, moveString, side, userId));
         } catch (e) {
-          console.log('[importForUser] extractBlunders failed — uid:', room.uid, 'error:', e.message);
+          logError('[importForUser/extractBlunders]', e, { uid: room.uid });
           skipped++;
           continue;
         }
@@ -330,7 +332,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
           const gameRow = { ...buildGameRow(room, replayData, papergamesId, userId, side), accuracy };
           papergamesGameId = await upsertGame(supabase, gameRow);
         } catch (e) {
-          console.log('[importForUser] upsertGame failed — uid:', room.uid, 'error:', e.message);
+          logError('[importForUser/upsertGame]', e, { uid: room.uid });
           skipped++;
           continue;
         }

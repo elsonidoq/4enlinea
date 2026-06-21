@@ -11,6 +11,7 @@ import { tagBlunder } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from '../moveQualityScorer.js';
 import { VALID_BLUNDER_TAGS } from '../blunderTags.js';
+import { logError } from '../logger.js';
 
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const INVALID_MOVE = -1000;
@@ -64,14 +65,14 @@ async function processGames(supabase, solver, games, { isPapergames }) {
         patternTag = VALID_BLUNDER_TAGS.has(result.tag) ? result.tag : 'suboptimal_move';
         reason = result.reason;
         direction = result.direction;
-      } catch (_e) { /* leave fallback values */ }
+      } catch (_e) { logError('[reprocess/tagBlunder]', _e); /* leave fallback values */ }
 
       let severityFraction = null;
       try {
         const postMistakeMs = movesBeforeThisPly + String(col);
         const sv = await computeBlunderSeverity(solver, postMistakeMs, BLUNDER_SEVERITY_DEPTH);
         severityFraction = sv.severity;
-      } catch (_e) { /* leave null */ }
+      } catch (_e) { logError('[reprocess/computeBlunderSeverity]', _e); /* leave null */ }
 
       toInsert.push({
         user_id,
