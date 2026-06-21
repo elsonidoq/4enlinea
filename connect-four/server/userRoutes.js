@@ -8,6 +8,7 @@
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { importForUser, saveLiveGame, extractAndSaveBlunders } from './papergamesImporter.js';
 import { randomUUID } from 'node:crypto';
+import { logError } from './logger.js';
 import {
   writeSessionStats,
   writeLessonProgress,
@@ -258,6 +259,7 @@ export function registerUserRoutes(app, supabase) {
 
       res.json({ progress });
     } catch (err) {
+      logError('[user/challenge-progress]', err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -507,6 +509,7 @@ export function registerUserRoutes(app, supabase) {
       if (failed) return res.status(500).json({ error: failed.error });
       res.status(204).send();
     } catch (err) {
+      logError('[user/migrate]', err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -615,6 +618,7 @@ export function registerUserRoutes(app, supabase) {
           // Non-fatal — import succeeded, just the timestamp write failed
         }
       } catch (err) {
+        logError('[papergames-import-job]', err);
         jobEntry.status = 'error';
         jobEntry.error = err.message;
         // Do NOT update last_import_at on error
