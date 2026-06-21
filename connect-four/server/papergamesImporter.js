@@ -247,6 +247,7 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
   try {
     let imported = 0;
     let skipped = 0;
+    let blunderErrors = 0;
     let processed = 0;
     let start = 0;
     let total = null;
@@ -336,7 +337,8 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
 
         // ── Insert blunders ───────────────────────────────────────────────
         for (const b of blunders) {
-          await insertGameBlunder(supabase, { ...b, papergames_game_id: papergamesGameId });
+          const ok = await insertGameBlunder(supabase, { ...b, papergames_game_id: papergamesGameId });
+          if (!ok) blunderErrors++;
         }
 
         imported++;
@@ -354,8 +356,8 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
     }
 
     console.log('[importForUser] Done — imported:', imported, 'skipped:', skipped,
-      'processed:', processed, 'stopEarly:', stopEarly);
-    return { imported, skipped };
+      'blunderErrors:', blunderErrors, 'processed:', processed, 'stopEarly:', stopEarly);
+    return { imported, skipped, blunderErrors };
   } finally {
     solver.destroy();
   }

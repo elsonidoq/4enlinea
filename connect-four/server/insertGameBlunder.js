@@ -24,33 +24,36 @@ export async function insertGameBlunder(supabase, row) {
 
   const quality = row.quality === 'suboptimal' ? 'suboptimal' : 'blunder';
 
+  const payload = {
+    user_id: row.user_id,
+    board_state: row.board_state,
+    move_played: row.move_played,
+    correct_move: row.correct_move,
+    pattern_category: safeTag,
+    quality,
+    reason: row.reason,
+    direction: row.direction,
+    severity: row.severity,
+    blunder_severity: row.blunder_severity ?? null,
+    move_index: row.board_state?.length ?? null,
+    puzzle_id: null,
+    game_id: row.game_id ?? null,
+    papergames_game_id: row.papergames_game_id ?? null,
+  };
   try {
-    const { error } = await supabase.from('blunders').insert({
-      user_id: row.user_id,
-      board_state: row.board_state,
-      move_played: row.move_played,
-      correct_move: row.correct_move,
-      pattern_category: safeTag,
-      quality,
-      reason: row.reason,
-      direction: row.direction,
-      severity: row.severity,
-      blunder_severity: row.blunder_severity ?? null,
-      move_index: row.board_state?.length ?? null,
-      puzzle_id: null,
-      game_id: row.game_id ?? null,
-      papergames_game_id: row.papergames_game_id ?? null,
-    });
+    const { error } = await supabase.from('blunders').insert(payload);
 
     if (error) {
       if (error.code === '23505') {
-        // Dedup — silent success
-      } else {
-        console.error('[insertGameBlunder] code:', error.code, 'msg:', error.message,
-          'details:', error.details, 'hint:', error.hint);
+        // duplicate — already recorded for this game/move
+        return true;
       }
+      console.error('[insertGameBlunder] code:', error.code, 'msg:', error.message);
+      return false;
     }
+    return true;
   } catch (e) {
-    console.error('[insertGameBlunder] caught:', e.message, e.code);
+    console.error('[insertGameBlunder] caught:', e.message);
+    return false;
   }
 }

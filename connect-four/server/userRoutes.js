@@ -550,6 +550,7 @@ export function registerUserRoutes(app, supabase) {
         status: 'done',
         imported: 0,
         skipped: 0,
+        blunderErrors: 0,
         capReached: true,
         error: null,
       });
@@ -571,6 +572,7 @@ export function registerUserRoutes(app, supabase) {
       status: 'pending',
       imported: 0,
       skipped: 0,
+      blunderErrors: 0,
       capReached: false,
       error: null,
     };
@@ -587,7 +589,7 @@ export function registerUserRoutes(app, supabase) {
           'gameLimit:', gameLimit,
           'lastImportAt:', req.user.last_import_at);
 
-        const { imported, skipped } = await importForUser(
+        const { imported, skipped, blunderErrors } = await importForUser(
           supabase,
           req.user.id,
           papergamesId,
@@ -595,11 +597,13 @@ export function registerUserRoutes(app, supabase) {
           req.user.last_import_at,
         );
 
-        console.log('[import] importForUser returned — imported:', imported, 'skipped:', skipped);
+        console.log('[import] importForUser returned — imported:', imported, 'skipped:', skipped,
+          'blunderErrors:', blunderErrors);
 
         jobEntry.status = 'done';
         jobEntry.imported = imported;
         jobEntry.skipped = skipped;
+        jobEntry.blunderErrors = blunderErrors;
 
         // Write last_import_at after successful import (endpoint's responsibility)
         try {
@@ -637,6 +641,7 @@ export function registerUserRoutes(app, supabase) {
       status: job.status,
       imported: job.imported,
       skipped: job.skipped,
+      blunderErrors: job.blunderErrors ?? 0,
       capReached: job.capReached ?? false,
       ...(job.error ? { error: job.error } : {}),
     });

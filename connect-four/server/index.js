@@ -157,15 +157,27 @@ function queryDepth(moves, depth) {
 
 const solver = createSolverProcess();
 
-// ── Supabase client ───────────────────────────────────────────────────────────
+// ── Supabase clients ──────────────────────────────────────────────────────────
+// supabase     — DB operations only (from(), rpc()); never call auth.* on this
+// authClient   — auth operations only (getUser, refreshSession, signInAnonymously)
+// Keeping them separate avoids supabase-js session contamination: auth.getUser(userJwt)
+// internally stores the user's JWT on the client, which would cause subsequent
+// DB inserts to run as 'authenticated' instead of 'service_role', triggering RLS 42501.
 
 let supabase = null;
+let authClient = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
   const { createClient } = await import('@supabase/supabase-js');
+  const clientOpts = { auth: { persistSession: false, autoRefreshToken: false } };
   supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false } }
+    clientOpts
+  );
+  authClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    clientOpts
   );
 }
 
@@ -216,7 +228,7 @@ app.post('/api/auth/callback', async (req, res) => {
 
   try {
     console.log('[auth/callback] verifying access_token, length=', access_token?.length);
-    const { data, error } = await supabase.auth.getUser(access_token);
+    const { data, error } = await authClient.auth.getUser(access_token);
     if (error || !data?.user) {
       console.error('[auth/callback] token invalid:', error?.message);
       return res.status(401).json({ error: 'Invalid token' });
@@ -253,7 +265,7 @@ app.post('/api/auth/refresh', async (req, res) => {
   if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
   try {
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    const { data, error } = await authClient.auth.refreshSession({ refresh_token: refreshToken });
     if (error || !data?.session) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
@@ -285,7 +297,7 @@ app.get('/api/auth/session', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await authClient.auth.getUser(token);
     if (error || !data?.user) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
@@ -310,7 +322,7 @@ app.get('/api/auth/session', async (req, res) => {
 app.post('/api/auth/anonymous', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
   try {
-    const { data, error } = await supabase.auth.signInAnonymously();
+    const { data, error } = await authClient.auth.signInAnonymously();
     if (error || !data?.session) return res.status(400).json({ error: error?.message || 'Anonymous sign-in failed' });
 
     res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
@@ -336,7 +348,7 @@ async function loadUser(req, _res, next) {
   if (!token || !supabase) return next();
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await authClient.auth.getUser(token);
     if (error || !data?.user) return next();
 
     let { data: profile } = await supabase

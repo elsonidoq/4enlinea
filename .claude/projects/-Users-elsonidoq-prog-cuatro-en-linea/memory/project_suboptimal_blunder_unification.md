@@ -18,6 +18,8 @@ Implemented 2026-06-21. Suboptimal moves and blunders are now the same concept a
 - `ReviewScreen.navigateToMistake` routes ALL non-optimal nodes to `blunderDetail` — no fallback to explorer. No-op if `gameBlunderList` match not found yet (queue loading or anonymous user).
 - `difficulty` is now passed as a nav param from `ReviewScreen` → `blunderDetail` for "Start from here".
 
+**Analysis caching (2026-06-21):** `POST /api/games/analyze` now has a fast cache path for logged-in users. If `blunders` rows already exist for the user+game, the endpoint reconstructs the full response from the DB (one SELECT) without any solver, tagBlunder, or blunderSeverity calls. Anonymous users and first-time analysis still run the full solver path. In the cached path, `score`/`bestScore`/`bestCol` per move are `null` (ReviewScreen doesn't use them; MistakeDetailScreen reads them from the coach queue). `scored` in the cached path counts all user plies rather than only non-forced ones — a known approximation documented as tech debt in `api-conventions.md`.
+
 **Why:** The old two-screen design created inconsistency. Both review actions (deep reveal, mark reviewed, start-from-here) should apply to all mistakes equally.
 
-**How to apply:** If touching mistake review flows, assume all non-optimal moves route to `blunderDetail` and are in the `blunders` table. See [[reference-review-screen-navigate-to-mistake]].
+**How to apply:** If touching mistake review flows, assume all non-optimal moves route to `blunderDetail` and are in the `blunders` table. See [[reference-review-screen-navigate-to-mistake]]. For the analyze endpoint, blunders table is now the cache — do not add a separate cache mechanism without first considering whether the blunders rows already contain all needed data.

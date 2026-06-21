@@ -132,6 +132,8 @@ export function SettingsScreen({ go, goBack }) {
           stopPolling();
           if (job.capReached) {
             setImportResult("You've reached your 15-game limit.");
+          } else if (job.blunderErrors > 0) {
+            setImportError(`Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}, but analysis failed to save for ${job.blunderErrors} move${job.blunderErrors !== 1 ? 's' : ''}. Please try re-importing.`);
           } else {
             setImportResult(`Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}.`);
           }
