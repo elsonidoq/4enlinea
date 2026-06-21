@@ -599,7 +599,7 @@ export function buildBlunderExplainPrompt({
 
   const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, double threat, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
 
   const sections = [];
 
