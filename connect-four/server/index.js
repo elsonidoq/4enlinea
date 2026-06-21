@@ -29,6 +29,7 @@ import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
+import { logError } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -3816,6 +3817,15 @@ ${noindexTag}`;
   }
 
   res.type('html').send(indexHtml);
+});
+
+// ── Global error handler ───────────────────────────────────────────────────────
+// Safety net for any error passed via next(err) or thrown in async routes.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  logError('[unhandled]', err, { method: req.method, url: req.originalUrl });
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ── Server start ───────────────────────────────────────────────────────────────
