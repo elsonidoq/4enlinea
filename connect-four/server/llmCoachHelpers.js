@@ -743,10 +743,12 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
   formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
   formatLines.push('');
-  formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
-  formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Example: [term:CONCEPT_ID]double threat[/term:CONCEPT_ID]');
-  formatLines.push('  Use the exact kbId from the KB term definitions. Only tag terms that appear in the definitions above.');
-  formatLines.push('');
+  if (kbTermsSection) {
+    formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
+    formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Replace CONCEPT_ID with the exact kbId from the KB term definitions.');
+    formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
+    formatLines.push('');
+  }
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
