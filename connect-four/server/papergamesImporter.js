@@ -105,7 +105,7 @@ async function extractBlunders(solver, moveString, side, userId) {
 
     const scores = movesBefore.length === 0
       ? EMPTY_BOARD_SCORES
-      : await solver.query(movesBefore);
+      : await solver.query(movesBefore, 30000);
 
     const legalCount = scores.filter(s => s !== INVALID_MOVE).length;
     if (legalCount <= 1) continue; // forced move — skip accuracy + blunder scoring
@@ -288,11 +288,15 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         }
 
         processed++;
+        console.log('[importForUser] Room', processed, '/', gameLimit,
+          'uid:', room.uid, 'createdAt:', room.createdAt);
 
         // ── Fetch replay ──────────────────────────────────────────────────
         let replayData;
         try {
+          console.log('[importForUser] fetchReplay start uid:', room.uid);
           replayData = await fetchReplay(room.uid);
+          console.log('[importForUser] fetchReplay ok uid:', room.uid);
         } catch (e) {
           logError('[importForUser/fetchReplay]', e, { uid: room.uid });
           skipped++;
@@ -304,6 +308,8 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         try {
           moveString = parseMoves(replayData);
           side = getUserSide(replayData, papergamesId);
+          console.log('[importForUser] parsed uid:', room.uid,
+            'moves:', moveString.length, 'side:', side);
         } catch (e) {
           logError('[importForUser/parse]', e, { uid: room.uid });
           skipped++;
@@ -319,7 +325,10 @@ export async function importForUser(supabase, userId, papergamesId, gameLimit, l
         // ── Extract blunders (solver analysis) ────────────────────────────
         let blunders, accuracy;
         try {
+          console.log('[importForUser] extractBlunders start uid:', room.uid);
           ({ blunders, accuracy } = await extractBlunders(solver, moveString, side, userId));
+          console.log('[importForUser] extractBlunders done uid:', room.uid,
+            'blunders:', blunders.length, 'accuracy:', accuracy);
         } catch (e) {
           logError('[importForUser/extractBlunders]', e, { uid: room.uid });
           skipped++;

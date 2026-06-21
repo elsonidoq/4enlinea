@@ -118,6 +118,8 @@
 - [Spec 038 — Papergames self-service import](project_spec038_papergames_self_service_import.md) — spec/plan/tasks done 2026-06-17; 17 tasks; background-job 202+poll, 15-game free cap, gear icon→settings screen, dedicated solver per import
 - [claimodd removal — 2026-06-17](project_claimodd_removal.md) — removed entirely; wrong implementation (center-col-specific) + generation rate ~2/400; 20 files edited/deleted
 
+- [Error logging — logError helper](project_error_logging.md) — server/logger.js added 2026-06-21; logError(tag,err,extra?) for all catch blocks; global error middleware; forbidden_columns test commented out
+
 ## Project — local dev / deploy
 
 - [Local Supabase setup](project_local_supabase_setup.md) — URL/key config, Mailpit, service_role grants, dev workflow

@@ -1,5 +1,35 @@
 # Server Conventions
 
+## Error Logging
+
+**MUST**: All catch blocks in server route handlers and helpers call `logError` before responding or returning.
+
+```js
+import { logError } from './logger.js';
+
+// Route handler
+} catch (err) {
+  logError('[endpoint-name]', err);
+  res.status(500).json({ error: err.message });
+}
+
+// Helper / background job
+} catch (e) {
+  logError('[job/step]', e, { uid: room.uid });  // extra context is optional
+  skipped++;
+  continue;
+}
+```
+
+`logError(tag, err, extra?)` in `server/logger.js`:
+- Always calls `console.error` with tag, message, stack, and optional extra object.
+- If `SENTRY_DSN` is set, calls `Sentry.captureException(err, { tags: { tag }, extra })`.
+- `tag` convention: `'[route-path]'` e.g. `'[auth/callback]'`, `'[puzzles/check/solver]'`
+
+**Global safety net**: A 4-arg Express error middleware is registered at the end of `index.js` (before `app.listen`) and catches any error passed via `next(err)` or thrown in async routes. All route handlers still call `logError` directly — the global handler is a last resort, not a substitute.
+
+**Intentional exception**: Client-input validation errors that respond with 4xx are NOT logged as errors — e.g. a `400 Invalid movestring` catch block is intentionally silent.
+
 ## Solver IPC — Persistent Process
 
 **MUST**: The standard scoring solver (`c4solver -a -b 7x6.book`) runs as a single persistent child process spawned at server startup via `createSolverProcess()` in `c4solver-wrapper.js`.
