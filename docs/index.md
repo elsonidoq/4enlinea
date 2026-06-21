@@ -22,6 +22,10 @@
 
 [old_dont_read/connect_four_training_application_design.md](connect_four_training_application_design.md) — superseded by connect-four-implementation-guide.md and connect-four-curriculum-guide.md
 
+### LLM Coach
+
+[deep-reveal-eval.md](deep-reveal-eval.md) — 3-layer evaluation framework for deep reveal explanations: deterministic checks, LLM-as-judge, and golden set regression — implementing or running evals after prompt changes
+
 ### Other
 
 [best_practices_spec_driven_development.md](best_practices_spec_driven_development.md) — spec-driven development methodology using SpecKit + Claude Code for solo founders — understanding the workflow that drives this project's spec → plan → tasks pipeline

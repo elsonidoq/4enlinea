@@ -761,10 +761,14 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
 
   // ── Task ──────────────────────────────────────────────────────────────────
   if (isBlunder) {
+    const patternInstruction = kbTermsSection
+      ? 'Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above).'
+      : 'Do not invent tactical concept names — describe only what you can see changing between the two boards.';
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
-Name the tactical pattern that was missed or given away. Say what the better move would have
-accomplished. Do not use the internal tag names or direction labels — explain using board concepts only.`);
+${patternInstruction} Say what the better move would have accomplished.
+When the threat comparison shows a meaningful difference, use the specific counts as evidence (e.g. "Green's minor threats doubled from 3 to 6").
+Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task
 In 2–3 sentences: explain why this was a strong move, using the key insight as your starting point.
