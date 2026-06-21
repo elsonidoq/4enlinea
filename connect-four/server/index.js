@@ -255,6 +255,7 @@ app.post('/api/auth/callback', async (req, res) => {
 
     res.json({ user: { id: data.user.id, tier } });
   } catch (err) {
+    logError('[auth/callback]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -280,6 +281,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
+    logError('[auth/refresh]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -315,6 +317,7 @@ app.get('/api/auth/session', async (req, res) => {
 
     res.json({ user: { id: data.user.id, tier } });
   } catch (err) {
+    logError('[auth/session]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -333,6 +336,7 @@ app.post('/api/auth/anonymous', async (req, res) => {
 
     res.json({ user: { id: data.user.id, tier: 'free' } });
   } catch (err) {
+    logError('[auth/anonymous]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -488,6 +492,7 @@ app.post('/api/papergames/guest-registration', async (req, res) => {
     const data = await pgRes.json();
     res.status(pgRes.status).json(data);
   } catch (err) {
+    logError('[papergames/guest-registration]', err);
     res.status(502).json({ error: 'Papergames unavailable' });
   }
 });
@@ -500,6 +505,7 @@ app.get('/api/papergames/tournament/open', async (req, res) => {
     const data = await pgRes.json();
     res.status(pgRes.status).json(data);
   } catch (err) {
+    logError('[papergames/tournament/open]', err);
     res.status(502).json({ error: 'Papergames unavailable' });
   }
 });
@@ -534,6 +540,7 @@ app.post('/api/admin/lessons', requireAdmin, (req, res) => {
     reloadLessons();
     res.status(201).json({ ok: true });
   } catch (e) {
+    logError('[admin/lessons/create]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -548,6 +555,7 @@ app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
     reloadLessons();
     res.json({ ok: true });
   } catch (e) {
+    logError('[admin/lessons/update]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -558,6 +566,7 @@ app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
     reloadLessons();
     res.json({ ok: true });
   } catch (e) {
+    logError('[admin/lessons/delete]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -582,6 +591,7 @@ app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ puzzles: puzzles || [] });
   } catch (e) {
+    logError('[admin/puzzles]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -603,6 +613,7 @@ app.post('/api/scores', async (req, res) => {
     console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
     res.json({ scores });
   } catch (err) {
+    logError('[scores]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1056,6 +1067,7 @@ app.post('/api/llm-feedback', async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json({ id: data.id });
   } catch (err) {
+    logError('[llm-feedback]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1147,6 +1159,7 @@ app.post('/api/blunders', async (req, res) => {
     }
     res.status(201).json({ id: data[0].id });
   } catch (err) {
+    logError('[blunders]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1240,6 +1253,7 @@ app.get('/api/puzzles', async (req, res) => {
 
     res.json({ categories });
   } catch (err) {
+    logError('[puzzles/admin]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1272,6 +1286,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
 
     res.json({ counts, sets: CHALLENGE_SETS });
   } catch (err) {
+    logError('[puzzles/counts]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1409,6 +1424,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
     // Anonymous — unchanged
     res.json({ puzzles });
   } catch (err) {
+    logError('[puzzles/draw]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1435,6 +1451,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
     }).eq('id', id);
     res.status(204).send();
   } catch (err) {
+    logError('[challenge-sessions/advance]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1530,6 +1547,7 @@ app.post('/api/evaluate-move', async (req, res) => {
 
     res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
   } catch (err) {
+    logError('[evaluate-move]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1602,6 +1620,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
       forbiddenCols: predicateResult.forbiddenCols ?? null,
     });
   } catch (err) {
+    logError('[evaluate-move/inline]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1664,6 +1683,7 @@ app.post('/api/games', async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json({ id: data.id });
   } catch (err) {
+    logError('[games/create]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1710,6 +1730,7 @@ app.post('/api/games/from-position', async (req, res) => {
     const truncated = moves.slice(0, N);
     res.json({ moves: truncated, side, difficulty });
   } catch (err) {
+    logError('[games/from-position]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1873,6 +1894,7 @@ app.get('/api/games', async (req, res) => {
 
     res.json({ games: page, total });
   } catch (err) {
+    logError('[games]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2103,6 +2125,7 @@ app.post('/api/games/analyze', async (req, res) => {
       }
     }
   } catch (err) {
+    logError('[games/analyze]', err);
     return res.status(500).json({ error: err.message });
   }
 
@@ -2200,6 +2223,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   try {
     scores = puzzle.move_string.length > 0 ? await solver.query(puzzle.move_string) : EMPTY_BOARD_SCORES;
   } catch (err) {
+    logError('[puzzles/check/solver]', err);
     return res.status(500).json({ error: 'Solver unavailable' });
   }
 
@@ -2536,6 +2560,7 @@ app.post('/api/stripe/create-checkout', async (req, res) => {
     });
     res.json({ checkoutUrl: session.url });
   } catch (err) {
+    logError('[stripe/create-checkout]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2549,6 +2574,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
+    logError('[stripe/webhook]', err);
     return res.status(400).json({ error: err.message });
   }
 
@@ -2610,6 +2636,7 @@ app.post('/api/stripe/portal', async (req, res) => {
     });
     res.json({ portalUrl: session.url });
   } catch (err) {
+    logError('[stripe/portal]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2909,6 +2936,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   try {
     scores = preClickMoves === '' ? EMPTY_BOARD_SCORES : await solver.query(preClickMoves);
   } catch (err) {
+    logError('[admin/scores/solver]', err);
     return res.status(500).json({ error: 'Solver unavailable' });
   }
 
@@ -3173,6 +3201,7 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
   try {
     puzzles = JSON.parse(await readFile(dataPath, 'utf8'));
   } catch (err) {
+    logError('[admin/seed-puzzles]', err);
     return res.status(500).json({ error: `Could not read placeholder_puzzles.json: ${err.message}` });
   }
 
@@ -3767,6 +3796,7 @@ app.get('/{*path}', async (req, res) => {
         return res.type('html').send(patched);
       }
     } catch (e) {
+      logError('[html-serve/game-og]', e);
       // fall through to serve plain index.html
     }
   }
@@ -3808,6 +3838,7 @@ ${noindexTag}`;
           return res.type('html').send(patched);
         }
       } catch (e) {
+        logError('[html-serve/blunder-og]', e);
         // fall through to noindex-only
       }
     }
