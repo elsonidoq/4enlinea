@@ -7,11 +7,18 @@ metadata:
   originSessionId: 04c4bf45-005f-4617-8eae-aeefaab3b257
 ---
 
-## Current state (as of 2026-05-19)
+## Current state (as of 2026-06-20)
 
-30 entries in `docs/knowledge-base/`:
+38 entries in `docs/knowledge-base/`:
 - 22 canonical entries: Allen T1–T7, Allen V1–V5, Allis 9 rules, allen-j-configuration
-- 8 project-local entries: `community-z-threat`, `community-ghost-threat`, `community-parity-trap`, `community-claimodd`, `community-figure-7`, `community-sextuple-threat`, `derived-parity-formula`, `derived-dead-space-parity`
+- 7 project-local entries: `community-z-threat`, `community-ghost-threat`, `community-parity-trap`, `community-figure-7`, `community-sextuple-threat`, `derived-parity-formula`, `derived-dead-space-parity` (community-claimodd removed 2026-06-17)
+- 8 new entries added 2026-06-20:
+  - Inline migrations: `community-immediate-threat`, `community-double-threat`, `community-forced-block`, `derived-odd-even-threat`
+  - Always-include glossary: `allen-major-threat`, `allen-minor-threat`, `community-gravity-top`, `allen-parity`
+
+**KB naming convention:** canonical Allen concepts use `allen-` prefix; canonical Allis use `allis-`; project-local heuristics use `community-`; logical derivations use `derived-`.
+
+**Entries with short_summary (popup-eligible):** all of the above 8 new files + the 7 pre-existing entries that already had short_summary (allen-j-configuration, allen-t2, allis-claimeven, allis-baseclaim, allis-before, allis-specialbefore, community-overcut, community-z-threat, community-figure-7).
 
 Schema defined in `docs/knowledge-base/README.md`. Template entry: `allen-t4.md` (only fully solver-verified entry at migration time).
 

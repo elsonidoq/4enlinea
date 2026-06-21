@@ -75,7 +75,6 @@
 ## References — infrastructure
 
 - [Supabase connection details](reference_supabase_connection.md) — sb_publishable/sb_secret key format; direct DB host fails, use pooler; Node inline query pattern
-- [Supabase Storage API](reference_supabase_storage_api.md) — verified upload/createSignedUrl/remove shapes from storage-js source; `signedUrl` field (not `url`); `upsert: true` in FileOptions
 - [Open Chrome with remote debugging](reference_open_chrome.md) — must use binary directly; `open -a` fails to bind port 9222 on macOS/Chrome 147
 - [Papergames auth API](reference_papergames_auth.md) — login needs domain-bound reCAPTCHA (blocks server-side login); refresh works without it; access≈30min/refresh≈366d
 - [ReviewScreen navigation contract](reference_review_screen_nav.md) — `go('review', { id: game.id })`; URL is `/game/:id`; screen takes `id` prop (UUID)
@@ -107,7 +106,7 @@
 
 - [MVP epic plan (v4)](project_mvp_epic_plan.md) — 10 epics in ship order; key product decisions gaps 1–30; product-vs-code mismatches
 - [New puzzle categories — spec locked](project_new_puzzle_categories.md) — z_threat, claimeven, undercut, overcut, figure_7, j_shape design decisions; highlight_metadata schema
-- [Lesson curriculum scope — MVP](project_lesson_curriculum.md) — 9 MVP + 2 post-MVP lessons; parity intro merged into L4 Z-Threats; Claimodd removed; lesson order + files listed
+- [Lesson curriculum scope — MVP](project_lesson_curriculum.md) — 11 MVP + 2 post-MVP lessons; parity chain L4→L5→L6→L7; what was cut and why
 - [Auth mostly built; payments deferred](project_auth_payments_state.md) — ProfileStore/IndexedDBStore/SupabaseStore/AuthModal exist; Epic 7 is reskin + store extension
 - [Stats from puzzle_attempts, not session_stats](project_stats_architecture.md) — GET /api/stats aggregates puzzle_attempts JOIN puzzles; session_stats table orphaned
 - [Coach + Deep Reveal product docs](project_coach_deep_reveal_docs.md) — coach_explanation_principles.md + deep_reveal_product.md (AUTHORITATIVE); real new work = server-side validate-then-cache
@@ -142,6 +141,7 @@
 - [Spec 030 — byPattern computation mismatch](project_spec030_session_stats_bypattern_mismatch.md) — both old and new getAllSessionStats read non-existent fields; byPattern always empty in prod
 - [explain-move-llm endpoint + explanation_cache](project_explain_system.md) — data flow, LLM prompt invariants, cache schema, Type 1–4 taxonomy
 - [Classifier current state — post-convolution refactor](project_classifier_current_state.md) — detectFigure7/detectJShape rewritten with convolution kernels 2026-06-19; J/U/O/F bugs resolved; T037–T048 closed
+- [detectOddEvenThreat — Yellow support added](project_detect_odd_even_threat_yellow.md) — FR-009 lifted 2026-06-20; parity via `isGoodRow = row => row % 2 === (perspective-1)`; categoryEvidence fields renamed to goodRowCol/goodRow/badMinorCol/badMinorRow
 - [Knowledge base status](project_kb_status.md) — 30 entries done; 9 fact-check errors fixed; 58 gaps; worked_examples PENDING
 - [forced_win refactor — done](project_forced_win_refactor.md) — CompletionStrategy interface; bitboard-only AI response; interaction_mode='sequence' on puzzles
 - [Puzzle quality + nav fixes](project_puzzle_quality_nav_fixes.md) — isClean() guards per category; forced_win min 5-ply; stable puzzle selection via useRef
@@ -167,7 +167,6 @@
 - [Papergames live-game integration (PlayOnlineScreen)](project_papergames_live_game_integration.md) — guest play + room-UID import (real-account shelved); useBoardState; save-live-game endpoint in userRoutes.js; known bugs (2nd-player win/loss inversion, identity mismatch)
 - [Spec 034 — board interaction feedback](project_spec034_board_interaction.md) — spec/plan/tasks done; lastDrop wiring in Board.jsx; staged continue render; isSubmitting trap; 11 tasks
 - [Spec 039 — audio & interactive coach](project_spec039_audio_interactive_coach.md) — spec/plan/tasks done 2026-06-19; 37 tasks; key anchors: PATTERN_KB slug bridge, Output format block at ~681–697, 6 return paths need terms, TRUNCATE explanation_cache at deploy
-- [Deep Reveal TTS](project_deep_reveal_tts.md) — implemented 2026-06-19; streaming ON-demand TTS for DeepRevealPane; GET /api/user/tts/deep-reveal; Supabase Storage cache keyed by sha256(stripped_text); unified speech queue
 - [Candidate generator — mistake probability experiment](project_candidate_generator_mistake_probability.md) — solverWeightedPosition refactored from softmax to MP-based sampling 2026-06-14
 - [Epic 6 architecture decisions](project_epic6_architecture.md) — IMPLEMENTED 2026-06-16; 14/15 tasks done; curation-time round robin reindex, shape_key + position columns, canonical key=value serializer, random-offset draw
 - [Shape descriptor module](project_shape_descriptor_module.md) — server/shapeDescriptor.js; 5 exports; dispatches all 14 categories; canonical serializer with sorted keys

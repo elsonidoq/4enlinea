@@ -10,7 +10,7 @@
 
 - bug: when the draggable split in the blunder view after clicking deep reveal gets too high up in the screen, the board suddenly stops being zoomed out and gets large again
 
-- locked lessons are clickable and playable. You should only be able to do lessons in the saga order, and if you are free user, clicking in a locked lesson should open a call to action to become a paying user
+-  You should only be able to do lessons in the saga order, and if you are free user, clicking in a locked lesson should open a call to action to become a paying user
 
 - in immediate threat in all examples the user should be green, and in forced block the user must be gray
 

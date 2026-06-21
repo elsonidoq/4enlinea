@@ -215,11 +215,15 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - `getScoreTier(col, score, immediateWinSet, immediateLossSet)` — classifies a column into IMMEDIATE WIN / WINS / DRAWS / LOSES / IMMEDIATE LOSS
 - `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
 
+`PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). Special shapes:
+- `{ id, always_include: true }` — glossary terms included in every explain-move prompt regardless of which patterns fired (e.g. `major_threat`, `parity`)
+- Alias entries share a `kbId` with another pattern key (e.g. `fork` → same file as `double_threat`); `explainContext.js` deduplicates by `kbId`. Every entry must have a corresponding `docs/knowledge-base/<id>.md` with `short_summary` and an entry in `src/lib/kbTermLesson.js` for the popup display name.
+
 ### Shared utilities
 
 - `isMajorThreatForPlayer(board, col, row, player)` — checks whether a cell is a 3+empty major threat; not exported from `classifier.js`, this is the canonical server location
 - `getBoardVisualization(movestring)` — shells out to `scripts/visualize_board.mjs` via `spawnSync`, strips the `scr` row
-- `buildKBSection(patternNames)` / `loadKBStatement(id)` — loads KB article statements for active patterns
+- `buildKBSection(patternNames)` / `loadKBStatement(id)` — loads KB article `statement` field for active patterns; `inline` branch removed 2026-06-20
 - `callLLM(prompt)` — calls OpenAI chat completions API; reads `OPENAI_API_KEY` / `OPENAI_MODEL` from env
 - `selectContrastMove(scores, userCol, board)` — pure; returns `{ contrastCol, isOptimal }` or `null` when all legal scores are equal. `isOptimal=true`: user played best, contrast = second-best; `isOptimal=false`: user played suboptimally, contrast = best. Tie-break: closest to col 3.
 - `getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver)` — returns the movestring after opponent's best response, or null if the game is over.

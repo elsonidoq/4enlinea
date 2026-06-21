@@ -1,8 +1,10 @@
 ---
 name: project_explain_system
 description: "explain-move-llm endpoint architecture, data flow, explanation_cache schema, and LLM prompt invariants"
-metadata:
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 8b3010d3-7cec-45b3-8dfc-c980649a8ace
 ---
 
 ## Endpoints (current — post Epic 3)
@@ -22,7 +24,7 @@ metadata:
 
 ## explanation_cache schema
 
-`explanation_cache.deep_reveal_json` (JSONB): `{ explanation, prompt }`. The `prompt` field allows `llm_feedback` to capture full LLM context. Old entries may lack `prompt` — the llm-feedback endpoint rebuilds it from `buildExplainContext` on cache miss.
+`explanation_cache.deep_reveal_json` (JSONB): `{ explanation, prompt, terms }`. The `prompt` field allows `llm_feedback` to capture full LLM context. Old entries may lack `prompt` — the llm-feedback endpoint rebuilds it from `buildExplainContext` on cache miss. `terms` is a `{ [kbId]: shortSummary }` map for all `[term:kbId]` tags found in the explanation.
 
 Cache key: `SHA256(movestring + ":" + col)`. `template_version = 'v2'` set on all new inserts (migration 035 adds the column).
 

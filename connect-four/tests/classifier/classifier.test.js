@@ -270,10 +270,10 @@ describe('detectOddEvenThreat()', () => {
     assert.ok(result.matched, 'should match odd_even_threat');
     assert.equal(result.correctCol, 2, 'correctCol should be col2');
     assert.ok(result.categoryEvidence, 'should include categoryEvidence');
-    assert.equal(result.categoryEvidence.oddRow, 4, 'promoted odd-row threat at row4');
-    assert.equal(result.categoryEvidence.oddRowCol, 5, 'promoted odd-row threat at col5');
-    assert.equal(result.categoryEvidence.evenMinorRow, 3, 'wrong-choice even-row minor at row3');
-    assert.equal(result.categoryEvidence.evenMinorCol, 2, 'wrong-choice even-row minor at col2');
+    assert.equal(result.categoryEvidence.goodRow, 4, 'promoted good-parity threat at row4');
+    assert.equal(result.categoryEvidence.goodRowCol, 5, 'promoted good-parity threat at col5');
+    assert.equal(result.categoryEvidence.badMinorRow, 3, 'wrong-choice bad-parity minor at row3');
+    assert.equal(result.categoryEvidence.badMinorCol, 2, 'wrong-choice bad-parity minor at col2');
   });
 
   // Negative: all scores <= 0 — no solver-optimal move exists → no match
@@ -290,11 +290,11 @@ describe('detectOddEvenThreat()', () => {
     assert.equal(result.matched, false, 'should not match when the converting move creates a double threat');
   });
 
-  // Negative: Yellow's turn (player 2) — must not match per FR-009
-  test('negative: Yellow turn — must not match', () => {
+  // Yellow's turn — FR-009 (Red-only) is lifted; Yellow can match when it has the pattern.
+  test('positive: Yellow turn — matches when Yellow has good+bad parity minors', () => {
     const board = new Board('333334444466306640210'); // + one extra move → Yellow's turn
     const result = detectOddEvenThreat(board, [1, 1, 1, 1, 1, 1, 1]);
-    assert.equal(result.matched, false, 'should not match on Yellow turn');
+    assert.equal(result.matched, true, 'Yellow should match when it has threats at both parities');
   });
 
   // Negative: no candidate columns create threats at both parities

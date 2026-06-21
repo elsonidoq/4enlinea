@@ -878,7 +878,6 @@ function isThreatUndercut(board, perspective, R, threatCol) {
 export function detectOddEvenThreat(board, scores, perspective = board.currentPlayer, solver = null) {
   // FR-033: when perspective != current player, recurse into all child moves
   if (perspective !== board.currentPlayer && solver) {
-    console.log('asdfasdf')
     return (async () => {
       const playableCols = [];
       for (let c = 0; c < COLS; c++) {
@@ -897,31 +896,30 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
     })();
   }
 
-  // Odd-even threat is Red-only (FR-009)
-  if (perspective !== 1) return { matched: false, cells: [] };
+  const majorFlag = perspective === 1 ? 'rm' : 'ym';
+  const minorFlag = perspective === 1 ? 'rn' : 'yn';
+  const isGoodRow = row => row % 2 === (perspective - 1);
 
-  const majorFlag = 'rm';
-  const minorFlag = 'rn';
   const oldMajorCells = getMajorThreatCells(board.board);
 
-  // Step 1: Both parities of non-immediate minor Red threats must already exist.
-  // Their simultaneous presence creates the parity choice for Red.
-  let firstEvenMinor = null;
-  let hasOddMinor = false;
+  // Step 1: Both parities of non-immediate minor threats must already exist.
+  // Their simultaneous presence creates the parity choice for the perspective player.
+  let firstBadMinor = null;
+  let hasGoodMinor = false;
   for (const [key, flags] of Object.entries(oldMajorCells)) {
     if (!flags[minorFlag] || flags[majorFlag]) continue;
     const [row, col] = key.split(',').map(Number);
     if (row <= board.colHeights[col]) continue; // immediate — not a parity choice
-    if (row % 2 === 0) { hasOddMinor = true; }
-    else if (!firstEvenMinor) { firstEvenMinor = { col, row }; }
+    if (isGoodRow(row)) { hasGoodMinor = true; }
+    else if (!firstBadMinor) { firstBadMinor = { col, row }; }
   }
-  if (!hasOddMinor || !firstEvenMinor) return { matched: false, cells: [] };
+  if (!hasGoodMinor || !firstBadMinor) return { matched: false, cells: [] };
 
   // Step 2: Verify there exists at least one playable column (any column, not just
-  // solver-optimal ones) that converts an even-row minor to a non-immediate major —
-  // the "wrong choice" whose completing cell does not align with Red's parity (odd
-  // 0-indexed rows). Without a promotable even-row minor, there is no genuine parity
-  // decision for the player to face.
+  // solver-optimal ones) that converts a bad-parity minor to a non-immediate major —
+  // the "wrong choice" whose completing cell does not align with the perspective
+  // player's favorable parity. Without a promotable bad-parity minor, there is no
+  // genuine parity decision for the player to face.
   {
     let wrongChoiceExists = false;
     for (let col = 0; col < COLS; col++) {
@@ -931,19 +929,19 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
       for (const [key, afterFlags] of Object.entries(afterCells)) {
         if (!afterFlags[majorFlag]) continue;
         const oldFlags = oldMajorCells[key];
-        // Must be a converted minor: was minor (rn) but not major (rm) before
+        // Must be a converted minor: was minor but not major before
         if (!oldFlags || !oldFlags[minorFlag] || oldFlags[majorFlag]) continue;
         const [row, tc] = key.split(',').map(Number);
         if (row <= afterBoard.colHeights[tc]) continue; // immediate — not a parity threat
-        if (row % 2 === 1) { wrongChoiceExists = true; break; } // even-row → wrong parity
+        if (!isGoodRow(row)) { wrongChoiceExists = true; break; } // bad parity → wrong choice
       }
       if (wrongChoiceExists) break;
     }
     if (!wrongChoiceExists) return { matched: false, cells: [] };
   }
 
-  // Step 3: Find all solver-optimal moves that promote at least one odd-row minor
-  // into a non-immediate, non-undercut major, without also promoting any even-row
+  // Step 3: Find all solver-optimal moves that promote at least one good-parity minor
+  // into a non-immediate, non-undercut major, without also promoting any bad-parity
   // minor or creating a parity double-threat.
   const correctCols = [];
   for (let col = 0; col < COLS; col++) {
@@ -953,7 +951,7 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
     const afterBoard = board.withMove(col);
     const newMajorCells = getMajorThreatCells(afterBoard.board);
 
-    // Discard if any pre-existing Red major threat survives as non-immediate after the move
+    // Discard if any pre-existing major threat for perspective player survives as non-immediate
     let hasPreexistingMajor = false;
     for (const [key, newFlags] of Object.entries(newMajorCells)) {
       if (!newFlags[majorFlag]) continue;
@@ -964,48 +962,48 @@ export function detectOddEvenThreat(board, scores, perspective = board.currentPl
     }
     if (hasPreexistingMajor) continue;
 
-    const convertedOdd = [];
-    let convertedEvenCount = 0;
+    const convertedGood = [];
+    let convertedBadCount = 0;
     for (const [key, newFlags] of Object.entries(newMajorCells)) {
       if (!newFlags[majorFlag]) continue;
       const oldFlags = oldMajorCells[key];
       if (!oldFlags || !oldFlags[minorFlag] || oldFlags[majorFlag]) continue;
       const [row, threatCol] = key.split(',').map(Number);
       if (row <= afterBoard.colHeights[threatCol]) continue; // gravity-top = immediate win, not a parity threat
-      if (row % 2 === 1) { convertedEvenCount++; continue; } // even-row → wrong parity
+      if (!isGoodRow(row)) { convertedBadCount++; continue; } // bad parity → wrong parity
       if (isThreatUndercut(afterBoard, perspective, row, threatCol)) continue;
-      convertedOdd.push({ col: threatCol, row });
+      convertedGood.push({ col: threatCol, row });
     }
 
-    if (convertedOdd.length === 0) continue;
-    if (convertedEvenCount > 0) continue; // promoted even-row minor — no choice left
+    if (convertedGood.length === 0) continue;
+    if (convertedBadCount > 0) continue; // promoted bad-parity minor — no choice left
     if (afterBoard.hasActiveDoubleThreat(perspective)) continue;
 
     // Check for non-immediate parity double-threat: ≥2 non-imm majors at both parities
     // means the opponent can't block both paths, making the position trivially won.
     {
-      let nonImmOdd = 0, nonImmEven = 0;
+      let nonImmGood = 0, nonImmBad = 0;
       for (const [key, flags] of Object.entries(newMajorCells)) {
         if (!flags[majorFlag]) continue;
         const [row, tc] = key.split(',').map(Number);
         if (row <= afterBoard.colHeights[tc]) continue;
-        if (row % 2 === 0) nonImmOdd++; else nonImmEven++;
+        if (isGoodRow(row)) nonImmGood++; else nonImmBad++;
       }
-      if (nonImmOdd >= 1 && nonImmEven >= 1) continue;
+      if (nonImmGood >= 1 && nonImmBad >= 1) continue;
     }
 
-    // Choose evidence: prefer converted odd threat in same column as the even
+    // Choose evidence: prefer converted good-parity threat in same column as the bad
     // minor (the parity-choice column), fall back to first converted.
-    const evidenceOdd = convertedOdd.find(e => e.col === firstEvenMinor.col) ?? convertedOdd[0];
+    const evidenceGood = convertedGood.find(e => e.col === firstBadMinor.col) ?? convertedGood[0];
 
     correctCols.push({
       col,
       evidence: {
-        correctCol:    col,
-        oddRowCol:     evidenceOdd.col,
-        oddRow:        evidenceOdd.row,
-        evenMinorCol:  firstEvenMinor.col,
-        evenMinorRow:  firstEvenMinor.row,
+        correctCol:   col,
+        goodRowCol:   evidenceGood.col,
+        goodRow:      evidenceGood.row,
+        badMinorCol:  firstBadMinor.col,
+        badMinorRow:  firstBadMinor.row,
       },
     });
   }
