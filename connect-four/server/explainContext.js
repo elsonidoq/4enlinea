@@ -7,7 +7,7 @@
  *   Returns { prompt: null, allowedSet: null, allMovesEqual: true } when all moves are settled.
  */
 
-import { classifyPattern, tagBlunder, Board } from './classifier.js';
+import { classifyPattern, tagBlunder, Board, getMajorThreatCells } from './classifier.js';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
@@ -22,6 +22,48 @@ import {
 
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const ROWS = 6;
+
+// Green = player 1 (rm/rn in getMajorThreatCells); wins on 0-indexed even rows (0,2,4).
+// Gray  = player 2 (ym/yn in getMajorThreatCells); wins on 0-indexed odd rows  (1,3,5).
+function summarizeThreats(board, perspective) {
+  const threatMap = getMajorThreatCells(board.board);
+  const pMaj = perspective === 1 ? 'rm' : 'ym';
+  const pMin = perspective === 1 ? 'rn' : 'yn';
+  const oMaj = perspective === 1 ? 'ym' : 'rm';
+  const oMin = perspective === 1 ? 'yn' : 'rn';
+  const playerGoodRow   = perspective === 1 ? r => r % 2 === 0 : r => r % 2 === 1;
+  const opponentGoodRow = perspective === 1 ? r => r % 2 === 1 : r => r % 2 === 0;
+
+  const s = {
+    playerMajor: 0, playerMajorAligned: 0, playerMajorGravityTop: 0, playerMinor: 0,
+    opponentMajor: 0, opponentMajorAligned: 0, opponentMajorGravityTop: 0, opponentMinor: 0,
+  };
+  for (const [key, flags] of Object.entries(threatMap)) {
+    const [r, c] = key.split(',').map(Number);
+    const gt = r === board.colHeights[c];
+    if (flags[pMaj]) { s.playerMajor++; if (playerGoodRow(r)) s.playerMajorAligned++; if (gt) s.playerMajorGravityTop++; }
+    if (flags[pMin]) s.playerMinor++;
+    if (flags[oMaj]) { s.opponentMajor++; if (opponentGoodRow(r)) s.opponentMajorAligned++; if (gt) s.opponentMajorGravityTop++; }
+    if (flags[oMin]) s.opponentMinor++;
+  }
+  return s;
+}
+
+function formatThreatStats(s, playerName, opponentName) {
+  const fmt = (count, aligned, gt) => {
+    if (count === 0) return '0';
+    const parts = [];
+    if (aligned > 0) parts.push(`${aligned} parity-aligned`);
+    if (gt > 0) parts.push(`${gt} immediately playable`);
+    return parts.length ? `${count} (${parts.join(', ')})` : String(count);
+  };
+  return [
+    `- ${playerName} major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
+    `- ${playerName} minor threats: ${s.playerMinor}`,
+    `- ${opponentName} major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
+    `- ${opponentName} minor threats: ${s.opponentMinor}`,
+  ].join('\n');
+}
 
 // Priority cascade for positive-framing on optimal moves (FR-013).
 // First matching tag wins.
@@ -303,7 +345,23 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     ? `## KB term definitions\n\nThe following tactical concepts apply to this position:\n\n${kbTermLines.join('\n')}`
     : '';
 
-  // ── Step 8: Build prompt ───────────────────────────────────────────────────
+  // ── Step 8: Threat comparison section ─────────────────────────────────────
+  const opponentName = perspective === 1 ? 'Gray' : 'Green';
+  const bestBoard    = new Board(bestMovestring);
+  const blunderBoard = new Board(postMovestring);
+  const bestStats    = summarizeThreats(bestBoard, perspective);
+  const blunderStats = summarizeThreats(blunderBoard, perspective);
+  const threatComparisonSection = [
+    '## Threat comparison',
+    '',
+    `After the best move (column ${bestCol + 1}):`,
+    formatThreatStats(bestStats, playerName, opponentName),
+    '',
+    `After the move played (column ${col + 1}):`,
+    formatThreatStats(blunderStats, playerName, opponentName),
+  ].join('\n');
+
+  // ── Step 9: Build prompt ───────────────────────────────────────────────────
   const prompt = buildBlunderExplainPrompt({
     tag,
     direction,
@@ -320,6 +378,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     playedCol: col,
     contrastCol: isOptimal ? undefined : contrastCol,
     kbTermsSection: kbTermsSection || undefined,
+    threatComparisonSection,
   });
 
   return { prompt, allowedSet };

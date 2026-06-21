@@ -587,9 +587,10 @@ export function buildBlunderExplainPrompt({
   gap,
   gapBucket,
   allowedSet,
-  playedCol,          // 0-indexed; undefined = not provided
-  contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
-  kbTermsSection,     // pre-formatted KB term definitions section (from buildExplainContext)
+  playedCol,              // 0-indexed; undefined = not provided
+  contrastCol,            // 0-indexed best column on blunder path; undefined = not provided
+  kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
+  threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -650,6 +651,11 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
     contextLines.push(`- Key insight: ${positiveReason ?? 'This was the strongest move available.'}`);
   }
   sections.push(contextLines.join('\n'));
+
+  // ── Threat comparison ─────────────────────────────────────────────────────
+  if (threatComparisonSection) {
+    sections.push(threatComparisonSection);
+  }
 
   // ── Best-move patterns (grounding evidence) ───────────────────────────────
   if (correctMovePatterns && correctMovePatterns.size > 0) {
