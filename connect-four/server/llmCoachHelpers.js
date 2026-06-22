@@ -758,7 +758,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
     formatLines.push('');
   }
-  formatLines.push('When citing a minor threat count from the threat comparison, use the pre-built zone tag shown on that line — copy it exactly, do not reconstruct it.');
+  formatLines.push('When you write a minor threat count, do not write a bare number — replace it with the full [zone:cells:…]N[/zone:cells:…] token from the matching line in the threat comparison section. The token is already formatted there; copy it verbatim into your sentence.');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
@@ -771,7 +771,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline (e.g. "the best move would have cut your opponent's minor threats from 7 to 3; your move left them at 6").
+When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:cells:…]4[/zone:cells:…] to [zone:cells:…]1[/zone:cells:…]; your move left them at [zone:cells:…]3[/zone:cells:…]").
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task
