@@ -22,15 +22,39 @@ import {
 
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const ROWS = 6;
+const COLS = 7;
+
+// Count distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs).
+// Each window is enumerated once by its (r, c, direction) starting point — no double-counting.
+function countMinorWindows(rawBoard, disc) {
+  const opponent = disc === 1 ? 2 : 1;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  let count = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of dirs) {
+        let player = 0, opp = 0, valid = true;
+        for (let i = 0; i < 4; i++) {
+          const nr = r + dr*i, nc = c + dc*i;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+          if (rawBoard[nr][nc] === disc) player++;
+          else if (rawBoard[nr][nc] === opponent) opp++;
+        }
+        if (valid && player === 2 && opp === 0) count++;
+      }
+    }
+  }
+  return count;
+}
 
 // Green = player 1 (rm/rn in getMajorThreatCells); wins on 0-indexed even rows (0,2,4).
 // Gray  = player 2 (ym/yn in getMajorThreatCells); wins on 0-indexed odd rows  (1,3,5).
 function summarizeThreats(board, perspective) {
   const threatMap = getMajorThreatCells(board.board);
   const pMaj = perspective === 1 ? 'rm' : 'ym';
-  const pMin = perspective === 1 ? 'rn' : 'yn';
   const oMaj = perspective === 1 ? 'ym' : 'rm';
-  const oMin = perspective === 1 ? 'yn' : 'rn';
+  const playerDisc   = perspective === 1 ? 1 : 2;
+  const opponentDisc = perspective === 1 ? 2 : 1;
   const playerGoodRow   = perspective === 1 ? r => r % 2 === 0 : r => r % 2 === 1;
   const opponentGoodRow = perspective === 1 ? r => r % 2 === 1 : r => r % 2 === 0;
 
@@ -42,10 +66,10 @@ function summarizeThreats(board, perspective) {
     const [r, c] = key.split(',').map(Number);
     const gt = r === board.colHeights[c];
     if (flags[pMaj]) { s.playerMajor++; if (playerGoodRow(r)) s.playerMajorAligned++; if (gt) s.playerMajorGravityTop++; }
-    if (flags[pMin]) s.playerMinor++;
     if (flags[oMaj]) { s.opponentMajor++; if (opponentGoodRow(r)) s.opponentMajorAligned++; if (gt) s.opponentMajorGravityTop++; }
-    if (flags[oMin]) s.opponentMinor++;
   }
+  s.playerMinor   = countMinorWindows(board.board, playerDisc);
+  s.opponentMinor = countMinorWindows(board.board, opponentDisc);
   return s;
 }
 
