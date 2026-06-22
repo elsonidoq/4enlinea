@@ -24,10 +24,45 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const ROWS = 6;
 const COLS = 7;
 
-// Return all distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs).
+// Build a set of all disc-pair keys from major threat windows (3 player discs + 1 empty).
+// Each pair is stored as a canonical sorted string "r1,c1|r2,c2" for all C(3,2)=3 pairs
+// within each major window. Used to filter shadow minor threats.
+function buildMajorDiscPairSet(rawBoard, disc) {
+  const opponent = disc === 1 ? 2 : 1;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  const pairSet = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of dirs) {
+        let player = 0, opp = 0, valid = true;
+        const discCells = [];
+        for (let i = 0; i < 4; i++) {
+          const nr = r + dr*i, nc = c + dc*i;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
+          else if (rawBoard[nr][nc] === opponent) opp++;
+        }
+        if (!valid || player !== 3 || opp !== 0) continue;
+        // Record all 3 pairs from the 3 disc cells
+        for (let i = 0; i < discCells.length; i++) {
+          for (let j = i + 1; j < discCells.length; j++) {
+            const [r1, c1] = discCells[i], [r2, c2] = discCells[j];
+            pairSet.add(`${r1},${c1}|${r2},${c2}`);
+          }
+        }
+      }
+    }
+  }
+  return pairSet;
+}
+
+// Return all distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs),
+// excluding windows whose disc pair is a subset of any major threat window's disc triplet
+// (those are "shadow" windows that arise from sliding along the same run as a major threat).
 // Each window is enumerated once by its (r, c, direction) starting point — no double-counting.
 // Returns Array<Array<[number,number]>> — each window is an array of 4 [r, c] pairs (0-indexed).
-function getMinorThreatWindows(rawBoard, disc) {
+export function getMinorThreatWindows(rawBoard, disc) {
+  const majorPairs = buildMajorDiscPairSet(rawBoard, disc);
   const opponent = disc === 1 ? 2 : 1;
   const dirs = [[0,1],[1,0],[1,1],[1,-1]];
   const windows = [];
@@ -36,14 +71,19 @@ function getMinorThreatWindows(rawBoard, disc) {
       for (const [dr, dc] of dirs) {
         let player = 0, opp = 0, valid = true;
         const cells = [];
+        const discCells = [];
         for (let i = 0; i < 4; i++) {
           const nr = r + dr*i, nc = c + dc*i;
           if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
           cells.push([nr, nc]);
-          if (rawBoard[nr][nc] === disc) player++;
+          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
           else if (rawBoard[nr][nc] === opponent) opp++;
         }
-        if (valid && player === 2 && opp === 0) windows.push(cells);
+        if (!valid || player !== 2 || opp !== 0) continue;
+        // Skip if these 2 discs are both present in any major threat window
+        const [r1, c1] = discCells[0], [r2, c2] = discCells[1];
+        if (majorPairs.has(`${r1},${c1}|${r2},${c2}`)) continue;
+        windows.push(cells);
       }
     }
   }
