@@ -834,7 +834,38 @@ function normalizeZoneTags(text) {
   // Remaining text after the last processed zone
   resultParts.push(text.slice(lastIndex));
 
-  return resultParts.join('');
+  text = resultParts.join('');
+
+  // Step 3: Expand short [zone:cells:SPEC]...[/zone:cells] closing tags.
+  // The LLM is instructed to use [/zone:cells] (no cell list) to save tokens.
+  // Here we expand each occurrence back to [/zone:cells:SPEC] so the downstream
+  // parsers (zoneParser.js, annotatedText.js) can match via backreference.
+  const CELLS_OPEN_RE = /\[zone:cells:([^\]]+)\]/g;
+  const cellsParts = [];
+  let cellsLastIndex = 0;
+  let cellsMatch;
+
+  while ((cellsMatch = CELLS_OPEN_RE.exec(text)) !== null) {
+    const spec = cellsMatch[1];
+    const afterOpen = cellsMatch.index + cellsMatch[0].length;
+
+    // Find the next [/zone:cells] or [/zone:cells:...] after this opening tag
+    const SHORT_CLOSE = /\[\/zone:cells(?::[^\]]*)?\]/g;
+    SHORT_CLOSE.lastIndex = afterOpen;
+    const closeMatch = SHORT_CLOSE.exec(text);
+
+    cellsParts.push(text.slice(cellsLastIndex, afterOpen));
+    if (closeMatch) {
+      cellsParts.push(text.slice(afterOpen, closeMatch.index));
+      cellsParts.push(`[/zone:cells:${spec}]`);
+      cellsLastIndex = closeMatch.index + closeMatch[0].length;
+    } else {
+      cellsLastIndex = afterOpen;
+    }
+  }
+  cellsParts.push(text.slice(cellsLastIndex));
+
+  return cellsParts.join('');
 }
 
 app.post('/api/explain-move-llm', async (req, res) => {

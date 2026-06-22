@@ -743,14 +743,15 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
   formatLines.push('When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets.');
   formatLines.push('The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag\'s spec).');
   formatLines.push('');
-  formatLines.push('Syntax (use EXACTLY these patterns — the closing tag MUST repeat the same spec as the opening tag):');
+  formatLines.push('Syntax (use EXACTLY these patterns):');
   formatLines.push('  [zone:colN]column N[/zone:colN] — for a column (N = column number 1–7). Example: [zone:col3]column 3[/zone:col3]');
   formatLines.push('  [zone:cNrM]that cell[/zone:cNrM] — for a single cell. Example: [zone:c5r2]that cell[/zone:c5r2]');
-  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] — for multiple cells');
+  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells] — for multiple cells (closing tag is ALWAYS [/zone:cells], no cell list)');
   formatLines.push('  [zone:rowN]row N[/zone:rowN] — for an entire row. Example: [zone:row3]row 3[/zone:row3]');
   formatLines.push('');
   formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
-  formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
+  formatLines.push('IMPORTANT: For colN/cNrM/rowN tags the closing tag MUST repeat the spec: [zone:col3]...[/zone:col3].');
+  formatLines.push('IMPORTANT: For cells tags the closing tag is ALWAYS [/zone:cells] — never repeat the cell list in the closing tag.');
   formatLines.push('');
   if (kbTermsSection) {
     formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
@@ -758,7 +759,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
     formatLines.push('');
   }
-  formatLines.push('When you write a minor threat count, do not write a bare number — replace it with the full [zone:cells:…]N[/zone:cells:…] token from the matching line in the threat comparison section. The token is already formatted there; copy it verbatim into your sentence.');
+  formatLines.push('When you write a minor threat count, do not write a bare number — copy the opening tag [zone:cells:…] from the matching line in the threat comparison section, write the count, then close with [/zone:cells] (short form — never repeat the cell list in the closing tag).');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
@@ -771,7 +772,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:cells:…]4[/zone:cells:…] to [zone:cells:…]1[/zone:cells:…]; your move left them at [zone:cells:…]3[/zone:cells:…]").
+When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:cells:…]4[/zone:cells] to [zone:cells:…]1[/zone:cells]; your move left them at [zone:cells:…]3[/zone:cells]").
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task
