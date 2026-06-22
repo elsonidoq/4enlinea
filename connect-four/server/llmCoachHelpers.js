@@ -758,6 +758,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
     formatLines.push('');
   }
+  formatLines.push('When citing a minor threat count from the threat comparison, use the pre-built zone tag shown on that line — copy it exactly, do not reconstruct it.');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));

@@ -24,27 +24,39 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const ROWS = 6;
 const COLS = 7;
 
-// Count distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs).
+// Return all distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs).
 // Each window is enumerated once by its (r, c, direction) starting point — no double-counting.
-function countMinorWindows(rawBoard, disc) {
+// Returns Array<Array<[number,number]>> — each window is an array of 4 [r, c] pairs (0-indexed).
+function getMinorThreatWindows(rawBoard, disc) {
   const opponent = disc === 1 ? 2 : 1;
   const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  let count = 0;
+  const windows = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       for (const [dr, dc] of dirs) {
         let player = 0, opp = 0, valid = true;
+        const cells = [];
         for (let i = 0; i < 4; i++) {
           const nr = r + dr*i, nc = c + dc*i;
           if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+          cells.push([nr, nc]);
           if (rawBoard[nr][nc] === disc) player++;
           else if (rawBoard[nr][nc] === opponent) opp++;
         }
-        if (valid && player === 2 && opp === 0) count++;
+        if (valid && player === 2 && opp === 0) windows.push(cells);
       }
     }
   }
-  return count;
+  return windows;
+}
+
+// Convert a list of windows (each = [[r,c]×4]) to a sorted array of 1-indexed "cNrM" cell strings.
+function windowsToCellStrings(windows) {
+  const seen = new Set();
+  for (const window of windows) {
+    for (const [r, c] of window) seen.add(`c${c + 1}r${r + 1}`);
+  }
+  return [...seen].sort();
 }
 
 // Green = player 1 (rm/rn in getMajorThreatCells); wins on 0-indexed even rows (0,2,4).
@@ -59,8 +71,10 @@ function summarizeThreats(board, perspective) {
   const opponentGoodRow = perspective === 1 ? r => r % 2 === 1 : r => r % 2 === 0;
 
   const s = {
-    playerMajor: 0, playerMajorAligned: 0, playerMajorGravityTop: 0, playerMinor: 0,
-    opponentMajor: 0, opponentMajorAligned: 0, opponentMajorGravityTop: 0, opponentMinor: 0,
+    playerMajor: 0, playerMajorAligned: 0, playerMajorGravityTop: 0,
+    playerMinor: 0, playerMinorCells: [],
+    opponentMajor: 0, opponentMajorAligned: 0, opponentMajorGravityTop: 0,
+    opponentMinor: 0, opponentMinorCells: [],
   };
   for (const [key, flags] of Object.entries(threatMap)) {
     const [r, c] = key.split(',').map(Number);
@@ -68,8 +82,12 @@ function summarizeThreats(board, perspective) {
     if (flags[pMaj]) { s.playerMajor++; if (playerGoodRow(r)) s.playerMajorAligned++; if (gt) s.playerMajorGravityTop++; }
     if (flags[oMaj]) { s.opponentMajor++; if (opponentGoodRow(r)) s.opponentMajorAligned++; if (gt) s.opponentMajorGravityTop++; }
   }
-  s.playerMinor   = countMinorWindows(board.board, playerDisc);
-  s.opponentMinor = countMinorWindows(board.board, opponentDisc);
+  const playerWindows   = getMinorThreatWindows(board.board, playerDisc);
+  const opponentWindows = getMinorThreatWindows(board.board, opponentDisc);
+  s.playerMinor        = playerWindows.length;
+  s.opponentMinor      = opponentWindows.length;
+  s.playerMinorCells   = windowsToCellStrings(playerWindows);
+  s.opponentMinorCells = windowsToCellStrings(opponentWindows);
   return s;
 }
 
@@ -81,11 +99,16 @@ function formatThreatStats(s) {
     if (gt > 0) parts.push(`${gt} immediately playable`);
     return parts.length ? `${count} (${parts.join(', ')})` : String(count);
   };
+  const fmtMinor = (count, cells) => {
+    if (count === 0) return '0';
+    const spec = cells.join(',');
+    return `[zone:cells:${spec}]${count}[/zone:cells:${spec}]`;
+  };
   return [
     `- Your major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
-    `- Your minor threats: ${s.playerMinor}`,
+    `- Your minor threats: ${fmtMinor(s.playerMinor, s.playerMinorCells)}`,
     `- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
-    `- Opponent minor threats: ${s.opponentMinor}`,
+    `- Opponent minor threats: ${fmtMinor(s.opponentMinor, s.opponentMinorCells)}`,
   ].join('\n');
 }
 
@@ -377,7 +400,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const threatComparisonSection = [
     '## Threat comparison',
     '',
-    'Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped".',
+    'Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a minor threat count, copy the zone tag shown on that line and wrap the count with it.',
     '',
     'Before the move:',
     formatThreatStats(preStats),
@@ -388,6 +411,21 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     `After the move played (column ${col + 1}):`,
     formatThreatStats(blunderStats),
   ].join('\n');
+
+  // Whitelist all minor threat cells across all three board states so zone references validate.
+  if (allowedSet !== null) {
+    const allMinorCells = new Set([
+      ...preStats.playerMinorCells,
+      ...preStats.opponentMinorCells,
+      ...bestStats.playerMinorCells,
+      ...bestStats.opponentMinorCells,
+      ...blunderStats.playerMinorCells,
+      ...blunderStats.opponentMinorCells,
+    ]);
+    if (allMinorCells.size > 0) {
+      allowedSet.push({ cells: [...allMinorCells], validationOnly: true });
+    }
+  }
 
   // ── Step 9: Build prompt ───────────────────────────────────────────────────
   const prompt = buildBlunderExplainPrompt({
