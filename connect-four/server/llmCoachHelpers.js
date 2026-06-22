@@ -770,7 +770,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, use the specific counts as evidence (e.g. "your opponent's minor threats doubled from 3 to 6").
+When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline (e.g. "the best move would have cut your opponent's minor threats from 7 to 3; your move left them at 6").
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

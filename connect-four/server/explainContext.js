@@ -345,12 +345,18 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     : '';
 
   // ── Step 8: Threat comparison section ─────────────────────────────────────
+  const preStats     = summarizeThreats(board, perspective);
   const bestBoard    = new Board(bestMovestring);
   const blunderBoard = new Board(postMovestring);
   const bestStats    = summarizeThreats(bestBoard, perspective);
   const blunderStats = summarizeThreats(blunderBoard, perspective);
   const threatComparisonSection = [
     '## Threat comparison',
+    '',
+    'Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped".',
+    '',
+    'Before the move:',
+    formatThreatStats(preStats),
     '',
     `After the best move (column ${bestCol + 1}):`,
     formatThreatStats(bestStats),
