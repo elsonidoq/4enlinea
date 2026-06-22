@@ -198,7 +198,7 @@ unified grounding flow for the LLM explain-move endpoint. It replaces the former
 
 ```js
 buildExplainContext(movestring, col, rounds = 1, solver)
-  → Promise<{ prompt: string, allowedSet: Array|null }
+  → Promise<{ prompt: string, allowedSet: Array|null, zoneAliasMap: Object }
            | { prompt: null, allowedSet: null, allMovesEqual: true }
            | null>
 ```
@@ -206,9 +206,12 @@ buildExplainContext(movestring, col, rounds = 1, solver)
 - Returns `null` if the contrast move could not be determined.
 - Returns `{ prompt: null, allowedSet: null, allMovesEqual: true }` when all legal moves
   have equal solver scores (settled position).
-- Otherwise returns `{ prompt, allowedSet }` where:
+- Otherwise returns `{ prompt, allowedSet, zoneAliasMap }` where:
   - `prompt` — full LLM system prompt string (from `buildBlunderExplainPrompt`)
   - `allowedSet` — `AllowedSetEntry[]` or `null` (null = no Tier 1/2 patterns found)
+  - `zoneAliasMap` — `{ 'player-minor-pre': 'windows:...', ... }` — 6 entries mapping alias names to `windows:` specs for minor threat windows at pre/best/played board states. Used by `expandZoneAliases()` after LLM generation.
+
+`expandZoneAliases(text, aliasMap)` (also exported from `explainContext.js`) replaces `[zone:player-minor-pre]` → `[zone:windows:c2r4,c3r4,...|...]` in the raw LLM output **before** `validateAnnotation`. The `windows:` spec encodes per-window cell structure so the frontend can render one capsule per threat window.
 
 **Flow**:
 1. Query solver scores; check for settled position.

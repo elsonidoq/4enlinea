@@ -252,8 +252,15 @@ Pages live in `src/pages/`. Router is defined in `src/App.jsx` using `react-rout
 | `/puzzles` | `PuzzlesPage.jsx` | Puzzle training flow |
 | `/coach` | `CoachPage.jsx` | Coach queue + weakness map (paid) |
 | `/admin/curate` | `AdminCuratePage.jsx` | Candidate curation (localhost-only) |
+| `/admin/audio` | `AdminAudioPage.jsx` | TTS audio approval |
+| `/admin/lessons` | `AdminLessonsPage.jsx` | Lesson content editor |
+| `/admin/deep-reveal-eval` | `AdminDeepRevealEvalPage.jsx` | Deep reveal eval set browser |
 
-**MUST**: Add new routes in `App.jsx` alongside the existing `<Routes>` block.
+**MUST**: Add new `/admin/*` routes as `pathname.startsWith('/admin/...')` branches in `App.jsx` **before** the catch-all `/admin` branch (lines 98–108). Each branch lazy-imports its page component.
+
+**Admin pages and `ProfileStoreProvider`**: Admin pages bypass `Navigator` and therefore have no `ProfileStoreProvider` in scope. If an admin page uses `DeepRevealPane` (or any component that calls `useStore()`), wrap the page root in `<ProfileStoreProvider>` explicitly. See `AdminDeepRevealEvalPage.jsx` for the pattern.
+
+**Admin page + DeepRevealPane on dark background**: `DeepRevealPane` uses light-surface CSS tokens. Wrap it in a `background: '#fff'` container scoped to the admin page — do not change DeepRevealPane itself. Pass `noSpeech` prop to suppress TTS audio on admin pages.
 Components shared across pages live in `src/components/`.
 
 ## RecommendCoach + BadgeRow Pattern

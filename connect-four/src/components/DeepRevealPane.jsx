@@ -46,6 +46,7 @@ export function DeepRevealPane({
   timeoutContent,
   closeLabel,
   navigate,
+  noSpeech = false,
 }) {
   const { t } = useTranslation();
   const { session } = useStore();
@@ -121,7 +122,7 @@ export function DeepRevealPane({
         setData(d);
 
         // Phase 2: fetch TTS audio if speech is enabled
-        if (speechEnabled) {
+        if (speechEnabled && !noSpeech) {
           setLoadingTts(true);
           const ttsUrl = `${API}/api/user/tts/deep-reveal?moveString=${encodeURIComponent(moveString)}&col=${col}`;
           const audio = new Audio(ttsUrl);

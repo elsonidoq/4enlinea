@@ -40,6 +40,7 @@ function shimStyle(color, role) {
 
 /**
  * Group a flat list of {c, r} cells into collinear runs and isolated dots.
+ * Used for zone types that don't carry window structure (col, row, cNrM, cells:).
  * Runs are tried in order: horizontal → vertical → diagonal↗ → diagonal↘.
  * Each cell is assigned to the first run of ≥2 it starts; leftover cells become dots.
  */
@@ -133,8 +134,16 @@ export function Board({
 
     const elements = [];
     let ki = 0;
-    for (const { color, cells } of zhCells) {
-      const { runs, dots } = groupCellsByCapsules(cells);
+    for (const { color, cells, windows } of zhCells) {
+      let runs, dots;
+      if (windows && windows.length > 0) {
+        // windows: spec — each window is already a structurally correct threat window;
+        // draw one capsule per window (first cell → last cell), no dots.
+        runs = windows.map(w => ({ start: w[0], end: w[w.length - 1] }));
+        dots = [];
+      } else {
+        ({ runs, dots } = groupCellsByCapsules(cells));
+      }
       for (const { start, end } of runs) {
         const S = center(start.c, start.r);
         const E = center(end.c, end.r);

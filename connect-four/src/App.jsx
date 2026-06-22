@@ -103,6 +103,10 @@ function App() {
     const AdminLessonsPage = lazy(() => import('./pages/AdminLessonsPage.jsx'));
     return <Suspense fallback={null}><AdminLessonsPage /></Suspense>;
   }
+  if (window.location.pathname.startsWith('/admin/deep-reveal-eval')) {
+    const AdminDeepRevealEvalPage = lazy(() => import('./pages/AdminDeepRevealEvalPage.jsx'));
+    return <Suspense fallback={null}><AdminDeepRevealEvalPage /></Suspense>;
+  }
   if (window.location.pathname.startsWith('/admin')) {
     return <Suspense fallback={null}><AdminCuratePage /></Suspense>;
   }

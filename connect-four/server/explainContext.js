@@ -99,6 +99,28 @@ function windowsToCellStrings(windows) {
   return [...seen].sort();
 }
 
+// Convert a list of windows to the zone alias expansion spec:
+//   "windows:c2r4,c3r4,c4r4,c5r4|c3r5,c4r5,c5r5,c6r5"
+// Each window becomes a pipe-separated group; cells within a window are comma-separated.
+function windowsToZoneSpec(windows) {
+  if (!windows || windows.length === 0) return 'windows:';
+  return 'windows:' + windows
+    .map(w => w.map(([r, c]) => `c${c + 1}r${r + 1}`).join(','))
+    .join('|');
+}
+
+// Replace [zone:alias] / [/zone:alias] tokens in LLM output with their expanded
+// [zone:windows:...] / [/zone:windows:...] equivalents.
+// Expansion must happen before annotation validation so the gate sees valid specs.
+export function expandZoneAliases(text, aliasMap) {
+  let result = text;
+  for (const [alias, spec] of Object.entries(aliasMap)) {
+    result = result.replaceAll(`[zone:${alias}]`, `[zone:${spec}]`);
+    result = result.replaceAll(`[/zone:${alias}]`, `[/zone:${spec}]`);
+  }
+  return result;
+}
+
 // Green = player 1 (rm/rn in getMajorThreatCells); wins on 0-indexed even rows (0,2,4).
 // Gray  = player 2 (ym/yn in getMajorThreatCells); wins on 0-indexed odd rows  (1,3,5).
 function summarizeThreats(board, perspective) {
@@ -128,10 +150,12 @@ function summarizeThreats(board, perspective) {
   s.opponentMinor      = opponentWindows.length;
   s.playerMinorCells   = windowsToCellStrings(playerWindows);
   s.opponentMinorCells = windowsToCellStrings(opponentWindows);
+  s.playerWindows      = playerWindows;
+  s.opponentWindows    = opponentWindows;
   return s;
 }
 
-function formatThreatStats(s) {
+function formatThreatStats(s, playerAlias, opponentAlias) {
   const fmt = (count, aligned, gt) => {
     if (count === 0) return '0';
     const parts = [];
@@ -139,16 +163,15 @@ function formatThreatStats(s) {
     if (gt > 0) parts.push(`${gt} immediately playable`);
     return parts.length ? `${count} (${parts.join(', ')})` : String(count);
   };
-  const fmtMinor = (count, cells) => {
+  const fmtMinor = (count, alias) => {
     if (count === 0) return '0';
-    const spec = cells.join(',');
-    return `[zone:cells:${spec}]${count}[/zone:cells:${spec}]`;
+    return `[zone:${alias}]${count}[/zone:${alias}]`;
   };
   return [
     `- Your major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
-    `- Your minor threats: ${fmtMinor(s.playerMinor, s.playerMinorCells)}`,
+    `- Your minor threats: ${fmtMinor(s.playerMinor, playerAlias)}`,
     `- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
-    `- Opponent minor threats: ${fmtMinor(s.opponentMinor, s.opponentMinorCells)}`,
+    `- Opponent minor threats: ${fmtMinor(s.opponentMinor, opponentAlias)}`,
   ].join('\n');
 }
 
@@ -437,22 +460,35 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const blunderBoard = new Board(postMovestring);
   const bestStats    = summarizeThreats(bestBoard, perspective);
   const blunderStats = summarizeThreats(blunderBoard, perspective);
+
+  // Build alias → window spec map. Aliases are short tokens the LLM copies verbatim;
+  // expandZoneAliases() replaces them with [zone:windows:...] before validation + caching.
+  const zoneAliasMap = {
+    'player-minor-pre':      windowsToZoneSpec(preStats.playerWindows),
+    'opponent-minor-pre':    windowsToZoneSpec(preStats.opponentWindows),
+    'player-minor-best':     windowsToZoneSpec(bestStats.playerWindows),
+    'opponent-minor-best':   windowsToZoneSpec(bestStats.opponentWindows),
+    'player-minor-played':   windowsToZoneSpec(blunderStats.playerWindows),
+    'opponent-minor-played': windowsToZoneSpec(blunderStats.opponentWindows),
+  };
+
   const threatComparisonSection = [
     '## Threat comparison',
     '',
     'Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a minor threat count, copy the zone tag shown on that line and wrap the count with it.',
     '',
     'Before the move:',
-    formatThreatStats(preStats),
+    formatThreatStats(preStats, 'player-minor-pre', 'opponent-minor-pre'),
     '',
     `After the best move (column ${bestCol + 1}):`,
-    formatThreatStats(bestStats),
+    formatThreatStats(bestStats, 'player-minor-best', 'opponent-minor-best'),
     '',
     `After the move played (column ${col + 1}):`,
-    formatThreatStats(blunderStats),
+    formatThreatStats(blunderStats, 'player-minor-played', 'opponent-minor-played'),
   ].join('\n');
 
-  // Whitelist all minor threat cells across all three board states so zone references validate.
+  // Whitelist all minor threat cells across all three board states so P5Strong passes
+  // after alias expansion (expanded windows: specs are validated against these cells).
   if (allowedSet !== null) {
     const allMinorCells = new Set([
       ...preStats.playerMinorCells,
@@ -487,5 +523,5 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     threatComparisonSection,
   });
 
-  return { prompt, allowedSet };
+  return { prompt, allowedSet, zoneAliasMap };
 }

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AnnotatedText } from './AnnotatedText.jsx';
 import { KbTermPopup } from './KbTermPopup.jsx';
-import { parseAnnotatedText, zoneToOverlays, regexFallbackParse, getZoneColor } from '../lib/annotatedText.js';
+import { parseAnnotatedText, zoneToOverlays, zoneToWindowGroups, regexFallbackParse, getZoneColor } from '../lib/annotatedText.js';
 import { KB_TERM_LESSON } from '../lib/kbTermLesson.js';
 import { useStore } from '../store/ProfileStore.jsx';
 
@@ -91,7 +91,8 @@ export function AnnotatedExplanation({
     for (const spec of specsToRender) {
       const color = getZoneColor(spec);
       const cells = zoneToOverlays(spec, userMajorThreats, opponentMajorThreats);
-      if (cells.length > 0) result.push({ color, cells });
+      const windows = zoneToWindowGroups(spec);
+      if (cells.length > 0 || (windows && windows.length > 0)) result.push({ color, cells, windows });
     }
     return result;
   }, [activeZones, hoveredSpec, zones, userMajorThreats, opponentMajorThreats]);

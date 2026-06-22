@@ -787,6 +787,9 @@ export function detectFigure7(board, _scores, perspective = board.currentPlayer)
       const m = matches[0];
       const hCells = m.playerCells.map(({row, col}) =>
         ({column: col, row, role: 'pattern_piece'}));
+      const threatCells = kernel.emptyCells
+        .map(({row, col}) => ({row: m.anchorRow + row, col: m.anchorCol + col}))
+        .sort((a, b) => a.row - b.row);
       return {
         matched: true,
         cells: hCells.map(c => `c${c.column + 1}r${c.row + 1}`),
@@ -794,6 +797,7 @@ export function detectFigure7(board, _scores, perspective = board.currentPlayer)
         categoryEvidence: {
           pattern_cells: m.playerCells.map(({row, col}) => ({column: col, row})),
         },
+        threatCells,
       };
     }
   }
@@ -1458,6 +1462,12 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
                reason: 'matched defensive_miss: forced_block' };
     }
 
+    // Step 1.5: Missed own immediate win — blunderer had an immediate threat and didn't take it
+    if (pMovesBlunderer.has('immediate_threat')) {
+      return { tag: 'immediate_threat', direction: 'missed_own',
+               reason: 'matched missed_own: immediate_threat' };
+    }
+
     // Step 2: Enabled immediate threat (1-ply) — opponent has immediate_threat after blunder
     if (pAfterPlayedOpponent.has('immediate_threat')) {
       return { tag: 'immediate_threat', direction: 'enabled_opponent',
@@ -1466,12 +1476,55 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
 
     // Step 3: Missed own — tags the blunderer had before but lost after playing
     const MISSED_OWN_PRIORITY = [
-      'immediate_threat', 'forced_win', 'double_threat', 'z_threat', 'odd_even_threat',
-      'figure_7', 'j_shape', 'overcut', 'claimeven',
+      'forced_win', 'z_threat', 'odd_even_threat',
+      'j_shape', 'overcut', 'claimeven',
     ];
     for (const t of MISSED_OWN_PRIORITY) {
       if (pMovesBlunderer.has(t) && !pAfterPlayedBlunderer.has(t)) {
         return { tag: t, direction: 'missed_own', reason: `matched missed_own: ${t}` };
+      }
+    }
+
+    // Step 3.5: Missed own double_threat / figure_7 — check if correct move would have built
+    // an un-undercut pattern. Computed lazily here (after Steps 1–3) to avoid querying the
+    // solver on won positions when correctCol is an immediate win (caught by Step 1.5 above).
+    const pJustAfterCorrectBlunderer = await P(moves + correctCol, blunderer);
+    if (pJustAfterCorrectBlunderer.has('double_threat') || pJustAfterCorrectBlunderer.has('figure_7')) {
+      const boardAfterCorrect = new Board(moves + correctCol);
+      const oppAfterCorrect   = 3 - blunderer;
+
+      if (pJustAfterCorrectBlunderer.has('double_threat')) {
+        const dtResult = detectDoubleThreat(boardAfterCorrect, blunderer);
+        if (dtResult.matched) {
+          let undercut = false;
+          if (dtResult.cols.length === 1) {
+            // Case B (stacked): check for opponent threat in same column at row <= lower threat row
+            const col      = dtResult.cols[0];
+            const lowerRow = boardAfterCorrect.colHeights[col];
+            const oppRows  = boardAfterCorrect.reachableThreats(oppAfterCorrect).get(col) ?? [];
+            undercut = oppRows.some(r => r <= lowerRow);
+          }
+          // Case A (2+ distinct gravity-top cols): opponent cannot neutralise both; no undercut check
+          if (!undercut) {
+            return { tag: 'double_threat', direction: 'missed_own',
+                     reason: 'matched missed_own: double_threat' };
+          }
+        }
+      }
+
+      if (pJustAfterCorrectBlunderer.has('figure_7')) {
+        const f7Result = detectFigure7(boardAfterCorrect, null, blunderer);
+        if (f7Result.matched) {
+          const lowerThreat = f7Result.threatCells[0]; // sorted ascending, index 0 = lower row
+          const col         = lowerThreat.col;
+          const lowerRow    = lowerThreat.row;
+          const oppRows     = boardAfterCorrect.reachableThreats(oppAfterCorrect).get(col) ?? [];
+          const undercut    = oppRows.some(r => r <= lowerRow);
+          if (!undercut) {
+            return { tag: 'figure_7', direction: 'missed_own',
+                     reason: 'matched missed_own: figure_7' };
+          }
+        }
       }
     }
 

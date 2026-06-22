@@ -35,8 +35,8 @@
 
 - **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.
 - **`userCanAccessCategory(user, categoryId)`**: Helper used in puzzle routes. Returns false for paid categories unless `user?.tier === 'paid'`.
-- **`requireLocalhost`**: Middleware for admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs. Admin endpoints are never exposed publicly.
-  Threat model: the server is expected to run behind a firewall or on a private network without port forwarding. `requireLocalhost` is the sole access control layer — there is no API key, session token, or other authentication for admin routes. If the deployment model changes (e.g. cloud-hosted server with a remote admin UI), admin routes must be migrated to token-based auth before deployment.
+- **`requireLocalhost`**: Middleware for curation/generation admin endpoints. Checks `req.ip` against `127.0.0.1`, `::1`, `::ffff:127.0.0.1`. Returns 403 for all other IPs.
+- **`requireAdmin`**: Middleware for admin endpoints that need remote access (lessons, eval-set, etc.). In non-production allows all requests; in production checks `req.user.email` against the `ADMIN_EMAILS` env var. Use this instead of `requireLocalhost` when the endpoint must be reachable from the hosted admin UI.
 
 ### `/api/user/*` ownership invariants (spec 030)
 

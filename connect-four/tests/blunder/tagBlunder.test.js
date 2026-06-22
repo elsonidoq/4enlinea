@@ -37,6 +37,25 @@
 //   Source: docs/knowledge-base/allis-claimeven.md
 //
 // Fixtures for T-006: tests/classifier/fixtures/fixtures.json
+//
+// "051526" — immediate_threat:missed_own fixture. Red's turn (6 moves).
+//   Red has 3-in-a-row at row 0, cols 0–2; immediate win at col 3 (score 18).
+//   Red plays col 4 instead. Pre-blunder tags include immediate_threat.
+//   correctCol=3 verified by solver (argmax of scores).
+//   Expected: { tag: 'immediate_threat', direction: 'missed_own' }
+//
+// "33333344" — double_threat:missed_own fixture. Red's turn (8 moves).
+//   Col 3 is full; col 4 has 2 discs. Pre-blunder tags: empty (no prior pattern).
+//   Playing col 2 (correctCol, score 16) creates double_threat at cols [1,5].
+//   Playing col 5 also creates double_threat at cols [2,6]. wrongCol=0 (score 2).
+//   Expected: { tag: 'double_threat', direction: 'missed_own' }
+//
+// "01121002" — figure_7:missed_own fixture. Red's turn (8 moves).
+//   Red has 4 of 5 figure_7 pieces (r0c0, r1c1, r2c0, r2c1); pre-blunder tags: j_shape.
+//   Playing col 2 (correctCol, score 14) places Red at r2c2, completing the figure_7.
+//   Threat cells: (r2,c3) and (r3,c3); opponent has no reachable threat in col 3 at
+//   row ≤ 2 (no undercut). wrongCol=3 (score -3).
+//   Expected: { tag: 'figure_7', direction: 'missed_own' }
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -101,10 +120,10 @@ describe('tagBlunder - pattern detection', () => {
 // T-002 / T028 — missed_own takes priority over Step 4 enabled_opponent
 // ─────────────────────────────────────────────────────────────────────────────
 describe('tagBlunder - priority', () => {
-  // Step 3 (missed_own) fires before Step 4 (enabled_opponent).
-  // "021353342445" pre-move: Red has z_threat (among others).
-  // Wrong col 0 loses z_threat. Step 2 does not fire (opponent not immediately
-  // threatening). Step 3 fires before Step 4.
+  // Step 1.5 (immediate_threat:missed_own) fires before Step 4 (enabled_opponent).
+  // "021353342445" pre-move: Red has immediate_threat (among z_threat, odd_even_threat).
+  // Step 1.5 fires because pMovesBlunderer.has('immediate_threat') — Red had a winning
+  // move and didn't take it. This also demonstrates missed_own > enabled_opponent priority.
   it('missed_own takes priority over enabled_opponent', async () => {
     const solver = await createSolverProcess();
     try {
@@ -114,7 +133,7 @@ describe('tagBlunder - priority', () => {
 
       const result = await tagBlunder('021353342445', 0, correctCol, solver);
       assert.equal(result.direction, 'missed_own');
-      assert.equal(result.tag, 'z_threat');
+      assert.equal(result.tag, 'immediate_threat');
       assert.ok(result.reason.startsWith('matched missed_own:'));
     } finally {
       solver.destroy();
@@ -165,6 +184,63 @@ describe('classifyPattern - player-only guards', () => {
       const tags = await classifyPattern('3233253335', 1, solver);
       assert.ok(!tags.has('claimeven'),
         'claimeven is Yellow-only, must not appear from Red perspective');
+    } finally {
+      solver.destroy();
+    }
+  }, { timeout: 60_000 });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T-007 — immediate_threat:missed_own
+// ─────────────────────────────────────────────────────────────────────────────
+describe('tagBlunder - immediate_threat:missed_own', () => {
+  it('returns missed_own when blunderer had immediate_threat and did not take it', async () => {
+    const solver = await createSolverProcess();
+    try {
+      // Red has 3-in-a-row at row 0 cols 0–2; immediate win at col 3 (score 18).
+      // Red plays col 4 instead. Step 1.5 fires on pMovesBlunderer.has('immediate_threat').
+      const result = await tagBlunder('051526', 4, 3, solver);
+      assert.equal(result.tag, 'immediate_threat');
+      assert.equal(result.direction, 'missed_own');
+    } finally {
+      solver.destroy();
+    }
+  }, { timeout: 60_000 });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T-008 — double_threat:missed_own
+// ─────────────────────────────────────────────────────────────────────────────
+describe('tagBlunder - double_threat:missed_own', () => {
+  it('returns missed_own when correct move would have built an un-undercut double threat', async () => {
+    const solver = await createSolverProcess();
+    try {
+      // Col 3 full, col 4 has 2 discs. Pre-blunder tags: empty.
+      // correctCol=2 (score 16) creates double_threat at cols [1,5].
+      // wrongCol=0 (score 2) does not.
+      const result = await tagBlunder('33333344', 0, 2, solver);
+      assert.equal(result.tag, 'double_threat');
+      assert.equal(result.direction, 'missed_own');
+    } finally {
+      solver.destroy();
+    }
+  }, { timeout: 60_000 });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T-009 — figure_7:missed_own
+// ─────────────────────────────────────────────────────────────────────────────
+describe('tagBlunder - figure_7:missed_own', () => {
+  it('returns missed_own when correct move would have completed an un-undercut figure_7', async () => {
+    const solver = await createSolverProcess();
+    try {
+      // Red has 4 of 5 figure_7 pieces (r0c0, r1c1, r2c0, r2c1). Pre-blunder tags: j_shape.
+      // correctCol=2 (score 14) places Red at r2c2, completing the figure_7.
+      // Threat cells (r2c3, r3c3); opponent has no reachable threat in col 3 at row ≤ 2.
+      // wrongCol=3 (score -3).
+      const result = await tagBlunder('01121002', 3, 2, solver);
+      assert.equal(result.tag, 'figure_7');
+      assert.equal(result.direction, 'missed_own');
     } finally {
       solver.destroy();
     }

@@ -759,7 +759,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
     formatLines.push('');
   }
-  formatLines.push('When you write a minor threat count, do not write a bare number — copy the opening tag [zone:cells:…] from the matching line in the threat comparison section, write the count, then close with [/zone:cells] (short form — never repeat the cell list in the closing tag).');
+  formatLines.push('When you write a minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-minor-pre]).');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
@@ -772,7 +772,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:cells:…]4[/zone:cells] to [zone:cells:…]1[/zone:cells]; your move left them at [zone:cells:…]3[/zone:cells]").
+When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:opponent-minor-pre]4[/zone:opponent-minor-pre] to [zone:opponent-minor-best]1[/zone:opponent-minor-best]; your move left them at [zone:opponent-minor-played]3[/zone:opponent-minor-played]").
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

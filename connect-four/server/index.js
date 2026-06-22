@@ -10,7 +10,7 @@ import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, Board, getImmediateThreats, tagBlunder, classifyPattern } from './classifier.js';
 import { classifyAiMove } from './classifyAiMove.js';
-import { buildExplainContext } from './explainContext.js';
+import { buildExplainContext, expandZoneAliases } from './explainContext.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { callLLM, loadKBShortSummary } from './llmCoachHelpers.js';
@@ -518,6 +518,17 @@ app.get('/api/lessons/:id', (req, res) => {
   res.json(lesson);
 });
 
+// ── Admin eval-set endpoint ────────────────────────────────────────────────────
+
+app.get('/api/admin/eval-set', requireAdmin, (req, res) => {
+  const evalPath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', 'eval_set.json');
+  try {
+    res.json(JSON.parse(readFileSync(evalPath, 'utf-8')));
+  } catch {
+    res.status(404).json({ error: 'eval_set.json not found — run server/scripts/generate_eval_set.mjs first' });
+  }
+});
+
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
 app.get('/api/admin/lessons', requireAdmin, (req, res) => {
@@ -942,17 +953,17 @@ app.post('/api/explain-move-llm', async (req, res) => {
       });
     }
 
-    const { prompt, allowedSet } = context;
+    const { prompt, allowedSet, zoneAliasMap } = context;
 
     // First attempt
     const rawExplanation = await callLLM(prompt);
-    let explanation = normalizeZoneTags(rawExplanation);
+    let explanation = expandZoneAliases(normalizeZoneTags(rawExplanation), zoneAliasMap);
     let result = validateAnnotation(explanation, board, allowedSet);
 
     if (!result.valid) {
       // ── Retry (same prompt, bypasses cache and quota) ──────────────────
       const retryRaw = await callLLM(prompt);
-      const retryExplanation = normalizeZoneTags(retryRaw);
+      const retryExplanation = expandZoneAliases(normalizeZoneTags(retryRaw), zoneAliasMap);
       const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
 
       if (retryResult.valid) {

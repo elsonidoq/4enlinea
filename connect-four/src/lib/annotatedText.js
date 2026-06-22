@@ -39,6 +39,7 @@ function isValidSpec(spec) {
   return /^col\d+$/.test(spec)
     || /^c\d+r\d+$/.test(spec)
     || /^cells:/.test(spec)
+    || /^windows:/.test(spec)
     || /^row\d+$/.test(spec)
     || spec === 'tg';
 }
@@ -205,6 +206,25 @@ export function zoneToOverlays(spec, userMajorThreats = [], opponentMajorThreats
     return Array.from({ length: COLS }, (_, c) => ({ c, r: row }));
   }
 
+  // windows:c2r4,c3r4,c4r4,c5r4|c3r5,... → flat deduplicated cell list
+  const windowsMatch = spec.match(/^windows:(.*)$/);
+  if (windowsMatch) {
+    const seen = new Set();
+    const results = [];
+    for (const windowStr of windowsMatch[1].split('|')) {
+      for (const part of windowStr.split(',')) {
+        const cm = part.trim().match(/^c(\d+)r(\d+)$/);
+        if (!cm) continue;
+        const col = parseInt(cm[1], 10) - 1;
+        const row = parseInt(cm[2], 10) - 1;
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+        const key = `${col},${row}`;
+        if (!seen.has(key)) { seen.add(key); results.push({ c: col, r: row }); }
+      }
+    }
+    return results;
+  }
+
   // tg → userMajorThreats
   if (spec === 'tg') {
     return userMajorThreats.map(t => ({ c: t.c, r: t.r }));
@@ -213,6 +233,29 @@ export function zoneToOverlays(spec, userMajorThreats = [], opponentMajorThreats
   // Unknown spec
   console.warn(`[zoneToOverlays] Unknown zone spec: "${spec}"`);
   return [];
+}
+
+/**
+ * For a windows: spec, return the window groups as Array<Array<{c,r}>> (0-indexed).
+ * Each inner array is one 4-cell threat window — used by Board to draw one capsule per window.
+ * Returns null for any other spec type.
+ *
+ * @param {string} spec
+ * @returns {Array<Array<{c,r}>>|null}
+ */
+export function zoneToWindowGroups(spec) {
+  const windowsMatch = spec.match(/^windows:(.+)$/);
+  if (!windowsMatch) return null;
+  return windowsMatch[1].split('|').map(windowStr =>
+    windowStr.split(',').flatMap(part => {
+      const cm = part.trim().match(/^c(\d+)r(\d+)$/);
+      if (!cm) return [];
+      const col = parseInt(cm[1], 10) - 1;
+      const row = parseInt(cm[2], 10) - 1;
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return [];
+      return [{ c: col, r: row }];
+    })
+  ).filter(w => w.length >= 2);
 }
 
 /**
