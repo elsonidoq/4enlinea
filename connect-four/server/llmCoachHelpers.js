@@ -600,7 +600,7 @@ export function buildBlunderExplainPrompt({
 
   const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. Address the player as "you" / "your". Refer to the other player as "your opponent". Do not use any player names such as "Gray" or "Green".`;
 
   const sections = [];
 
@@ -617,7 +617,8 @@ You are a Connect Four coach explaining why a move was a strong choice.`);
 
   // ── Players ───────────────────────────────────────────────────────────────
   sections.push(`## Players
-${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${winningParity} rows (${winningRows}); ${opponentName}'s on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows}). Use only Connect Four terms.`);
+You win by completing a line on ${winningParity} rows (${winningRows}).
+Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows}).`);
 
   // ── Boards ────────────────────────────────────────────────────────────────
   const boardLines = ['## Boards'];
@@ -632,12 +633,14 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
   boardLines.push('### After the move played');
   boardLines.push(postBoardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('Note: In the board, Gn = Green discs, Gy = Gray discs.');
+  const yourGlyph = playerName === 'Green' ? 'Gn' : 'Gy';
+  const oppGlyph  = playerName === 'Green' ? 'Gy' : 'Gn';
+  boardLines.push(`Note: In the board, ${yourGlyph} = your discs, ${oppGlyph} = your opponent's discs.`);
   sections.push(boardLines.join('\n'));
 
   // ── Move context ──────────────────────────────────────────────────────────
   const contextLines = ['## Move context'];
-  contextLines.push(`- Player: ${playerName} (winning parity = ${winningParity} rows ${winningRows})`);
+  contextLines.push(`- Your winning rows: ${winningParity} (${winningRows})`);
   contextLines.push(`- Eval gap: ${gapBucket}`);
   if (playedCol !== undefined) {
     contextLines.push(`- Move played: column ${playedCol + 1}`);
@@ -767,7 +770,7 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, use the specific counts as evidence (e.g. "Green's minor threats doubled from 3 to 6").
+When the threat comparison shows a meaningful difference, use the specific counts as evidence (e.g. "your opponent's minor threats doubled from 3 to 6").
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

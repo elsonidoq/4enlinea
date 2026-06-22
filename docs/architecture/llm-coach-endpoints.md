@@ -44,22 +44,42 @@ Walks a game tree `numPlies` deep with optimal play, classifying positions via t
 
 ---
 
-## explain_move data flow
+## explain_move data flow (current — post spec 039)
+
+The unified blunder/optimal flow lives in `server/explainContext.js` → `buildExplainContext()`.
+It replaced the old `explainSimulate`-based pipeline.
 
 ```
-args: movestring, col (0-indexed), rounds
+args: movestring, col (0-indexed), rounds, solver
   │
-  ├─ solver.query(movestring) → pre-move scores
-  ├─ selectContrastMove(scores, col, board) → contrastCol
-  ├─ explainSimulate(movestring+col, ...)       ┐ parallel
-  ├─ explainSimulate(movestring+contrastCol, ...) ┘
-  ├─ computeDeltaTable(userPatterns, contrastPatterns)
-  ├─ getBoardVisualization(movestring)   ← pre-move
-  ├─ getBoardVisualization(movestring+col) ← post-move
-  ├─ isMajorThreatForPlayer → forcedBlockNote
-  ├─ getImmediateThreats(postBoard) → blunderNote
-  ├─ buildKBSection(activePatterns)
-  └─ buildPrompt → callLLM → print
+  ├─ solver.query(movestring) → preScores
+  ├─ selectContrastMove(preScores, col, board) → { contrastCol, isOptimal }
+  ├─ getGapAndFraming → { gap, gapBucket }
+  ├─ Trivial-optimal guard: if optimal + small gap → canned message (no LLM call)
+  │
+  ├─ Blunder path (isOptimal=false):
+  │   └─ tagBlunder(movestring, col, contrastCol, solver) → { tag, direction }
+  │
+  ├─ Optimal path (isOptimal=true):
+  │   └─ positiveReason from POSITIVE_CASCADE + POSITIVE_TEMPLATES
+  │
+  ├─ safeClassifyPattern(movestring + bestCol, ...)  → correctMovePatterns
+  ├─ safeClassifyPattern(movestring, ...)             → patPlayed
+  ├─ safeClassifyPattern(movestring + col, ...)       → patPostBlunder
+  ├─ buildAllowedSetFromPatternMaps(all 3 patternMaps, postBestBoard)
+  │
+  ├─ getBoardVisualization(movestring)         ← Before
+  ├─ getBoardVisualization(movestring + bestCol) ← After best move
+  ├─ getBoardVisualization(movestring + col)     ← After move played
+  │
+  ├─ Threat comparison: summarizeThreats + formatThreatStats
+  │   (major/minor threats, parity alignment, gravity-top)
+  │
+  ├─ KB terms section: union of 3 pattern maps + tagBlunder.tag
+  │   → PATTERN_KB lookup → short_summary per entry
+  │   → alias entries (e.g. fork) use patternKey as tag id
+  │
+  └─ buildBlunderExplainPrompt → callLLM → cache
 ```
 
 **Key invariant:** solver scores never appear in the LLM prompt. The `scr` row is stripped from board visualizations; `selectContrastMove` uses scores internally but only passes `isOptimal: bool` to the prompt builder.
@@ -100,18 +120,49 @@ args: movestring, rounds
 
 ---
 
-## Prompt structure comparison
+## Prompt structure (explain_move, current)
 
-### explain_move prompt
 ```
-## Role
-## Move context          ← "Red just played col N" + forced-block / blunder notes
-## Board (BEFORE)        ← pre-move, scr stripped
-## Board (AFTER)         ← post-move, scr stripped
-## Pattern comparison    ← outcome line + delta table (sorted by |Δratio|)
-## Pattern definitions   ← KB for patterns in delta table
-## Task                  ← 2–4 sentence explanation
+## Role                  ← blunder or optimal framing
+**Language rule**        ← banned internal terms only (no positive vocabulary list)
+## Players               ← player names, parity rows
+## Boards                ← 3 boards: Before / After best move / After move played
+## Move context          ← player, eval gap, columns, key insight (humanReason)
+## Threat comparison     ← pre-computed major/minor threat counts + parity alignment
+## Best-move tactical evidence  ← correctMovePatterns (when patterns fired)
+## Hard grounding rules  ← column/cell whitelist
+## Tone                  ← severity framing
+## KB term definitions   ← classifier-driven; absent when no patterns fired
+## Output format         ← zone/term tag syntax; term instruction omitted when no KB terms
+## Task                  ← 2–3 sentences; pattern-naming conditional on KB terms presence
 ```
+
+**`## Threat comparison`** format:
+
+```
+After the best move (column N):
+- Player major threats: 0
+- Player minor threats: 6
+- Opponent major threats: 1
+- Opponent minor threats: 3
+
+After the move played (column M):
+- Player major threats: 1 (1 parity-aligned, 0 immediately playable)
+- Player minor threats: 2
+- Opponent major threats: 0
+- Opponent minor threats: 6
+```
+
+Parity-aligned = threat row matches the player's winning parity.
+Immediately playable = gravity-top cell.
+
+**`## Task`** varies by presence of KB terms:
+- **With KB terms:** "Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above)."
+- **Without KB terms:** "Do not invent tactical concept names — describe only what you can see changing between the two boards."
+
+Both paths include: "When the threat comparison shows a meaningful difference, use the specific counts as evidence."
+
+**Term tag instruction** is omitted from `## Output format` when no `## KB term definitions` section exists — no definitions = no tagging.
 
 ### recommend_next_move prompt
 ```
@@ -164,9 +215,18 @@ Both server endpoints return 503 if these are absent. CLI scripts read them via 
 | `overcut` | `community-overcut` |
 | `z_threat` | `community-z-threat` |
 | `forced_win` | inline string |
+| `odd_even_threat` | `derived-odd-even-threat` |
+| `fork` | `community-double-threat` (alias — resolves to same article as `double_threat`) |
 | `immediate_threat` | — (table only, no KB article) |
 | `forced_block` | — (table only, no KB article) |
 | `forbidden_columns` | — (table only, no KB article) |
+
+**`loadKBShortSummary` alias fallback:** If the direct file read fails (e.g. `fork.md` doesn't exist), the function checks `PATTERN_KB[id]` and retries with the resolved slug. This means `loadKBShortSummary('fork')` returns the `community-double-threat` summary.
+
+**KB term line format in prompt:** For alias entries where `patternKey !== kbEntry.id`, the prompt uses `patternKey` as the tag id with a combined display name:
+```
+- [term:fork] **community double threat / fork** (fork): <short_summary>
+```
 
 ---
 
@@ -176,4 +236,4 @@ Both server endpoints return 503 if these are absent. CLI scripts read them via 
 - `connect-four/server/classifier.js` — `Board`, `getImmediateThreats`, pattern detectors
 - `connect-four/server/c4solver-wrapper.js` — solver IPC
 - `docs/knowledge-base/` — KB article files (YAML frontmatter + markdown body)
-- `docs/architecture/server-conventions.md` — solver IPC modes and board representation
+- `docs/deep-reveal-eval.md` — 3-layer evaluation framework: deterministic checks, LLM-as-judge, golden set regression

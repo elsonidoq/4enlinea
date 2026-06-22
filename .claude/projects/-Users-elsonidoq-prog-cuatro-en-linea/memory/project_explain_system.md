@@ -42,18 +42,31 @@ Cache key: `SHA256(movestring + ":" + col)`. `template_version = 'v2'` set on al
 - **Solver scores are NEVER sent to LLM** — `getPositionTier` converts to tier labels; `getBoardVisualization` strips the `scr` row. Preserved by all callers.
 - **`## Move context` section** — must explicitly name the player who moved; prevents LLM from adopting opponent's perspective from "Next: Yellow" board header. See [[feedback_llm_perspective_bug]].
 - **Pre-move board in prompt** — forces LLM to see opponent's threat before the move; critical for forced-block detection.
+- **LANGUAGE_RULE now only bans internal terms** — positive vocabulary list removed 2026-06-21 ("threats, columns, rows, diagonals, blocking, winning line, double threat, etc." → removed). LLM describes only what it sees on boards + KB terms when present.
+- **Term-tagging instructions are conditional** — only emitted in `## Output format` when `## KB term definitions` section exists. No definitions = no term-tagging instruction → prevents hallucination.
+- **`## Task` section varies** — when KB terms exist: "Name the tactical pattern that was missed"; when absent: "Do not invent tactical concept names — describe only what you can see changing between the two boards."
 
-## `## Move context` fields (as of 2026-06-11)
+## Prompt sections (as of 2026-06-21)
 
+Sequence: `Role` → `Language rule` → `Players` → `Boards` (3 boards: Before / After best move / After played) → `Move context` → `Threat comparison` → `Best-move tactical evidence` (conditional) → `Hard grounding rules` → `Tone` → `KB term definitions` (conditional) → `Output format` → `Task`.
+
+**`## Threat comparison`** (always present, pre-computed server-side):
 ```
-- Player: Green (winning parity = ODD rows 1,3,5)
-- Eval gap: moderate
-- Move played: column 5          ← playedCol + 1 (always present)
-- Better move: column 2          ← contrastCol + 1 (blunder path only)
-- Key insight: <humanReason or positiveReason>
-```
+After the best move (column N):
+- Player major threats: 0
+- Player minor threats: 6
+- Opponent major threats: 1
+- Opponent minor threats: 3
 
-`contrastCol` is also appended to `allowedSet` as `{ col: contrastCol, validationOnly: true }` when `allowedSet` is non-null on the blunder path — this whitelists it for P5Strong zone-tag validation without affecting prompt rendering.
+After the move played (column M):
+- Player major threats: 1 (1 parity-aligned, 0 immediately playable)
+- Player minor threats: 2
+- ...
+```
+Parity-aligned = threat row matches player's winning parity. Immediately playable = gravity-top.
+Computed by `summarizeThreats()` + `formatThreatStats()` in `explainContext.js` using `getMajorThreatCells`.
+
+**`## KB term definitions`** entries are driven by the union of `classifyPattern` results from all 3 boards + `tagBlunder.tag`. Forced_win is excluded (banned by LANGUAGE_RULE). Alias entries (e.g. fork→community-double-threat) emit the alias key as the term tag id with combined display name: `[term:fork] **community double threat / fork** (fork): <summary>`.
 
 ## `## Hard grounding rules` section
 

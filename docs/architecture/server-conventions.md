@@ -382,8 +382,9 @@ The `row` shape:
 **`move_index` stamping**: `insertGameBlunder` computes `move_index` as `row.board_state?.length ?? null`. This is the 0-indexed global ply number where the blunder occurred. Callers do NOT pass `move_index` — the function derives it from `board_state`. The column and its partial unique index (`idx_blunders_papergames_unique`) are used for idempotent papergames re-import: `INSERT ... ON CONFLICT DO NOTHING` per `(papergames_game_id, move_index)`.
 
 - `game_id` and `papergames_game_id` are both nullable. Pass `null` (or omit) when the blunder does not originate from that source.
-- The function is fire-and-forget — it never throws or rejects; all errors are logged via `console.error`.
-- Deduplication is handled by DB unique indexes; `23505` constraint violations are silently swallowed.
+- Returns `true` on success or a `23505` dedup (already recorded), `false` on any other DB error. Callers that track import quality (e.g. `importForUser`) count `false` returns as `blunderErrors`.
+- Never throws or rejects — all errors are logged via `console.error`.
+- Deduplication is handled by DB unique indexes; `23505` constraint violations return `true` (treated as success).
 
 ## Annotation Gate (`POST /api/explain-move-llm`)
 
@@ -435,6 +436,22 @@ The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users
 - **Paid-tier**: No quota check; all requests are allowed unconditionally.
 - **429 response shape**: `{ error: 'quota_exceeded', resetsAt: <ISO string> }`.
 - **Endpoint scope**: Quota is enforced on `/api/explain-move-llm` only. The old `/api/explain-move` endpoint does NOT decrement quota.
+
+## Supabase Two-Client Pattern
+
+**MUST**: `server/index.js` initializes **two** separate supabase client instances from the same service role key:
+
+```js
+supabase    = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+authClient  = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+```
+
+- `supabase` — DB operations ONLY: `from()`, `rpc()`. **Never** call `auth.*` on this client.
+- `authClient` — auth operations ONLY: `getUser()`, `refreshSession()`, `signInAnonymously()`.
+
+**Why**: supabase-js v2 `auth.getUser(userToken)` stores the user's JWT as the client's active session. If `supabase` is reused for auth calls, subsequent DB inserts run as `authenticated` instead of `service_role`, bypassing BYPASSRLS and triggering RLS 42501 errors. See memory `bug-supabase-js-session-contamination`.
+
+**MUST NOT** add `auth.*` calls on the `supabase` DB client. Both clients are always initialized together — `!supabase` guards are sufficient for both.
 
 ## Environment Variables
 
@@ -498,7 +515,7 @@ const jobMap = new Map();
 ```
 
 **Key**: `jobId` (UUID string, generated via `crypto.randomUUID()`).
-**Value**: `{ jobId, userId, status, imported, skipped, capReached, error }` where `status` is one of `pending | running | done | error`.
+**Value**: `{ jobId, userId, status, imported, skipped, blunderErrors, capReached, error }` where `status` is one of `pending | running | done | error`. `blunderErrors` counts the number of blunder rows that failed to write (non-dedup errors from `insertGameBlunder`); exposed in the status response so the frontend can warn the user.
 
 **Lifecycle**:
 1. **Created** when `POST` spawns a new job (C2d) — status `pending`.

@@ -49,7 +49,7 @@ function summarizeThreats(board, perspective) {
   return s;
 }
 
-function formatThreatStats(s, playerName, opponentName) {
+function formatThreatStats(s) {
   const fmt = (count, aligned, gt) => {
     if (count === 0) return '0';
     const parts = [];
@@ -58,10 +58,10 @@ function formatThreatStats(s, playerName, opponentName) {
     return parts.length ? `${count} (${parts.join(', ')})` : String(count);
   };
   return [
-    `- ${playerName} major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
-    `- ${playerName} minor threats: ${s.playerMinor}`,
-    `- ${opponentName} major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
-    `- ${opponentName} minor threats: ${s.opponentMinor}`,
+    `- Your major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
+    `- Your minor threats: ${s.playerMinor}`,
+    `- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
+    `- Opponent minor threats: ${s.opponentMinor}`,
   ].join('\n');
 }
 
@@ -195,12 +195,11 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   // Return a canned message instead.
   const positionTier = getPositionTier(preScores, board);
   if (isOptimal && gapBucket === 'small') {
-    const opponentName = perspective === 1 ? 'Gray' : 'Green';
     let trivialExplanation;
     if (positionTier === 'WINNING') {
-      trivialExplanation = `All available moves maintain ${playerName}'s winning position — this is solid. No single column decisively outperforms the others here.`;
+      trivialExplanation = `All available moves maintain your winning position — this is solid. No single column decisively outperforms the others here.`;
     } else if (positionTier === 'LOSING') {
-      trivialExplanation = `All available moves lead to difficult positions — ${opponentName} holds the advantage regardless. No column changes the fundamental outlook.`;
+      trivialExplanation = `All available moves lead to difficult positions — your opponent holds the advantage regardless. No column changes the fundamental outlook.`;
     } else {
       trivialExplanation = `All available moves are roughly equivalent. There is no clear best choice in this balanced position.`;
     }
@@ -346,7 +345,6 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     : '';
 
   // ── Step 8: Threat comparison section ─────────────────────────────────────
-  const opponentName = perspective === 1 ? 'Gray' : 'Green';
   const bestBoard    = new Board(bestMovestring);
   const blunderBoard = new Board(postMovestring);
   const bestStats    = summarizeThreats(bestBoard, perspective);
@@ -355,10 +353,10 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     '## Threat comparison',
     '',
     `After the best move (column ${bestCol + 1}):`,
-    formatThreatStats(bestStats, playerName, opponentName),
+    formatThreatStats(bestStats),
     '',
     `After the move played (column ${col + 1}):`,
-    formatThreatStats(blunderStats, playerName, opponentName),
+    formatThreatStats(blunderStats),
   ].join('\n');
 
   // ── Step 9: Build prompt ───────────────────────────────────────────────────

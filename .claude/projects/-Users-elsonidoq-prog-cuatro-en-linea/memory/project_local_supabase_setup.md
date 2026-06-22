@@ -14,7 +14,7 @@ Local Supabase runs at `http://127.0.0.1:54321`. Keys are new-format (`sb_publis
 ## Key facts
 
 - `SUPABASE_URL` in `server/.env` must be `http://127.0.0.1:54321` (NOT the storage S3 URL `/storage/v1/s3`)
-- `SUPABASE_SERVICE_ROLE_KEY` = `sb_secret_...` key from `supabase status`
+- `SUPABASE_SERVICE_ROLE_KEY` = **JWT-format** `SERVICE_ROLE_KEY` (`eyJ...`) from `supabase status` — NOT the `sb_secret_*` key. PostgREST decodes the JWT to get `role: service_role`; `sb_secret_*` is an opaque token that PostgREST can't parse, so it falls back to `anon` role → 42501 on inserts. See [[bug-supabase-js-session-contamination]].
 - `VITE_SUPABASE_URL` = `http://127.0.0.1:54321`
 - `VITE_SUPABASE_ANON_KEY` = `sb_publishable_...` key from `supabase status`
 - Emails are captured by Mailpit at `http://127.0.0.1:54324` — they are NOT sent externally
