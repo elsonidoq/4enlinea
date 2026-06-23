@@ -184,17 +184,20 @@ Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectD
 
 ## Simulating games
 
-`server/gameSampling.js` is the **canonical game simulator**. When you need real game
-positions — eval sets, test fixtures, blunder coverage, position sampling, finding a
-board with a given property — do NOT hand-roll a game loop (it has been duplicated
-across `candidate-generator.js`, `generate_eval_set.mjs`, and others). Use:
+`server/gameSampling.js` is the **canonical game simulator** and the SOLE owner of all
+self-play. When you need real game positions — eval sets, test fixtures, blunder
+coverage, position sampling, finding a board with a given property — do NOT hand-roll a
+game loop. Every consumer now goes through this module: `generate_eval_set.mjs` and
+`generate_tagblunder_fixtures.mjs` (via `harvestBlunders`), and `candidate-generator.js`'s
+`generateCandidates` (via `playGame`, see below). Use:
 
-- **`playGame(solver, rng = Math.random)`** — THE primitive. Async generator that
-  plays one mistake-weighted self-play game, yielding `{ ms, scores, player,
-  movePlayed, plyIndex }` at each ply **before** the move is applied. Because it
-  streams, a caller can inspect each position and `break` the moment it finds the
-  board it wants — no whole-game cost, no callbacks/inversion of control. Each player
-  draws an independent mistake probability in `[0, 0.5)`.
+- **`playGame(solver, rng = Math.random, { maxMistakeProb = 0.5 } = {})`** — THE
+  primitive. Async generator that plays one mistake-weighted self-play game, yielding
+  `{ ms, scores, player, movePlayed, plyIndex }` at each ply **before** the move is
+  applied. Because it streams, a caller can inspect each position and `break` the moment
+  it finds the board it wants — no whole-game cost, no callbacks/inversion of control.
+  Each player draws an independent mistake probability in `[0, maxMistakeProb)`.
+  `candidate-generator` passes `maxMistakeProb: 0.25`; all other callers use the default.
 - **`simulateGame(solver, rng)`** — drains `playGame` into a full game `{ ms,
   scoresCache }` (`scoresCache[i]` = scores before move `i`).
 - **`harvestBlunders(solver, { maxGames, rng })`** — async generator yielding **every
@@ -204,6 +207,16 @@ across `candidate-generator.js`, `generate_eval_set.mjs`, and others). Use:
 
 Pass a seeded `rng` for deterministic runs (e.g. in tests). `harvestBlunders` skips
 optimal plies, so consumers only see mistakes.
+
+**Candidate generation pattern** (`candidate-generator.js` → `generateCandidates`): each
+rollout iterates `playGame`, accumulating yielded plies into `debug_trace.plies`, and
+`break`s on the first position satisfying the category predicate. It re-imposes the old
+fixed scan cap by `break`-ing when `pos.ms.length >= maxMoves` (abandon this game, try
+another). **FR-011**: the per-rollout minimum move count MUST be drawn from `randint(14,
+34)` (one `rng()` call: `14 + Math.floor(rng() * 21)`); positions shorter than that are
+skipped. The integration test `candidate-generator.test.js` (T017/SC-002) asserts every
+`move_string` has length ≥ 14 — this passes deterministically only because of the FR-011
+floor, not by luck.
 
 ## Board Class
 

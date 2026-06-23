@@ -2,7 +2,8 @@
 
 ## Before writing a game simulation / random-position loop
 
-- [Game simulation harness](reference_game_simulation_harness.md) — use server/gameSampling.js (simulateGame / harvestBlunders); don't hand-roll
+- [Game simulation harness](reference_game_simulation_harness.md) — all self-play centralized in server/gameSampling.js (playGame/simulateGame/harvestBlunders); don't hand-roll
+- [gameSampling rng determinism trap](project_gamesampling_rng_determinism_trap.md) — changing rng usage shifts candidate-generator output; FR-011 minMoves floor protects T017
 
 ## Before touching the solver or board evaluation
 

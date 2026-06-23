@@ -8,6 +8,7 @@ import {
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { playGame } from './gameSampling.js';
 
 /** @import { HighlightCell, HighlightMetadata } from './classifier.js' */
 const ROWS = 6;
@@ -22,28 +23,6 @@ function mulberry32(a) {
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
-}
-
-export function softmaxSample(legalCols, scores, T, rng) {
-  const raw = legalCols.map(c => scores[c]);
-  const minS = Math.min(...raw);
-  const maxS = Math.max(...raw);
-  const range = maxS - minS;
-  const normalized = range === 0
-    ? raw.map(() => 0)
-    : raw.map(s => (s - minS) / range * 2 - 1);
-  const logits = normalized.map(n => n / T);
-  const maxLogit = Math.max(...logits);
-  const weights = logits.map(l => Math.exp(l - maxLogit));
-  const total = weights.reduce((a, b) => a + b, 0);
-  const probs = weights.map(w => w / total);
-
-  let r = rng(), cum = 0;
-  for (let j = 0; j < legalCols.length; j++) {
-    cum += probs[j];
-    if (r < cum) return legalCols[j];
-  }
-  return legalCols[legalCols.length - 1];
 }
 
 // Return true if the position is finished (someone won or board is full).
@@ -322,111 +301,6 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
   return [];
 }
 
-// Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
-// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
-async function solverWeightedPositionSoftmax(solver, maxMoves, rng, onPosition) {
-  const T1 = rng() * 4 + 0.1;
-  const T2 = rng() * 4 + 0.1;
-  const temps = [T1, T2];
-  let moveString = '';
-  const heights = Array(COLS).fill(0);
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  let player = 1;
-  const plies = [];
-
-  for (let i = 0; i < maxMoves; i++) {
-    const legal = [];
-    for (let c = 0; c < COLS; c++) {
-      if (heights[c] < ROWS) legal.push(c);
-    }
-    if (legal.length === 0) return null;
-
-    const scores = await solver.query(moveString);
-
-    if (await onPosition(moveString, scores)) {
-      return { moveString, scores, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'predicate_match', plies } };
-    }
-
-    const T = temps[player - 1];
-    const rawWeights = legal.map(c => Math.exp(scores[c] / T));
-    const total = rawWeights.reduce((a, b) => a + b, 0);
-    const probs = Array(COLS).fill(0);
-    legal.forEach((c, j) => { probs[c] = rawWeights[j] / total; });
-
-    const col = softmaxSample(legal, scores, T, rng);
-    plies.push({ ply: i, player, scores: [...scores], weights: probs, sampled_col: col });
-
-    board[heights[col]][col] = player;
-    heights[col]++;
-    moveString += col.toString();
-    if (hasWon(board, player)) return null;
-    player = 3 - player;
-  }
-  return null;
-}
-
-// Simulate a mistake-probability-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
-// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
-// Each player gets a random mistake probability in [0, 0.5). On each move:
-//   - With probability mp: play the second-best column (deliberate mistake).
-//   - Otherwise: pick uniformly at random among the best columns.
-async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
-  const MP1 = rng() * 0.25;
-  const MP2 = rng() * 0.25;
-  const mistakeProbs = [MP1, MP2];
-  let moveString = '';
-  const heights = Array(COLS).fill(0);
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  let player = 1;
-  const plies = [];
-
-  for (let i = 0; i < maxMoves; i++) {
-    const legal = [];
-    for (let c = 0; c < COLS; c++) {
-      if (heights[c] < ROWS) legal.push(c);
-    }
-    if (legal.length === 0) return null;
-
-    const scores = await solver.query(moveString);
-
-    if (await onPosition(moveString, scores)) {
-      return { moveString, scores, trace: { mistake_prob_p1: MP1, mistake_prob_p2: MP2, termination: 'predicate_match', plies } };
-    }
-
-    const mp = mistakeProbs[player - 1];
-    let col;
-    let mistakeMade = false;
-
-    if (legal.length > 1 && rng() < mp) {
-      // Deliberate mistake: pick second-best column among legal columns.
-      const maxScore = Math.max(...legal.map(c => scores[c]));
-      const belowMax = legal.filter(c => scores[c] < maxScore);
-      if (belowMax.length > 0) {
-        const secondBestScore = Math.max(...belowMax.map(c => scores[c]));
-        const tiedSecond = belowMax.filter(c => scores[c] === secondBestScore);
-        col = tiedSecond[Math.floor(rng() * tiedSecond.length)];
-        mistakeMade = true;
-      }
-    }
-
-    if (!mistakeMade) {
-      // No mistake: pick uniformly at random among the best columns.
-      const maxScore = Math.max(...legal.map(c => scores[c]));
-      const tiedBest = legal.filter(c => scores[c] === maxScore);
-      col = tiedBest[Math.floor(rng() * tiedBest.length)];
-    }
-
-    plies.push({ ply: i, player, scores: [...scores], sampled_col: col, mistake: mistakeMade });
-
-    board[heights[col]][col] = player;
-    heights[col]++;
-    moveString += col.toString();
-    if (hasWon(board, player)) return null;
-    player = 3 - player;
-  }
-  return null;
-}
-
 // T011 — check* functions for the 6 new tactical categories
 
 export function checkZThreatPredicate(ms, scores) {
@@ -649,32 +523,39 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const rawMinMoves = 8 + Math.floor(rng() * 10);
-      // const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
+      // FR-011: draw the per-rollout minimum move count from randint(14, 34) (one rng()
+      // call). Positions shorter than minMoves are skipped; the rollout is abandoned once
+      // it reaches maxMoves without a match.
+      const rawMinMoves = 14 + Math.floor(rng() * 21);  // [14, 34] inclusive
       const maxMoves = Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
-      let matchedCorrectCols = null;
+      // Play one mistake-weighted game via the canonical simulator (gameSampling.js),
+      // breaking the moment a position satisfies the category predicate. playGame yields
+      // each position BEFORE its move with the solver scores at that position — exactly the
+      // (moveString, scores) the former onPosition callback received.
+      let matched = null;
       let matchedHighlightMetadata = null;
       let matchedCategoryEvidence = null;
       let matchedCorrectCol = null;
-      const onPosition = async (ms, sc) => {
-        if (ms.length < minMoves) return false;
-        if (!isClean(category, ms)) return false;
-        const predicateResult = await checkPredicate(category, ms, sc, solver);
-        if (!predicateResult.passes) return false;
-        matchedCorrectCols = predicateResult.correctCols;
+      const plies = [];
+      for await (const pos of playGame(solver, rng, { maxMistakeProb: 0.25 })) {
+        plies.push({ ply: pos.plyIndex, player: pos.player, scores: [...pos.scores], sampled_col: pos.movePlayed });
+        if (pos.ms.length >= maxMoves) break;       // abandon this game, try another
+        if (pos.ms.length < minMoves) continue;
+        if (!isClean(category, pos.ms)) continue;
+        const predicateResult = await checkPredicate(category, pos.ms, pos.scores, solver);
+        if (!predicateResult.passes) continue;
+        matched = { moveString: pos.ms, scores: pos.scores, correctCols: predicateResult.correctCols };
         matchedHighlightMetadata = predicateResult.highlight_metadata ?? null;
         matchedCategoryEvidence = predicateResult.category_evidence ?? null;
         matchedCorrectCol = predicateResult.correct_col ?? null;
-        return true;
-      };
+        break;
+      }
+      if (!matched) { stats.noMatch++; continue; }
 
-      const result = await solverWeightedPosition(solver, maxMoves, rng, onPosition);
-      if (!result) { stats.noMatch++; continue; }
-
-      const { moveString, scores, trace } = result;
-      const correctCols = matchedCorrectCols;
+      const { moveString, scores, correctCols } = matched;
+      const trace = { termination: 'predicate_match', plies };
 
       const tags = [];
       if (correctCols.length > 0) {

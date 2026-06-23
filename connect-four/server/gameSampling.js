@@ -74,11 +74,17 @@ function sampleColMP(scores, mp, rng) {
  *     plyIndex,   // 0-based index of this move within the game
  *   }
  *
+ * Each player draws an independent mistake probability in `[0, maxMistakeProb)`
+ * (default `0.5`). Callers that need a different mistake intensity (e.g.
+ * candidate generation) pass `maxMistakeProb`; the two rng draws happen in the
+ * same order regardless, so the rng contract is unchanged.
+ *
  * @param {object} solver  c4solver wrapper
  * @param {() => number} rng  random source in [0, 1)
+ * @param {{ maxMistakeProb?: number }} [opts]
  */
-export async function* playGame(solver, rng = Math.random) {
-  const mistakeProbs = [rng() * 0.5, rng() * 0.5];
+export async function* playGame(solver, rng = Math.random, { maxMistakeProb = 0.5 } = {}) {
+  const mistakeProbs = [rng() * maxMistakeProb, rng() * maxMistakeProb];
 
   let ms = '';
   const heights = Array(COLS).fill(0);
