@@ -124,7 +124,8 @@ function computeCheapPredicates(boardState, move, bestCol, severity, preBoard, p
 async function main() {
   const solver = createSolverProcess();
 
-  const satisfied = new Set();
+  const predicateCounts = new Map(); // how many boards each predicate has appeared in
+  const satisfied = new Set();       // predicates that have appeared in >= 2 boards
   const collected = [];
   let boardCount = 0;
   let gameCount = 0;
@@ -186,8 +187,16 @@ async function main() {
     const newPreds = [...allPreds].filter(p => !satisfied.has(p));
     if (newPreds.length === 0) continue;
 
-    newPreds.forEach(p => satisfied.add(p));
-    process.stderr.write(`  ✓ ${newPreds.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
+    const newlySatisfied = [];
+    newPreds.forEach(p => {
+      const count = (predicateCounts.get(p) || 0) + 1;
+      predicateCounts.set(p, count);
+      if (count >= 2) {
+        satisfied.add(p);
+        newlySatisfied.push(p);
+      }
+    });
+    process.stderr.write(`  seen: ${newPreds.join(' ')}  done(×2): ${newlySatisfied.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
 
     // Build threat_cells from major threat flags at pre-blunder position
     const threatMap = getMajorThreatCells(preBoard.board);

@@ -16,8 +16,9 @@ metadata:
 
 | File | Role |
 |------|------|
-| `server/explainContext.js` | `buildExplainContext(ms, col, rounds)` — runs solver+classifyPattern+board viz+prompt assembly |
+| `server/explainContext.js` | `buildExplainContext(ms, col, rounds)` — runs solver+classifyPattern+board viz+prompt assembly; also exports `expandZoneAliases` |
 | `server/llmCoachHelpers.js` | `buildBlunderExplainPrompt`, `selectContrastMove`, `getPositionTier`, `getBoardVisualization`, `buildKBSection`, `callLLM`, `classifyExplanationType` (Types 1–4) |
+| `server/annotationGate.js` | `validateAnnotation`, `normalizeZoneTags` (exported — was private in index.js before 2026-06-23) |
 | `server/index.js` | thin `buildExplainContextActive` wrapper injecting module-level solver |
 
 ## explanation_cache schema

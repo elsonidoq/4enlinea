@@ -110,6 +110,7 @@
 
 ## When touching the LLM coach / deep reveal
 
+- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs + /judge-deep-reveals to diagnose pipeline failures; baseline 23/25 success
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow
 - [Blunder tagging design](project_blunder_tagging_design.md) — tagBlunder throws NotABlunderError on terminal; missed_own = correctCol builds pattern
@@ -162,6 +163,7 @@
 
 ## General behavioral rules (always apply)
 
+- [callLLM error handling in scripts](feedback_calllm_error_handling.md) — wrap each callLLM call individually; uncaught error silently drops the entry
 - [Answer before editing](feedback_answer_before_editing.md)
 - [Empirical first](feedback_empirical_first.md)
 - [Use rg/fd/sg not grep/find](feedback_use_ripgrep.md)

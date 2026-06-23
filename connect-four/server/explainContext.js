@@ -155,7 +155,7 @@ function summarizeThreats(board, perspective) {
   return s;
 }
 
-function formatThreatStats(s, playerAlias, opponentAlias) {
+function formatThreatStats(s, playerAlias, opponentAlias, showPlayerMinor = true, showOpponentMinor = true) {
   const fmt = (count, aligned, gt) => {
     if (count === 0) return '0';
     const parts = [];
@@ -167,12 +167,13 @@ function formatThreatStats(s, playerAlias, opponentAlias) {
     if (count === 0) return '0';
     return `[zone:${alias}]${count}[/zone:${alias}]`;
   };
-  return [
+  const lines = [
     `- Your major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
-    `- Your minor threats: ${fmtMinor(s.playerMinor, playerAlias)}`,
-    `- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`,
-    `- Opponent minor threats: ${fmtMinor(s.opponentMinor, opponentAlias)}`,
-  ].join('\n');
+  ];
+  if (showPlayerMinor) lines.push(`- Your minor threats: ${fmtMinor(s.playerMinor, playerAlias)}`);
+  lines.push(`- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`);
+  if (showOpponentMinor) lines.push(`- Opponent minor threats: ${fmtMinor(s.opponentMinor, opponentAlias)}`);
+  return lines.join('\n');
 }
 
 // Priority cascade for positive-framing on optimal moves (FR-013).
@@ -461,30 +462,44 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   const bestStats    = summarizeThreats(bestBoard, perspective);
   const blunderStats = summarizeThreats(blunderBoard, perspective);
 
-  // Build alias → window spec map. Aliases are short tokens the LLM copies verbatim;
-  // expandZoneAliases() replaces them with [zone:windows:...] before validation + caching.
-  const zoneAliasMap = {
-    'player-minor-pre':      windowsToZoneSpec(preStats.playerWindows),
-    'opponent-minor-pre':    windowsToZoneSpec(preStats.opponentWindows),
-    'player-minor-best':     windowsToZoneSpec(bestStats.playerWindows),
-    'opponent-minor-best':   windowsToZoneSpec(bestStats.opponentWindows),
-    'player-minor-played':   windowsToZoneSpec(blunderStats.playerWindows),
-    'opponent-minor-played': windowsToZoneSpec(blunderStats.opponentWindows),
-  };
+  // Only show a minor threat metric when the comparison is directionally meaningful:
+  // player minor: best move should give MORE of your own threats
+  // opponent minor: best move should leave opponent with FEWER threats
+  // Equal counts or wrong-direction counts are noise — omitting them prevents the LLM
+  // from writing "X instead of X" or counterintuitive comparisons.
+  const showPlayerMinor   = bestStats.playerMinor   > blunderStats.playerMinor;
+  const showOpponentMinor = bestStats.opponentMinor < blunderStats.opponentMinor;
+
+  // Build alias → window spec map only for metrics that will appear in the prompt.
+  const zoneAliasMap = {};
+  if (showPlayerMinor) {
+    zoneAliasMap['player-minor-pre']    = windowsToZoneSpec(preStats.playerWindows);
+    zoneAliasMap['player-minor-best']   = windowsToZoneSpec(bestStats.playerWindows);
+    zoneAliasMap['player-minor-played'] = windowsToZoneSpec(blunderStats.playerWindows);
+  }
+  if (showOpponentMinor) {
+    zoneAliasMap['opponent-minor-pre']    = windowsToZoneSpec(preStats.opponentWindows);
+    zoneAliasMap['opponent-minor-best']   = windowsToZoneSpec(bestStats.opponentWindows);
+    zoneAliasMap['opponent-minor-played'] = windowsToZoneSpec(blunderStats.opponentWindows);
+  }
+
+  const minorNoteClause = (showPlayerMinor || showOpponentMinor)
+    ? ' Minor threat rows are included only when they differ meaningfully between the two moves — do not write a minor threat comparison for any metric not shown below.'
+    : '';
 
   const threatComparisonSection = [
     '## Threat comparison',
     '',
-    'Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a minor threat count, copy the zone tag shown on that line and wrap the count with it.',
+    `Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a minor threat count, copy the zone tag shown on that line and wrap the count with it.${minorNoteClause}`,
     '',
     'Before the move:',
-    formatThreatStats(preStats, 'player-minor-pre', 'opponent-minor-pre'),
+    formatThreatStats(preStats, 'player-minor-pre', 'opponent-minor-pre', showPlayerMinor, showOpponentMinor),
     '',
     `After the best move (column ${bestCol + 1}):`,
-    formatThreatStats(bestStats, 'player-minor-best', 'opponent-minor-best'),
+    formatThreatStats(bestStats, 'player-minor-best', 'opponent-minor-best', showPlayerMinor, showOpponentMinor),
     '',
     `After the move played (column ${col + 1}):`,
-    formatThreatStats(blunderStats, 'player-minor-played', 'opponent-minor-played'),
+    formatThreatStats(blunderStats, 'player-minor-played', 'opponent-minor-played', showPlayerMinor, showOpponentMinor),
   ].join('\n');
 
   // Whitelist all minor threat cells across all three board states so P5Strong passes
@@ -523,5 +538,5 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     threatComparisonSection,
   });
 
-  return { prompt, allowedSet, zoneAliasMap };
+  return { prompt, allowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol };
 }

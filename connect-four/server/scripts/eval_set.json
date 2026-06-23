@@ -1,15 +1,16 @@
 [
   {
     "id": "eval-0",
-    "board_state": "3",
-    "move_played": 2,
+    "board_state": "3333",
+    "move_played": 4,
     "correct_move": 3,
     "threat_cells": [],
-    "severity": 0,
+    "severity": 1,
     "blunder_severity": null,
     "pattern_category": "suboptimal_move",
     "predicates": [
-      "P02",
+      "P01",
+      "P03",
       "P05",
       "P10",
       "P31",
@@ -19,9 +20,9 @@
   },
   {
     "id": "eval-1",
-    "board_state": "32533364",
-    "move_played": 2,
-    "correct_move": 4,
+    "board_state": "33334222",
+    "move_played": 0,
+    "correct_move": 1,
     "threat_cells": [],
     "severity": 1,
     "blunder_severity": null,
@@ -38,59 +39,122 @@
   },
   {
     "id": "eval-2",
-    "board_state": "3253336422424",
-    "move_played": 0,
-    "correct_move": 1,
+    "board_state": "33334222023101",
+    "move_played": 1,
+    "correct_move": 0,
     "threat_cells": [
       {
-        "row": 3,
-        "col": 1
+        "row": 4,
+        "col": 4
       }
     ],
-    "severity": 4,
+    "severity": 2,
     "blunder_severity": null,
-    "pattern_category": "double_threat",
+    "pattern_category": "figure_7",
     "predicates": [
-      "P02",
+      "P01",
+      "P03",
       "P08",
       "P10",
-      "P17",
+      "P21",
       "P32",
       "P35"
     ]
   },
   {
     "id": "eval-3",
-    "board_state": "3253336422424043",
-    "move_played": 3,
+    "board_state": "333342220231011",
+    "move_played": 2,
     "correct_move": 1,
     "threat_cells": [
       {
-        "row": 0,
-        "col": 1
-      },
-      {
-        "row": 1,
-        "col": 1
-      },
-      {
         "row": 3,
-        "col": 1
+        "col": 0
       },
       {
         "row": 4,
         "col": 4
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "figure_7",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P20",
+      "P32",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-4",
+    "board_state": "333342220231011221",
+    "move_played": 1,
+    "correct_move": 3,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 4
       },
       {
         "row": 4,
-        "col": 5
+        "col": 0
+      },
+      {
+        "row": 4,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P17",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-5",
+    "board_state": "333342220231011221131",
+    "move_played": 6,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 4,
+        "col": 0
+      },
+      {
+        "row": 4,
+        "col": 4
       }
     ],
     "severity": 0,
     "blunder_severity": null,
     "pattern_category": "immediate_threat",
     "predicates": [
-      "P01",
+      "P02",
       "P08",
       "P10",
       "P11",
@@ -98,10 +162,27 @@
     ]
   },
   {
-    "id": "eval-4",
-    "board_state": "3113335",
-    "move_played": 6,
-    "correct_move": 4,
+    "id": "eval-6",
+    "board_state": "",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P34"
+    ]
+  },
+  {
+    "id": "eval-7",
+    "board_state": "20311",
+    "move_played": 3,
+    "correct_move": 2,
     "threat_cells": [],
     "severity": 0,
     "blunder_severity": null,
@@ -115,14 +196,31 @@
     ]
   },
   {
-    "id": "eval-5",
-    "board_state": "31133356532",
+    "id": "eval-8",
+    "board_state": "2031133",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P31",
+      "P34"
+    ]
+  },
+  {
+    "id": "eval-9",
+    "board_state": "20311334131",
     "move_played": 6,
-    "correct_move": 4,
+    "correct_move": 1,
     "threat_cells": [
       {
-        "row": 0,
-        "col": 4
+        "row": 4,
+        "col": 1
       }
     ],
     "severity": 3,
@@ -138,22 +236,52 @@
     ]
   },
   {
-    "id": "eval-6",
-    "board_state": "3343254241",
-    "move_played": 3,
-    "correct_move": 4,
+    "id": "eval-10",
+    "board_state": "311203313511413",
+    "move_played": 5,
+    "correct_move": 3,
     "threat_cells": [
       {
-        "row": 3,
-        "col": 4
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 5,
+        "col": 3
       }
     ],
-    "severity": 9,
+    "severity": 2,
+    "blunder_severity": null,
+    "pattern_category": "forced_block",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P13",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-11",
+    "board_state": "3112033135114135",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 5,
+        "col": 3
+      }
+    ],
+    "severity": 0,
     "blunder_severity": null,
     "pattern_category": "immediate_threat",
     "predicates": [
       "P01",
-      "P04",
       "P08",
       "P10",
       "P11",
@@ -161,47 +289,7 @@
     ]
   },
   {
-    "id": "eval-7",
-    "board_state": "33343144253341425",
-    "move_played": 6,
-    "correct_move": 0,
-    "threat_cells": [
-      {
-        "row": 1,
-        "col": 0
-      }
-    ],
-    "severity": 1,
-    "blunder_severity": null,
-    "pattern_category": "forced_win",
-    "predicates": [
-      "P02",
-      "P03",
-      "P08",
-      "P10",
-      "P15",
-      "P35"
-    ]
-  },
-  {
-    "id": "eval-8",
-    "board_state": "3340",
-    "move_played": 3,
-    "correct_move": 2,
-    "threat_cells": [],
-    "severity": 4,
-    "blunder_severity": null,
-    "pattern_category": "double_threat",
-    "predicates": [
-      "P01",
-      "P06",
-      "P10",
-      "P16",
-      "P34"
-    ]
-  },
-  {
-    "id": "eval-9",
+    "id": "eval-12",
     "board_state": "",
     "move_played": 4,
     "correct_move": 3,
@@ -218,21 +306,46 @@
     ]
   },
   {
-    "id": "eval-10",
-    "board_state": "31545511350133132554020062",
-    "move_played": 4,
-    "correct_move": 2,
+    "id": "eval-13",
+    "board_state": "4611",
+    "move_played": 5,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P06",
+      "P10",
+      "P31",
+      "P34"
+    ]
+  },
+  {
+    "id": "eval-14",
+    "board_state": "46115323214111222562535633364",
+    "move_played": 6,
+    "correct_move": 4,
     "threat_cells": [
       {
+        "row": 1,
+        "col": 0
+      },
+      {
         "row": 3,
-        "col": 2
+        "col": 4
+      },
+      {
+        "row": 5,
+        "col": 4
       }
     ],
-    "severity": 1,
+    "severity": 3,
     "blunder_severity": null,
     "pattern_category": "forced_block",
     "predicates": [
-      "P01",
+      "P02",
       "P03",
       "P08",
       "P10",
@@ -241,28 +354,197 @@
     ]
   },
   {
-    "id": "eval-11",
-    "board_state": "352062403133",
-    "move_played": 1,
+    "id": "eval-15",
+    "board_state": "31353366465006645",
+    "move_played": 3,
+    "correct_move": 4,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P17",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-16",
+    "board_state": "341011303324233110061662265",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 5,
+        "col": 0
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P22",
+      "P36"
+    ]
+  },
+  {
+    "id": "eval-17",
+    "board_state": "3333340412111555",
+    "move_played": 2,
+    "correct_move": 4,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "undercut",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P18",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-18",
+    "board_state": "33333404121115552",
+    "move_played": 3,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P03",
+      "P06",
+      "P10",
+      "P31",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-19",
+    "board_state": "333334041211155523515",
+    "move_played": 4,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P12",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-20",
+    "board_state": "33325366545525151",
+    "move_played": 3,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P23",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-21",
+    "board_state": "33325366545525151322110",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 0
+      },
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P12",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-22",
+    "board_state": "333342223",
+    "move_played": 4,
     "correct_move": 2,
     "threat_cells": [],
     "severity": 1,
     "blunder_severity": null,
     "pattern_category": "j_shape",
     "predicates": [
-      "P01",
+      "P02",
       "P03",
       "P08",
       "P10",
       "P22",
-      "P35"
+      "P34"
     ]
   },
   {
-    "id": "eval-12",
-    "board_state": "3520624031331",
-    "move_played": 4,
-    "correct_move": 0,
+    "id": "eval-23",
+    "board_state": "3333422234211",
+    "move_played": 3,
+    "correct_move": 2,
     "threat_cells": [],
     "severity": 0,
     "blunder_severity": null,
@@ -276,21 +558,71 @@
     ]
   },
   {
-    "id": "eval-13",
-    "board_state": "3520624031331441",
-    "move_played": 6,
-    "correct_move": 2,
+    "id": "eval-24",
+    "board_state": "3333341345111520102",
+    "move_played": 1,
+    "correct_move": 0,
     "threat_cells": [
       {
         "row": 3,
-        "col": 5
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 4
       }
     ],
     "severity": 1,
     "blunder_severity": null,
     "pattern_category": "forced_win",
     "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P15",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-25",
+    "board_state": "424344510266",
+    "move_played": 5,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 3
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "undercut",
+    "predicates": [
       "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P18",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-26",
+    "board_state": "424344510266555331033",
+    "move_played": 6,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 2
+      }
+    ],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P02",
       "P03",
       "P08",
       "P10",
@@ -299,52 +631,104 @@
     ]
   },
   {
-    "id": "eval-14",
-    "board_state": "3333215455312204452550",
-    "move_played": 4,
-    "correct_move": 0,
+    "id": "eval-27",
+    "board_state": "4243445102665553310336",
+    "move_played": 0,
+    "correct_move": 1,
     "threat_cells": [
+      {
+        "row": 3,
+        "col": 2
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P16",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-28",
+    "board_state": "3333362440453422402462600",
+    "move_played": 2,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 1
+      },
+      {
+        "row": 2,
+        "col": 1
+      },
+      {
+        "row": 2,
+        "col": 5
+      },
       {
         "row": 3,
         "col": 1
       },
       {
+        "row": 3,
+        "col": 5
+      },
+      {
         "row": 4,
-        "col": 4
+        "col": 1
       }
     ],
-    "severity": 2,
+    "severity": 1,
     "blunder_severity": null,
-    "pattern_category": "immediate_threat",
+    "pattern_category": "overcut",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P19",
+      "P36"
+    ]
+  },
+  {
+    "id": "eval-29",
+    "board_state": "2031120112145223",
+    "move_played": 6,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
     "predicates": [
       "P01",
       "P03",
       "P08",
       "P10",
-      "P12",
+      "P15",
       "P35"
     ]
   },
   {
-    "id": "eval-15",
-    "board_state": "333336422144223",
-    "move_played": 1,
-    "correct_move": 0,
+    "id": "eval-30",
+    "board_state": "3402222343",
+    "move_played": 0,
+    "correct_move": 4,
     "threat_cells": [
       {
-        "row": 1,
-        "col": 5
-      },
-      {
         "row": 3,
-        "col": 5
+        "col": 1
       }
     ],
-    "severity": 1,
+    "severity": 2,
     "blunder_severity": null,
     "pattern_category": "figure_7",
     "predicates": [
-      "P02",
+      "P01",
       "P03",
       "P08",
       "P10",
@@ -353,44 +737,110 @@
     ]
   },
   {
-    "id": "eval-16",
-    "board_state": "4332310443343044656661611000102256",
-    "move_played": 2,
-    "correct_move": 1,
+    "id": "eval-31",
+    "board_state": "34022223430400452",
+    "move_played": 6,
+    "correct_move": 5,
     "threat_cells": [
       {
-        "row": 3,
+        "row": 2,
+        "col": 1
+      },
+      {
+        "row": 2,
         "col": 5
       },
       {
-        "row": 4,
-        "col": 2
+        "row": 3,
+        "col": 1
       },
       {
-        "row": 4,
+        "row": 3,
         "col": 5
       }
     ],
     "severity": 0,
     "blunder_severity": null,
-    "pattern_category": "z_threat",
+    "pattern_category": "double_threat",
     "predicates": [
-      "P01",
-      "P07",
+      "P02",
+      "P08",
       "P10",
-      "P24",
-      "P36"
+      "P16",
+      "P35"
     ]
   },
   {
-    "id": "eval-17",
-    "board_state": "4222523632256633061661301",
+    "id": "eval-32",
+    "board_state": "35123353326605022025",
+    "move_played": 2,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 1
+      },
+      {
+        "row": 2,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "overcut",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P19",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-33",
+    "board_state": "4514143243231",
     "move_played": 5,
     "correct_move": 1,
     "threat_cells": [
       {
-        "row": 2,
-        "col": 4
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 7,
+    "blunder_severity": null,
+    "pattern_category": "forced_block",
+    "predicates": [
+      "P02",
+      "P04",
+      "P06",
+      "P10",
+      "P13",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-34",
+    "board_state": "45141432432315",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 6
       },
       {
         "row": 3,
@@ -398,29 +848,64 @@
       },
       {
         "row": 3,
-        "col": 4
+        "col": 1
       },
       {
-        "row": 4,
-        "col": 4
+        "row": 3,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 7,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P01",
+      "P04",
+      "P07",
+      "P10",
+      "P11",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-35",
+    "board_state": "333333215441141562222145646654215",
+    "move_played": 0,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 0
+      },
+      {
+        "row": 2,
+        "col": 0
+      },
+      {
+        "row": 5,
+        "col": 6
       }
     ],
     "severity": 1,
     "blunder_severity": null,
-    "pattern_category": "undercut",
+    "pattern_category": "z_threat",
     "predicates": [
       "P02",
       "P03",
-      "P08",
+      "P06",
       "P10",
-      "P18",
+      "P24",
       "P36"
     ]
   },
   {
-    "id": "eval-18",
-    "board_state": "20354165404354",
-    "move_played": 2,
+    "id": "eval-36",
+    "board_state": "4164534455120221133302500",
+    "move_played": 6,
     "correct_move": 3,
     "threat_cells": [
       {
@@ -428,6 +913,95 @@
         "col": 6
       }
     ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P02",
+      "P03",
+      "P06",
+      "P10",
+      "P14",
+      "P36"
+    ]
+  },
+  {
+    "id": "eval-37",
+    "board_state": "32565655660512352",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "odd_even_threat",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P27",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-38",
+    "board_state": "33333252644446662225434610621100000555",
+    "move_played": 1,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 4,
+        "col": 1
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P24",
+      "P36"
+    ]
+  },
+  {
+    "id": "eval-39",
+    "board_state": "33333512551146513206166224216645",
+    "move_played": 2,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 4,
+        "col": 0
+      },
+      {
+        "row": 4,
+        "col": 4
+      },
+      {
+        "row": 5,
+        "col": 0
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P07",
+      "P10",
+      "P25",
+      "P36"
+    ]
+  },
+  {
+    "id": "eval-40",
+    "board_state": "332031152522",
+    "move_played": 3,
+    "correct_move": 1,
+    "threat_cells": [],
     "severity": 2,
     "blunder_severity": null,
     "pattern_category": "figure_7",
@@ -441,116 +1015,44 @@
     ]
   },
   {
-    "id": "eval-19",
-    "board_state": "333301453451456111054551004034262",
-    "move_played": 0,
-    "correct_move": 2,
+    "id": "eval-41",
+    "board_state": "351433344",
+    "move_played": 4,
+    "correct_move": 1,
     "threat_cells": [
       {
-        "row": 4,
+        "row": 3,
         "col": 2
       }
     ],
-    "severity": 1,
+    "severity": 0,
     "blunder_severity": null,
-    "pattern_category": "claimeven",
+    "pattern_category": "odd_even_threat",
     "predicates": [
       "P02",
-      "P03",
       "P07",
       "P10",
-      "P28",
-      "P36"
-    ]
-  },
-  {
-    "id": "eval-20",
-    "board_state": "3333031222150500",
-    "move_played": 0,
-    "correct_move": 6,
-    "threat_cells": [
-      {
-        "row": 3,
-        "col": 4
-      }
-    ],
-    "severity": 0,
-    "blunder_severity": null,
-    "pattern_category": "odd_even_threat",
-    "predicates": [
-      "P01",
-      "P08",
-      "P10",
       "P27",
-      "P35"
+      "P34"
     ]
   },
   {
-    "id": "eval-21",
-    "board_state": "332433104101511314",
-    "move_played": 5,
-    "correct_move": 4,
+    "id": "eval-42",
+    "board_state": "33334345415451",
+    "move_played": 3,
+    "correct_move": 1,
     "threat_cells": [
       {
         "row": 2,
         "col": 2
       },
       {
-        "row": 3,
-        "col": 2
-      }
-    ],
-    "severity": 2,
-    "blunder_severity": null,
-    "pattern_category": "overcut",
-    "predicates": [
-      "P01",
-      "P03",
-      "P08",
-      "P10",
-      "P19",
-      "P35"
-    ]
-  },
-  {
-    "id": "eval-22",
-    "board_state": "414544102226",
-    "move_played": 4,
-    "correct_move": 5,
-    "threat_cells": [
-      {
         "row": 2,
-        "col": 3
-      }
-    ],
-    "severity": 0,
-    "blunder_severity": null,
-    "pattern_category": "odd_even_threat",
-    "predicates": [
-      "P01",
-      "P06",
-      "P10",
-      "P26",
-      "P35"
-    ]
-  },
-  {
-    "id": "eval-23",
-    "board_state": "333444413011331412166664",
-    "move_played": 0,
-    "correct_move": 5,
-    "threat_cells": [
-      {
-        "row": 2,
-        "col": 5
+        "col": 6
       },
       {
         "row": 3,
-        "col": 2
-      },
-      {
-        "row": 3,
-        "col": 5
+        "col": 6
       }
     ],
     "severity": 0,
@@ -565,20 +1067,70 @@
     ]
   },
   {
-    "id": "eval-24",
-    "board_state": "33423326354155230616614422562600110040",
+    "id": "eval-43",
+    "board_state": "20525064542561313066044",
     "move_played": 1,
+    "correct_move": 3,
+    "threat_cells": [
+      {
+        "row": 4,
+        "col": 3
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P28",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-44",
+    "board_state": "215551133333521",
+    "move_played": 0,
     "correct_move": 4,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 2,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P02",
+      "P03",
+      "P07",
+      "P10",
+      "P28",
+      "P35"
+    ]
+  },
+  {
+    "id": "eval-45",
+    "board_state": "333366202",
+    "move_played": 5,
+    "correct_move": 1,
     "threat_cells": [],
     "severity": 0,
     "blunder_severity": null,
     "pattern_category": "z_threat",
     "predicates": [
-      "P01",
-      "P07",
+      "P02",
+      "P08",
       "P10",
       "P25",
-      "P36"
+      "P34"
     ]
   }
 ]

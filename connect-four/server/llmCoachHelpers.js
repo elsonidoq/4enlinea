@@ -600,7 +600,7 @@ export function buildBlunderExplainPrompt({
 
   const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. Address the player as "you" / "your". Refer to the other player as "your opponent". Do not use any player names such as "Gray" or "Green".`;
+  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win (the internal slug — writing "forced win" in plain language is fine), losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. Address the player as "you" / "your". Refer to the other player as "your opponent". Do not use any player names such as "Gray" or "Green".`;
 
   const sections = [];
 
@@ -757,6 +757,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
     formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Replace CONCEPT_ID with the exact kbId from the KB term definitions.');
     formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
+    formatLines.push('  Never use [term:forced_win] — "forced_win" has no KB definition. Write "forced win" as plain text.');
     formatLines.push('');
   }
   formatLines.push('When you write a minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-minor-pre]).');
@@ -772,7 +773,8 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
-When the threat comparison shows a meaningful difference, compare branches against the pre-move baseline — and replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:opponent-minor-pre]4[/zone:opponent-minor-pre] to [zone:opponent-minor-best]1[/zone:opponent-minor-best]; your move left them at [zone:opponent-minor-played]3[/zone:opponent-minor-played]").
+When describing the better move, always frame it as what YOU could have played — never describe it as an easy reply or opportunity for your opponent.
+If the threat comparison section includes minor threat rows, include a comparison in your explanation using those counts — replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:opponent-minor-pre]4[/zone:opponent-minor-pre] to [zone:opponent-minor-best]1[/zone:opponent-minor-best]; your move left them at [zone:opponent-minor-played]3[/zone:opponent-minor-played]"). If no minor threat rows appear, do not write a minor threat comparison.
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

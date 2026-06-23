@@ -10,6 +10,7 @@ Two LLM-grounded coaching features are live as server endpoints. CLI scripts in 
 |---------|----------------|------------|
 | Move explanation | `POST /api/explain-move-llm` | `explain_move.sh` → `explain_move.mjs` |
 | Move recommendation | `POST /api/recommend-move` | `recommend_next_move.sh` → `recommend_next_move.mjs` |
+| Eval harness (offline) | — | `run_eval.mjs` → `/judge-deep-reveals` skill |
 
 Server endpoints share the solver singleton managed at startup. CLI scripts in `connect-four/server/scripts/` each spawn their own solver process. Shell wrappers at project root load `.env` via `node --env-file`.
 
@@ -38,6 +39,9 @@ Walks a game tree `numPlies` deep with optimal play, classifying positions via t
 
 ### KB loading
 `loadKBStatement(id)` — reads a KB article's `statement:` frontmatter field from `docs/knowledge-base/`. Only articles for patterns with ratio > 0 are loaded at runtime.
+
+### Zone tag normalization
+`normalizeZoneTags(text)` — exported from `annotationGate.js` (moved from private `index.js` function 2026-06-23). Normalizes LLM output before validation: `[zone:column N]` → `[zone:colN]`, pairs opening/closing col tags, expands short `[/zone:cells]` closers. Import from `annotationGate.js`, not `index.js`.
 
 ### LLM call
 `callLLM(prompt)` — native `fetch` to OpenAI chat completions API. Model and key read from `OPENAI_API_KEY` / `OPENAI_MODEL` env vars.

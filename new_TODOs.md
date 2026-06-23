@@ -35,6 +35,10 @@
 
 - the coach mas speak in the lesson. For now we need to add the generate audios button in the /admin/lessons to pre-generate them, save the path for the audio in the json file and then serving them and playing them in each slide of the lesson
 
+- the deep reveal should never say "community immediate threat", it should just say "immediate threat". That applies to all community-* knowledge-base entries
+
+- security checkup: would anyone be able to access the codebase? Explore ways that a hacker could access the codebase
+
 - unify sub-optimal move with blunder. The screens must be the same, a sub optimal move is a less severe blunder. The games analysis showing sub optimal moves and blunders should be seen the same, but the blunder view and the explorer view must be unified. The "start a game from here" and "what should I have played" and "mark as reviewed" buttons must be in the new merged window. No old dead code should remain from this merge
 
 - The browser forgets i have signed in very quickly. I want the app to remember me

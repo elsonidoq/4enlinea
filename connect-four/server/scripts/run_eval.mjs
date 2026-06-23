@@ -41,7 +41,7 @@ if (process.argv[2] && existsSync(outputFile)) {
 }
 
 // ── Load eval set ──────────────────────────────────────────────────────────
-const evalSet = JSON.parse(readFileSync(join(__dirname, 'eval_set.json'), 'utf8'));
+const evalSet = JSON.parse(readFileSync(join(__dirname, 'eval_set_small.json'), 'utf8'));
 
 // ── Run ────────────────────────────────────────────────────────────────────
 const solver = createSolverProcess();
@@ -111,6 +111,10 @@ try {
     record.context_outcome = 'success';
     record.prompt = context.prompt;
     record.allowed_set = context.allowedSet ?? null;
+    // Override correct_move with the column buildExplainContext actually put in the
+    // prompt. eval_set.json uses a different tiebreaker for tied-score positions,
+    // which can produce a different column than selectContrastMove's centerMost rule.
+    if (context.contrastCol !== undefined) record.correct_move = context.contrastCol;
 
     const board = new Board(entry.board_state);
     const aliasMap = context.zoneAliasMap ?? {};

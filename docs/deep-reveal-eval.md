@@ -305,6 +305,29 @@ golden set with the `approved_explanation` field set.
 
 ---
 
+## Known issue: `correct_move` tiebreaker vs. pedagogical best move
+
+`eval_set.json` stores a `correct_move` column for each entry. The eval harness
+now overwrites this at runtime with the column that `buildExplainContext` actually
+put in the prompt (via `context.contrastCol`), so the two are always consistent.
+
+However, the column chosen by `selectContrastMove` (in `llmCoachHelpers.js`) uses
+a `centerMost` tiebreaker: when multiple columns share the best solver score, it
+picks the one geometrically closest to col 4 (center). This is arbitrary and can
+produce a less instructive "better move" than what a human curator would choose —
+for example, a claimeven column that clearly illustrates the pairing concept might
+lose the tiebreak to a more central column that is equally optimal but less
+pattern-relevant.
+
+**Post-MVP improvement to consider:** replace the `centerMost` tiebreaker in
+`selectContrastMove` with a pattern-aware ranking: among tied-score columns,
+prefer the column whose resulting position most clearly fires the target
+`pattern_category` classifier. This would require running `classifyPattern` on
+each candidate and picking the one with the most informative annotation. The
+change should be made in `selectContrastMove` in `llmCoachHelpers.js`.
+
+---
+
 ## Running order
 
 1. **After every prompt change:** run Layer 1 on all cached rows + Layer 3

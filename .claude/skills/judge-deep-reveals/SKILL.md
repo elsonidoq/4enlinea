@@ -41,7 +41,7 @@ The argument is a path to a `.jsonl` file. Each line is a JSON object with this 
 1. Read the JSONL file using the Read tool (or Bash `cat`).
 2. For each record, classify it into one of three buckets:
    - **Pipeline failure**: `context_outcome` is not `success` — no LLM was called. Record the outcome type and `context_error` if present.
-   - **Annotation failure**: `context_outcome` is `success` but `final_response` is `null` — both validation attempts failed. Record the failure codes from `attempt1_failures` and `attempt2_failures`.
+   - **Annotation failure**: `context_outcome` is `success` but `final_response` is `null` — both validation attempts failed. Record the failure codes from `attempt1_failures` and `attempt2_failures`, and capture the full text of `attempt1_response` and `attempt2_response`.
    - **Success**: `final_response` is non-null — apply the 8-item rubric.
 3. For each success record, score all 8 rubric items.
 4. Write the report to `<same-directory>/<stem>_report.md` where `<stem>` is the filename without `.jsonl`.
@@ -89,6 +89,14 @@ Write the report in this structure:
 | id | category | attempt1_failures | attempt2_failures |
 |----|----------|------------------|------------------|
 ...
+
+For each annotation failure, add a block immediately below the table:
+
+> **eval-N attempt 1** (`failure_code1, failure_code2`):
+> <paste attempt1_response verbatim>
+>
+> **eval-N attempt 2** (`failure_code1, failure_code2`):
+> <paste attempt2_response verbatim>
 
 ## Per-entry rubric scores (success entries)
 
