@@ -363,6 +363,65 @@ export function checkP5Strong(zones, allowedSet) {
 }
 
 // ---------------------------------------------------------------------------
+// Zone tag normalization
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize zone tags in raw LLM output before annotation validation.
+ * - [zone:column N] / [zone:col N] → [zone:colN]
+ * - Pairs each [zone:colN] with the nearest following closing tag → [/zone:colN]
+ * - Expands [/zone:cells] short closers to [/zone:cells:SPEC]
+ */
+export function normalizeZoneTags(text) {
+  // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
+  text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
+
+  // Step 2: Pair each opening [zone:colN] with the nearest following closing tag
+  const CLOSE_RE = /\[\/zone:col(?:umn)?(?:\s+\d+)?\]/gi;
+  const OPEN_RE = /\[zone:col(\d+)\]/gi;
+  const resultParts = [];
+  let lastIndex = 0;
+  let openMatch;
+
+  while ((openMatch = OPEN_RE.exec(text)) !== null) {
+    resultParts.push(text.slice(lastIndex, openMatch.index + openMatch[0].length));
+    const colNum = openMatch[1];
+    CLOSE_RE.lastIndex = openMatch.index + openMatch[0].length;
+    const closeMatch = CLOSE_RE.exec(text);
+    if (closeMatch) {
+      resultParts.push(text.slice(openMatch.index + openMatch[0].length, closeMatch.index));
+      resultParts.push(`[/zone:col${colNum}]`);
+      lastIndex = closeMatch.index + closeMatch[0].length;
+    } else {
+      lastIndex = openMatch.index + openMatch[0].length;
+    }
+  }
+  resultParts.push(text.slice(lastIndex));
+  text = resultParts.join('');
+
+  // Step 3: Expand short [zone:cells:SPEC]...[/zone:cells] closing tags
+  const CELLS_OPEN_RE = /\[zone:cells:([^\]]+)\]/g;
+  const cellsParts = [];
+  let cellsLastIndex = 0;
+  let cellsMatch;
+  while ((cellsMatch = CELLS_OPEN_RE.exec(text)) !== null) {
+    cellsParts.push(text.slice(cellsLastIndex, cellsMatch.index + cellsMatch[0].length));
+    const spec = cellsMatch[1];
+    const afterOpen = cellsMatch.index + cellsMatch[0].length;
+    const closeIdx = text.indexOf('[/zone:cells]', afterOpen);
+    if (closeIdx !== -1) {
+      cellsParts.push(text.slice(afterOpen, closeIdx));
+      cellsParts.push(`[/zone:cells:${spec}]`);
+      cellsLastIndex = closeIdx + '[/zone:cells]'.length;
+    } else {
+      cellsLastIndex = afterOpen;
+    }
+  }
+  cellsParts.push(text.slice(cellsLastIndex));
+  return cellsParts.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 

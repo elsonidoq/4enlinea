@@ -26,7 +26,7 @@ import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
-import { validateAnnotation } from './annotationGate.js';
+import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
@@ -793,92 +793,6 @@ async function buildExplainContextActive(movestring, col, rounds = 1) {
 // Returns { explanation: string, cached?: boolean }.
 // Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
-/**
- * Normalize common LLM malformations in zone tags before validation.
- *
- * Common mistakes:
- *   [zone:column 2]...[/zone:column]  → [zone:col2]...[/zone:col2]
- *   [zone:col 2]...[/zone:col]        → [zone:col2]...[/zone:col2]
- *   [zone:column 6]...[/zone:col6]    → [zone:col6]...[/zone:col6] (already ok)
- *
- * Strategy: first normalize all opening tags to [zone:colN], then pair each
- * opening tag with the following closing tag and fix the closing tag to match.
- *
- * @param {string} text  Raw LLM output
- * @returns {string}  Normalized text
- */
-function normalizeZoneTags(text) {
-  // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
-  text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
-
-  // Step 2: Pair each opening [zone:colN] with the nearest following closing tag
-  // and fix the closing tag to be [/zone:colN].
-  // Matches any closing tag: [/zone:col], [/zone:column], [/zone:colN], [/zone:column N]
-  const CLOSE_RE = /\[\/zone:col(?:umn)?(?:\s+\d+)?\]/gi;
-
-  // We need to pair correctly: find [zone:colN], then find the next [/zone:...]
-  // and replace it with [/zone:colN].
-  const OPEN_RE = /\[zone:col(\d+)\]/gi;
-  const resultParts = [];
-  let lastIndex = 0;
-  let openMatch;
-
-  while ((openMatch = OPEN_RE.exec(text)) !== null) {
-    // Text before this opening tag
-    resultParts.push(text.slice(lastIndex, openMatch.index + openMatch[0].length));
-    const colNum = openMatch[1];
-
-    // Find the next closing tag after this opening tag
-    CLOSE_RE.lastIndex = openMatch.index + openMatch[0].length;
-    const closeMatch = CLOSE_RE.exec(text);
-    if (closeMatch) {
-      // Text between opening and closing
-      resultParts.push(text.slice(openMatch.index + openMatch[0].length, closeMatch.index));
-      // Fixed closing tag
-      resultParts.push(`[/zone:col${colNum}]`);
-      lastIndex = closeMatch.index + closeMatch[0].length;
-    } else {
-      // No closing tag found — leave remaining text as-is
-      lastIndex = openMatch.index + openMatch[0].length;
-    }
-  }
-  // Remaining text after the last processed zone
-  resultParts.push(text.slice(lastIndex));
-
-  text = resultParts.join('');
-
-  // Step 3: Expand short [zone:cells:SPEC]...[/zone:cells] closing tags.
-  // The LLM is instructed to use [/zone:cells] (no cell list) to save tokens.
-  // Here we expand each occurrence back to [/zone:cells:SPEC] so the downstream
-  // parsers (zoneParser.js, annotatedText.js) can match via backreference.
-  const CELLS_OPEN_RE = /\[zone:cells:([^\]]+)\]/g;
-  const cellsParts = [];
-  let cellsLastIndex = 0;
-  let cellsMatch;
-
-  while ((cellsMatch = CELLS_OPEN_RE.exec(text)) !== null) {
-    const spec = cellsMatch[1];
-    const afterOpen = cellsMatch.index + cellsMatch[0].length;
-
-    // Find the next [/zone:cells] or [/zone:cells:...] after this opening tag
-    const SHORT_CLOSE = /\[\/zone:cells(?::[^\]]*)?\]/g;
-    SHORT_CLOSE.lastIndex = afterOpen;
-    const closeMatch = SHORT_CLOSE.exec(text);
-
-    cellsParts.push(text.slice(cellsLastIndex, afterOpen));
-    if (closeMatch) {
-      cellsParts.push(text.slice(afterOpen, closeMatch.index));
-      cellsParts.push(`[/zone:cells:${spec}]`);
-      cellsLastIndex = closeMatch.index + closeMatch[0].length;
-    } else {
-      cellsLastIndex = afterOpen;
-    }
-  }
-  cellsParts.push(text.slice(cellsLastIndex));
-
-  return cellsParts.join('');
-}
-
 app.post('/api/explain-move-llm', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
