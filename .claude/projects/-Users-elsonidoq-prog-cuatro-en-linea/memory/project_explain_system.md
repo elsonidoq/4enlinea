@@ -12,9 +12,7 @@ metadata:
 - `POST /api/explain-move-llm` — auth required (401 for anon); rate-limited 5 req/min; free-tier quota 20/week (429, resets Monday). Response: `{ explanation, prompt, cached? }`. Cache hits do NOT decrement quota.
 - `POST /api/llm-feedback` — rate-limited 10 req/min; no auth. Stores flagged LLM responses.
 
-**Deleted in Epic 3:** `/api/recommend-move`, `/api/coach/explain-simulate`.
-
-## Key files (current)
+## Key files
 
 | File | Role |
 |------|------|
@@ -42,11 +40,11 @@ Cache key: `SHA256(movestring + ":" + col)`. `template_version = 'v2'` set on al
 - **Solver scores are NEVER sent to LLM** — `getPositionTier` converts to tier labels; `getBoardVisualization` strips the `scr` row. Preserved by all callers.
 - **`## Move context` section** — must explicitly name the player who moved; prevents LLM from adopting opponent's perspective from "Next: Yellow" board header. See [[feedback_llm_perspective_bug]].
 - **Pre-move board in prompt** — forces LLM to see opponent's threat before the move; critical for forced-block detection.
-- **LANGUAGE_RULE now only bans internal terms** — positive vocabulary list removed 2026-06-21 ("threats, columns, rows, diagonals, blocking, winning line, double threat, etc." → removed). LLM describes only what it sees on boards + KB terms when present.
+- **LANGUAGE_RULE bans internal terms only** — no positive vocabulary list. LLM describes only what it sees on boards + KB terms when present.
 - **Term-tagging instructions are conditional** — only emitted in `## Output format` when `## KB term definitions` section exists. No definitions = no term-tagging instruction → prevents hallucination.
 - **`## Task` section varies** — when KB terms exist: "Name the tactical pattern that was missed"; when absent: "Do not invent tactical concept names — describe only what you can see changing between the two boards."
 
-## Prompt sections (as of 2026-06-21)
+## Prompt sections
 
 Sequence: `Role` → `Language rule` → `Players` → `Boards` (3 boards: Before / After best move / After played) → `Move context` → `Threat comparison` → `Best-move tactical evidence` (conditional) → `Hard grounding rules` → `Tone` → `KB term definitions` (conditional) → `Output format` → `Task`.
 
@@ -75,7 +73,7 @@ Computed by `summarizeThreats()` + `formatThreatStats()` in `explainContext.js` 
 
 ## No server-side post-processing of LLM output
 
-`injectDefaultActiveZone` was removed (2026-06-11). The LLM output is used as-is. Zone tag `!` (active highlight) is no longer injected anywhere — removed from prompt instructions and from `index.js`.
+`injectDefaultActiveZone` was removed. The LLM output is used as-is. Zone tag `!` (active highlight) is no longer injected anywhere — removed from prompt instructions and from `index.js`.
 
 ## `llm_feedback` schema
 

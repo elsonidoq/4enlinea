@@ -5,13 +5,9 @@ metadata:
   type: project
 ---
 
-Spec pipeline complete at `specs/030-server-mediated-data-access/` (spec, plan, tasks). 43 tasks across 6 phases. Run `/coordinate-implementation specs/030-server-mediated-data-access` to begin.
+Spec 030: server-mediated data access — browser must never talk to Supabase directly; all reads/writes go through `/api/user/*` server endpoints. Read `specs/030-server-mediated-data-access/spec.md` before touching any SupabaseStore method or `/api/user/*` endpoints.
 
-**Why:** Epic 1 from TODOs_epics.md — security hardening: browser must never talk to Supabase directly; all reads/writes go through `/api/user/*` server endpoints.
-
-**How to apply:** Read spec.md before touching any SupabaseStore method or adding /api/user/* endpoints. These invariants are load-bearing:
-
-## Non-obvious invariants (discovered through 4 rounds of critique)
+## Non-obvious invariants
 
 **session_stats write asymmetry — the most dangerous trap:**
 - `POST /api/user/session-stats` stores `req.body.stats` (the *inner* object) as the `stats` jsonb column. Its caller sends `{ date, stats: next }` — storing the whole body would double-nest and silently break two consumers.

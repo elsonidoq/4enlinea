@@ -7,11 +7,7 @@ metadata:
   originSessionId: df3993bd-901e-4984-b6dc-811f0efe0cc0
 ---
 
-Spec 037 is **implemented** (all 15 tasks T001–T015 complete, 2026-06-17). Four QA bugs remain open — not yet fixed.
-
-**Why:** Epic 8 adds player-color clarity chips, past-games sort, and blunder permalinks.
-
-**How to apply:** Fix the four open QA bugs below before considering this branch shippable.
+Four QA bugs remain open (see below). Fix before considering this branch shippable.
 
 ## Key decisions (non-obvious, needed for implementation)
 
@@ -27,8 +23,6 @@ Spec 037 is **implemented** (all 15 tasks T001–T015 complete, 2026-06-17). Fou
 - **Deep Reveal on permalink = "Sign in to unlock" prompt.** Deliberate conversion hook. Do NOT hide Deep Reveal for non-authenticated users — show the prompt.
 - **Sort is JS comparator over merged array, not SQL.** `GET /api/games` fetches games + papergames_games separately, concatenates, then JS-sorts before slicing. `blunder_count` computed via separate `blunders` query + JS map (not a DB column).
 - **OG title humanizes enum server-side.** `pattern_category` DB enum (e.g. `immediate_threat`) must be converted to title-case ("Immediate Threat") via a `CATEGORY_LABELS` map with regex fallback before injecting `og:title`. Raw enum strings read as broken in social previews.
-- **Deploy constraint: T009 before T011/T012.** `GET /api/blunders/:id` must be deployed and reachable before the URL_MAP change (T011) and cold-boot fetch (T012) ship. Violating this order makes all permalink URLs 404 with no fallback.
-
 ## Open QA bugs (2026-06-17)
 
 1. **ReviewScreen chip floats above coach.** `PlayerColorChip` is placed AFTER `<CoachDialog fixed .../>` in the JSX. The coach uses `background: rgba(255,255,255,0.45)` (semi-transparent), so the chip bleeds through visually. Fix: move the chip to BEFORE `<CoachDialog>`.

@@ -23,6 +23,12 @@ The codebase has **two separate CSS custom property systems** defined in differe
 
 See also: [[reference_token_pairing]], [[project_dark_global_theme]]
 
+## CSS Layout Gotchas
+
+**flex-basis percentages require definite heights.** Chrome does not resolve `flex-basis: N%` on children of flex containers whose height is determined algorithmically (e.g. `flex: 1` with no explicit height ancestor). Use a `ResizeObserver` to measure the container in pixels and pass explicit pixel values (`flex: 0 0 ${px}px`) instead of percentages.
+
+**maxWidth percentage requires an explicit width sibling.** `maxWidth: "N%"` on a flex child resolves against `width`, not `maxWidth` — so if `width` is unset, `maxWidth` has no effect. Always pair `maxWidth` with `width: '100%'`.
+
 ## State Management
 
 **MUST**: App-level state lives in `ProfileStore` (React Context, `src/store/ProfileStore.jsx`).

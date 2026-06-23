@@ -59,10 +59,3 @@ Score from c4solver `-a` = from current player's perspective:
 - `detectFigure7` and `detectJShape` no longer return `correctCol` — the completing column is derived by `checkFigure7Predicate`/`checkJShapePredicate` via transition logic (simulate each legal column, check before/after pattern presence)
 - undercut/overcut derive from `highlight_metadata` at eval time, `correct_col = null`
 
-## Test fixtures
-
-`connect-four/tests/classifier/fixtures/fixtures.json` — labeled positions per category (T020–T025 for new cats still pending).
-`connect-four/tests/predicates/fixtures/fixtures.json` — 25 positions covering correct/wrong/tied for all categories.
-Integration tests: `tests/integration/z_threat.test.js`, `claimeven.test.js`, `figure7_jshape.test.js`, `undercut_overcut.test.js`.
-
-Run predicate tests: `node --test tests/predicates/predicates.test.js` (27 pass).

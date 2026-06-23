@@ -1,35 +1,13 @@
 ---
 name: project_epic6_architecture
-description: "Epic 6 (Challenge Progression & Variety) — IMPLEMENTED 2026-06-16; all 14/15 tasks done, only manual verification remains"
+description: "Epic 6 (Challenge Progression & Variety) — shape reindex, position-based draw, challenge-progress endpoint"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 8e7f98dd-1a31-40fd-9f3a-a9839cc9bdbe
 ---
 
-Epic 6 spec/plan/tasks are complete at `specs/035-challenge-progression-variety/`. Implementation completed 2026-06-16 across 3 batches.
-
-## Implementation status
-
-All 14 implementation tasks (T001–T014) done. T015 (manual verification) remaining.
-
-## Files created
-- `server/migrations/044_shape_key_position.sql` — `shape_key TEXT`, `position INTEGER DEFAULT NULL`, `highlight_cells JSONB` + GRANTs
-- `server/shapeDescriptor.js` — 5 exports: `bucketColZone`, `bucketRowZone`, `serialize`, `descriptorForPuzzle`, `shapeKeyForPuzzle`
-- `tests/unit/shapeDescriptor.test.js` — 33 unit tests
-- `tests/integration/challenge-progress.test.js` — 8 integration tests
-- `tests/integration/puzzles-reindex.test.js` — 9 integration tests
-
-## Files modified
-- `server/index.js` — draw endpoint (position-based ordering + random offset at line 1222), reindex endpoint (line 2543), stats endpoint (unindexed_count at line 2524), candidate approval copies highlight_cells (lines 2740/2772/2802/2838), import shapeKeyForPuzzle (line 30)
-- `server/userRoutes.js` — `GET /api/user/challenge-progress` at line 172
-- `src/components/SetCard.jsx` — progress bar, accuracy bar (color-coded), cleared badge; new props: `progress`, `isAuthenticated`
-- `src/screens/SetPickerScreen.jsx` — fetches progress in parallel with counts, passes to SetCards
-- `src/components/CandidateDashboard.jsx` — reindex button + orange unindexed warning badge
-- `src/i18n/en.json`, `src/i18n/es.json` — `setcard.progress`, `setcard.cleared` keys
-- `connect-four/package.json` — 3 new test files added to `test` and `test:fast`
-
-## Core architecture (unchanged from spec)
+## Core architecture
 
 - **Shape reindex runs at curation time, not draw time.** Round-robin algorithm per category: group puzzles by `shape_key`, interleave, assign sequential `position` values.
 - **Draw endpoint is sequential by position with random offset.** `ORDER BY position ASC` with `.not('position', 'is', null)`. Un-reindexed categories return empty arrays (by design).

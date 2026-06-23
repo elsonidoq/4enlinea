@@ -1,13 +1,13 @@
 ---
 name: project-new-puzzle-categories
-description: "New puzzle categories designed in 2026-05-14 session — z_threat, claimeven, undercut, overcut, figure_7, j_shape — with all design decisions locked"
+description: "Locked design decisions for z_threat, claimeven, undercut, overcut, figure_7, j_shape puzzle categories"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 453f3557-7e22-47f5-9dc9-88917ff53395
 ---
 
-Six new puzzle categories. Spec is written and **Ready for Plan** (`specs/008-new-puzzle-categories/spec.md`). API contract at `specs/008-new-puzzle-categories/contracts/api.md`. All use `interaction_mode = "single_move"`.
+Six puzzle categories. All use `interaction_mode = "single_move"`.
 
 **New categories:**
 - `z_threat` — parity control; count empty cells below threat (inclusive), odd = Z-threat; solver confirms unique winning column
@@ -27,10 +27,6 @@ Six new puzzle categories. Spec is written and **Ready for Plan** (`specs/008-ne
 - `category_evidence` column is curation-only (candidates table); not copied to puzzles on approve.
 - Curation UI uses existing highlight_cells sequence rendering for claimeven (simulation trace → loser/winner roles); no category-specific UI components needed.
 - Multi-category classifier priority order is deferred to implementation time.
-
-**Why:** Teaching zugzwang control and geometric tactical patterns beyond the current 5 categories.
-
-**How to apply:** When implementing any of these categories, treat design decisions above as locked. Spec is the authoritative source.
 
 [[project-forced-win-refactor]]
 [[project-interaction-mode-architecture]]

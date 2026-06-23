@@ -39,7 +39,7 @@ metadata:
 - Puzzle: play into the column to exploit this
 - Highlight: both threat cells with distinct roles
 
-**KB entries (2026-05-17):**
+**KB entries:**
 - J-shape: `docs/knowledge-base/allen-j-configuration.md` (canonical, Allen-sourced). Supersedes the J-shape section above for implementation work.
 - Figure-7: `docs/knowledge-base/community-figure-7.md` (canonical: false). Hard-derived invariants are in `known_limitations` and `formal_predicate`. Solver-verified worked example: `54333541514` (Red wins). Solver-verified false positives: `41432254553` (far-arm-end), `33344646555` (direct fork / both threats gravity-top).
 

@@ -7,7 +7,7 @@ metadata:
   originSessionId: 8e7f98dd-1a31-40fd-9f3a-a9839cc9bdbe
 ---
 
-`server/shapeDescriptor.js` is the single module for puzzle shape extraction, created for Epic 6 (spec 035).
+`server/shapeDescriptor.js` is the single module for puzzle shape extraction.
 
 ## Exports
 

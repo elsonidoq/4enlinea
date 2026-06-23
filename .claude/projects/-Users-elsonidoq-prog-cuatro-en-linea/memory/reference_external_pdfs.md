@@ -22,7 +22,6 @@ Three canonical Connect Four PDFs live at `docs/external_references/`. Use `pdfm
 - Allis §3.3 case 4: odd+odd=even cells → Red forced first, both threats lost → Draw
 - Bagan et al.: irrelevant to standard Connect Four parity; misattribution in old strategy ref was corrected
 
-**Strategy reference corrections made 2026-05-17:**
-- `docs/connect-four-strategy-reference.md` §2.3, §2.5 T7, §2.6 notes updated
-- 1R vs 1B = Draw (was wrong: Red wins); 0R vs 1B = Draw (was wrong: Black wins)
-- Bagan attribution removed; Allen correctly cited
+**Corrected rule outcomes (counter-intuitive):**
+- 1R vs 1B odd-row threats in separate columns = Draw (not Red wins)
+- 0R vs 1B odd-row threats = Draw (not Black wins)

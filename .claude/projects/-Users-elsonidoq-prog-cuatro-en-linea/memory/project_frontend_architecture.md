@@ -8,7 +8,7 @@ type: project
 
 ## Entry points
 
-- `index.html` — updated with manifest link, SW registration, title "DecodeC4 — Connect Four Trainer"
+- `index.html` — manifest link, SW registration, title "DecodeC4 — Connect Four Trainer"
 - `main.jsx` — mounts `<App />` in StrictMode
 - `App.jsx` — root: `<ProfileStoreProvider>` → `<BrowserRouter>` → `<ErrorBoundary>` → `<NavBar>` + lazy `<Routes>`
 

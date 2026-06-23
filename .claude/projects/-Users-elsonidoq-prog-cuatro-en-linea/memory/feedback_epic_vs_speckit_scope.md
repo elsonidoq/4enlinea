@@ -1,8 +1,10 @@
 ---
 name: feedback-epic-vs-speckit-scope
-description: When auditing an epic doc that feeds speckit, only fix things the per-epic pipeline structurally can't catch; leave the rest
-metadata:
+description: "When auditing an epic doc that feeds speckit, only fix things the per-epic pipeline structurally can't catch; leave the rest"
+metadata: 
+  node_type: memory
   type: feedback
+  originSessionId: 57444168-0988-4f85-98d9-67fe50bdff48
 ---
 
 When an epic doc (e.g. `docs/mvp/epics.md`) is the input to the speckit pipeline (`speckit-specify → plan → tasks`), do **not** push every audit finding back into the epic. Most details are correctly resolved *during* the pipeline.
@@ -15,7 +17,5 @@ When an epic doc (e.g. `docs/mvp/epics.md`) is the input to the speckit pipeline
 3. **Mockup-vs-Gap conflicts** — when "authoritative" visuals contradict a product decision, `specify` may faithfully build the wrong thing unless the epic says "don't follow the mockup here" (e.g. mockup timeline shows all moves but Gap 12 = user moves only; mockup lock sheets show Stripe "Upgrade to Pro" copy but Gap 19 = waitlist UpgradeModal).
 
 Everything else — behavior bounded by epic + a Gap, implementation behind an already-named interface (store methods, component props, module signatures), single-epic decisions (migration shape, RLS/grants, response field lists) — leave to specify/clarify/plan/tasks. Flagging it in a pre-spec sweep is fine; baking it into the epic over-constrains the specs.
-
-Confirmed during the Epic-1a pre-spec audit (2026-05-29): of ~15 findings, only 3 were applied to `epics.md` (PaywallModal fact fix, i18n namespace convention + phrase-library-is-keys note, two mockup-divergence notes); the rest were left to the pipeline.
 
 Related: [[project-new-mvp-epics]], [[project-speckit-workflow]], [[feedback-agent-model-selection]].

@@ -1,6 +1,6 @@
 ---
 name: allis-rule-examples
-description: "Verified Connect Four movestrings for all 9 of Allis's strategic rules; all confirmed 2026-05-18"
+description: "Verified Connect Four movestrings for all 9 of Allis's strategic rules"
 metadata: 
   node_type: memory
   type: reference

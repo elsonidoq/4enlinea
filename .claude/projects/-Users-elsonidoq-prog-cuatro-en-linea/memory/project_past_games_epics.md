@@ -7,9 +7,7 @@ metadata:
   originSessionId: a92b750d-c217-4da0-bd63-3bfb02181583
 ---
 
-Two epics defined in `docs/mvp/past_games_epics.md`. **Epic A** (Past Games Navigation) and **Epic B** (Blunder Category Navigation) have both completed the full speckit pipeline (critique→spec→plan→tasks).
-
-**Locked decisions from Epic A pipeline (do not re-open):**
+**Locked decisions from Epic A (do not re-open):**
 - Game ID passed via navigation param: `go('review', { id: g.id })`. PostGameReview reads `props.id`. No `selGameId` app-level state. [[project_past_games_epics]]
 - `accuracy` stored at game-end: client computes from solver scores, sends in `POST /api/games`. Stored in `games.accuracy real` column. No solver at list time.
 - `cols` encoding: `g` = first player at **even** 0-based indices, `d` = second player at odd indices. Matches `boardSpecToBoard` in `src/lib/board.js`. The spec originally had this inverted (odd=first) — corrected during plan critique.
@@ -23,15 +21,9 @@ Two epics defined in `docs/mvp/past_games_epics.md`. **Epic A** (Past Games Navi
 - Draw outcome chip: neutral gray (`.draw` variant on `.outcome-chip`).
 - CTA button on signed-out gate opens AuthModal (same pattern as other gated screens).
 
-**Epic A spec directory:** `specs/027-past-games-navigation/` — spec.md, plan.md, tasks.md (19 tasks).
-
 **DB migration (Epic A):** `036_past_games_schema.sql` — `blunders.game_id uuid FK games ON DELETE SET NULL` + partial index + `games.accuracy real`.
 
-**Epic A spec directory:** `specs/027-past-games-navigation/` — spec.md, plan.md, tasks.md (19 tasks).
-
-**Epic B spec directory:** `specs/028-blunder-category-nav/` — spec.md, plan.md, tasks.md (16 tasks). **FULLY IMPLEMENTED** on `101-new-design` (2026-06-10), all 16 tasks done.
-
-**Locked decisions from Epic B pipeline:**
+**Locked decisions from Epic B (do not re-open):**
 - `selCategory`, `selMistake`, `blunderNavList`, `mistakeContext`, `mistakeSource` are **navigation params**, NOT app-level state. Production Navigator holds only `screen + params`; nav context flows through `go(key, params)` spread as direct screen props.
 - Mistakes surface three levels: `mistakes`→`CategoryListScreen` (new), `mistakeDetail`→`MistakesListScreen` (refactored, requires `category` prop), `blunderDetail`→`MistakeDetailScreen` (refactored, new nav param shape).
 - `blunderDetail` is `SESSION_ONLY_SCREENS` — cold-boot redirects to home. URL is `/blunder` with no params.
@@ -43,6 +35,4 @@ Two epics defined in `docs/mvp/past_games_epics.md`. **Epic A** (Past Games Navi
 - Null-category flat-list view is OUT OF SCOPE per Epic B. `MistakesListScreen` requires `category` prop.
 - `SeverityMeter` extracted to `src/components/SeverityMeter.jsx`; `MistakesGate` extracted to `src/components/MistakesGate.jsx`.
 
-**Why:** The epic originally had several mockup-vs-production mismatches (NAV_GROUPS, app-level state, fake severity scale, missing endpoint extensions). The pipeline corrected all of them.
-
-**How to apply:** Use these locked decisions during implementation. The `navigateToMistake` signature and the `globalPlyIndex` formula are the two most likely areas to get wrong without this context.
+**Key traps:** The `navigateToMistake` signature and the `globalPlyIndex` formula are the two most likely areas to get wrong without this context.

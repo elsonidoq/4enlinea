@@ -10,6 +10,6 @@ metadata:
 
 When a spawned background agent (`Agent` tool) needs to edit files, its Edit/Write calls can be **denied outright** because it can't surface an interactive permission prompt — it just comes back blocked, having designed everything but written nothing.
 
-**Why**: observed 2026-06-18 — the "Batch 2" implementation subagent returned a complete design but reported every Edit/Write was denied; I implemented its plan directly in the main session and it applied cleanly.
+**Why**: background agents cannot surface an interactive permission prompt, so Edit/Write calls are denied outright.
 
 **How to apply**: For batches that must write code, prefer implementing in the main session, OR have the subagent return a tight, ready-to-apply design (file + exact change) that the main agent applies. Reserve background subagents for read/research/analysis that returns conclusions. If you do spawn a writing subagent, expect to apply its output yourself. Relates to [[reference-multiagent-orchestration-patterns]].

@@ -27,6 +27,16 @@ foreground form.
 
 Read the relevant index before starting any task that touches architecture, data model, API contracts, or product decisions.
 
+## Where information lives: memory vs. docs/architecture
+
+**`docs/architecture/`** is the authoritative, up-to-date source for project conventions, API contracts, data models, and architectural decisions. Read these docs before writing code; they reflect the current state of the system.
+
+**Memory files** (auto-memory) are trigger-first **gotchas** — non-obvious traps, counterintuitive decisions, open bugs, and cross-system surprises that would not be apparent from reading the code and architecture docs alone. They are NOT a summary of the architecture docs. If a fact can be derived from reading the code or docs, it belongs in the docs, not in memory.
+
+The two-destination rule:
+- Architecture / conventions / API contracts → `docs/architecture/`
+- Non-obvious traps, open bugs, behavioral surprises → memory
+
 ## Architecture docs — mandatory reads
 
 Before touching **server code, API endpoints, data model, or frontend architecture**, read the relevant file(s) in `docs/architecture/`:

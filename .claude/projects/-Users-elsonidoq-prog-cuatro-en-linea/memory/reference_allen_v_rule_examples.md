@@ -7,7 +7,7 @@ metadata:
 
 Canonical file: `specs/008-new-puzzle-categories/allen_v_rule_examples.yaml`
 
-## Verified (2026-05-18) — ALL CASES DONE
+## Verified examples
 
 | Rule | Movestring | Winner | Key structure |
 |------|-----------|--------|---------------|
@@ -23,5 +23,3 @@ Canonical file: `specs/008-new-puzzle-categories/allen_v_rule_examples.yaml`
 - **V1 structure:** Red at cols 2,3,4,5 row1 + Red at col3,6 row3 creates three `[R]` windows in separate columns. Black mirrors with even-row threats only (T6 makes them worthless).
 - **V4 structure:** Fill cols 1–3 rows 1–4 with alternating R/Y; Yellow gets 3-in-a-row at row 4 (cols 1–3), threatening col4 row4. Critical: rows 1–3 must alternate to avoid odd-row threats.
 - **T7:** one Red odd + one Black odd in *separate* columns cancel 1:1. Count pairs.
-
-**Why:** Working examples needed for Allen V-rule documentation in spec 008.

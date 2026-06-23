@@ -7,9 +7,7 @@ metadata:
 
 **Authoritative doc:** `docs/mvp/patterns_blunders_challenges.md` — wins over any older classifier comments.
 
-**Epics file (pending creation):** `docs/mvp/patterns_blunders_challenges_epics.md` — 4 epics in ship order: (1) prerequisite DB migrations, (2) `classifyPattern` + detector registry, (3) `tagBlunder` + call-site migration, (4) deferrable row relabeling.
-
-## Key invariants settled in 2026-06-05 session
+## Key invariants
 
 **Storage gate is independent of tagging.** A blunder row is stored whenever `scoreMove()` says `quality === 'blunder'`. `tagBlunder` runs after this gate; failure to find a named pattern never prevents storage.
 

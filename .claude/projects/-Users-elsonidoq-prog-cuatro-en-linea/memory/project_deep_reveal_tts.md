@@ -1,6 +1,6 @@
 ---
 name: project_deep_reveal_tts
-description: Deep Reveal TTS — streaming spoken explanations for DeepRevealPane using OpenAI TTS + Supabase Storage cache; IMPLEMENTED 2026-06-19
+description: Deep Reveal TTS — streaming spoken explanations for DeepRevealPane using OpenAI TTS + Supabase Storage cache
 metadata: 
   node_type: memory
   type: project
@@ -75,7 +75,3 @@ queue, or adding new TTS-backed features.
 - **Upload options**: `{ contentType: 'audio/mpeg', upsert: true }`.
 - **Signed URL TTL**: 604800s (1 week).
 
-## Deployment
-
-1. Apply `server/migrations/050_explanation_cache_audio.sql`.
-2. Create private `coach-tts` bucket in Supabase Storage dashboard.

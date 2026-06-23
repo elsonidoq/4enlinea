@@ -7,31 +7,28 @@ metadata:
   originSessionId: 4df31b00-24d6-4eaa-a70c-088e1e45610b
 ---
 
-## Problem
+## Trap
 
-On 2026-06-21, deploy showed all `[solver.query] TIMEOUT after 30000ms` errors. Root cause:
-`make` in `solver-src/` compiled `.o` files but the `.depend` file had a modification time
-6s *in the future* relative to the Railway builder clock. `make` printed "Clock skew detected.
-Your build may be incomplete." and skipped the linking step. No `c4solver` binary was produced,
-but the build continued (no error exit code) → deployed a server with no solver binary.
+Railway's builder clock can be skewed relative to `.depend` file timestamps. When `.depend` is
+in the future, `make` prints "Clock skew detected. Your build may be incomplete." and silently
+skips the linking step — no `c4solver` binary is produced, but the build exits 0. Result: every
+solver query times out at 30 s with `[solver.query] TIMEOUT`.
 
-The `c4solver-wrapper.js` had no `process.on('error')` handler for spawn failures, so a missing
-binary produced silent dead process + 30s timeouts on every query.
+## Required build command in `railpack.json`
 
-## Fix (2026-06-21)
-
-**`railpack.json`** — two changes to the build step:
 ```json
 "cd solver-src && make -B SERVER_DIR=../server && test -f ../server/c4solver"
 ```
-- `-B` flag: unconditionally rebuild regardless of timestamps
-- `test -f ../server/c4solver`: fails the build immediately if linking didn't produce the binary
+- `-B`: unconditionally rebuild, ignoring timestamps
+- `test -f ../server/c4solver`: fails the build immediately if the binary is absent
 
-**`c4solver-wrapper.js`** — add spawn error handler and binary existence guard (recommended, not yet deployed):
+## Guard to add in `c4solver-wrapper.js`
+
 ```js
 if (!existsSync(BINARY_PATH)) throw new Error('Solver binary not found: ' + BINARY_PATH);
 process.on('error', (err) => { /* reject all queued entries */ });
 ```
+Without this, a missing binary produces a silent dead process and 30 s timeouts on every query.
 
 ## Verification
 

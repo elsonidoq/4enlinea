@@ -1,36 +1,22 @@
 ---
 name: project-papergames-integration
-description: "papergames_games table, import script, GET /api/games merge, PastGamesListScreen board thumbnail + chips"
+description: "Durable gotchas for papergames import and blunders FK"
 metadata: 
   node_type: memory
   type: project
   originSessionId: bd59bb82-d7ac-4e59-995b-ea65d067be38
 ---
 
-# Papergames integration (2026-06-11)
+# Papergames integration — gotchas
 
-## DB schema
+## FK separation
 
-`papergames_games` table (migrations 038 + 039): stores games imported from papergames.io. Key columns: `papergames_room_uid` UNIQUE (dedup key), `side`, `result`, `accuracy`, `opponent_name`, `opponent_avatar` (UUID), `opponent_elo`, `finish_reason`, `duration_ms`, `played_at`.
+`blunders.papergames_game_id` FK is separate from `blunders.game_id` (which links to AI sparring games). Never conflate the two when querying blunders.
 
-`blunders.papergames_game_id` FK (migration 038) — separate from `game_id` which links to AI sparring games.
+## Import script API path bug
 
-## Import script
+In `server/scripts/import_papergames_blunders.mjs`, the game result is at `replayData.game.outcome.winnerAccountId`, NOT `replayData.outcome.winnerAccountId`. The wrong path silently returns `undefined`.
 
-`server/scripts/import_papergames_blunders.mjs` — fetches rooms + replays from papergames API, runs solver on all user plies, writes to both `papergames_games` (with accuracy) and `blunders` (with `papergames_game_id`).
+## Bulk insert dedup trap (migration 041 fixed the constraint)
 
-**Key API path bug**: result is at `replayData.game.outcome.winnerAccountId`, NOT `replayData.outcome.winnerAccountId`.
-
-Accuracy is computed in the same solver pass as blunder extraction (optimal/scored ratio). Re-import needed for rows before migration 039.
-
-**Bulk insert dedup bug (fixed 2026-06-14)**: the script used a single `insert(allBlunders)` per game. If any row was a duplicate (same board_state played in a prior game), the entire batch rolled back. The script treated the "unique constraint" error as benign and counted all rows as inserted — leaving 0 blunders in the DB while `accuracy` on the game row was correct. Fixed by dropping `idx_blunders_game_unique` (migration 041). Re-run the import script against affected games to backfill.
-
-## GET /api/games
-
-Queries both `games` and `papergames_games` in parallel, fetches blunder counts via `game_id` and `papergames_game_id` respectively, merges + sorts by date, paginates with `offset`/`limit`. Returns `{ games, total }`. AI rows include `difficulty`; papergames rows include `opponent_name`, `opponent_avatar`.
-
-## PastGamesListScreen
-
-- `BoardThumb`: renders real `Board` component at 252px then CSS-scales to 72px with `transform: scale + overflow:hidden`. Height computed from Board's compact layout constants (pad=9, gap=6, aspectRatio:1 cells).
-- `GameCard` row 2: AI → colored difficulty chip (DIFF_STYLES map, perfect = indigo `#e0e7ff`/`#3730a3`, label "Perfect AI") + accuracy span. Papergames → opponent avatar (SVG with initials fallback) + name + accuracy.
-- `GameCard` row 3: `.gc-blunder-chip` (amber pill, flag icon) or `.gc-no-blunder-chip` (green pill). Both need `alignSelf: flex-start` to avoid stretching in column flex container.
+Before migration 041, a single `insert(allBlunders)` per game would silently roll back the entire batch if any row hit a unique constraint on `board_state`. The script swallowed the error and reported success — leaving 0 blunders in the DB while `accuracy` on the game row appeared correct. If blunder counts look wrong but accuracy looks right, suspect a dedup rollback.
