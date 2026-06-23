@@ -21,7 +21,7 @@ const envPath = join(__dirname, '../.env');
 const env = readFileSync(envPath, 'utf8');
 env.split('\n').forEach(line => {
   const [k, ...v] = line.split('=');
-  if (k?.trim()) process.env[k.trim()] = v.join('=').trim();
+  if (k?.trim() && !k.trim().startsWith('#')) process.env[k.trim()] = v.join('=').trim();
 });
 
 // ── Resolve output file ────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ try {
       severity: entry.severity,
       context_outcome: null,
       context_error: null,
+      llm_error: null,
       prompt: null,
       allowed_set: null,
       attempt1_response: null,
@@ -115,7 +116,15 @@ try {
     const aliasMap = context.zoneAliasMap ?? {};
 
     // ── Step 2: Attempt 1 ─────────────────────────────────────────────────
-    const raw1 = await callLLM(context.prompt);
+    let raw1;
+    try {
+      raw1 = await callLLM(context.prompt);
+    } catch (err) {
+      record.llm_error = err.message;
+      appendFileSync(outputFile, JSON.stringify(record) + '\n');
+      process.stdout.write(`llm_error (attempt 1)\n`);
+      continue;
+    }
     const exp1 = expandZoneAliases(normalizeZoneTags(raw1), aliasMap);
     const result1 = validateAnnotation(exp1, board, context.allowedSet);
     record.attempt1_response = exp1;
@@ -130,7 +139,15 @@ try {
     }
 
     // ── Step 3: Attempt 2 (retry) ─────────────────────────────────────────
-    const raw2 = await callLLM(context.prompt);
+    let raw2;
+    try {
+      raw2 = await callLLM(context.prompt);
+    } catch (err) {
+      record.llm_error = err.message;
+      appendFileSync(outputFile, JSON.stringify(record) + '\n');
+      process.stdout.write(`llm_error (attempt 2)\n`);
+      continue;
+    }
     const exp2 = expandZoneAliases(normalizeZoneTags(raw2), aliasMap);
     const result2 = validateAnnotation(exp2, board, context.allowedSet);
     record.attempt2_response = exp2;
