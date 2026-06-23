@@ -6,76 +6,17 @@
 // Writes eval_set.json after each newly satisfied predicate (crash-safe).
 
 import { writeFileSync } from 'fs';
-import { parseBoardState, checkWin, Board, getMajorThreatCells, tagBlunder, hasWon } from '../classifier.js';
+import { Board, getMajorThreatCells, tagBlunder } from '../classifier.js';
 import { buildExplainContext, getMinorThreatWindows } from '../explainContext.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { scoreMove } from '../moveQualityScorer.js';
+import { harvestBlunders } from '../gameSampling.js';
 
-const INVALID_MOVE = -1000;
-const COLS = 7;
-const ROWS = 6;
 const MAX_GAMES = 10_000;
 
 const outPath = process.argv[2] || 'server/scripts/eval_set.json';
 
-// ── Simulation helpers ─────────────────────────────────────────────────────────
-
-function computeSeverity(bestScore, score) {
-  return Math.round((bestScore - score) / 36 * 10);
-}
-
-// Mistake-probability sampler (mirrors solverWeightedPosition in candidate-generator.js).
-// mp ∈ [0, 0.25): with probability mp, play the second-best column; otherwise play the best.
-function sampleColMP(scores, mp) {
-  const legal = scores.map((s, i) => ({ s, i })).filter(e => e.s > INVALID_MOVE);
-  if (!legal.length) return 0;
-
-  const maxScore = Math.max(...legal.map(e => e.s));
-
-  if (legal.length > 1 && Math.random() < mp) {
-    const belowMax = legal.filter(e => e.s < maxScore);
-    if (belowMax.length > 0) {
-      const secondBest = Math.max(...belowMax.map(e => e.s));
-      const tied = belowMax.filter(e => e.s === secondBest);
-      return tied[Math.floor(Math.random() * tied.length)].i;
-    }
-  }
-
-  const tiedBest = legal.filter(e => e.s === maxScore);
-  return tiedBest[Math.floor(Math.random() * tiedBest.length)].i;
-}
-
-async function simulate(solver) {
-  // Sample per-player mistake probabilities independently in [0, 0.5)
-  const MP1 = Math.random() * 0.5;
-  const MP2 = Math.random() * 0.5;
-  const mistakeProbs = [MP1, MP2];
-
-  let ms = '';
-  const scoresCache = [];
-  const heights = Array(COLS).fill(0);
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  let player = 1;
-
-  while (ms.length < COLS * ROWS) {
-    const legal = [];
-    for (let c = 0; c < COLS; c++) { if (heights[c] < ROWS) legal.push(c); }
-    if (!legal.length) break;
-
-    const scores = await solver.query(ms);
-    scoresCache.push(scores);
-
-    const col = sampleColMP(scores, mistakeProbs[player - 1]);
-    ms += String(col);
-    board[heights[col]][col] = player;
-    heights[col]++;
-
-    if (hasWon(board, player)) break;
-    player = 3 - player;
-  }
-
-  return { ms, scoresCache };
-}
+// Game simulation + blunder-ply iteration live in ../gameSampling.js
+// (harvestBlunders). This script only adds the predicate-coverage logic on top.
 
 // ── Predicate definitions ──────────────────────────────────────────────────────
 
@@ -185,104 +126,92 @@ async function main() {
 
   const satisfied = new Set();
   const collected = [];
-  let gameCount = 0;
   let boardCount = 0;
+  let gameCount = 0;
 
   const tagPredsDone = () => [...TAG_PREDICATES].every(p => satisfied.has(p));
   const kbPredsDone  = () => satisfied.has('P32') && satisfied.has('P33');
 
-  while (satisfied.size < ALL_PREDICATES.size && gameCount < MAX_GAMES) {
-    const { ms, scoresCache } = await simulate(solver);
-    gameCount++;
+  // harvestBlunders plays mistake-weighted games and yields every non-optimal ply.
+  for await (const ply of harvestBlunders(solver, { maxGames: MAX_GAMES })) {
+    if (satisfied.size >= ALL_PREDICATES.size) break;
 
-    for (let i = 0; i < ms.length; i++) {
-      const scores = scoresCache[i];
-      if (!scores) continue;
+    const { boardState, movePlayed: move, correctCol: bestCol, severity, perspective } = ply;
+    gameCount = ply.gameIndex;
 
-      boardCount++;
-      if (boardCount % 100 === 0) {
-        const missing = [...ALL_PREDICATES].filter(p => !satisfied.has(p));
-        process.stderr.write(`board ${boardCount}  game ${gameCount}  satisfied ${satisfied.size}/35  missing: ${missing.join(' ')}\n`);
-      }
+    boardCount++;
+    if (boardCount % 100 === 0) {
+      const missing = [...ALL_PREDICATES].filter(p => !satisfied.has(p));
+      process.stderr.write(`board ${boardCount}  game ${ply.gameIndex}  satisfied ${satisfied.size}/35  missing: ${missing.join(' ')}\n`);
+    }
 
-      const move = parseInt(ms[i], 10);
-      const { quality, bestCol } = scoreMove(scores, move);
-      if (quality === 'optimal') continue;
+    const preBoard  = new Board(boardState);
+    const postBoard = new Board(boardState + move);
 
-      const boardState = ms.slice(0, i);
-      const score = scores[move];
-      const bestScore = scores[bestCol];
-      const severity = computeSeverity(bestScore, score);
-      const perspective = boardState.length % 2 === 0 ? 1 : 2;
+    const cheapPreds = computeCheapPredicates(
+      boardState, move, bestCol, severity, preBoard, postBoard, perspective
+    );
 
-      const preBoard  = new Board(boardState);
-      const postBoard = new Board(boardState + move);
+    // Skip if no cheap preds are new AND tag predicates are done (nothing to gain)
+    const newCheap = [...cheapPreds].filter(p => !satisfied.has(p));
+    if (newCheap.length === 0 && tagPredsDone() && kbPredsDone()) continue;
 
-      const cheapPreds = computeCheapPredicates(
-        boardState, move, bestCol, severity, preBoard, postBoard, perspective
-      );
+    // Call tagBlunder when tag predicates still need coverage
+    let tagResult = null;
+    if (!tagPredsDone() || newCheap.length > 0) {
+      tagResult = await tagBlunder(boardState, move, bestCol, solver);
+    }
 
-      // Skip if no cheap preds are new AND tag predicates are done (nothing to gain)
-      const newCheap = [...cheapPreds].filter(p => !satisfied.has(p));
-      if (newCheap.length === 0 && tagPredsDone() && kbPredsDone()) continue;
+    const allPreds = new Set(cheapPreds);
+    if (tagResult) {
+      const tagPred = TAG_PREDICATE.get(`${tagResult.tag}:${tagResult.direction}`);
+      if (tagPred) allPreds.add(tagPred);
+    }
 
-      // Call tagBlunder when tag predicates still need coverage
-      let tagResult = null;
-      if (!tagPredsDone() || newCheap.length > 0) {
-        tagResult = await tagBlunder(boardState, move, bestCol, solver);
-      }
-
-      const allPreds = new Set(cheapPreds);
-      if (tagResult) {
-        const tagPred = TAG_PREDICATE.get(`${tagResult.tag}:${tagResult.direction}`);
-        if (tagPred) allPreds.add(tagPred);
-      }
-
-      // Call buildExplainContext only when P32/P33 still unsatisfied.
-      // P32 = at least one position-specific KB term fired (beyond always-include entries).
-      // P33 = prompt has only always-include KB terms (no position-specific pattern).
-      if (!kbPredsDone()) {
-        try {
-          const ctx = await buildExplainContext(boardState, move, 1, solver);
-          if (ctx?.prompt) {
-            if (hasPositionSpecificKBTerms(ctx.prompt)) allPreds.add('P32');
-            else allPreds.add('P33');
-          }
-        } catch {
-          // solver error on degenerate position; skip
+    // Call buildExplainContext only when P32/P33 still unsatisfied.
+    // P32 = at least one position-specific KB term fired (beyond always-include entries).
+    // P33 = prompt has only always-include KB terms (no position-specific pattern).
+    if (!kbPredsDone()) {
+      try {
+        const ctx = await buildExplainContext(boardState, move, 1, solver);
+        if (ctx?.prompt) {
+          if (hasPositionSpecificKBTerms(ctx.prompt)) allPreds.add('P32');
+          else allPreds.add('P33');
         }
+      } catch {
+        // solver error on degenerate position; skip
       }
+    }
 
-      const newPreds = [...allPreds].filter(p => !satisfied.has(p));
-      if (newPreds.length === 0) continue;
+    const newPreds = [...allPreds].filter(p => !satisfied.has(p));
+    if (newPreds.length === 0) continue;
 
-      newPreds.forEach(p => satisfied.add(p));
-      process.stderr.write(`  ✓ ${newPreds.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
+    newPreds.forEach(p => satisfied.add(p));
+    process.stderr.write(`  ✓ ${newPreds.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
 
-      // Build threat_cells from major threat flags at pre-blunder position
-      const threatMap = getMajorThreatCells(preBoard.board);
-      const threat_cells = Object.entries(threatMap)
-        .filter(([, f]) => f.rm || f.ym)
-        .map(([key]) => {
-          const [row, col] = key.split(',').map(Number);
-          return { row, col };
-        });
-
-      collected.push({
-        id: `eval-${collected.length}`,
-        board_state: boardState,
-        move_played: move,
-        correct_move: bestCol,
-        threat_cells,
-        severity,
-        blunder_severity: null,
-        pattern_category: tagResult?.tag ?? null,
-        predicates: [...allPreds].sort(),
+    // Build threat_cells from major threat flags at pre-blunder position
+    const threatMap = getMajorThreatCells(preBoard.board);
+    const threat_cells = Object.entries(threatMap)
+      .filter(([, f]) => f.rm || f.ym)
+      .map(([key]) => {
+        const [row, col] = key.split(',').map(Number);
+        return { row, col };
       });
 
-      // Write incrementally so a kill mid-run preserves progress.
-      writeFileSync(outPath, JSON.stringify(collected, null, 2));
-    }
+    collected.push({
+      id: `eval-${collected.length}`,
+      board_state: boardState,
+      move_played: move,
+      correct_move: bestCol,
+      threat_cells,
+      severity,
+      blunder_severity: null,
+      pattern_category: tagResult?.tag ?? null,
+      predicates: [...allPreds].sort(),
+    });
+
+    // Write incrementally so a kill mid-run preserves progress.
+    writeFileSync(outPath, JSON.stringify(collected, null, 2));
   }
 
   solver.destroy();

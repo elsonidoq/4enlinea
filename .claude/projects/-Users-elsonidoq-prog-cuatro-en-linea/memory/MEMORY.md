@@ -1,5 +1,9 @@
 # Memory index — trigger-first
 
+## Before writing a game simulation / random-position loop
+
+- [Game simulation harness](reference_game_simulation_harness.md) — use server/gameSampling.js (simulateGame / harvestBlunders); don't hand-roll
+
 ## Before touching the solver or board evaluation
 
 - [c4solver score semantics](reference_c4solver_scores.md) — sign/magnitude, book encoding
@@ -107,6 +111,7 @@
 
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow
+- [Blunder tagging design](project_blunder_tagging_design.md) — tagBlunder throws NotABlunderError on terminal; missed_own = correctCol builds pattern
 - [Pattern KB architecture](project_pattern_kb_architecture.md) — PATTERN_KB entry shapes; popup checklist
 - [Pattern KB alias resolution](project_pattern_kb_alias_resolution.md) — alias resolution fix 2026-06-21
 - [Coach deep reveal docs](project_coach_deep_reveal_docs.md) — authoritative docs; Epic A/B contracts

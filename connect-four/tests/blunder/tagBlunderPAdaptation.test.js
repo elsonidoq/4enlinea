@@ -42,16 +42,18 @@ describe('tagBlunder P() adapter regression (FR-T03)', () => {
     }
   }, { timeout: 60_000 });
 
-  it('enabled_opponent / immediate_threat still resolves after P() adaptation', async () => {
+  it('defensive_miss / pre-existing threat still resolves after P() adaptation', async () => {
     const solver = createSolverProcess();
     try {
+      // Yellow already threatens an immediate win at col4 before Red moves; Red plays
+      // col5 and fails to block. The threat pre-existed → defensive_miss, not enabled.
       const result = await tagBlunder('010263', 5, 3, solver);
-      assert.equal(result.tag, 'immediate_threat',
-        'tag must be immediate_threat: playing col5 gives opponent immediate win');
-      assert.equal(result.direction, 'enabled_opponent',
-        'direction must be enabled_opponent: opponent gains immediate threat');
-      assert.ok(result.reason.startsWith('matched enabled_opponent:'),
-        `reason must start with "matched enabled_opponent:" got: ${result.reason}`);
+      assert.equal(result.tag, 'forced_block',
+        'tag must be forced_block: Red faced a pre-existing immediate threat to block');
+      assert.equal(result.direction, 'defensive_miss',
+        'direction must be defensive_miss: the threat pre-existed the blunder');
+      assert.ok(result.reason.startsWith('matched defensive_miss:'),
+        `reason must start with "matched defensive_miss:" got: ${result.reason}`);
     } finally {
       solver.destroy();
     }

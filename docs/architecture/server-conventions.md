@@ -143,19 +143,32 @@ Returns a Map of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'
 tagBlunder(moves, playedCol, correctCol, solver) → Promise<{ tag: string, direction: string, reason: string }>
 ```
 
-Tags a blunder with the tactical pattern the player missed. Never throws — all errors resolve to the solver-error fallback `{ tag: 'suboptimal_move', direction: 'missed_own', reason: 'solver error: ...' }`.
+Tags a blunder with the tactical pattern involved, from the perspective of the player who moved.
 
 - `moves` — 0-indexed movestring of the position where the blunder was made.
 - `playedCol` — 0-indexed column the player actually played.
-- `correctCol` — 0-indexed best column.
+- `correctCol` — 0-indexed best column (argmax of solver scores).
 - `solver` — c4solver wrapper.
 
-`direction` is one of:
-- `'defensive_miss'` — blunderer had `forced_block` before playing (Step 1).
-- `'enabled_opponent'` — the wrong move gives the opponent a pattern (Steps 2, 4).
-- `'missed_own'` — the blunderer had a pattern before playing but lost it by playing elsewhere (Steps 3, 5 fallback).
+**Throwing contract** (changed): `tagBlunder` throws `NotABlunderError` (exported from `classifier.js`) when called on a **terminal** position — already won, or a full board — because there is no move to tag. This is a *precondition violation* (caller error), surfaced loudly and distinct from a solver failure. All OTHER errors (e.g. solver rejects) resolve to the fallback `{ tag: 'suboptimal_move', direction: 'missed_own', reason: 'solver error: ...' }`.
 
-**Priority cascade**: Step 1 (defensive_miss) > Step 2 (enabled_opponent, 1-ply) > Step 3 (missed_own) > Step 4 (enabled_opponent, continuation) > Step 5 (score-based fallback).
+> Callers MUST distinguish the two: on `NotABlunderError`, skip the ply / do not record a blunder (never fabricate a `suboptimal_move`); only fall back for genuine solver errors. The "is this a mistake?" gate (`scoreMove`) must never flag a blunder on a terminal position — it can't, since the solver won't score one, but the typed error enforces it. See `index.js` (analysis loop) and `papergamesImporter.js` for the reference handling.
+
+`direction` is one of:
+- `'defensive_miss'` — the **opponent already had** an immediate winning threat at `moves` and the blunderer failed to take it off the board (tag is always `forced_block`).
+- `'missed_own'` — the blunderer either had an immediate win available, or **playing `correctCol` would have built** pattern X for them while `playedCol` did not.
+- `'enabled_opponent'` — the played move let the opponent build a pattern (an immediate threat, or a pattern on the opponent's best continuation that the correct line avoided).
+
+**New missed_own semantics** (changed): a pattern tag is `missed_own` when `correctCol` *builds* it and `playedCol` does not — i.e. `patterns(moves+correctCol, blunderer) ∋ X` and `patterns(moves+playedCol, blunderer) ∌ X` — NOT the old "had X at `moves`, lost it". `double_threat`/`figure_7` carry an undercut guard.
+
+**Priority cascade** (phases; first match wins):
+1. **Phase A** (pre-move pressure): `immediate_threat:missed_own` (own win available) → `forced_block:defensive_miss` (opponent had an immediate threat).
+2. **Phase B**: `immediate_threat:enabled_opponent` (played move hands a *new* opponent win; pre-existing threats are caught by Phase A as `defensive_miss`).
+3. **Phase C** (missed_own patterns): `forced_win`, `double_threat`, `figure_7`, `j_shape`, `z_threat`, `odd_even_threat`, `overcut`, `claimeven`.
+4. **Phase D** (enabled_opponent continuation): existential/universal over **all** the opponent's optimal replies — `enabled(X)` iff some optimal reply on the blunder line builds X and no optimal reply on the correct line does.
+5. **Phase E**: score-based fallback (`drawing_move` or `suboptimal_move`).
+
+Phase A returns before any `moves+correctCol` solver query when the blunderer has an immediate win, so Phase C never queries a terminal position.
 
 ### FR-033: Two-step perspective contract
 
@@ -168,6 +181,29 @@ When `perspective !== board.currentPlayer && solver !== null`, each detector rec
 This IIFE (`(async () => { ... })()`) returns a Promise, so these five detectors become async when the perspective changes. The IIFE shields against terminal child positions (where the solver rejects) by returning `{ matched: false }` — a terminal game cannot exhibit tactical patterns.
 
 Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectUndercut`, `detectOvercut`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
+
+## Simulating games
+
+`server/gameSampling.js` is the **canonical game simulator**. When you need real game
+positions — eval sets, test fixtures, blunder coverage, position sampling, finding a
+board with a given property — do NOT hand-roll a game loop (it has been duplicated
+across `candidate-generator.js`, `generate_eval_set.mjs`, and others). Use:
+
+- **`playGame(solver, rng = Math.random)`** — THE primitive. Async generator that
+  plays one mistake-weighted self-play game, yielding `{ ms, scores, player,
+  movePlayed, plyIndex }` at each ply **before** the move is applied. Because it
+  streams, a caller can inspect each position and `break` the moment it finds the
+  board it wants — no whole-game cost, no callbacks/inversion of control. Each player
+  draws an independent mistake probability in `[0, 0.5)`.
+- **`simulateGame(solver, rng)`** — drains `playGame` into a full game `{ ms,
+  scoresCache }` (`scoresCache[i]` = scores before move `i`).
+- **`harvestBlunders(solver, { maxGames, rng })`** — async generator yielding **every
+  non-optimal ply** with `{ boardState, movePlayed, correctCol, scores, score,
+  bestScore, severity, perspective, quality, gameIndex, plyIndex, gameMs }` — exactly
+  the inputs `tagBlunder` / blunder recording need.
+
+Pass a seeded `rng` for deterministic runs (e.g. in tests). `harvestBlunders` skips
+optimal plies, so consumers only see mistakes.
 
 ## Board Class
 

@@ -1404,13 +1404,39 @@ export async function classifyPattern(ms, perspective, solver) {
 }
 
 /**
+ * Thrown by tagBlunder when called on a position that has no move to tag — i.e. a
+ * board that is already won or completely full. This is a PRECONDITION VIOLATION
+ * (a caller error), distinct from a genuine solver failure: callers must treat it
+ * as "this is not a blunder, skip it", never as a fallback blunder tag.
+ */
+export class NotABlunderError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NotABlunderError';
+  }
+}
+
+/**
  * Tags a blunder move with a tactical pattern from the perspective of the player
- * who made the move. Never throws — all errors resolve to the solver-error fallback.
+ * who made the move.
  *
- * Algorithm:
- *   Steps 1–3: compute blunderer & opponent pattern sets for pre- and post-move positions
- *   Step 4 (lazy): compute after-blunder and after-correct continuation patterns
- *   Step 5: score-based fallback (drawing_move or suboptimal_move)
+ * Throws NotABlunderError if the position is terminal (won or full) — a caller
+ * error, surfaced loudly rather than masked. All OTHER errors (e.g. solver
+ * failures) resolve to the suboptimal_move fallback.
+ *
+ * Algorithm (priority order; first match wins):
+ *   Phase A — pre-move pressure: immediate_threat:missed_own (own win available),
+ *             then forced_block:defensive_miss (opponent had an immediate threat).
+ *   Phase B — immediate_threat:enabled_opponent (played move hands a NEW opp win).
+ *   Phase C — missed_own pattern: correctCol BUILDS pattern X for the blunderer
+ *             while playedCol does not  (pAfterCorrect.has(X) && !pAfterPlayed.has(X)),
+ *             with undercut guards on double_threat / figure_7.
+ *   Phase D (lazy) — enabled_opponent: pattern on the blunder continuation that the
+ *             correct continuation avoided (one opponent best-response ply each).
+ *   Phase E — score-based fallback (drawing_move or suboptimal_move).
+ *
+ * Won-position safety: Phase A returns before any `moves + correctCol` query when
+ * the blunderer has an immediate win, so Phase C never queries a terminal position.
  *
  * @param {string} moves  movestring of the position where the blunder was made
  * @param {number} playedCol  0-indexed column the player actually played
@@ -1419,18 +1445,20 @@ export async function classifyPattern(ms, perspective, solver) {
  * @returns {Promise<{tag: string, direction: string, reason: string}>}
  */
 export async function tagBlunder(moves, playedCol, correctCol, solver) {
-  try {
-    // Degenerate detection — BEFORE any solver calls
-    const board = new Board(moves);
-    if (board.hasWon(1) || board.hasWon(2)) {
-      return { tag: 'suboptimal_move', direction: 'missed_own',
-               reason: 'degenerate position: board is already won' };
-    }
-    if (moves.length >= 42) {
-      return { tag: 'suboptimal_move', direction: 'missed_own',
-               reason: 'degenerate position: board is full' };
-    }
+  // Precondition: tagBlunder must be called on a live position that still has a
+  // move to evaluate. A position that is already won, or a full board, is a caller
+  // error — there is no blunder to tag — so fail loudly. These checks live OUTSIDE
+  // the try/catch on purpose: the catch converts errors into the solver-error
+  // fallback, which would silently mask the misuse.
+  const board = new Board(moves);
+  if (board.hasWon(1) || board.hasWon(2)) {
+    throw new NotABlunderError(`tagBlunder: position "${moves}" is already won — no move to tag`);
+  }
+  if (moves.length >= 42) {
+    throw new NotABlunderError(`tagBlunder: board "${moves}" is full — no move to tag`);
+  }
 
+  try {
     // Derive blunderer and opponent from move count parity
     const blunderer = moves.length % 2 === 0 ? 1 : 2; // even move count → Red opens
     const opponent  = 3 - blunderer;
@@ -1439,130 +1467,189 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
     // Returns a Set<string> of matched tags — wraps classifyPattern (which now returns Map).
     const P = async (ms, player) => new Set((await classifyPattern(ms, player, solver)).keys());
 
-    // bm(ms): best-move function — argmax of solver scores, lowest-index tie-break
-    const bm = async (ms) => {
-      const scores = await solver.query(ms);
-      return scores.indexOf(Math.max(...scores));
-    };
-
-    // --- Steps 1–3: computed upfront ---
-    const [
-      pMovesBlunderer,
-      pAfterPlayedBlunderer,
-      pAfterPlayedOpponent,
-    ] = await Promise.all([
-      P(moves,             blunderer),
-      P(moves + playedCol, blunderer),
-      P(moves + playedCol, opponent),
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase A — defensive / tactical pressure that exists AT `moves`.
+    // These are about what was true before the blunder, evaluated from each
+    // player's perspective on the pre-move board. Computed upfront.
+    // ─────────────────────────────────────────────────────────────────────────
+    const [pMovesBlunderer, pMovesOpponent] = await Promise.all([
+      P(moves, blunderer),
+      P(moves, opponent),
     ]);
 
-    // Step 1: Defensive miss — blunderer had forced_block before playing
-    if (pMovesBlunderer.has('forced_block')) {
-      return { tag: 'forced_block', direction: 'defensive_miss',
-               reason: 'matched defensive_miss: forced_block' };
-    }
-
-    // Step 1.5: Missed own immediate win — blunderer had an immediate threat and didn't take it
+    // A1: Missed own immediate win — the most specific blunder. If the blunderer
+    // could win in one move and this is a (non-optimal) blunder, they did not take
+    // it. Returning here also means we never query `moves + correctCol` (a won
+    // position the solver would reject): correctCol is the winning column.
     if (pMovesBlunderer.has('immediate_threat')) {
       return { tag: 'immediate_threat', direction: 'missed_own',
                reason: 'matched missed_own: immediate_threat' };
     }
 
-    // Step 2: Enabled immediate threat (1-ply) — opponent has immediate_threat after blunder
+    // A2: Defensive miss — the opponent already had an immediate winning threat at
+    // `moves` and the blunderer failed to take it off the board. This is a defensive
+    // lapse, NOT an "enabled" threat (the threat pre-existed the move) — so it must
+    // be caught here, before Phase B's enabled_opponent check.
+    //
+    // We key on the opponent's pre-existing immediate threat rather than on the
+    // forced_block detector: forced_block only matches when a safe non-negative
+    // blocking column exists, so in an already-lost position (all scores negative)
+    // it misses, leaving the threat to be mislabeled as enabled_opponent later.
+    // `pMovesBlunderer.has('forced_block')` is a strict subset of this condition, so
+    // every previous forced_block case still resolves to forced_block:defensive_miss.
+    // (A1 already returned if the blunderer had their own win to take instead.)
+    if (pMovesOpponent.has('immediate_threat')) {
+      return { tag: 'forced_block', direction: 'defensive_miss',
+               reason: 'matched defensive_miss: forced_block' };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase B — 1-ply consequence of the played move.
+    // ─────────────────────────────────────────────────────────────────────────
+    const pAfterPlayedOpponent = await P(moves + playedCol, opponent);
+
+    // B1: Enabled immediate threat — the played move HANDED the opponent an
+    // immediate win. Reaching here guarantees the opponent had NO immediate threat
+    // at `moves` (A2 returned otherwise), so any threat now is necessarily new.
     if (pAfterPlayedOpponent.has('immediate_threat')) {
       return { tag: 'immediate_threat', direction: 'enabled_opponent',
                reason: 'matched enabled_opponent: immediate_threat' };
     }
 
-    // Step 3: Missed own — tags the blunderer had before but lost after playing
-    const MISSED_OWN_PRIORITY = [
-      'forced_win', 'z_threat', 'odd_even_threat',
-      'j_shape', 'overcut', 'claimeven',
-    ];
-    for (const t of MISSED_OWN_PRIORITY) {
-      if (pMovesBlunderer.has(t) && !pAfterPlayedBlunderer.has(t)) {
-        return { tag: t, direction: 'missed_own', reason: `matched missed_own: ${t}` };
-      }
-    }
-
-    // Step 3.5: Missed own double_threat / figure_7 — check if correct move would have built
-    // an un-undercut pattern. Computed lazily here (after Steps 1–3) to avoid querying the
-    // solver on won positions when correctCol is an immediate win (caught by Step 1.5 above).
-    const pJustAfterCorrectBlunderer = await P(moves + correctCol, blunderer);
-    if (pJustAfterCorrectBlunderer.has('double_threat') || pJustAfterCorrectBlunderer.has('figure_7')) {
-      const boardAfterCorrect = new Board(moves + correctCol);
-      const oppAfterCorrect   = 3 - blunderer;
-
-      if (pJustAfterCorrectBlunderer.has('double_threat')) {
-        const dtResult = detectDoubleThreat(boardAfterCorrect, blunderer);
-        if (dtResult.matched) {
-          let undercut = false;
-          if (dtResult.cols.length === 1) {
-            // Case B (stacked): check for opponent threat in same column at row <= lower threat row
-            const col      = dtResult.cols[0];
-            const lowerRow = boardAfterCorrect.colHeights[col];
-            const oppRows  = boardAfterCorrect.reachableThreats(oppAfterCorrect).get(col) ?? [];
-            undercut = oppRows.some(r => r <= lowerRow);
-          }
-          // Case A (2+ distinct gravity-top cols): opponent cannot neutralise both; no undercut check
-          if (!undercut) {
-            return { tag: 'double_threat', direction: 'missed_own',
-                     reason: 'matched missed_own: double_threat' };
-          }
-        }
-      }
-
-      if (pJustAfterCorrectBlunderer.has('figure_7')) {
-        const f7Result = detectFigure7(boardAfterCorrect, null, blunderer);
-        if (f7Result.matched) {
-          const lowerThreat = f7Result.threatCells[0]; // sorted ascending, index 0 = lower row
-          const col         = lowerThreat.col;
-          const lowerRow    = lowerThreat.row;
-          const oppRows     = boardAfterCorrect.reachableThreats(oppAfterCorrect).get(col) ?? [];
-          const undercut    = oppRows.some(r => r <= lowerRow);
-          if (!undercut) {
-            return { tag: 'figure_7', direction: 'missed_own',
-                     reason: 'matched missed_own: figure_7' };
-          }
-        }
-      }
-    }
-
-    // --- Step 4: Lazy — compute after_blunder and after_correct only now ---
-    const afterBlunderMs = moves + playedCol  + (await bm(moves + playedCol)).toString();
-    const afterCorrectMs = moves + correctCol + (await bm(moves + correctCol)).toString();
-
-    const [
-      pAfterBlunderOpponent,
-      pAfterCorrectOpponent,
-      pAfterBlunderBlunderer,
-      pAfterCorrectBlunderer,
-    ] = await Promise.all([
-      P(afterBlunderMs, opponent),
-      P(afterCorrectMs, opponent),
-      P(afterBlunderMs, blunderer),
-      P(afterCorrectMs, blunderer),
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase C — Missed own pattern (NEW semantics).
+    // "Playing correctCol would have BUILT pattern X for the blunderer, but
+    //  playing playedCol did not." → pAfterCorrect.has(X) && !pAfterPlayed.has(X).
+    // This is uniform across every pattern tag; double_threat and figure_7 carry
+    // an extra undercut guard (a stacked threat the opponent can neutralise from
+    // below is not a real missed win).
+    //
+    // Safety: A1 guarantees the blunderer has no immediate win at `moves`, so no
+    // column wins immediately → `moves + correctCol` is never a terminal (won)
+    // position, and the solver query inside P() is safe. `moves + playedCol` is
+    // likewise non-winning (a winning move would be optimal, not a blunder).
+    // ─────────────────────────────────────────────────────────────────────────
+    const [pAfterCorrectBlunderer, pAfterPlayedBlunderer] = await Promise.all([
+      P(moves + correctCol, blunderer),
+      P(moves + playedCol,  blunderer),
     ]);
 
-    const STEP4_PRIORITY = [
-      { tag: 'forced_win',      check: () => pAfterBlunderOpponent.has('forced_win')      && !pAfterCorrectOpponent.has('forced_win') },
-      { tag: 'double_threat',   check: () => pAfterBlunderOpponent.has('double_threat')   && !pAfterCorrectOpponent.has('double_threat') },
-      { tag: 'z_threat',        check: () => pAfterBlunderOpponent.has('z_threat')        && !pAfterCorrectOpponent.has('z_threat') },
-      { tag: 'odd_even_threat', check: () => pAfterBlunderOpponent.has('odd_even_threat') && !pAfterCorrectOpponent.has('odd_even_threat') },
-      { tag: 'figure_7',        check: () => pAfterBlunderOpponent.has('figure_7')        && !pAfterCorrectOpponent.has('figure_7') },
-      { tag: 'j_shape',         check: () => pAfterBlunderOpponent.has('j_shape')         && !pAfterCorrectOpponent.has('j_shape') },
+    const boardAfterCorrect = new Board(moves + correctCol);
+
+    // Undercut guards for stacked-threat patterns. A stacked double_threat
+    // (Case B, single column) or figure_7 is illusory if the opponent has a
+    // reachable threat in the same column at or below the lower threat row — they
+    // win/neutralise from underneath before the pattern matures. Case A
+    // double_threats (≥2 distinct gravity-top columns) can never be undercut.
+    const isUndercutDoubleThreat = () => {
+      const dt = detectDoubleThreat(boardAfterCorrect, blunderer);
+      if (!dt.matched) return true;            // detector disagrees → don't credit
+      if (dt.cols.length !== 1) return false;  // Case A — never undercut
+      const col      = dt.cols[0];
+      const lowerRow = boardAfterCorrect.colHeights[col];
+      const oppRows  = boardAfterCorrect.reachableThreats(opponent).get(col) ?? [];
+      return oppRows.some(r => r <= lowerRow);
+    };
+    const isUndercutFigure7 = () => {
+      const f7 = detectFigure7(boardAfterCorrect, null, blunderer);
+      if (!f7.matched) return true;            // detector disagrees → don't credit
+      const lower   = f7.threatCells[0];       // sorted ascending: index 0 = lower row
+      const oppRows = boardAfterCorrect.reachableThreats(opponent).get(lower.col) ?? [];
+      return oppRows.some(r => r <= lower.row);
+    };
+
+    // Priority: concrete tactical wins first, then strategic/zugzwang patterns.
+    // (forced_win and double_threat are mutually exclusive on the same board:
+    // detectForcedWin returns false when a double_threat is present.)
+    const MISSED_OWN_PRIORITY = [
+      'forced_win', 'double_threat', 'figure_7', 'j_shape',
+      'z_threat', 'odd_even_threat', 'overcut', 'claimeven',
+    ];
+    for (const tag of MISSED_OWN_PRIORITY) {
+      if (!pAfterCorrectBlunderer.has(tag) || pAfterPlayedBlunderer.has(tag)) continue;
+      if (tag === 'double_threat' && isUndercutDoubleThreat()) continue;
+      if (tag === 'figure_7'      && isUndercutFigure7())      continue;
+      return { tag, direction: 'missed_own', reason: `matched missed_own: ${tag}` };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase D — Enabled opponent. Advance both the blunder line and the correct
+    // line by one opponent reply, then ask: does a pattern exist on the blunder
+    // continuation that the correct continuation avoided?
+    //
+    // The opponent has free choice among ALL of their optimal replies (tied
+    // top-score columns), and will pick whichever one realises the pattern. So the
+    // honest quantifier structure is:
+    //     enabled(X) ⇔ (∃ optimal reply on the BLUNDER line that builds X)
+    //               ∧  (∄ optimal reply on the CORRECT line that builds X)
+    // We aggregate each line into the UNION of patterns over its optimal replies;
+    // `union.has(X)` is the existential, `!union.has(X)` the universal-absence.
+    // Computed lazily — only reached when no missed_own pattern matched.
+    // (undercut is the blunderer's own exposure, not an opponent gain.)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // optimalReplies(ms): every legal column whose solver score ties for the max.
+    const optimalReplies = async (ms) => {
+      const scores = await solver.query(ms);
+      const heights = new Board(ms).colHeights;
+      const legal = scores.filter((_, c) => heights[c] < ROWS);
+      const max = Math.max(...legal);
+      const cols = [];
+      for (let c = 0; c < scores.length; c++) {
+        if (heights[c] < ROWS && scores[c] === max) cols.push(c);
+      }
+      return cols;
+    };
+
+    // unionPatterns(ms, replies, player): the patterns `player` holds under ANY of
+    // the given replies. A reply that lands on a terminal (won) position contributes
+    // no patterns — the relevant tag there is immediate_threat, not enumerated here.
+    const unionPatterns = async (ms, replies, player) => {
+      const sets = await Promise.all(replies.map(async (r) => {
+        try { return await P(ms + r, player); }
+        catch { return new Set(); } // terminal/illegal continuation → no patterns
+      }));
+      const union = new Set();
+      for (const s of sets) for (const t of s) union.add(t);
+      return union;
+    };
+
+    const [repliesBlunder, repliesCorrect] = await Promise.all([
+      optimalReplies(moves + playedCol),
+      optimalReplies(moves + correctCol),
+    ]);
+
+    const [
+      contBlunderOpponent,
+      contCorrectOpponent,
+      contBlunderBlunderer,
+      contCorrectBlunderer,
+    ] = await Promise.all([
+      unionPatterns(moves + playedCol,  repliesBlunder, opponent),
+      unionPatterns(moves + correctCol, repliesCorrect, opponent),
+      unionPatterns(moves + playedCol,  repliesBlunder, blunderer),
+      unionPatterns(moves + correctCol, repliesCorrect, blunderer),
+    ]);
+
+    const ENABLED_OPP_PRIORITY = [
+      { tag: 'forced_win',      check: () => contBlunderOpponent.has('forced_win')      && !contCorrectOpponent.has('forced_win') },
+      { tag: 'double_threat',   check: () => contBlunderOpponent.has('double_threat')   && !contCorrectOpponent.has('double_threat') },
+      { tag: 'z_threat',        check: () => contBlunderOpponent.has('z_threat')        && !contCorrectOpponent.has('z_threat') },
+      { tag: 'odd_even_threat', check: () => contBlunderOpponent.has('odd_even_threat') && !contCorrectOpponent.has('odd_even_threat') },
+      { tag: 'figure_7',        check: () => contBlunderOpponent.has('figure_7')        && !contCorrectOpponent.has('figure_7') },
+      { tag: 'j_shape',         check: () => contBlunderOpponent.has('j_shape')         && !contCorrectOpponent.has('j_shape') },
       // undercut uses enabled_self (blunderer's after-positions), not enabled_opp —
       // per FR-024/FR-025: undercut names the blunderer's exposure, not an opponent gain
-      { tag: 'undercut',        check: () => pAfterBlunderBlunderer.has('undercut')       && !pAfterCorrectBlunderer.has('undercut') },
-      { tag: 'claimeven',       check: () => pAfterBlunderOpponent.has('claimeven')       && !pAfterCorrectOpponent.has('claimeven') },
+      { tag: 'undercut',        check: () => contBlunderBlunderer.has('undercut')       && !contCorrectBlunderer.has('undercut') },
+      { tag: 'claimeven',       check: () => contBlunderOpponent.has('claimeven')       && !contCorrectOpponent.has('claimeven') },
     ];
-    for (const { tag, check } of STEP4_PRIORITY) {
+    for (const { tag, check } of ENABLED_OPP_PRIORITY) {
       if (check()) {
         return { tag, direction: 'enabled_opponent', reason: `matched enabled_opponent: ${tag}` };
       }
     }
 
-    // Step 5: Score-based fallbacks
+    // Phase E: Score-based fallbacks
     const preScores  = await solver.query(moves);
     const postScores = await solver.query(moves + playedCol);
     const preScore   = Math.max(...preScores);

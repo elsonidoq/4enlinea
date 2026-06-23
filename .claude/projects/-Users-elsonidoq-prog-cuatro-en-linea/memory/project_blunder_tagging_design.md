@@ -1,8 +1,10 @@
 ---
 name: project-blunder-tagging-design
-description: "Authoritative doc and settled design decisions for the pattern→blunder→challenge tagging system; key invariants that are non-obvious from code alone"
-metadata:
+description: Authoritative doc and settled design decisions for the pattern→blunder→challenge tagging system; key invariants that are non-obvious from code alone
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 0e333f7b-7643-4eee-959f-2f5b34c43c45
 ---
 
 **Authoritative doc:** `docs/mvp/patterns_blunders_challenges.md` — wins over any older classifier comments.
@@ -15,7 +17,7 @@ metadata:
 
 **`forced_win` is a first-class pattern** (not a score-based fallback). Predicate: `solver.score(ms, player) > 0`. Participates in `classifyPattern` registry, appears in both missed-own and enabled-opponent cascades, ranked above `double_threat`. Distinct from `forced_win` as a multi-move puzzle category.
 
-**`tagBlunder` never throws.** On solver failure or degenerate position it resolves to `{ tag: 'suboptimal_move', reason: 'solver error: <msg>' }`.
+**`tagBlunder` throws `NotABlunderError` on a TERMINAL position** (already won, or 42-move full board) — a precondition violation, surfaced loudly, NOT masked. Callers MUST distinguish it from a solver failure: on `NotABlunderError`, skip the ply / record nothing (never fabricate a `suboptimal_move`); on any OTHER error, fall back to `{ tag: 'suboptimal_move', reason: 'solver error: <msg>' }`. (`NotABlunderError` is exported from `classifier.js`; reference handling in `index.js` / `papergamesImporter.js` / `reprocess_blunders.mjs`.) The old "never throws → degenerate resolves to suboptimal_move" contract is GONE. Also: missed_own now means "correctCol *builds* pattern X, playedCol doesn't" — not the old "had X, lost it". Full phase cascade in docs/architecture/server-conventions.md → tagBlunder. See [[reference_game_simulation_harness]] for fixture sourcing.
 
 **`reason` TEXT column on `blunders` table** (nullable, prerequisite migration). Stores the human-readable explanation from `tagBlunder` (e.g. `"matched missed_own: double_threat"`, `"solver error: timeout"`).
 

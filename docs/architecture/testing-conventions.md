@@ -62,9 +62,32 @@ connect-four/tests/
 }
 ```
 
-**MUST**: Fixture files are static JSON checked into the repo — no random generation.
+**MUST**: Fixture files are static JSON checked into the repo — no random generation *at test time*.
 **MUST**: Each fixture has a human-readable `description` field.
 **MUST**: Solver scores in fixtures are real values obtained from the c4solver binary, not invented.
+
+### Generated-then-committed fixtures (tagBlunder)
+
+`tagBlunder` fixtures are not hand-authored — they come from real game positions via the
+canonical simulator (`server/gameSampling.js` → `harvestBlunders`), so movestrings are
+never fabricated. The flow:
+
+- `server/scripts/generate_tagblunder_fixtures.mjs [maxGames] [seed]` plays mistake-weighted
+  self-play games, runs `tagBlunder` on each non-optimal ply, bins results by
+  `tag:direction` (canonical enumeration = `REASON_TEMPLATES` keys in `blunderReasons.js`),
+  and writes `tests/blunder/fixtures/tagBlunderFixtures.json`. Deterministic given
+  `(maxGames, seed)`: seeded RNG + deterministic solver → reproducible output. Regenerate
+  and commit; the test reads the static file.
+- `tests/blunder/tagBlunderFixtures.test.js` checks two layers: (1) **golden/regression** —
+  `tagBlunder` reproduces each recorded `tag`+`direction` (shared solver via `before`/`after`);
+  (2) **structural invariants** — properties provable from board geometry alone, no solver
+  (e.g. `immediate_threat:missed_own` ⇒ the blunderer had an immediate win;
+  `forced_block:defensive_miss` ⇒ the opponent had a pre-existing immediate threat). Layer 2
+  is the correctness oracle (layer 1 alone would be self-referential).
+
+**Gotcha**: a few `tag:direction` bins are structurally unreachable in random self-play
+(`claimeven:*` is Yellow-only and rare; `odd_even_threat:missed_own`, `z_threat:enabled_opponent`).
+The generator reports them as "unreached" rather than failing — missing bins are expected, not a bug.
 
 ## What Gets Each Test Type
 

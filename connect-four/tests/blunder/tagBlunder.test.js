@@ -102,14 +102,18 @@ describe('tagBlunder - pattern detection', () => {
     }
   }, { timeout: 60_000 });
 
-  // enabled_opponent: wrong move gives opponent immediate_threat (Step 2 fires)
-  it('returns enabled_opponent when opponent gains immediate threat', async () => {
+  // defensive_miss: Yellow ALREADY threatens an immediate win at col 4 before Red
+  // moves (it is the forbidden_columns fixture). Red plays col 5 and fails to block.
+  // Because the threat pre-existed the move, this is a defensive miss, NOT an
+  // "enabled_opponent" threat. (Pre-rewrite this fixture asserted enabled_opponent,
+  // which mislabeled a pre-existing threat as one the blunder created.)
+  it('returns defensive_miss when blunderer fails to block a pre-existing threat', async () => {
     const solver = await createSolverProcess();
     try {
       const result = await tagBlunder('010263', 5, 3, solver);
-      assert.equal(result.tag, 'immediate_threat');
-      assert.equal(result.direction, 'enabled_opponent');
-      assert.ok(result.reason.startsWith('matched enabled_opponent:'));
+      assert.equal(result.tag, 'forced_block');
+      assert.equal(result.direction, 'defensive_miss');
+      assert.ok(result.reason.startsWith('matched defensive_miss:'));
     } finally {
       solver.destroy();
     }

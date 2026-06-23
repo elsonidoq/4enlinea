@@ -3,7 +3,7 @@
 // Exports importForUser() — called by POST /api/user/papergames/import and
 // the CLI script at scripts/import_papergames_blunders.mjs.
 
-import { tagBlunder } from './classifier.js';
+import { tagBlunder, NotABlunderError } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
@@ -125,7 +125,15 @@ async function extractBlunders(solver, moveString, side, userId) {
       patternTag = VALID_BLUNDER_TAGS.has(result.tag) ? result.tag : 'suboptimal_move';
       reason = result.reason;
       direction = result.direction;
-    } catch { /* fallback values already set */ }
+    } catch (e) {
+      if (e instanceof NotABlunderError) {
+        // Precondition violation: scoreMove flagged a mistake on a terminal
+        // position. Never fabricate a blunder record for it — skip the ply.
+        console.error(`[import] NotABlunderError at "${movesBefore}": ${e.message}`);
+        continue;
+      }
+      /* genuine solver error: fallback values already set */
+    }
 
     let severityFraction = null;
     try {

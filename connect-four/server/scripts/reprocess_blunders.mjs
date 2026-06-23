@@ -7,7 +7,7 @@
 //   node --env-file=connect-four/server/.env connect-four/server/scripts/reprocess_blunders.mjs
 
 import { createClient } from '@supabase/supabase-js';
-import { tagBlunder } from '../classifier.js';
+import { tagBlunder, NotABlunderError } from '../classifier.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from '../moveQualityScorer.js';
 import { VALID_BLUNDER_TAGS } from '../blunderTags.js';
@@ -65,7 +65,14 @@ async function processGames(supabase, solver, games, { isPapergames }) {
         patternTag = VALID_BLUNDER_TAGS.has(result.tag) ? result.tag : 'suboptimal_move';
         reason = result.reason;
         direction = result.direction;
-      } catch (_e) { logError('[reprocess/tagBlunder]', _e); /* leave fallback values */ }
+      } catch (_e) {
+        if (_e instanceof NotABlunderError) {
+          // Terminal position flagged as a mistake — never record it as a blunder.
+          logError('[reprocess/NotABlunderError]', _e);
+          continue;
+        }
+        logError('[reprocess/tagBlunder]', _e); /* leave fallback values */
+      }
 
       let severityFraction = null;
       try {

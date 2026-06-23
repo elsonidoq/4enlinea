@@ -8,7 +8,7 @@ import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, Board, getImmediateThreats, tagBlunder, classifyPattern } from './classifier.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
 import { classifyAiMove } from './classifyAiMove.js';
 import { buildExplainContext, expandZoneAliases } from './explainContext.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
@@ -2107,9 +2107,16 @@ app.post('/api/games/analyze', async (req, res) => {
           reason = tagResult.reason;
           direction = tagResult.direction;
         } catch (_e) {
-          patternTag = 'suboptimal_move';
-          reason = 'solver error: tagBlunder threw';
-          direction = 'missed_own';
+          if (_e instanceof NotABlunderError) {
+            // Precondition violation: scoreMove flagged a mistake on a terminal
+            // position. This must never happen — surface loudly, and do NOT
+            // fabricate a pattern tag (leave null) rather than mislabel a non-blunder.
+            console.error(`[analyze] NotABlunderError at ply "${movesBeforeThisPly}": ${_e.message}`);
+          } else {
+            patternTag = 'suboptimal_move';
+            reason = 'solver error: tagBlunder threw';
+            direction = 'missed_own';
+          }
         }
       }
 
