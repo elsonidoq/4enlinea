@@ -58,6 +58,9 @@ function EvalViewer() {
   const [selectedFile, setSelectedFile] = useState('');
   const [fileRows, setFileRows] = useState(null);
   const [fileLoading, setFileLoading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [allFilesRows, setAllFilesRows] = useState(new Map());
+  const [allFilesLoading, setAllFilesLoading] = useState(new Set());
 
   useEffect(() => {
     fetch(`${API}/api/admin/eval-set`)
@@ -89,6 +92,29 @@ function EvalViewer() {
       .catch(() => setFileRows(new Map()))
       .finally(() => setFileLoading(false));
   }, [selectedFile]);
+
+  useEffect(() => {
+    if (!showAll || evalFiles.length === 0) return;
+    const toFetch = evalFiles.filter(f => !allFilesRows.has(f));
+    if (toFetch.length === 0) return;
+
+    setAllFilesLoading(prev => new Set([...prev, ...toFetch]));
+
+    for (const filename of toFetch) {
+      fetch(`${API}/api/admin/eval-results/${encodeURIComponent(filename)}`)
+        .then(r => r.ok ? r.json() : { rows: [] })
+        .then(data => {
+          const map = new Map();
+          for (const row of (data.rows || [])) map.set(row.board_state, row);
+          setAllFilesRows(prev => new Map([...prev, [filename, map]]));
+          setAllFilesLoading(prev => { const s = new Set(prev); s.delete(filename); return s; });
+        })
+        .catch(() => {
+          setAllFilesRows(prev => new Map([...prev, [filename, new Map()]]));
+          setAllFilesLoading(prev => { const s = new Set(prev); s.delete(filename); return s; });
+        });
+    }
+  }, [showAll, evalFiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const entry = entries[index];
 
@@ -188,6 +214,19 @@ function EvalViewer() {
           <option value="">{evalFiles.length === 0 ? 'no eval files' : '— select file —'}</option>
           {evalFiles.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontFamily: 'monospace', fontSize: 12, color: '#e2e8f0',
+          cursor: evalFiles.length > 0 ? 'pointer' : 'default',
+        }}>
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={e => setShowAll(e.target.checked)}
+            disabled={evalFiles.length === 0}
+          />
+          Show all evals
+        </label>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             onClick={handlePrev}
@@ -231,7 +270,53 @@ function EvalViewer() {
 
       {/* Board + DeepRevealPane */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', color: 'var(--ink)' }}>
-        {selectedFile ? (
+        {showAll ? (
+          <SplitReveal
+            isOpen={true}
+            onClose={() => setShowAll(false)}
+            closeLabel="← Close list"
+            boardContent={
+              <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+            }
+            revealContent={
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {evalFiles.map(filename => {
+                  const fileMap = allFilesRows.get(filename);
+                  const isLoading = allFilesLoading.has(filename);
+                  const row = fileMap ? fileMap.get(entry.board_state) : null;
+                  return (
+                    <div key={filename}>
+                      <div style={{
+                        fontFamily: 'monospace', fontSize: 11, fontWeight: 700,
+                        color: '#475569', marginBottom: 8,
+                        borderBottom: '1px solid #334155', paddingBottom: 4,
+                      }}>
+                        {filename}
+                      </div>
+                      {isLoading ? (
+                        <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 11 }}>Loading…</div>
+                      ) : !fileMap ? (
+                        <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 11 }}>— not loaded —</div>
+                      ) : !row ? (
+                        <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 11 }}>— no entry —</div>
+                      ) : !row.final_response ? (
+                        <div style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 11 }}>— no final_response —</div>
+                      ) : (
+                        <AnnotatedExplanation
+                          text={row.final_response}
+                          termsMap={{}}
+                          userMajorThreats={userMajorThreats}
+                          onHighlightsChange={setZhCells}
+                          navigate={() => {}}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            }
+          />
+        ) : selectedFile ? (
           fileLoading ? (
             <div style={{ padding: 20, color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>Loading…</div>
           ) : matchedRow ? (
