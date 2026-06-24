@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { ProfileStoreProvider } from '../store/ProfileStore.jsx';
 import { Board } from '../components/Board.jsx';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
+import { SplitReveal } from '../components/SplitReveal.jsx';
+import { AnnotatedExplanation } from '../components/AnnotatedExplanation.jsx';
 import { buildBoard } from '../lib/board.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -52,6 +54,10 @@ function EvalViewer() {
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
   const [highlightCol, setHighlightCol] = useState(null);
   const [zhCells, setZhCells] = useState([]);
+  const [evalFiles, setEvalFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState('');
+  const [fileRows, setFileRows] = useState(null);
+  const [fileLoading, setFileLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/api/admin/eval-set`)
@@ -62,6 +68,27 @@ function EvalViewer() {
       .then(data => { setEntries(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
+
+  useEffect(() => {
+    fetch(`${API}/api/admin/eval-results`)
+      .then(r => r.ok ? r.json() : { files: [] })
+      .then(data => setEvalFiles(data.files || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedFile) { setFileRows(null); return; }
+    setFileLoading(true);
+    fetch(`${API}/api/admin/eval-results/${encodeURIComponent(selectedFile)}`)
+      .then(r => r.ok ? r.json() : { rows: [] })
+      .then(data => {
+        const map = new Map();
+        for (const row of (data.rows || [])) map.set(row.board_state, row);
+        setFileRows(map);
+      })
+      .catch(() => setFileRows(new Map()))
+      .finally(() => setFileLoading(false));
+  }, [selectedFile]);
 
   const entry = entries[index];
 
@@ -87,6 +114,11 @@ function EvalViewer() {
     }
     return result;
   }, [entry, boardObj, highlightCol]);
+
+  const matchedRow = useMemo(() => {
+    if (!fileRows || !entry) return null;
+    return fileRows.get(entry.board_state) ?? null;
+  }, [fileRows, entry]);
 
   function handlePrev() {
     if (index > 0) {
@@ -142,6 +174,20 @@ function EvalViewer() {
         <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>
           {index + 1} / {entries.length}
         </span>
+        <select
+          value={selectedFile}
+          onChange={e => setSelectedFile(e.target.value)}
+          disabled={evalFiles.length === 0}
+          style={{
+            fontFamily: 'monospace', fontSize: 12,
+            background: '#1e293b', color: '#e2e8f0',
+            border: '1px solid #334155', borderRadius: 4,
+            padding: '4px 8px',
+          }}
+        >
+          <option value="">{evalFiles.length === 0 ? 'no eval files' : '— select file —'}</option>
+          {evalFiles.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             onClick={handlePrev}
@@ -185,7 +231,60 @@ function EvalViewer() {
 
       {/* Board + DeepRevealPane */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', color: 'var(--ink)' }}>
-        {deepRevealOpen ? (
+        {selectedFile ? (
+          fileLoading ? (
+            <div style={{ padding: 20, color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>Loading…</div>
+          ) : matchedRow ? (
+            <SplitReveal
+              isOpen={true}
+              onClose={() => setSelectedFile('')}
+              closeLabel="← Deselect file"
+              boardContent={
+                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+              }
+              revealContent={
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6, color: 'var(--ink)' }}>
+                  {([...(matchedRow.attempt1_failures || []), ...(matchedRow.attempt2_failures || [])].length > 0) && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+                      {(matchedRow.attempt1_failures || []).map(f => (
+                        <span key={`a1-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#78350f', color: '#fcd34d', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
+                          a1: {f}
+                        </span>
+                      ))}
+                      {(matchedRow.attempt2_failures || []).map(f => (
+                        <span key={`a2-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#92400e', color: '#fde68a', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
+                          a2: {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {matchedRow.final_response ? (
+                    <AnnotatedExplanation
+                      text={matchedRow.final_response}
+                      termsMap={{}}
+                      userMajorThreats={userMajorThreats}
+                      onHighlightsChange={setZhCells}
+                      navigate={() => {}}
+                    />
+                  ) : (
+                    <p style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12, margin: 0 }}>
+                      No final_response for this entry.
+                    </p>
+                  )}
+                </div>
+              }
+            />
+          ) : (
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ borderRadius: 8, padding: 12, maxWidth: 380 }}>
+                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+              </div>
+              <p style={{ fontFamily: 'monospace', fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                No result for this position in selected file.
+              </p>
+            </div>
+          )
+        ) : deepRevealOpen ? (
           <DeepRevealPane
             isOpen={deepRevealOpen}
             onClose={() => setDeepRevealOpen(false)}
