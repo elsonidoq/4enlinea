@@ -1,8 +1,8 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { dirname, join, basename } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
@@ -25,6 +25,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
+import { isValidEvalFilename } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
@@ -529,6 +530,45 @@ app.get('/api/admin/eval-set', requireAdmin, (req, res) => {
   }
 });
 
+app.get('/api/admin/eval-results', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir)
+      .filter(isValidEvalFilename)
+      .sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (req, res) => {
+  const { filename } = req.params;
+  if (!isValidEvalFilename(filename)) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+  const safe = basename(filename);
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', safe);
+  try {
+    const lines = readFileSync(filePath, 'utf-8').trim().split('\n').filter(Boolean);
+    const rows = lines.map(line => {
+      const obj = JSON.parse(line);
+      return {
+        id: obj.id,
+        board_state: obj.board_state,
+        final_response: obj.final_response,
+        attempt1_failures: obj.attempt1_failures ?? [],
+        attempt2_failures: obj.attempt2_failures ?? [],
+      };
+    });
+    res.json({ rows });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'file not found' });
+    logError('[admin/eval-results/:filename]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
 app.get('/api/admin/lessons', requireAdmin, (req, res) => {
@@ -875,8 +915,10 @@ app.post('/api/explain-move-llm', async (req, res) => {
     let result = validateAnnotation(explanation, board, allowedSet);
 
     if (!result.valid) {
-      // ── Retry (same prompt, bypasses cache and quota) ──────────────────
-      const retryRaw = await callLLM(prompt);
+      // ── Retry with failure feedback ─────────────────────────────────────
+      const failureSummary = result.failures.join(', ');
+      const retryPrompt = `Your previous response was rejected for these reasons: ${failureSummary}. Please rewrite to fix them.\n\n${prompt}`;
+      const retryRaw = await callLLM(retryPrompt);
       const retryExplanation = expandZoneAliases(normalizeZoneTags(retryRaw), zoneAliasMap);
       const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
 
