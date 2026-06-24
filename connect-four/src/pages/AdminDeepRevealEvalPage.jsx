@@ -191,7 +191,7 @@ function EvalViewer() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#0f172a', color: '#e2e8f0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: '#0f172a', color: '#e2e8f0', ...(showAll || selectedFile ? { height: '100vh', overflow: 'hidden' } : { minHeight: '100vh' }) }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 20px', background: '#1e293b', borderBottom: '1px solid #334155' }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, color: '#94a3b8' }}>
