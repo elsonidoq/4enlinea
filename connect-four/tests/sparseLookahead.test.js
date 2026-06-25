@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
-import { selectOpponentMistakeCols } from '../server/sparseLookahead.js';
+import { selectOpponentMistakeCols, classifyPatternWithTimeout } from '../server/sparseLookahead.js';
 
 test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
   // 7 distinct tiers, all columns legal (empty board).
@@ -39,4 +39,23 @@ test('selectOpponentMistakeCols keeps a whole tie tier even if it exceeds OPPONE
   // Exclude best(col0) and worst(col6); first middle tier is the five 5s -> whole tier included,
   // even though 5 columns exceeds OPPONENT_CAP(4).
   assert.deepEqual(got, [1, 2, 3, 4, 5]);
+});
+
+test('classifyPatternWithTimeout returns empty Map when classify hangs', async () => {
+  const hang = () => new Promise(() => {}); // never resolves
+  const got = await classifyPatternWithTimeout(hang, '01', 1, null, 50);
+  assert.ok(got instanceof Map);
+  assert.equal(got.size, 0);
+});
+
+test('classifyPatternWithTimeout returns empty Map when classify throws', async () => {
+  const boom = async () => { throw new Error('solver error on won position'); };
+  const got = await classifyPatternWithTimeout(boom, '01', 1, null, 1000);
+  assert.equal(got.size, 0);
+});
+
+test('classifyPatternWithTimeout passes through the Map on success', async () => {
+  const ok = async () => new Map([['double_threat', { cells: ['c4r3'] }]]);
+  const got = await classifyPatternWithTimeout(ok, '01', 1, null, 1000);
+  assert.deepEqual(got.get('double_threat'), { cells: ['c4r3'] });
 });

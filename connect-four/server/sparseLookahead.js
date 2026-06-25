@@ -45,3 +45,25 @@ export function selectOpponentMistakeCols(scores, board) {
   }
   return selected;
 }
+
+/**
+ * Runs classifyFn with a hard timeout. Returns an empty Map on throw OR timeout.
+ * classifyPattern can hang on IPC deadlock (no throw) — the timeout is mandatory.
+ */
+export async function classifyPatternWithTimeout(classifyFn, ms, perspective, solver, timeoutMs = CLASSIFY_TIMEOUT_MS) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(new Map()), timeoutMs);
+  });
+  try {
+    const result = await Promise.race([
+      Promise.resolve().then(() => classifyFn(ms, perspective, solver)),
+      timeout,
+    ]);
+    return result instanceof Map ? result : new Map();
+  } catch {
+    return new Map();
+  } finally {
+    clearTimeout(timer);
+  }
+}
