@@ -34,6 +34,9 @@ export function selectOpponentMistakeCols(scores, board) {
   // Drop best tier (index 0). Drop worst tier (last) unless that leaves nothing.
   const middle = tiers.slice(1, tiers.length > 2 ? tiers.length - 1 : tiers.length);
 
+  // Accumulate middle tiers whole; never-split takes precedence over OPPONENT_CAP.
+  // A single large tie tier may exceed the cap (e.g., 5 columns) rather than force
+  // an arbitrary within-tier choice.
   const selected = [];
   for (const tier of middle) {
     if (selected.length >= 3 && selected.length + tier.length > OPPONENT_CAP) break;

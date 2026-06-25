@@ -30,3 +30,13 @@ test('selectOpponentMistakeCols returns [] when <=1 legal column', () => {
   const scores = [3, 0, 0, 0, 0, 0, 0];
   assert.deepEqual(selectOpponentMistakeCols(scores, board), []);
 });
+
+test('selectOpponentMistakeCols keeps a whole tie tier even if it exceeds OPPONENT_CAP', () => {
+  // Never-split-overrides-cap: if the first middle tier is a large tie, return all of it.
+  const board = new Board('');
+  const scores = [10, 5, 5, 5, 5, 5, 1]; // best col0(10); tie tier cols1-5(5); worst col6(1)
+  const got = selectOpponentMistakeCols(scores, board).sort((a, b) => a - b);
+  // Exclude best(col0) and worst(col6); first middle tier is the five 5s -> whole tier included,
+  // even though 5 columns exceeds OPPONENT_CAP(4).
+  assert.deepEqual(got, [1, 2, 3, 4, 5]);
+});
