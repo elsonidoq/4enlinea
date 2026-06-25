@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
-import { selectOpponentMistakeCols, classifyPatternWithTimeout, extractTier1Structures } from '../server/sparseLookahead.js';
+import { selectOpponentMistakeCols, classifyPatternWithTimeout, extractTier1Structures, runSparseLookahead } from '../server/sparseLookahead.js';
 
 test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
   // 7 distinct tiers, all columns legal (empty board).
@@ -133,4 +133,33 @@ test('compareOpportunities surfaces tag best reaches and played never does', asy
   const best = tally([['figure_7', [2]]]);
   const played = new Map();
   assert.equal(compareOpportunities(best, played).tag, 'figure_7');
+});
+
+test('runSparseLookahead returns alias map + allowedSet entries for the distinguishing structure', async () => {
+  // best move line yields double_threat via opp reply col 2; played line never does.
+  const fSolver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  const classifyFn = async (ms) => {
+    // best line movestrings start with bestCol '1'; played start with '4'.
+    if (ms[0] === '1' && ms[1] === '2') return new Map([['double_threat', { cells: ['c4r3', 'c5r3'] }]]);
+    return new Map();
+  };
+  const got = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.tag, 'double_threat');
+  assert.equal(Object.keys(got.aliasMap)[0], 'future-double_threat-1');
+  assert.equal(got.aliasMap['future-double_threat-1'], 'cells:c4r3,c5r3');
+  assert.ok(got.allowedSetEntries[0].cells.includes('c4r3'));
+  assert.equal(got.allowedSetEntries[0].validationOnly, true);
+});
+
+test('runSparseLookahead returns null when nothing distinguishes the moves', async () => {
+  const fSolver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  const classifyFn = async () => new Map();
+  const got = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got, null);
 });

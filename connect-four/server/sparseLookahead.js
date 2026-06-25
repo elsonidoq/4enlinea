@@ -1,4 +1,4 @@
-import { Board } from './classifier.js';
+import { Board, classifyPattern } from './classifier.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -150,4 +150,33 @@ export function compareOpportunities(bestTally, playedTally) {
     }
   }
   return winner;
+}
+
+export async function runSparseLookahead({ movestring, playedCol, bestCol, perspective }, deps = {}) {
+  const solver = deps.solver;
+  const classifyFn = deps.classifyFn ?? classifyPattern;
+  const budget = { calls: GLOBAL_CALL_BUDGET };
+
+  const bestRoot = movestring + bestCol.toString();
+  const playedRoot = movestring + playedCol.toString();
+
+  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn }, budget);
+  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn }, budget);
+
+  const winner = compareOpportunities(bestTally, playedTally);
+  if (!winner) return null;
+
+  const aliasMap = {};
+  const allCells = new Set();
+  winner.ways.forEach((cells, i) => {
+    aliasMap[`future-${winner.tag}-${i + 1}`] = 'cells:' + cells.join(',');
+    for (const c of cells) allCells.add(c);
+  });
+
+  return {
+    tag: winner.tag,
+    aliasMap,
+    allowedSetEntries: [{ cells: [...allCells], validationOnly: true }],
+    waysCount: winner.ways.length,
+  };
 }
