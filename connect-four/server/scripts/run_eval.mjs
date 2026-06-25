@@ -71,6 +71,12 @@ try {
       is_sparse: entry.is_sparse ?? null,
       runtime_is_sparse: null,
       lookahead_fired: null,
+      premove_scores: null,
+      played_scores: null,
+      best_scores: null,
+      premove_best_col: null,
+      premove_best_score: null,
+      lookahead_null_reason: null,
       context_outcome: null,
       context_error: null,
       llm_error: null,
@@ -125,6 +131,39 @@ try {
     // prompt. eval_set.json uses a different tiebreaker for tied-score positions,
     // which can produce a different column than selectContrastMove's centerMost rule.
     if (context.contrastCol !== undefined) record.correct_move = context.contrastCol;
+
+    // ── Solver ground-truth fields (for the judge's grounding-sufficiency check) ──
+    // Each query is guarded individually: board_state + move can be a terminal/won
+    // position, which the solver rejects with "Invalid position" — an unguarded
+    // query would crash the whole run. On throw, the field stays null and we continue.
+    try {
+      record.premove_scores = await solver.query(entry.board_state);
+    } catch { record.premove_scores = null; }
+    try {
+      record.played_scores = await solver.query(entry.board_state + String(entry.move_played));
+    } catch { record.played_scores = null; }
+    try {
+      // Use the OVERRIDDEN record.correct_move (the column the prompt treats as "better").
+      record.best_scores = await solver.query(entry.board_state + String(record.correct_move));
+    } catch { record.best_scores = null; }
+    if (Array.isArray(record.premove_scores)) {
+      let bestCol = 0;
+      for (let c = 1; c < record.premove_scores.length; c++) {
+        if (record.premove_scores[c] > record.premove_scores[bestCol]) bestCol = c;
+      }
+      record.premove_best_col = bestCol;
+      record.premove_best_score = record.premove_scores[bestCol];
+    }
+    // Coarse null-reason tag. We only have runtime_is_sparse / lookahead_fired here.
+    // Distinguishing finer cases (empty_tally vs no_branch_delta) would require
+    // runSparseLookahead to return a reason — left as a future follow-up.
+    if (record.lookahead_fired === true) {
+      record.lookahead_null_reason = null;
+    } else if (record.runtime_is_sparse === false) {
+      record.lookahead_null_reason = 'not_sparse';
+    } else {
+      record.lookahead_null_reason = 'sparse_no_winner';
+    }
 
     const board = new Board(entry.board_state);
     const aliasMap = context.zoneAliasMap ?? {};

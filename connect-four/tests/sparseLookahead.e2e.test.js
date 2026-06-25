@@ -14,8 +14,15 @@ test('eval-8 sparse look-ahead produces a distinguishing structure or honest nul
     );
     // Either a real structure with cells, or null (honest no-differentiator) — never throws/hangs.
     if (got !== null) {
-      assert.ok(got.tag);
-      assert.ok(got.allowedSetEntries[0].cells.length > 0);
+      if (got.case === 3) {
+        // Case 3 carries opponent-punishment and/or player-slip structures; at least one fired.
+        const oppFired = got.oppTag && got.oppAllowedSetEntries[0]?.cells.length > 0;
+        const playerFired = got.tag && got.allowedSetEntries[0]?.cells.length > 0;
+        assert.ok(oppFired || playerFired, 'case 3 must surface at least one structure');
+      } else {
+        assert.ok(got.tag);
+        assert.ok(got.allowedSetEntries[0].cells.length > 0);
+      }
     }
   } finally {
     solver.close?.();

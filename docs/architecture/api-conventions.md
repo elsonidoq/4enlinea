@@ -636,6 +636,28 @@ Returns a single blunder by UUID. No auth required — this is the public permal
 
 **Rate limit**: 10 req/min.
 
+## Admin Deep-Reveal Eval Viewer Endpoints
+
+Back the `admin/deep-reveal-eval` page (`src/pages/AdminDeepRevealEvalPage.jsx`). All read JSONL/JSON files from `server/scripts/`. Filenames are validated by `isValidEvalFilename` / `isValidEvalSetFilename` (`server/evalResultsHelpers.js`) to block path traversal. All guarded by `requireLocalhost + requireAdmin`.
+
+- `GET /api/admin/eval-sets` → `{ files }` — eval-set JSON filenames (`eval_set_*.json`).
+- `GET /api/admin/eval-set/:name` → the eval-set entries array.
+- `GET /api/admin/eval-results` → `{ files }` — result JSONL filenames (`eval_set_*_results_*.jsonl`, incl. `.enriched.jsonl`).
+- `GET /api/admin/eval-results/:filename` → `{ rows }` — each row `{ id, board_state, final_response, prompt, attempt1_failures, attempt2_failures }`.
+
+### `POST /api/admin/eval-feedback`
+
+Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirrors the in-app flag UX (`DeepRevealPane`), but writes to a file instead of the `llm_feedback` table.
+
+**Request body**: `{ filename, id, human_note }`
+- `filename`: a valid eval-results filename (validated by `isValidEvalFilename`). The sidecar name is derived by `feedbackFilenameFor` — inserting `feedback_` after the `_results_` segment (`..._results_<ts>.jsonl` → `..._results_feedback_<ts>.jsonl`).
+- `id`: the eval entry id (required; join key).
+- `human_note`: optional free-text reviewer note.
+
+**Response**: `201 { ok: true, feedback_file }`. Appended record shape: `{ id, human_note, flagged_at }`. The `judge-deep-reveals` skill left-joins this sidecar onto the results by `id`.
+
+**Errors**: `400 { "error": "invalid filename" }` / `{ "error": "id is required" }`; `500` on write failure.
+
 ## Papergames Import Endpoints (spec 038)
 
 ### `PUT /api/user/profile`

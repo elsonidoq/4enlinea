@@ -88,6 +88,7 @@
 - [T4 example movestring](reference_t4_example_movestring.md) — Case A example; PENDING movestrings noted
 - [T4 vs forced_win trap](reference_t4_vs_forced_win_trap.md) — T4 movestring is 1-indexed; fails forced_win
 - [Cat 5 forced-block detection](reference_cat5_forced_block_detection.md) — all scores equal; use checkWin directly
+- [missed_own capitalize principle](project_missed_own_capitalize_principle.md) — established double_threat/figure_7/immediate_threat survive wrong moves; missed_own = correctCol BUILDS pattern, not "had it & lost it"; only undercut (same col, row≤) kills a fork
 
 ## When working with movestrings
 
@@ -110,14 +111,15 @@
 
 ## When writing inline Node.js scripts
 
-- [Inline Node scripts](reference_inline_node_scripts.md) — absolute imports required; export is `createSolverProcess`; solver hangs (try/finally + close)
+- [Inline Node scripts](reference_inline_node_scripts.md) — absolute imports; export `createSolverProcess`; solver hangs (try/finally+close); solver.query is async—await it (else `{}`)
 
 ## When touching the LLM coach / deep reveal
 
-- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs + /judge-deep-reveals; rubric has pre-check + item 2 structure-hallucination check; baseline 23/25 success
+- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs (solver ground-truth) + /judge-deep-reveals (3 axes); admin flag→feedback sidecar left-joined by id
+- [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow; threat comparison format; major/minor threat KB terms conditional
-- [KB major/minor threat not always_include](project_kb_major_minor_threat_not_always_include.md) — deliberately removed; injecting on empty boards causes hallucination; do not revert
+- [always_include mechanism removed](project_kb_major_minor_threat_not_always_include.md) — NO KB term injects without its pattern firing; parity/gravity_top also removed 2026-06-25; do not revert
 - [Zone alias must match prompt](project_zone_alias_must_match_prompt.md) — alias absent from map → P1:invalid_spec; major=always, minor=conditional
 - [Blunder tagging design](project_blunder_tagging_design.md) — tagBlunder throws NotABlunderError on terminal; missed_own = correctCol builds pattern
 - [Pattern tier definitions](project_pattern_tier_definitions.md) — Tier-1/2/3 live in explainContext.js not classifier.js; 3 unrelated "tier" meanings
@@ -130,7 +132,8 @@
 - [Deep reveal failures table](reference_deep_reveal_failures.md) — debugging tool for annotation rejections
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
-- [Sparse look-ahead unvalidated](project_sparse_lookahead_unvalidated.md) — built on stagging but NOT eval-validated; may return null on lost positions (opponent-indifference); run eval before trusting
+- [Sparse look-ahead unvalidated](project_sparse_lookahead_unvalidated.md) — judged 2026-06-25; case1&2 deepening + INITIAL depth tier added (NOT re-judged); pre-move-query + DFS-budget test traps
+- [drawing_move mislabels wins](project_drawing_move_mislabels_wins.md) — open bug: win-forfeiting move tagged drawing_move; Fix 4 patched rule text, Fix 6 (upstream tagging) still TODO
 
 ## When working on the past-games / review flow
 
@@ -176,6 +179,8 @@
 - [callLLM error handling in scripts](feedback_calllm_error_handling.md) — wrap each callLLM call individually; uncaught error silently drops the entry
 - [Answer before editing](feedback_answer_before_editing.md)
 - [Empirical first](feedback_empirical_first.md)
+- [LLM output root-cause](feedback_llm_output_root_cause.md) — goal-first, then RCA across render/context/generator; a missing signal is a question, not a fact; observe with tools
+
 - [Use rg/fd/sg not grep/find](feedback_use_ripgrep.md)
 - [Mark tasks completed promptly](feedback_update_tasks_promptly.md)
 - [Quarantine before delete](feedback_quarantine_before_delete.md)
@@ -195,6 +200,7 @@
 - [Background subagents get Edit/Write denied](feedback_subagent_write_permissions.md)
 - [Prepopulate reviewed data upfront](feedback_prepopulate_pattern.md)
 - [AskUserQuestion needs ≥2 options](feedback_ask_user_question_min_options.md)
+- [Explanation/question style](feedback_explanation_and_question_style.md) — pitch to a non-internals reader; alternatives carry a recommendation; no vague clarifying questions
 - [Heatmap terminology](feedback_heatmap_terminology.md) — use "column-score overlay"
 - [Server restart kills Vite](feedback_server_restart.md)
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons

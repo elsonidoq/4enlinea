@@ -20,7 +20,7 @@ const MAX_GAMES = 10_000;
 // the better move's own board can introduce a Tier-1/2 pattern (→ allowedSet non-null →
 // not anchorless), and a "quiet" board can still show a meaningful threat row. So we ask
 // buildExplainContext directly (with the look-ahead search skipped — we only need the gate).
-const SPARSE_TARGET = 10;
+const SPARSE_TARGET = 20;
 
 const outPath = process.argv[2] || 'server/scripts/eval_set.json';
 
@@ -136,6 +136,7 @@ async function main() {
   const predicateCounts = new Map(); // how many boards each predicate has appeared in
   const satisfied = new Set();       // predicates that have appeared in >= 2 boards
   const collected = [];
+  const seenBoards = new Set();      // dedup key: `${boardState}|${move}` — skip repeats
   let boardCount = 0;
   let gameCount = 0;
   let sparseCount = 0; // anchorless boards collected (forward look-ahead would trigger)
@@ -151,6 +152,11 @@ async function main() {
 
     const { boardState, movePlayed: move, correctCol: bestCol, severity, perspective } = ply;
     gameCount = ply.gameIndex;
+
+    // Skip boards already collected (same pre-blunder position + move played).
+    const dedupKey = `${boardState}|${move}`;
+    if (seenBoards.has(dedupKey)) continue;
+    seenBoards.add(dedupKey);
 
     boardCount++;
     if (boardCount % 100 === 0) {

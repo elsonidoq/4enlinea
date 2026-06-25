@@ -399,6 +399,14 @@ export function checkP5Strong(zones, allowedSet) {
  * - Expands [/zone:cells] short closers to [/zone:cells:SPEC]
  */
 export function normalizeZoneTags(text) {
+  // Step 0: Strip the internal [zone:tg] zero-count sentinel, keeping its inner text.
+  // The prompt tells the model to write a bare "0" for zero counts, but it sometimes
+  // wraps it as [zone:tg]0[/zone:tg]. 'tg' is a vacuous spec (P1/P5 already skip it and
+  // it highlights nothing), so removing the wrapper and keeping the inner text is safe
+  // and turns an otherwise-correct annotation from a P3:engine_jargon rejection into an
+  // accepted one.
+  text = text.replace(/\[zone:tg\]([\s\S]*?)\[\/zone:tg\]/gi, (_, inner) => inner);
+
   // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
   text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
 

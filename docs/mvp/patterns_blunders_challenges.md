@@ -33,7 +33,7 @@ A pattern is a predicate over `(board, player)`. All detectors accept an explici
 | `odd_even_threat` | Player has ≥2 major-threat moves, one landing on an odd row and one on an even row. | **Red only** | Red's odd-row parity advantage. |
 | `claimodd` | Red, with all columns even-height, controls via the center column. | **Red only** | Response to Claimeven. |
 | `claimeven` | Player holds a claimeven-winning endgame (pairing strategy). | **Yellow only** | Yellow is second player; simulation-verified. |
-| `forced_win` | Player has a solver-confirmed forced win from this position (`solver.score(ms, player) > 0`). | Both | Detected by querying the solver directly; subsumes `double_threat` — use `forced_win` when the win is confirmed but the specific tactic is unclear. |
+| `forced_win` | Player has a forcing chain to a win: exactly one immediate threat that forces the opponent to block, after which a continuation either wins outright, builds a `double_threat`, or continues the forcing chain (recursion, depth ≤ 8). | Both | Structural detector `detectForcedWin(board, perspective)` in `classifier.js` — consumes **no** solver score. Does **not** match when a `double_threat` already exists (that is its own, higher-ranked category); it does not subsume `double_threat`. |
 
 "Both" = either player can hold it depending on the position. Red-only / Yellow-only patterns are parity-bound and must never be tagged for the wrong player.
 
@@ -125,10 +125,10 @@ Pre-move check only — the opponent already had the threat before the blunder. 
 
 | Direction | Predicate | Narrative |
 |---|---|---|
-| Missed own | `missed(forced_win)` | *"You had a forced win and let it slip."* |
+| Missed own | `missed(forced_win)` | *"The right column would have built a forced win; your move passed it up."* |
 | Enabled opponent | `enabled_opp(forced_win)` | *"Your move handed your opponent a forced win."* |
 
-Detected via solver score: `forced_win ∈ P(ms, player)` iff `solver.score(ms, player) > 0`. Requires **2-ply** for enabled-opponent (same as `double_threat`).
+Detected **structurally** by `detectForcedWin(board, perspective)` (the forcing-chain shape above) — **not** via solver score. The function consumes no `scores` arg and resolves the `perspective ≠ currentPlayer` case via internal `withMove` recursion. Requires **2-ply** for enabled-opponent (same as `double_threat`).
 
 ---
 

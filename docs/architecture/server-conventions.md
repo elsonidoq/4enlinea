@@ -297,8 +297,7 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - `getScoreTier(col, score, immediateWinSet, immediateLossSet)` — classifies a column into IMMEDIATE WIN / WINS / DRAWS / LOSES / IMMEDIATE LOSS
 - `TIER_ORDER`, `IMMEDIATE_WIN_OUTCOMES`, `PATTERN_KB` — shared constants
 
-`PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). Special shapes:
-- `{ id, always_include: true }` — glossary terms included in every explain-move prompt regardless of which patterns fired (e.g. `major_threat`, `parity`)
+`PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). A KB term is injected into an explain-move prompt **only when its pattern fires** (added to `relevantPatternKeys` in `explainContext.js`); the gate is `if (!relevantPatternKeys.has(patternKey)) continue;`. There is **no** `always_include` glossary path — it was removed 2026-06-25 because injecting a term with no on-board instance (even `parity`/`gravity_top`) caused the LLM to fabricate/misapply it (see memory `project_kb_major_minor_threat_not_always_include`). Special shape:
 - Alias entries share a `kbId` with another pattern key (e.g. `fork` → same file as `double_threat`); `explainContext.js` deduplicates by `kbId`. Every entry must have a corresponding `docs/knowledge-base/<id>.md` with `short_summary` and an entry in `src/lib/kbTermLesson.js` for the popup display name.
 
 ### Shared utilities

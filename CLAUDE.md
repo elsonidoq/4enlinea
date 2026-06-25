@@ -1,24 +1,3 @@
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan at
-specs/039-audio-interactive-coach/plan.md
-<!-- SPECKIT END -->
-
-## Subagents — always foreground
-
-When the user asks for a subagent, spawn it via the Agent tool but ALWAYS in the
-foreground, in-process mode so I can wait for its result and so its edits land in
-the current working tree:
-
-- NEVER use `subagent_type: "fork"` — it runs in the background and hides its tool
-  output. Use a normal agent type (e.g. `general-purpose`, `Explore`, `Plan`).
-- NEVER pass `isolation: "worktree"` or `isolation: "remote"`. Worktree agents edit
-  a separate checkout, so their edits never reach the real working tree; remote
-  always runs in the background.
-
-This does not mean "don't use subagents" — it means use them only in the plain,
-foreground form.
-
 ## Documentation index
 
 - `docs/index.md` — all design, architecture, and product docs
@@ -71,7 +50,7 @@ The script prints two boards followed by analysis rows:
 ## When you need a concrete movestring
   - Never construct a movestring from random column placements.
   - Do not generate movestrings by hand unless it is a quick smoke test.
-  - Prefer fetching from the DB or using existing code for candidate generation to produce one that satisfies the required predicate.
+  - You can always create a script that uses the playGame function from gameSampling.js to generate a valid board with a specific property
   - Tests and the knowledge base are also good sources.
   - If none of the above works, ask the user before spending more time on it.
 
@@ -90,8 +69,19 @@ If the user asks you to 'write a prompt' or 'draft a prompt' for use in another 
 ## Answering Questions
 If the user asks a question, answer the question first before editing any files or running any tools.
 
-## The knowledge-base
-The knowledge base's goal is to provide expertise knowledge to a coding agent, structured in a AI friendly way, so that a coding agent has the right context to make expert based decisions
+## Knowledge base — mandatory reads
+
+`docs/knowledge-base/` is the source of truth for Connect Four strategic theory. Each file contains a `formal_predicate`, `worked_examples`, and `false_positives` for one concept — read the relevant entry before acting, not after.
+
+**Before implementing or modifying a pattern detector or classifier** for any named strategic concept (z-threat, figure-7, claimeven, baseinverse, aftereven, lowinverse, highinverse, parity, etc.): read `docs/knowledge-base/<slug>.md` for that concept. The `formal_predicate` is the spec; the `false_positives` are the test cases you must not break.
+
+**Before writing or editing LLM prompts or explanation text** that describes a strategic pattern by name: read the KB entry to get accurate terminology and scope. Do not paraphrase from memory — KB entries carry verbatim source quotes for canonical rules.
+
+**Before speccing or building a new puzzle category** based on a strategic concept: read the KB entry to understand the concept's preconditions and known limitations before committing to a detection approach.
+
+**Before reasoning about the tactical significance of a board position**: if the position involves a named pattern (even informally), read the corresponding KB entry to confirm you are applying the predicate correctly.
+
+The README at `docs/knowledge-base/README.md` lists all current entries by slug.
 
 ## Querying the database from Node.js
 

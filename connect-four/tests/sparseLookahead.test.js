@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
-import { selectOpponentMistakeCols, classifyPatternWithTimeout, extractTier1Structures, runSparseLookahead } from '../server/sparseLookahead.js';
+import { selectOpponentMistakeCols, selectOptimalOpponentCols, classifyPatternWithTimeout, extractTier1Structures, runSparseLookahead } from '../server/sparseLookahead.js';
 
 test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
   // 7 distinct tiers, all columns legal (empty board).
@@ -135,9 +135,17 @@ test('compareOpportunities surfaces tag best reaches and played never does', asy
   assert.equal(compareOpportunities(best, played).tag, 'figure_7');
 });
 
+// Pre-move-aware fake solver: returns PRE scores for the pre-move query (movestring),
+// NODE scores for every deeper node. Lets a test independently pick the mode (via PRE)
+// and steer in-search opponent replies (via NODE).
+function preNodeSolver(preScores, nodeScores, root = '') {
+  return { async query(ms) { return ms === root ? preScores : nodeScores; } };
+}
+
 test('runSparseLookahead returns alias map + allowedSet entries for the distinguishing structure', async () => {
-  // best move line yields double_threat via opp reply col 2; played line never does.
-  const fSolver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  // optScore (bestCol 1) = 5 >= 0 -> optimal-opponent path (case 2). NODE scores make the
+  // opponent's optimal reply col 2, so the best line reaches double_threat; played line does not.
+  const fSolver = preNodeSolver([5, 5, 5, 5, 5, 5, 5], [0, 0, 9, 0, 0, 0, 0]);
   const classifyFn = async (ms) => {
     // best line movestrings start with bestCol '1'; played start with '4'.
     if (ms[0] === '1' && ms[1] === '2') return new Map([['double_threat', { cells: ['c4r3', 'c5r3'] }]]);
@@ -147,6 +155,7 @@ test('runSparseLookahead returns alias map + allowedSet entries for the distingu
     { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
     { solver: fSolver, classifyFn },
   );
+  assert.equal(got.case, 2);
   assert.equal(got.tag, 'double_threat');
   assert.equal(Object.keys(got.aliasMap)[0], 'future-double_threat-1');
   assert.equal(got.aliasMap['future-double_threat-1'], 'cells:c4r3,c5r3');
@@ -211,4 +220,126 @@ test('isAnchorlessPosition: true only when no threat rows shown AND allowedSet n
   assert.equal(isAnchorlessPosition({ ...none, showOpponentMinor: true }, null), false);
   // allowedSet present (Tier-1/2 pattern cells) → not anchorless even with no rows.
   assert.equal(isAnchorlessPosition(none, [{ cells: ['c4r3'] }]), false);
+});
+
+// ── Optimal-opponent column selection ──────────────────────────────────────────
+test('selectOptimalOpponentCols keeps every column tied for the max score', () => {
+  const board = new Board('');
+  // cols 2 and 5 tie for the max (9).
+  assert.deepEqual(selectOptimalOpponentCols([1, 3, 9, 4, 2, 9, 0], board).sort((a, b) => a - b), [2, 5]);
+  // single max
+  assert.deepEqual(selectOptimalOpponentCols([1, 3, 9, 4, 2, 8, 0], board), [2]);
+});
+
+test('selectOptimalOpponentCols only considers legal columns', () => {
+  const board = new Board('');
+  board.colHeights = [6, 0, 0, 0, 0, 0, 0]; // col0 full
+  // col0 has the highest score but is full → excluded; next max is col3.
+  assert.deepEqual(selectOptimalOpponentCols([99, 1, 1, 5, 1, 1, 1], board), [3]);
+});
+
+// ── Terminal-position guard ─────────────────────────────────────────────────────
+test('searchOpportunities prunes an already-won root without querying/classifying', async () => {
+  const { searchOpportunities } = await import('../server/sparseLookahead.js');
+  // '0101010' = P1 dropped col0 four times (rows 0-3) → vertical win for player 1.
+  const wonRoot = '0101010';
+  assert.equal(new Board(wonRoot).hasWon(1), true);
+  let queried = false;
+  let classified = false;
+  const solver = { async query() { queried = true; return [0, 0, 0, 0, 0, 0, 0]; } };
+  const classifyFn = async () => { classified = true; return new Map(); };
+  const tally = await searchOpportunities(wonRoot, 1, { solver, classifyFn }, { calls: 10 });
+  assert.equal(tally.size, 0);
+  assert.equal(queried, false, 'solver.query must not be called on a won position');
+  assert.equal(classified, false, 'classify must not be called on a won position');
+});
+
+// ── Mode selector ───────────────────────────────────────────────────────────────
+test('runSparseLookahead: optScore >= 0 routes through optimal-opponent (case 1)', async () => {
+  // Pre-move: bestCol 3 wins (+1), playedCol 4 loses (-2) → case 1. NODE scores steer the
+  // opponent's optimal reply to col 5, where the best line surfaces an undercut.
+  const pre = [-2, -2, -2, 1, -2, -2, -2];
+  const node = [0, 0, 0, 0, 0, 9, 0]; // col5 is the opponent's optimal reply
+  const fSolver = { async query(ms) { return ms === '3333' ? pre : node; } };
+  const classifyFn = async (ms) => {
+    // best line starts with bestCol '3'; played starts with '4'. Opp reply col 5.
+    if (ms[4] === '3' && ms[5] === '5') return new Map([['undercut', { cells: ['c1r1'] }]]);
+    return new Map();
+  };
+  const got = await runSparseLookahead(
+    { movestring: '3333', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 1);
+  assert.equal(got.tag, 'undercut');
+  assert.ok(Object.keys(got.aliasMap)[0].startsWith('future-undercut'));
+});
+
+test('runSparseLookahead: solver error on pre-move query falls back to mistake mode (no throw)', async () => {
+  // Pre-move query throws → optScore undefined → mistake-mode best-vs-played fallback.
+  // Mistake mode explores middle tiers [1,2,3,4,5] best-first; the match lands on col 1,
+  // the FIRST reply explored, so the depth-first budget reaches it before being exhausted.
+  const node = [10, 5, 5, 5, 5, 5, 1];
+  const fSolver = { async query(ms) { if (ms === '') throw new Error('pre-move solver error'); return node; } };
+  const classifyFn = async (ms) => {
+    if (ms[0] === '1' && ms[1] === '1') return new Map([['double_threat', { cells: ['c4r3'] }]]);
+    return new Map();
+  };
+  const got = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.tag, 'double_threat'); // mistake-mode opp explores middle tiers incl col2
+});
+
+// ── Case 3: dual output (opponent punishment + player slip) ──────────────────────
+test('runSparseLookahead: case 3 carries both opponent-punishment and player-slip structures', async () => {
+  // optScore (bestCol 3) = -1 < 0 → case 3.
+  const pre = [-3, -3, -3, -1, -2, -3, -3];
+  // NODE scores: distinct tiers so mistake mode (player slip) has a gradient, and the
+  // opponent's optimal reply (max) is col 0.
+  const node = [9, 5, 4, 3, 2, 1, 0];
+  const fSolver = { async query(ms) { return ms === '' ? pre : node; } };
+  const classifyFn = async (ms, persp) => {
+    // Player-slip search: perspective 1, best line starts '3', mistake opp reply incl col1..4.
+    if (persp === 1 && ms[0] === '3' && ms.length >= 2) {
+      return new Map([['j_shape', { cells: ['c2r2'] }]]);
+    }
+    // Opponent-punishment search: perspective 2 (opponent), from played root '4',
+    // opponent's optimal reply col 0.
+    if (persp === 2 && ms[0] === '4' && ms[1] === '0') {
+      return new Map([['double_threat', { cells: ['c5r4'] }]]);
+    }
+    return new Map();
+  };
+  const got = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 3);
+  assert.equal(got.oppTag, 'double_threat');
+  assert.ok(Object.keys(got.oppAliasMap)[0].startsWith('opp-future-double_threat'));
+  assert.equal(got.tag, 'j_shape');
+  assert.ok(Object.keys(got.aliasMap)[0].startsWith('future-j_shape'));
+});
+
+test('runSparseLookahead: case 3 fires when only the opponent-punishment search has content', async () => {
+  const pre = [-3, -3, -3, -1, -2, -3, -3]; // optScore (col3) = -1 < 0 → case 3
+  const node = [9, 5, 4, 3, 2, 1, 0];
+  const fSolver = { async query(ms) { return ms === '' ? pre : node; } };
+  const classifyFn = async (ms, persp) => {
+    if (persp === 2 && ms[0] === '4' && ms[1] === '0') {
+      return new Map([['immediate_threat', { cells: ['c5r4'] }]]);
+    }
+    return new Map(); // player-slip search finds nothing
+  };
+  const got = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 3);
+  assert.equal(got.oppTag, 'immediate_threat');
+  assert.equal(got.tag, null);
+  assert.deepEqual(got.aliasMap, {});
+  assert.deepEqual(got.allowedSetEntries, []);
 });

@@ -63,16 +63,16 @@ export const PATTERN_KB = {
   z_threat:        { id: 'community-z-threat' },
   forced_win:      { id: 'community-forced-win' },
   odd_even_threat: { id: 'derived-odd-even-threat' },
-  // Always-include glossary terms: surfaced in every explain-move prompt regardless
-  // of which tactical patterns fired. These appear in the board visualisation legend
-  // and the LLM will always encounter them.
-  // major_threat and minor_threat are NOT always_include — they are added to
-  // relevantPatternKeys in explainContext.js only when threats actually exist on
-  // the board. Injecting them on empty boards causes the LLM to hallucinate threats.
+  // KB terms are injected into a prompt ONLY when their pattern actually fires on the
+  // board (relevantPatternKeys in explainContext.js). The former `always_include`
+  // glossary path was removed: injecting a term with no instance — even parity /
+  // gravity_top, which were thought to be safe "legend" terms — led the LLM to
+  // fabricate or misapply it on sparse boards (deep-reveal eval, 2026-06-25). This is
+  // the same remedy already applied to major_threat / minor_threat.
   major_threat:    { id: 'allen-major-threat' },
   minor_threat:    { id: 'allen-minor-threat' },
-  gravity_top:     { id: 'community-gravity-top',    always_include: true },
-  parity:          { id: 'allen-parity',             always_include: true },
+  gravity_top:     { id: 'community-gravity-top' },
+  parity:          { id: 'allen-parity' },
   // Alias: fork is a synonym for double_threat; shares the same KB article.
   fork:            { id: 'community-double-threat' },
 };
@@ -597,6 +597,7 @@ export function buildBlunderExplainPrompt({
   kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
   threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
   lookaheadSection,       // pre-formatted sparse-board forward look-ahead section
+  centerDominanceSection, // pre-formatted opening center-dominance reason (no-structure path)
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -683,6 +684,11 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     sections.push(lookaheadSection);
   }
 
+  // ── Why the better move is stronger (opening center-dominance reason) ──────
+  if (centerDominanceSection) {
+    sections.push(centerDominanceSection);
+  }
+
   // ── Best-move patterns (grounding evidence) ───────────────────────────────
   if (correctMovePatterns && correctMovePatterns.size > 0) {
     const patternLines = ['## Best-move tactical evidence'];
@@ -701,7 +707,7 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
   const groundingLines = ['## Hard grounding rules'];
   groundingLines.push('Threat ownership: a threat or winning line is YOURS only if its cells carry your disc glyph on the boards, it is listed under a "Your …" threat row, or it appears under "YOUR threat cells" below. It is your OPPONENT\'s only if marked with their glyph, listed under an "Opponent …" row, or under "YOUR OPPONENT\'s threat cells" below. Never infer or guess ownership — if the boards above do not show whose threat a cell is, describe the cell without claiming an owner.');
   if (tag === 'drawing_move') {
-    groundingLines.push('This was a drawing move: the position is a draw, not a win for either side. Do NOT claim you or your opponent had a winning position or a winning line — explain only the loss of the move that would have held the draw.');
+    groundingLines.push('The move you played results in a draw, but a stronger move was available — explain what that better move would have secured. Do NOT claim the position AFTER your move is winning for you or for your opponent; describe only what the better move would have held or built. (A better move may itself have been stronger than a draw — do not deny that a better option existed.)');
   }
   // Collect allowed columns for the prompt
   const allowedCols = [];
@@ -738,6 +744,12 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
       if (yourCells.length > 0)      groundingLines.push(`- YOUR threat cells: [${yourCells.join(', ')}]`);
       if (oppCells.length > 0)       groundingLines.push(`- YOUR OPPONENT's threat cells: [${oppCells.join(', ')}]`);
       if (unlabeledCells.length > 0) groundingLines.push(`- Other reference cells (ownership not determined — do not assert who owns these): [${unlabeledCells.join(', ')}]`);
+    } else if (lookaheadSection) {
+      // Sparse look-ahead fired: the future cells are validation-only (so they don't
+      // appear as Strategic reference cells), but the model MUST still point at the
+      // structure via the zone tag(s) in the look-ahead section. Do NOT tell it to stay
+      // vague here — that instruction directly defeated the feature.
+      groundingLines.push('Specific present-board cells are not pre-listed here. To point at the future follow-up, use the zone tag(s) provided in the "What the better move leads to" section above — they mark the exact square(s) where it would form.');
     } else {
       groundingLines.push('(no specific cell references — use the allowed columns above and describe patterns in general terms)');
     }
@@ -795,22 +807,28 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     formatLines.push('  Use the MOST SPECIFIC term that applies: e.g. if a move wins in one play, prefer [term:immediate_threat] over the more general [term:major_threat].');
     formatLines.push('');
   }
-  formatLines.push('When you write a major or minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-major-pre] or [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-major-pre] or [/zone:player-minor-pre]). Exception: if a line shows a bare "0" with no zone tag, write "0" without any zone tag — never use [zone:tg] or any other invented tag for a zero count.');
+  formatLines.push('When you write an actual major or minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-major-pre] or [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-major-pre] or [/zone:player-minor-pre]). Exception: if a line shows "none", describe it in plain words (e.g. "left you with no minor threats") — do NOT write a count and do NOT add any zone tag, and never use [zone:tg] or any other invented tag.');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
 
   // ── Task ──────────────────────────────────────────────────────────────────
   if (isBlunder) {
-    const patternInstruction = kbTermsSection
+    // Only ask the model to NAME a tactical pattern when one is actually grounded in
+    // the prompt: a KB term fired, a threat row is shown, the forward look-ahead fired,
+    // or pattern cells are whitelisted (allowedSet). Otherwise telling it to "name the
+    // pattern" with no instance present makes it fabricate one (deep-reveal eval).
+    const hasGroundedPattern = Boolean(kbTermsSection) || Boolean(threatComparisonSection)
+      || Boolean(lookaheadSection) || allowedSet !== null;
+    const patternInstruction = hasGroundedPattern
       ? 'Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above).'
       : 'Do not invent tactical concept names — describe only what you can see changing between the two boards.';
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
 When describing the better move, always frame it as what YOU could have played — never describe it as an easy reply or opportunity for your opponent.
-If the threat comparison section includes major or minor threat rows, include a comparison in your explanation using those counts — replace every threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's major threats from [zone:opponent-major-pre]3[/zone:opponent-major-pre] to [zone:opponent-major-best]1[/zone:opponent-major-best]; your move left them at [zone:opponent-major-played]2[/zone:opponent-major-played]", or similarly for minor threats). If no major or minor threat rows appear, do not write a threat comparison.
-If no threat comparison rows are shown and no tactical pattern is named above, ground your explanation in the concrete board change — cite the exact landing squares and columns that differ between the two moves — and do not invent a tactical pattern or claim a threat the boards do not show.
+If the threat comparison section includes major or minor threat rows, include a comparison in your explanation using those counts — replace every threat count with its zone tag token from the threat comparison. The rows show three parallel states (pre-move, after the better move, after your move); read them in whichever direction the position calls for. The better move is not always the one with MORE threats — sometimes YOUR move is the one that created a threat, and the point is that it was still the weaker choice. Examples: "the best move would have cut your opponent's major threats from [zone:opponent-major-pre]3[/zone:opponent-major-pre] to [zone:opponent-major-best]1[/zone:opponent-major-best]; your move left them at [zone:opponent-major-played]2[/zone:opponent-major-played]"; or "even though your move created a minor threat ([zone:player-minor-played]1[/zone:player-minor-played]), the better move left you with no minor threats and was still stronger because …". A line that shows "none" carries no tag — say "no minor threats" in plain words, never wrap a zero. If no major or minor threat rows appear, do not write a threat comparison.
+If no threat comparison rows are shown and no tactical pattern is named above, give the concrete STRATEGIC reason the better move is preferable — for example it keeps more of the board open and creates more future possibilities, takes more central control, or loses more slowly under best play.${centerDominanceSection ? ' A "## Why the better move is stronger" section above gives the concrete reason for THIS position — build your explanation on it (centrality / number of winning lines), do not substitute a vaguer one.' : ''} Do NOT pad the explanation by merely restating where each disc landed ("would have put your disc on that cell"): naming a landing square is not a reason. Do not invent a tactical pattern or claim a threat the boards do not show.
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task
@@ -819,7 +837,19 @@ Name the tactical pattern or strategic benefit it creates. Scaled to the eval ga
 acknowledge both moves have merit; for a large gap, highlight what this move uniquely achieves.`);
   }
 
-  return sections.join('\n\n');
+  // No section may be rendered with an empty body. A section is "informationally
+  // empty" when everything after its `## Heading` line (ignoring blank lines) is
+  // whitespace — such a section conveys nothing and primes the LLM to invent content.
+  // This is a structural property of the whole prompt, not a per-section special case.
+  const nonEmptySections = sections.filter((s) => {
+    if (s == null) return false;
+    const text = String(s);
+    // Strip a single leading `## Heading` line, then check for any real content.
+    const body = text.replace(/^\s*#{1,6}[^\n]*\n?/, '');
+    return body.trim().length > 0;
+  });
+
+  return nonEmptySections.join('\n\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

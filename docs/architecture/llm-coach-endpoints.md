@@ -93,7 +93,7 @@ args: movestring, col (0-indexed), rounds, solver
   │
   ├─ Step 8b — Sparse-board forward look-ahead (only when anchorless + blunder):
   │   isAnchorlessPosition(show* flags, allowedSet) && !isOptimal
-  │   → runSparseLookahead → { tag, aliasMap, allowedSetEntries } | null
+  │   → runSparseLookahead → { case, tag, aliasMap, allowedSetEntries[, oppTag, oppAliasMap, oppAllowedSetEntries] } | null
   │   → merges aliasMap into zoneAliasMap, builds resolvedAllowedSet,
   │     formats the `## What the better move leads to` section
   │
@@ -116,11 +116,27 @@ args: movestring, col (0-indexed), rounds, solver
 
 **Gate:** `isAnchorlessPosition({showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor}, allowedSet)` → true iff none of the four row-visibility flags is set AND `allowedSet === null`. Keys off the **row-visibility** `show*` flags, NOT the raw `hasMajor/MinorThreats` existence flags — a board can carry non-meaningful threats (e.g. opponent minors that render no directional row) and still be anchorless.
 
-**Method (`runSparseLookahead`):** from both the played and the better move, `searchOpportunities` runs a bounded DFS exploring the **opponent's mistakes** (`selectOpponentMistakeCols` — whole score-tiers excluding the best, never splitting a tie), running `classifyPattern` at player-to-move nodes to find reachable Tier-1 structures (double_threat, fork, undercut, …). `compareOpportunities` returns the structure the better move reaches in **more** opponent-mistake branches, or `null` when nothing distinguishes them (never manufacture a benefit). Representative cells become `future-<tag>-N` zone-aliases.
+**Method (`runSparseLookahead`):** the engine first queries the **pre-move** position (`solver.query(movestring)`) and picks an opponent-exploration strategy from the player's per-column scores. `optScore` = the better column's score, `blunderScore` = the played column's score (player-to-move convention: `≥0` wins/draws, `<0` loses). `searchOpportunities` then runs a bounded DFS from each candidate move, running `classifyPattern` at player-to-move nodes to find reachable Tier-1 structures (double_threat, fork, undercut, …). The opponent-node branching mode is selected per `deps.opponentMode`:
+
+- **`'optimal'`** (`selectOptimalOpponentCols`) — branch only into the opponent's best defense (all columns tied for their max score). A losing/weaker played move then surfaces nothing against best play, so the better move's surviving structure yields a positive delta.
+- **`'mistake'`** (`selectOpponentMistakeCols`, the default) — branch into whole middle score-tiers (excluding the best and worst, never splitting a tie; uniform-score positions explore every legal reply).
+
+Mode/case selection (top-level selector is `optScore`):
+
+| Case | Pre-move condition | Exploration | Conveys |
+|---|---|---|---|
+| 1 | `optScore ≥ 0`, `blunderScore < 0` | optimal-opponent (player structures) | best defense punishes your move and wins; the better move survives best defense |
+| 2 | `optScore > 0`, `blunderScore ≥ 0` | optimal-opponent (player structures) | you still win, but you give up structure the better move keeps vs best defense |
+| 3 | `optScore < 0` | sub-optimal-opponent **AND** optimal-opponent-from-blunder | best play punishes your move (opponent's structures); if they slip, the better move lets you punish (player's structures) |
+
+Cases 1 & 2 share one optimal-opponent best-vs-played search and return `{ tag, aliasMap, allowedSetEntries }` plus `case` (1|2) and `playedStillWins`. Case 3 runs **both**: (a) an optimal-opponent search from the **blunder root with the opponent as perspective** so `classifyPattern` surfaces the **opponent's** punishing structures (compared against an empty tally), aliased `opp-future-<tag>-N`; and (b) the player surviving-slip search (mistake-mode best-vs-played) aliased `future-<tag>-N`. It returns `{ case: 3, tag, aliasMap, allowedSetEntries, oppTag, oppAliasMap, oppAllowedSetEntries }` (either part may be empty; fires if **either** has content). If the pre-move query throws, it falls back to mistake-mode best-vs-played. `compareOpportunities` returns the structure reached in **more** branches than the comparison tally, or `null` when nothing distinguishes (never manufacture a benefit).
+
+**Case 1/2 deepening fall-through (decisive flip with no player-structure delta):** when the case-1/2 player-structure comparison returns `null` (no Tier-1 structure separates the moves) **but** the played move actually loses (`blunderScore < 0` — an `outcome_flip`), the engine deepens rather than returning null: it runs the opponent-punishment search (the same machinery as case 3a — `searchOpportunities(playedRoot, opponent, { opponentMode: 'optimal' })` vs an empty tally) and, if that surfaces a structure, returns a **`case: 3` opponent-only shape** (`tag: null, aliasMap: {}, allowedSetEntries: []` + populated `oppTag`/`oppAliasMap`/`oppAllowedSetEntries`). This grounds mid-sparse losses where the refutation is tactically reachable (the rendered section becomes "your move loses to best play…"). When the refutation is too deep for the budget (e.g. an empty-board positional loss whose forced win is ~40 plies away), it still returns `null` → the prompt falls back to an honest-minimal explanation rather than a fabricated one. (Added 2026-06-25 from the `eval_set_large_2_nonfiring_lookup_evals` judge round; the prior behavior here was an unconditional `null`.)
 
 **Key invariants / contracts:**
 - **Hang safety:** every `classifyPattern` call goes through `classifyPatternWithTimeout` (timeout + empty-Map on hang/throw); every `solver.query` in the recursion is try/caught (prune, never reject); the `runSparseLookahead` call in `buildExplainContext` is try/caught (throw → no section). An optional additive feature must never sink the explanation.
-- **Budget:** each candidate search gets its **own** `{ calls: GLOBAL_CALL_BUDGET }` (independent, equal — a shared budget would let the first search starve the second and manufacture a spurious winner).
+- **Budget:** each candidate search gets its **own** `{ calls: budget }` object (independent, equal — a shared budget would let the first search starve the second and manufacture a spurious winner). `budget` is the per-tier value (`INITIAL_GAME_CALL_BUDGET` or `GLOBAL_CALL_BUDGET`), not a hardcoded constant.
+- **Terminal guard:** `searchOpportunities` prunes any node where `board.hasWon(1) || board.hasWon(2)` **before** any `solver.query`/`classifyPattern`. Already-won positions are game-over — the solver rejects them with `Error: Invalid position` (this previously crashed validation scripts).
 - **P5Strong whitelist:** when look-ahead flips `allowedSet` from null → non-null, the played/contrast columns and landing cells must also be appended to `resolvedAllowedSet` (mirroring the existing non-null whitelist), or the explanation's unavoidable column references fail `P5strong:col_not_allowed`.
 - The found structure is rendered as a **future possibility** (`## What the better move leads to`), never as a current board fact.
 
@@ -132,7 +148,12 @@ args: movestring, col (0-indexed), rounds, solver
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `LOOKAHEAD_DEPTH` | 4 | plies searched from each candidate move |
+| `LOOKAHEAD_DEPTH` | 4 | plies searched from each candidate move (mid/late game) |
+| `EARLY_GAME_DEPTH` | 8 | plies used when `movestring.length < EARLY_GAME_MS_THRESHOLD` |
+| `EARLY_GAME_MS_THRESHOLD` | 8 | movestring length below which `EARLY_GAME_DEPTH` applies |
+| `INITIAL_GAME_DEPTH` | 10 | plies used when `movestring.length ≤ INITIAL_GAME_MS_THRESHOLD` (near-empty opening) |
+| `INITIAL_GAME_MS_THRESHOLD` | 4 | movestring length at/below which the INITIAL tier applies |
+| `INITIAL_GAME_CALL_BUDGET` | 2000 | per-candidate `classifyPattern` budget in the INITIAL tier (large one-time search; cached per position) |
 | `PLAYER_CAP` | 2 | player branching (top score-tier moves continued) |
 | `OPPONENT_CAP` | 4 | opponent-mistake columns per node (whole tiers; may exceed on a tie) |
 | `GLOBAL_CALL_BUDGET` | 60 | `classifyPattern` calls **per candidate** (each of the two searches gets its own) |
@@ -140,8 +161,11 @@ args: movestring, col (0-indexed), rounds, solver
 | `MAX_WAYS` | 3 | representative cell-sets surfaced per structure (matches the 4-color highlight pool) |
 | `MIN_BRANCH_DELTA` | 1 | extra opponent-mistake branches the better move must reach to count as distinguishing |
 
+Depth **and budget** are adaptive across three tiers (selected by `movestring.length` in `runSparseLookahead`): `≤ INITIAL_GAME_MS_THRESHOLD(4)` → `INITIAL_GAME_DEPTH(10)` + `INITIAL_GAME_CALL_BUDGET(2000)`; `< EARLY_GAME_MS_THRESHOLD(8)` → `EARLY_GAME_DEPTH(8)` + `GLOBAL_CALL_BUDGET`; else `LOOKAHEAD_DEPTH(4)` + `GLOBAL_CALL_BUDGET`. The chosen `depth` and `budget` are passed to every `searchOpportunities` call (including the case-1/2 deepening fall-through). Root cause for the tiers: at `LOOKAHEAD_DEPTH=4` from a 2-disc board, player nodes only see 4–6 total discs — not enough disc density for any Tier-1 geometry. The INITIAL tier spends a far larger one-time search on the handful of distinct opening positions, which is affordable because the whole deep-reveal is cached per position (`explanation_cache`). `searchOpportunities` accepts an optional `depth` param (default `LOOKAHEAD_DEPTH`) so tests can override independently.
+
 **Known limitations / not yet implemented:**
-- **Opponent-indifference dead-end:** `selectOpponentMistakeCols` needs ≥2 distinct opponent score tiers; it returns `[]` when the solver is indifferent among replies. In lost/drawn positions (a primary target class) the solver is often indifferent among losing replies, so the search dead-ends and the engine returns `null` (no section) rather than firing. Fix frontier: select opponent/player moves by a **threat-creating heuristic** instead of pure solver score-tier.
+- **Early-game depth still finite:** `EARLY_GAME_DEPTH=8` was calibrated to reach ~10 discs at player nodes from boards with <8 moves played. Very early positions (movestring.length ≤ 2) with complex structure requirements may still null. Monitor eval results; the tunable is easy to raise.
+- **Opponent-indifference dead-end:** `selectOpponentMistakeCols` needs ≥2 distinct opponent score tiers; it returns `[]` when the solver is indifferent among replies. This correctly prunes the PLAYED branch when the played move is already a decisive blunder (all opponent replies score identically). In purely drawn positions both branches may dead-end this way.
 - **Designed but unbuilt:** an explicit future-board visualization in the prompt (currently the future structure is conveyed by alias text only), and a Tier-3 *promotion* shortcut (surfacing an already-detected position-global parity pattern without simulating). The gate simulates uniformly instead.
 
 ---
@@ -182,15 +206,17 @@ args: movestring, rounds
 ## Players               ← player names, parity rows
 ## Boards                ← 3 boards: Before / After best move / After move played
 ## Move context          ← player, eval gap, columns, key insight (humanReason)
-## Threat comparison     ← pre-computed major/minor threat counts + parity alignment
+## Threat comparison     ← pre-computed major/minor threat counts + parity alignment; OMITTED when no threat row is directionally meaningful (all four show* flags false)
 ## What the better move leads to ← sparse-board look-ahead; only on anchorless blunders (future-<tag>-N aliases)
 ## Best-move tactical evidence  ← correctMovePatterns (when patterns fired)
 ## Hard grounding rules  ← column/cell whitelist
 ## Tone                  ← severity framing
-## KB term definitions   ← classifier-driven; absent when no patterns fired
+## KB term definitions   ← classifier-driven; injected ONLY when a pattern fires (no always-include glossary path); absent on anchorless boards
 ## Output format         ← zone/term tag syntax; term instruction omitted when no KB terms
-## Task                  ← 2–3 sentences; pattern-naming conditional on KB terms presence
+## Task                  ← 2–3 sentences; pattern-naming conditional on a grounded pattern being present
 ```
+
+**No empty sections (structural invariant):** the final prompt is assembled by `sections.join('\n\n')` in `buildBlunderExplainPrompt`, but first passes a filter that drops any section whose body — everything after its `## Heading` line, ignoring blank lines — is whitespace-only. This is a property of *every* section, not a per-section special case: an informationally-empty section conveys nothing and primes the model to invent content. Sections that render labels but no data (notably `## Threat comparison`, whose sub-labels are non-whitespace) must additionally be set to `undefined` at build time — the whitespace filter cannot catch them. (Added 2026-06-25; the empty `## Threat comparison` was a confirmed fabrication trigger.)
 
 **`## Threat comparison`** format:
 
@@ -211,9 +237,11 @@ After the move played (column M):
 Parity-aligned = threat row matches the player's winning parity.
 Immediately playable = gravity-top cell.
 
-**`## Task`** varies by presence of KB terms:
-- **With KB terms:** "Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above)."
-- **Without KB terms:** "Do not invent tactical concept names — describe only what you can see changing between the two boards."
+**`## Task`** varies by whether a **grounded pattern** is present — `hasGroundedPattern = kbTermsSection || threatComparisonSection || lookaheadSection || allowedSet !== null`:
+- **Grounded pattern present:** "Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above)."
+- **No grounded pattern:** "Do not invent tactical concept names — describe only what you can see changing between the two boards."
+
+(The gate was previously keyed on `kbTermsSection` alone, which was effectively always-on while `parity`/`gravity_top` were always-include — so it ordered the model to name a pattern even on bare boards, and it fabricated one. With the always-include path removed and this broader gate, the "name the pattern" instruction only fires when something concrete actually grounds it.)
 
 Both paths include: "When the threat comparison shows a meaningful difference, use the specific counts as evidence."
 

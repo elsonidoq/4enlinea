@@ -30,7 +30,7 @@ Score from c4solver `-a` = from current player's perspective:
 1. **immediate_threat**: `score >= floor((42-n)/2) && score > 0`
 2. **forced_block**: `score >= 0` AND all other legal moves equal `opponentImmediateWin`
 3. **double_threat**: `score > 0` AND after placing candidate, current player has ≥2 winning threats
-4. **forced_win**: all scores ≤ 0, pick highest (losing slowest)
+4. **forced_win**: structural `detectForcedWin` — NOT score-based. Matches when: not already a `double_threat`; mover has exactly 1 immediate threat; opponent forced to block gains no threat; and a continuation wins / makes a `double_threat` / continues the forcing chain (recursion depth ≤ 8). No score gate. (Corrected 2026-06-25; the earlier "all scores ≤ 0, pick highest" was wrong.)
 5. **forbidden_columns**: any column where opponent immediately wins if played directly above
 
 **6 new tactical categories (added spec 008, phase 3):**

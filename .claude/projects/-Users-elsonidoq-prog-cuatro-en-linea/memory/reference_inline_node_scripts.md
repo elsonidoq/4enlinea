@@ -30,3 +30,6 @@ solver.close?.();
 
 **Problem 3 — solver process hangs on exit**
 The solver subprocess does not terminate automatically when the script ends. Wrap in try/finally and call `solver.close?.()`. The script may exit with code 143 (SIGTERM) even after producing output — that's normal; check stdout for results.
+
+**Problem 4 — `solver.query()` is async; you MUST `await` it**
+`solver.query(moveString)` returns a **Promise** that resolves to the 7-element per-column score array — it does NOT return the array directly. Forgetting `await` gives you the Promise object, which serializes to `{}` in JSON (a silent failure that passes any "is it set?" check). Always `await solver.query(...)`. The query also takes a **0-indexed** movestring (the wrapper converts to 1-indexed internally) and **rejects** terminal/won positions with `Error: Invalid position` — guard each call in its own try/catch if appending moves that may complete a line.

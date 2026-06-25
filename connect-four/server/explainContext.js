@@ -9,6 +9,7 @@
 
 import { classifyPattern, tagBlunder, Board, getMajorThreatCells } from './classifier.js';
 import { runSparseLookahead, isAnchorlessPosition } from './sparseLookahead.js';
+import { detectCenterDominance } from './centerDominance.js';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
@@ -181,7 +182,10 @@ function formatThreatStats(
   showPlayerMinor = true, showOpponentMinor = true,
 ) {
   const fmt = (count, alias) => {
-    if (count === 0) return '0';
+    // Zero counts render as a word, not a digit: there is no zone tag to copy on a
+    // zero line, and a bare "0" tempts the model to wrap it in the banned [zone:tg]
+    // placeholder (→ P3:engine_jargon). "none" reads naturally and carries no tag.
+    if (count === 0) return 'none';
     return `[zone:${alias}]${count}[/zone:${alias}]`;
   };
   const lines = [];
@@ -457,31 +461,35 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   const bestStats    = summarizeThreats(bestBoard, perspective);
   const blunderStats = summarizeThreats(blunderBoard, perspective);
 
-  // major_threat / minor_threat: include their KB definitions only when threats
-  // actually exist across the three board states. On empty or near-empty boards
-  // the LLM hallucinates threats when it sees these definitions without any
-  // concrete instances to reference.
-  const hasMajorThreats =
-    preStats.playerMajor + preStats.opponentMajor +
-    bestStats.playerMajor + bestStats.opponentMajor +
-    blunderStats.playerMajor + blunderStats.opponentMajor > 0;
-  const hasMinorThreats =
-    preStats.playerMinor + preStats.opponentMinor +
-    bestStats.playerMinor + bestStats.opponentMinor +
-    blunderStats.playerMinor + blunderStats.opponentMinor > 0;
-  if (hasMajorThreats) relevantPatternKeys.add('major_threat');
-  if (hasMinorThreats) relevantPatternKeys.add('minor_threat');
+  // Show a threat metric whenever the move choice CHANGED it — i.e. the count is not
+  // identical across all three board states (pre / best / played). This gives the LLM
+  // the full picture, including a threat the PLAYED move created that the better move
+  // did not, so it can produce educated feedback ("even though your move creates a
+  // minor threat, the better move is stronger because…"). Rows whose count is identical
+  // across all three boards do not distinguish the moves and are omitted — that also
+  // keeps the KB term injection (below) backed by a concrete data row, preventing the
+  // empty-vocab hallucination where the LLM invents a threat it was named but not shown.
+  const differs3 = (a, b, c) => !(a === b && b === c);
+  const showPlayerMajor   = differs3(preStats.playerMajor,   bestStats.playerMajor,   blunderStats.playerMajor);
+  const showOpponentMajor = differs3(preStats.opponentMajor, bestStats.opponentMajor, blunderStats.opponentMajor);
+  const showPlayerMinor   = differs3(preStats.playerMinor,   bestStats.playerMinor,   blunderStats.playerMinor);
+  const showOpponentMinor = differs3(preStats.opponentMinor, bestStats.opponentMinor, blunderStats.opponentMinor);
+
+  // major_threat / minor_threat: include their KB definitions ONLY when a corresponding
+  // threat-comparison row is actually shown. The two criteria MUST agree — injecting a
+  // term with no data row led the LLM to fabricate/misattribute it (deep-reveal eval).
+  if (showPlayerMajor || showOpponentMajor) relevantPatternKeys.add('major_threat');
+  if (showPlayerMinor || showOpponentMinor) relevantPatternKeys.add('minor_threat');
 
   const kbTermLines = [];
   const seenKbIds = new Set();
   for (const [patternKey, kbEntry] of Object.entries(PATTERN_KB)) {
     // Only entries with a file-backed KB article
     if (!kbEntry.id) continue;
-    // forced_win is excluded from term annotation (LANGUAGE_RULE bans it from LLM output)
-    if (patternKey === 'forced_win') continue;
-    // Include if always_include (glossary terms visible on every board) OR if the
-    // pattern actually fired in this position
-    if (!kbEntry.always_include && !relevantPatternKeys.has(patternKey)) continue;
+    // Include ONLY when the pattern actually fired in this position. There is no
+    // "always_include glossary" path: injecting a term with no instance on the board
+    // led the LLM to fabricate/misapply it (parity, gravity_top — see deep-reveal eval).
+    if (!relevantPatternKeys.has(patternKey)) continue;
 
     if (seenKbIds.has(kbEntry.id)) continue;
     seenKbIds.add(kbEntry.id);
@@ -506,16 +514,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
 
   // ── Step 8: Threat comparison section ─────────────────────────────────────
   // preStats / bestStats / blunderStats / bestBoard / blunderBoard computed in Step 7a.
-
-  // Only show a threat metric when the comparison is directionally meaningful:
-  // player threats: best move should give MORE of your own threats
-  // opponent threats: best move should leave opponent with FEWER threats
-  // Rows are hidden entirely when not meaningful — this also prevents the LLM from
-  // hallucinating zone tags for aliases that are absent from the map.
-  const showPlayerMajor   = bestStats.playerMajor   > blunderStats.playerMajor;
-  const showOpponentMajor = bestStats.opponentMajor < blunderStats.opponentMajor;
-  const showPlayerMinor   = bestStats.playerMinor   > blunderStats.playerMinor;
-  const showOpponentMinor = bestStats.opponentMinor < blunderStats.opponentMinor;
+  // show* flags (computed above, alongside KB-term gating) drive which rows render:
+  // a metric is shown whenever it differs across the three board states.
 
   // Aliases are only added when their row appears in the prompt — alias in map ↔ row shown.
   const zoneAliasMap = {};
@@ -544,10 +544,14 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     ? ' Threat rows are included only when they differ meaningfully between the two moves — do not write a threat comparison for any metric not shown below.'
     : '';
 
-  const threatComparisonSection = [
+  // When no threat row is directionally meaningful (all four show* flags false), the
+  // section would render only its labels with empty bodies — an informationally-empty
+  // section that primes the LLM to invent threats. Omit it entirely in that case.
+  const anyThreatRow = showPlayerMajor || showOpponentMajor || showPlayerMinor || showOpponentMinor;
+  const threatComparisonSection = !anyThreatRow ? undefined : [
     '## Threat comparison',
     '',
-    `Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a threat count, copy the zone tag shown on that line and wrap the count with it.${minorNoteClause}`,
+    `Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing an actual count, copy the zone tag shown on that line and wrap the count with it; when a line shows "none", just say so in plain words (e.g. "no minor threats") with no tag.${minorNoteClause}`,
     '',
     'Before the move:',
     formatThreatStats(
@@ -618,24 +622,67 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     }
     if (la) {
       lookaheadFired = true;
-      Object.assign(zoneAliasMap, la.aliasMap);
+      // Per-tag natural-language label + the "way" label used inside each zone tag.
+      const NL = (t) => ({ double_threat: 'a double threat', immediate_threat: 'a winning move', undercut: 'an undercut threat', overcut: 'an overcut threat', figure_7: 'a figure-7 fork', j_shape: 'a J-shape threat' }[t] ?? 'a stronger structure');
+      // Each alias expands server-side to the concrete cells the look-ahead found, so
+      // the model never has to emit raw coordinates — it just drops the zone tag in.
+      const wayLabel = (t) => ({ immediate_threat: 'the square that completes the win', double_threat: 'the square that forks two threats', undercut: 'the square that lands the undercut', overcut: 'the square that lands the overcut', figure_7: 'the square that completes the figure-7', j_shape: 'the square that completes the J-shape' }[t] ?? 'the key square');
+      const wayLinesFor = (aliasMap, label) => Object.keys(aliasMap)
+        .map((alias, i) => `- [zone:${alias}]${i === 0 ? label : 'another square that gets there'}[/zone:${alias}]`)
+        .join('\n');
       // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).
       // The explanation unavoidably references the played and better COLUMNS and their
       // landing cells, so they MUST be whitelisted here too — mirror the existing
       // non-null block (explainContext.js:421-429). playedCell/bestCell already exist
       // in scope (computed at lines 418-419); do NOT recompute them.
-      resolvedAllowedSet = [
-        ...la.allowedSetEntries,
+      const moveCells = [
         { col, validationOnly: true },                 // the move played
         { cells: [playedCell], validationOnly: true }, // where it landed
         { col: contrastCol, validationOnly: true },    // the better move
         { cells: [bestCell], validationOnly: true },   // where it lands
       ];
-      const NL = { double_threat: 'a double threat', immediate_threat: 'a winning move', undercut: 'an undercut threat', overcut: 'an overcut threat', figure_7: 'a figure-7 fork', j_shape: 'a J-shape threat' }[la.tag] ?? 'a stronger structure';
-      const wayLines = Object.keys(la.aliasMap)
-        .map((alias, i) => `- [zone:${alias}]${i === 0 ? 'one way to reach it' : 'another way'}[/zone:${alias}]`)
-        .join('\n');
-      lookaheadSection = `## What the better move leads to\n\nThis is a future possibility, not a fact on the board yet. If your opponent does not defend perfectly, the better move lets you reach ${NL}:\n${wayLines}\nDescribe it as something you could build next, never as already present.`;
+
+      if (la.case === 3) {
+        // Case 3 (losing either way): surface how best play punishes the move (opponent
+        // structures) and, when present, how the player could punish an opponent slip.
+        // CHECKPOINT: this framing is validated via the eval/judge-deep-reveals harness.
+        Object.assign(zoneAliasMap, la.aliasMap, la.oppAliasMap);
+        resolvedAllowedSet = [
+          ...la.allowedSetEntries,
+          ...la.oppAllowedSetEntries,
+          ...moveCells,
+        ];
+        const parts = ['## What the better move leads to', ''];
+        if (la.oppTag) {
+          parts.push(`Your move loses to best play: if your opponent responds perfectly, they punish it by building toward ${NL(la.oppTag)}. This is a future possibility, NOT a fact on the board yet — these cells are empty now. Point the player at how the opponent would punish by USING the zone tag(s) below (they mark the exact square(s) where the opponent's threat would form); describe it as something the opponent could do next, never as already present:`);
+          parts.push(wayLinesFor(la.oppAliasMap, wayLabel(la.oppTag)));
+        }
+        if (la.tag) {
+          if (la.oppTag) parts.push('');
+          parts.push(`This does not guarantee you a win, but if your opponent slips, the better move lets you punish by building toward ${NL(la.tag)} — again a future possibility, not a fact on the board yet. Point at it by USING the zone tag(s) below:`);
+          parts.push(wayLinesFor(la.aliasMap, wayLabel(la.tag)));
+        }
+        lookaheadSection = parts.join('\n');
+      } else {
+        // Cases 1 & 2: structurally identical to the prior single-mode behavior.
+        Object.assign(zoneAliasMap, la.aliasMap);
+        resolvedAllowedSet = [...la.allowedSetEntries, ...moveCells];
+        const wayLines = wayLinesFor(la.aliasMap, wayLabel(la.tag));
+        lookaheadSection = `## What the better move leads to\n\nThis is a future possibility, NOT a fact on the board yet — these cells are empty now. If your opponent does not defend perfectly, the better move lets you build toward ${NL(la.tag)}. In your explanation, point the player at this concrete follow-up by USING the zone tag(s) below (they mark the exact square(s) where it forms); always describe it as something they could build next, never as already present:\n${wayLines}`;
+      }
+    }
+  }
+
+  // ── Step 8c: Center-dominance reason (opening, no tactical structure) ──────
+  // When the look-ahead found no structure and no threat row is shown, an early
+  // position still has an honest, board-findable reason: the more central move sits
+  // in more four-in-a-row lines. Surface it so the coach grounds on centrality
+  // instead of falling back to generic filler. No simulation — pure geometry.
+  let centerDominanceSection;
+  if (!isOptimal && !lookaheadFired && !threatComparisonSection) {
+    const cd = detectCenterDominance({ movestring, playedCol: col, bestCol: contrastCol });
+    if (cd) {
+      centerDominanceSection = `## Why the better move is stronger\n\n${cd.reason}`;
     }
   }
 
@@ -664,6 +711,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     kbTermsSection: kbTermsSection || undefined,
     threatComparisonSection: effectiveThreatComparison,
     lookaheadSection,
+    centerDominanceSection,
   });
 
   return { prompt, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol, isSparse, lookaheadFired };

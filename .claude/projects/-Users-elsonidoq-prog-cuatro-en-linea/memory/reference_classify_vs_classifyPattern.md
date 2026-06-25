@@ -13,7 +13,7 @@ Two classifier entry points with very different scopes:
 - Synchronous
 - Returns exactly ONE tag from: `immediate_threat`, `double_threat`, `forced_block`, `forced_win`, `forbidden_columns`, `best_move`, `drawing_move`, `suboptimal_move`
 - No perspective parameter — always evaluates from the mover's view
-- `forced_win` fires when the mover is LOSING (all scores ≤ 0) — semantics are inverted relative to `classifyPattern`
+- `forced_win` uses the **same structural `detectForcedWin`** as `classifyPattern` (classifier.js:449 calls it; no score gate). The two entry points differ in scope/return shape, NOT in the `forced_win` predicate — there is no "score-based / losing-position" forced_win. (Corrected 2026-06-25; the earlier "fires when the mover is LOSING (all scores ≤ 0)" claim was wrong.)
 - Used by: `POST /api/evaluate-move` (user-move path), `POST /api/evaluate-move/inline`, and the sparring game analysis endpoint
 
 **`classifyPattern(ms, perspective, solver)`** — `classifier.js:1354`

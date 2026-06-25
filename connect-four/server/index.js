@@ -2,7 +2,7 @@ import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join, basename } from 'path';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
@@ -25,7 +25,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
-import { isValidEvalFilename } from './evalResultsHelpers.js';
+import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
@@ -519,14 +519,38 @@ app.get('/api/lessons/:id', (req, res) => {
   res.json(lesson);
 });
 
-// ── Admin eval-set endpoint ────────────────────────────────────────────────────
+// ── Admin eval-set endpoints ───────────────────────────────────────────────────
 
-app.get('/api/admin/eval-set', requireAdmin, (req, res) => {
+app.get('/api/admin/eval-sets', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir).filter(isValidEvalSetFilename).sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/eval-set', requireLocalhost, requireAdmin, (req, res) => {
   const evalPath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', 'eval_set.json');
   try {
     res.json(JSON.parse(readFileSync(evalPath, 'utf-8')));
   } catch {
     res.status(404).json({ error: 'eval_set.json not found — run server/scripts/generate_eval_set.mjs first' });
+  }
+});
+
+app.get('/api/admin/eval-set/:name', requireLocalhost, requireAdmin, (req, res) => {
+  const { name } = req.params;
+  if (!isValidEvalSetFilename(`${name}.json`)) {
+    return res.status(400).json({ error: 'invalid eval set name' });
+  }
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', `${name}.json`);
+  try {
+    res.json(JSON.parse(readFileSync(filePath, 'utf-8')));
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval set not found' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -557,6 +581,7 @@ app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (re
         id: obj.id,
         board_state: obj.board_state,
         final_response: obj.final_response,
+        prompt: obj.prompt ?? null,
         attempt1_failures: obj.attempt1_failures ?? [],
         attempt2_failures: obj.attempt2_failures ?? [],
       };
@@ -565,6 +590,39 @@ app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (re
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'file not found' });
     logError('[admin/eval-results/:filename]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/eval-feedback — append a human flag for one eval entry to a
+// sidecar JSONL file alongside the results file (left-joined by `id` by the
+// judge-deep-reveals skill). Body: { filename, id, human_note }.
+app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) => {
+  const { filename, id, human_note } = req.body;
+
+  if (!isValidEvalFilename(filename)) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+  if (id === undefined || id === null || id === '') {
+    return res.status(400).json({ error: 'id is required' });
+  }
+
+  const feedbackName = feedbackFilenameFor(basename(filename));
+  if (!feedbackName) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', feedbackName);
+  const record = {
+    id,
+    human_note: typeof human_note === 'string' ? human_note : '',
+    flagged_at: new Date().toISOString(),
+  };
+  try {
+    appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf-8');
+    res.status(201).json({ ok: true, feedback_file: feedbackName });
+  } catch (err) {
+    logError('[admin/eval-feedback]', err);
     res.status(500).json({ error: err.message });
   }
 });
