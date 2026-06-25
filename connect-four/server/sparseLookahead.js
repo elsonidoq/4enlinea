@@ -1,3 +1,5 @@
+import { Board } from './classifier.js';
+
 const ROWS = 6;
 const COLS = 7;
 
@@ -78,4 +80,57 @@ export function extractTier1Structures(patternMap) {
     }
   }
   return out;
+}
+
+function topScoringCols(scores, board, cap) {
+  const legal = [];
+  for (let c = 0; c < COLS; c++) if (board.colHeights[c] < ROWS) legal.push(c);
+  legal.sort((a, b) => scores[b] - scores[a]);
+  return legal.slice(0, cap);
+}
+
+function recordWay(tally, tag, firstReply, cells) {
+  if (!tally.has(tag)) tally.set(tag, { branches: new Set(), ways: [] });
+  const entry = tally.get(tag);
+  entry.branches.add(firstReply);
+  const key = cells.join(',');
+  if (!entry.ways.some(w => w.join(',') === key)) entry.ways.push(cells);
+}
+
+export async function searchOpportunities(rootMovestring, perspective, deps, budget) {
+  const { solver, classifyFn } = deps;
+  const tally = new Map();
+  const opponent = perspective === 1 ? 2 : 1;
+
+  async function recurse(ms, firstReply, pliesLeft) {
+    if (pliesLeft <= 0 || budget.calls <= 0) return;
+    const board = new Board(ms);
+    const toMove = board.currentPlayer;
+
+    if (toMove === opponent) {
+      const scores = await solver.query(ms);
+      const cols = selectOpponentMistakeCols(scores, board);
+      for (const c of cols) {
+        if (board.colHeights[c] >= ROWS) continue;
+        const nextFirst = firstReply === null ? c : firstReply;
+        await recurse(ms + c.toString(), nextFirst, pliesLeft - 1);
+      }
+    } else {
+      // Player to move: detect structures here, then continue down best lines.
+      if (budget.calls > 0) {
+        budget.calls -= 1;
+        const map = await classifyPatternWithTimeout(classifyFn, ms, perspective, solver);
+        for (const { tag, cells } of extractTier1Structures(map)) {
+          recordWay(tally, tag, firstReply, cells);
+        }
+      }
+      const scores = await solver.query(ms);
+      for (const c of topScoringCols(scores, board, PLAYER_CAP)) {
+        await recurse(ms + c.toString(), firstReply, pliesLeft - 1);
+      }
+    }
+  }
+
+  await recurse(rootMovestring, null, LOOKAHEAD_DEPTH);
+  return tally;
 }

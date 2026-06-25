@@ -73,3 +73,38 @@ test('extractTier1Structures keeps Tier-1 tags with cells, drops others', () => 
     { tag: 'figure_7', cells: ['c2r2'] },
   ]);
 });
+
+// Fake solver: returns fixed scores so opponent/player column selection is deterministic.
+function fakeSolver(scoreFn) {
+  return { async query(ms) { return scoreFn(ms); } };
+}
+
+test('searchOpportunities tallies structures per first-opponent-reply branch', async () => {
+  const { searchOpportunities } = await import('../server/sparseLookahead.js');
+
+  // Root after candidate move = '3' (one disc). depth small via budget.
+  // Opponent scores: make cols 1,2,3 the mistakes (col0 best, col6 worst).
+  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  // classifyFn: only when it's the player's move AND the line went through opp reply col 2,
+  // report a double_threat; otherwise nothing.
+  const classifyFn = async (ms, perspective) => {
+    // ms is rootMovestring + oppReply + ... ; detect oppReply char at index = root length.
+    if (ms[1] === '2') return new Map([['double_threat', { cells: ['c4r3', 'c5r3'] }]]);
+    return new Map();
+  };
+  const tally = await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 20 });
+  const dt = tally.get('double_threat');
+  assert.ok(dt, 'double_threat tallied');
+  assert.ok(dt.branches.has(2), 'reachable via opponent reply col 2');
+  assert.deepEqual(dt.ways[0], ['c4r3', 'c5r3']);
+});
+
+test('searchOpportunities stops when call budget is exhausted', async () => {
+  const { searchOpportunities } = await import('../server/sparseLookahead.js');
+
+  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  let calls = 0;
+  const classifyFn = async () => { calls++; return new Map(); };
+  await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 2 });
+  assert.ok(calls <= 2, `classify called at most budget times, got ${calls}`);
+});
