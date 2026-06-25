@@ -604,10 +604,15 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   let lookaheadSection;
   let resolvedAllowedSet = allowedSet;
   if (isSparse && !isOptimal) {
-    const la = await runSparseLookahead(
-      { movestring, playedCol: col, bestCol, perspective },
-      { solver, classifyFn: deps.classifyFn },
-    );
+    let la = null;
+    try {
+      la = await runSparseLookahead(
+        { movestring, playedCol: col, bestCol, perspective },
+        { solver, classifyFn: deps.classifyFn },
+      );
+    } catch {
+      // transient solver error in this optional section — treat as if look-ahead returned null
+    }
     if (la) {
       Object.assign(zoneAliasMap, la.aliasMap);
       // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).

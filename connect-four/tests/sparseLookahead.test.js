@@ -164,6 +164,44 @@ test('runSparseLookahead returns null when nothing distinguishes the moves', asy
   assert.equal(got, null);
 });
 
+// Fix 1: per-candidate independent budgets
+test('runSparseLookahead: played search is not starved when best search runs first', async () => {
+  // classifyFn only returns a structure on the PLAYED line (playedCol=4).
+  // If both searches shared a budget the best search would exhaust it and the
+  // played search would see 0 calls — but with independent budgets the played
+  // search still gets its own GLOBAL_CALL_BUDGET calls.
+  const { GLOBAL_CALL_BUDGET } = await import('../server/sparseLookahead.js');
+  const fSolver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  let bestCalls = 0;
+  let playedCalls = 0;
+  const classifyFn = async (ms) => {
+    // ms[0] is the first column digit: '1' = best line, '4' = played line.
+    if (ms[0] === '1') { bestCalls++; return new Map(); }
+    if (ms[0] === '4') { playedCalls++; return new Map([['double_threat', { cells: ['c4r3'] }]]); }
+    return new Map();
+  };
+  await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  // Each search must receive up to GLOBAL_CALL_BUDGET calls independently.
+  assert.ok(bestCalls <= GLOBAL_CALL_BUDGET, `best search used ${bestCalls} calls, expected <= ${GLOBAL_CALL_BUDGET}`);
+  assert.ok(playedCalls > 0, `played search was starved (0 calls)`);
+  assert.ok(playedCalls <= GLOBAL_CALL_BUDGET, `played search used ${playedCalls} calls, expected <= ${GLOBAL_CALL_BUDGET}`);
+});
+
+// Fix 2: solver.query rejection must not propagate
+test('runSparseLookahead resolves (does not reject) when solver.query throws', async () => {
+  const rejectingSolver = { async query() { throw new Error('solver IPC error'); } };
+  const classifyFn = async () => new Map();
+  const result = await runSparseLookahead(
+    { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
+    { solver: rejectingSolver, classifyFn },
+  );
+  // Must resolve to null (no structures found due to pruning) — not reject.
+  assert.equal(result, null);
+});
+
 import { isAnchorlessPosition } from '../server/sparseLookahead.js';
 
 test('isAnchorlessPosition: true only when no threat rows shown AND allowedSet null', () => {

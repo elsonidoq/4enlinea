@@ -6,7 +6,7 @@ const COLS = 7;
 export const LOOKAHEAD_DEPTH = 4;
 export const PLAYER_CAP = 2;
 export const OPPONENT_CAP = 4;
-export const GLOBAL_CALL_BUDGET = 60;
+export const GLOBAL_CALL_BUDGET = 60; // budget PER CANDIDATE MOVE — each of the two searches (best and played) gets this many classify calls independently
 export const CLASSIFY_TIMEOUT_MS = 4000;
 export const MAX_WAYS = 3;
 export const MIN_BRANCH_DELTA = 1;
@@ -108,7 +108,12 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
     const toMove = board.currentPlayer;
 
     if (toMove === opponent) {
-      const scores = await solver.query(ms);
+      let scores;
+      try {
+        scores = await solver.query(ms);
+      } catch {
+        return; // solver error — prune this branch
+      }
       const cols = selectOpponentMistakeCols(scores, board);
       for (const c of cols) {
         if (board.colHeights[c] >= ROWS) continue;
@@ -124,7 +129,12 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
           recordWay(tally, tag, firstReply, cells);
         }
       }
-      const scores = await solver.query(ms);
+      let scores;
+      try {
+        scores = await solver.query(ms);
+      } catch {
+        return; // solver error — prune this branch
+      }
       for (const c of topScoringCols(scores, board, PLAYER_CAP)) {
         await recurse(ms + c.toString(), firstReply, pliesLeft - 1);
       }
@@ -167,13 +177,11 @@ export function isAnchorlessPosition(showFlags, allowedSet) {
 export async function runSparseLookahead({ movestring, playedCol, bestCol, perspective }, deps = {}) {
   const solver = deps.solver;
   const classifyFn = deps.classifyFn ?? classifyPattern;
-  const budget = { calls: GLOBAL_CALL_BUDGET };
-
   const bestRoot = movestring + bestCol.toString();
   const playedRoot = movestring + playedCol.toString();
 
-  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn }, budget);
-  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn }, budget);
+  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn }, { calls: GLOBAL_CALL_BUDGET });
+  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn }, { calls: GLOBAL_CALL_BUDGET });
 
   const winner = compareOpportunities(bestTally, playedTally);
   if (!winner) return null;
@@ -189,6 +197,5 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     tag: winner.tag,
     aliasMap,
     allowedSetEntries: [{ cells: [...allCells], validationOnly: true }],
-    waysCount: winner.ways.length,
   };
 }
