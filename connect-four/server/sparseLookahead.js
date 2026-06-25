@@ -152,6 +152,18 @@ export function compareOpportunities(bestTally, playedTally) {
   return winner;
 }
 
+/**
+ * Anchorless = the explanation has nothing concrete to point at: no threat-comparison
+ * row is shown AND no Tier-1/2 pattern cells (allowedSet null). A board may still carry
+ * non-meaningful threats (e.g. opponent minors that produce no directional row) and
+ * still be anchorless — that is exactly when forward look-ahead must run.
+ */
+export function isAnchorlessPosition(showFlags, allowedSet) {
+  const { showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor } = showFlags;
+  const noThreatRowsShown = !showPlayerMajor && !showOpponentMajor && !showPlayerMinor && !showOpponentMinor;
+  return noThreatRowsShown && allowedSet === null;
+}
+
 export async function runSparseLookahead({ movestring, playedCol, bestCol, perspective }, deps = {}) {
   const solver = deps.solver;
   const classifyFn = deps.classifyFn ?? classifyPattern;

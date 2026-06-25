@@ -8,6 +8,7 @@
  */
 
 import { classifyPattern, tagBlunder, Board, getMajorThreatCells } from './classifier.js';
+import { runSparseLookahead, isAnchorlessPosition } from './sparseLookahead.js';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
@@ -293,7 +294,7 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
  *                  |{prompt: null, allowedSet: null, allMovesEqual: true}
  *                  |null>}
  */
-export async function buildExplainContext(movestring, col, rounds = 1, solver) {
+export async function buildExplainContext(movestring, col, rounds = 1, solver, deps = {}) {
   const board = new Board(movestring);
   const perspective = movestring.length % 2 === 0 ? 1 : 2;
   const playerName = perspective === 1 ? 'Green' : 'Gray';
@@ -595,6 +596,40 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     }
   }
 
+  // ── Step 8b: Sparse-board forward look-ahead ──────────────────────────────
+  const isSparse = isAnchorlessPosition(
+    { showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor },
+    allowedSet,
+  );
+  let lookaheadSection;
+  let resolvedAllowedSet = allowedSet;
+  if (isSparse && !isOptimal) {
+    const la = await runSparseLookahead(
+      { movestring, playedCol: col, bestCol, perspective },
+      { solver, classifyFn: deps.classifyFn },
+    );
+    if (la) {
+      Object.assign(zoneAliasMap, la.aliasMap);
+      // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).
+      // The explanation unavoidably references the played and better COLUMNS and their
+      // landing cells, so they MUST be whitelisted here too — mirror the existing
+      // non-null block (explainContext.js:421-429). playedCell/bestCell already exist
+      // in scope (computed at lines 418-419); do NOT recompute them.
+      resolvedAllowedSet = [
+        ...la.allowedSetEntries,
+        { col, validationOnly: true },                 // the move played
+        { cells: [playedCell], validationOnly: true }, // where it landed
+        { col: contrastCol, validationOnly: true },    // the better move
+        { cells: [bestCell], validationOnly: true },   // where it lands
+      ];
+      const NL = { double_threat: 'a double threat', immediate_threat: 'a winning move', undercut: 'an undercut threat', overcut: 'an overcut threat', figure_7: 'a figure-7 fork', j_shape: 'a J-shape threat' }[la.tag] ?? 'a stronger structure';
+      const wayLines = Object.keys(la.aliasMap)
+        .map((alias, i) => `- [zone:${alias}]${i === 0 ? 'one way to reach it' : 'another way'}[/zone:${alias}]`)
+        .join('\n');
+      lookaheadSection = `## What the better move leads to\n\nThis is a future possibility, not a fact on the board yet. If your opponent does not defend perfectly, the better move lets you reach ${NL}:\n${wayLines}\nDescribe it as something you could build next, never as already present.`;
+    }
+  }
+
   // ── Step 9: Build prompt ───────────────────────────────────────────────────
   // Suppress threat comparison when tag is immediate_threat: one board state is
   // terminal (the game-ending move), so post-move threat counts are incoherent.
@@ -612,14 +647,15 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     playerName,
     gap,
     gapBucket,
-    allowedSet,
+    allowedSet: resolvedAllowedSet,
     playedCol: col,
     contrastCol: isOptimal ? undefined : contrastCol,
     playedCell,
     bestCell: isOptimal ? undefined : bestCell,
     kbTermsSection: kbTermsSection || undefined,
     threatComparisonSection: effectiveThreatComparison,
+    lookaheadSection,
   });
 
-  return { prompt, allowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol };
+  return { prompt, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol };
 }

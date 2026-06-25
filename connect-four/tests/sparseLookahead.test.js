@@ -163,3 +163,14 @@ test('runSparseLookahead returns null when nothing distinguishes the moves', asy
   );
   assert.equal(got, null);
 });
+
+import { isAnchorlessPosition } from '../server/sparseLookahead.js';
+
+test('isAnchorlessPosition: true only when no threat rows shown AND allowedSet null', () => {
+  const none = { showPlayerMajor: false, showOpponentMajor: false, showPlayerMinor: false, showOpponentMinor: false };
+  assert.equal(isAnchorlessPosition(none, null), true);
+  // Any shown row → not anchorless (something to anchor on).
+  assert.equal(isAnchorlessPosition({ ...none, showOpponentMinor: true }, null), false);
+  // allowedSet present (Tier-1/2 pattern cells) → not anchorless even with no rows.
+  assert.equal(isAnchorlessPosition(none, [{ cells: ['c4r3'] }]), false);
+});
