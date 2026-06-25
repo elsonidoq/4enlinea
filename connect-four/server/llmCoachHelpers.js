@@ -38,7 +38,7 @@ export const IMMEDIATE_WIN_OUTCOMES = {
 // User-facing display names for internal pattern labels.
 // Internal names are used for KB lookups; display names appear in LLM prompts.
 const PATTERN_DISPLAY = {
-  forced_win: 'losing_position',
+  forced_win: 'forced win',
 };
 
 function displayName(name) {
@@ -61,13 +61,16 @@ export const PATTERN_KB = {
   undercut:        { id: 'allen-t2' },
   overcut:         { id: 'community-overcut' },
   z_threat:        { id: 'community-z-threat' },
-  forced_win:      { id: 'derived-lost-position' },
+  forced_win:      { id: 'community-forced-win' },
   odd_even_threat: { id: 'derived-odd-even-threat' },
   // Always-include glossary terms: surfaced in every explain-move prompt regardless
   // of which tactical patterns fired. These appear in the board visualisation legend
   // and the LLM will always encounter them.
-  major_threat:    { id: 'allen-major-threat',       always_include: true },
-  minor_threat:    { id: 'allen-minor-threat',       always_include: true },
+  // major_threat and minor_threat are NOT always_include — they are added to
+  // relevantPatternKeys in explainContext.js only when threats actually exist on
+  // the board. Injecting them on empty boards causes the LLM to hallucinate threats.
+  major_threat:    { id: 'allen-major-threat' },
+  minor_threat:    { id: 'allen-minor-threat' },
   gravity_top:     { id: 'community-gravity-top',    always_include: true },
   parity:          { id: 'allen-parity',             always_include: true },
   // Alias: fork is a synonym for double_threat; shares the same KB article.
@@ -589,6 +592,8 @@ export function buildBlunderExplainPrompt({
   allowedSet,
   playedCol,              // 0-indexed; undefined = not provided
   contrastCol,            // 0-indexed best column on blunder path; undefined = not provided
+  playedCell,             // 1-indexed cNrM where the played disc landed; undefined = not provided
+  bestCell,               // 1-indexed cNrM where the better move lands; undefined = not provided
   kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
   threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
 }) {
@@ -645,11 +650,23 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
   if (playedCol !== undefined) {
     contextLines.push(`- Move played: column ${playedCol + 1}`);
   }
+  if (playedCell) {
+    contextLines.push(`- Your move placed a disc on ${playedCell}.`);
+  }
   if (isBlunder && contrastCol !== undefined) {
     contextLines.push(`- Better move: column ${contrastCol + 1}`);
   }
+  if (isBlunder && bestCell) {
+    contextLines.push(`- The better move places a disc on ${bestCell}.`);
+  }
   if (isBlunder) {
     contextLines.push(`- Key insight: ${humanReason}`);
+    if (tag === 'forced_win' && contrastCol !== undefined) {
+      const mechanism = direction === 'missed_own'
+        ? `Column ${contrastCol + 1} would have started a forced win — a sequence of moves that guarantees a win regardless of your opponent's defense.`
+        : `Your move gave your opponent a forced win — a sequence of forcing moves that guarantees their win regardless of your defense. Column ${contrastCol + 1} would have kept this sequence unavailable.`;
+      contextLines.push(`- Pattern mechanism: ${mechanism}`);
+    }
   } else {
     contextLines.push(`- Key insight: ${positiveReason ?? 'This was the strongest move available.'}`);
   }
@@ -676,6 +693,10 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
 
   // ── Hard grounding rules ──────────────────────────────────────────────────
   const groundingLines = ['## Hard grounding rules'];
+  groundingLines.push('Threat ownership: a threat or winning line is YOURS only if its cells carry your disc glyph on the boards, it is listed under a "Your …" threat row, or it appears under "YOUR threat cells" below. It is your OPPONENT\'s only if marked with their glyph, listed under an "Opponent …" row, or under "YOUR OPPONENT\'s threat cells" below. Never infer or guess ownership — if the boards above do not show whose threat a cell is, describe the cell without claiming an owner.');
+  if (tag === 'drawing_move') {
+    groundingLines.push('This was a drawing move: the position is a draw, not a win for either side. Do NOT claim you or your opponent had a winning position or a winning line — explain only the loss of the move that would have held the draw.');
+  }
   // Collect allowed columns for the prompt
   const allowedCols = [];
   if (playedCol !== undefined) allowedCols.push(playedCol);
@@ -691,18 +712,26 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     groundingLines.push('You may reference these columns using zone tags:');
     groundingLines.push(allowedCols.map(c => `[zone:col${c + 1}]column ${c + 1}[/zone:col${c + 1}]`).join(', '));
     groundingLines.push('');
-    // Build strategic cells list (non-validationOnly, cell-type entries only)
-    const strategicCells = [];
+    // Build strategic cells list, grouped by owner so the LLM never guesses whose
+    // threat a cell belongs to (non-validationOnly, cell-type entries only).
+    const yourCells = [];
+    const oppCells = [];
+    const unlabeledCells = [];
     for (const entry of allowedSet) {
       if (entry.validationOnly) continue;
       if (entry.cells && entry.cells.length > 0) {
-        strategicCells.push(...entry.cells);
+        const bucket = entry.owner === 'you' ? yourCells
+                     : entry.owner === 'opponent' ? oppCells
+                     : unlabeledCells;
+        bucket.push(...entry.cells);
       }
     }
-    if (strategicCells.length > 0) {
+    if (yourCells.length + oppCells.length + unlabeledCells.length > 0) {
       groundingLines.push('### Strategic reference cells');
-      groundingLines.push('These cells are tactical reference points for your explanation.');
-      groundingLines.push(`- Concrete cells: [${strategicCells.join(', ')}]`);
+      groundingLines.push('These cells are tactical reference points for your explanation. Each group is labeled with who owns the threat on those cells — attribute them exactly as labeled and never flip ownership.');
+      if (yourCells.length > 0)      groundingLines.push(`- YOUR threat cells: [${yourCells.join(', ')}]`);
+      if (oppCells.length > 0)       groundingLines.push(`- YOUR OPPONENT's threat cells: [${oppCells.join(', ')}]`);
+      if (unlabeledCells.length > 0) groundingLines.push(`- Other reference cells (ownership not determined — do not assert who owns these): [${unlabeledCells.join(', ')}]`);
     } else {
       groundingLines.push('(no specific cell references — use the allowed columns above and describe patterns in general terms)');
     }
@@ -756,11 +785,11 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
   if (kbTermsSection) {
     formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
     formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Replace CONCEPT_ID with the exact kbId from the KB term definitions.');
-    formatLines.push('  Only tag terms that appear in the definitions above. Do not invent kbIds.');
-    formatLines.push('  Never use [term:forced_win] — "forced_win" has no KB definition. Write "forced win" as plain text.');
+    formatLines.push('  CRITICAL: Only use [term:ID] when the ID appears VERBATIM in the KB term definitions section above. Never invent a [term:ID] tag for any slug (underscored or hyphenated) not listed there — write those concepts in plain text instead.');
+    formatLines.push('  Use the MOST SPECIFIC term that applies: e.g. if a move wins in one play, prefer [term:immediate_threat] over the more general [term:major_threat].');
     formatLines.push('');
   }
-  formatLines.push('When you write a minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-minor-pre]).');
+  formatLines.push('When you write a major or minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-major-pre] or [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-major-pre] or [/zone:player-minor-pre]). Exception: if a line shows a bare "0" with no zone tag, write "0" without any zone tag — never use [zone:tg] or any other invented tag for a zero count.');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
@@ -774,7 +803,8 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
 ${patternInstruction} Say what the better move would have accomplished.
 When describing the better move, always frame it as what YOU could have played — never describe it as an easy reply or opportunity for your opponent.
-If the threat comparison section includes minor threat rows, include a comparison in your explanation using those counts — replace every minor threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's minor threats from [zone:opponent-minor-pre]4[/zone:opponent-minor-pre] to [zone:opponent-minor-best]1[/zone:opponent-minor-best]; your move left them at [zone:opponent-minor-played]3[/zone:opponent-minor-played]"). If no minor threat rows appear, do not write a minor threat comparison.
+If the threat comparison section includes major or minor threat rows, include a comparison in your explanation using those counts — replace every threat count with its zone tag token from the threat comparison (e.g. "the best move would have cut your opponent's major threats from [zone:opponent-major-pre]3[/zone:opponent-major-pre] to [zone:opponent-major-best]1[/zone:opponent-major-best]; your move left them at [zone:opponent-major-played]2[/zone:opponent-major-played]", or similarly for minor threats). If no major or minor threat rows appear, do not write a threat comparison.
+If no threat comparison rows are shown and no tactical pattern is named above, ground your explanation in the concrete board change — cite the exact landing squares and columns that differ between the two moves — and do not invent a tactical pattern or claim a threat the boards do not show.
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

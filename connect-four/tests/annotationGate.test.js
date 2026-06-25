@@ -139,9 +139,11 @@ describe('checkP3', () => {
     assert.ok(!failures.includes('P3:engine_jargon'), `should NOT include engine_jargon: ${JSON.stringify(failures)}`);
   });
 
-  test('972f74e1: "forced win" phrase → P3:engine_jargon', () => {
+  test('972f74e1: "forced win" plain English is allowed — not engine_jargon', () => {
+    // The language rule permits plain-English "forced win"; only the internal slug
+    // 'forced_win' is banned.  This test documents the intentional exception.
     const failures = checkP3('This move creates a forced win for the current player.');
-    assert.ok(failures.includes('P3:engine_jargon'), `got: ${JSON.stringify(failures)}`);
+    assert.ok(!failures.includes('P3:engine_jargon'), `should NOT flag plain-English "forced win": ${JSON.stringify(failures)}`);
   });
 
   test('092f4340: "the solver" phrase → P3:engine_jargon', () => {
@@ -377,16 +379,16 @@ describe('checkP5Strong', () => {
     assert.equal(failures.length, 0);
   });
 
-  test('5: backward-compat — no allowedSet skips strong-P5', () => {
+  test('5: [zone:tg] in output is always rejected by P3', () => {
     const explanation = '[zone:tg]A threat[/zone:tg]';
     const board = new Board('');
-    // Without allowedSet parameter (undefined) — old behavior
+    // [zone:tg] is an internal placeholder — must be rejected even without allowedSet
     const result1 = validateAnnotation(explanation, board);
-    // With explicit null
     const result2 = validateAnnotation(explanation, board, null);
-    // Both should be valid (tg passes P1, P5 vacuously, and no strong-P5)
-    assert.equal(result1.valid, true);
-    assert.equal(result2.valid, true);
+    assert.equal(result1.valid, false);
+    assert.ok(result1.failures.includes('P3:engine_jargon'));
+    assert.equal(result2.valid, false);
+    assert.ok(result2.failures.includes('P3:engine_jargon'));
   });
 
   test('6: checkP5Strong directly with synthetic zones', () => {

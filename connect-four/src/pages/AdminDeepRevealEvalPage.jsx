@@ -191,15 +191,34 @@ function EvalViewer() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: '#0f172a', color: '#e2e8f0', ...(showAll || selectedFile ? { height: '100vh', overflow: 'hidden' } : { minHeight: '100vh' }) }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 20px', background: '#1e293b', borderBottom: '1px solid #334155' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
+      {/* Header row 1: title + counter + nav */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12, background: '#1e293b', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, color: '#94a3b8' }}>
           Deep Reveal Eval
         </span>
         <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>
           {index + 1} / {entries.length}
         </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button
+            onClick={handlePrev}
+            disabled={index === 0}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: index === 0 ? '#334155' : '#475569', color: index === 0 ? '#64748b' : '#e2e8f0', cursor: index === 0 ? 'default' : 'pointer', fontSize: 13 }}
+          >
+            ← Prev
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={index === entries.length - 1}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: index === entries.length - 1 ? '#334155' : '#475569', color: index === entries.length - 1 ? '#64748b' : '#e2e8f0', cursor: index === entries.length - 1 ? 'default' : 'pointer', fontSize: 13 }}
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+      {/* Header row 2: eval file controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', background: '#1e293b', borderBottom: '1px solid #334155', flexShrink: 0 }}>
         <select
           value={selectedFile}
           onChange={e => setSelectedFile(e.target.value)}
@@ -209,6 +228,7 @@ function EvalViewer() {
             background: '#1e293b', color: '#e2e8f0',
             border: '1px solid #334155', borderRadius: 4,
             padding: '4px 8px',
+            minWidth: 0, maxWidth: 320,
           }}
         >
           <option value="">{evalFiles.length === 0 ? 'no eval files' : '— select file —'}</option>
@@ -227,22 +247,6 @@ function EvalViewer() {
           />
           Show all evals
         </label>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button
-            onClick={handlePrev}
-            disabled={index === 0}
-            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: index === 0 ? '#334155' : '#475569', color: index === 0 ? '#64748b' : '#e2e8f0', cursor: index === 0 ? 'default' : 'pointer', fontSize: 13 }}
-          >
-            ← Prev
-          </button>
-          <button
-            onClick={handleNext}
-            disabled={index === entries.length - 1}
-            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: index === entries.length - 1 ? '#334155' : '#475569', color: index === entries.length - 1 ? '#64748b' : '#e2e8f0', cursor: index === entries.length - 1 ? 'default' : 'pointer', fontSize: 13 }}
-          >
-            Next →
-          </button>
-        </div>
       </div>
 
       {/* Predicate chips */}
@@ -269,7 +273,7 @@ function EvalViewer() {
       </div>
 
       {/* Board + DeepRevealPane */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', color: 'var(--ink)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#fff', color: 'var(--ink)' }}>
         {showAll ? (
           <SplitReveal
             isOpen={true}
@@ -386,7 +390,7 @@ function EvalViewer() {
             }
           />
         ) : (
-          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
             <div style={{ borderRadius: 8, padding: 12, maxWidth: 380 }}>
               <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
             </div>
@@ -396,23 +400,22 @@ function EvalViewer() {
             >
               Deep Reveal
             </button>
+            {/* Predicate glossary */}
+            <div style={{ paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 12 }}>
+                Predicate glossary
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '4px 24px' }}>
+                {PREDICATE_GLOSSARY.filter(({ id }) => (entry.predicates || []).includes(id)).map(({ id, desc }) => (
+                  <div key={id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#1d4ed8', minWidth: 32, flexShrink: 0 }}>{id}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569' }}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Predicate glossary */}
-      <div style={{ padding: '20px 20px 32px', borderTop: '1px solid #334155', background: '#0f172a' }}>
-        <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 12 }}>
-          Predicate glossary
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '4px 24px' }}>
-          {PREDICATE_GLOSSARY.filter(({ id }) => (entry.predicates || []).includes(id)).map(({ id, desc }) => (
-            <div key={id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#7dd3fc', minWidth: 32, flexShrink: 0 }}>{id}</span>
-              <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{desc}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

@@ -75,7 +75,7 @@ test('REASON_TEMPLATES — all expected values match exactly', () => {
     ['odd_even_threat:enabled_opponent',  "Your move gave Red threats on both row parities."],
     ['claimeven:missed_own',              "You had a claimeven endgame — the pairing was yours — and threw it away."],
     ['claimeven:enabled_opponent',        "You gave Yellow a claimeven endgame — they now control the pairing."],
-    ['drawing_move:missed_own',           "You had a forced win available with best play — the position was winning — but this move settled for a draw."],
+    ['drawing_move:missed_own',           "You had a move that would have held at least a draw, and this move gave that balance up."],
     ['suboptimal_move:missed_own',        "There was a stronger move — this one gives ground."],
   ]);
   for (const [key, value] of expected) {
@@ -86,7 +86,7 @@ test('REASON_TEMPLATES — all expected values match exactly', () => {
 test('REASON_TEMPLATES spot-check: drawing_move:missed_own', () => {
   assert.equal(
     REASON_TEMPLATES.get('drawing_move:missed_own'),
-    "You had a forced win available with best play — the position was winning — but this move settled for a draw."
+    "You had a move that would have held at least a draw, and this move gave that balance up."
   );
 });
 

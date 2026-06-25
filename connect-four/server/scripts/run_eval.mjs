@@ -2,12 +2,15 @@
 // run_eval.mjs — Deep Reveal eval harness, Phase 1: data collection.
 //
 // Usage (run from connect-four/):
-//   node server/scripts/run_eval.mjs                                   # new run
-//   node server/scripts/run_eval.mjs eval_results_2026-06-23T10.jsonl  # resume
+//   node server/scripts/run_eval.mjs <eval_set.json> [output.jsonl]
+//
+// Examples:
+//   node server/scripts/run_eval.mjs server/scripts/eval_set_large.json
+//   node server/scripts/run_eval.mjs server/scripts/eval_set_failing.json out.jsonl  # resume if out.jsonl exists
 
 import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, basename } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { buildExplainContext, expandZoneAliases } from '../explainContext.js';
 import { callLLM } from '../llmCoachHelpers.js';
@@ -24,13 +27,15 @@ env.split('\n').forEach(line => {
   if (k?.trim() && !k.trim().startsWith('#')) process.env[k.trim()] = v.join('=').trim();
 });
 
-// ── Resolve output file ────────────────────────────────────────────────────
+// ── Resolve eval set path and output file ─────────────────────────────────
 const ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
-const outputFile = process.argv[2] ?? `server/scripts/eval_results_${ts}.jsonl`;
+const evalSetPath = process.argv[2] ?? join(__dirname, 'eval_set_small.json');
+const evalSetStem = basename(evalSetPath, '.json');
+const outputFile = process.argv[3] ?? `server/scripts/${evalSetStem}_results_${ts}.jsonl`;
 
 // ── Load already-processed IDs (resume mode) ──────────────────────────────
 const processedIds = new Set();
-if (process.argv[2] && existsSync(outputFile)) {
+if (process.argv[3] && existsSync(outputFile)) {
   const lines = readFileSync(outputFile, 'utf8').split('\n').filter(Boolean);
   for (const line of lines) {
     try { const r = JSON.parse(line); if (r.id) processedIds.add(r.id); } catch {}
@@ -41,7 +46,7 @@ if (process.argv[2] && existsSync(outputFile)) {
 }
 
 // ── Load eval set ──────────────────────────────────────────────────────────
-const evalSet = JSON.parse(readFileSync(join(__dirname, 'eval_set_small.json'), 'utf8'));
+const evalSet = JSON.parse(readFileSync(evalSetPath, 'utf8'));
 
 // ── Run ────────────────────────────────────────────────────────────────────
 const solver = createSolverProcess();

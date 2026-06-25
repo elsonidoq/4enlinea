@@ -90,13 +90,23 @@ export function getMinorThreatWindows(rawBoard, disc) {
   return windows;
 }
 
-// Convert a list of windows (each = [[r,c]×4]) to a sorted array of 1-indexed "cNrM" cell strings.
-function windowsToCellStrings(windows) {
+// Return deduplicated sorted "cNrM" strings for the empty cells within a list of windows.
+function emptyCellsFromWindows(rawBoard, windows) {
   const seen = new Set();
   for (const window of windows) {
-    for (const [r, c] of window) seen.add(`c${c + 1}r${r + 1}`);
+    for (const [r, c] of window) {
+      if (rawBoard[r][c] === 0) seen.add(`c${c + 1}r${r + 1}`);
+    }
   }
   return [...seen].sort();
+}
+
+// Convert a sorted array of "cNrM" cell strings to a zone spec where each cell is its own window.
+//   "windows:c2r4|c5r3"
+// Returns 'tg' for an empty list so the gate skips it gracefully (same as tg vacuous-valid rule).
+function cellsToZoneSpec(cells) {
+  if (!cells || cells.length === 0) return 'tg';
+  return 'windows:' + cells.join('|');
 }
 
 // Convert a list of windows to the zone alias expansion spec:
@@ -129,50 +139,55 @@ function summarizeThreats(board, perspective) {
   const oMaj = perspective === 1 ? 'ym' : 'rm';
   const playerDisc   = perspective === 1 ? 1 : 2;
   const opponentDisc = perspective === 1 ? 2 : 1;
-  const playerGoodRow   = perspective === 1 ? r => r % 2 === 0 : r => r % 2 === 1;
-  const opponentGoodRow = perspective === 1 ? r => r % 2 === 1 : r => r % 2 === 0;
 
-  const s = {
-    playerMajor: 0, playerMajorAligned: 0, playerMajorGravityTop: 0,
-    playerMinor: 0, playerMinorCells: [],
-    opponentMajor: 0, opponentMajorAligned: 0, opponentMajorGravityTop: 0,
-    opponentMinor: 0, opponentMinorCells: [],
-  };
+  const playerMajorCells   = [];
+  const opponentMajorCells = [];
   for (const [key, flags] of Object.entries(threatMap)) {
     const [r, c] = key.split(',').map(Number);
     const gt = r === board.colHeights[c];
-    if (flags[pMaj]) { s.playerMajor++; if (playerGoodRow(r)) s.playerMajorAligned++; if (gt) s.playerMajorGravityTop++; }
-    if (flags[oMaj]) { s.opponentMajor++; if (opponentGoodRow(r)) s.opponentMajorAligned++; if (gt) s.opponentMajorGravityTop++; }
+    // Exclude immediately-playable cells — those are covered by the immediate_threat tag.
+    if (gt) continue;
+    if (flags[pMaj]) playerMajorCells.push(`c${c + 1}r${r + 1}`);
+    if (flags[oMaj]) opponentMajorCells.push(`c${c + 1}r${r + 1}`);
   }
+  playerMajorCells.sort();
+  opponentMajorCells.sort();
+
   const playerWindows   = getMinorThreatWindows(board.board, playerDisc);
   const opponentWindows = getMinorThreatWindows(board.board, opponentDisc);
-  s.playerMinor        = playerWindows.length;
-  s.opponentMinor      = opponentWindows.length;
-  s.playerMinorCells   = windowsToCellStrings(playerWindows);
-  s.opponentMinorCells = windowsToCellStrings(opponentWindows);
-  s.playerWindows      = playerWindows;
-  s.opponentWindows    = opponentWindows;
-  return s;
+  const playerMinorCells   = emptyCellsFromWindows(board.board, playerWindows);
+  const opponentMinorCells = emptyCellsFromWindows(board.board, opponentWindows);
+
+  return {
+    playerMajor: playerMajorCells.length,
+    playerMajorCells,
+    playerMinor: playerMinorCells.length,
+    playerMinorCells,
+    opponentMajor: opponentMajorCells.length,
+    opponentMajorCells,
+    opponentMinor: opponentMinorCells.length,
+    opponentMinorCells,
+    playerWindows,
+    opponentWindows,
+  };
 }
 
-function formatThreatStats(s, playerAlias, opponentAlias, showPlayerMinor = true, showOpponentMinor = true) {
-  const fmt = (count, aligned, gt) => {
-    if (count === 0) return '0';
-    const parts = [];
-    if (aligned > 0) parts.push(`${aligned} parity-aligned`);
-    if (gt > 0) parts.push(`${gt} immediately playable`);
-    return parts.length ? `${count} (${parts.join(', ')})` : String(count);
-  };
-  const fmtMinor = (count, alias) => {
+function formatThreatStats(
+  s,
+  playerMajorAlias, opponentMajorAlias,
+  playerMinorAlias, opponentMinorAlias,
+  showPlayerMajor = true, showOpponentMajor = true,
+  showPlayerMinor = true, showOpponentMinor = true,
+) {
+  const fmt = (count, alias) => {
     if (count === 0) return '0';
     return `[zone:${alias}]${count}[/zone:${alias}]`;
   };
-  const lines = [
-    `- Your major threats: ${fmt(s.playerMajor, s.playerMajorAligned, s.playerMajorGravityTop)}`,
-  ];
-  if (showPlayerMinor) lines.push(`- Your minor threats: ${fmtMinor(s.playerMinor, playerAlias)}`);
-  lines.push(`- Opponent major threats: ${fmt(s.opponentMajor, s.opponentMajorAligned, s.opponentMajorGravityTop)}`);
-  if (showOpponentMinor) lines.push(`- Opponent minor threats: ${fmtMinor(s.opponentMinor, opponentAlias)}`);
+  const lines = [];
+  if (showPlayerMajor)   lines.push(`- Your major threats: ${fmt(s.playerMajor,   playerMajorAlias)}`);
+  if (showPlayerMinor)   lines.push(`- Your minor threats: ${fmt(s.playerMinor,   playerMinorAlias)}`);
+  if (showOpponentMajor) lines.push(`- Opponent major threats: ${fmt(s.opponentMajor, opponentMajorAlias)}`);
+  if (showOpponentMinor) lines.push(`- Opponent minor threats: ${fmt(s.opponentMinor, opponentMinorAlias)}`);
   return lines.join('\n');
 }
 
@@ -236,7 +251,7 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
   const entries = [];
   const seenCells = new Set();
 
-  for (const map of patternMaps) {
+  for (const { map, owner } of patternMaps) {
     for (const [tag, { cells }] of map) {
       if (TIER1_TAGS.has(tag) && cells.length > 0) {
         const dedupedCells = cells.filter(c => {
@@ -244,7 +259,7 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
           seenCells.add(c);
           return true;
         });
-        if (dedupedCells.length > 0) entries.push({ cells: dedupedCells, zoneSpec: 'tg' });
+        if (dedupedCells.length > 0) entries.push({ cells: dedupedCells, zoneSpec: 'tg', owner });
       } else if (TIER2_TAGS.has(tag)) {
         // Derive capsule column: first col where (ROWS - colHeights[c]) % 2 === 1
         const { colHeights } = boardForCapsule;
@@ -256,7 +271,7 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
           }
         }
         if (capsuleCol >= 0) {
-          entries.push({ col: capsuleCol, parity: 'odd', zoneSpec: 'tg' });
+          entries.push({ col: capsuleCol, parity: 'odd', zoneSpec: 'tg', owner });
         }
         // If no odd-parity column exists, treat as Tier 3 (skip)
       }
@@ -356,11 +371,14 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
 
   // ── Step 5: allowedSet derivation ─────────────────────────────────────────
   // Base union: patterns at played position + patterns at best-move position
+  // Each entry carries an `owner` so cell references can be labeled in the prompt
+  // as belonging to "you" or "your opponent" (prevents the LLM from guessing/flipping
+  // threat ownership). Player-perspective maps → 'you'; opponent-perspective → 'opponent'.
   const patMaps = [];
 
   const patPlayed = await safeClassifyPattern(movestring, perspective, solver);
-  patMaps.push(patPlayed);
-  patMaps.push(correctMovePatterns); // already computed above
+  patMaps.push({ map: patPlayed, owner: 'you' });
+  patMaps.push({ map: correctMovePatterns, owner: 'you' }); // already computed above
 
   // Direction-specific augmentations
   if (!isOptimal && direction === 'enabled_opponent') {
@@ -373,7 +391,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
         const patOpp = await safeClassifyPattern(
           movestring + col + oppBestCol, opponentPerspective, solver
         );
-        patMaps.push(patOpp);
+        patMaps.push({ map: patOpp, owner: 'opponent' });
       }
     } catch {
       // solver error on won position or other; skip augmentation
@@ -386,7 +404,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     for (const t of ['forced_block', 'immediate_threat']) {
       if (patOppPre.has(t)) restricted.set(t, patOppPre.get(t));
     }
-    if (restricted.size > 0) patMaps.push(restricted);
+    if (restricted.size > 0) patMaps.push({ map: restricted, owner: 'opponent' });
   }
 
   const postBestBoard = new Board(movestring + bestCol);
@@ -394,13 +412,19 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
 
   // Whitelist the played column and contrast column in P5Strong when allowedSet is non-null.
   // P5Strong only fires when allowedSet is provided; if null, all column refs are unchecked.
+  // Landing squares (1-indexed display form, matching cell refs elsewhere). The played
+  // and better moves are alternatives from the same pre-move board, so both heights
+  // come from `board`. These give the LLM a concrete anchor even when no threats exist.
+  const playedCell = `c${col + 1}r${board.colHeights[col] + 1}`;
+  const bestCell   = `c${bestCol + 1}r${board.colHeights[bestCol] + 1}`;
+
   if (allowedSet !== null) {
     allowedSet.push({ col, validationOnly: true }); // the move being explained
-    // Also whitelist the exact cell where the disc landed (pre-move column height = row index)
-    const playedRow = board.colHeights[col];
-    allowedSet.push({ cells: [`c${col}r${playedRow}`], validationOnly: true });
+    // Whitelist the exact cell where the played disc landed (1-indexed cNrM).
+    allowedSet.push({ cells: [playedCell], validationOnly: true });
     if (!isOptimal) {
       allowedSet.push({ col: contrastCol, validationOnly: true }); // the better move
+      allowedSet.push({ cells: [bestCell], validationOnly: true }); // where it lands
     }
   }
 
@@ -423,6 +447,30 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
   for (const key of patPostBlunder.keys()) relevantPatternKeys.add(key);
   if (tag) relevantPatternKeys.add(tag);
 
+  // ── Step 7a: Threat stats (needed for KB term filtering and threat comparison) ──
+  // Compute here so they're available both for conditional KB term inclusion and
+  // for the threat comparison section (Step 8), avoiding duplicate computation.
+  const preStats     = summarizeThreats(board, perspective);
+  const bestBoard    = new Board(bestMovestring);
+  const blunderBoard = new Board(postMovestring);
+  const bestStats    = summarizeThreats(bestBoard, perspective);
+  const blunderStats = summarizeThreats(blunderBoard, perspective);
+
+  // major_threat / minor_threat: include their KB definitions only when threats
+  // actually exist across the three board states. On empty or near-empty boards
+  // the LLM hallucinates threats when it sees these definitions without any
+  // concrete instances to reference.
+  const hasMajorThreats =
+    preStats.playerMajor + preStats.opponentMajor +
+    bestStats.playerMajor + bestStats.opponentMajor +
+    blunderStats.playerMajor + blunderStats.opponentMajor > 0;
+  const hasMinorThreats =
+    preStats.playerMinor + preStats.opponentMinor +
+    bestStats.playerMinor + bestStats.opponentMinor +
+    blunderStats.playerMinor + blunderStats.opponentMinor > 0;
+  if (hasMajorThreats) relevantPatternKeys.add('major_threat');
+  if (hasMinorThreats) relevantPatternKeys.add('minor_threat');
+
   const kbTermLines = [];
   const seenKbIds = new Set();
   for (const [patternKey, kbEntry] of Object.entries(PATTERN_KB)) {
@@ -440,12 +488,12 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     const shortSummary = loadKBShortSummary(kbEntry.id);
     if (!shortSummary) continue;
 
-    // For alias entries (e.g. fork → community-double-threat), expose the alias as the tag id
-    // so the LLM writes [term:fork] — which matches what loadKBShortSummary can now resolve.
-    // For non-alias entries the tag id is the KB slug as before.
-    const isAlias = patternKey !== kbEntry.id;
-    const tagId = isAlias ? patternKey : kbEntry.id;
-    const displayName = isAlias ? `${kbEntry.id.replace(/-/g, ' ')} / ${patternKey}` : kbEntry.id;
+    // Always use the pattern key as the tag id so the LLM writes e.g. [term:fork].
+    // Display name is the human-readable pattern key (underscores → spaces).
+    // KB article slugs with provenance prefixes (community-/allen-) must not appear
+    // in the prompt — the LLM copies them verbatim into its output.
+    const tagId = patternKey;
+    const displayName = patternKey.replace(/_/g, ' ');
     kbTermLines.push(
       `- [term:${tagId}] **${displayName}** (${tagId}): ${shortSummary}`
     );
@@ -456,69 +504,102 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     : '';
 
   // ── Step 8: Threat comparison section ─────────────────────────────────────
-  const preStats     = summarizeThreats(board, perspective);
-  const bestBoard    = new Board(bestMovestring);
-  const blunderBoard = new Board(postMovestring);
-  const bestStats    = summarizeThreats(bestBoard, perspective);
-  const blunderStats = summarizeThreats(blunderBoard, perspective);
+  // preStats / bestStats / blunderStats / bestBoard / blunderBoard computed in Step 7a.
 
-  // Only show a minor threat metric when the comparison is directionally meaningful:
-  // player minor: best move should give MORE of your own threats
-  // opponent minor: best move should leave opponent with FEWER threats
-  // Equal counts or wrong-direction counts are noise — omitting them prevents the LLM
-  // from writing "X instead of X" or counterintuitive comparisons.
+  // Only show a threat metric when the comparison is directionally meaningful:
+  // player threats: best move should give MORE of your own threats
+  // opponent threats: best move should leave opponent with FEWER threats
+  // Rows are hidden entirely when not meaningful — this also prevents the LLM from
+  // hallucinating zone tags for aliases that are absent from the map.
+  const showPlayerMajor   = bestStats.playerMajor   > blunderStats.playerMajor;
+  const showOpponentMajor = bestStats.opponentMajor < blunderStats.opponentMajor;
   const showPlayerMinor   = bestStats.playerMinor   > blunderStats.playerMinor;
   const showOpponentMinor = bestStats.opponentMinor < blunderStats.opponentMinor;
 
-  // Build alias → window spec map only for metrics that will appear in the prompt.
+  // Aliases are only added when their row appears in the prompt — alias in map ↔ row shown.
   const zoneAliasMap = {};
+  if (showPlayerMajor) {
+    zoneAliasMap['player-major-pre']    = cellsToZoneSpec(preStats.playerMajorCells);
+    zoneAliasMap['player-major-best']   = cellsToZoneSpec(bestStats.playerMajorCells);
+    zoneAliasMap['player-major-played'] = cellsToZoneSpec(blunderStats.playerMajorCells);
+  }
+  if (showOpponentMajor) {
+    zoneAliasMap['opponent-major-pre']    = cellsToZoneSpec(preStats.opponentMajorCells);
+    zoneAliasMap['opponent-major-best']   = cellsToZoneSpec(bestStats.opponentMajorCells);
+    zoneAliasMap['opponent-major-played'] = cellsToZoneSpec(blunderStats.opponentMajorCells);
+  }
   if (showPlayerMinor) {
-    zoneAliasMap['player-minor-pre']    = windowsToZoneSpec(preStats.playerWindows);
-    zoneAliasMap['player-minor-best']   = windowsToZoneSpec(bestStats.playerWindows);
-    zoneAliasMap['player-minor-played'] = windowsToZoneSpec(blunderStats.playerWindows);
+    zoneAliasMap['player-minor-pre']    = cellsToZoneSpec(preStats.playerMinorCells);
+    zoneAliasMap['player-minor-best']   = cellsToZoneSpec(bestStats.playerMinorCells);
+    zoneAliasMap['player-minor-played'] = cellsToZoneSpec(blunderStats.playerMinorCells);
   }
   if (showOpponentMinor) {
-    zoneAliasMap['opponent-minor-pre']    = windowsToZoneSpec(preStats.opponentWindows);
-    zoneAliasMap['opponent-minor-best']   = windowsToZoneSpec(bestStats.opponentWindows);
-    zoneAliasMap['opponent-minor-played'] = windowsToZoneSpec(blunderStats.opponentWindows);
+    zoneAliasMap['opponent-minor-pre']    = cellsToZoneSpec(preStats.opponentMinorCells);
+    zoneAliasMap['opponent-minor-best']   = cellsToZoneSpec(bestStats.opponentMinorCells);
+    zoneAliasMap['opponent-minor-played'] = cellsToZoneSpec(blunderStats.opponentMinorCells);
   }
 
-  const minorNoteClause = (showPlayerMinor || showOpponentMinor)
-    ? ' Minor threat rows are included only when they differ meaningfully between the two moves — do not write a minor threat comparison for any metric not shown below.'
+  const minorNoteClause = (showPlayerMajor || showOpponentMajor || showPlayerMinor || showOpponentMinor)
+    ? ' Threat rows are included only when they differ meaningfully between the two moves — do not write a threat comparison for any metric not shown below.'
     : '';
 
   const threatComparisonSection = [
     '## Threat comparison',
     '',
-    `Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a minor threat count, copy the zone tag shown on that line and wrap the count with it.${minorNoteClause}`,
+    `Note: the three snapshots below are parallel states, not a time sequence. Use them to compare what each move choice left behind relative to the pre-move baseline — never say threats "increased" or "jumped". When citing a threat count, copy the zone tag shown on that line and wrap the count with it.${minorNoteClause}`,
     '',
     'Before the move:',
-    formatThreatStats(preStats, 'player-minor-pre', 'opponent-minor-pre', showPlayerMinor, showOpponentMinor),
+    formatThreatStats(
+      preStats,
+      'player-major-pre', 'opponent-major-pre',
+      'player-minor-pre', 'opponent-minor-pre',
+      showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor,
+    ),
     '',
     `After the best move (column ${bestCol + 1}):`,
-    formatThreatStats(bestStats, 'player-minor-best', 'opponent-minor-best', showPlayerMinor, showOpponentMinor),
+    formatThreatStats(
+      bestStats,
+      'player-major-best', 'opponent-major-best',
+      'player-minor-best', 'opponent-minor-best',
+      showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor,
+    ),
     '',
     `After the move played (column ${col + 1}):`,
-    formatThreatStats(blunderStats, 'player-minor-played', 'opponent-minor-played', showPlayerMinor, showOpponentMinor),
+    formatThreatStats(
+      blunderStats,
+      'player-major-played', 'opponent-major-played',
+      'player-minor-played', 'opponent-minor-played',
+      showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor,
+    ),
   ].join('\n');
 
-  // Whitelist all minor threat cells across all three board states so P5Strong passes
+  // Whitelist all threat cells across all three board states so P5Strong passes
   // after alias expansion (expanded windows: specs are validated against these cells).
   if (allowedSet !== null) {
-    const allMinorCells = new Set([
+    const allThreatCells = new Set([
+      ...preStats.playerMajorCells,
+      ...preStats.opponentMajorCells,
       ...preStats.playerMinorCells,
       ...preStats.opponentMinorCells,
+      ...bestStats.playerMajorCells,
+      ...bestStats.opponentMajorCells,
       ...bestStats.playerMinorCells,
       ...bestStats.opponentMinorCells,
+      ...blunderStats.playerMajorCells,
+      ...blunderStats.opponentMajorCells,
       ...blunderStats.playerMinorCells,
       ...blunderStats.opponentMinorCells,
     ]);
-    if (allMinorCells.size > 0) {
-      allowedSet.push({ cells: [...allMinorCells], validationOnly: true });
+    if (allThreatCells.size > 0) {
+      allowedSet.push({ cells: [...allThreatCells], validationOnly: true });
     }
   }
 
   // ── Step 9: Build prompt ───────────────────────────────────────────────────
+  // Suppress threat comparison when tag is immediate_threat: one board state is
+  // terminal (the game-ending move), so post-move threat counts are incoherent.
+  const effectiveThreatComparison = tag === 'immediate_threat' ? undefined : threatComparisonSection;
+
   const prompt = buildBlunderExplainPrompt({
     tag,
     direction,
@@ -534,8 +615,10 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver) {
     allowedSet,
     playedCol: col,
     contrastCol: isOptimal ? undefined : contrastCol,
+    playedCell,
+    bestCell: isOptimal ? undefined : bestCell,
     kbTermsSection: kbTermsSection || undefined,
-    threatComparisonSection,
+    threatComparisonSection: effectiveThreatComparison,
   });
 
   return { prompt, allowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol };

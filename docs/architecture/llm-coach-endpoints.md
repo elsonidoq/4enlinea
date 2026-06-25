@@ -43,6 +43,14 @@ Walks a game tree `numPlies` deep with optimal play, classifying positions via t
 ### Zone tag normalization
 `normalizeZoneTags(text)` — exported from `annotationGate.js` (moved from private `index.js` function 2026-06-23). Normalizes LLM output before validation: `[zone:column N]` → `[zone:colN]`, pairs opening/closing col tags, expands short `[/zone:cells]` closers. Import from `annotationGate.js`, not `index.js`.
 
+### Annotation gate invariants
+
+`validateAnnotation(explanation, board, allowedSet)` runs P1–P6 + P5Strong checks. Two non-obvious invariants:
+
+- **P3 checks visible text only.** `checkP3` strips all `[zone:...]` and `[term:...]` markup tags from the text before scanning for forbidden slugs. A `[term:forced_win]` tag does not trigger the `forced_win` jargon check — only the literal string in the rendered output does.
+
+- **Zero-count threats use bare `0`, not `[zone:tg]`.** `formatThreatStats` emits a bare `0` (no zone tag) when a threat count is zero. The LLM prompt has an explicit exception clause instructing the LLM to write bare `0` for zero-count lines rather than invent a zone tag. `checkP5Strong` always fails `[zone:tg]` — there is no valid use of that spec in LLM output.
+
 ### LLM call
 `callLLM(prompt)` — native `fetch` to OpenAI chat completions API. Model and key read from `OPENAI_API_KEY` / `OPENAI_MODEL` env vars.
 

@@ -50,22 +50,36 @@ Cache key: `SHA256(movestring + ":" + col)`. `template_version = 'v2'` set on al
 Sequence: `Role` → `Language rule` → `Players` → `Boards` (3 boards: Before / After best move / After played) → `Move context` → `Threat comparison` → `Best-move tactical evidence` (conditional) → `Hard grounding rules` → `Tone` → `KB term definitions` (conditional) → `Output format` → `Task`.
 
 **`## Threat comparison`** (always present, pre-computed server-side):
+
+Both major and minor threat rows are conditional — each only appears when the comparison is directionally meaningful (best gives the player MORE of their own threats, or FEWER opponent threats). Example when both fire:
+
 ```
+Before the move:
+- Your major threats: [zone:player-major-pre]3[/zone:player-major-pre]
+- Your minor threats: [zone:player-minor-pre]2[/zone:player-minor-pre]
+- Opponent major threats: [zone:opponent-major-pre]1[/zone:opponent-major-pre]
+
 After the best move (column N):
-- Player major threats: 0
-- Player minor threats: 6
-- Opponent major threats: 1
-- Opponent minor threats: 3
+- Your major threats: [zone:player-major-best]3[/zone:player-major-best]
+- Opponent major threats: [zone:opponent-major-best]0[/zone:opponent-major-best]
 
 After the move played (column M):
-- Player major threats: 1 (1 parity-aligned, 0 immediately playable)
-- Player minor threats: 2
-- ...
+- Your major threats: [zone:player-major-played]2[/zone:player-major-played]
+- Opponent major threats: [zone:opponent-major-played]1[/zone:opponent-major-played]
 ```
-Parity-aligned = threat row matches player's winning parity. Immediately playable = gravity-top.
-Computed by `summarizeThreats()` + `formatThreatStats()` in `explainContext.js` using `getMajorThreatCells`.
+
+**Major threats** = count of unique empty cells that complete a 4-in-a-row for that player, EXCLUDING immediately-playable cells (gravity-top). Computed from `getMajorThreatCells`. No parity/playable breakdown.
+
+**Minor threats** = count of unique empty cells across 2-disc+2-empty windows (shadow windows filtered).
+
+**Zone alias invariant** (critical): rows are hidden entirely when not meaningful, and aliases are only added to `zoneAliasMap` when the row is shown. This is what prevents `P1:invalid_spec` — if a row isn't shown, no alias exists, so the LLM can't write a zone tag for it. The invariant is: *alias in map ↔ row visible in prompt*. See [[project_zone_alias_must_match_prompt]].
+
+`cellsToZoneSpec(cells)` returns `'tg'` for empty cell lists so the gate skips gracefully.
+Computed by `summarizeThreats()` + `formatThreatStats()` in `explainContext.js`.
 
 **`## KB term definitions`** entries are driven by the union of `classifyPattern` results from all 3 boards + `tagBlunder.tag`. Forced_win is excluded (banned by LANGUAGE_RULE). Alias entries (e.g. fork→community-double-threat) emit the alias key as the term tag id with combined display name: `[term:fork] **community double threat / fork** (fork): <summary>`.
+
+**`major_threat` and `minor_threat` are conditionally included** (Step 7a in `explainContext.js`): they are added to `relevantPatternKeys` only when at least one major/minor threat actually exists across the three board states (pre, best-move, post-move). They do NOT have `always_include: true` in PATTERN_KB. On empty or near-empty boards, injecting their definitions causes the LLM to hallucinate threats. Do not revert this to `always_include: true`. See [[project_kb_major_minor_threat_not_always_include]].
 
 ## `## Hard grounding rules` section
 

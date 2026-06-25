@@ -172,9 +172,17 @@ export function checkP3(fullText) {
     failures.push('P3:player_name');
   }
 
-  // Sub-check 3: engine jargon — phrase list (case-insensitive)
+  // Sub-check 3: engine jargon — phrase list (case-insensitive).
+  // 'forced win' is intentionally absent: the language rule allows plain-English
+  // "forced win"; only the internal slug 'forced_win' is banned.
+  // [zone:tg] is checked on the raw text before stripping — it is an internal
+  // placeholder that must never appear in LLM output.
+  if (/\[zone:tg\]/i.test(fullText)) {
+    failures.push('P3:engine_jargon');
+  }
+  // Strip [zone:...] and [term:...] markup tags before scanning so that tag specs
+  // like [term:forced_win] don't trigger the check when the visible text is fine.
   const jargonPhrases = [
-    'forced win',
     'leaf position',
     'the solver',
     'forced_win',
@@ -183,7 +191,8 @@ export function checkP3(fullText) {
     'the score is',
     'patterns in data',
   ];
-  const lowerText = fullText.toLowerCase();
+  const visibleText = fullText.replace(/\[\/?(zone|term):[^\]]*\]/gi, '');
+  const lowerText = visibleText.toLowerCase();
   for (const phrase of jargonPhrases) {
     if (lowerText.includes(phrase.toLowerCase())) {
       failures.push('P3:engine_jargon');
@@ -204,16 +213,33 @@ export function checkP3(fullText) {
  * `tg` zones are vacuously valid (skip).
  * Out-of-bounds / unresolvable specs fail with a dedicated code.
  *
+ * Columns that are explicitly whitelisted in `allowedSet` (played column,
+ * contrast column) are exempt — they are already validated by P5Strong and may
+ * legitimately be full (no live windows) while still being valid references.
+ *
  * @param {Board} board
  * @param {Array<{ spec: string, innerText: string }>} zoneSpecs
+ * @param {Array|null} [allowedSet=null]
  * @returns {string[]}  failure codes
  */
-export function checkP5(board, zoneSpecs) {
+export function checkP5(board, zoneSpecs, allowedSet = null) {
+  // Build set of 1-indexed column numbers exempt from blocked-window check.
+  const exemptCols = new Set();
+  if (allowedSet) {
+    for (const entry of allowedSet) {
+      if (entry.col !== undefined) exemptCols.add(entry.col + 1);
+    }
+  }
+
   const failures = [];
 
   for (const { spec } of zoneSpecs) {
     // tg is vacuously valid
     if (spec === 'tg') continue;
+
+    // Whitelisted columns skip P5 — P5Strong covers them.
+    const colMatch = spec.match(/^col(\d+)$/);
+    if (colMatch && exemptCols.has(parseInt(colMatch[1], 10))) continue;
 
     const cells = expandSpec(spec);
     if (cells.length === 0) {
@@ -452,7 +478,7 @@ export function validateAnnotation(explanation, board, allowedSet = null) {
     ...checkP1(zones),
     ...checkP2(zones, expandedCellsMap),
     ...checkP3(explanation),
-    ...checkP5(board, zones),
+    ...checkP5(board, zones, allowedSet),
     ...checkP6(zones),
   ];
 

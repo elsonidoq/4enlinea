@@ -108,20 +108,28 @@
 - [Spec 030 session-stats write asymmetry](project_spec030_server_mediated_data_access.md) — asymmetric write shapes; must not unify
 - [byPattern always empty](project_spec030_session_stats_bypattern_mismatch.md) — stored shape mismatch
 
+## When writing inline Node.js scripts
+
+- [Inline Node scripts](reference_inline_node_scripts.md) — absolute imports required; export is `createSolverProcess`; solver hangs (try/finally + close)
+
 ## When touching the LLM coach / deep reveal
 
-- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs + /judge-deep-reveals to diagnose pipeline failures; baseline 23/25 success
+- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs + /judge-deep-reveals; rubric has pre-check + item 2 structure-hallucination check; baseline 23/25 success
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
-- [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow
+- [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow; threat comparison format; major/minor threat KB terms conditional
+- [KB major/minor threat not always_include](project_kb_major_minor_threat_not_always_include.md) — deliberately removed; injecting on empty boards causes hallucination; do not revert
+- [Zone alias must match prompt](project_zone_alias_must_match_prompt.md) — alias absent from map → P1:invalid_spec; major=always, minor=conditional
 - [Blunder tagging design](project_blunder_tagging_design.md) — tagBlunder throws NotABlunderError on terminal; missed_own = correctCol builds pattern
+- [Pattern tier definitions](project_pattern_tier_definitions.md) — Tier-1/2/3 live in explainContext.js not classifier.js; 3 unrelated "tier" meanings
 - [Pattern KB architecture](project_pattern_kb_architecture.md) — PATTERN_KB entry shapes; popup checklist
 - [Pattern KB alias resolution](project_pattern_kb_alias_resolution.md) — alias resolution fix 2026-06-21
 - [Coach deep reveal docs](project_coach_deep_reveal_docs.md) — authoritative docs; Epic A/B contracts
 - [Annotation gate](project_epic_a_annotation_gate.md) — allowedSet shapes; findMajorThreatWindows |
 - [Patterns blunders done](project_patterns_blunders_done.md) — inverted semantic; allowedSet=null vs []; debug guide
-- [Deep reveal zone fixes](deep_reveal_zone_validation_fixes.md) — P5strong allowedSet bugs; normalizeZoneTags
+- [Deep reveal zone fixes](deep_reveal_zone_validation_fixes.md) — P5strong:tg zero-count trap; P3 markup stripping; normalizeZoneTags
 - [Deep reveal failures table](reference_deep_reveal_failures.md) — debugging tool for annotation rejections
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
+- [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
 
 ## When working on the past-games / review flow
 
@@ -146,6 +154,7 @@
 ## When working on the frontend
 
 - [CSS flex-basis % trap](reference_css_flex_basis_percentage_height_trap.md) — use px via ResizeObserver
+- [SplitReveal minHeight:0 trap](reference_split_reveal_min_height.md) — containing flex item needs minHeight:0 or board fills viewport; siblings in bounded column must move inside scrollable area
 - [CSS maxWidth % trap](reference_css_maxwidth_percentage_trap.md) — pair maxWidth with explicit width
 - [Check CSS before using mockup class names](feedback_check_css_before_using_mockup_classes.md) — grep tokens.css first
 - [Mobile tap highlight](feedback_mobile_tap_highlight.md) — WebkitTapHighlightColor on tappable divs

@@ -6,12 +6,44 @@
 // Writes eval_set.json after each newly satisfied predicate (crash-safe).
 
 import { writeFileSync } from 'fs';
-import { Board, getMajorThreatCells, tagBlunder } from '../classifier.js';
+import { Board, getMajorThreatCells, tagBlunder, classifyPattern } from '../classifier.js';
 import { buildExplainContext, getMinorThreatWindows } from '../explainContext.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { harvestBlunders } from '../gameSampling.js';
 
 const MAX_GAMES = 10_000;
+
+// Minimum number of boards that have NO Tier-1 and NO Tier-2 pattern. These are
+// the "allowedSet === null" deep-reveal positions and must be exercised by the
+// eval set. See classifier.js (classifyPattern) for the detectors that produce
+// these tags, and explainContext.js for the Tier-1/Tier-2 grouping.
+const NO_TIER12_TARGET = 10;
+
+// Tier-1 + Tier-2 tags, mirrored from explainContext.js (TIER1_TAGS / TIER2_TAGS).
+// A board with none of these (across both perspectives) is a "no Tier-1/2" board.
+const TIER12_TAGS = new Set([
+  'immediate_threat', 'double_threat',
+  'undercut', 'overcut', 'figure_7', 'j_shape',
+  'z_threat',
+]);
+
+// Returns true if `boardState` exhibits any Tier-1 or Tier-2 pattern for either
+// player. classifyPattern can throw on won/degenerate positions (solver error);
+// treat a throw as "no pattern from that perspective".
+async function hasTier12Pattern(boardState, solver) {
+  for (const perspective of [1, 2]) {
+    let map;
+    try {
+      map = await classifyPattern(boardState, perspective, solver);
+    } catch {
+      continue;
+    }
+    for (const tag of map.keys()) {
+      if (TIER12_TAGS.has(tag)) return true;
+    }
+  }
+  return false;
+}
 
 const outPath = process.argv[2] || 'server/scripts/eval_set.json';
 
@@ -129,13 +161,16 @@ async function main() {
   const collected = [];
   let boardCount = 0;
   let gameCount = 0;
+  let noTier12Count = 0; // boards collected that have no Tier-1/Tier-2 pattern
 
-  const tagPredsDone = () => [...TAG_PREDICATES].every(p => satisfied.has(p));
-  const kbPredsDone  = () => satisfied.has('P32') && satisfied.has('P33');
+  const tagPredsDone   = () => [...TAG_PREDICATES].every(p => satisfied.has(p));
+  const kbPredsDone    = () => satisfied.has('P32') && satisfied.has('P33');
+  const noTier12Done   = () => noTier12Count >= NO_TIER12_TARGET;
+  const allGoalsDone   = () => satisfied.size >= ALL_PREDICATES.size && noTier12Done();
 
   // harvestBlunders plays mistake-weighted games and yields every non-optimal ply.
   for await (const ply of harvestBlunders(solver, { maxGames: MAX_GAMES })) {
-    if (satisfied.size >= ALL_PREDICATES.size) break;
+    if (allGoalsDone()) break;
 
     const { boardState, movePlayed: move, correctCol: bestCol, severity, perspective } = ply;
     gameCount = ply.gameIndex;
@@ -143,7 +178,7 @@ async function main() {
     boardCount++;
     if (boardCount % 100 === 0) {
       const missing = [...ALL_PREDICATES].filter(p => !satisfied.has(p));
-      process.stderr.write(`board ${boardCount}  game ${ply.gameIndex}  satisfied ${satisfied.size}/35  missing: ${missing.join(' ')}\n`);
+      process.stderr.write(`board ${boardCount}  game ${ply.gameIndex}  satisfied ${satisfied.size}/35  noTier12 ${noTier12Count}/${NO_TIER12_TARGET}  missing: ${missing.join(' ')}\n`);
     }
 
     const preBoard  = new Board(boardState);
@@ -153,9 +188,10 @@ async function main() {
       boardState, move, bestCol, severity, preBoard, postBoard, perspective
     );
 
-    // Skip if no cheap preds are new AND tag predicates are done (nothing to gain)
+    // Skip if no cheap preds are new AND tag predicates are done AND KB predicates
+    // are done AND we already have enough no-Tier-1/2 boards (nothing to gain).
     const newCheap = [...cheapPreds].filter(p => !satisfied.has(p));
-    if (newCheap.length === 0 && tagPredsDone() && kbPredsDone()) continue;
+    if (newCheap.length === 0 && tagPredsDone() && kbPredsDone() && noTier12Done()) continue;
 
     // Call tagBlunder when tag predicates still need coverage
     let tagResult = null;
@@ -184,19 +220,36 @@ async function main() {
       }
     }
 
-    const newPreds = [...allPreds].filter(p => !satisfied.has(p));
-    if (newPreds.length === 0) continue;
+    // Determine whether this board has no Tier-1/Tier-2 pattern, but only while we
+    // still need such boards (the classifyPattern calls are not free).
+    let isNoTier12 = false;
+    if (!noTier12Done()) {
+      isNoTier12 = !(await hasTier12Pattern(boardState, solver));
+    }
 
-    const newlySatisfied = [];
-    newPreds.forEach(p => {
-      const count = (predicateCounts.get(p) || 0) + 1;
-      predicateCounts.set(p, count);
-      if (count >= 2) {
-        satisfied.add(p);
-        newlySatisfied.push(p);
-      }
-    });
-    process.stderr.write(`  seen: ${newPreds.join(' ')}  done(×2): ${newlySatisfied.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
+    const newPreds = [...allPreds].filter(p => !satisfied.has(p));
+
+    // Keep the board if it advances predicate coverage OR it is a still-needed
+    // no-Tier-1/2 board.
+    if (newPreds.length === 0 && !isNoTier12) continue;
+
+    if (newPreds.length > 0) {
+      const newlySatisfied = [];
+      newPreds.forEach(p => {
+        const count = (predicateCounts.get(p) || 0) + 1;
+        predicateCounts.set(p, count);
+        if (count >= 2) {
+          satisfied.add(p);
+          newlySatisfied.push(p);
+        }
+      });
+      process.stderr.write(`  seen: ${newPreds.join(' ')}  done(×2): ${newlySatisfied.join(' ')} (${satisfied.size}/${ALL_PREDICATES.size} satisfied)\n`);
+    }
+
+    if (isNoTier12) {
+      noTier12Count++;
+      process.stderr.write(`  no Tier-1/2 pattern board (${noTier12Count}/${NO_TIER12_TARGET})\n`);
+    }
 
     // Build threat_cells from major threat flags at pre-blunder position
     const threatMap = getMajorThreatCells(preBoard.board);
@@ -217,6 +270,7 @@ async function main() {
       blunder_severity: null,
       pattern_category: tagResult?.tag ?? null,
       predicates: [...allPreds].sort(),
+      no_tier12: isNoTier12,
     });
 
     // Write incrementally so a kill mid-run preserves progress.
@@ -231,6 +285,11 @@ async function main() {
     process.stderr.write(`MISSING predicates (structurally rare): ${missing.join(' ')}\n`);
   } else {
     process.stderr.write('All 35 predicates satisfied.\n');
+  }
+  if (noTier12Done()) {
+    process.stderr.write(`Collected ${noTier12Count} no-Tier-1/2 boards (target ${NO_TIER12_TARGET}).\n`);
+  } else {
+    process.stderr.write(`WARNING: only ${noTier12Count}/${NO_TIER12_TARGET} no-Tier-1/2 boards collected.\n`);
   }
 }
 

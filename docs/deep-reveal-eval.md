@@ -335,3 +335,88 @@ change should be made in `selectContrastMove` in `llmCoachHelpers.js`.
 2. **Weekly:** run Layer 2 on a random sample of 50 rows.
 3. **Before deploying a new prompt version:** Layer 1 + Layer 3 must be clean;
    Layer 2 sample score must not regress vs baseline.
+
+---
+
+## Annotation gate eval harness (Layer 1 — implemented)
+
+The annotation gate harness is the concrete implementation of Layer 1. It runs
+the full production pipeline end-to-end (no mocks) against a curated eval set
+and surfaces annotation validation failures.
+
+### Scripts
+
+| Script | Purpose |
+|---|---|
+| `server/scripts/run_eval.mjs` | Run the pipeline over an eval set; collect raw JSONL results |
+| `server/scripts/filter_failing_evals.mjs` | Extract failing entries from a results JSONL into a new eval set |
+| `.claude/skills/judge-deep-reveals/SKILL.md` | Claude skill: score a JSONL against the 8-item rubric |
+
+### Eval set files
+
+| File | Description |
+|---|---|
+| `server/scripts/eval_set_small.json` | Small subset for quick smoke tests |
+| `server/scripts/eval_set_large.json` | 49 positions: forced_win, immediate_threat, odd_even_threat, claimeven, … |
+
+### Typical debug loop
+
+```bash
+# 1. Run against the full eval set
+cd connect-four
+node server/scripts/run_eval.mjs server/scripts/eval_set_large.json
+# → server/scripts/eval_results_<timestamp>.jsonl
+
+# 2. Inspect failures (look for final_response === null)
+#    Then invoke /judge-deep-reveals in Claude Code to get a structured report.
+
+# 3. Fix annotationGate.js / llmCoachHelpers.js / explainContext.js as needed.
+
+# 4. Filter only the failing entries to create a fast regression target:
+node server/scripts/filter_failing_evals.mjs \
+  server/scripts/eval_results_<timestamp>.jsonl \
+  server/scripts/eval_set_large.json
+# → server/scripts/eval_set_large_failing_<timestamp>.json
+
+# 5. Re-run against the filtered subset to verify fixes:
+node server/scripts/run_eval.mjs server/scripts/eval_set_large_failing_<ts>.json
+```
+
+### Output record shape
+
+Each line in the output JSONL is:
+
+```jsonc
+{
+  "id": "eval-5",
+  "board_state": "...",
+  "move_played": 0,          // 0-indexed
+  "correct_move": 0,         // 0-indexed (overwritten at runtime by contrastCol)
+  "pattern_category": "immediate_threat",
+  "predicates": ["P02", ...],
+  "severity": 3,
+  "context_outcome": "success",   // success | null_returned | trivial | all_moves_equal | error
+  "context_error": null,
+  "llm_error": null,
+  "prompt": "...",
+  "allowed_set": [...],
+  "attempt1_response": "...",
+  "attempt1_passed": false,
+  "attempt1_failures": ["P5strong:tg"],
+  "attempt2_response": "...",
+  "attempt2_passed": false,
+  "attempt2_failures": ["P5strong:tg"],
+  "final_response": null          // null = both attempts failed
+}
+```
+
+`final_response` is non-null only when at least one attempt passed annotation validation.
+
+### Common failure codes
+
+| Code | Meaning | Typical cause |
+|---|---|---|
+| `P3:engine_jargon` | Forbidden slug in visible text | LLM uses `[term:forced_win]` — markup tags are stripped before checking, so only visible text triggers this |
+| `P5strong:tg` | LLM used `[zone:tg]` for a zero count | Prompt contradicts itself: instruction says "no bare numbers" but zero-count lines have no zone tag; fixed by explicit exception in prompt |
+| `P5strong:cell_not_allowed` | Cell zone references a cell outside the allowed set | LLM hallucinating a cell that wasn't grounded |
+| `P6:raw_coordinate` | Zone inner text contains `c4r3`-style coords | LLM writing raw coords inside a zone tag |

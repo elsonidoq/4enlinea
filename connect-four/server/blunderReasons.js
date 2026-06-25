@@ -36,7 +36,7 @@ export const REASON_TEMPLATES = new Map([
   ['odd_even_threat:enabled_opponent',  "Your move gave Red threats on both row parities."],
   ['claimeven:missed_own',              "You had a claimeven endgame — the pairing was yours — and threw it away."],
   ['claimeven:enabled_opponent',        "You gave Yellow a claimeven endgame — they now control the pairing."],
-  ['drawing_move:missed_own',           "You had a forced win available with best play — the position was winning — but this move settled for a draw."],
+  ['drawing_move:missed_own',           "You had a move that would have held at least a draw, and this move gave that balance up."],
   ['suboptimal_move:missed_own',        "There was a stronger move — this one gives ground."],
 ]);
 

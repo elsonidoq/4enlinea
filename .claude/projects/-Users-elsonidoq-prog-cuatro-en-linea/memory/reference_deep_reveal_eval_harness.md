@@ -1,6 +1,6 @@
 ---
 name: reference_deep_reveal_eval_harness
-description: Eval harness for deep reveal — run_eval.mjs collects pipeline results; /judge-deep-reveals scores them against 8-item rubric
+description: Eval harness for deep reveal — run_eval.mjs collects pipeline results; /judge-deep-reveals scores them against 9-item rubric
 metadata: 
   node_type: memory
   type: reference
@@ -11,28 +11,65 @@ Two-phase eval harness for diagnosing deep reveal (explain-move-llm) quality iss
 
 ## Phase 1 — data collection
 
-`connect-four/server/scripts/run_eval.mjs` — runs the full `/api/explain-move-llm` production pipeline (buildExplainContext → callLLM → normalizeZoneTags → expandZoneAliases → validateAnnotation → retry) over all 25 positions in `eval_set.json`.
+`connect-four/server/scripts/run_eval.mjs` — runs the full `/api/explain-move-llm` production pipeline (buildExplainContext → callLLM → normalizeZoneTags → expandZoneAliases → validateAnnotation → retry) over an eval set JSON file.
 
 ```bash
-# New run (creates timestamped JSONL):
-cd connect-four && node server/scripts/run_eval.mjs
+# New run from an eval set path (creates timestamped JSONL):
+cd connect-four && node server/scripts/run_eval.mjs server/scripts/eval_set_large.json
 
-# Resume existing run (skips already-processed IDs):
-cd connect-four && node server/scripts/run_eval.mjs server/scripts/eval_results_<timestamp>.jsonl
+# Resume an existing run (skips already-processed IDs):
+cd connect-four && node server/scripts/run_eval.mjs server/scripts/eval_set_large.json server/scripts/eval_results_<timestamp>.jsonl
+
+# Default (no args): uses eval_set_small.json
+cd connect-four && node server/scripts/run_eval.mjs
 ```
 
-Output: `eval_results_<ISO-timestamp>.jsonl` — one JSON record per position. Each record includes `context_outcome` (success/null_returned/trivial/all_moves_equal/error/llm_error), both attempt responses + validation results, and `final_response` (null if both attempts failed annotation validation).
+Output: `<eval_set_stem>_results_<ISO-timestamp>.jsonl` — one JSON record per position (e.g. `eval_set_large_results_2026-06-24T14Z.jsonl`). Each record includes `context_outcome` (success/null_returned/trivial/all_moves_equal/error), both attempt responses + validation results, and `final_response` (null if both attempts failed annotation validation).
 
-First baseline run (2026-06-23): 23/25 success, 2 annotation failures (eval-7, eval-24).
+## Filtering failures for a targeted re-run
+
+`connect-four/server/scripts/filter_failing_evals.mjs` — extracts entries where `final_response === null` from a results JSONL and writes a new eval set JSON for targeted re-runs.
+
+```bash
+# Produces <eval_set_stem>_failing_<timestamp>.json next to the results file:
+cd connect-four && node server/scripts/filter_failing_evals.mjs \
+  server/scripts/eval_results_<timestamp>.jsonl \
+  server/scripts/eval_set_large.json
+
+# Then re-run on just the failures:
+cd connect-four && node server/scripts/run_eval.mjs server/scripts/eval_set_large_failing_<timestamp>.json
+```
 
 ## Phase 2 — judge
 
-`/judge-deep-reveals <path-to-jsonl>` — Claude skill that classifies records into pipeline failures / annotation failures / successes, scores success records on the 8-item rubric, and writes `<stem>_report.md` alongside the JSONL.
+`/judge-deep-reveals <path-to-jsonl>` — Claude skill that classifies records into pipeline failures / annotation failures / successes, scores success records on the 9-item rubric, and writes `<stem>_report.md` alongside the JSONL.
 
-**8-item rubric:** correct column named, no hallucinated win, pattern match, player perspective, move location accuracy, no internal terms leaked, internal consistency, other issues.
+**9-item rubric** (sub-agent prompt in SKILL.md — always read SKILL.md for the authoritative version):
+1. Correct column named
+2. No hallucinated win **or structure** — also checks if the explanation claims a tactical structure (major threat, forcing sequence) that the boards show is absent
+3. Pattern match — sub-agent first runs a **pre-check** that identifies the PRIMARY tactical concept (what the player missed/had), then checks it matches `pattern_category`; secondary supporting concepts are fine. `suboptimal_move` no longer accepts generic positional filler — it must name a reproducible board feature or be scored against item 9
+4. Player perspective correct
+5. Move location accuracy
+6. No internal terms leaked
+7. Internal consistency
+8. Other issues (catch-all only — vague/boilerplate moved to item 9, do not double-count)
+9. Reproducible reasoning (added 2026-06-25) — the reason must be a board feature the player could find on their own, not score-flavored ("stronger move", "loses slower") or generic filler ("kept your options open"). Honest-minimal exception: brevity is fine when no feature genuinely distinguishes the moves. Checkable rule: if the prompt has a `## What the better move leads to` section, the explanation must use it. Will fail on current sparse-board outputs by design — see [[feedback_deep_reveal_product_mindset]]
 
 **Key rule:** `move_played` and `correct_move` in the JSONL are 0-indexed; the LLM response uses 1-indexed columns.
 
-## Eval set
+## Annotation failure codes
 
-`connect-four/server/scripts/eval_set.json` — 25 positions covering all 35 evaluation predicates (P01–P36, P09 structurally impossible). Generated by `generate_eval_set.mjs`.
+Failures in `attempt1_failures` / `attempt2_failures` come from `annotationGate.js`:
+- `P1:invalid_spec` / `P1:empty` — zone spec is syntactically invalid or resolves to no cells
+- `P2:col_mismatch` — inner text references a different column than the zone spec
+- `P3:disc_notation` / `P3:player_name` / `P3:engine_jargon` — forbidden text in visible output (markup tags are stripped before checking)
+- `P5:blocked` — all 4-windows through the zone's cells are blocked
+- `P5strong:tg` — LLM used `[zone:tg]` (always invalid; use bare `0` for zero-count threats)
+- `P5strong:col_not_allowed` / `P5strong:cell_not_allowed` — zone references a cell/col not in the allowed set
+- `P6:raw_coordinate` — zone inner text contains a raw coordinate like `c4r3`
+
+## Eval sets
+
+- `eval_set_small.json` — small subset for quick smoke tests
+- `eval_set_large.json` — 49 positions covering forced_win, immediate_threat, odd_even_threat, and other categories
+- Generated by `generate_eval_set.mjs`; filtered subsets produced by `filter_failing_evals.mjs`
