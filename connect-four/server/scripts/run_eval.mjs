@@ -68,6 +68,9 @@ try {
       pattern_category: entry.pattern_category,
       predicates: entry.predicates,
       severity: entry.severity,
+      is_sparse: entry.is_sparse ?? null,
+      runtime_is_sparse: null,
+      lookahead_fired: null,
       context_outcome: null,
       context_error: null,
       llm_error: null,
@@ -114,6 +117,8 @@ try {
     }
 
     record.context_outcome = 'success';
+    record.runtime_is_sparse = context.isSparse ?? null;
+    record.lookahead_fired = context.lookaheadFired ?? null;
     record.prompt = context.prompt;
     record.allowed_set = context.allowedSet ?? null;
     // Override correct_move with the column buildExplainContext actually put in the

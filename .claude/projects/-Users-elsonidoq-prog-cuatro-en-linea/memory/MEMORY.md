@@ -130,6 +130,7 @@
 - [Deep reveal failures table](reference_deep_reveal_failures.md) — debugging tool for annotation rejections
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
+- [Sparse look-ahead unvalidated](project_sparse_lookahead_unvalidated.md) — built on stagging but NOT eval-validated; may return null on lost positions (opponent-indifference); run eval before trusting
 
 ## When working on the past-games / review flow
 
@@ -184,6 +185,7 @@
 - [Spec review before plan](feedback_spec_review_before_plan.md)
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md)
 - [Product doc authoring](feedback_product_doc_authoring.md)
+- [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — design docs/plans under docs/superpowers/ are throwaway; migrate durable info to docs/architecture/, agents never read them
 - [Hard-derived algorithms in spec](feedback_hard_derived_algorithms_in_spec.md)
 - [Epic sizing for speckit](feedback_epic_sizing_speckit.md)
 - [Epic vs speckit scope](feedback_epic_vs_speckit_scope.md)

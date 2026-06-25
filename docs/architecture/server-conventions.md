@@ -538,6 +538,11 @@ The server hosts the built SPA (`dist/`) and serves `dist/index.html` for all no
 
 **OG injection**: For `/game/:id` paths, inject `<meta property="og:title">` and `<meta property="og:description">` before `</head>` using a local `patched` variable. Never mutate the cached `indexHtml` string.
 
+**`/blunder/:id` OG + noindex injection**: The blunder permalink is unlisted-but-public (see `api-conventions.md` → `GET /api/blunders/:id`), so the catch-all both advertises it for sharing and keeps it out of search indexes:
+
+- When the id is a valid UUID (`UUID_REGEX`) and the blunder row exists, inject `<meta property="og:title" content="Connect Four blunder — <human category>">`, an `og:description`, **and** `<meta name="robots" content="noindex, nofollow">`. The human category comes from a small `CATEGORY_LABELS` map with a `snake_case → Title Case` fallback.
+- The `noindex, nofollow` robots tag is injected for **every** `/blunder/*` request — including malformed/non-UUID ids, 404s (no matching row), DB errors, and when Supabase is unconfigured. A blunder page must never be indexable, even on the fall-through paths.
+
 ---
 
 ## Route Module Organization

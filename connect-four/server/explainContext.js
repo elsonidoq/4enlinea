@@ -602,8 +602,11 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     allowedSet,
   );
   let lookaheadSection;
+  let lookaheadFired = false;
   let resolvedAllowedSet = allowedSet;
-  if (isSparse && !isOptimal) {
+  // deps.skipLookahead lets callers (e.g. eval-set generation) get the gate decision
+  // (isSparse) without paying for the forward search, which is the expensive part.
+  if (isSparse && !isOptimal && !deps.skipLookahead) {
     let la = null;
     try {
       la = await runSparseLookahead(
@@ -614,6 +617,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
       // transient solver error in this optional section — treat as if look-ahead returned null
     }
     if (la) {
+      lookaheadFired = true;
       Object.assign(zoneAliasMap, la.aliasMap);
       // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).
       // The explanation unavoidably references the played and better COLUMNS and their
@@ -662,5 +666,5 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     lookaheadSection,
   });
 
-  return { prompt, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol };
+  return { prompt, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol, isSparse, lookaheadFired };
 }

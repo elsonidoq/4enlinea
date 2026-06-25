@@ -91,6 +91,12 @@ args: movestring, col (0-indexed), rounds, solver
   │   → PATTERN_KB lookup → short_summary per entry
   │   → alias entries (e.g. fork) use patternKey as tag id
   │
+  ├─ Step 8b — Sparse-board forward look-ahead (only when anchorless + blunder):
+  │   isAnchorlessPosition(show* flags, allowedSet) && !isOptimal
+  │   → runSparseLookahead → { tag, aliasMap, allowedSetEntries } | null
+  │   → merges aliasMap into zoneAliasMap, builds resolvedAllowedSet,
+  │     formats the `## What the better move leads to` section
+  │
   └─ buildBlunderExplainPrompt → callLLM → cache
 ```
 
@@ -101,6 +107,42 @@ args: movestring, col (0-indexed), rounds, solver
 - User played suboptimally → contrast = best column
 - All columns equal → exits (no explanation possible)
 - Tie-break: center-most column (closest to col 3)
+
+---
+
+## Sparse-board forward look-ahead
+
+`server/sparseLookahead.js` — fires only on **anchorless** blunder positions: the explanation has nothing concrete to point at (no threat-comparison row is shown **and** `allowedSet === null`), so the *reason one column beats another is invisible in the static board* and only recoverable by simulating forward. Surfaced reasons must be board features the player can reproduce — the solver score is an internal compass only, never stated.
+
+**Gate:** `isAnchorlessPosition({showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor}, allowedSet)` → true iff none of the four row-visibility flags is set AND `allowedSet === null`. Keys off the **row-visibility** `show*` flags, NOT the raw `hasMajor/MinorThreats` existence flags — a board can carry non-meaningful threats (e.g. opponent minors that render no directional row) and still be anchorless.
+
+**Method (`runSparseLookahead`):** from both the played and the better move, `searchOpportunities` runs a bounded DFS exploring the **opponent's mistakes** (`selectOpponentMistakeCols` — whole score-tiers excluding the best, never splitting a tie), running `classifyPattern` at player-to-move nodes to find reachable Tier-1 structures (double_threat, fork, undercut, …). `compareOpportunities` returns the structure the better move reaches in **more** opponent-mistake branches, or `null` when nothing distinguishes them (never manufacture a benefit). Representative cells become `future-<tag>-N` zone-aliases.
+
+**Key invariants / contracts:**
+- **Hang safety:** every `classifyPattern` call goes through `classifyPatternWithTimeout` (timeout + empty-Map on hang/throw); every `solver.query` in the recursion is try/caught (prune, never reject); the `runSparseLookahead` call in `buildExplainContext` is try/caught (throw → no section). An optional additive feature must never sink the explanation.
+- **Budget:** each candidate search gets its **own** `{ calls: GLOBAL_CALL_BUDGET }` (independent, equal — a shared budget would let the first search starve the second and manufacture a spurious winner).
+- **P5Strong whitelist:** when look-ahead flips `allowedSet` from null → non-null, the played/contrast columns and landing cells must also be appended to `resolvedAllowedSet` (mirroring the existing non-null whitelist), or the explanation's unavoidable column references fail `P5strong:col_not_allowed`.
+- The found structure is rendered as a **future possibility** (`## What the better move leads to`), never as a current board fact.
+
+**`buildExplainContext` look-ahead surface:**
+- Optional 5th param `deps = {}`: `{ classifyFn }` injects `runSparseLookahead`'s classifier for tests; `skipLookahead: true` computes the gate (`isSparse`) but skips the expensive forward search (used by `generate_eval_set.mjs` to collect anchorless boards cheaply). The internal *grounding* `classifyPattern` calls are not injectable, so end-to-end firing is covered only by the real-solver e2e (`tests/sparseLookahead.e2e.test.js`, excluded from `test:fast`).
+- Return adds `isSparse` (the `isAnchorlessPosition` gate decision) and `lookaheadFired` (true when a `## What the better move leads to` section was produced). Both are additive — existing 4-arg callers are unaffected.
+
+**Tunables** (exported named constants in `sparseLookahead.js`; tune from eval results):
+
+| Constant | Default | Meaning |
+|---|---|---|
+| `LOOKAHEAD_DEPTH` | 4 | plies searched from each candidate move |
+| `PLAYER_CAP` | 2 | player branching (top score-tier moves continued) |
+| `OPPONENT_CAP` | 4 | opponent-mistake columns per node (whole tiers; may exceed on a tie) |
+| `GLOBAL_CALL_BUDGET` | 60 | `classifyPattern` calls **per candidate** (each of the two searches gets its own) |
+| `CLASSIFY_TIMEOUT_MS` | 4000 | per-call hang timeout |
+| `MAX_WAYS` | 3 | representative cell-sets surfaced per structure (matches the 4-color highlight pool) |
+| `MIN_BRANCH_DELTA` | 1 | extra opponent-mistake branches the better move must reach to count as distinguishing |
+
+**Known limitations / not yet implemented:**
+- **Opponent-indifference dead-end:** `selectOpponentMistakeCols` needs ≥2 distinct opponent score tiers; it returns `[]` when the solver is indifferent among replies. In lost/drawn positions (a primary target class) the solver is often indifferent among losing replies, so the search dead-ends and the engine returns `null` (no section) rather than firing. Fix frontier: select opponent/player moves by a **threat-creating heuristic** instead of pure solver score-tier.
+- **Designed but unbuilt:** an explicit future-board visualization in the prompt (currently the future structure is conveyed by alias text only), and a Tier-3 *promotion* shortcut (surfacing an already-detected position-global parity pattern without simulating). The gate simulates uniformly instead.
 
 ---
 
@@ -141,6 +183,7 @@ args: movestring, rounds
 ## Boards                ← 3 boards: Before / After best move / After move played
 ## Move context          ← player, eval gap, columns, key insight (humanReason)
 ## Threat comparison     ← pre-computed major/minor threat counts + parity alignment
+## What the better move leads to ← sparse-board look-ahead; only on anchorless blunders (future-<tag>-N aliases)
 ## Best-move tactical evidence  ← correctMovePatterns (when patterns fired)
 ## Hard grounding rules  ← column/cell whitelist
 ## Tone                  ← severity framing
