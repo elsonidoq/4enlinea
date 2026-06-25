@@ -67,3 +67,15 @@ export async function classifyPatternWithTimeout(classifyFn, ms, perspective, so
     clearTimeout(timer);
   }
 }
+
+const TIER1 = new Set(['immediate_threat', 'double_threat', 'undercut', 'overcut', 'figure_7', 'j_shape']);
+
+export function extractTier1Structures(patternMap) {
+  const out = [];
+  for (const [tag, val] of patternMap) {
+    if (TIER1.has(tag) && val && Array.isArray(val.cells) && val.cells.length > 0) {
+      out.push({ tag, cells: val.cells });
+    }
+  }
+  return out;
+}

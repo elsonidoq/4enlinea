@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
-import { selectOpponentMistakeCols, classifyPatternWithTimeout } from '../server/sparseLookahead.js';
+import { selectOpponentMistakeCols, classifyPatternWithTimeout, extractTier1Structures } from '../server/sparseLookahead.js';
 
 test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
   // 7 distinct tiers, all columns legal (empty board).
@@ -58,4 +58,18 @@ test('classifyPatternWithTimeout passes through the Map on success', async () =>
   const ok = async () => new Map([['double_threat', { cells: ['c4r3'] }]]);
   const got = await classifyPatternWithTimeout(ok, '01', 1, null, 1000);
   assert.deepEqual(got.get('double_threat'), { cells: ['c4r3'] });
+});
+
+test('extractTier1Structures keeps Tier-1 tags with cells, drops others', () => {
+  const map = new Map([
+    ['double_threat', { cells: ['c4r3', 'c5r3'] }],
+    ['odd_even_threat', { cells: [] }],   // Tier-3 -> dropped
+    ['j_shape', { cells: [] }],           // Tier-1 but empty -> dropped
+    ['figure_7', { cells: ['c2r2'] }],
+  ]);
+  const got = extractTier1Structures(map);
+  assert.deepEqual(got, [
+    { tag: 'double_threat', cells: ['c4r3', 'c5r3'] },
+    { tag: 'figure_7', cells: ['c2r2'] },
+  ]);
 });
