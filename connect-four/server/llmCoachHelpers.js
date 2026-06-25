@@ -596,6 +596,7 @@ export function buildBlunderExplainPrompt({
   bestCell,               // 1-indexed cNrM where the better move lands; undefined = not provided
   kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
   threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
+  lookaheadSection,       // pre-formatted sparse-board forward look-ahead section
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -675,6 +676,11 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
   // ── Threat comparison ─────────────────────────────────────────────────────
   if (threatComparisonSection) {
     sections.push(threatComparisonSection);
+  }
+
+  // ── What the better move leads to (sparse-board forward look-ahead) ────────
+  if (lookaheadSection) {
+    sections.push(lookaheadSection);
   }
 
   // ── Best-move patterns (grounding evidence) ───────────────────────────────
