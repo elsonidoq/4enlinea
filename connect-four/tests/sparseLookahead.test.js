@@ -108,3 +108,29 @@ test('searchOpportunities stops when call budget is exhausted', async () => {
   await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 2 });
   assert.ok(calls <= 2, `classify called at most budget times, got ${calls}`);
 });
+
+const tally = (entries) => new Map(entries.map(([t, b, ways]) =>
+  [t, { branches: new Set(b), ways: ways ?? [['c4r3']] }]));
+
+test('compareOpportunities picks structure best reaches more than played', async () => {
+  const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  const best = tally([['double_threat', [1, 2, 3], [['c4r3'], ['c5r4'], ['c2r2'], ['c6r5']]]]);
+  const played = tally([['double_threat', [1]]]);
+  const got = compareOpportunities(best, played);
+  assert.equal(got.tag, 'double_threat');
+  assert.equal(got.ways.length, 3); // capped at MAX_WAYS
+});
+
+test('compareOpportunities returns null when no advantage', async () => {
+  const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  const best = tally([['double_threat', [1]]]);
+  const played = tally([['double_threat', [1, 2]]]); // played reaches MORE
+  assert.equal(compareOpportunities(best, played), null);
+});
+
+test('compareOpportunities surfaces tag best reaches and played never does', async () => {
+  const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  const best = tally([['figure_7', [2]]]);
+  const played = new Map();
+  assert.equal(compareOpportunities(best, played).tag, 'figure_7');
+});

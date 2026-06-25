@@ -134,3 +134,20 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
   await recurse(rootMovestring, null, LOOKAHEAD_DEPTH);
   return tally;
 }
+
+export function compareOpportunities(bestTally, playedTally) {
+  let winner = null;
+  let bestDelta = 0;
+  for (const [tag, entry] of bestTally) {
+    const bestCount = entry.branches.size;
+    const playedCount = playedTally.get(tag)?.branches.size ?? 0;
+    const delta = bestCount - playedCount;
+    if (delta >= MIN_BRANCH_DELTA) {
+      if (delta > bestDelta || (delta === bestDelta && (winner === null || tag < winner.tag))) {
+        bestDelta = delta;
+        winner = { tag, ways: entry.ways.slice(0, MAX_WAYS) };
+      }
+    }
+  }
+  return winner;
+}
