@@ -3,42 +3,43 @@ import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
 import { selectOpponentMistakeCols, selectOptimalOpponentCols, classifyPatternWithTimeout, extractLookaheadStructures, runSparseLookahead } from '../server/sparseLookahead.js';
 
-test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
-  // 7 distinct tiers, all columns legal (empty board).
+test('selectOpponentMistakeCols excludes replies that still win for the opponent (score > 0)', () => {
+  // All scores positive → the opponent is winning on every reply → no genuine mistake to explore.
   const board = new Board('');
-  const scores = [10, 9, 8, 7, 6, 5, 4]; // best=col0(10), worst=col6(4)
+  const scores = [10, 9, 8, 7, 6, 5, 4];
+  assert.deepEqual(selectOpponentMistakeCols(scores, board), []);
+});
+
+test('selectOpponentMistakeCols keeps only score<=0 replies, best-first, until >=3', () => {
+  const board = new Board('');
+  // col0 still wins (5, excluded); cols 1..6 concede (0,-1,-2,-3,-4,-6).
+  const scores = [5, 0, -1, -2, -3, -4, -6];
   const got = selectOpponentMistakeCols(scores, board).sort((a, b) => a - b);
-  // Drop best tier (col0) and worst tier (col6); accumulate from 2nd-best until >=3, cap 4.
-  // 2nd..: col1(9),col2(8),col3(7) -> 3 reached -> stop. worst tier already excluded.
+  // Candidates ranked best-first: 0(col1), -1(col2), -2(col3) → 3 reached, stop.
   assert.deepEqual(got, [1, 2, 3]);
 });
 
-test('selectOpponentMistakeCols never splits a tie tier', () => {
+test('selectOpponentMistakeCols never splits a tie tier among concessions', () => {
   const board = new Board('');
-  const scores = [10, 9, 9, 9, 9, 5, 4]; // best col0; tie tier (9) has 4 cols; worst col6.
+  // col0 wins (5, excluded); four 0-tier concessions (cols1-4); then -5,-6.
+  const scores = [5, 0, 0, 0, 0, -5, -6];
   const got = selectOpponentMistakeCols(scores, board).sort((a, b) => a - b);
-  // Exclude best(col0) and worst(col6); next tier is the four 9s -> whole tier included (>=3, cap 4 ok).
   assert.deepEqual(got, [1, 2, 3, 4]);
 });
 
 test('selectOpponentMistakeCols returns [] when <=1 legal column', () => {
-  // Fill all but column 0 to height 6 by constructing a near-full board movestring is overkill;
-  // instead assert the guard via a board with a single legal column.
-  const board = new Board('111111'); // col1 filled to 6 -> still other cols legal; use colHeights directly
-  // Simpler: monkeypatch colHeights to simulate one legal col.
+  const board = new Board('');
   board.colHeights = [0, 6, 6, 6, 6, 6, 6];
-  const scores = [3, 0, 0, 0, 0, 0, 0];
+  const scores = [-3, 0, 0, 0, 0, 0, 0];
   assert.deepEqual(selectOpponentMistakeCols(scores, board), []);
 });
 
-test('selectOpponentMistakeCols keeps a whole tie tier even if it exceeds OPPONENT_CAP', () => {
-  // Never-split-overrides-cap: if the first middle tier is a large tie, return all of it.
+test('selectOpponentMistakeCols keeps a whole concession tie tier even past OPPONENT_CAP', () => {
   const board = new Board('');
-  const scores = [10, 5, 5, 5, 5, 5, 1]; // best col0(10); tie tier cols1-5(5); worst col6(1)
+  // col0 wins (5, excluded); five 0-tier concessions (cols1-5); col6 = -6.
+  const scores = [5, 0, 0, 0, 0, 0, -6];
   const got = selectOpponentMistakeCols(scores, board).sort((a, b) => a - b);
-  // Exclude best(col0) and worst(col6); first middle tier is the five 5s -> whole tier included,
-  // even though 5 columns exceeds OPPONENT_CAP(4).
-  assert.deepEqual(got, [1, 2, 3, 4, 5]);
+  assert.deepEqual(got, [1, 2, 3, 4, 5]); // never-split overrides the cap
 });
 
 test('classifyPatternWithTimeout returns empty Map when classify hangs', async () => {
@@ -78,7 +79,7 @@ test('extractLookaheadStructures keeps Tier-1 + threat tags with cells, drops ot
 
 test('searchOpportunities expands a threat union into one instance per completing cell', async () => {
   const { searchOpportunities } = await import('../server/sparseLookahead.js');
-  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  const solver = fakeSolver(() => [3, 0, 0, 0, 0, 0, -3]); // cols1-5 concede (0), col0 wins, col6 worst
   // On the player node after opponent reply col 2, surface a 2-cell parity threat union.
   const classifyFn = async (ms) => {
     if (ms[1] === '2') return new Map([['major_threat_parity', { cells: ['c1r5', 'c3r3'] }]]);
@@ -102,8 +103,8 @@ test('searchOpportunities tallies structures per first-opponent-reply branch', a
   const { searchOpportunities } = await import('../server/sparseLookahead.js');
 
   // Root after candidate move = '3' (one disc). depth small via budget.
-  // Opponent scores: make cols 1,2,3 the mistakes (col0 best, col6 worst).
-  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  // Opponent scores: cols1-5 concede (0), col0 wins, col6 worst concession.
+  const solver = fakeSolver(() => [3, 0, 0, 0, 0, 0, -3]); // cols1-5 concede (0), col0 wins, col6 worst
   // classifyFn: only when it's the player's move AND the line went through opp reply col 2,
   // report a double_threat; otherwise nothing.
   const classifyFn = async (ms, perspective) => {
@@ -121,7 +122,7 @@ test('searchOpportunities tallies structures per first-opponent-reply branch', a
 test('searchOpportunities stops when call budget is exhausted', async () => {
   const { searchOpportunities } = await import('../server/sparseLookahead.js');
 
-  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  const solver = fakeSolver(() => [3, 0, 0, 0, 0, 0, -3]); // cols1-5 concede (0), col0 wins, col6 worst
   let calls = 0;
   const classifyFn = async () => { calls++; return new Map(); };
   await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 2 });
@@ -397,9 +398,9 @@ test('runSparseLookahead: both moves win → case 2, both win with best play', a
 
 test('runSparseLookahead: solver error on pre-move query falls back to mistake mode (no throw)', async () => {
   // Pre-move query throws → optScore undefined → mistake-mode best-vs-played fallback.
-  // Mistake mode explores middle tiers [1,2,3,4,5] best-first; the match lands on col 1,
-  // the FIRST reply explored, so the depth-first budget reaches it before being exhausted.
-  const node = [10, 5, 5, 5, 5, 5, 1];
+  // Mistake mode explores concession replies (score<=0); col1 concedes (0), so the match
+  // lands on col 1, the first concession explored.
+  const node = [10, 0, 0, 0, 0, 0, -1]; // col0 wins (10), cols1-5 concede (0), col6 worst (-1)
   const fSolver = { async query(ms) { if (ms === '') throw new Error('pre-move solver error'); return node; } };
   const classifyFn = async (ms) => {
     if (ms[0] === '1' && ms[1] === '1') return new Map([['double_threat', { cells: ['c4r3'] }]]);

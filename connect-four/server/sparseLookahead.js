@@ -40,42 +40,43 @@ function priorityIndex(tag) {
 
 /**
  * 0-indexed opponent "mistake" columns to explore from an opponent-to-move node.
- * Excludes the best score tier and the single worst tier; accumulates middle tiers
- * (best-first) until >=3 columns, never splitting a tier, capped by OPPONENT_CAP.
+ * Only considers columns whose score <= 0 (the opponent concedes at least a draw).
+ * A still-winning sub-optimal reply does NOT hand the player a genuine on-board
+ * opportunity — exploring it floods the look-ahead with phantom player structure in
+ * positions the player is actually losing (see fv-sufficiency eval-42).
  *
- * Uniform-score exception: when every legal column scores the same (one tier), the
- * opponent has no mistake gradient to rank — but the position can still be one the
- * player wins only if the opponent errs (e.g. a winning-under-optimal-play position
- * with no immediate forcing threat — NOT a forced win in the classifier sense). In
- * that case we explore ALL legal replies rather than pruning, so the search can find
- * the threats the player builds down any opponent line. This case is rare, so the
- * extra branching has negligible cost.
+ * Among concessions, accumulates score tiers (best = least-bad for opponent, first)
+ * until >=3 columns; never splits a tie tier; a single large tie tier may exceed
+ * OPPONENT_CAP rather than force an arbitrary within-tier choice.
+ * Returns [] when no legal reply concedes a draw-or-loss.
  */
 export function selectOpponentMistakeCols(scores, board) {
   const legal = [];
   for (let c = 0; c < COLS; c++) if (board.colHeights[c] < ROWS) legal.push(c);
   if (legal.length <= 1) return [];
 
-  // Group legal columns into score tiers, best (highest score) first.
+  // Only opponent replies that concede at least a draw (score <= 0 from the opponent's
+  // to-move perspective) are real mistakes worth exploring. A still-winning sub-optimal
+  // reply does NOT hand the player a genuine on-board opportunity — exploring it floods the
+  // look-ahead with phantom player structure in positions the player is actually losing
+  // (see the feature-vector glossary §5.3 and the sufficiency report's eval-42).
+  const candidates = legal.filter((c) => scores[c] <= 0);
+  if (candidates.length === 0) return [];
+
+  // Group concessions into score tiers, best (highest score = least-bad for the opponent,
+  // i.e. the most realistic slip) first.
   const byScore = new Map();
-  for (const c of legal) {
+  for (const c of candidates) {
     const s = scores[c];
     if (!byScore.has(s)) byScore.set(s, []);
     byScore.get(s).push(c);
   }
-  const tiers = [...byScore.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([, cols]) => cols);
+  const tiers = [...byScore.entries()].sort((a, b) => b[0] - a[0]).map(([, cols]) => cols);
 
-  if (tiers.length <= 1) return legal; // all scores equal — explore every legal reply (see uniform-score exception above)
-  // Drop best tier (index 0). Drop worst tier (last) unless that leaves nothing.
-  const middle = tiers.slice(1, tiers.length > 2 ? tiers.length - 1 : tiers.length);
-
-  // Accumulate middle tiers whole; never-split takes precedence over OPPONENT_CAP.
-  // A single large tie tier may exceed the cap (e.g., 5 columns) rather than force
-  // an arbitrary within-tier choice.
+  // Accumulate whole tiers (best-first) until >=3 columns; never split a tie tier; a single
+  // large tie tier may exceed OPPONENT_CAP rather than force an arbitrary within-tier choice.
   const selected = [];
-  for (const tier of middle) {
+  for (const tier of tiers) {
     if (selected.length >= 3 && selected.length + tier.length > OPPONENT_CAP) break;
     selected.push(...tier);
     if (selected.length >= 3) break;
