@@ -151,13 +151,18 @@ function topScoringCols(scores, board, cap) {
   return legal.slice(0, cap);
 }
 
-function recordWay(tally, tag, firstReply, cells) {
+function recordWay(tally, tag, firstReply, cells, ply) {
   if (!tally.has(tag)) tally.set(tag, { branches: new Set(), ways: [], occurrences: 0 });
   const entry = tally.get(tag);
   entry.branches.add(firstReply);
   entry.occurrences += 1;   // raw count: every node at which the structure was detected
   const key = cells.join(',');
-  if (!entry.ways.some(w => w.join(',') === key)) entry.ways.push(cells);
+  const existing = entry.ways.find((w) => w.cells.join(',') === key);
+  if (existing) {
+    if (ply < existing.ply) existing.ply = ply; // keep the EARLIEST realization
+  } else {
+    entry.ways.push({ cells, ply });
+  }
 }
 
 // Deduplicate candidate columns by their solver score: keep only the first column for each
@@ -215,14 +220,15 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
       // Player to move: detect structures here, then continue down best lines.
       if (budget.calls > 0) {
         budget.calls -= 1;
+        const ply = 1 + (depth - pliesLeft); // plies from the pre-move board (root = 1)
         const map = await classifyPatternWithTimeout(classifyFn, ms, perspective, solver);
         for (const { tag, cells } of extractLookaheadStructures(map)) {
           if (THREAT_TAGS.has(tag)) {
             // Expand the union into one instance per completing cell — each threat counts
             // independently and is independently pointable.
-            for (const cell of cells) recordWay(tally, tag, firstReply, [cell]);
+            for (const cell of cells) recordWay(tally, tag, firstReply, [cell], ply);
           } else {
-            recordWay(tally, tag, firstReply, cells); // Tier-1: single grouped way
+            recordWay(tally, tag, firstReply, cells, ply); // Tier-1: single grouped way
           }
         }
       }
@@ -285,12 +291,12 @@ export function collectNovelOpportunities(bestTally, playedTally) {
   const out = [];
   for (const [tag, entry] of bestTally) {
     const playedEntry = playedTally.get(tag);
-    const playedWayKeys = new Set((playedEntry?.ways ?? []).map(w => w.join(',')));
-    const novelWays = entry.ways.filter(w => !playedWayKeys.has(w.join(',')));
+    const playedWayKeys = new Set((playedEntry?.ways ?? []).map((w) => w.cells.join(',')));
+    const novelWays = entry.ways.filter((w) => !playedWayKeys.has(w.cells.join(',')));
     if (novelWays.length === 0) continue;
     out.push({
       tag,
-      ways: novelWays.slice(0, MAX_WAYS),
+      ways: novelWays.slice(0, MAX_WAYS).map((w) => ({ cells: w.cells, realizedOnPly: w.ply })),
       novelInstances: novelWays.length,
     });
   }
@@ -331,9 +337,9 @@ export function buildAliasOutput(winner, prefix) {
   if (!winner) return null;
   const aliasMap = {};
   const allCells = new Set();
-  winner.ways.forEach((cells, i) => {
-    aliasMap[`${prefix}-${winner.tag}-${i + 1}`] = 'cells:' + cells.join(',');
-    for (const c of cells) allCells.add(c);
+  winner.ways.forEach((way, i) => {
+    aliasMap[`${prefix}-${winner.tag}-${i + 1}`] = 'cells:' + way.cells.join(',');
+    for (const c of way.cells) allCells.add(c);
   });
   return {
     tag: winner.tag,

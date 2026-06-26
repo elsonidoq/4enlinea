@@ -90,7 +90,7 @@ test('searchOpportunities expands a threat union into one instance per completin
   assert.ok(t, 'major_threat_parity tallied');
   // Two completing cells → two separate ways/instances, each a single-cell group.
   assert.equal(t.ways.length, 2, 'one instance per completing cell');
-  assert.ok(t.ways.every((w) => w.length === 1), 'each way is a single cell');
+  assert.ok(t.ways.every((w) => w.cells.length === 1), 'each way is a single cell');
   assert.ok(t.occurrences >= 2, 'occurrences counts each cell independently');
 });
 
@@ -116,7 +116,7 @@ test('searchOpportunities tallies structures per first-opponent-reply branch', a
   const dt = tally.get('double_threat');
   assert.ok(dt, 'double_threat tallied');
   assert.ok(dt.branches.has(2), 'reachable via opponent reply col 2');
-  assert.deepEqual(dt.ways[0], ['c4r3', 'c5r3']);
+  assert.deepEqual(dt.ways[0].cells, ['c4r3', 'c5r3']);
 });
 
 test('searchOpportunities stops when call budget is exhausted', async () => {
@@ -133,7 +133,7 @@ test('searchOpportunities stops when call budget is exhausted', async () => {
 // via branch counts) keep working under occurrences-based ranking; pass a 4th element to
 // set occurrences explicitly.
 const tally = (entries) => new Map(entries.map(([t, b, ways, occ]) =>
-  [t, { branches: new Set(b), ways: ways ?? [['c4r3']], occurrences: occ ?? (b?.length ?? 0) }]));
+  [t, { branches: new Set(b), ways: (ways ?? [['c4r3']]).map((cells) => ({ cells, ply: 1 })), occurrences: occ ?? (b?.length ?? 0) }]));
 
 test('compareOpportunities selects by informativeness priority, not raw quantity', async () => {
   const { compareOpportunities } = await import('../server/sparseLookahead.js');
@@ -163,8 +163,8 @@ test('collectNovelOpportunities returns every category (best minus played), prio
   const got = collectNovelOpportunities(best, played);
   // figure_7 fully shared → omitted; the other two survive, ordered parity-major before minor.
   assert.deepEqual(got.map(e => e.tag), ['major_threat_parity', 'minor_threat']);
-  assert.deepEqual(got[0].ways, [['c3r4'], ['c5r2']]);     // both novel, ≤ MAX_WAYS
-  assert.deepEqual(got[1].ways, [['c2r1'], ['c3r1']]);     // c1r1 excluded (shared), capped at 2
+  assert.deepEqual(got[0].ways, [{ cells: ['c3r4'], realizedOnPly: 1 }, { cells: ['c5r2'], realizedOnPly: 1 }]);     // both novel, ≤ MAX_WAYS
+  assert.deepEqual(got[1].ways, [{ cells: ['c2r1'], realizedOnPly: 1 }, { cells: ['c3r1'], realizedOnPly: 1 }]);     // c1r1 excluded (shared), capped at 2
 });
 
 test('compareOpportunities picks structure best reaches more than played', async () => {
@@ -175,7 +175,7 @@ test('compareOpportunities picks structure best reaches more than played', async
   const got = compareOpportunities(best, played);
   assert.equal(got.tag, 'double_threat');
   assert.equal(got.ways.length, 2); // novel ways (best minus played), capped at MAX_WAYS
-  assert.ok(!got.ways.some(w => w.join(',') === 'c4r3'), 'the shared way is excluded');
+  assert.ok(!got.ways.some(w => w.cells.join(',') === 'c4r3'), 'the shared way is excluded');
 });
 
 test('compareOpportunities returns null when the occurrence delta is only a frequency difference', async () => {
@@ -280,6 +280,19 @@ test('runSparseLookahead resolves (does not reject) when solver.query throws', a
   // Must RESOLVE (not reject). Every query throws → no structures → a no-winner object.
   assert.equal(result.tag, null);
   assert.equal(result.oppTag, null);
+});
+
+test('collectNovelOpportunities carries realizedOnPly (>=1, minimum across nodes)', async () => {
+  const { searchOpportunities, collectNovelOpportunities } = await import('../server/sparseLookahead.js');
+  // Scores: col0 wins (3), cols1-5 concede (0), col6 worst (-3).
+  // classifyFn fires on any player node (ms.length >= 2 = after root + opp reply).
+  const solver = fakeSolver(() => [3, 0, 0, 0, 0, 0, -3]);
+  const classifyFn = async (ms) => (ms.length >= 2 ? new Map([['minor_threat', { cells: ['c4r3'] }]]) : new Map());
+  const best = await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 20 }, 3);
+  const novel = collectNovelOpportunities(best, new Map());
+  const mt = novel.find((n) => n.tag === 'minor_threat');
+  assert.ok(mt, 'minor_threat surfaced');
+  assert.ok(mt.ways.every((w) => Number.isInteger(w.realizedOnPly) && w.realizedOnPly >= 1), 'each way has realizedOnPly >= 1');
 });
 
 import { isAnchorlessPosition } from '../server/sparseLookahead.js';

@@ -9,7 +9,7 @@
 //
 // pruneEmpty (default) then collapses a patterns* map that becomes empty after stripping.
 
-import { describe, it } from 'node:test';
+import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toFeatureVector } from '../../server/explainContext.js';
 
@@ -161,8 +161,8 @@ describe('toFeatureVector — severity labels (Task 3)', () => {
       lookahead: {
         case: 3,
         categoryExamples: [
-          { tag: 'major_threat_parity', ways: [['c4r3']], novelInstances: 1 },
-          { tag: 'minor_threat', ways: [['c1r1']], novelInstances: 1 },
+          { tag: 'major_threat_parity', ways: [{ cells: ['c4r3'], realizedOnPly: 2 }], novelInstances: 1 },
+          { tag: 'minor_threat', ways: [{ cells: ['c1r1'], realizedOnPly: 1 }], novelInstances: 1 },
         ],
         oppCategoryExamples: [],
         tallyComparison: [],
@@ -174,4 +174,19 @@ describe('toFeatureVector — severity labels (Task 3)', () => {
     assert.equal(byTag.major_threat_parity.owner, 'player');
     assert.equal(byTag.minor_threat.severity, 'minor');
   });
+});
+
+test('feature vector lookahead ways carry realizedOnPly', () => {
+  const pd = {
+    movestring: '3434', perspective: 1, playedCol: 1, bestCol: 4,
+    playedCell: 'c2r1', bestCell: 'c5r1',
+    threatStats: { pre: {}, best: {}, played: {} },
+    lookahead: {
+      case: 3,
+      categoryExamples: [{ tag: 'minor_threat', ways: [{ cells: ['c4r3'], realizedOnPly: 2 }], novelInstances: 1 }],
+      oppCategoryExamples: [], tallyComparison: [],
+    },
+  };
+  const fv = toFeatureVector(pd, { prune: true });
+  assert.equal(fv.lookahead.categoryExamples[0].ways[0].realizedOnPly, 2);
 });

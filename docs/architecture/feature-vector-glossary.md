@@ -260,8 +260,8 @@ lookahead: {
   case:                <enum>,                       // which comparison was run
   bestOutcome:         <outcome> | null,             // result of the better move, with best play
   postBlunderOutcome:  <outcome> | null,             // result of the played move, with best play
-  categoryExamples:    [ { tag, ways, novelInstances }, ... ],
-  oppCategoryExamples: [ { tag, ways, novelInstances }, ... ],
+  categoryExamples:    [ { tag, ways: [{ cells, realizedOnPly }], novelInstances }, ... ],
+  oppCategoryExamples: [ { tag, ways: [{ cells, realizedOnPly }], novelInstances }, ... ],
   perCategory:         [ { tag, bestInstances, playedInstances }, ... ],
 }
 ```
@@ -292,8 +292,8 @@ move would have held the draw; your move loses."* (`null` = the outcome could no
 | Field | Meaning |
 |---|---|
 | `tag` | A pattern category (from §4's vocabulary) that the search surfaced. |
-| `ways` | A list of cell-sets (each a list of `cNrM`) — the **novel** squares the better line opens that the played line cannot. These are concrete board squares you may name. |
-| `novelInstances` | Count of distinct novel cells across `ways`. |
+| `ways` | A list of `{ cells: [<cNrM>...], realizedOnPly }` entries. `cells` are the novel squares; **`realizedOnPly` is how many plies into the future the structure first appears** (1 = the immediate resulting board; larger = a deeper line). A high `realizedOnPly` is a *projected* future structure, **not** a threat on the current board — never describe it as already present. |
+| `novelInstances` | Count of distinct novel cell-sets across `ways`. |
 | `owner` | `"player"` for `categoryExamples`; `"opponent"` for `oppCategoryExamples`. |
 | `severity` | Threat-window severity — `"immediate"`, `"major"`, or `"minor"` — for threat tags; absent for structural tags (same vocabulary as §1 and §4). |
 
@@ -345,7 +345,7 @@ Given (abbreviated):
     "case": "better_holds_played_loses",
     "bestOutcome": "draw_with_best_play",
     "postBlunderOutcome": "loss_with_best_play",
-    "oppCategoryExamples": [ { "tag": "double_threat", "ways": [["c5r4"]], "novelInstances": 1 } ]
+    "oppCategoryExamples": [ { "tag": "double_threat", "ways": [{ "cells": ["c5r4"], "realizedOnPly": 2 }], "novelInstances": 1 } ]
   }
 }
 ```
