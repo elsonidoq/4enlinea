@@ -50,6 +50,63 @@ function evalSetDisplayName(filename) {
   return filename.replace(/^eval_set_/, '').replace(/\.json$/, '');
 }
 
+// Pretty-print JSON with lightweight syntax highlighting (no dependency). Indents 2
+// spaces, then wraps keys/strings/numbers/booleans/null in colored spans. Input is
+// HTML-escaped first, so the value itself can contain any characters safely.
+const JSON_COLORS = { key: '#7c3aed', str: '#16a34a', num: '#2563eb', bool: '#db2777', null: '#94a3b8' };
+function highlightJson(value) {
+  const json = JSON.stringify(value, null, 2)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+    (match) => {
+      let cls = 'num';
+      if (/^"/.test(match)) cls = /:$/.test(match) ? 'key' : 'str';
+      else if (/^(true|false)$/.test(match)) cls = 'bool';
+      else if (match === 'null') cls = 'null';
+      return `<span style="color:${JSON_COLORS[cls]}">${match}</span>`;
+    },
+  );
+}
+
+// Recursive empty/all-zero elimination — client port of pruneEmpty in server/explainContext.js.
+// Toggled in the header; collapses the fixed-shape feature vector to only its informative fields.
+function fvIsZeroOrBlankDeep(v) {
+  if (v === null || v === undefined || v === '') return true;
+  if (typeof v === 'number') return v === 0;
+  if (typeof v === 'boolean' || typeof v === 'string') return false;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.values(v).every(fvIsZeroOrBlankDeep);
+  return false;
+}
+function fvIsDroppable(v) {
+  if (v === null || v === undefined || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.keys(v).length === 0 || fvIsZeroOrBlankDeep(v);
+  return false;
+}
+function pruneFeatureVectorDeep(value) {
+  if (Array.isArray(value)) return value.map(pruneFeatureVectorDeep).filter((v) => !fvIsDroppable(v));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      const pv = pruneFeatureVectorDeep(v);
+      if (!fvIsDroppable(pv)) out[k] = pv;
+    }
+    return out;
+  }
+  return value;
+}
+
+function JsonView({ value }) {
+  return (
+    <pre
+      style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5, color: '#1e293b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowX: 'auto' }}
+      dangerouslySetInnerHTML={{ __html: highlightJson(value) }}
+    />
+  );
+}
+
 // Flag-this-explanation control mirroring the in-app DeepRevealPane UX, but
 // writing to a per-run feedback JSONL file via POST /api/admin/eval-feedback.
 // Reset between entries/files by giving it a `key`.
@@ -135,8 +192,18 @@ function EvalViewer() {
   const [fileRows, setFileRows] = useState(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [collapseEmpty, setCollapseEmpty] = useState(true); // recursive empty-elimination on the feature vector — ON by default
   const [allFilesRows, setAllFilesRows] = useState(new Map());
   const [allFilesLoading, setAllFilesLoading] = useState(new Set());
+
+  // This tool is a dense desktop debugging surface (board + deep reveal + prompt-data
+  // column side by side). Below ~1100px there is no room for the layout, so we gate it.
+  const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1100);
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1100);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // eval set name without extension, e.g. "eval_set_large_2"
   const evalSetBasename = selectedEvalSet ? selectedEvalSet.replace(/\.json$/, '') : '';
@@ -265,13 +332,25 @@ function EvalViewer() {
   const selectPrompt = !selectedEvalSet && !loading && !error;
   const noEntries = selectedEvalSet && !loading && !error && entries.length === 0;
 
+  if (!isDesktop) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: 32, textAlign: 'center', background: '#0f172a', color: '#94a3b8', fontFamily: 'monospace', fontSize: 14, lineHeight: 1.6 }}>
+        The Deep Reveal Eval tool is desktop-only. Please open it on a wider screen (≥ 1100px).
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
       {/* Header row 1: title + eval set selector + counter + nav */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12, background: '#1e293b', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, color: '#94a3b8' }}>
-          Deep Reveal Eval
+          Deep reveal feature vector
         </span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11, color: '#94a3b8', cursor: 'pointer' }}>
+          <input type="checkbox" checked={collapseEmpty} onChange={e => setCollapseEmpty(e.target.checked)} />
+          collapse empty
+        </label>
         <select
           value={selectedEvalSet}
           onChange={e => setSelectedEvalSet(e.target.value)}
@@ -435,53 +514,81 @@ function EvalViewer() {
           fileLoading ? (
             <div style={{ padding: 20, color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>Loading…</div>
           ) : matchedRow ? (
-            <SplitReveal
-              isOpen={true}
-              onClose={() => setSelectedFile('')}
-              closeLabel="← Deselect file"
-              boardContent={
-                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
-              }
-              revealContent={
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6, color: 'var(--ink)' }}>
-                  {([...(matchedRow.attempt1_failures || []), ...(matchedRow.attempt2_failures || [])].length > 0) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
-                      {(matchedRow.attempt1_failures || []).map(f => (
-                        <span key={`a1-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#78350f', color: '#fcd34d', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
-                          a1: {f}
-                        </span>
-                      ))}
-                      {(matchedRow.attempt2_failures || []).map(f => (
-                        <span key={`a2-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#92400e', color: '#fde68a', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
-                          a2: {f}
-                        </span>
-                      ))}
+            <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+              {/* Left column: board + deep reveal (~30% narrower than the prior flex:1 ≈58%) */}
+              <div style={{ flex: '0 0 40%', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                <SplitReveal
+                  isOpen={true}
+                  onClose={() => setSelectedFile('')}
+                  closeLabel="← Deselect file"
+                  boardContent={
+                    <Board board={boardObj.board} compact canPlay={false} overlays={overlays} zhCells={zhCells} />
+                  }
+                  revealContent={
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.6, color: 'var(--ink)' }}>
+                      {([...(matchedRow.attempt1_failures || []), ...(matchedRow.attempt2_failures || [])].length > 0) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+                          {(matchedRow.attempt1_failures || []).map(f => (
+                            <span key={`a1-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#78350f', color: '#fcd34d', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
+                              a1: {f}
+                            </span>
+                          ))}
+                          {(matchedRow.attempt2_failures || []).map(f => (
+                            <span key={`a2-${f}`} style={{ padding: '2px 8px', borderRadius: 10, background: '#92400e', color: '#fde68a', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>
+                              a2: {f}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {matchedRow.final_response ? (
+                        <AnnotatedExplanation
+                          text={matchedRow.final_response}
+                          termsMap={{}}
+                          userMajorThreats={userMajorThreats}
+                          onHighlightsChange={setZhCells}
+                          navigate={() => {}}
+                        />
+                      ) : (
+                        <p style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12, margin: 0 }}>
+                          No final_response for this entry.
+                        </p>
+                      )}
+                      {matchedRow.final_response && (
+                        <div style={{ marginTop: 16 }}>
+                          <EvalFlagButton
+                            key={`${selectedFile}:${matchedRow.id ?? entry.id}`}
+                            filename={selectedFile}
+                            id={matchedRow.id ?? entry.id}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  }
+                />
+              </div>
+
+              {/* Right column: feature vector + prompt data + prompt */}
+              {(() => { const featureVector = matchedRow.feature_vector ?? matchedRow.filtered_prompt_data; return (
+              (featureVector || matchedRow.prompt_data || matchedRow.prompt) && (
+                <aside style={{ flex: 1, minWidth: 400, borderLeft: '1px solid #e2e8f0', background: '#fff', overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {featureVector && (
+                    <div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
+                        Feature Vector{collapseEmpty ? ' (collapsed)' : ''}
+                      </div>
+                      <JsonView value={collapseEmpty ? pruneFeatureVectorDeep(featureVector) : featureVector} />
                     </div>
                   )}
-                  {matchedRow.final_response ? (
-                    <AnnotatedExplanation
-                      text={matchedRow.final_response}
-                      termsMap={{}}
-                      userMajorThreats={userMajorThreats}
-                      onHighlightsChange={setZhCells}
-                      navigate={() => {}}
-                    />
-                  ) : (
-                    <p style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12, margin: 0 }}>
-                      No final_response for this entry.
-                    </p>
-                  )}
-                  {matchedRow.final_response && (
-                    <div style={{ marginTop: 16 }}>
-                      <EvalFlagButton
-                        key={`${selectedFile}:${matchedRow.id ?? entry.id}`}
-                        filename={selectedFile}
-                        id={matchedRow.id ?? entry.id}
-                      />
+                  {matchedRow.prompt_data && (
+                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
+                        Prompt Data
+                      </div>
+                      <JsonView value={matchedRow.prompt_data} />
                     </div>
                   )}
                   {matchedRow.prompt && (
-                    <div style={{ marginTop: 24, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
                         Prompt
                       </div>
@@ -490,9 +597,9 @@ function EvalViewer() {
                       </pre>
                     </div>
                   )}
-                </div>
-              }
-            />
+                </aside>
+              )); })()}
+            </div>
           ) : (
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ borderRadius: 8, padding: 12, maxWidth: 380 }}>
@@ -552,6 +659,21 @@ function EvalViewer() {
 }
 
 export default function AdminDeepRevealEvalPage() {
+  // #root is globally capped at max-width:480px (the mobile app shell). This admin tool
+  // is a full-width desktop surface, so widen #root while it's mounted and restore the
+  // original constraints on unmount — without touching the global stylesheet.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const prev = { maxWidth: root.style.maxWidth, width: root.style.width };
+    root.style.maxWidth = 'none';
+    root.style.width = '100%';
+    return () => {
+      root.style.maxWidth = prev.maxWidth;
+      root.style.width = prev.width;
+    };
+  }, []);
+
   return (
     <ProfileStoreProvider>
       <EvalViewer />

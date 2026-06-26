@@ -13,7 +13,7 @@
 - [Forced-block detection](reference_cat5_forced_block_detection.md) — use checkWin, not flat scores
 - [Binary stale/crash fix](feedback_binary_rebuild.md) — delete + make to recompile
 - [Railway clock skew](project_railway_solver_clock_skew.md) — -B flag + test -f guard in railpack.json
-- [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/12-tag; Map priority
+- [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/15-detector; +3 parity threats; Map priority
 - [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast
 
 ## Before adding a puzzle category
@@ -28,6 +28,7 @@
 - [Classifier architecture](project_classifier_architecture.md) — detection pipeline; highlight_metadata schemas per category
 - [Classifier current state](project_classifier_current_state.md) — convolution refactor; pre-existing test failures
 - [detectOddEvenThreat Yellow](project_detect_odd_even_threat_yellow.md) — Yellow support added; renamed fields
+- [odd_even_threat is puzzle-only](project_odd_even_threat_puzzle_only.md) — still a classifyPattern tag + category, but de-listed from coach + blunder vocab (2026-06-25)
 
 ## Before writing a server endpoint
 
@@ -40,6 +41,7 @@
 - [Supabase session contamination](bug_supabase_js_session_contamination.md) — two clients: supabase (DB) + authClient (auth)
 - [GoTrue trigger not firing](bug_supabase_trigger_not_firing.md) — loadUser auto-creates public.users row
 - [Error logging](feedback_server_testing_pattern.md) — extract helper + node --test (no endpoint harness)
+- [eval-results field whitelist](project_eval_results_field_whitelist.md) — /api/admin/eval-results/:filename whitelists row fields; new run_eval fields dropped unless added there too
 
 ## Before writing a DB migration
 
@@ -160,6 +162,7 @@
 - [CSS flex-basis % trap](reference_css_flex_basis_percentage_height_trap.md) — use px via ResizeObserver
 - [SplitReveal minHeight:0 trap](reference_split_reveal_min_height.md) — containing flex item needs minHeight:0 or board fills viewport; siblings in bounded column must move inside scrollable area
 - [CSS maxWidth % trap](reference_css_maxwidth_percentage_trap.md) — pair maxWidth with explicit width
+- [#root max-width cap](reference_root_maxwidth_cap.md) — #root globally capped at 480px (mobile shell); full-width admin pages override #root inline on mount/restore on unmount
 - [Check CSS before using mockup class names](feedback_check_css_before_using_mockup_classes.md) — grep tokens.css first
 - [Mobile tap highlight](feedback_mobile_tap_highlight.md) — WebkitTapHighlightColor on tappable divs
 - [Navigator params spread](feedback_navigator_params_spread.md) — params spread as direct props

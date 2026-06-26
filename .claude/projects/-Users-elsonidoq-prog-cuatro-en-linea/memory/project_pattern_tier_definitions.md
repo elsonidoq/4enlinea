@@ -1,8 +1,10 @@
 ---
 name: project_pattern_tier_definitions
-description: Pattern Tier-1/2/3 grouping lives in explainContext.js, NOT classifier.js; distinct from position tier (WINNING/LOSING)
-metadata:
+description: "Pattern Tier-1/2/3 grouping lives in explainContext.js, NOT classifier.js; distinct from position tier (WINNING/LOSING)"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: c9e50389-b9da-47c3-9f2d-cf1525eac88a
 ---
 
 The deep-reveal **pattern tiers** (Tier-1/Tier-2/Tier-3) are NOT defined in
@@ -19,6 +21,17 @@ produces the raw `classifyPattern` tags. The tier *grouping* lives in
 A board "with no Tier-1/2 pattern" is exactly the `allowedSet === null` case in
 `buildAllowedSetFromPatternMaps` — see [[project_patterns_blunders_done]] (null vs []
 semantics for validateAnnotation).
+
+**Threat detectors emit cells but are deliberately NOT in `TIER1_TAGS`.** The 3
+parity-aware threat detectors added 2026-06-25 (`major_threat_parity`,
+`major_threat_nonparity`, `minor_threat`) return concrete `cells[]` like a Tier-1
+detector, yet they are intentionally absent from `explainContext.js`'s `TIER1_TAGS`, so
+`buildAllowedSetFromPatternMaps` falls them through to "Tier-3: skip" — they do NOT
+expand the static `allowedSet`. They flow instead through the **sparse look-ahead's
+own** `LOOKAHEAD_TAGS = TIER1 ∪ THREAT_TAGS` set in `sparseLookahead.js` (a separate
+tier list from explainContext's). Two distinct tag-tier registries; don't assume a
+cell-emitting tag is in `TIER1_TAGS`. See [[project_sparse_lookahead_unvalidated]] and
+[[project_odd_even_threat_puzzle_only]].
 
 **Beware a second, unrelated "tier":** `getPositionTier` (in `llmCoachHelpers.js`)
 returns the *position* tier `WINNING | NEUTRAL | LOSING` from solver scores. Totally

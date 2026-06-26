@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Board } from '../server/classifier.js';
-import { selectOpponentMistakeCols, selectOptimalOpponentCols, classifyPatternWithTimeout, extractTier1Structures, runSparseLookahead } from '../server/sparseLookahead.js';
+import { selectOpponentMistakeCols, selectOptimalOpponentCols, classifyPatternWithTimeout, extractLookaheadStructures, runSparseLookahead } from '../server/sparseLookahead.js';
 
 test('selectOpponentMistakeCols drops best tier and worst tier, keeps middle', () => {
   // 7 distinct tiers, all columns legal (empty board).
@@ -60,18 +60,37 @@ test('classifyPatternWithTimeout passes through the Map on success', async () =>
   assert.deepEqual(got.get('double_threat'), { cells: ['c4r3'] });
 });
 
-test('extractTier1Structures keeps Tier-1 tags with cells, drops others', () => {
+test('extractLookaheadStructures keeps Tier-1 + threat tags with cells, drops others', () => {
   const map = new Map([
     ['double_threat', { cells: ['c4r3', 'c5r3'] }],
-    ['odd_even_threat', { cells: [] }],   // Tier-3 -> dropped
-    ['j_shape', { cells: [] }],           // Tier-1 but empty -> dropped
+    ['odd_even_threat', { cells: [] }],        // not a look-ahead tag -> dropped
+    ['j_shape', { cells: [] }],                // look-ahead tag but empty -> dropped
     ['figure_7', { cells: ['c2r2'] }],
+    ['major_threat_parity', { cells: ['c1r5', 'c3r3'] }], // threat tag -> kept (union)
   ]);
-  const got = extractTier1Structures(map);
+  const got = extractLookaheadStructures(map);
   assert.deepEqual(got, [
     { tag: 'double_threat', cells: ['c4r3', 'c5r3'] },
     { tag: 'figure_7', cells: ['c2r2'] },
+    { tag: 'major_threat_parity', cells: ['c1r5', 'c3r3'] },
   ]);
+});
+
+test('searchOpportunities expands a threat union into one instance per completing cell', async () => {
+  const { searchOpportunities } = await import('../server/sparseLookahead.js');
+  const solver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
+  // On the player node after opponent reply col 2, surface a 2-cell parity threat union.
+  const classifyFn = async (ms) => {
+    if (ms[1] === '2') return new Map([['major_threat_parity', { cells: ['c1r5', 'c3r3'] }]]);
+    return new Map();
+  };
+  const tally = await searchOpportunities('3', 1, { solver, classifyFn }, { calls: 20 });
+  const t = tally.get('major_threat_parity');
+  assert.ok(t, 'major_threat_parity tallied');
+  // Two completing cells → two separate ways/instances, each a single-cell group.
+  assert.equal(t.ways.length, 2, 'one instance per completing cell');
+  assert.ok(t.ways.every((w) => w.length === 1), 'each way is a single cell');
+  assert.ok(t.occurrences >= 2, 'occurrences counts each cell independently');
 });
 
 // Fake solver: returns fixed scores so opponent/player column selection is deterministic.
@@ -109,16 +128,61 @@ test('searchOpportunities stops when call budget is exhausted', async () => {
   assert.ok(calls <= 2, `classify called at most budget times, got ${calls}`);
 });
 
-const tally = (entries) => new Map(entries.map(([t, b, ways]) =>
-  [t, { branches: new Set(b), ways: ways ?? [['c4r3']] }]));
+// occurrences defaults to the branch-list length so legacy tests (which expressed intent
+// via branch counts) keep working under occurrences-based ranking; pass a 4th element to
+// set occurrences explicitly.
+const tally = (entries) => new Map(entries.map(([t, b, ways, occ]) =>
+  [t, { branches: new Set(b), ways: ways ?? [['c4r3']], occurrences: occ ?? (b?.length ?? 0) }]));
+
+test('compareOpportunities selects by informativeness priority, not raw quantity', async () => {
+  const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  // minor_threat has FAR more novel ways (quantity) but major_threat_parity outranks it by
+  // priority → the winner must be the parity-aligned major, not the swarm of minors.
+  const best = tally([
+    ['minor_threat', [1, 2, 3], [['c1r1'], ['c2r1'], ['c3r1'], ['c4r1']], 40],
+    ['major_threat_parity', [1], [['c3r4']], 2],
+  ]);
+  const played = new Map();
+  const got = compareOpportunities(best, played);
+  assert.equal(got.tag, 'major_threat_parity');
+});
+
+test('collectNovelOpportunities returns every category (best minus played), priority-ordered, capped', async () => {
+  const { collectNovelOpportunities } = await import('../server/sparseLookahead.js');
+  const best = tally([
+    ['minor_threat', [1], [['c1r1'], ['c2r1'], ['c3r1']], 9],
+    ['major_threat_parity', [1], [['c3r4'], ['c5r2']], 2],
+    ['figure_7', [1], [['c2r2']], 1],
+  ]);
+  // played shares the figure_7 cell and one minor cell → those are excluded as non-novel.
+  const played = tally([
+    ['figure_7', [1], [['c2r2']], 1],
+    ['minor_threat', [1], [['c1r1']], 1],
+  ]);
+  const got = collectNovelOpportunities(best, played);
+  // figure_7 fully shared → omitted; the other two survive, ordered parity-major before minor.
+  assert.deepEqual(got.map(e => e.tag), ['major_threat_parity', 'minor_threat']);
+  assert.deepEqual(got[0].ways, [['c3r4'], ['c5r2']]);     // both novel, ≤ MAX_WAYS
+  assert.deepEqual(got[1].ways, [['c2r1'], ['c3r1']]);     // c1r1 excluded (shared), capped at 2
+});
 
 test('compareOpportunities picks structure best reaches more than played', async () => {
   const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  // played's way ['c4r3'] is NOT novel; the other three best ways are → capped at MAX_WAYS (2).
   const best = tally([['double_threat', [1, 2, 3], [['c4r3'], ['c5r4'], ['c2r2'], ['c6r5']]]]);
-  const played = tally([['double_threat', [1]]]);
+  const played = tally([['double_threat', [1], [['c4r3']]]]);
   const got = compareOpportunities(best, played);
   assert.equal(got.tag, 'double_threat');
-  assert.equal(got.ways.length, 3); // capped at MAX_WAYS
+  assert.equal(got.ways.length, 2); // novel ways (best minus played), capped at MAX_WAYS
+  assert.ok(!got.ways.some(w => w.join(',') === 'c4r3'), 'the shared way is excluded');
+});
+
+test('compareOpportunities returns null when the occurrence delta is only a frequency difference', async () => {
+  const { compareOpportunities } = await import('../server/sparseLookahead.js');
+  // best sees the SAME single cell more often (occ 3) than played (occ 1), but no NOVEL way.
+  const best = tally([['major_threat_parity', [1, 2, 3], [['c3r4']], 3]]);
+  const played = tally([['major_threat_parity', [1], [['c3r4']], 1]]);
+  assert.equal(compareOpportunities(best, played), null);
 });
 
 test('compareOpportunities returns null when no advantage', async () => {
@@ -163,14 +227,17 @@ test('runSparseLookahead returns alias map + allowedSet entries for the distingu
   assert.equal(got.allowedSetEntries[0].validationOnly, true);
 });
 
-test('runSparseLookahead returns null when nothing distinguishes the moves', async () => {
+test('runSparseLookahead returns a no-winner object (with tallyComparison) when nothing distinguishes the moves', async () => {
   const fSolver = fakeSolver(() => [10, 5, 5, 5, 5, 5, 1]);
   const classifyFn = async () => new Map();
   const got = await runSparseLookahead(
     { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
     { solver: fSolver, classifyFn },
   );
-  assert.equal(got, null);
+  // No structure on either side, but the search still reports what it found (empty here).
+  assert.equal(got.tag, null);
+  assert.equal(got.oppTag, null);
+  assert.deepEqual(got.tallyComparison, []);
 });
 
 // Fix 1: per-candidate independent budgets
@@ -191,7 +258,9 @@ test('runSparseLookahead: played search is not starved when best search runs fir
   };
   await runSparseLookahead(
     { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
-    { solver: fSolver, classifyFn },
+    // Pin the per-search budget to GLOBAL_CALL_BUDGET: the empty-board INITIAL tier would
+    // otherwise grant 2000 calls, which is unrelated to this test's "independent budgets" intent.
+    { solver: fSolver, classifyFn, budget: GLOBAL_CALL_BUDGET },
   );
   // Each search must receive up to GLOBAL_CALL_BUDGET calls independently.
   assert.ok(bestCalls <= GLOBAL_CALL_BUDGET, `best search used ${bestCalls} calls, expected <= ${GLOBAL_CALL_BUDGET}`);
@@ -207,8 +276,9 @@ test('runSparseLookahead resolves (does not reject) when solver.query throws', a
     { movestring: '', playedCol: 4, bestCol: 1, perspective: 1 },
     { solver: rejectingSolver, classifyFn },
   );
-  // Must resolve to null (no structures found due to pruning) — not reject.
-  assert.equal(result, null);
+  // Must RESOLVE (not reject). Every query throws → no structures → a no-winner object.
+  assert.equal(result.tag, null);
+  assert.equal(result.oppTag, null);
 });
 
 import { isAnchorlessPosition } from '../server/sparseLookahead.js';

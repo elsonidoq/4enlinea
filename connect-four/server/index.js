@@ -582,6 +582,9 @@ app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (re
         board_state: obj.board_state,
         final_response: obj.final_response,
         prompt: obj.prompt ?? null,
+        prompt_data: obj.prompt_data ?? null,
+        feature_vector: obj.feature_vector ?? null,
+        filtered_prompt_data: obj.filtered_prompt_data ?? null, // legacy result files
         attempt1_failures: obj.attempt1_failures ?? [],
         attempt2_failures: obj.attempt2_failures ?? [],
       };

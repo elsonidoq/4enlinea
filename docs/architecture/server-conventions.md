@@ -90,7 +90,9 @@ Current slugs (as of Epic 6): `immediate_threat`, `forced_block`, `double_threat
 
 **MUST**: All valid blunder tags are defined once in `server/blunderTags.js` as the `VALID_BLUNDER_TAGS` Set.
 
-The set contains exactly 15 tags (as of Epic 2 batch 1): `immediate_threat`, `forced_block`, `forced_win`, `double_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`, `z_threat`, `odd_even_threat`, `claimeven`, `claimodd`, `drawing_move`, `suboptimal_move`, `forbidden_columns`.
+The set contains exactly 16 tags (as of 2026-06-25): `immediate_threat`, `forced_block`, `forced_win`, `double_threat`, `undercut`, `overcut`, `figure_7`, `j_shape`, `z_threat`, `major_threat_parity`, `major_threat_nonparity`, `minor_threat`, `claimeven`, `drawing_move`, `suboptimal_move`, `forbidden_columns`.
+
+`odd_even_threat` was **removed** as a blunder tag 2026-06-25 (it remains a puzzle category and a `classifyPattern` tag — see [[project_odd_even_threat_puzzle_only]]). The three parity-aware threat tags replaced its blunder role; they are generic (almost any mid-game position carries a latent major threat), so they rank **last** among tactical tags in both `tagBlunder` cascades, just above the score-based fallbacks.
 
 `VALID_BLUNDER_TAGS` is distinct from `VALID_CATEGORIES` in `server/categories.js` (which lists puzzle category slugs). Blunder tags are applied to sparring-game blunders via `tagBlunder()` in `classifier.js`. Any tag not in this set is substituted with `'suboptimal_move'` before INSERT into the `blunders` table.
 
@@ -127,7 +129,9 @@ Categories that store their answer as a scalar (claimeven, figure_7, j_shape) re
 classifyPattern(ms, perspective, solver) → Promise<Map<string, { cells: string[] }>>
 ```
 
-Returns a Map of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Each value has a `cells` array of wire-format cell coordinates (`"c{col+1}r{row+1}"`, 1-indexed). Tags are drawn from all 13 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
+Returns a Map of tactical pattern tags (e.g. `'immediate_threat'`, `'forced_win'`, `'z_threat'`) present for the given `perspective` on the position `ms`. Each value has a `cells` array of wire-format cell coordinates (`"c{col+1}r{row+1}"`, 1-indexed). Tags are drawn from all 15 detectors, run in parallel via `Promise.all`. Never contains `'unknown'`.
+
+The 15 detectors include three **parity-aware threat** detectors added 2026-06-25 — `major_threat_parity`, `major_threat_nonparity`, `minor_threat` (geometry-only, built on `categorizeThreats`; see **Threat categorization** below). `odd_even_threat` is still emitted (puzzle path) but is de-listed from the coach prompt and the blunder vocabulary — see [[project_odd_even_threat_puzzle_only]].
 
 - `ms` — 0-indexed movestring.
 - `perspective` — 1 (Red) or 2 (Yellow). The player whose patterns to detect.
@@ -164,7 +168,7 @@ Tags a blunder with the tactical pattern involved, from the perspective of the p
 **Priority cascade** (phases; first match wins):
 1. **Phase A** (pre-move pressure): `immediate_threat:missed_own` (own win available) → `forced_block:defensive_miss` (opponent had an immediate threat).
 2. **Phase B**: `immediate_threat:enabled_opponent` (played move hands a *new* opponent win; pre-existing threats are caught by Phase A as `defensive_miss`).
-3. **Phase C** (missed_own patterns): `forced_win`, `double_threat`, `figure_7`, `j_shape`, `z_threat`, `odd_even_threat`, `overcut`, `claimeven`.
+3. **Phase C** (missed_own patterns): `forced_win`, `double_threat`, `figure_7`, `j_shape`, `z_threat`, `overcut`, `claimeven`, then the generic parity-aware threats `major_threat_parity`, `major_threat_nonparity`, `minor_threat` (ranked last).
 4. **Phase D** (enabled_opponent continuation): existential/universal over **all** the opponent's optimal replies — `enabled(X)` iff some optimal reply on the blunder line builds X and no optimal reply on the correct line does.
 5. **Phase E**: score-based fallback (`drawing_move` or `suboptimal_move`).
 
@@ -285,6 +289,15 @@ Pattern detectors (`detectFigure7`, `detectJShape`) count threats at any reachab
 The gravity-top restriction (only `row === colHeights[col]`) applies exclusively to `immediate_threat` and `forced_block` detection, which reason about the current player's single immediate move.
 
 `getImmediateThreats` / `board.immediateThreats(player)` uses the gravity-top restriction and is reserved for immediate-move semantics (`detectClaimeven`, forced-block checks). Do not use it in pattern detectors.
+
+## Threat categorization (`categorizeThreats`)
+
+`categorizeThreats(board, perspective)` in `classifier.js` is the canonical parity-aware threat categorizer. For BOTH `player` (the to-move perspective) and `opponent` it returns `{ majorParityAligned, majorNonParity, minor }`, each `{ count, cells }` (cells are sorted `"cNrM"` 1-indexed strings):
+
+- **Majors** come from `getMajorThreatCells` (`rm`/`ym` flags), **exclude** immediately-playable cells (`row === colHeights[col]`), and are split by parity: aligned ⟺ `row % 2 === (P - 1)` where `P` is that side's perspective.
+- **Minors** use `getMinorThreatWindows` + `emptyCellsFromWindows` (NOT the `rn`/`yn` flags), so a 2-disc window shadowed by a major window is excluded.
+
+`categorizeThreats`, `getMinorThreatWindows`, and `emptyCellsFromWindows` live in `classifier.js` (moved there from `explainContext.js` 2026-06-25) **specifically to avoid an import cycle**: `explainContext.js → sparseLookahead.js → classifier.js`, and the new `classifyPattern` threat detectors need the categorizer. `classifier.js` imports neither of the other two, so it is the only cycle-free home. `explainContext.js`'s `summarizeThreats` delegates to `categorizeThreats` (keeping its legacy output shape) and imports `getMinorThreatWindows` from `classifier.js`.
 
 ## LLM Coach Helpers (`llmCoachHelpers.js`)
 

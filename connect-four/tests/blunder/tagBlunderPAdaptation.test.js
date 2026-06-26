@@ -59,16 +59,18 @@ describe('tagBlunder P() adapter regression (FR-T03)', () => {
     }
   }, { timeout: 60_000 });
 
-  it('missed_own / no tactical pattern resolves after P() adaptation', async () => {
+  it('missed_own / parity-aware threat resolves after P() adaptation', async () => {
     const solver = createSolverProcess();
     try {
-      // '3233333556' (10 moves, Red's turn): all scores are -2, no tactical forcing chain.
-      // Old score-based forced_win incorrectly fired here; correct result is suboptimal_move.
+      // '3233333556' (10 moves, Red's turn): no forcing chain, but playing correctCol=2
+      // BUILDS a latent off-parity major threat for Red at c5r2 that playedCol=0 does not.
+      // Parity-aware threats are now first-class blunder tags (replacing the old
+      // score-only suboptimal_move fallback here). missed_own = correctCol builds the pattern.
       const result = await tagBlunder('3233333556', 0, 2, solver);
-      assert.equal(result.tag, 'suboptimal_move',
-        'tag must be suboptimal_move: no real forcing chain exists in this position');
+      assert.equal(result.tag, 'major_threat_nonparity',
+        'tag must be major_threat_nonparity: correctCol builds a latent off-parity major');
       assert.equal(result.direction, 'missed_own',
-        'direction must be missed_own: no pattern was detected');
+        'direction must be missed_own: correctCol builds the threat, playedCol does not');
     } finally {
       solver.destroy();
     }

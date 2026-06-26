@@ -70,10 +70,10 @@ export const KB_TERM_LESSON = {
     practiceCategory: null,
     displayName: 'Forced Block',
   },
-  'derived-odd-even-threat': {
+  'derived-parity-aligned-threat': {
     lessonId: null,
     practiceCategory: 'odd_even_threat',
-    displayName: 'Odd-Even Threat',
+    displayName: 'Parity-Aligned Threat',
   },
   'allen-major-threat': {
     lessonId: null,

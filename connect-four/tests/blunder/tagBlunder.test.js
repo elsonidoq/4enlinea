@@ -88,14 +88,15 @@ describe('tagBlunder - pattern detection', () => {
     }
   }, { timeout: 60_000 });
 
-  // missed_own: no tactical pattern detected — all scores equally bad, no forcing chain
-  it('returns missed_own when blunderer loses a pattern', async () => {
+  // missed_own: no forcing chain, but correctCol builds a first-class parity-aware threat.
+  it('returns major_threat_nonparity:missed_own when correctCol builds a latent major', async () => {
     const solver = await createSolverProcess();
     try {
-      // '3233333556': all solver scores are -2, no tactical forcing chain exists.
-      // Old score-based forced_win incorrectly fired here; correct result is suboptimal_move.
+      // '3233333556': no forcing chain, but playing correctCol=2 builds a latent off-parity
+      // major threat for the blunderer at c5r2 that playedCol=0 does not. Parity-aware threats
+      // are now first-class blunder tags (they rank just above the score-only fallbacks).
       const result = await tagBlunder('3233333556', 0, 2, solver);
-      assert.equal(result.tag, 'suboptimal_move');
+      assert.equal(result.tag, 'major_threat_nonparity');
       assert.equal(result.direction, 'missed_own');
     } finally {
       solver.destroy();

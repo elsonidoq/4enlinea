@@ -571,7 +571,10 @@
       "overcut": "Overcut",
       "figure_7": "Figure 7",
       "j_shape": "J-shape",
-      "odd_even_threat": "Odd & Even Threats"
+      "odd_even_threat": "Odd & Even Threats",
+      "major_threat_parity": "Parity-aligned threat",
+      "major_threat_nonparity": "Off-parity threat",
+      "minor_threat": "Minor threat"
     },
     "detail": {
       "topbarTitle": "Mistake",
@@ -790,6 +793,9 @@
       "figure_7": "Figure 7",
       "j_shape": "J-shape",
       "odd_even_threat": "Odd & Even Threats",
+      "major_threat_parity": "Parity-aligned threat",
+      "major_threat_nonparity": "Off-parity threat",
+      "minor_threat": "Minor threat",
       "suboptimal_move": "Suboptimal move",
       "drawing_move": "Drawing move"
     },

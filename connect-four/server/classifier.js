@@ -173,6 +173,160 @@ export function getMajorThreatCells(board) {
   return map;
 }
 
+// ── Threat categorization (canonical, low-level) ───────────────────────────────
+// Moved here from explainContext.js so it is importable by classifyPattern detectors,
+// explainContext.js (summarizeThreats), and sparseLookahead.js without an import cycle
+// (classifier.js imports neither of those modules).
+
+// Build a set of all disc-pair keys from major threat windows (3 player discs + 1 empty).
+// Each pair is stored as a canonical sorted string "r1,c1|r2,c2" for all C(3,2)=3 pairs
+// within each major window. Used to filter shadow minor threats.
+function buildMajorDiscPairSet(rawBoard, disc) {
+  const opponent = disc === 1 ? 2 : 1;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  const pairSet = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of dirs) {
+        let player = 0, opp = 0, valid = true;
+        const discCells = [];
+        for (let i = 0; i < 4; i++) {
+          const nr = r + dr*i, nc = c + dc*i;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
+          else if (rawBoard[nr][nc] === opponent) opp++;
+        }
+        if (!valid || player !== 3 || opp !== 0) continue;
+        for (let i = 0; i < discCells.length; i++) {
+          for (let j = i + 1; j < discCells.length; j++) {
+            const [r1, c1] = discCells[i], [r2, c2] = discCells[j];
+            pairSet.add(`${r1},${c1}|${r2},${c2}`);
+          }
+        }
+      }
+    }
+  }
+  return pairSet;
+}
+
+// Return all distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs),
+// excluding windows whose disc pair is a subset of any major threat window's disc triplet
+// (those are "shadow" windows that arise from sliding along the same run as a major threat).
+// Each window is enumerated once by its (r, c, direction) starting point — no double-counting.
+// Returns Array<Array<[number,number]>> — each window is an array of 4 [r, c] pairs (0-indexed).
+export function getMinorThreatWindows(rawBoard, disc) {
+  const majorPairs = buildMajorDiscPairSet(rawBoard, disc);
+  const opponent = disc === 1 ? 2 : 1;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  const windows = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of dirs) {
+        let player = 0, opp = 0, valid = true;
+        const cells = [];
+        const discCells = [];
+        for (let i = 0; i < 4; i++) {
+          const nr = r + dr*i, nc = c + dc*i;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
+          cells.push([nr, nc]);
+          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
+          else if (rawBoard[nr][nc] === opponent) opp++;
+        }
+        if (!valid || player !== 2 || opp !== 0) continue;
+        const [r1, c1] = discCells[0], [r2, c2] = discCells[1];
+        if (majorPairs.has(`${r1},${c1}|${r2},${c2}`)) continue;
+        windows.push(cells);
+      }
+    }
+  }
+  return windows;
+}
+
+// Return deduplicated sorted "cNrM" strings for the empty cells within a list of windows.
+export function emptyCellsFromWindows(rawBoard, windows) {
+  const seen = new Set();
+  for (const window of windows) {
+    for (const [r, c] of window) {
+      if (rawBoard[r][c] === 0) seen.add(`c${c + 1}r${r + 1}`);
+    }
+  }
+  return [...seen].sort();
+}
+
+/**
+ * Canonical threat categorizer. For BOTH the to-move perspective ("player") and its
+ * opponent, partitions latent threats into three buckets:
+ *   - majorParityAligned: 3-disc major threats whose empty cell sits on that side's
+ *     natural parity row (aligned ⟺ row % 2 === (P - 1); P = that side's perspective)
+ *   - majorNonParity:     major threats on the off-parity row
+ *   - minor:              app-canonical minor-threat empty cells (shadow windows excluded)
+ *
+ * Major threats EXCLUDE immediately-playable cells (row === colHeights[col]); those are
+ * covered by the immediate_threat tag. Minors use getMinorThreatWindows (NOT the rn/yn
+ * flags), so 2-disc windows shadowed by a major window are excluded.
+ *
+ * @param {Board} board
+ * @param {1|2} perspective  the to-move / "player" side
+ * @returns {{ player: {majorParityAligned:{count,cells}, majorNonParity:{count,cells}, minor:{count,cells}},
+ *             opponent: {...same shape...} }}  cells are "cNrM" 1-indexed strings, sorted.
+ */
+export function categorizeThreats(board, perspective) {
+  const opponent = 3 - perspective;
+  const threatMap = getMajorThreatCells(board.board);
+
+  const mkBuckets = () => ({
+    majorParityAligned: { count: 0, cells: [] },
+    majorNonParity:     { count: 0, cells: [] },
+    minor:              { count: 0, cells: [] },
+  });
+  const result = { player: mkBuckets(), opponent: mkBuckets() };
+
+  const sides = [
+    { side: 'player',   persp: perspective, majFlag: perspective === 1 ? 'rm' : 'ym' },
+    { side: 'opponent', persp: opponent,    majFlag: opponent === 1    ? 'rm' : 'ym' },
+  ];
+
+  for (const { side, persp, majFlag } of sides) {
+    for (const [key, flags] of Object.entries(threatMap)) {
+      const [r, c] = key.split(',').map(Number);
+      if (r === board.colHeights[c]) continue; // exclude immediately-playable
+      if (!flags[majFlag]) continue;
+      const cell = `c${c + 1}r${r + 1}`;
+      if (r % 2 === (persp - 1)) result[side].majorParityAligned.cells.push(cell);
+      else                       result[side].majorNonParity.cells.push(cell);
+    }
+    const windows = getMinorThreatWindows(board.board, persp);
+    result[side].minor.cells = emptyCellsFromWindows(board.board, windows);
+  }
+
+  for (const side of ['player', 'opponent']) {
+    for (const bucket of ['majorParityAligned', 'majorNonParity', 'minor']) {
+      result[side][bucket].cells.sort();
+      result[side][bucket].count = result[side][bucket].cells.length;
+    }
+  }
+  return result;
+}
+
+// ── First-class threat pattern detectors (geometry-only; perspective-independent) ──
+// Each emits the union of completing cells for the to-move perspective in its category.
+// No FR-033 solver IIFE — threat geometry does not depend on whose turn the solver thinks
+// it is. Shape matches figure_7/j_shape: { matched, cells }.
+export function detectMajorThreatParity(board, perspective = board.currentPlayer) {
+  const cells = categorizeThreats(board, perspective).player.majorParityAligned.cells;
+  return { matched: cells.length > 0, cells };
+}
+
+export function detectMajorThreatNonParity(board, perspective = board.currentPlayer) {
+  const cells = categorizeThreats(board, perspective).player.majorNonParity.cells;
+  return { matched: cells.length > 0, cells };
+}
+
+export function detectMinorThreat(board, perspective = board.currentPlayer) {
+  const cells = categorizeThreats(board, perspective).player.minor.cells;
+  return { matched: cells.length > 0, cells };
+}
+
 /**
  * Returns true when two same-column threats have the same row parity.
  * T4: same parity → no interaction between threats, regardless of player.
@@ -1391,6 +1545,10 @@ export async function classifyPattern(ms, perspective, solver) {
     ['overcut',           () => detectOvercut(board, scores, perspective)],
     ['figure_7',          () => detectFigure7(board, scores, perspective)],
     ['j_shape',           () => detectJShape(board, scores, perspective)],
+    // Parity-aware threats (geometry-only; first-class, flow through the look-ahead pipeline)
+    ['major_threat_parity',    () => detectMajorThreatParity(board, perspective)],
+    ['major_threat_nonparity', () => detectMajorThreatNonParity(board, perspective)],
+    ['minor_threat',           () => detectMinorThreat(board, perspective)],
     // Async detector (uses solver internally for simulation)
     ['claimeven',         () => detectClaimeven(board, solver, perspective)],
   ];
@@ -1562,8 +1720,12 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
     // (forced_win and double_threat are mutually exclusive on the same board:
     // detectForcedWin returns false when a double_threat is present.)
     const MISSED_OWN_PRIORITY = [
+      // Specific named structures first; the parity-aware threats are generic (almost any
+      // mid-game position carries a latent major threat), so they rank LAST — only chosen
+      // when no more specific pattern applies, just above the score-based fallbacks.
       'forced_win', 'double_threat', 'figure_7', 'j_shape',
-      'z_threat', 'odd_even_threat', 'overcut', 'claimeven',
+      'z_threat', 'overcut', 'claimeven',
+      'major_threat_parity', 'major_threat_nonparity', 'minor_threat',
     ];
     for (const tag of MISSED_OWN_PRIORITY) {
       if (!pAfterCorrectBlunderer.has(tag) || pAfterPlayedBlunderer.has(tag)) continue;
@@ -1635,13 +1797,16 @@ export async function tagBlunder(moves, playedCol, correctCol, solver) {
       { tag: 'forced_win',      check: () => contBlunderOpponent.has('forced_win')      && !contCorrectOpponent.has('forced_win') },
       { tag: 'double_threat',   check: () => contBlunderOpponent.has('double_threat')   && !contCorrectOpponent.has('double_threat') },
       { tag: 'z_threat',        check: () => contBlunderOpponent.has('z_threat')        && !contCorrectOpponent.has('z_threat') },
-      { tag: 'odd_even_threat', check: () => contBlunderOpponent.has('odd_even_threat') && !contCorrectOpponent.has('odd_even_threat') },
       { tag: 'figure_7',        check: () => contBlunderOpponent.has('figure_7')        && !contCorrectOpponent.has('figure_7') },
       { tag: 'j_shape',         check: () => contBlunderOpponent.has('j_shape')         && !contCorrectOpponent.has('j_shape') },
       // undercut uses enabled_self (blunderer's after-positions), not enabled_opp —
       // per FR-024/FR-025: undercut names the blunderer's exposure, not an opponent gain
       { tag: 'undercut',        check: () => contBlunderBlunderer.has('undercut')       && !contCorrectBlunderer.has('undercut') },
       { tag: 'claimeven',       check: () => contBlunderOpponent.has('claimeven')       && !contCorrectOpponent.has('claimeven') },
+      // Parity-aware threats are generic — rank LAST so specific structures win first.
+      { tag: 'major_threat_parity',    check: () => contBlunderOpponent.has('major_threat_parity')    && !contCorrectOpponent.has('major_threat_parity') },
+      { tag: 'major_threat_nonparity', check: () => contBlunderOpponent.has('major_threat_nonparity') && !contCorrectOpponent.has('major_threat_nonparity') },
+      { tag: 'minor_threat',    check: () => contBlunderOpponent.has('minor_threat')    && !contCorrectOpponent.has('minor_threat') },
     ];
     for (const { tag, check } of ENABLED_OPP_PRIORITY) {
       if (check()) {

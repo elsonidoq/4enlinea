@@ -18,8 +18,25 @@ export const PLAYER_CAP = 2;
 export const OPPONENT_CAP = 4;
 export const GLOBAL_CALL_BUDGET = 60; // budget PER CANDIDATE MOVE — each of the two searches (best and played) gets this many classify calls independently
 export const CLASSIFY_TIMEOUT_MS = 4000;
-export const MAX_WAYS = 3;
-export const MIN_BRANCH_DELTA = 1;
+export const MAX_WAYS = 2; // cap on the novel cell-sets surfaced PER CATEGORY (best-vs-played)
+
+// Informativeness priority among look-ahead structures — NOT raw quantity, which over-favors
+// minor threats (a position spawns many of them). A parity-aligned major threat can be
+// game-winning on its own; minors are the weakest signal. The winner surfaced in the prompt
+// is the highest-priority category the better move uniquely opens; the full per-category list
+// is emitted separately so a downstream consumer can keep them all and decide what to filter.
+export const LOOKAHEAD_PRIORITY = [
+  'double_threat', 'immediate_threat',
+  'major_threat_parity',
+  'figure_7', 'j_shape', 'undercut', 'overcut',
+  'major_threat_nonparity',
+  'minor_threat',
+];
+
+function priorityIndex(tag) {
+  const i = LOOKAHEAD_PRIORITY.indexOf(tag);
+  return i === -1 ? LOOKAHEAD_PRIORITY.length : i; // unknown tags sort last
+}
 
 /**
  * 0-indexed opponent "mistake" columns to explore from an opponent-to-move node.
@@ -103,12 +120,23 @@ export async function classifyPatternWithTimeout(classifyFn, ms, perspective, so
   }
 }
 
+// Tier-1 tactical structures: each is recorded as a single grouped "way" (one instance
+// per detection node, cells kept together).
 const TIER1 = new Set(['immediate_threat', 'double_threat', 'undercut', 'overcut', 'figure_7', 'j_shape']);
 
-export function extractTier1Structures(patternMap) {
+// Parity-aware threats are first-class look-ahead structures. Unlike Tier-1 groups, a
+// threat tag's `cells` array is a UNION of independent completing cells, so each cell is
+// expanded into its own way before recordWay (see searchOpportunities) — occurrences and
+// instances then count individual threats and each cell is independently pointable.
+const THREAT_TAGS = new Set(['major_threat_parity', 'major_threat_nonparity', 'minor_threat']);
+
+// The full set of tags the look-ahead extracts and tallies.
+const LOOKAHEAD_TAGS = new Set([...TIER1, ...THREAT_TAGS]);
+
+export function extractLookaheadStructures(patternMap) {
   const out = [];
   for (const [tag, val] of patternMap) {
-    if (TIER1.has(tag) && val && Array.isArray(val.cells) && val.cells.length > 0) {
+    if (LOOKAHEAD_TAGS.has(tag) && val && Array.isArray(val.cells) && val.cells.length > 0) {
       out.push({ tag, cells: val.cells });
     }
   }
@@ -123,11 +151,27 @@ function topScoringCols(scores, board, cap) {
 }
 
 function recordWay(tally, tag, firstReply, cells) {
-  if (!tally.has(tag)) tally.set(tag, { branches: new Set(), ways: [] });
+  if (!tally.has(tag)) tally.set(tag, { branches: new Set(), ways: [], occurrences: 0 });
   const entry = tally.get(tag);
   entry.branches.add(firstReply);
+  entry.occurrences += 1;   // raw count: every node at which the structure was detected
   const key = cells.join(',');
   if (!entry.ways.some(w => w.join(',') === key)) entry.ways.push(cells);
+}
+
+// Deduplicate candidate columns by their solver score: keep only the first column for each
+// distinct score. Columns with equal scores are tactically interchangeable (mirror/symmetry),
+// so exploring one representative per score preserves column diversity while pruning redundant
+// branches — e.g. scores [-3,-3,-2,1,-2,-3,-3] collapse to one -3, one -2 and the 1 column.
+function dedupeColsByScore(cols, scores) {
+  const seen = new Set();
+  const out = [];
+  for (const c of cols) {
+    if (seen.has(scores[c])) continue;
+    seen.add(scores[c]);
+    out.push(c);
+  }
+  return out;
 }
 
 export async function searchOpportunities(rootMovestring, perspective, deps, budget, depth = LOOKAHEAD_DEPTH) {
@@ -135,6 +179,9 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
   // 'mistake' (default) explores the opponent's middle/error tiers; 'optimal' explores
   // only the opponent's best defense (max-tied columns). See module-level docs.
   const opponentMode = deps.opponentMode ?? 'mistake';
+  // When set, prune branches whose column shares a solver score with an already-explored
+  // sibling (see dedupeColsByScore) — exploits symmetry to shrink the search space.
+  const dedupeByScore = deps.dedupeByScore ?? false;
   const tally = new Map();
   const opponent = perspective === 1 ? 2 : 1;
 
@@ -154,9 +201,10 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
       } catch {
         return; // solver error — prune this branch
       }
-      const cols = opponentMode === 'optimal'
+      let cols = opponentMode === 'optimal'
         ? selectOptimalOpponentCols(scores, board)
         : selectOpponentMistakeCols(scores, board);
+      if (dedupeByScore) cols = dedupeColsByScore(cols, scores);
       for (const c of cols) {
         if (board.colHeights[c] >= ROWS) continue;
         const nextFirst = firstReply === null ? c : firstReply;
@@ -167,8 +215,14 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
       if (budget.calls > 0) {
         budget.calls -= 1;
         const map = await classifyPatternWithTimeout(classifyFn, ms, perspective, solver);
-        for (const { tag, cells } of extractTier1Structures(map)) {
-          recordWay(tally, tag, firstReply, cells);
+        for (const { tag, cells } of extractLookaheadStructures(map)) {
+          if (THREAT_TAGS.has(tag)) {
+            // Expand the union into one instance per completing cell — each threat counts
+            // independently and is independently pointable.
+            for (const cell of cells) recordWay(tally, tag, firstReply, [cell]);
+          } else {
+            recordWay(tally, tag, firstReply, cells); // Tier-1: single grouped way
+          }
         }
       }
       let scores;
@@ -177,7 +231,9 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
       } catch {
         return; // solver error — prune this branch
       }
-      for (const c of topScoringCols(scores, board, PLAYER_CAP)) {
+      let playerCols = topScoringCols(scores, board, PLAYER_CAP);
+      if (dedupeByScore) playerCols = dedupeColsByScore(playerCols, scores);
+      for (const c of playerCols) {
         await recurse(ms + c.toString(), firstReply, pliesLeft - 1);
       }
     }
@@ -187,21 +243,70 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
   return tally;
 }
 
-export function compareOpportunities(bestTally, playedTally) {
-  let winner = null;
-  let bestDelta = 0;
+// Full per-tag comparison over the union of both tallies' tags. `occurrences` (every node
+// the structure was detected at, see recordWay) is the raw signal compareOpportunities
+// ranks by; branches.size and instances are recorded too so a reader can see every
+// candidate pattern and why one won (or why none did).
+export function summarizeTallyComparison(bestTally, playedTally) {
+  const tags = new Set([...bestTally.keys(), ...playedTally.keys()]);
+  return [...tags].sort().map((tag) => {
+    const b = bestTally.get(tag);
+    const p = playedTally.get(tag);
+    return {
+      pattern: tag,
+      // occurrences: how many times the structure appeared (every node it was detected at).
+      bestOccurrences: b?.occurrences ?? 0,
+      playedOccurrences: p?.occurrences ?? 0,
+      // distinct instances (unique cell-groups) of the structure.
+      bestInstances: b?.ways.length ?? 0,
+      playedInstances: p?.ways.length ?? 0,
+      // branches: distinct first-reply lines under which it appeared — the ranking metric.
+      bestBranches: b?.branches.size ?? 0,
+      playedBranches: p?.branches.size ?? 0,
+    };
+  });
+}
+
+/**
+ * For EVERY look-ahead category, the cell-sets ("ways") that occur in the BEST branch but
+ * NOT in the played branch — concrete examples the better move generates that the blunder
+ * move cannot. A category whose ways all also appear in the played line contributes nothing
+ * (any occurrence delta there is only a frequency difference) and is omitted. Every
+ * qualifying category is returned (its novel ways capped at MAX_WAYS), ordered by
+ * informativeness priority (LOOKAHEAD_PRIORITY) so a downstream consumer can keep them all
+ * and decide which to surface. Quantity (occurrences) is reported but is NOT the sort key.
+ *
+ * @returns {Array<{ tag, ways, novelInstances, bestOccurrences, playedOccurrences }>}
+ */
+export function collectNovelOpportunities(bestTally, playedTally) {
+  const out = [];
   for (const [tag, entry] of bestTally) {
-    const bestCount = entry.branches.size;
-    const playedCount = playedTally.get(tag)?.branches.size ?? 0;
-    const delta = bestCount - playedCount;
-    if (delta >= MIN_BRANCH_DELTA) {
-      if (delta > bestDelta || (delta === bestDelta && (winner === null || tag < winner.tag))) {
-        bestDelta = delta;
-        winner = { tag, ways: entry.ways.slice(0, MAX_WAYS) };
-      }
-    }
+    const playedEntry = playedTally.get(tag);
+    const playedWayKeys = new Set((playedEntry?.ways ?? []).map(w => w.join(',')));
+    const novelWays = entry.ways.filter(w => !playedWayKeys.has(w.join(',')));
+    if (novelWays.length === 0) continue;
+    out.push({
+      tag,
+      ways: novelWays.slice(0, MAX_WAYS),
+      novelInstances: novelWays.length,
+      bestOccurrences: entry.occurrences,
+      playedOccurrences: playedEntry?.occurrences ?? 0,
+    });
   }
-  return winner;
+  out.sort((a, b) => priorityIndex(a.tag) - priorityIndex(b.tag) || (a.tag < b.tag ? -1 : 1));
+  return out;
+}
+
+/**
+ * The single structure surfaced in the prompt: the highest-PRIORITY category the better move
+ * uniquely opens up. Priority — not raw occurrence count — so a lone parity-aligned major
+ * (game-winning) wins over a swarm of minor threats. Returns { tag, ways } or null.
+ */
+export function compareOpportunities(bestTally, playedTally) {
+  const novel = collectNovelOpportunities(bestTally, playedTally);
+  if (novel.length === 0) return null;
+  const top = novel[0];
+  return { tag: top.tag, ways: top.ways };
 }
 
 /**
@@ -239,6 +344,7 @@ export function buildAliasOutput(winner, prefix) {
 export async function runSparseLookahead({ movestring, playedCol, bestCol, perspective }, deps = {}) {
   const solver = deps.solver;
   const classifyFn = deps.classifyFn ?? classifyPattern;
+  const dedupeByScore = deps.dedupeByScore;
   const opponent = perspective === 1 ? 2 : 1;
   const bestRoot = movestring + bestCol.toString();
   const playedRoot = movestring + playedCol.toString();
@@ -255,6 +361,11 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     depth = LOOKAHEAD_DEPTH;
     budget = GLOBAL_CALL_BUDGET;
   }
+  // deps.depth / deps.budget override the tier defaults (used by debug/eval tooling).
+  // budget: a number caps total classify/solver calls; null means UNBOUNDED (only depth
+  // limits the search); undefined keeps the game-stage tier default.
+  if (deps.depth != null) depth = deps.depth;
+  if (deps.budget !== undefined) budget = deps.budget === null ? Infinity : deps.budget;
 
   // Choose the opponent-exploration strategy from the PRE-MOVE position. optScore is the
   // best move's score, blunderScore the played move's score (player-to-move perspective:
@@ -274,14 +385,20 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
   // player structures than the better move, yielding a positive delta toward the better move.
   if (optScore === undefined || optScore >= 0) {
     const opMode = optScore === undefined ? 'mistake' : 'optimal';
-    const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: opMode }, { calls: budget }, depth);
-    const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: opMode }, { calls: budget }, depth);
+    const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: opMode, dedupeByScore }, { calls: budget }, depth);
+    const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: opMode, dedupeByScore }, { calls: budget }, depth);
+    const tallyComparison = summarizeTallyComparison(bestTally, playedTally);
+    const playerExamples = collectNovelOpportunities(bestTally, playedTally);
     const out = buildAliasOutput(compareOpportunities(bestTally, playedTally), 'future');
     if (out) {
       return {
         ...out,
         case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
         playedStillWins: blunderScore !== undefined && blunderScore > 0,
+        categoryExamples: playerExamples,
+        oppCategoryExamples: [],
+        tallyComparison,
+        oppTallyComparison: null,
       };
     }
     // No player-side structure delta distinguishes the moves. If the better move HOLDS
@@ -291,9 +408,13 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     // machinery Case 3 uses) on the losing played root, so the decisive position is
     // grounded rather than returning null and leaving the prompt with nothing to point
     // at. When the refutation is too deep to surface within the budget (e.g. an
-    // empty-board positional loss), this still returns null → honest-minimal fallback.
+    // empty-board positional loss), oppOut stays null → no winner (honest-minimal fallback).
+    let oppTallyComparison = null;
+    let oppExamples = [];
     if (blunderScore !== undefined && blunderScore < 0) {
-      const oppTally = await searchOpportunities(playedRoot, opponent, { solver, classifyFn, opponentMode: 'optimal' }, { calls: budget }, depth);
+      const oppTally = await searchOpportunities(playedRoot, opponent, { solver, classifyFn, opponentMode: 'optimal', dedupeByScore }, { calls: budget }, depth);
+      oppTallyComparison = summarizeTallyComparison(oppTally, new Map());
+      oppExamples = collectNovelOpportunities(oppTally, new Map());
       const oppOut = buildAliasOutput(compareOpportunities(oppTally, new Map()), 'opp-future');
       if (oppOut) {
         return {
@@ -304,26 +425,45 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
           oppTag: oppOut.tag,
           oppAliasMap: oppOut.aliasMap,
           oppAllowedSetEntries: oppOut.allowedSetEntries,
+          categoryExamples: [],
+          oppCategoryExamples: oppExamples,
+          tallyComparison,
+          oppTallyComparison,
         };
       }
     }
-    return null;
+    // No winner. Return the comparisons anyway so prompt_data records what was searched.
+    return {
+      case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
+      tag: null, aliasMap: {}, allowedSetEntries: [],
+      oppTag: null, oppAliasMap: {}, oppAllowedSetEntries: [],
+      playedStillWins: blunderScore !== undefined && blunderScore > 0,
+      categoryExamples: playerExamples,
+      oppCategoryExamples: oppExamples,
+      tallyComparison,
+      oppTallyComparison,
+    };
   }
 
   // ── Case 3: losing either way (optScore < 0) ────────────────────────────────
   // (a) Optimal-opponent-from-blunder: how best play punishes the move. Search the
   //     BLUNDER root from the OPPONENT's perspective so classify surfaces the OPPONENT's
   //     punishing structures; compare against an empty tally to extract them.
-  const oppTally = await searchOpportunities(playedRoot, opponent, { solver, classifyFn, opponentMode: 'optimal' }, { calls: budget }, depth);
+  const oppTally = await searchOpportunities(playedRoot, opponent, { solver, classifyFn, opponentMode: 'optimal', dedupeByScore }, { calls: budget }, depth);
+  const oppTallyComparison = summarizeTallyComparison(oppTally, new Map());
+  const oppExamples = collectNovelOpportunities(oppTally, new Map());
   const oppOut = buildAliasOutput(compareOpportunities(oppTally, new Map()), 'opp-future');
 
   // (b) Player surviving-slip: if the opponent errs, the better move lets the player punish.
   //     Mistake-mode best-vs-played, player perspective (existing machinery).
-  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: 'mistake' }, { calls: budget }, depth);
-  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: 'mistake' }, { calls: budget }, depth);
+  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore }, { calls: budget }, depth);
+  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore }, { calls: budget }, depth);
+  const tallyComparison = summarizeTallyComparison(bestTally, playedTally);
+  const playerExamples = collectNovelOpportunities(bestTally, playedTally);
   const playerOut = buildAliasOutput(compareOpportunities(bestTally, playedTally), 'future');
 
-  if (!oppOut && !playerOut) return null;
+  // Return the comparisons even when neither side has a winner (no prompt structure, but
+  // prompt_data still records what was searched). Winner presence = (tag || oppTag).
   return {
     case: 3,
     tag: playerOut?.tag ?? null,
@@ -332,5 +472,9 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     oppTag: oppOut?.tag ?? null,
     oppAliasMap: oppOut?.aliasMap ?? {},
     oppAllowedSetEntries: oppOut?.allowedSetEntries ?? [],
+    categoryExamples: playerExamples,
+    oppCategoryExamples: oppExamples,
+    tallyComparison,
+    oppTallyComparison,
   };
 }

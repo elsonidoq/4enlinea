@@ -7,7 +7,10 @@
  *   Returns { prompt: null, allowedSet: null, allMovesEqual: true } when all moves are settled.
  */
 
-import { classifyPattern, tagBlunder, Board, getMajorThreatCells } from './classifier.js';
+import {
+  classifyPattern, tagBlunder, Board,
+  getMinorThreatWindows, categorizeThreats,
+} from './classifier.js';
 import { runSparseLookahead, isAnchorlessPosition } from './sparseLookahead.js';
 import { detectCenterDominance } from './centerDominance.js';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
@@ -26,82 +29,148 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 const ROWS = 6;
 const COLS = 7;
 
-// Build a set of all disc-pair keys from major threat windows (3 player discs + 1 empty).
-// Each pair is stored as a canonical sorted string "r1,c1|r2,c2" for all C(3,2)=3 pairs
-// within each major window. Used to filter shadow minor threats.
-function buildMajorDiscPairSet(rawBoard, disc) {
-  const opponent = disc === 1 ? 2 : 1;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  const pairSet = new Set();
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      for (const [dr, dc] of dirs) {
-        let player = 0, opp = 0, valid = true;
-        const discCells = [];
-        for (let i = 0; i < 4; i++) {
-          const nr = r + dr*i, nc = c + dc*i;
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
-          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
-          else if (rawBoard[nr][nc] === opponent) opp++;
-        }
-        if (!valid || player !== 3 || opp !== 0) continue;
-        // Record all 3 pairs from the 3 disc cells
-        for (let i = 0; i < discCells.length; i++) {
-          for (let j = i + 1; j < discCells.length; j++) {
-            const [r1, c1] = discCells[i], [r2, c2] = discCells[j];
-            pairSet.add(`${r1},${c1}|${r2},${c2}`);
-          }
-        }
-      }
-    }
-  }
-  return pairSet;
+// Declarative slugs for runSparseLookahead's numeric `case` (sparseLookahead.js):
+//   1 → better move holds (>=0) but the played move loses (<0)
+//   2 → both moves hold/win, but the better move is stronger
+//   3 → losing either way (better move's score < 0)
+const LOOKAHEAD_CASE_SLUGS = {
+  1: 'better_holds_played_loses',
+  2: 'both_moves_hold_better_stronger',
+  3: 'losing_either_way',
+};
+
+// "Zero-or-blank, deeply": null/undefined/'' and the number 0 carry no information, an
+// empty array/object does too, and an OBJECT all of whose values are zero-or-blank is
+// itself blank — this is what makes an all-zero stats block (e.g. threatStats) bubble up
+// and get dropped entirely. Booleans, non-empty strings, non-zero numbers, and NON-EMPTY
+// arrays are meaningful: a score vector of zeros is still data, so a non-empty array
+// always counts as informative.
+function isZeroOrBlankDeep(v) {
+  if (v === null || v === undefined || v === '') return true;
+  if (typeof v === 'number') return v === 0;
+  if (typeof v === 'boolean' || typeof v === 'string') return false;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.values(v).every(isZeroOrBlankDeep);
+  return false;
 }
 
-// Return all distinct 4-windows with exactly 2 of `disc` and 2 empty cells (no opponent discs),
-// excluding windows whose disc pair is a subset of any major threat window's disc triplet
-// (those are "shadow" windows that arise from sliding along the same run as a major threat).
-// Each window is enumerated once by its (r, c, direction) starting point — no double-counting.
-// Returns Array<Array<[number,number]>> — each window is an array of 4 [r, c] pairs (0-indexed).
-export function getMinorThreatWindows(rawBoard, disc) {
-  const majorPairs = buildMajorDiscPairSet(rawBoard, disc);
-  const opponent = disc === 1 ? 2 : 1;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  const windows = [];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      for (const [dr, dc] of dirs) {
-        let player = 0, opp = 0, valid = true;
-        const cells = [];
-        const discCells = [];
-        for (let i = 0; i < 4; i++) {
-          const nr = r + dr*i, nc = c + dc*i;
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { valid = false; break; }
-          cells.push([nr, nc]);
-          if (rawBoard[nr][nc] === disc) { player++; discCells.push([nr, nc]); }
-          else if (rawBoard[nr][nc] === opponent) opp++;
-        }
-        if (!valid || player !== 2 || opp !== 0) continue;
-        // Skip if these 2 discs are both present in any major threat window
-        const [r1, c1] = discCells[0], [r2, c2] = discCells[1];
-        if (majorPairs.has(`${r1},${c1}|${r2},${c2}`)) continue;
-        windows.push(cells);
-      }
-    }
-  }
-  return windows;
+// Whether an already-pruned value should be omitted. Scalar 0 and false are KEPT as leaves
+// (gap:0, isOptimal:false are meaningful); empty OR all-zero containers are dropped.
+function isDroppable(v) {
+  if (v === null || v === undefined || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.keys(v).length === 0 || isZeroOrBlankDeep(v);
+  return false;
 }
 
-// Return deduplicated sorted "cNrM" strings for the empty cells within a list of windows.
-function emptyCellsFromWindows(rawBoard, windows) {
-  const seen = new Set();
-  for (const window of windows) {
-    for (const [r, c] of window) {
-      if (rawBoard[r][c] === 0) seen.add(`c${c + 1}r${r + 1}`);
-    }
+// Recursively drop empty / all-zero containers (see isDroppable) from objects and arrays.
+function pruneEmpty(value) {
+  if (Array.isArray(value)) {
+    return value.map(pruneEmpty).filter((v) => !isDroppable(v));
   }
-  return [...seen].sort();
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      const pv = pruneEmpty(v);
+      if (!isDroppable(pv)) out[k] = pv;
+    }
+    return out;
+  }
+  return value;
 }
+
+// Project a board state's threat snapshot (summarizeThreats output) to parity buckets, each
+// {count, cells}. Cells are kept — they are grounded squares that complement the movestring.
+// Only the verbose 4-cell `windows` and the redundant non-split aggregates are dropped.
+function compactThreats(s) {
+  if (!s) return null;
+  const bucket = (count, cells) => ({ count: count ?? 0, cells: cells ?? [] });
+  return {
+    playerMajorParityAligned:   s.playerMajorParityAligned   ?? { count: 0, cells: [] },
+    playerMajorNonParity:       s.playerMajorNonParity        ?? { count: 0, cells: [] },
+    playerMinor:                bucket(s.playerMinor, s.playerMinorCells),
+    opponentMajorParityAligned: s.opponentMajorParityAligned ?? { count: 0, cells: [] },
+    opponentMajorNonParity:     s.opponentMajorNonParity      ?? { count: 0, cells: [] },
+    opponentMinor:              bucket(s.opponentMinor, s.opponentMinorCells),
+  };
+}
+
+/**
+ * Project the full (uncensored) promptData into a tactics-only FEATURE VECTOR: decision
+ * primitives + blunder classification + the static pattern detections + parity-bucket threats
+ * (count + cells) + the sparse look-ahead. Grounded cells are KEPT throughout — they complement
+ * the movestring with specific board detail not recoverable from counts alone.
+ *
+ * Only LLM-prompt plumbing, prose, and pure derivations are dropped: the annotation whitelist
+ * (`allowedSet`), the capsule-expansion spec (`zoneAliasMap`), all reason prose
+ * (`humanReason`/`positiveReason`/`terseReason` — `terseReason` only restates tag+direction and
+ * a score transition already recoverable from `preScores`/`gap`), KB-term plumbing
+ * (`relevantPatternKeys`/`kbTerms`), display labels (`playerName`), the rendered
+ * `threatComparison`/`threatShowFlags`, the redundant `lookaheadRaw`, and trivially-derived
+ * scalars (`gapBucket`, `positionTier`, `isOptimal`, `opponentPerspective`, `lookaheadFired`).
+ *
+ * @param {object} promptData
+ * @param {object} [opts]
+ * @param {boolean} [opts.prune=true]  when true (the default), recursively drop empty / all-zero
+ *   containers (the "recursive elimination" — see pruneEmpty). Callers that need the full
+ *   fixed-shape vector (e.g. so a UI can toggle the collapse both ways) pass `{ prune: false }`.
+ */
+export function toFeatureVector(promptData, { prune = true } = {}) {
+  if (!promptData) return promptData;
+  const la = promptData.lookahead;
+  const vector = {
+    // decision primitives
+    movestring: promptData.movestring,
+    perspective: promptData.perspective,
+    playedCol: promptData.playedCol,
+    bestCol: promptData.bestCol,
+    playedCell: promptData.playedCell,   // exact square the played disc lands on
+    bestCell: promptData.bestCell,       // exact square the better move lands on
+    preScores: promptData.preScores,
+    gap: promptData.gap,
+    // blunder classification
+    tag: promptData.tag,
+    direction: promptData.direction,
+    // sparseness / opening signal
+    isSparse: promptData.isSparse,
+    centerDominance: !!promptData.centerDominance, // sole signal on early/positional boards
+    // static pattern detections (tag → {cells}) at the key board states
+    patternsBest: promptData.patternsBest,
+    patternsPlayed: promptData.patternsPlayed,
+    patternsPostBlunder: promptData.patternsPostBlunder,
+    patternsOpponent: promptData.patternsOpponent,
+    // parity-bucket threats — count + CELLS — at each board state
+    threatStats: {
+      pre:    compactThreats(promptData.threatStats?.pre),
+      best:   compactThreats(promptData.threatStats?.best),
+      played: compactThreats(promptData.threatStats?.played),
+    },
+    // sparse look-ahead. `categoryExamples` / `oppCategoryExamples` carry the NOVEL cell-sets
+    // (the squares the better move opens that the played move cannot) — grounded tactical
+    // detail that complements the movestring and is NOT recoverable from counts alone. They
+    // are priority-ordered and already include their own counts. `perCategory` is the dense
+    // per-category count table over every category the search saw (branches dropped: they
+    // saturate at 0/1).
+    lookahead: la ? {
+      case: la.case,
+      playedStillWins: la.playedStillWins ?? null,
+      categoryExamples: la.categoryExamples ?? [],
+      oppCategoryExamples: la.oppCategoryExamples ?? [],
+      perCategory: (la.tallyComparison ?? []).map((m) => ({
+        tag: m.pattern,
+        bestOccurrences: m.bestOccurrences,
+        playedOccurrences: m.playedOccurrences,
+        bestInstances: m.bestInstances,
+        playedInstances: m.playedInstances,
+      })),
+    } : null,
+  };
+  return prune ? pruneEmpty(vector) : vector;
+}
+
+// buildMajorDiscPairSet, getMinorThreatWindows, and emptyCellsFromWindows moved to
+// classifier.js (low-level, so categorizeThreats / classifyPattern detectors and the
+// sparse look-ahead can share them without an import cycle). Imported at top of file.
 
 // Convert a sorted array of "cNrM" cell strings to a zone spec where each cell is its own window.
 //   "windows:c2r4|c5r3"
@@ -136,29 +205,24 @@ export function expandZoneAliases(text, aliasMap) {
 // Green = player 1 (rm/rn in getMajorThreatCells); wins on 0-indexed even rows (0,2,4).
 // Gray  = player 2 (ym/yn in getMajorThreatCells); wins on 0-indexed odd rows  (1,3,5).
 function summarizeThreats(board, perspective) {
-  const threatMap = getMajorThreatCells(board.board);
-  const pMaj = perspective === 1 ? 'rm' : 'ym';
-  const oMaj = perspective === 1 ? 'ym' : 'rm';
+  // Delegate the parity-aware split + immediate-cell / shadow-minor exclusion to the
+  // canonical categorizer; keep this function's legacy output shape unchanged so the
+  // threatComparison / zoneAliasMap / prompt path is byte-identical.
+  const cat = categorizeThreats(board, perspective);
   const playerDisc   = perspective === 1 ? 1 : 2;
   const opponentDisc = perspective === 1 ? 2 : 1;
 
-  const playerMajorCells   = [];
-  const opponentMajorCells = [];
-  for (const [key, flags] of Object.entries(threatMap)) {
-    const [r, c] = key.split(',').map(Number);
-    const gt = r === board.colHeights[c];
-    // Exclude immediately-playable cells — those are covered by the immediate_threat tag.
-    if (gt) continue;
-    if (flags[pMaj]) playerMajorCells.push(`c${c + 1}r${r + 1}`);
-    if (flags[oMaj]) opponentMajorCells.push(`c${c + 1}r${r + 1}`);
-  }
-  playerMajorCells.sort();
-  opponentMajorCells.sort();
+  const mergeMajor = (side) =>
+    [...side.majorParityAligned.cells, ...side.majorNonParity.cells].sort();
+  const playerMajorCells   = mergeMajor(cat.player);
+  const opponentMajorCells = mergeMajor(cat.opponent);
+  const playerMinorCells   = cat.player.minor.cells;
+  const opponentMinorCells = cat.opponent.minor.cells;
 
+  // Windows are still needed for the minor-threat zone aliases (categorizeThreats only
+  // returns the empty completing cells, not the full 4-cell windows).
   const playerWindows   = getMinorThreatWindows(board.board, playerDisc);
   const opponentWindows = getMinorThreatWindows(board.board, opponentDisc);
-  const playerMinorCells   = emptyCellsFromWindows(board.board, playerWindows);
-  const opponentMinorCells = emptyCellsFromWindows(board.board, opponentWindows);
 
   return {
     playerMajor: playerMajorCells.length,
@@ -171,6 +235,11 @@ function summarizeThreats(board, perspective) {
     opponentMinorCells,
     playerWindows,
     opponentWindows,
+    // Parity split (new) — count + cells per bucket.
+    playerMajorParityAligned: cat.player.majorParityAligned,
+    playerMajorNonParity:     cat.player.majorNonParity,
+    opponentMajorParityAligned: cat.opponent.majorParityAligned,
+    opponentMajorNonParity:     cat.opponent.majorNonParity,
   };
 }
 
@@ -207,8 +276,11 @@ const POSITIVE_CASCADE = [
   'figure_7',
   'j_shape',
   'z_threat',
-  'odd_even_threat',
+  // odd_even_threat de-listed from the coach 2026-06-25; parity-aware threats take its slot.
+  'major_threat_parity',
+  'major_threat_nonparity',
   'claimeven',
+  'minor_threat',
   'drawing_move',
   'suboptimal_move',
 ];
@@ -347,6 +419,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   let direction = null;
   let humanReason = null;
   let positiveReason = null;
+  let terseReason = null;        // tagBlunder's internal `reason` (e.g. "matched missed_own: figure_7")
+  let opponentPatterns = null;   // patOpp / patOppPre, when a direction-specific augmentation runs
 
   // correctMovePatterns: patterns at the best-move position
   const correctMovePatterns = await safeClassifyPattern(
@@ -358,6 +432,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     const blunderResult = await tagBlunder(movestring, col, bestCol, solver);
     tag = blunderResult.tag;
     direction = blunderResult.direction;
+    terseReason = blunderResult.reason ?? null;
     humanReason = REASON_TEMPLATES.get(`${tag}:${direction}`) ?? 'A stronger move was available.';
     positiveReason = null;
   } else {
@@ -397,6 +472,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
           movestring + col + oppBestCol, opponentPerspective, solver
         );
         patMaps.push({ map: patOpp, owner: 'opponent' });
+        opponentPatterns = patOpp;
       }
     } catch {
       // solver error on won position or other; skip augmentation
@@ -409,7 +485,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     for (const t of ['forced_block', 'immediate_threat']) {
       if (patOppPre.has(t)) restricted.set(t, patOppPre.get(t));
     }
-    if (restricted.size > 0) patMaps.push({ map: restricted, owner: 'opponent' });
+    if (restricted.size > 0) { patMaps.push({ map: restricted, owner: 'opponent' }); opponentPatterns = restricted; }
   }
 
   const postBestBoard = new Board(movestring + bestCol);
@@ -482,6 +558,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   if (showPlayerMinor || showOpponentMinor) relevantPatternKeys.add('minor_threat');
 
   const kbTermLines = [];
+  const kbTermIds = [];
+  const kbTerms = [];
   const seenKbIds = new Set();
   for (const [patternKey, kbEntry] of Object.entries(PATTERN_KB)) {
     // Only entries with a file-backed KB article
@@ -506,6 +584,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     kbTermLines.push(
       `- [term:${tagId}] **${displayName}** (${tagId}): ${shortSummary}`
     );
+    kbTermIds.push(tagId);
+    kbTerms.push({ tagId, kbId: kbEntry.id, displayName, summary: shortSummary });
   }
 
   const kbTermsSection = kbTermLines.length > 0
@@ -578,6 +658,18 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     ),
   ].join('\n');
 
+  // Uncensored structured threat comparison for the eval harness (prompt_data). ALL four
+  // metrics are always included across all three board states; `differs` carries the same
+  // show* gate the prompt uses (which rows it would render), but no metric is dropped and
+  // the immediate_threat suppression is NOT applied here — field selection is a Step-2
+  // concern, this stage must expose everything computed.
+  const threatComparisonData = [
+    { metric: 'player_major',   differs: showPlayerMajor,   pre: preStats.playerMajor,   best: bestStats.playerMajor,   played: blunderStats.playerMajor,   preCells: preStats.playerMajorCells,   bestCells: bestStats.playerMajorCells,   playedCells: blunderStats.playerMajorCells },
+    { metric: 'opponent_major', differs: showOpponentMajor, pre: preStats.opponentMajor, best: bestStats.opponentMajor, played: blunderStats.opponentMajor, preCells: preStats.opponentMajorCells, bestCells: bestStats.opponentMajorCells, playedCells: blunderStats.opponentMajorCells },
+    { metric: 'player_minor',   differs: showPlayerMinor,   pre: preStats.playerMinor,   best: bestStats.playerMinor,   played: blunderStats.playerMinor,   preCells: preStats.playerMinorCells,   bestCells: bestStats.playerMinorCells,   playedCells: blunderStats.playerMinorCells },
+    { metric: 'opponent_minor', differs: showOpponentMinor, pre: preStats.opponentMinor, best: bestStats.opponentMinor, played: blunderStats.opponentMinor, preCells: preStats.opponentMinorCells, bestCells: bestStats.opponentMinorCells, playedCells: blunderStats.opponentMinorCells },
+  ];
+
   // Whitelist all threat cells across all three board states so P5Strong passes
   // after alias expansion (expanded windows: specs are validated against these cells).
   if (allowedSet !== null) {
@@ -607,68 +699,106 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   );
   let lookaheadSection;
   let lookaheadFired = false;
+  let lookaheadData = null;
+  let rawLookahead = null;      // the full runSparseLookahead return, uncensored
   let resolvedAllowedSet = allowedSet;
-  // deps.skipLookahead lets callers (e.g. eval-set generation) get the gate decision
-  // (isSparse) without paying for the forward search, which is the expensive part.
-  if (isSparse && !isOptimal && !deps.skipLookahead) {
+  // deps.skipLookahead skips the search entirely (eval-set generation just wants the
+  // isSparse gate decision). deps.alwaysLookahead forces the search even on non-sparse
+  // positions, but ONLY to populate prompt_data — it never injects the look-ahead section
+  // or mutates the prompt's allowedSet/aliasMap (those stay gated on isSparse, preserving
+  // production prompt behavior). The search is the expensive part.
+  const lookaheadForPrompt = isSparse && !isOptimal && !deps.skipLookahead;
+  // Data path: when alwaysLookahead is set (eval harness), compute the look-ahead for
+  // prompt_data UNCONDITIONALLY — not gated on isOptimal. On a genuinely optimal position
+  // bestCol === playedCol so the search has no "better vs played" delta and returns null
+  // by construction, but we always attempt it so prompt_data carries the look-ahead
+  // whenever one exists.
+  const lookaheadForData = !!deps.alwaysLookahead && !deps.skipLookahead;
+  if (lookaheadForPrompt || lookaheadForData) {
     let la = null;
     try {
       la = await runSparseLookahead(
         { movestring, playedCol: col, bestCol, perspective },
-        { solver, classifyFn: deps.classifyFn },
+        { solver, classifyFn: deps.classifyFn, depth: deps.lookaheadDepth, budget: deps.lookaheadBudget, dedupeByScore: deps.lookaheadDedupeByScore },
       );
     } catch {
       // transient solver error in this optional section — treat as if look-ahead returned null
     }
     if (la) {
-      lookaheadFired = true;
-      // Per-tag natural-language label + the "way" label used inside each zone tag.
-      const NL = (t) => ({ double_threat: 'a double threat', immediate_threat: 'a winning move', undercut: 'an undercut threat', overcut: 'an overcut threat', figure_7: 'a figure-7 fork', j_shape: 'a J-shape threat' }[t] ?? 'a stronger structure');
-      // Each alias expands server-side to the concrete cells the look-ahead found, so
-      // the model never has to emit raw coordinates — it just drops the zone tag in.
-      const wayLabel = (t) => ({ immediate_threat: 'the square that completes the win', double_threat: 'the square that forks two threats', undercut: 'the square that lands the undercut', overcut: 'the square that lands the overcut', figure_7: 'the square that completes the figure-7', j_shape: 'the square that completes the J-shape' }[t] ?? 'the key square');
-      const wayLinesFor = (aliasMap, label) => Object.keys(aliasMap)
-        .map((alias, i) => `- [zone:${alias}]${i === 0 ? label : 'another square that gets there'}[/zone:${alias}]`)
-        .join('\n');
-      // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).
-      // The explanation unavoidably references the played and better COLUMNS and their
-      // landing cells, so they MUST be whitelisted here too — mirror the existing
-      // non-null block (explainContext.js:421-429). playedCell/bestCell already exist
-      // in scope (computed at lines 418-419); do NOT recompute them.
-      const moveCells = [
-        { col, validationOnly: true },                 // the move played
-        { cells: [playedCell], validationOnly: true }, // where it landed
-        { col: contrastCol, validationOnly: true },    // the better move
-        { cells: [bestCell], validationOnly: true },   // where it lands
-      ];
+      rawLookahead = la;
+      // Structured mirror for the eval harness (prompt_data). Cells come from the
+      // already-deduped allowedSetEntries, not by re-parsing the alias cell strings.
+      const flat = (entries) => (entries ?? []).flatMap((e) => e.cells);
+      lookaheadData = {
+        case: LOOKAHEAD_CASE_SLUGS[la.case] ?? `case_${la.case}`,
+        player: la.tag ? { tag: la.tag, cells: flat(la.allowedSetEntries) } : null,
+        opponent: la.oppTag ? { tag: la.oppTag, cells: flat(la.oppAllowedSetEntries) } : null,
+        playedStillWins: la.playedStillWins ?? null,
+        // Per-category novel examples (every category the better move opens that the played
+        // move cannot), priority-ordered, ≤MAX_WAYS ways each. The prompt surfaces only the
+        // top-priority `player`/`opponent` winner above; this carries the full set so a
+        // downstream consumer can keep them all and decide what to filter.
+        categoryExamples: la.categoryExamples ?? null,
+        oppCategoryExamples: la.oppCategoryExamples ?? null,
+        // Per-tag {pattern, bestCnt, playedCnt} over every Tier-1 structure the search saw —
+        // the raw branch counts compareOpportunities ranks by (null when not computed).
+        tallyComparison: la.tallyComparison ?? null,
+        oppTallyComparison: la.oppTallyComparison ?? null,
+      };
 
-      if (la.case === 3) {
-        // Case 3 (losing either way): surface how best play punishes the move (opponent
-        // structures) and, when present, how the player could punish an opponent slip.
-        // CHECKPOINT: this framing is validated via the eval/judge-deep-reveals harness.
-        Object.assign(zoneAliasMap, la.aliasMap, la.oppAliasMap);
-        resolvedAllowedSet = [
-          ...la.allowedSetEntries,
-          ...la.oppAllowedSetEntries,
-          ...moveCells,
+      // Prompt-affecting mutations are gated on isSparse AND a winner existing. runSparseLookahead
+      // now always returns an object (to carry tallyComparison even with no winner), so we can no
+      // longer key off `la` truthiness — fire only when there is a player or opponent structure.
+      if (lookaheadForPrompt && (la.tag || la.oppTag)) {
+        lookaheadFired = true;
+        // Per-tag natural-language label + the "way" label used inside each zone tag.
+        const NL = (t) => ({ double_threat: 'a double threat', immediate_threat: 'a winning move', undercut: 'an undercut threat', overcut: 'an overcut threat', figure_7: 'a figure-7 fork', j_shape: 'a J-shape threat' }[t] ?? 'a stronger structure');
+        // Each alias expands server-side to the concrete cells the look-ahead found, so
+        // the model never has to emit raw coordinates — it just drops the zone tag in.
+        const wayLabel = (t) => ({ immediate_threat: 'the square that completes the win', double_threat: 'the square that forks two threats', undercut: 'the square that lands the undercut', overcut: 'the square that lands the overcut', figure_7: 'the square that completes the figure-7', j_shape: 'the square that completes the J-shape' }[t] ?? 'the key square');
+        const wayLinesFor = (aliasMap, label) => Object.keys(aliasMap)
+          .map((alias, i) => `- [zone:${alias}]${i === 0 ? label : 'another square that gets there'}[/zone:${alias}]`)
+          .join('\n');
+        // Providing a non-null allowedSet turns checkP5Strong ON (it was OFF while null).
+        // The explanation unavoidably references the played and better COLUMNS and their
+        // landing cells, so they MUST be whitelisted here too — mirror the existing
+        // non-null block (explainContext.js:421-429). playedCell/bestCell already exist
+        // in scope (computed at lines 418-419); do NOT recompute them.
+        const moveCells = [
+          { col, validationOnly: true },                 // the move played
+          { cells: [playedCell], validationOnly: true }, // where it landed
+          { col: contrastCol, validationOnly: true },    // the better move
+          { cells: [bestCell], validationOnly: true },   // where it lands
         ];
-        const parts = ['## What the better move leads to', ''];
-        if (la.oppTag) {
-          parts.push(`Your move loses to best play: if your opponent responds perfectly, they punish it by building toward ${NL(la.oppTag)}. This is a future possibility, NOT a fact on the board yet — these cells are empty now. Point the player at how the opponent would punish by USING the zone tag(s) below (they mark the exact square(s) where the opponent's threat would form); describe it as something the opponent could do next, never as already present:`);
-          parts.push(wayLinesFor(la.oppAliasMap, wayLabel(la.oppTag)));
+
+        if (la.case === 3) {
+          // Case 3 (losing either way): surface how best play punishes the move (opponent
+          // structures) and, when present, how the player could punish an opponent slip.
+          // CHECKPOINT: this framing is validated via the eval/judge-deep-reveals harness.
+          Object.assign(zoneAliasMap, la.aliasMap, la.oppAliasMap);
+          resolvedAllowedSet = [
+            ...la.allowedSetEntries,
+            ...la.oppAllowedSetEntries,
+            ...moveCells,
+          ];
+          const parts = ['## What the better move leads to', ''];
+          if (la.oppTag) {
+            parts.push(`Your move loses to best play: if your opponent responds perfectly, they punish it by building toward ${NL(la.oppTag)}. This is a future possibility, NOT a fact on the board yet — these cells are empty now. Point the player at how the opponent would punish by USING the zone tag(s) below (they mark the exact square(s) where the opponent's threat would form); describe it as something the opponent could do next, never as already present:`);
+            parts.push(wayLinesFor(la.oppAliasMap, wayLabel(la.oppTag)));
+          }
+          if (la.tag) {
+            if (la.oppTag) parts.push('');
+            parts.push(`This does not guarantee you a win, but if your opponent slips, the better move lets you punish by building toward ${NL(la.tag)} — again a future possibility, not a fact on the board yet. Point at it by USING the zone tag(s) below:`);
+            parts.push(wayLinesFor(la.aliasMap, wayLabel(la.tag)));
+          }
+          lookaheadSection = parts.join('\n');
+        } else {
+          // Cases 1 & 2: structurally identical to the prior single-mode behavior.
+          Object.assign(zoneAliasMap, la.aliasMap);
+          resolvedAllowedSet = [...la.allowedSetEntries, ...moveCells];
+          const wayLines = wayLinesFor(la.aliasMap, wayLabel(la.tag));
+          lookaheadSection = `## What the better move leads to\n\nThis is a future possibility, NOT a fact on the board yet — these cells are empty now. If your opponent does not defend perfectly, the better move lets you build toward ${NL(la.tag)}. In your explanation, point the player at this concrete follow-up by USING the zone tag(s) below (they mark the exact square(s) where it forms); always describe it as something they could build next, never as already present:\n${wayLines}`;
         }
-        if (la.tag) {
-          if (la.oppTag) parts.push('');
-          parts.push(`This does not guarantee you a win, but if your opponent slips, the better move lets you punish by building toward ${NL(la.tag)} — again a future possibility, not a fact on the board yet. Point at it by USING the zone tag(s) below:`);
-          parts.push(wayLinesFor(la.aliasMap, wayLabel(la.tag)));
-        }
-        lookaheadSection = parts.join('\n');
-      } else {
-        // Cases 1 & 2: structurally identical to the prior single-mode behavior.
-        Object.assign(zoneAliasMap, la.aliasMap);
-        resolvedAllowedSet = [...la.allowedSetEntries, ...moveCells];
-        const wayLines = wayLinesFor(la.aliasMap, wayLabel(la.tag));
-        lookaheadSection = `## What the better move leads to\n\nThis is a future possibility, NOT a fact on the board yet — these cells are empty now. If your opponent does not defend perfectly, the better move lets you build toward ${NL(la.tag)}. In your explanation, point the player at this concrete follow-up by USING the zone tag(s) below (they mark the exact square(s) where it forms); always describe it as something they could build next, never as already present:\n${wayLines}`;
       }
     }
   }
@@ -679,10 +809,16 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
   // in more four-in-a-row lines. Surface it so the coach grounds on centrality
   // instead of falling back to generic filler. No simulation — pure geometry.
   let centerDominanceSection;
-  if (!isOptimal && !lookaheadFired && !threatComparisonSection) {
+  let centerDominanceData = null;
+  if (!isOptimal) {
+    // Compute on the whole blunder path so prompt_data always carries it when available;
+    // the prompt SECTION keeps its original gate (only when no threat row / look-ahead).
     const cd = detectCenterDominance({ movestring, playedCol: col, bestCol: contrastCol });
     if (cd) {
-      centerDominanceSection = `## Why the better move is stronger\n\n${cd.reason}`;
+      centerDominanceData = { reason: cd.reason };
+      if (!lookaheadFired && !threatComparisonSection) {
+        centerDominanceSection = `## Why the better move is stronger\n\n${cd.reason}`;
+      }
     }
   }
 
@@ -714,5 +850,74 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     centerDominanceSection,
   });
 
-  return { prompt, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol, isSparse, lookaheadFired };
+  // ── Uncensored snapshot of EVERYTHING buildExplainContext computes (Step-1 goal) ──
+  // This is deliberately complete, not curated: a human or a thinking model should be able
+  // to derive the deep reason a move is a blunder (and why the better move is stronger)
+  // from this object alone. Field SELECTION + the prompt-shaping suppressions are Step-2/3
+  // concerns and must NOT be applied here. classifyPattern returns Maps, which JSON-encode
+  // to {} unless converted — serialize every pattern Map with m2o.
+  const m2o = (m) => (m ? Object.fromEntries(m) : null);
+  const promptData = {
+    // ── identity / framing ──
+    movestring,
+    playedCol: col,
+    perspective,
+    playerName,
+    opponentPerspective,
+
+    // ── solver ground truth ──
+    preScores,                                  // per-column scores from the pre-move position
+    positionTier,                               // WINNING / LOSING / DRAW
+    contrastCol,                                // the better column (always, even when optimal)
+    bestCol,
+    isOptimal,
+    gap,
+    gapBucket,
+
+    // ── blunder framing ──
+    tag,
+    direction,
+    terseReason,                                // tagBlunder's internal reason string
+    humanReason,
+    positiveReason,
+
+    // ── pattern detections (Maps → plain objects) ──
+    patternsBest: m2o(correctMovePatterns),     // patterns at the best-move position
+    patternsPlayed: m2o(patPlayed),             // patterns at the played position
+    patternsPostBlunder: m2o(patPostBlunder),   // patterns after the played move
+    patternsOpponent: m2o(opponentPatterns),    // direction-specific opponent augmentation, if any
+    relevantPatternKeys: [...relevantPatternKeys],
+
+    // ── concrete anchors ──
+    playedCell,
+    bestCell,
+    allowedSet: resolvedAllowedSet,
+    zoneAliasMap,
+
+    // ── threats (full, uncensored) ──
+    threatStats: { pre: preStats, best: bestStats, played: blunderStats },
+    threatShowFlags: { showPlayerMajor, showOpponentMajor, showPlayerMinor, showOpponentMinor },
+    threatComparison: threatComparisonData,     // all 4 metrics, each carries `differs`
+
+    // ── KB terms ──
+    kbTermIds,
+    kbTerms,                                     // [{ tagId, kbId, displayName, summary }]
+
+    // ── sparse look-ahead ──
+    isSparse,
+    lookaheadFired,
+    lookahead: lookaheadData,                    // distilled view
+    lookaheadRaw: rawLookahead,                  // full runSparseLookahead return
+
+    // ── opening center dominance ──
+    centerDominance: centerDominanceData,
+    // boardViz intentionally omitted — movestring + preScores + threatStats capture the
+    // board state structurally; Step 1 tests whether the model needs the ASCII boards.
+  };
+
+  // Wire the FULL (unpruned) vector so the admin tool's "collapse empty" toggle works both
+  // ways; the recursive elimination defaults ON in toFeatureVector for any other caller.
+  const featureVector = toFeatureVector(promptData, { prune: false });
+
+  return { prompt, promptData, featureVector, allowedSet: resolvedAllowedSet, zoneAliasMap, contrastCol: isOptimal ? undefined : contrastCol, isSparse, lookaheadFired };
 }

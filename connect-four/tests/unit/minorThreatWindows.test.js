@@ -11,8 +11,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { Board } from '../../server/classifier.js';
-import { getMinorThreatWindows } from '../../server/explainContext.js';
+import { Board, getMinorThreatWindows } from '../../server/classifier.js';
 
 // Movestring "542344233": 9-move position where Green has a major anti-diagonal threat.
 // Board (display coords, 1-indexed):

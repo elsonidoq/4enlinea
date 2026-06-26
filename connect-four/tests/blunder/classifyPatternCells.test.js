@@ -67,6 +67,29 @@ describe('classifyPattern — Map return type and cells (FR-T02)', () => {
     }
   }, { timeout: 30_000 });
 
+  it('major_threat_parity fires with the parity-aligned cell for the to-move perspective', async () => {
+    // '3342652334': Gray (P=2) holds a latent major threat at c3r4 on an odd row (Gray's parity).
+    const result = await classifyPattern('3342652334', 2, solver);
+    assert.ok(result.has('major_threat_parity'), 'major_threat_parity must fire for Gray');
+    const entry = result.get('major_threat_parity');
+    assert.ok(entry.cells.includes('c3r4'), 'parity-aligned cell c3r4 present');
+    assert.ok(!result.has('major_threat_nonparity'), 'no off-parity major here');
+  }, { timeout: 30_000 });
+
+  it('major_threat_nonparity fires for an off-parity major; minor_threat carries union cells', async () => {
+    // '542344233': Green (P=1) holds a latent major threat at c3r4 on an odd row (OFF Green parity).
+    const result = await classifyPattern('542344233', 1, solver);
+    assert.ok(result.has('major_threat_nonparity'), 'major_threat_nonparity must fire for Green');
+    assert.ok(result.get('major_threat_nonparity').cells.includes('c3r4'));
+    assert.ok(!result.has('major_threat_parity'), 'no parity-aligned major here');
+    // minor_threat union cells are wire-format and exclude the shadow window cell c2r5.
+    assert.ok(result.has('minor_threat'), 'minor_threat fires');
+    const minor = result.get('minor_threat');
+    assert.ok(minor.cells.length > 1, 'minor_threat carries a union of cells');
+    for (const cell of minor.cells) assert.match(cell, /^c\d+r\d+$/);
+    assert.ok(!minor.cells.includes('c2r5'), 'shadow window cell excluded');
+  }, { timeout: 30_000 });
+
   it('entries without cell evidence return cells: []', async () => {
     // forced_win has cells: [] (position-global, not cell-specific)
     // Use a forced-win position: '3233333556' (from tagBlunder test)

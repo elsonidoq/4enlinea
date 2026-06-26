@@ -81,6 +81,8 @@ try {
       context_error: null,
       llm_error: null,
       prompt: null,
+      prompt_data: null,
+      feature_vector: null,
       allowed_set: null,
       attempt1_response: null,
       attempt1_passed: null,
@@ -94,7 +96,14 @@ try {
     // ── Step 1: Build explain context ─────────────────────────────────────
     let context;
     try {
-      context = await buildExplainContext(entry.board_state, entry.move_played, 1, solver);
+      // prompt_data look-ahead config: 20-ply window, dedupe-by-score pruning, no budget cap
+      // (only depth limits the search). Matches server/scripts/print_lookahead.mjs.
+      context = await buildExplainContext(entry.board_state, entry.move_played, 1, solver, {
+        alwaysLookahead: true,
+        lookaheadDepth: 20,
+        lookaheadBudget: null,
+        lookaheadDedupeByScore: true,
+      });
     } catch (err) {
       record.context_outcome = 'error';
       record.context_error = err.message;
@@ -126,6 +135,8 @@ try {
     record.runtime_is_sparse = context.isSparse ?? null;
     record.lookahead_fired = context.lookaheadFired ?? null;
     record.prompt = context.prompt;
+    record.prompt_data = context.promptData ?? null;
+    record.feature_vector = context.featureVector ?? null;
     record.allowed_set = context.allowedSet ?? null;
     // Override correct_move with the column buildExplainContext actually put in the
     // prompt. eval_set.json uses a different tiebreaker for tied-score positions,

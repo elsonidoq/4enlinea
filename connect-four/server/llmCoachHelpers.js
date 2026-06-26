@@ -62,7 +62,11 @@ export const PATTERN_KB = {
   overcut:         { id: 'community-overcut' },
   z_threat:        { id: 'community-z-threat' },
   forced_win:      { id: 'community-forced-win' },
-  odd_even_threat: { id: 'derived-odd-even-threat' },
+  // odd_even_threat de-listed from the coach 2026-06-25: its detector + puzzle category
+  // stay, but it is never injected as a [term:...] in the explain prompt. The parity-aware
+  // threat tags below replace its coaching role.
+  major_threat_parity:    { id: 'derived-parity-aligned-threat' },
+  major_threat_nonparity: { id: 'allen-major-threat' },
   // KB terms are injected into a prompt ONLY when their pattern actually fires on the
   // board (relevantPatternKeys in explainContext.js). The former `always_include`
   // glossary path was removed: injecting a term with no instance — even parity /

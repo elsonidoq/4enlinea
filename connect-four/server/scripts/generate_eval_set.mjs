@@ -6,8 +6,8 @@
 // Writes eval_set.json after each newly satisfied predicate (crash-safe).
 
 import { writeFileSync } from 'fs';
-import { Board, getMajorThreatCells, tagBlunder } from '../classifier.js';
-import { buildExplainContext, getMinorThreatWindows } from '../explainContext.js';
+import { Board, getMajorThreatCells, tagBlunder, getMinorThreatWindows } from '../classifier.js';
+import { buildExplainContext } from '../explainContext.js';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { harvestBlunders } from '../gameSampling.js';
 

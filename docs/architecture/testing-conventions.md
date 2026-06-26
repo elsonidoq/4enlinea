@@ -86,8 +86,11 @@ never fabricated. The flow:
   is the correctness oracle (layer 1 alone would be self-referential).
 
 **Gotcha**: a few `tag:direction` bins are structurally unreachable in random self-play
-(`claimeven:*` is Yellow-only and rare; `odd_even_threat:missed_own`, `z_threat:enabled_opponent`).
-The generator reports them as "unreached" rather than failing — missing bins are expected, not a bug.
+(`claimeven:*` is Yellow-only and rare; `z_threat:enabled_opponent`). The generator reports
+them as "unreached" rather than failing — missing bins are expected, not a bug. (Regenerated
+2026-06-25 after the parity-threat refactor: `odd_even_threat:*` bins are gone — that tag is
+no longer a blunder tag — and new `major_threat_parity:*`/`major_threat_nonparity:*`/`minor_threat:*`
+bins are now covered. The canonical bin enumeration is always `REASON_TEMPLATES.keys()`.)
 
 ## What Gets Each Test Type
 

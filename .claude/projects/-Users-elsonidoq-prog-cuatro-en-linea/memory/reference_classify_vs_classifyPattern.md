@@ -16,10 +16,12 @@ Two classifier entry points with very different scopes:
 - `forced_win` uses the **same structural `detectForcedWin`** as `classifyPattern` (classifier.js:449 calls it; no score gate). The two entry points differ in scope/return shape, NOT in the `forced_win` predicate — there is no "score-based / losing-position" forced_win. (Corrected 2026-06-25; the earlier "fires when the mover is LOSING (all scores ≤ 0)" claim was wrong.)
 - Used by: `POST /api/evaluate-move` (user-move path), `POST /api/evaluate-move/inline`, and the sparring game analysis endpoint
 
-**`classifyPattern(ms, perspective, solver)`** — `classifier.js:1354`
-- Async — runs 12 detectors in parallel via `Promise.all`
+**`classifyPattern(ms, perspective, solver)`** — `classifier.js`
+- Async — runs **15** detectors in parallel via `Promise.all` (was 12; +3 parity-aware threats 2026-06-25)
 - Returns a `Map` of ALL matched tags (multiple can fire simultaneously)
-- Full 11-tag set including parity/shape patterns: `claimeven`, `z_threat`, `odd_even_threat`, `figure_7`, `j_shape`, `overcut`, `undercut` (plus the 4 from classify); `claimodd` was removed 2026-06-17
+- Tag set including parity/shape patterns: `claimeven`, `z_threat`, `odd_even_threat`, `figure_7`, `j_shape`, `overcut`, `undercut` (plus the 4 from classify); `claimodd` was removed 2026-06-17
+- **Parity-aware threats (added 2026-06-25):** `major_threat_parity`, `major_threat_nonparity`, `minor_threat` — geometry-only detectors built on `categorizeThreats`, each emitting the union of completing cells for the to-move perspective. First-class in the look-ahead, blunder tagging, and coach KB.
+- **`odd_even_threat` still fires here but is PUZZLE-ONLY** — de-listed from the coach prompt and the blunder vocabulary 2026-06-25. See [[project_odd_even_threat_puzzle_only]].
 - Perspective-aware — `forced_win` correctly detects when the specified `perspective` player is winning
 - `detectClaimeven` makes ~20 additional solver calls (expensive)
 - Used by: blunder-analysis path (`tagBlunder`), and — after coach commentary epic ships — `POST /api/evaluate-move` when `req.body.aiMove === true`
