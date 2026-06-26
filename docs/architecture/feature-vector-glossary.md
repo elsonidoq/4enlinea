@@ -44,9 +44,20 @@ was not present," not "unknown."
     as "Gray".
   - All `patterns*` and `threatStats.*.player*` data is from **your** perspective; `*.opponent*`
     and `patternsOpponent` are from the opponent's.
-- **"Major" vs "minor" threat.** A **major threat** is a 4-in-a-row window holding **three of one
-  player's discs and one empty cell** (filling the empty cell wins). A **minor threat** is a
-  window holding **two discs and two empties** (a developing, two-moves-away setup).
+- **`owner` on cell groups.** Every non-empty `cells`/`ways` group carries `owner: "player"`
+  (yours) or `owner: "opponent"`. Trust it literally — never re-attribute a cell to the other
+  side. An absent `owner` only ever co-occurs with an empty group (pruned away).
+- **"Major" vs "minor" vs "immediate" threat.** Non-empty threat groups carry `severity`:
+  - `"immediate"` — a major threat whose completing cell is **gravity-top (playable this move /
+    win-in-one)**. Structural tactical patterns (`figure_7`, `j_shape`, `undercut`, `overcut`,
+    `forced_block`, `forced_win`, `z_threat`, `claimeven`) carry **no `severity`** — the tag
+    names the shape, not a threat-window category.
+  - `"major"` — a **3-in-window latent threat** whose cell is not immediately playable.
+  - `"minor"` — a **2-in-window developing setup** (two-moves-away).
+  - Structural tactical patterns carry **no `severity`** — the tag name is the meaning.
+  A **major threat** is a 4-in-a-row window holding **three of one player's discs and one empty
+  cell** (filling the empty cell wins). A **minor threat** is a window holding **two discs and
+  two empties** (a developing, two-moves-away setup).
 - **"With best play."** Every outcome word (`win`/`draw`/`loss`) means the game-theoretic result
   **assuming both sides play optimally from here on**. A `win` means you *can force* a win with
   correct continuation — it is **not** a guarantee produced by this single move. The only move
@@ -153,9 +164,11 @@ deliberately not exposed).
 
 ## 4. Pattern names (keys of the `patterns*` maps)
 
-Each `patterns*` map is `{ <patternTag>: { cells: [<cNrM>, ...] } }`. A key present means that
-pattern is detected on that snapshot's board (from the relevant perspective); `cells` are the
-grounding squares involved. The possible keys:
+Each `patterns*` map is `{ <patternTag>: { cells: [<cNrM>, ...], owner, severity? } }`. A key
+present means that pattern is detected on that snapshot's board (from the relevant perspective);
+`cells` are the grounding squares involved. `patternsBest`/`patternsPreMove`/`patternsPostBlunder`
+carry `owner:"player"`; `patternsOpponent` carries `owner:"opponent"`. Threat-window tags also
+carry `severity` (see §1); structural shape tags do not. The possible keys:
 
 | Pattern key | Meaning |
 |---|---|
@@ -211,7 +224,13 @@ threatStats: {
 }
 ```
 
-Each snapshot has these six buckets, every one `{ count: <int>, cells: [<cNrM>, ...] }`:
+Each snapshot has these six buckets, every non-empty one
+`{ count: <int>, cells: [<cNrM>, ...], owner, severity }`. The `owner` field matches the bucket
+name (`player*` → `"player"`, `opponent*` → `"opponent"`). The `severity` field is `"major"` for
+latent major buckets (the cell is not immediately playable), or `"immediate"` if all cells in the
+bucket are gravity-top on the snapshot board (vanishingly rare — gravity-top majors are normally
+pre-routed to `patterns.immediate_threat`). Minor buckets carry `severity:"minor"`. Empty buckets
+have neither field (and are pruned away in the default output).
 
 | Bucket | Meaning |
 |---|---|
@@ -275,6 +294,8 @@ move would have held the draw; your move loses."* (`null` = the outcome could no
 | `tag` | A pattern category (from §4's vocabulary) that the search surfaced. |
 | `ways` | A list of cell-sets (each a list of `cNrM`) — the **novel** squares the better line opens that the played line cannot. These are concrete board squares you may name. |
 | `novelInstances` | Count of distinct novel cells across `ways`. |
+| `owner` | `"player"` for `categoryExamples`; `"opponent"` for `oppCategoryExamples`. |
+| `severity` | Threat-window severity — `"immediate"`, `"major"`, or `"minor"` — for threat tags; absent for structural tags (same vocabulary as §1 and §4). |
 
 `categoryExamples` = structure the **better move** opens that the played move does not (your side).
 `oppCategoryExamples` = the **opponent's** punishing structure on the played line (used in

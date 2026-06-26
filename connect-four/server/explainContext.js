@@ -79,19 +79,87 @@ function pruneEmpty(value) {
   return value;
 }
 
+// Severity vocabulary for threat-window cells: minor (2-in-window), major (3-in-window
+// latent, not playable now), immediate (major whose completing cell is gravity-top — a
+// win this move). Structural tactical tags name a SHAPE, not a threat window, so they
+// carry no severity (the tag is the meaning).
+const IMMEDIATE_TAGS = new Set(['immediate_threat', 'double_threat']);
+const MAJOR_TAGS = new Set(['major_threat_parity', 'major_threat_nonparity']);
+const MINOR_TAGS = new Set(['minor_threat']);
+
+// Severity for a pattern-map / lookahead tag. Returns undefined for structural tags.
+function patternSeverity(tag) {
+  if (IMMEDIATE_TAGS.has(tag)) return 'immediate';
+  if (MAJOR_TAGS.has(tag)) return 'major';
+  if (MINOR_TAGS.has(tag)) return 'minor';
+  return undefined;
+}
+
+// True when cell string `cNrM` is the next square gravity will fill in its column on a board
+// with the given 0-indexed `colHeights` (i.e. playing that column lands exactly there).
+function isGravityTop(cellStr, colHeights) {
+  const m = /^c(\d)r(\d)$/.exec(cellStr);
+  if (!m) return false;
+  const col0 = Number(m[1]) - 1;
+  const row0 = Number(m[2]) - 1;
+  return colHeights[col0] === row0;
+}
+
+// Stamp a lookahead example entry with severity derived from its tag (omit for structural tags).
+function severityTag(entry) {
+  const sev = patternSeverity(entry.tag);
+  return sev ? { ...entry, severity: sev } : entry;
+}
+
+// Attach provenance labels to a cell group WITHOUT defeating the prune contract: a group
+// with no cells stays a bare {cells: []} (so pruneEmpty still drops it); a non-empty group
+// gains `owner` (and `severity` when provided).
+function labelGroup(group, owner, severity) {
+  const cells = group?.cells ?? [];
+  if (cells.length === 0) return { cells: [] };
+  const out = { cells, owner };
+  if (severity) out.severity = severity;
+  return out;
+}
+
+// Map a serialized pattern map ({tag → {cells}}) to a labeled one, stamping each non-empty
+// group with `owner` (and a per-tag `severity` from patternSeverity).
+function labelPatternMap(patternMap, owner) {
+  if (!patternMap) return patternMap;
+  const out = {};
+  for (const [tag, value] of Object.entries(patternMap)) {
+    out[tag] = labelGroup(value, owner, patternSeverity(tag));
+  }
+  return out;
+}
+
 // Project a board state's threat snapshot (summarizeThreats output) to parity buckets, each
 // {count, cells}. Cells are kept — they are grounded squares that complement the movestring.
 // Only the verbose 4-cell `windows` and the redundant non-split aggregates are dropped.
-function compactThreats(s) {
+// Non-empty buckets carry `owner` and `severity`; empty buckets stay bare {count,cells} so
+// pruneEmpty still collapses them. Major buckets carry severity:'immediate' iff all their
+// cells are gravity-top on the snapshot board (bucket is atomic), else severity:'major'.
+function compactThreats(s, colHeights) {
   if (!s) return null;
-  const bucket = (count, cells) => ({ count: count ?? 0, cells: cells ?? [] });
+  const majorSeverity = (cells) =>
+    cells.length && cells.every((c) => isGravityTop(c, colHeights)) ? 'immediate' : 'major';
+  const major = (count, cells, owner) =>
+    (cells?.length ? { count: count ?? 0, cells, owner, severity: majorSeverity(cells) }
+                   : { count: count ?? 0, cells: cells ?? [] });
+  const minor = (count, cells, owner) =>
+    (cells?.length ? { count: count ?? 0, cells, owner, severity: 'minor' }
+                   : { count: count ?? 0, cells: cells ?? [] });
+  const pmajP = s.playerMajorParityAligned   ?? { count: 0, cells: [] };
+  const pmajN = s.playerMajorNonParity        ?? { count: 0, cells: [] };
+  const omajP = s.opponentMajorParityAligned ?? { count: 0, cells: [] };
+  const omajN = s.opponentMajorNonParity      ?? { count: 0, cells: [] };
   return {
-    playerMajorParityAligned:   s.playerMajorParityAligned   ?? { count: 0, cells: [] },
-    playerMajorNonParity:       s.playerMajorNonParity        ?? { count: 0, cells: [] },
-    playerMinor:                bucket(s.playerMinor, s.playerMinorCells),
-    opponentMajorParityAligned: s.opponentMajorParityAligned ?? { count: 0, cells: [] },
-    opponentMajorNonParity:     s.opponentMajorNonParity      ?? { count: 0, cells: [] },
-    opponentMinor:              bucket(s.opponentMinor, s.opponentMinorCells),
+    playerMajorParityAligned:   major(pmajP.count, pmajP.cells, 'player'),
+    playerMajorNonParity:       major(pmajN.count, pmajN.cells, 'player'),
+    playerMinor:                minor(s.playerMinor, s.playerMinorCells, 'player'),
+    opponentMajorParityAligned: major(omajP.count, omajP.cells, 'opponent'),
+    opponentMajorNonParity:     major(omajN.count, omajN.cells, 'opponent'),
+    opponentMinor:              minor(s.opponentMinor, s.opponentMinorCells, 'opponent'),
   };
 }
 
@@ -163,16 +231,26 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
     // parity-aware threat tags are stripped here: their cells are a strict, exact duplicate
     // of threatStats' player-side buckets (all derived from categorizeThreats().player.*),
     // and threatStats is the richer home (parity split + opponent side + count).
-    patternsBest: stripThreatDupeTags(promptData.patternsBest),
-    patternsPreMove: stripThreatDupeTags(promptData.patternsPreMove),
-    patternsPostBlunder: stripThreatDupeTags(promptData.patternsPostBlunder),
-    patternsOpponent: stripThreatDupeTags(promptData.patternsOpponent),
-    // parity-bucket threats — count + CELLS — at each board state
-    threatStats: {
-      pre:    compactThreats(promptData.threatStats?.pre),
-      best:   compactThreats(promptData.threatStats?.best),
-      played: compactThreats(promptData.threatStats?.played),
-    },
+    patternsBest:        labelPatternMap(stripThreatDupeTags(promptData.patternsBest),        'player'),
+    patternsPreMove:     labelPatternMap(stripThreatDupeTags(promptData.patternsPreMove),     'player'),
+    patternsPostBlunder: labelPatternMap(stripThreatDupeTags(promptData.patternsPostBlunder), 'player'),
+    patternsOpponent:    labelPatternMap(stripThreatDupeTags(promptData.patternsOpponent),    'opponent'),
+    // parity-bucket threats — count + CELLS — at each board state.
+    // colHeights are needed per-snapshot to classify gravity-top majors. Guard the Board
+    // construction: bestCol/playedCol can be absent on synthetic promptData (tests, eval harness).
+    ...(() => {
+      const ms = promptData.movestring ?? '';
+      const preH    = new Board(ms).colHeights;
+      const bestH   = promptData.bestCol   != null ? new Board(ms + promptData.bestCol).colHeights   : preH;
+      const playedH = promptData.playedCol != null ? new Board(ms + promptData.playedCol).colHeights : preH;
+      return {
+        threatStats: {
+          pre:    compactThreats(promptData.threatStats?.pre,    preH),
+          best:   compactThreats(promptData.threatStats?.best,   bestH),
+          played: compactThreats(promptData.threatStats?.played, playedH),
+        },
+      };
+    })(),
     // sparse look-ahead. `categoryExamples` / `oppCategoryExamples` carry the NOVEL cell-sets
     // (the squares the better move opens that the played move cannot) — grounded tactical
     // detail that complements the movestring and is NOT recoverable from counts alone. They
@@ -184,8 +262,8 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
       case: la.case,
       bestOutcome: la.bestOutcome ?? null,                 // {win,draw,loss}_with_best_play — better move
       postBlunderOutcome: la.postBlunderOutcome ?? null,   // {win,draw,loss}_with_best_play — played move
-      categoryExamples: la.categoryExamples ?? [],
-      oppCategoryExamples: la.oppCategoryExamples ?? [],
+      categoryExamples: (la.categoryExamples ?? []).map((e) => severityTag({ ...e, owner: 'player' })),
+      oppCategoryExamples: (la.oppCategoryExamples ?? []).map((e) => severityTag({ ...e, owner: 'opponent' })),
       perCategory: (la.tallyComparison ?? []).map((m) => ({
         tag: m.pattern,
         bestInstances: m.bestInstances,
