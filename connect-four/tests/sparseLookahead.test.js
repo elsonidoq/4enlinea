@@ -345,6 +345,56 @@ test('runSparseLookahead: optScore >= 0 routes through optimal-opponent (case 1)
   assert.ok(Object.keys(got.aliasMap)[0].startsWith('future-undercut'));
 });
 
+// ── bestOutcome / postBlunderOutcome (with-best-play outcome labels) ──────────────
+test('runSparseLookahead: best wins, played loses → win/loss with best play', async () => {
+  // bestCol 3 = +1 (>0 win), playedCol 4 = -2 (<0 loss) → case 1.
+  const pre = [-2, -2, -2, 1, -2, -2, -2];
+  const node = [0, 0, 0, 0, 0, 9, 0];
+  const fSolver = { async query(ms) { return ms === '3333' ? pre : node; } };
+  const classifyFn = async (ms) => (ms[4] === '3' && ms[5] === '5')
+    ? new Map([['undercut', { cells: ['c1r1'] }]]) : new Map();
+  const got = await runSparseLookahead(
+    { movestring: '3333', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 1);
+  assert.equal(got.bestOutcome, 'win_with_best_play');
+  assert.equal(got.postBlunderOutcome, 'loss_with_best_play');
+});
+
+test('runSparseLookahead: best draws (0), played loses (-1) → draw/loss with best play', async () => {
+  // The motivating scenario: better move only HOLDS the draw, played move LOSES.
+  // optScore 0 (>=0 → holds branch), blunderScore -1 (<0 → case 1).
+  const pre = [-3, -2, -3, 0, -1, 0, -4];
+  const node = [0, 0, 0, 0, 0, 9, 0];
+  const fSolver = { async query(ms) { return ms === '3333' ? pre : node; } };
+  const classifyFn = async (ms) => (ms[4] === '3' && ms[5] === '5')
+    ? new Map([['undercut', { cells: ['c1r1'] }]]) : new Map();
+  const got = await runSparseLookahead(
+    { movestring: '3333', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 1);
+  assert.equal(got.bestOutcome, 'draw_with_best_play', 'best move only holds the draw');
+  assert.equal(got.postBlunderOutcome, 'loss_with_best_play');
+});
+
+test('runSparseLookahead: both moves win → case 2, both win with best play', async () => {
+  // bestCol 3 = +5, playedCol 4 = +3 → both hold (case 2), both win.
+  const pre = [-2, -2, -2, 5, 3, -2, -2];
+  const node = [0, 0, 0, 0, 0, 9, 0];
+  const fSolver = { async query(ms) { return ms === '3333' ? pre : node; } };
+  const classifyFn = async (ms) => (ms[4] === '3' && ms[5] === '5')
+    ? new Map([['undercut', { cells: ['c1r1'] }]]) : new Map();
+  const got = await runSparseLookahead(
+    { movestring: '3333', playedCol: 4, bestCol: 3, perspective: 1 },
+    { solver: fSolver, classifyFn },
+  );
+  assert.equal(got.case, 2);
+  assert.equal(got.bestOutcome, 'win_with_best_play');
+  assert.equal(got.postBlunderOutcome, 'win_with_best_play');
+});
+
 test('runSparseLookahead: solver error on pre-move query falls back to mistake mode (no throw)', async () => {
   // Pre-move query throws → optScore undefined → mistake-mode best-vs-played fallback.
   // Mistake mode explores middle tiers [1,2,3,4,5] best-first; the match lands on col 1,

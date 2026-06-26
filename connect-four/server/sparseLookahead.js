@@ -274,9 +274,11 @@ export function summarizeTallyComparison(bestTally, playedTally) {
  * (any occurrence delta there is only a frequency difference) and is omitted. Every
  * qualifying category is returned (its novel ways capped at MAX_WAYS), ordered by
  * informativeness priority (LOOKAHEAD_PRIORITY) so a downstream consumer can keep them all
- * and decide which to surface. Quantity (occurrences) is reported but is NOT the sort key.
+ * and decide which to surface. `novelInstances` = the count of distinct novel cell-sets (a
+ * clean, board-bounded quantity). Raw occurrence counts (DFS detection-node tallies) are
+ * intentionally NOT reported here — they are depth/budget artifacts that mislead a reader.
  *
- * @returns {Array<{ tag, ways, novelInstances, bestOccurrences, playedOccurrences }>}
+ * @returns {Array<{ tag, ways, novelInstances }>}
  */
 export function collectNovelOpportunities(bestTally, playedTally) {
   const out = [];
@@ -289,8 +291,6 @@ export function collectNovelOpportunities(bestTally, playedTally) {
       tag,
       ways: novelWays.slice(0, MAX_WAYS),
       novelInstances: novelWays.length,
-      bestOccurrences: entry.occurrences,
-      playedOccurrences: playedEntry?.occurrences ?? 0,
     });
   }
   out.sort((a, b) => priorityIndex(a.tag) - priorityIndex(b.tag) || (a.tag < b.tag ? -1 : 1));
@@ -369,7 +369,12 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
 
   // Choose the opponent-exploration strategy from the PRE-MOVE position. optScore is the
   // best move's score, blunderScore the played move's score (player-to-move perspective:
-  // >=0 wins/draws, <0 loses). On solver error, fall back to mistake-mode best-vs-played.
+  // >=0 wins/draws, <0 loses). These also drive the two outcome labels on the result:
+  // bestOutcome / postBlunderOutcome ∈ {win,draw,loss}_with_best_play. The "_with_best_play"
+  // suffix is load-bearing: a positive score means the side CAN force the win with correct
+  // continuation — it is NOT a guarantee from this move alone (only completing a line is).
+  // Since the better move is never worse (optScore >= blunderScore), bestOutcome is never
+  // worse than postBlunderOutcome. On solver error, fall back to mistake-mode best-vs-played.
   let optScore, blunderScore;
   try {
     const preScores = await solver.query(movestring);
@@ -379,6 +384,15 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     optScore = undefined;
     blunderScore = undefined;
   }
+  // Sign of the solver score → with-best-play outcome label (null when score is unknown).
+  const outcomeWithBestPlay = (score) => {
+    if (score === undefined) return null;
+    if (score > 0) return 'win_with_best_play';
+    if (score === 0) return 'draw_with_best_play';
+    return 'loss_with_best_play';
+  };
+  const bestOutcome = outcomeWithBestPlay(optScore);
+  const postBlunderOutcome = outcomeWithBestPlay(blunderScore);
 
   // ── Cases 1 & 2: the better move still holds (optScore >= 0) ─────────────────
   // Explore the opponent's BEST defense. A losing/weaker played move surfaces fewer
@@ -394,7 +408,8 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
       return {
         ...out,
         case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
-        playedStillWins: blunderScore !== undefined && blunderScore > 0,
+        bestOutcome,
+        postBlunderOutcome,
         categoryExamples: playerExamples,
         oppCategoryExamples: [],
         tallyComparison,
@@ -437,7 +452,8 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
       case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
       tag: null, aliasMap: {}, allowedSetEntries: [],
       oppTag: null, oppAliasMap: {}, oppAllowedSetEntries: [],
-      playedStillWins: blunderScore !== undefined && blunderScore > 0,
+      bestOutcome,
+      postBlunderOutcome,
       categoryExamples: playerExamples,
       oppCategoryExamples: oppExamples,
       tallyComparison,

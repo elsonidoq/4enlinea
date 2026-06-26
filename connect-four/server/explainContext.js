@@ -95,6 +95,23 @@ function compactThreats(s) {
   };
 }
 
+// Parity-aware threat tags whose cells duplicate threatStats' player-side buckets
+// (classifier.js detectMajorThreatParity / detectMajorThreatNonParity / detectMinorThreat
+// each return categorizeThreats().player.<bucket>.cells). Stripped from the feature-vector
+// patterns* maps so the parity threats live in one place: threatStats.
+const THREAT_TAGS_IN_THREATSTATS = ['major_threat_parity', 'major_threat_nonparity', 'minor_threat'];
+
+// Drop the parity-threat dupe tags from a serialized pattern map (tag → {cells}). Falsy
+// inputs (null/undefined — an absent board state) pass through unchanged.
+function stripThreatDupeTags(patternMap) {
+  if (!patternMap) return patternMap;
+  const out = {};
+  for (const [tag, value] of Object.entries(patternMap)) {
+    if (!THREAT_TAGS_IN_THREATSTATS.includes(tag)) out[tag] = value;
+  }
+  return out;
+}
+
 /**
  * Project the full (uncensored) promptData into a tactics-only FEATURE VECTOR: decision
  * primitives + blunder classification + the static pattern detections + parity-bucket threats
@@ -103,11 +120,16 @@ function compactThreats(s) {
  *
  * Only LLM-prompt plumbing, prose, and pure derivations are dropped: the annotation whitelist
  * (`allowedSet`), the capsule-expansion spec (`zoneAliasMap`), all reason prose
- * (`humanReason`/`positiveReason`/`terseReason` — `terseReason` only restates tag+direction and
- * a score transition already recoverable from `preScores`/`gap`), KB-term plumbing
+ * (`humanReason`/`positiveReason`/`terseReason`), KB-term plumbing
  * (`relevantPatternKeys`/`kbTerms`), display labels (`playerName`), the rendered
  * `threatComparison`/`threatShowFlags`, the redundant `lookaheadRaw`, and trivially-derived
- * scalars (`gapBucket`, `positionTier`, `isOptimal`, `opponentPerspective`, `lookaheadFired`).
+ * scalars (`positionTier`, `isOptimal`, `opponentPerspective`, `lookaheadFired`).
+ * Raw solver scores (`preScores`/`gap`) are dropped too — their magnitudes are misleading
+ * engine artifacts; the qualitative `gapBucket` (small/moderate/large) is surfaced instead,
+ * and the with-best-play outcomes ride on `lookahead.bestOutcome`/`postBlunderOutcome`.
+ * The three parity-aware threat tags (`major_threat_parity`/`major_threat_nonparity`/
+ * `minor_threat`) are also stripped from the `patterns*` maps — they are an exact duplicate
+ * of `threatStats`' player-side buckets (see `stripThreatDupeTags`).
  *
  * @param {object} promptData
  * @param {object} [opts]
@@ -126,19 +148,25 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
     bestCol: promptData.bestCol,
     playedCell: promptData.playedCell,   // exact square the played disc lands on
     bestCell: promptData.bestCell,       // exact square the better move lands on
-    preScores: promptData.preScores,
-    gap: promptData.gap,
+    // Raw solver scores (preScores/gap) are intentionally NOT surfaced: their magnitudes are
+    // engine artifacts a reader misreads (see feedback_deep_reveal_product_mindset — score is a
+    // compass, not the reason). The qualitative severity lives in `gapBucket`, and the
+    // with-best-play outcomes live in lookahead.bestOutcome / postBlunderOutcome.
+    gapBucket: promptData.gapBucket,     // 'small' | 'moderate' | 'large' (from getGapAndFraming)
     // blunder classification
     tag: promptData.tag,
     direction: promptData.direction,
     // sparseness / opening signal
     isSparse: promptData.isSparse,
     centerDominance: !!promptData.centerDominance, // sole signal on early/positional boards
-    // static pattern detections (tag → {cells}) at the key board states
-    patternsBest: promptData.patternsBest,
-    patternsPlayed: promptData.patternsPlayed,
-    patternsPostBlunder: promptData.patternsPostBlunder,
-    patternsOpponent: promptData.patternsOpponent,
+    // static pattern detections (tag → {cells}) at the key board states. The three
+    // parity-aware threat tags are stripped here: their cells are a strict, exact duplicate
+    // of threatStats' player-side buckets (all derived from categorizeThreats().player.*),
+    // and threatStats is the richer home (parity split + opponent side + count).
+    patternsBest: stripThreatDupeTags(promptData.patternsBest),
+    patternsPreMove: stripThreatDupeTags(promptData.patternsPreMove),
+    patternsPostBlunder: stripThreatDupeTags(promptData.patternsPostBlunder),
+    patternsOpponent: stripThreatDupeTags(promptData.patternsOpponent),
     // parity-bucket threats — count + CELLS — at each board state
     threatStats: {
       pre:    compactThreats(promptData.threatStats?.pre),
@@ -148,18 +176,18 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
     // sparse look-ahead. `categoryExamples` / `oppCategoryExamples` carry the NOVEL cell-sets
     // (the squares the better move opens that the played move cannot) — grounded tactical
     // detail that complements the movestring and is NOT recoverable from counts alone. They
-    // are priority-ordered and already include their own counts. `perCategory` is the dense
-    // per-category count table over every category the search saw (branches dropped: they
-    // saturate at 0/1).
+    // are priority-ordered and carry `novelInstances` (distinct novel cells). `perCategory`
+    // is the per-category INSTANCE table (distinct ways per side) over every category the
+    // search saw. Raw occurrence counts (DFS detection-node tallies) and branches are dropped:
+    // they are depth/budget artifacts whose magnitudes mislead a reader.
     lookahead: la ? {
       case: la.case,
-      playedStillWins: la.playedStillWins ?? null,
+      bestOutcome: la.bestOutcome ?? null,                 // {win,draw,loss}_with_best_play — better move
+      postBlunderOutcome: la.postBlunderOutcome ?? null,   // {win,draw,loss}_with_best_play — played move
       categoryExamples: la.categoryExamples ?? [],
       oppCategoryExamples: la.oppCategoryExamples ?? [],
       perCategory: (la.tallyComparison ?? []).map((m) => ({
         tag: m.pattern,
-        bestOccurrences: m.bestOccurrences,
-        playedOccurrences: m.playedOccurrences,
         bestInstances: m.bestInstances,
         playedInstances: m.playedInstances,
       })),
@@ -733,7 +761,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
         case: LOOKAHEAD_CASE_SLUGS[la.case] ?? `case_${la.case}`,
         player: la.tag ? { tag: la.tag, cells: flat(la.allowedSetEntries) } : null,
         opponent: la.oppTag ? { tag: la.oppTag, cells: flat(la.oppAllowedSetEntries) } : null,
-        playedStillWins: la.playedStillWins ?? null,
+        bestOutcome: la.bestOutcome ?? null,
+        postBlunderOutcome: la.postBlunderOutcome ?? null,
         // Per-category novel examples (every category the better move opens that the played
         // move cannot), priority-ordered, ≤MAX_WAYS ways each. The prompt surfaces only the
         // top-priority `player`/`opponent` winner above; this carries the full set so a
@@ -883,7 +912,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
 
     // ── pattern detections (Maps → plain objects) ──
     patternsBest: m2o(correctMovePatterns),     // patterns at the best-move position
-    patternsPlayed: m2o(patPlayed),             // patterns at the played position
+    patternsPreMove: m2o(patPlayed),            // patterns at the pre-move decision position
     patternsPostBlunder: m2o(patPostBlunder),   // patterns after the played move
     patternsOpponent: m2o(opponentPatterns),    // direction-specific opponent augmentation, if any
     relevantPatternKeys: [...relevantPatternKeys],
