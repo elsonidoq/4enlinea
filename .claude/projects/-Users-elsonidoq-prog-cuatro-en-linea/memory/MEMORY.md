@@ -118,6 +118,7 @@
 ## When touching the LLM coach / deep reveal
 
 - [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs (solver ground-truth) + /judge-deep-reveals (3 axes); admin flag→feedback sidecar left-joined by id
+- [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations/occurrence-artifacts; keep instance counts
 - [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
 - [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow; threat comparison format; major/minor threat KB terms conditional
@@ -132,10 +133,16 @@
 - [Patterns blunders done](project_patterns_blunders_done.md) — inverted semantic; allowedSet=null vs []; debug guide
 - [Deep reveal zone fixes](deep_reveal_zone_validation_fixes.md) — P5strong:tg zero-count trap; P3 markup stripping; normalizeZoneTags
 - [Deep reveal failures table](reference_deep_reveal_failures.md) — debugging tool for annotation rejections
+- [eval_set_large_3_sparse subset](reference_eval_set_large_3_sparse_subset.md) — strict subset of eval_set_large_3.json; don't combine
+- [Feature vector content traps](project_feature_vector_content_traps.md) — lookahead outcomes null on losing_either_way (use solver); patternsOpponent snapshot ambiguity
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
+- [Eval design methodology](feedback_eval_design_methodology.md) — when validating LLM artifacts: floor test w/ stronger same-vendor model, counterexamples not averages, ablation, separate from run_eval
+- [FV-grounding correctness over speed](feedback_fv_grounding_correctness_over_speed.md) — spec 040 premise; extra solver passes OK; reachability ceiling via real mistake-mode search; optimize only after soundness proven
 - [Sparse look-ahead unvalidated](project_sparse_lookahead_unvalidated.md) — judged 2026-06-25; case1&2 deepening + INITIAL depth tier added (NOT re-judged); pre-move-query + DFS-budget test traps
 - [drawing_move mislabels wins](project_drawing_move_mislabels_wins.md) — open bug: win-forfeiting move tagged drawing_move; Fix 4 patched rule text, Fix 6 (upstream tagging) still TODO
+- [Lookahead shared seam](project_lookahead_shared_seam.md) — collectNovelOpportunities/compareOpportunities feed BOTH feature vector AND production annotation gate; characterize before editing; FV-grounding epic+/fv-grounding-manager
+- [run_eval resume-mode trap](project_run_eval_resume_mode_trap.md) — regen silently skips ids already in output jsonl; rm -f first + pass explicit input/output; frozen vectors are prune:false
 
 ## When working on the past-games / review flow
 
@@ -192,6 +199,7 @@
 - [Audit all code paths before epic](feedback_audit_all_paths_before_epic.md)
 - [Spec review before plan](feedback_spec_review_before_plan.md)
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md)
+- [Epic+manager sizing](feedback_epic_manager_sizing.md) — bespoke speckit manager command only for ≥2 stories × ≥7 tasks; else writing-plans
 - [Product doc authoring](feedback_product_doc_authoring.md)
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — design docs/plans under docs/superpowers/ are throwaway; migrate durable info to docs/architecture/, agents never read them
 - [Hard-derived algorithms in spec](feedback_hard_derived_algorithms_in_spec.md)

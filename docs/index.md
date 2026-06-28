@@ -54,6 +54,10 @@
 
 [architecture/llm-coach-endpoints.md](architecture/llm-coach-endpoints.md) — `explain_move` and `recommend_next_move` PoC architecture: shared infrastructure, data flows, prompt structures, flat table format, server endpoint conversion guide — adding LLM coaching features or converting CLI scripts to server routes
 
+[architecture/feature-vector-glossary.md](architecture/feature-vector-glossary.md) — field-by-field semantics of the deep-reveal feature vector (`toFeatureVector`) for an LLM reader: every field + enum value (`tag`, `direction`, `gapBucket`, `*_with_best_play`, `lookahead.case`, pattern keys, `threatStats` buckets), pruning/absence rules, anti-fabrication rules — reading/extending the feature vector or building a prompt from it
+
+[architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether feature vector + glossary is enough context to explain a blunder: isolated OpenAI answerer + tools-enabled Claude grader, stratified set, ablation, counterexample output — running or extending the sufficiency experiment
+
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 
 [architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields

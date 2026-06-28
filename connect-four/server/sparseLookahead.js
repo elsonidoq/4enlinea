@@ -3,6 +3,190 @@ import { Board, classifyPattern } from './classifier.js';
 const ROWS = 6;
 const COLS = 7;
 
+// ── Story A: outcome-timing and decisive-line helpers ──────────────────────────
+
+/**
+ * Map a solver score to the short outcome enum ('win'|'draw'|'loss'|null).
+ * null when the score is undefined (solver error / not queried).
+ */
+export function toOutcome(score) {
+  if (score === undefined) return null;
+  if (score > 0) return 'win';
+  if (score === 0) return 'draw';
+  return 'loss';
+}
+
+/**
+ * Map a solver score to the number of plies until the decisive outcome.
+ * Returns null for draws (score=0) and solver errors (score=undefined).
+ * Uses |score| directly — the bijection |score| = pliesToEnd holds exactly
+ * (confirmed in research.md §R1).
+ */
+export function toPliesToEnd(score) {
+  if (score === undefined || score === 0) return null;
+  return Math.abs(score);
+}
+
+/**
+ * Return the `immediate_threat` tally entry way with the minimum ply, or null.
+ * Read-only over the tally — does not modify searchOpportunities or recordWay.
+ */
+export function pickEarliestWay(tally) {
+  const entry = tally.get('immediate_threat');
+  if (!entry || entry.ways.length === 0) return null;
+  return entry.ways.reduce((best, w) => (!best || w.ply < best.ply) ? w : best, null);
+}
+
+/**
+ * Return the unique gravity-top empty cell in a completing window.
+ * `cells` is an array of cNrM strings (1-indexed); `board` is a Board instance.
+ * Returns the first cell whose column's gravity-top is at that row, or null.
+ */
+export function findGravityTopEmpty(cells, board) {
+  for (const cell of cells) {
+    const m = /^c(\d+)r(\d+)$/.exec(cell);
+    if (!m) continue;
+    const col0 = Number(m[1]) - 1;
+    const row0 = Number(m[2]) - 1;
+    if (board.colHeights[col0] === row0) return cell;
+  }
+  return null;
+}
+
+/**
+ * Count distinct 4-windows that pass through `cell` and where all OTHER cells in
+ * the window are occupied by `ownerPlayer`. Uses Board.winningWindows (which does
+ * the same check) — pure board geometry, no solver calls.
+ * `cell` is a cNrM string (1-indexed); `ownerPlayer` is 1 or 2.
+ * Returns 0 when the cell string is malformed or no windows exist.
+ */
+export function countWindowsThrough(cell, board, ownerPlayer) {
+  const m = /^c(\d+)r(\d+)$/.exec(cell);
+  if (!m) return 0;
+  const col0 = Number(m[1]) - 1;
+  const row0 = Number(m[2]) - 1;
+  return board.winningWindows(row0, col0, ownerPlayer).length;
+}
+
+/**
+ * Assemble a `decisiveLine` object from the correct source tallies and owner.
+ *
+ * Called at EACH of the four return paths in runSparseLookahead:
+ *   - Cases 1/2 (player wins best or played):
+ *       buildDecisiveLine(bestTally, playedTally, 'player', rootBoard)
+ *   - Case 3 (opponent punishes):
+ *       buildDecisiveLine(oppTally, null, 'opponent', rootBoard)
+ *
+ * Returns the decisiveLine object, or undefined when neither tally has an
+ * immediate_threat (horizon-exceeded → absent → pruned by toFeatureVector).
+ */
+export function buildDecisiveLine(primaryTally, secondaryTally, owner, rootBoard) {
+  const primaryWay   = pickEarliestWay(primaryTally);
+  const secondaryWay = secondaryTally ? pickEarliestWay(secondaryTally) : null;
+  if (!primaryWay && !secondaryWay) return undefined;
+
+  const fastWay  = (primaryWay && (!secondaryWay || primaryWay.ply <= secondaryWay.ply))
+                   ? primaryWay : secondaryWay;
+  const slowWay  = fastWay === primaryWay ? secondaryWay : primaryWay;
+  const fastSide = fastWay === primaryWay ? 'best' : 'played';
+
+  // immediate_threat cells are completing cells (gravity-top at the SEARCH NODE board, not
+  // at the pre-move rootBoard). When cells.length <= 2, each cell IS already a completing
+  // cell; use cells.length as the fork count. When cells.length >= 3 (a full 4-window passed
+  // in from tests or a future detection), locate the gravity-top cell on rootBoard.
+  const ownerPlayer = owner === 'player' ? rootBoard.currentPlayer : rootBoard.opponent;
+  let completingCell, winningLinesThroughCell;
+
+  if (fastWay.cells.length <= 2) {
+    // detectImmediateThreat returns 1 cell per immediate-threat column (or 2 for a fork).
+    // These cells are completing cells by construction — use them directly.
+    completingCell           = fastWay.cells[0];
+    winningLinesThroughCell  = fastWay.cells.length; // 1 = single-line, 2 = fork
+  } else {
+    // Full 4-window (e.g. from test helpers or a detector that emits the whole window).
+    // Find the gravity-top empty cell on rootBoard, then count real winning windows.
+    completingCell           = findGravityTopEmpty(fastWay.cells, rootBoard) ?? fastWay.cells[0];
+    winningLinesThroughCell  = completingCell
+      ? countWindowsThrough(completingCell, rootBoard, ownerPlayer)
+      : 0;
+  }
+
+  return {
+    owner,
+    cells:                   fastWay.cells,
+    completingCell,
+    winningLinesThroughCell,
+    fastSide,
+    fastSideRealizedOnPly:  fastWay.ply,
+    slowSideRealizedOnPly:  slowWay?.ply ?? null,
+  };
+}
+
+// ── Story B: causation & stakes helpers ───────────────────────────────────────
+
+/**
+ * Map a ceilingRef (from a mistake-mode search) to an outcome string.
+ * If the ref is null or no player-to-move node was visited (-Infinity), return 'loss'
+ * (conservative: the losing side stays 'loss' at ceiling too — equal to floor, valid).
+ */
+export function toOutcomeFromRef(ref) {
+  if (ref === null || ref.value === -Infinity) return 'loss';
+  return toOutcome(ref.value);
+}
+
+/**
+ * Assemble the `reachability` object: { best: { floor, ceiling }, played: { floor, ceiling } }.
+ * Only emitted when at least one side's floor is 'loss'.
+ * Non-losing side: ceiling = floor (no separate search needed).
+ * Losing side: ceiling = toOutcomeFromRef(ceilingRef from mistake-mode search).
+ * Returns undefined when neither side is losing (caller omits the field).
+ */
+export function assembleReachability(outcomeTiming, bestRef, playedRef) {
+  const bf = outcomeTiming.best.outcome;
+  const pf = outcomeTiming.played.outcome;
+  if (bf !== 'loss' && pf !== 'loss') return undefined;
+  return {
+    best:   { floor: bf, ceiling: bf !== 'loss' ? bf : toOutcomeFromRef(bestRef) },
+    played: { floor: pf, ceiling: pf !== 'loss' ? pf : toOutcomeFromRef(playedRef) },
+  };
+}
+
+/**
+ * Merge the two symmetric `collectNovelOpportunities` results (best→played novel and
+ * played→best novel) into a single per-tag entry with `bestNovel` and `playedNovel` arrays.
+ * Tags with no novel ways on either side are filtered out (shouldn't happen in practice
+ * since collectNovelOpportunities already filters empty results, but guard anyway).
+ */
+export function mergeSymmetricExamples(bestExamples, playedExamples) {
+  const map = new Map();
+  for (const e of bestExamples) {
+    map.set(e.tag, { tag: e.tag, bestNovel: e.ways, playedNovel: [], novelInstances: e.novelInstances });
+  }
+  for (const e of playedExamples) {
+    const existing = map.get(e.tag);
+    if (existing) {
+      existing.playedNovel = e.ways;
+      existing.novelInstances += e.novelInstances;
+    } else {
+      map.set(e.tag, { tag: e.tag, bestNovel: [], playedNovel: e.ways, novelInstances: e.novelInstances });
+    }
+  }
+  return [...map.values()].filter(e => e.bestNovel.length > 0 || e.playedNovel.length > 0);
+}
+
+/**
+ * Derive the edge type from outcome timing and decisiveLine presence.
+ * 'tactical'   — outcomes differ (best holds, played loses, or vice versa).
+ * 'marginal'   — same outcomes but a concrete decisive line was found (timing delta).
+ * 'positional' — same outcomes, no decisive line surfaced within budget/depth.
+ * Must be present on ALL four return paths of runSparseLookahead.
+ */
+export function deriveEdgeType(outcomeTiming, decisiveLine) {
+  if (outcomeTiming.best.outcome !== outcomeTiming.played.outcome) return 'tactical';
+  if (decisiveLine === undefined) return 'positional';
+  return 'marginal';
+}
+
 export const LOOKAHEAD_DEPTH = 4;
 export const EARLY_GAME_DEPTH = 8;   // depth used when board is sparse (< EARLY_GAME_MS_THRESHOLD discs played)
 export const EARLY_GAME_MS_THRESHOLD = 8; // movestring.length below which EARLY_GAME_DEPTH applies
@@ -238,6 +422,14 @@ export async function searchOpportunities(rootMovestring, perspective, deps, bud
       } catch {
         return; // solver error — prune this branch
       }
+      // T015: update ceilingRef with the best legal score at this player-to-move node.
+      if (deps.ceilingRef) {
+        for (let c = 0; c < scores.length; c++) {
+          if (scores[c] !== undefined && board.colHeights[c] < ROWS && scores[c] > deps.ceilingRef.value) {
+            deps.ceilingRef.value = scores[c];
+          }
+        }
+      }
       let playerCols = topScoringCols(scores, board, PLAYER_CAP);
       if (dedupeByScore) playerCols = dedupeColsByScore(playerCols, scores);
       for (const c of playerCols) {
@@ -401,6 +593,16 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
   const bestOutcome = outcomeWithBestPlay(optScore);
   const postBlunderOutcome = outcomeWithBestPlay(blunderScore);
 
+  // Story A: outcome timing (present on ALL four return paths).
+  // outcomeTiming.best/played use short-form outcomes ('win'|'draw'|'loss'|null).
+  // pliesToEnd = |score| when score !== 0 and score !== undefined; null otherwise.
+  const outcomeTiming = {
+    best:   { outcome: toOutcome(optScore),     pliesToEnd: toPliesToEnd(optScore)     },
+    played: { outcome: toOutcome(blunderScore), pliesToEnd: toPliesToEnd(blunderScore) },
+  };
+  // Root board used for geometry helpers in buildDecisiveLine (pre-move position).
+  const rootBoard = new Board(movestring);
+
   // ── Cases 1 & 2: the better move still holds (optScore >= 0) ─────────────────
   // Explore the opponent's BEST defense. A losing/weaker played move surfaces fewer
   // player structures than the better move, yielding a positive delta toward the better move.
@@ -408,19 +610,43 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     const opMode = optScore === undefined ? 'mistake' : 'optimal';
     const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: opMode, dedupeByScore }, { calls: budget }, depth);
     const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: opMode, dedupeByScore }, { calls: budget }, depth);
+
+    // T016: When the played move loses, run a separate mistake-mode search on playedRoot
+    // (player perspective) to determine how well the player can do if the opponent slips.
+    // This populates playedCeilingRef for reachability.played.ceiling. Must run BEFORE
+    // any early return so all three sub-paths can include reachability.
+    let playedCeilingRef = null;
+    if (blunderScore !== undefined && blunderScore < 0) {
+      playedCeilingRef = { value: -Infinity };
+      await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore, ceilingRef: playedCeilingRef }, { calls: budget }, depth);
+    }
+
+    // T017: Assemble reachability (emitted only when played floor = 'loss').
+    const reachability = assembleReachability(outcomeTiming, null, playedCeilingRef);
+
     const tallyComparison = summarizeTallyComparison(bestTally, playedTally);
-    const playerExamples = collectNovelOpportunities(bestTally, playedTally);
+    // T018: Symmetric categoryExamples — novel ways from both directions.
+    const bestExamples = collectNovelOpportunities(bestTally, playedTally);
+    const playedExamplesSwap = collectNovelOpportunities(playedTally, bestTally);
+    const playerExamples = mergeSymmetricExamples(bestExamples, playedExamplesSwap);
+
     const out = buildAliasOutput(compareOpportunities(bestTally, playedTally), 'future');
     if (out) {
+      const dl1 = buildDecisiveLine(bestTally, playedTally, 'player', rootBoard);
+      const edgeType = deriveEdgeType(outcomeTiming, dl1); // T019
       return {
         ...out,
         case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
         bestOutcome,
         postBlunderOutcome,
+        outcomeTiming,
+        ...(dl1 !== undefined && { decisiveLine: dl1 }),
         categoryExamples: playerExamples,
         oppCategoryExamples: [],
         tallyComparison,
         oppTallyComparison: null,
+        edgeType,
+        ...(reachability !== undefined && { reachability }),
       };
     }
     // No player-side structure delta distinguishes the moves. If the better move HOLDS
@@ -439,6 +665,8 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
       oppExamples = collectNovelOpportunities(oppTally, new Map());
       const oppOut = buildAliasOutput(compareOpportunities(oppTally, new Map()), 'opp-future');
       if (oppOut) {
+        const dl2 = buildDecisiveLine(oppTally, null, 'opponent', rootBoard);
+        const edgeType = deriveEdgeType(outcomeTiming, dl2); // T019
         return {
           case: 3,
           tag: null,
@@ -447,24 +675,34 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
           oppTag: oppOut.tag,
           oppAliasMap: oppOut.aliasMap,
           oppAllowedSetEntries: oppOut.allowedSetEntries,
+          outcomeTiming,
+          ...(dl2 !== undefined && { decisiveLine: dl2 }),
           categoryExamples: [],
           oppCategoryExamples: oppExamples,
           tallyComparison,
           oppTallyComparison,
+          edgeType,
+          ...(reachability !== undefined && { reachability }),
         };
       }
     }
     // No winner. Return the comparisons anyway so prompt_data records what was searched.
+    const dl3 = buildDecisiveLine(bestTally, playedTally, 'player', rootBoard);
+    const edgeType3 = deriveEdgeType(outcomeTiming, dl3); // T019
     return {
       case: blunderScore !== undefined && blunderScore >= 0 ? 2 : 1,
       tag: null, aliasMap: {}, allowedSetEntries: [],
       oppTag: null, oppAliasMap: {}, oppAllowedSetEntries: [],
       bestOutcome,
       postBlunderOutcome,
+      outcomeTiming,
+      ...(dl3 !== undefined && { decisiveLine: dl3 }),
       categoryExamples: playerExamples,
       oppCategoryExamples: oppExamples,
       tallyComparison,
       oppTallyComparison,
+      edgeType: edgeType3,
+      ...(reachability !== undefined && { reachability }),
     };
   }
 
@@ -479,14 +717,25 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
 
   // (b) Player surviving-slip: if the opponent errs, the better move lets the player punish.
   //     Mistake-mode best-vs-played, player perspective (existing machinery).
-  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore }, { calls: budget }, depth);
-  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore }, { calls: budget }, depth);
+  //     T016: Pass fresh ceilingRef objects so T017 can compute reachability ceilings.
+  const bestCeilingRef = { value: -Infinity };
+  const playedCeilingRef = { value: -Infinity };
+  const bestTally = await searchOpportunities(bestRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore, ceilingRef: bestCeilingRef }, { calls: budget }, depth);
+  const playedTally = await searchOpportunities(playedRoot, perspective, { solver, classifyFn, opponentMode: 'mistake', dedupeByScore, ceilingRef: playedCeilingRef }, { calls: budget }, depth);
   const tallyComparison = summarizeTallyComparison(bestTally, playedTally);
-  const playerExamples = collectNovelOpportunities(bestTally, playedTally);
+  // T018: Symmetric categoryExamples — novel ways from both directions.
+  const bestExamplesC3 = collectNovelOpportunities(bestTally, playedTally);
+  const playedExamplesC3 = collectNovelOpportunities(playedTally, bestTally);
+  const playerExamples = mergeSymmetricExamples(bestExamplesC3, playedExamplesC3);
   const playerOut = buildAliasOutput(compareOpportunities(bestTally, playedTally), 'future');
+
+  // T017: Assemble reachability (both floors are 'loss' in Case 3).
+  const reachability = assembleReachability(outcomeTiming, bestCeilingRef, playedCeilingRef);
 
   // Return the comparisons even when neither side has a winner (no prompt structure, but
   // prompt_data still records what was searched). Winner presence = (tag || oppTag).
+  const dl4 = buildDecisiveLine(oppTally, null, 'opponent', rootBoard);
+  const edgeType4 = deriveEdgeType(outcomeTiming, dl4); // T019
   return {
     case: 3,
     tag: playerOut?.tag ?? null,
@@ -495,9 +744,13 @@ export async function runSparseLookahead({ movestring, playedCol, bestCol, persp
     oppTag: oppOut?.tag ?? null,
     oppAliasMap: oppOut?.aliasMap ?? {},
     oppAllowedSetEntries: oppOut?.allowedSetEntries ?? [],
+    outcomeTiming,
+    ...(dl4 !== undefined && { decisiveLine: dl4 }),
     categoryExamples: playerExamples,
     oppCategoryExamples: oppExamples,
     tallyComparison,
     oppTallyComparison,
+    edgeType: edgeType4,
+    ...(reachability !== undefined && { reachability }),
   };
 }

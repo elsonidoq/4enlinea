@@ -658,6 +658,15 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 **Errors**: `400 { "error": "invalid filename" }` / `{ "error": "id is required" }`; `500` on write failure.
 
+## Admin FV-Sufficiency Browser Endpoints
+
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), which browses the Feature-Vector Sufficiency Experiment outputs (board + feature vector + one LLM answer). All read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`.
+
+- `GET /api/admin/fv-suff/files` → `{ files }` — answer-file names matching `fv_suff_answers_*.jsonl` (produced by `explain_from_vector.mjs`), sorted.
+- `GET /api/admin/fv-suff?answers=<name>` → `{ vectors, answers }`. `vectors` is the full parsed `eval_set_fv_suff_frozen_vectors.jsonl` (fixed filename — the frozen vectors); `answers` is the full parsed answers file named by the `answers` query param (default `fv_suff_answers_all.jsonl`). The two are joined client-side by `id`. A missing answers file yields `answers: []` (not an error); a missing vectors file is a 404. The `answers` param is validated against `/^fv_suff_answers_[\w.-]+\.jsonl$/` to block path traversal.
+
+Unlike the eval-results endpoint, the vectors response is **not field-whitelisted** — records are returned whole (they carry `feature_vector`, `prompt`, `predicates`, etc.).
+
 ## Papergames Import Endpoints (spec 038)
 
 ### `PUT /api/user/profile`

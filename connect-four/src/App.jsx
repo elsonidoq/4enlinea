@@ -107,6 +107,10 @@ function App() {
     const AdminDeepRevealEvalPage = lazy(() => import('./pages/AdminDeepRevealEvalPage.jsx'));
     return <Suspense fallback={null}><AdminDeepRevealEvalPage /></Suspense>;
   }
+  if (window.location.pathname.startsWith('/admin/fv-suff')) {
+    const AdminFvSuffPage = lazy(() => import('./pages/AdminFvSuffPage.jsx'));
+    return <Suspense fallback={null}><AdminFvSuffPage /></Suspense>;
+  }
   if (window.location.pathname.startsWith('/admin')) {
     return <Suspense fallback={null}><AdminCuratePage /></Suspense>;
   }

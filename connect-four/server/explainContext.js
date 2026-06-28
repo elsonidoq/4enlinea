@@ -153,6 +153,8 @@ function compactThreats(s, colHeights) {
   const pmajN = s.playerMajorNonParity        ?? { count: 0, cells: [] };
   const omajP = s.opponentMajorParityAligned ?? { count: 0, cells: [] };
   const omajN = s.opponentMajorNonParity      ?? { count: 0, cells: [] };
+  const playerMajorTotal   = (pmajP.count ?? 0) + (pmajN.count ?? 0);
+  const opponentMajorTotal = (omajP.count ?? 0) + (omajN.count ?? 0);
   return {
     playerMajorParityAligned:   major(pmajP.count, pmajP.cells, 'player'),
     playerMajorNonParity:       major(pmajN.count, pmajN.cells, 'player'),
@@ -160,6 +162,10 @@ function compactThreats(s, colHeights) {
     opponentMajorParityAligned: major(omajP.count, omajP.cells, 'opponent'),
     opponentMajorNonParity:     major(omajN.count, omajN.cells, 'opponent'),
     opponentMinor:              minor(s.opponentMinor, s.opponentMinorCells, 'opponent'),
+    // Totals — emitted only when > 0 so that absence = "no major threats" even in prune:false mode.
+    // "Zero parity-aligned majors ≠ zero majors" — playerMajorNonParity alone keeps this > 0.
+    ...(playerMajorTotal   > 0 ? { playerMajorTotal }   : {}),
+    ...(opponentMajorTotal > 0 ? { opponentMajorTotal } : {}),
   };
 }
 
@@ -254,21 +260,38 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
     // sparse look-ahead. `categoryExamples` / `oppCategoryExamples` carry the NOVEL cell-sets
     // (the squares the better move opens that the played move cannot) — grounded tactical
     // detail that complements the movestring and is NOT recoverable from counts alone. They
-    // are priority-ordered and carry `novelInstances` (distinct novel cells). `perCategory`
-    // is the per-category INSTANCE table (distinct ways per side) over every category the
-    // search saw. Raw occurrence counts (DFS detection-node tallies) and branches are dropped:
-    // they are depth/budget artifacts whose magnitudes mislead a reader.
+    // are priority-ordered and carry `novelInstances` (distinct novel cells). Story B:
+    // `categoryExamples` is now a SYMMETRIC cell-set diff — each entry carries `bestNovel`
+    // (cells the better move opens that the played move cannot) AND `playedNovel` (cells the
+    // played move opens that the better move cannot), each with per-cell `realizedOnPly`.
+    // The old count-based `perCategory` table is removed (superseded by the symmetric diff);
+    // `tallyComparison` remains on `rawLookahead` for prompt_data/debugging but is NOT
+    // projected here. `reachability` (floor/ceiling) and `edgeType` ground causation/stakes.
     lookahead: la ? {
       case: la.case,
       bestOutcome: la.bestOutcome ?? null,                 // {win,draw,loss}_with_best_play — better move
       postBlunderOutcome: la.postBlunderOutcome ?? null,   // {win,draw,loss}_with_best_play — played move
-      categoryExamples: (la.categoryExamples ?? []).map((e) => severityTag({ ...e, owner: 'player' })),
+      // Story A: outcome timing (always present when lookahead ran)
+      outcomeTiming: la.outcomeTiming ?? undefined,
+      // Story A: completing 4-window found within search horizon (absent when not found)
+      decisiveLine: la.decisiveLine ?? undefined,
+      // Story B: floor/ceiling per side — present only when at least one floor is 'loss'
+      reachability: la.reachability ?? undefined,
+      // Story B: nature of the positional difference — always present when lookahead ran
+      edgeType: la.edgeType,
+      // Story B: symmetric cell-set diff — bestNovel/playedNovel each pruned when empty
+      categoryExamples: (la.categoryExamples ?? []).map((e) => {
+        const tagged = severityTag({ ...e, owner: 'player' });
+        return {
+          tag: tagged.tag,
+          owner: tagged.owner,
+          severity: tagged.severity,
+          bestNovel: e.bestNovel?.length ? e.bestNovel : undefined,       // pruned if empty
+          playedNovel: e.playedNovel?.length ? e.playedNovel : undefined, // pruned if empty
+          novelInstances: e.novelInstances,
+        };
+      }),
       oppCategoryExamples: (la.oppCategoryExamples ?? []).map((e) => severityTag({ ...e, owner: 'opponent' })),
-      perCategory: (la.tallyComparison ?? []).map((m) => ({
-        tag: m.pattern,
-        bestInstances: m.bestInstances,
-        playedInstances: m.playedInstances,
-      })),
     } : null,
   };
   return prune ? pruneEmpty(vector) : vector;
@@ -841,6 +864,14 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
         opponent: la.oppTag ? { tag: la.oppTag, cells: flat(la.oppAllowedSetEntries) } : null,
         bestOutcome: la.bestOutcome ?? null,
         postBlunderOutcome: la.postBlunderOutcome ?? null,
+        // Story A: outcome timing (always present from runSparseLookahead)
+        outcomeTiming: la.outcomeTiming,
+        // Story A: decisive line — omit key when buildDecisiveLine returned undefined
+        ...(la.decisiveLine !== undefined && { decisiveLine: la.decisiveLine }),
+        // Story B: reachability (floor/ceiling per side) — absent when no side's floor is 'loss'
+        ...(la.reachability !== undefined && { reachability: la.reachability }),
+        // Story B: edge type — always present when lookahead ran
+        edgeType: la.edgeType,
         // Per-category novel examples (every category the better move opens that the played
         // move cannot), priority-ordered, ≤MAX_WAYS ways each. The prompt surfaces only the
         // top-priority `player`/`opponent` winner above; this carries the full set so a

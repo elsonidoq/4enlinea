@@ -176,17 +176,20 @@ describe('toFeatureVector — severity labels (Task 3)', () => {
   });
 });
 
-test('feature vector lookahead ways carry realizedOnPly', () => {
+// Story B renamed `ways` → `bestNovel` (symmetric cell-set diff). The test below is
+// updated to reflect the new shape while preserving the essential assertion: that
+// `realizedOnPly` is preserved on category-example cell-sets through the projection.
+test('feature vector lookahead bestNovel entries carry realizedOnPly', () => {
   const pd = {
     movestring: '3434', perspective: 1, playedCol: 1, bestCol: 4,
     playedCell: 'c2r1', bestCell: 'c5r1',
     threatStats: { pre: {}, best: {}, played: {} },
     lookahead: {
       case: 3,
-      categoryExamples: [{ tag: 'minor_threat', ways: [{ cells: ['c4r3'], realizedOnPly: 2 }], novelInstances: 1 }],
+      categoryExamples: [{ tag: 'minor_threat', bestNovel: [{ cells: ['c4r3'], realizedOnPly: 2 }], novelInstances: 1 }],
       oppCategoryExamples: [], tallyComparison: [],
     },
   };
   const fv = toFeatureVector(pd, { prune: true });
-  assert.equal(fv.lookahead.categoryExamples[0].ways[0].realizedOnPly, 2);
+  assert.equal(fv.lookahead.categoryExamples[0].bestNovel[0].realizedOnPly, 2);
 });

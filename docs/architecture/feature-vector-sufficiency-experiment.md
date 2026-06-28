@@ -1,6 +1,9 @@
 # Feature-Vector Sufficiency Experiment
 
-**Status:** experimental (apparatus implemented 2026-06-26; first grading run pending)
+**Status:** experimental (apparatus implemented 2026-06-26; first grading run complete 2026-06-26 —
+8/18 cases passed Condition A; all 10 failures were A3/A4. Report:
+`server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md`. Remediation staged as
+`docs/epics/feature-vector-grounding-epic.md`, driven by `/fv-grounding-manager`.)
 **Created:** 2026-06-26
 
 ## 1. Background / why this exists
@@ -213,3 +216,5 @@ list** attributing failures to feature-field / glossary gaps. Grade the **combin
 answers file so the A/B/C ablation table has all three rows. Two content traps it must handle live
 in memory `project_feature_vector_content_traps.md` (null lookahead outcomes on `losing_either_way`;
 `patternsOpponent` snapshot ambiguity).
+
+**Browser (manual inspection).** `/admin/fv-suff` (`AdminFvSuffPage.jsx`, backed by `GET /api/admin/fv-suff`) is a read-only viewer mirroring `/admin/deep-reveal-eval`: per frozen record it shows the board (played/best/answer `key_cells` overlays), the pruneable feature vector as a collapsible JSON tree, and **one** structured LLM answer at a time, selected by condition + run dropdowns. The answers-file dropdown lists `fv_suff_answers_*.jsonl`. This is for eyeballing, not grading — grading is the skill above.

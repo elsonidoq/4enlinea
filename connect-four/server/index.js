@@ -630,6 +630,50 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
   }
 });
 
+// ── Feature-Vector Sufficiency browser ─────────────────────────────────────────
+// Serves the frozen vectors jsonl (board + feature_vector, produced by
+// freeze_fv_set.mjs → run_eval --no-llm) joined client-side with an answers jsonl
+// (produced by explain_from_vector.mjs). Read-only, localhost-admin only.
+
+const FV_SUFF_VECTORS_FILE = 'eval_set_fv_suff_frozen_vectors.jsonl';
+function isFvSuffAnswersFile(name) {
+  return typeof name === 'string' && /^fv_suff_answers_[\w.-]+\.jsonl$/.test(name);
+}
+
+app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir).filter(isFvSuffAnswersFile).sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
+  if (!isFvSuffAnswersFile(answersName)) {
+    return res.status(400).json({ error: 'invalid answers filename' });
+  }
+  const parseJsonl = (path) =>
+    readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  try {
+    const vectors = parseJsonl(join(scriptsDir, FV_SUFF_VECTORS_FILE));
+    let answers = [];
+    try {
+      answers = parseJsonl(join(scriptsDir, basename(answersName)));
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e; // missing answers file → empty, not fatal
+    }
+    res.json({ vectors, answers });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'frozen vectors file not found' });
+    logError('[admin/fv-suff]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
 app.get('/api/admin/lessons', requireAdmin, (req, res) => {

@@ -50,24 +50,8 @@ function evalSetDisplayName(filename) {
   return filename.replace(/^eval_set_/, '').replace(/\.json$/, '');
 }
 
-// Pretty-print JSON with lightweight syntax highlighting (no dependency). Indents 2
-// spaces, then wraps keys/strings/numbers/booleans/null in colored spans. Input is
-// HTML-escaped first, so the value itself can contain any characters safely.
+// Syntax-highlight colors for the collapsible JSON tree (no dependency).
 const JSON_COLORS = { key: '#7c3aed', str: '#16a34a', num: '#2563eb', bool: '#db2777', null: '#94a3b8' };
-function highlightJson(value) {
-  const json = JSON.stringify(value, null, 2)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return json.replace(
-    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
-    (match) => {
-      let cls = 'num';
-      if (/^"/.test(match)) cls = /:$/.test(match) ? 'key' : 'str';
-      else if (/^(true|false)$/.test(match)) cls = 'bool';
-      else if (match === 'null') cls = 'null';
-      return `<span style="color:${JSON_COLORS[cls]}">${match}</span>`;
-    },
-  );
-}
 
 // Recursive empty/all-zero elimination — client port of pruneEmpty in server/explainContext.js.
 // Toggled in the header; collapses the fixed-shape feature vector to only its informative fields.
@@ -98,12 +82,62 @@ function pruneFeatureVectorDeep(value) {
   return value;
 }
 
+// One scalar leaf, colored by type.
+function JsonLeaf({ value }) {
+  let color = JSON_COLORS.num, text = String(value);
+  if (typeof value === 'string') { color = JSON_COLORS.str; text = JSON.stringify(value); }
+  else if (typeof value === 'boolean') color = JSON_COLORS.bool;
+  else if (value === null || value === undefined) { color = JSON_COLORS.null; text = 'null'; }
+  return <span style={{ color }}>{text}</span>;
+}
+
+// Recursive collapsible JSON node. Objects/arrays render a clickable toggle line;
+// children render only when expanded. Indentation is by paddingLeft on each line
+// (all lines are flat siblings, so nesting does not compound).
+function JsonNode({ name, value, depth, isLast }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const pad = { paddingLeft: depth * 16 };
+  const comma = isLast ? '' : ',';
+  const keyLabel = name != null
+    ? <><span style={{ color: JSON_COLORS.key }}>"{name}"</span>: </>
+    : null;
+
+  const isContainer = value != null && typeof value === 'object';
+  if (!isContainer) {
+    return <div style={pad}>{keyLabel}<JsonLeaf value={value} />{comma}</div>;
+  }
+
+  const isArr = Array.isArray(value);
+  const entries = isArr ? value.map((v, i) => [i, v]) : Object.entries(value);
+  const open = isArr ? '[' : '{';
+  const close = isArr ? ']' : '}';
+
+  if (entries.length === 0) {
+    return <div style={pad}>{keyLabel}{open}{close}{comma}</div>;
+  }
+
+  return (
+    <>
+      <div style={{ ...pad, cursor: 'pointer' }} onClick={() => setCollapsed(c => !c)}>
+        <span style={{ color: JSON_COLORS.null, userSelect: 'none' }}>{collapsed ? '▶' : '▼'} </span>
+        {keyLabel}{open}
+        {collapsed && <span style={{ color: JSON_COLORS.null }}> {isArr ? `${entries.length} items` : `${entries.length} keys`} {close}{comma}</span>}
+      </div>
+      {!collapsed && entries.map(([k, v], i) => (
+        <JsonNode key={k} name={isArr ? null : k} value={v} depth={depth + 1} isLast={i === entries.length - 1} />
+      ))}
+      {!collapsed && <div style={pad}>{close}{comma}</div>}
+    </>
+  );
+}
+
 function JsonView({ value }) {
   return (
     <pre
-      style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5, color: '#1e293b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowX: 'auto' }}
-      dangerouslySetInnerHTML={{ __html: highlightJson(value) }}
-    />
+      style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, color: '#1e293b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowX: 'auto' }}
+    >
+      <JsonNode value={value} depth={0} isLast />
+    </pre>
   );
 }
 

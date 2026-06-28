@@ -212,6 +212,15 @@ move would have built and your move did not — usually the heart of a `missed_o
 `patternsOpponent` (when present) carries opponent-side structure relevant to the `direction`
 (e.g. a pre-existing opponent threat for a `defensive_miss`, or the opponent's punishing threat).
 
+**Snapshot provenance** — which board each map describes:
+- `patternsPreMove` — the board **before either move** (root position, `movestring` exactly).
+- `patternsBest` — the board **after the better move** lands (the board produced with `bestCol`).
+- `patternsPostBlunder` — the board **after the played move** lands (the board you actually produced).
+- `patternsOpponent` — the **opponent's structures on the pre-move board** (classifier run from
+  the opponent's perspective on `movestring`, before either move was made). This is NOT the
+  opponent's structures after the played move — it is a static snapshot of the pre-move threat
+  landscape from the opponent's side.
+
 ### 5.2 `threatStats`
 
 Three snapshots, each with six parity-classified buckets:
@@ -250,7 +259,21 @@ Compare the same bucket across `pre → best → played` to see what the blunder
 `playerMajorParityAligned` that appears in `best` but not `played` is a strong threat the better
 move would have created).
 
+**Major-threat totals** — each snapshot also carries `playerMajorTotal` (sum of
+`playerMajorParityAligned.count` and `playerMajorNonParity.count`) and `opponentMajorTotal` (sum
+of the two opponent major buckets). When either total is zero, the field is absent (pruned —
+absence = "no major threats"). **"Zero parity-aligned majors ≠ zero majors."** A player with
+`playerMajorParityAligned` absent but `playerMajorNonParity` present still has a major threat —
+`playerMajorTotal` (and the `playerMajorNonParity` bucket) make this explicit.
+
 ### 5.3 `lookahead`
+
+> **Present-vs-projected discipline.** The `lookahead` block describes structures found during a
+> forward search, not structures on the current board. Every `realizedOnPly` value (whether in
+> `categoryExamples`, `decisiveLine`, or `oppCategoryExamples`) tells you how many plies into the
+> future the structure was found. A `realizedOnPly` of 1 means it appears on the immediate
+> resulting board; larger values mean deeper in the search. **Never describe a structure with
+> `realizedOnPly > 1` as already present on the board.**
 
 A forward search comparing the **better line** and the **played line**, plus how best play
 punishes the blunder. `null` when no look-ahead ran.
@@ -260,9 +283,14 @@ lookahead: {
   case:                <enum>,                       // which comparison was run
   bestOutcome:         <outcome> | null,             // result of the better move, with best play
   postBlunderOutcome:  <outcome> | null,             // result of the played move, with best play
-  categoryExamples:    [ { tag, ways: [{ cells, realizedOnPly }], novelInstances }, ... ],
-  oppCategoryExamples: [ { tag, ways: [{ cells, realizedOnPly }], novelInstances }, ... ],
-  perCategory:         [ { tag, bestInstances, playedInstances }, ... ],
+  outcomeTiming:       { best: { outcome, pliesToEnd }, played: { outcome, pliesToEnd } },
+  decisiveLine:        { owner, cells, completingCell, winningLinesThroughCell, fastSide,
+                         fastSideRealizedOnPly, slowSideRealizedOnPly } | absent,
+  reachability:        { best: { floor, ceiling }, played: { floor, ceiling } } | absent,
+  edgeType:            'tactical' | 'positional' | 'marginal',
+  categoryExamples:    [ { tag, bestNovel?, playedNovel?, novelInstances, owner, severity? }, ... ],
+  oppCategoryExamples: [ { tag, bestNovel?, novelInstances, owner, severity? }, ... ],
+  // perCategory REMOVED — superseded by symmetric categoryExamples
 }
 ```
 
@@ -287,30 +315,101 @@ Because the better move is never worse than the played move, `bestOutcome` is ne
 `bestOutcome: draw_with_best_play`, `postBlunderOutcome: loss_with_best_play` means *"the better
 move would have held the draw; your move loses."* (`null` = the outcome could not be determined.)
 
-**`categoryExamples` / `oppCategoryExamples`** — grounded novel structure. Each entry:
+**`outcomeTiming`** — per-side outcome and distance to decisive event:
 
 | Field | Meaning |
 |---|---|
-| `tag` | A pattern category (from §4's vocabulary) that the search surfaced. |
-| `ways` | A list of `{ cells: [<cNrM>...], realizedOnPly }` entries. `cells` are the novel squares; **`realizedOnPly` is how many plies into the future the structure first appears** (1 = the immediate resulting board; larger = a deeper line). A high `realizedOnPly` is a *projected* future structure, **not** a threat on the current board — never describe it as already present. |
-| `novelInstances` | Count of distinct novel cell-sets across `ways`. |
+| `best.outcome` | Outcome of the better move under optimal play: `'win'` \| `'draw'` \| `'loss'`. |
+| `best.pliesToEnd` | Number of moves until the decisive outcome appears under optimal play (from solver score magnitude). `null` for draws or when the solver cannot provide a magnitude. |
+| `played.outcome` | Same for the played move. |
+| `played.pliesToEnd` | Same for the played move. |
+
+Used **comparatively** between the two lines: "you lose N moves faster on the played line." It is
+**NOT** the same as `realizedOnPly` (which measures depth along the mistake branch) and **NOT** raw
+solver-score magnitude. **Three distinct timing concepts — do not conflate:**
+- `realizedOnPly` — depth in plies at which a structure appears in the forward search.
+- `outcomeTiming.pliesToEnd` — moves until the game-theoretic decisive outcome appears under optimal play.
+- "mate distance" — classical chess concept; neither field above is a direct equivalent.
+
+**Presence rule**: `outcomeTiming` is always present when `lookahead` ran — it is NOT conditional on
+`reachability` or `decisiveLine`. A draw position yields `pliesToEnd: null` but `outcome: 'draw'`
+still carries information. `outcomeTiming` is never pruned when a lookahead result exists. Absent
+only when `lookahead` itself is `null`.
+
+**Read jointly with `reachability`**: a losing-floor side with a LARGER `pliesToEnd` loses slower —
+more turns for the opponent to err before the decisive outcome. This is the primary reason a
+losing-floor move may still be better than a faster-losing alternative.
+
+**`decisiveLine`** — the completing 4-window found within the search horizon:
+
+| Field | Meaning |
+|---|---|
+| `owner` | `'player'` when it is your win; `'opponent'` when the opponent's win punishes your blunder. |
+| `cells` | The 4-cell window (cNrM strings, 1-indexed), from the fastest-surfacing tally. |
+| `completingCell` | The unique gravity-top empty cell in the window — the cell that would complete the win. |
+| `winningLinesThroughCell` | Count of 4-windows that include `completingCell`. `1` = single-line win; `>1` = genuine fork ("double threat"). |
+| `fastSide` | `'best'` or `'played'` — which move line surfaces this win soonest. |
+| `fastSideRealizedOnPly` | Ply at which the fastest side's `immediate_threat` fires in the search. |
+| `slowSideRealizedOnPly` | Ply for the other side; `null` if not found within the search horizon. |
+
+Absent (pruned) when no concrete winning line was found within the search depth — in that case,
+`edgeType` is `"positional"`. Never describe a cell from `decisiveLine` as already present on the
+board if `fastSideRealizedOnPly > 1`.
+
+**`reachability`** — floor / ceiling per side, emitted when at least one side's floor is `'loss'`:
+
+| Field | Meaning |
+|---|---|
+| `best.floor` | Outcome under perfect opponent play for the better move. |
+| `best.ceiling` | Best outcome reachable on the better line if the opponent errs, **within the search**. For non-losing floor sides (floor ≠ 'loss'), ceiling equals floor. |
+| `played.floor` | Outcome under perfect opponent play for the played move. |
+| `played.ceiling` | Best outcome reachable on the played line if the opponent errs, **within the search**. |
+
+Ceiling is **never** "provably" achievable — it is the best result found within the bounded search
+depth. `ceiling = 'win'` or `'draw'` on a losing-floor side means a punishable opponent-mistake
+line was found within the search. `ceiling = 'loss'` means no such line was found within the search
+— **do NOT say** "lost cause," "you cannot win," or "provably lost"; a mistake beyond the search
+horizon may still exist.
+
+Absent when neither side's floor is `'loss'`. When emitted, BOTH sides are always present in the
+shape (the non-losing side carries ceiling = floor).
+
+**Read jointly with `outcomeTiming`**: a losing-floor side with a larger `pliesToEnd` loses slower
+= more chances for the opponent to err. Combine with `reachability.*.ceiling` to assess whether
+any punishable mistake was actually found within the search.
+
+**`edgeType`** — nature of the positional difference (always present when `lookahead` ran):
+
+| Value | Meaning |
+|---|---|
+| `'tactical'` | The outcomes diverge between the two lines (different `outcomeTiming.*.outcome` values). |
+| `'positional'` | No decisive line found within the search horizon on either side (`decisiveLine` absent). |
+| `'marginal'` | Catch-all: same outcome on both lines. Covers positions with a decisive line on one side, both sides, or neither (e.g. both draw). |
+
+Derived via a total ordered if/else — every position maps to exactly one value. Fine-grained K/D
+threshold branch (using `pliesToEnd` magnitudes) is DEFERRED to a follow-up iteration.
+
+**`categoryExamples`** — symmetric cell-set diff showing what structurally changed between the two lines. Each entry:
+
+| Field | Meaning |
+|---|---|
+| `tag` | A pattern category (from §4's vocabulary) that differs between the two lines. |
+| `bestNovel` | Cell-sets present on the better line but absent on the played line — `[{ cells: [<cNrM>...], realizedOnPly }]`. Absent when the better line has no novel cells for this category. |
+| `playedNovel` | Cell-sets present on the played line but absent on the better line. Absent when the played line has no novel cells. |
+| `novelInstances` | Count of distinct novel cell-sets across both directions. |
 | `owner` | `"player"` for `categoryExamples`; `"opponent"` for `oppCategoryExamples`. |
-| `severity` | Threat-window severity — `"immediate"`, `"major"`, or `"minor"` — for threat tags; absent for structural tags (same vocabulary as §1 and §4). |
+| `severity` | Threat-window severity — `"immediate"`, `"major"`, or `"minor"` — for threat tags; absent for structural tags. |
 
-`categoryExamples` = structure the **better move** opens that the played move does not (your side).
-`oppCategoryExamples` = the **opponent's** punishing structure on the played line (used in
-`losing_either_way`, and when a blunder flips the outcome to a loss).
+A category appears only when its cell-sets differ between the two lines (true cell-set ties are
+dropped — the category is not a differentiator). **`realizedOnPly`** on every cell tells you how
+many plies into the future that structure was found — a high `realizedOnPly` is a *projected*
+future structure, **not** a threat on the current board; never describe it as already present.
 
-**`perCategory`** — a per-category instance table over every category the search saw:
+`oppCategoryExamples` carries the **opponent's** punishing structure on the played line (used in
+`losing_either_way` and when a blunder flips the outcome to a loss).
 
-| Field | Meaning |
-|---|---|
-| `tag` | A pattern category. |
-| `bestInstances` | Distinct instances of that category on the better line. |
-| `playedInstances` | Distinct instances on the played line. |
-
-Use `perCategory` for breadth ("the better move yields more of X across the search"); use
-`categoryExamples` for the specific novel squares to point at.
+*(The old `ways` field (now `bestNovel`) and the old `perCategory` count-table have been removed.
+`perCategory` is no longer part of the feature vector.)*
 
 ---
 

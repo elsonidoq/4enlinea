@@ -261,6 +261,7 @@ Pages live in `src/pages/`. Router is defined in `src/App.jsx` using `react-rout
 | `/admin/audio` | `AdminAudioPage.jsx` | TTS audio approval |
 | `/admin/lessons` | `AdminLessonsPage.jsx` | Lesson content editor |
 | `/admin/deep-reveal-eval` | `AdminDeepRevealEvalPage.jsx` | Deep reveal eval set browser |
+| `/admin/fv-suff` | `AdminFvSuffPage.jsx` | Feature-vector sufficiency browser (board + FV + one LLM answer) |
 
 **MUST**: Add new `/admin/*` routes as `pathname.startsWith('/admin/...')` branches in `App.jsx` **before** the catch-all `/admin` branch (lines 98–108). Each branch lazy-imports its page component.
 

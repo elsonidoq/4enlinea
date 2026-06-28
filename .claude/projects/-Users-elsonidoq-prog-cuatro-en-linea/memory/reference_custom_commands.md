@@ -17,6 +17,8 @@ Project-level custom commands live at `/Users/elsonidoq/prog/cuatro_en_linea/.cl
 
 - `/past-games-manager <A|B>` — same pipeline as mvp-manager, scoped to Past Games epics in `docs/mvp/past_games_epics.md`. Epic A = PastGamesList + GET /api/games; Epic B = category drill-down + two-way blunder↔game link. State at `.claude/past-games-workflow-epic-<A|B>.json`.
 
+- `/fv-grounding-manager` — same pipeline (full mirror of routing-permalinks-manager), single epic at `docs/epics/feature-vector-grounding-epic.md` (feature-vector lookahead grounding fixes from the 2026-06-26 fv-sufficiency grade report). State at `.claude/fv-grounding-workflow.json`. `$ARGUMENTS` ignored (one epic). Enforces invariants: pruning-safe truthy enums, no-PV, mate-distance≠realizedOnPly, no production-prompt regression via the shared collectNovelOpportunities seam.
+
 ## Non-obvious traps
 
 - Critique stages use AskUserQuestion with ≥2 options — do not bypass this gate or auto-advance without user input.
