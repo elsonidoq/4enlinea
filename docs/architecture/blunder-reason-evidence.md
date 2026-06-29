@@ -33,10 +33,15 @@ varies by case:
 
 | case | half (a) kind | half (b) kind |
 |---|---|---|
-| `win_to_draw` | `winning_line` | `neutralization` (opponent's single saving reply) |
-| `win_to_lose` | `winning_line` | `winning_line` |
+| `win_to_draw` (fork) | `winning_line` (stops at fork — D16) | `denial` (fork-denial search — D17) |
+| `win_to_draw` (no fork) | `winning_line` | `neutralization` (opponent's single saving reply) |
+| `win_to_lose` | `winning_line` (stops at fork — D16) | `winning_line` (stops at fork — D16) |
 | `draw_to_lose` | `defensive_hold` (tactical) or `parity_group` (zugzwang) | `winning_line` |
 | `lose_to_faster_lose` | `conditional_swindle` (gated) | `winning_line` (faster) |
+
+**D16 fork-stop (applies to `win_to_draw` and `win_to_lose` half (a) and half (b)).** `walkOptimal` does NOT walk every win to the completed four. After each winner move it checks for an unstoppable double-threat fork (`detectDoubleThreat` + `!detectImmediateThreat(opponent)`) and stops there, returning the fork cells and windows as the resource (`terminal:'fork'`). This means `lostResource` for these cases describes **where the fork forms**, not where the four completes. The `win_to_draw`/`win_to_lose` half (b) also uses this fork-stopped position as the basis for its search. See DECISIONS **D16**.
+
+**D17 fork-denial (`win_to_draw` half (b) when half (a) found a fork).** Half (b) is no longer a "single saving reply" (`neutralization`) but a **fork-denial search**: a BFS over the depth-bounded optimal-play tree of the blunder position (both sides branch all score-preserving moves, BFS by ply) finding the shallowest node where the opponent occupies a cell of `lostResource.forkWindows` and kills it (LIVE→DEAD). Verdict: `occupation` (the occupied cell is the constructive D14-tie) or `no_occupation` (two-valued by `exhaustive`). Non-fork `win_to_draw` keeps `neutralization`. See DECISIONS **D17**.
 
 **Keep the two halves in separate fields.** In `draw_to_lose` the half-(a) parity/hold cell is *not*
 the half-(b) opponent completing cell (validated board below: `c2r3` vs `c7r6`). Merging them into a
@@ -75,7 +80,9 @@ At any node `board + move`, the opponent's score vector — already computed —
 count directly:
 
 - **`win_to_draw`:** after the winning move the opponent has **0** non-losing replies; after the draw
-  move, **exactly 1**. That one cell *is* the explanation: "you handed them their one escape."
+  move, **exactly 1**. The histogram establishes the counterplay count; the actual explanation for
+  fork-based `win_to_draw` cases is the **denial search** (D17) — the first moment the opponent kills
+  a fork window under optimal play — not the identity of the saving reply.
 - **`lose_to_faster_lose` gate:** fires iff `min(oppScores) ≤ 0` — i.e. the player still has a threat
   the opponent is *forced* to answer (any non-answer scores ≤ 0). "Buying time" = keeping the
   opponent on a narrow forced path.

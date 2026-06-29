@@ -78,13 +78,19 @@ def reason(movestring, playedCol):
 
 def punish_half(case, movestring, playedRoot, opponent, against):     # against = lostResource
     if case == 'win_to_draw':
-        # the played move only DRAWS: half (b) is the opponent's single saving reply.
-        oppScores = solver.query(playedRoot)
-        saving    = [c for c in legal(playedRoot) if oppScores[c] >= 0]
-        savingCol = best_of(saving)                                   # the one save (histogram == 1)
-        half = { kind:'neutralization', register:'immediate',
-                 entryCell: landing_cell(playedRoot, savingCol),       # where the opponent escapes
-                 savingCol, savingReplyCount: len(saving) }
+        if against.terminal == 'fork':
+            # D17: half (b) is a fork-denial search (BFS over the optimal-play tree of blunderRoot).
+            # Both sides branch ALL score-preserving (score = 0) moves.  Return the shallowest node
+            # where the opponent occupies a cell of lostResource.forkWindows (LIVE->DEAD).
+            half = denial_search(playedRoot, opponent, against.forkWindows)
+        else:
+            # non-fork win_to_draw: legacy neutralization — the opponent's single saving reply.
+            oppScores = solver.query(playedRoot)
+            saving    = [c for c in legal(playedRoot) if oppScores[c] >= 0]
+            savingCol = best_of(saving)                               # the one save (histogram == 1)
+            half = { kind:'neutralization', register:'immediate',
+                     entryCell: landing_cell(playedRoot, savingCol),  # where the opponent escapes
+                     savingCol, savingReplyCount: len(saving) }
     else:
         # the played move LOSES (or loses faster): half (b) is the opponent's winning line.
         half = win_half(playedRoot, winner=opponent)                  # kind = winning_line
@@ -110,6 +116,49 @@ def tie_to(case, lost, punish):
     #   win_to_lose : shared != ∅  ->  "they win on the very square you vacated."
     #   draw_to_lose: tactical -> tied (hold cell == completing cell);
     #                 zugzwang -> independent BY DESIGN (hold cell != completing cell) — honest, not a gap.
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  denial_search — D17: fork-denial BFS for win_to_draw half (b)
+#    blunderRoot: movestring after the played (draw) move
+#    opponent: the side that played the blunder (now on move's OTHER side)
+#    forkWindows: list of fork windows from lostResource (lostResource.forkWindows)
+#
+#  Contract: BFS strictly by ply; both sides branch ALL score-preserving (score=0) moves
+#  (I2: every node is solver-grounded optimal play).  Returns the shallowest node where
+#  the opponent occupies a cell of forkWindows, killing it (LIVE before -> DEAD after).
+#  Tie-break frontier ordering toward forkWindows is permitted but must NOT prune depth.
+# ════════════════════════════════════════════════════════════════════════════
+
+def denial_search(blunderRoot, opponent, forkWindows):
+    queue   = [(blunderRoot, [])]           # (movestring, line_so_far)
+    visited = {blunderRoot}
+    while queue:
+        node, line = queue.pop(0)                                     # strict BFS
+        scores     = solver.query(node)
+        mover      = side_to_move(node)
+        for col in [c for c in legal(node) if scores[c] == 0]:       # all score-preserving moves
+            child    = node + col
+            cell     = landing_cell(node, col)
+            new_line = line + [{ ply: len(line), mover, col, cell, score: 0 }]
+            if mover == opponent:                                      # check for window kill
+                for win in forkWindows:
+                    if (cell in win
+                            and window_live_before(node, win, opponent)   # no opp disc yet
+                            and window_dead_after(child, win, opponent)):  # opp disc now present
+                        return { kind:'denial', verdict:'occupation',
+                                 line: new_line, finalMovestring: child,
+                                 cell: cell, window: win,
+                                 tie: { kind:'tied', sharedCells:[cell] } }
+            if child not in visited and not is_terminal(child):
+                visited.add(child)
+                queue.append((child, new_line))
+    # no occupation found within depth cap (or tree exhausted)
+    exhaustive = all nodes in visited are terminal draws
+    return { kind:'denial', verdict:'no_occupation',
+             line: [], finalMovestring: None,
+             exhaustive: exhaustive,           # True = confirmed no opp ever needs a pattern cell
+             tie: { kind:'independent', sharedCells:[] } }
 
 
 # ════════════════════════════════════════════════════════════════════════════

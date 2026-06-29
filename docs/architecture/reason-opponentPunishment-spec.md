@@ -1,8 +1,10 @@
 # Spec — `opponentPunishment` fork-denial (occupation witness) for `win_to_draw`
 
-> Status: SPEC (2026-06-29). Subordinate to the four canonical docs (INVARIANTS / DECISIONS /
-> my_pseudocode / blunder-reason-evidence) and downstream of D16 (fork-stop). On conflict, the
-> canonical docs win — stop and ask.
+> Status: IMPLEMENTED (2026-06-29). Commits: f339220, 66cae80, fcfdae9, 0ac62cd, 2835e3c, 761401e.
+> 45/45 tests pass. Canonicalized into DECISIONS (D17), blunder-reason-evidence.md,
+> reason-engine-pseudocode.md, and my_pseudocode.md. Subordinate to the four canonical docs
+> (INVARIANTS / DECISIONS / my_pseudocode / blunder-reason-evidence). On conflict, the canonical
+> docs win.
 
 ## 1. Motivation
 

@@ -31,6 +31,9 @@ if bestScore * playedScore > 0
 elif bestScore > 0 and playedScore = 0
     case = 'win_to_draw' # if the opponent plays optimal, you will draw if you play optimal
     reason = You could have won like this or that, now the opponent can neutralize all your threats like this and that
+    # half (b): when half (a) found a fork (D16), half (b) is the fork-denial search (D17) — BFS to
+    # the shallowest optimal node where the opponent occupies+kills a fork window (LIVE->DEAD).
+    # Non-fork win_to_draw keeps legacy neutralization. See reason-engine-pseudocode.md.
 
 elif bestScore > 0 and playedScore < 0
     case = 'win_to_lose' # if the opponent plays optimal, you will loose if you play optimal
