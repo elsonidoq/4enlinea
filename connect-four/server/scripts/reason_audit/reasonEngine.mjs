@@ -80,21 +80,50 @@ const TAG_PRIORITY = [
   'figure_7', 'j_shape', 'undercut', 'overcut', 'claimeven',
   'major_threat_parity', 'major_threat_nonparity', 'forced_block', 'forbidden_columns', 'minor_threat',
 ];
-function pickTag(map, exclude) {
-  for (const t of TAG_PRIORITY) if (map.has(t) && !(exclude && exclude.has(t))) return t;
-  return null;
+
+// GATE 1 class map. INVARIANT: register is a function of win-distance, so a short tactic cannot win
+// a long (parity) position and vice-versa. contextual = weak/defensive, admissible in any register.
+const REGISTER_CLASS = {
+  immediate_threat: 'tactical', double_threat: 'tactical', forced_win: 'tactical',
+  figure_7: 'tactical', j_shape: 'tactical', undercut: 'tactical', overcut: 'tactical',
+  z_threat: 'structural', odd_even_threat: 'structural', claimeven: 'structural',
+  major_threat_parity: 'structural', major_threat_nonparity: 'structural',
+  forced_block: 'contextual', forbidden_columns: 'contextual', minor_threat: 'contextual',
+};
+function registerClassOk(tag, register) {
+  const cls = REGISTER_CLASS[tag] || 'contextual';
+  if (cls === 'contextual') return true;                  // last-resort, any register
+  return register === 'parity' ? cls === 'structural' : cls === 'tactical';
+}
+function cellsTouch(cells, anchor) {
+  return (cells || []).some((c) => anchor.has(c));
+}
+// GATE 2 anchor: the cells the solver's realized win actually occupies/rides.
+function realizedLocus(half) {
+  const s = new Set();
+  for (const c of (half.window || [])) s.add(c);
+  for (const m of (half.line || [])) s.add(m.cell);
+  const pa = half.parityAttribution;
+  if (pa && pa.controllingGroup) for (const c of pa.controllingGroup) s.add(c);
+  return s;
 }
 // Name a half via classifyPattern. With `diffAgainst`, prefer the highest-priority tactic that the
 // half's board has but the comparison board does NOT (the tagBlunder Phase-C "best BUILDS, played
-// doesn't" diff); fall back to the highest-priority tactic overall. Solver-error safe.
-async function nameHalf(solver, rootMs, perspective, { diffAgainst } = {}) {
+// doesn't" diff); fall back to the highest-priority tactic overall. With optional `register` + `anchor`,
+// gates by register class and realized-locus touch. Solver-error safe.
+async function nameHalf(solver, rootMs, perspective, { diffAgainst, register, anchor } = {}) {
   try {
     const pRoot = await classifyPattern(rootMs, perspective, solver);
     const exclude = diffAgainst != null ? await classifyPattern(diffAgainst, perspective, solver) : null;
-    const tag = pickTag(pRoot, exclude) ?? pickTag(pRoot, null);
-    if (!tag) return { tacticTag: null, tacticCells: [], tacticFromDiff: false };
-    const fromDiff = exclude ? !exclude.has(tag) : false;
-    return { tacticTag: tag, tacticCells: pRoot.get(tag).cells || [], tacticFromDiff: fromDiff };
+    const ok = (tag) => (register == null || registerClassOk(tag, register))
+                     && (anchor == null || cellsTouch(pRoot.get(tag).cells, anchor));
+    const admissible = [...pRoot.keys()].filter(ok);
+    if (!admissible.length) return { tacticTag: null, tacticCells: [], tacticFromDiff: false };
+    const inDiff = (t) => (exclude ? !exclude.has(t) : false);
+    admissible.sort((a, b) => (inDiff(b) - inDiff(a))
+      || (TAG_PRIORITY.indexOf(a) - TAG_PRIORITY.indexOf(b)));   // diff = tiebreak, NOT a gate
+    const tag = admissible[0];
+    return { tacticTag: tag, tacticCells: pRoot.get(tag).cells || [], tacticFromDiff: inDiff(tag) };
   } catch {
     return { tacticTag: null, tacticCells: [], tacticFromDiff: false };
   }
@@ -353,8 +382,9 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = CASES.WIN_TO_DRAW;
     const aWalk = await walkOptimal(solver, bestRoot);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
+    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
+      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
     out.lostResource.anchorCells = winningMoveCells(movestring, scores);
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
     // half (b): the opponent's SINGLE saving reply (neutralization). Find the non-losing reply.
     const oppScores = await solver.query(playedRoot);
     const oppLegal = legalCols(oppScores);
@@ -377,11 +407,13 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = CASES.WIN_TO_LOSE;
     const aWalk = await walkOptimal(solver, bestRoot);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
+    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
+      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
     out.lostResource.anchorCells = winningMoveCells(movestring, scores);
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
     const bWalk = await walkOptimal(solver, playedRoot);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
+    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
+      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
   } else if (bestScore === 0 && playedScore < 0) {
     // ── draw_to_lose ──
     out.case = CASES.DRAW_TO_LOSE;
@@ -395,7 +427,6 @@ export async function computeReason(movestring, playedCol, { solver }) {
         kind: 'defensive_hold', register: 'immediate',
         completingCell: holdCell, window: hit.window, pliesToEnd: 1, line: null,
         finalMovestring: bestRoot, // the draw move occupies holdCell on this board
-        anchorCells: [holdCell],
       };
     } else {
       // zugzwang parity_group — precise Allis odd/even attribution DEFERRED (decision 2).
@@ -408,13 +439,16 @@ export async function computeReason(movestring, playedCol, { solver }) {
         completingCell: cell, window: null, pliesToEnd: null, line: null,
         finalMovestring: null, // parity group not walked; precise naming deferred (decision 2)
         parityNamingDeferred: true,
-        anchorCells: cell ? [cell] : [],
       };
     }
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
+    const anchorForLost = hit ? [holdCell] : (out.lostResource.completingCell ? [out.lostResource.completingCell] : []);
+    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
+      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
+    out.lostResource.anchorCells = anchorForLost;
     const bWalk = await walkOptimal(solver, playedRoot);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
+    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
+      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
   } else if (bestScore < 0 && playedScore < 0) {
     // ── lose_to_faster_lose ── (only real search: the gate)
     out.case = CASES.LOSE_TO_FASTER_LOSE;
@@ -443,12 +477,14 @@ export async function computeReason(movestring, playedCol, { solver }) {
       witness: { node: gate.node, devCol: gate.devCol, devCols: gate.devCols, oppPlies: gate.oppPlies },
     });
     const { heights: gh } = buildBoard(gate.node);
+    Object.assign(out.lostResource, await nameHalf(solver, swindleRoot, player,
+      { register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
     out.lostResource.anchorCells = [cellStr(gh[gate.devCol], gate.devCol)];
-    Object.assign(out.lostResource, await nameHalf(solver, swindleRoot, player));
     // half (b): the faster forced loss the played move walks into.
     const bWalk = await walkOptimal(solver, playedRoot);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
+    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
+      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
   } else {
     // bestScore < 0 && playedScore === 0  -> played is BETTER than best (impossible: best is max).
     // bestScore === 0 && playedScore === 0 -> not a blunder (both draw).
