@@ -154,3 +154,31 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   loose version is shown to mislabel.
 - **Status:** ACCEPTED known-gap — revisit if the loose tie produces a misleading `tied`/`independent`.
 - **Source:** case audit (2026-06-29); `reason-engine-pseudocode.md` honest-limits.
+
+### D16 — The PV stops at the deciding double-threat fork; this supersedes D5's `fwd`-as-parity proxy
+- **Decision:** `walkOptimal` no longer walks every win to the completed four. After each winner move
+  it checks the node for an unstoppable **double-threat fork** and stops there, returning that node as
+  the resource (`terminal:'fork'`, the fork cells + windows). The stop trigger is the **whole realized
+  double-threat family**: `hasActiveDoubleThreat(board, colHeights, winner)` (`classifier.js`) — true
+  for ≥2 gravity-top wins (**Case A**, named `double_threat`) OR 1 gravity-top + a major stacked
+  directly above (**Case B**, named `figure_7`) — guarded by `!detectImmediateThreat(board, opponent)`
+  (opponent has no immediate win of its own). `j_shape` is **excluded**: per KB
+  `allen-j-configuration` it generates three *minor* threats winning in zugzwang — a precursor, not a
+  realized fork. Cells/windows come from `detectDoubleThreat`; the tactic name is chosen by
+  `classifyPattern` between `double_threat`/`figure_7`.
+  - **Supersedes D5 in operative meaning:** "register from `fwd = 43 − 2·|score| − discs`" used
+    win-distance as a proxy for parity-vs-tactical. That proxy is **wrong** — a *forced* win can be
+    12+ plies long and still be a pure tactical fork (validated: `214444115623`, a 12-ply win the old
+    rule called `parity`, with `fwd=13`). Register is now derived from the **fork node** (near-distance
+    → `immediate`/`forced_sequence`), and `fwd` is no longer consulted to infer parity.
+  - **Annotates D7:** `parityAttribution` now fires **only when no fork is found on the whole PV** —
+    i.e. genuine zugzwang/parity wins. The fork check is the tactical-vs-parity discriminator D5 lacked.
+  - **Annotates D13:** once the register is correctly tactical at the fork node, Gate 1 admits
+    `double_threat`/`figure_7` naturally — no special-case. The earlier `minor_threat` fallback on
+    `214444115623` was a downstream symptom of the D5 misclassification, not a tagging bug.
+- **Rationale:** I12 — the old register rule was validated only on its motivating examples and missed
+  the Case-B (figure_7) class. Structural fork detection on the solver-proven PV is sound (the detector
+  only *locates* the decisive resource; the solver already proved the win — I2), reuses tested
+  detectors (I8), and unifies the tactical/parity split onto one mechanism (I9/Occam).
+- **Status:** LOCKED (thresholds for the *remaining* genuine-parity cases stay provisional per D5).
+- **Source:** owner-driven case audit `214444115623` (2026-06-29); I12; `reason-engine-pseudocode.md`.

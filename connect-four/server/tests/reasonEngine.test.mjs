@@ -29,6 +29,13 @@ after(() => { if (solver) solver.destroy(); });
 // completingCell must be a real on-board coordinate occupied on its snapshot board.
 function assertCellOnSnapshot(half, label) {
   if (!half) return;
+  if (half.terminal === 'fork') {
+    // a fork's completingCell is an EMPTY pending threat (not yet played); assert it is one of the
+    // fork's completing cells rather than an occupied square.
+    assert.ok(half.forkCells && half.forkCells.includes(half.completingCell),
+      `${label}: fork completingCell ${half.completingCell} must be in forkCells ${JSON.stringify(half.forkCells)}`);
+    return;
+  }
   if (half.completingCell == null) {
     // tolerated for the deferred parity_group half, and for a conditional_swindle whose deviation
     // saves a DRAW (no single winning cell) rather than a win.
@@ -66,14 +73,24 @@ for (const row of rows) {
 
     // 3) fwd-derived registers match the formula (only the walking, score-driven halves)
     const discs = row.movestring.length;
+    // D16: a fork half derives its register from the fork node, not the root fwd formula — so the
+    // fwd-formula assertions apply only to halves that walked all the way to a single completed four.
+    const regFromFwd = (half, score) => {
+      if (half.terminal === 'fork') {
+        assert.notEqual(half.register, 'parity', 'fork register must not be parity');
+        assert.ok(['immediate', 'forced_sequence'].includes(half.register), 'fork register is tactical');
+      } else {
+        assert.equal(half.register, registerOf(fwdOf(score, discs)));
+      }
+    };
     if (row.expectedCase === 'win_to_draw') {
-      assert.equal(r.lostResource.register, registerOf(fwdOf(r.bestScore, discs)), 'w2d lostResource register');
+      regFromFwd(r.lostResource, r.bestScore);
       assert.equal(r.opponentPunishment.kind, 'neutralization');
     } else if (row.expectedCase === 'win_to_lose') {
-      assert.equal(r.lostResource.register, registerOf(fwdOf(r.bestScore, discs)), 'w2l lostResource register');
-      assert.equal(r.opponentPunishment.register, registerOf(fwdOf(r.playedScore, discs)), 'w2l oppPunish register');
+      regFromFwd(r.lostResource, r.bestScore);
+      regFromFwd(r.opponentPunishment, r.playedScore);
     } else if (row.expectedCase === 'draw_to_lose') {
-      assert.equal(r.opponentPunishment.register, registerOf(fwdOf(r.playedScore, discs)), 'd2l oppPunish register');
+      regFromFwd(r.opponentPunishment, r.playedScore);
       assert.ok(['defensive_hold', 'parity_group'].includes(r.lostResource.kind), 'd2l lostResource kind');
     } else if (row.expectedCase === 'lose_to_faster_lose') {
       // 4) gate verdict/flag present and correct
@@ -84,8 +101,12 @@ for (const row of rows) {
       if (row.expectedGate === 'Blunder') {
         assert.equal(r.lostResource.kind, 'conditional_swindle', 'ltfl lostResource kind');
         const w = r.gate.witness;
-        assert.equal(r.lostResource.register, registerOf(fwdOf(w.devVal, w.node.length)), 'ltfl swindle register');
-        assert.equal(r.opponentPunishment.register, registerOf(fwdOf(r.playedScore, discs)), 'ltfl oppPunish register');
+        if (r.lostResource.terminal === 'fork') {
+          assert.ok(['immediate', 'forced_sequence'].includes(r.lostResource.register), 'ltfl swindle fork register');
+        } else {
+          assert.equal(r.lostResource.register, registerOf(fwdOf(w.devVal, w.node.length)), 'ltfl swindle register');
+        }
+        regFromFwd(r.opponentPunishment, r.playedScore);
       } else {
         assert.equal(r.lostResource, null, 'NotABlunder => no halves');
         assert.equal(r.opponentPunishment, null);
@@ -93,3 +114,29 @@ for (const row of rows) {
     }
   });
 }
+
+// ── D16 fork-stop: the lost-resource walk halts at the deciding double-threat fork (not the
+// completed four). Two sourced fixtures, one per detectDoubleThreat case (I12 counterexample per case).
+test('D16 Case A: 214444115623 played 4 -> double_threat fork, not parity', async () => {
+  const r = await computeReason('214444115623', 4, { solver });
+  assert.equal(r.case, 'win_to_draw', 'case');
+  assert.equal(r.lostResource.terminal, 'fork', 'lostResource stops at a fork');
+  assert.notEqual(r.lostResource.register, 'parity', 'a forced tactical fork must NOT be register=parity');
+  assert.equal(r.lostResource.tacticTag, 'double_threat', 'Case A (>=2 gravity-top columns) names double_threat');
+  assert.ok(r.lostResource.forkCells.includes('c4r3') && r.lostResource.forkCells.includes('c6r4'),
+    `fork completing cells include c4r3 & c6r4, got ${JSON.stringify(r.lostResource.forkCells)}`);
+  // the opponent's saving reply sits on a constituent cell of the fork the best move was building
+  assert.ok(r.opponentPunishment.tie.sharedCells.includes('c3r3'),
+    `tie shares c3r3 (fork constituent), got ${JSON.stringify(r.opponentPunishment.tie.sharedCells)}`);
+});
+
+test('D16 Case B: 3333344440625621503122 played 6 -> figure_7 stacked fork, not parity', async () => {
+  const r = await computeReason('3333344440625621503122', 6, { solver });
+  assert.equal(r.case, 'win_to_draw', 'case');
+  assert.equal(r.lostResource.terminal, 'fork', 'lostResource stops at a fork');
+  assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
+  // Case B (1 column, stacked) prefers the more specific figure_7 over the co-present double_threat tag
+  assert.equal(r.lostResource.tacticTag, 'figure_7', 'Case B names figure_7');
+  assert.ok(r.lostResource.forkCells.includes('c1r3'),
+    `stacked fork includes gravity-top cell c1r3, got ${JSON.stringify(r.lostResource.forkCells)}`);
+});

@@ -13,10 +13,12 @@ let solver;
 before(async () => { solver = await createSolverProcess(); });
 after(() => { if (solver) solver.destroy(); });
 
-test('anchorCells: win_to_draw 3325 = winning-move cells', async () => {
+test('anchorCells: win_to_draw 3325 fork = fork-window cells', async () => {
   const r = await computeReason('3325', 5, { solver });
-  // scores [-3,18,2,3,-3,0,-3]: winning cols 1,2,3 -> landing cells c2r1,c3r2,c4r3
-  assert.deepEqual([...r.lostResource.anchorCells].sort(), ['c2r1', 'c3r2', 'c4r3']);
+  // D16: the best move creates a Case-A fork (forkCells c1r1,c5r1). anchorCells are the cells of the
+  // fork windows (the row-1 group), so the tie can match a constituent the opponent occupies.
+  assert.equal(r.lostResource.terminal, 'fork');
+  assert.deepEqual([...r.lostResource.anchorCells].sort(), ['c1r1', 'c2r1', 'c3r1', 'c4r1', 'c5r1']);
 });
 
 test('anchorCells present for every blunder case', async () => {
@@ -26,14 +28,15 @@ test('anchorCells present for every blunder case', async () => {
   }
 });
 
-test('gated naming: 214444115623 rejects the immediate_threat decoy', async () => {
+test('gated naming: 214444115623 names the double_threat fork, not the immediate_threat decoy', async () => {
   const r = await computeReason('214444115623', 4, { solver });
-  // register is 'parity'; immediate_threat{c3r4} is the blocked decoy and must be rejected.
+  // D16: the win is a forced double-threat fork (forkCells c4r3,c6r4), NOT the single
+  // immediate_threat{c3r4} tempo decoy and NOT the old parity-register minor_threat fallback.
+  assert.equal(r.lostResource.terminal, 'fork');
   assert.notEqual(r.lostResource.tacticTag, 'immediate_threat');
-  // contextual fallback names the actual row-2 group -> minor_threat with a cell in the group.
-  assert.equal(r.lostResource.tacticTag, 'minor_threat');
-  const group = new Set(r.lostResource.parityAttribution.controllingGroup);
-  assert.ok(r.lostResource.tacticCells.some((c) => group.has(c)), 'named cells touch the controlling group');
+  assert.equal(r.lostResource.tacticTag, 'double_threat');
+  assert.ok(r.lostResource.forkCells.includes('c4r3') && r.lostResource.forkCells.includes('c6r4'),
+    'fork completing cells c4r3 & c6r4');
 });
 
 test('gated naming: 3325 keeps double_threat', async () => {

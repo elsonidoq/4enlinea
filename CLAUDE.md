@@ -34,7 +34,7 @@ Do not rely solely on memory summaries — those can be stale. Read the actual d
 
 Before touching the blunder-`reason` feature-vector engine (anything under `connect-four/server/scripts/reason_audit/`, `toFeatureVector`'s reason field, or the case taxonomy), read **all four**, in order:
 
-- `docs/architecture/reason-INVARIANTS.md` — the constitution: 12 non-negotiable principles (I0 = correctness over optimization; never weaken the algorithm to save solver calls).
+- `docs/architecture/reason-INVARIANTS.md` — the constitution: 13 non-negotiable principles (I0 = correctness over optimization; never weaken the algorithm to save solver calls; I12 = validate a classification/stop rule against its full case-space + a counterexample per case, through the production detector — not the motivating example).
 - `docs/architecture/reason-DECISIONS.md` — append-only log of resolved decisions + rationale. Do not relitigate these.
 - `docs/architecture/my_pseudocode.md` — the authoritative `(bestScore, playedScore)` case taxonomy.
 - `docs/architecture/blunder-reason-evidence.md` — the two-halves evidence engine, validated boards, implementation map.
@@ -49,7 +49,7 @@ The script prints two boards followed by analysis rows:
 
 1. **Raw board** — compact view showing `R` / `Y` / empty for each cell.
 2. **Annotated board** — each cell is one of:
-   - `R 1` / `Y42` — disc with the move number that placed it (odd move# = Red, even = Yellow)
+   - `R 1` / `Y42` — disc with the move number that placed it (odd move# = player 1, even = player 2). `R`/`Y` are the historical internal token names: **`R` = player 1, rendered as a GREEN disc in-app; `Y` = player 2, rendered as a GRAY disc.** They are not red/yellow on screen.
    - `[R]` / `[Y]` — major threat (3 discs of that player + 1 empty in a 4-window)
    - `(r)` / `(y)` — minor threat (2 discs + 2 empty)
    - `[*]` / `(*)` — both players have a major/minor threat on that cell

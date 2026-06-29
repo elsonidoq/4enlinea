@@ -11,7 +11,7 @@ You are working on the Connect-Four blunder-`reason` engine (the structured feat
 LLM turns into "why this move was a blunder"). Before doing anything else, read **all four** of these,
 in order, and treat them as binding:
 
-1. `docs/architecture/reason-INVARIANTS.md` — the constitution. 12 non-negotiable principles.
+1. `docs/architecture/reason-INVARIANTS.md` — the constitution. 13 non-negotiable principles.
    **I0 (correctness over optimization) overrides everything when in conflict**: the engine must be
    correct 100% of the time and always surface something relevant for the player; extra solver calls
    are expected and acceptable; **never** weaken the algorithm to save queries, and do **not** raise
@@ -41,6 +41,10 @@ Hard rules you must not violate (full text in the docs above — this is a check
 - **One frozen design.** Ignore the quarantined `blunder-reason-field-epic.md`,
   `unified-blunder-reason-epic.md`, `feature-vector-reason-algorithm.md`, and the `reason_audit/`
   SUPERSEDED cluster, even if they surface in search or injected memory.
+- **Validate rules against their case-space (I12).** Proposing a stop / threshold / taxonomy rule?
+  Enumerate the cases (read the reused detector's *full* contract), probe the property *through the
+  production detector* — never a hand-rolled proxy, even in a scratch script — and run one
+  counterexample board per case before claiming it generalizes. The motivating example is not proof.
 
 Project conventions: coordinates 0-indexed internally, `cNrM` 1-indexed on emit; always observe a
 board with `./visualize_board.sh <movestring>` before reasoning about it; solver score is from the

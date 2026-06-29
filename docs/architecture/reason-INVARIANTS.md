@@ -129,3 +129,25 @@ is the INVALID_MOVE sentinel.
 **historical only** — do not read, cite, or be guided by them even if they surface in search or
 injected memory. If you believe the core taxonomy must change, **stop and ask** — amend this design,
 do not fork a parallel one.
+
+## I12. Validate a rule against its case-space, not its motivating example
+
+A rule that classifies, thresholds, or stops — a taxonomy boundary, a register cutoff, a stop
+condition, a gate — is **not** validated by the example that motivated it. Before claiming it
+generalizes:
+
+1. **Enumerate the case-space.** When the rule reuses a detector, read that detector's **full**
+   return contract — every Case/branch — not the branch you have in mind.
+2. **Probe a detectable property only through its production detector — never a hand-rolled proxy,
+   not even in a throwaway verification script.** A hand-rolled proxy silently narrows the
+   case-space and yields false validation. *(The figure-7 miss: a `gravityTopWins` proxy modeled
+   `double_threat` Case A and could not express the stacked Case B, so Case B was never confronted;
+   reusing `detectDoubleThreat` would have forced both cases into view.)* This is **why I8 reuse is a
+   correctness rule, not a tidiness one.**
+3. **Build a deliberate counterexample per case and run it.** A board that confirms the motivating
+   case is not evidence the rule generalizes.
+4. If a case cannot yet be tested, **mark the rule provisional** — never assert coverage you did not
+   test.
+
+This is the enforced, local form of `feedback_eval_design_methodology` (counterexamples, not
+averages) and `feedback_empirical_first`.

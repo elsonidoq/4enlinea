@@ -117,7 +117,27 @@ def tie_to(case, lost, punish):
 # ════════════════════════════════════════════════════════════════════════════
 
 def win_half(root, winner, diffAgainst=None):
-    walk = walk_optimal(root)                       # both-optimal PV to terminal; O(plies) queries
+    walk = walk_optimal(root, winner)               # D16: stops at the deciding fork, else the four
+
+    # D16 — FORK STOP. walk_optimal halts at the first node (after a winner move) where the winner
+    # holds an unstoppable double threat: detectDoubleThreat(board, winner).matched AND NOT
+    # detectImmediateThreat(board, opponent)  (production detectors, I8/I12). This is the
+    # tactical-vs-parity discriminator. A fork is ALWAYS tactical, never parity.
+    if walk.terminal == 'fork':
+        reg  = 'forced_sequence' if walk.line else 'immediate'      # NOT derived from fwd (supersedes D5)
+        half = { kind:'winning_line', terminal:'fork', register: reg,
+                 forkCase: walk.forkCase,                           # 'A' (>=2 gravity-top) | 'B' (stacked)
+                 forkCells: walk.forkCells, forkWindows: walk.forkWindows,
+                 completingCell: walk.forkCells[0], window: walk.forkWindows[0],
+                 line: walk.line, finalMovestring: walk.finalMovestring, pliesToEnd: walk.pliesToEnd }
+        # named at the FORK NODE (the tactic may not exist yet at root): Case A -> double_threat;
+        # Case B -> figure_7 if present (more specific) else double_threat. j_shape is NOT a fork.
+        half.tactic = name_fork(walk.finalMovestring, winner, walk.forkCase)
+        # anchorCells = every cell of the fork windows (so the tie can find a constituent the
+        # punishment sits on, e.g. c3r3 on 214444115623).
+        half.anchorCells = union(walk.forkWindows)
+        return half
+
     fwd  = 43 - 2*abs(score_of(winner, root)) - len(root)
     reg  = register(fwd)                            # immediate | forced_sequence | parity
 
@@ -127,6 +147,7 @@ def win_half(root, winner, diffAgainst=None):
              finalMovestring: walk.finalMovestring, pliesToEnd: walk.pliesToEnd }
 
     if reg == 'parity' and walk.terminal == 'win':            # enrichment A: parity attribution
+        # fires ONLY for a genuine parity win — i.e. NO fork on the whole PV (D16 annotates D7)
         half.parityAttribution = attribute_parity_win(root, walk.window, walk.completingCell, winner)
 
     half.tactic = name_half(root, winner, reg,                # enrichment B: solver-gated tactic name

@@ -25,7 +25,9 @@ import {
   parseCell,
 } from './lib/boardUtils.mjs';
 import { parityCells } from './TOOLS/parity_cells.mjs';
-import { classifyPattern } from '../../classifier.js';
+import {
+  classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
+} from '../../classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../../.env'));
@@ -141,8 +143,71 @@ function lastMoveWon(ms) {
   return { mover, completingCell: cellStr(r, lastCol), window: wins[0].map(([rr, cc]) => cellStr(rr, cc)) };
 }
 
-// Walk solver-optimal moves (BOTH sides) from `ms` to terminal. Returns the resolution.
-async function walkOptimal(solver, ms) {
+// ── fork detection (D16): an unstoppable double-threat for `winnerMark` on board `ms`. ──
+// Reuses the PRODUCTION detectors (I8/I12): detectDoubleThreat (Case A = >=2 gravity-top cols;
+// Case B = stacked consecutive in one col) gated by detectImmediateThreat(opponent) === false (the
+// opponent has no immediate win of its own). Solver-free — the caller's walk already proved the win
+// (I2); this only LOCATES the deciding resource. Returns null when there is no fork.
+function detectForkAt(ms, winnerMark) {
+  const board = new Board(ms);
+  const opp = winnerMark === 1 ? 2 : 1;
+  const dt = detectDoubleThreat(board, winnerMark);
+  if (!dt.matched) return null;
+  if (detectImmediateThreat(board, opp).matched) return null; // opponent wins first → not unstoppable
+  const forkCase = (dt.cols && dt.cols.length >= 2) ? 'A' : 'B';
+  const forkCells = dt.cells || [];
+  const { grid } = buildBoard(ms);
+  const forkWindows = [];
+  for (const cs of forkCells) {
+    const p = parseCell(cs);
+    if (!p) continue;
+    for (const w of getWinningWindows(grid, p.r, p.c, winnerMark)) {
+      forkWindows.push(w.map(({ row, col }) => cellStr(row, col)));
+    }
+  }
+  return { forkCase, forkCells, forkWindows, completingCell: forkCells[0] ?? null, window: forkWindows[0] ?? null };
+}
+
+// Name a fork half via classifyPattern (I8): Case A → double_threat; Case B → figure_7 if that
+// (more specific) shape is present, else the co-present double_threat. classifyPattern PROPOSES; the
+// fork node IS the solver-realized win so Gate-2 (locus) is satisfied by construction.
+async function nameFork(solver, forkNode, winnerMark, forkCase) {
+  try {
+    const pat = await classifyPattern(forkNode, winnerMark, solver);
+    let tag = null;
+    if (forkCase === 'B' && pat.has('figure_7')) tag = 'figure_7';
+    else if (pat.has('double_threat')) tag = 'double_threat';
+    else if (pat.has('figure_7')) tag = 'figure_7';
+    if (!tag) return { tacticTag: null, tacticCells: [], tacticFromDiff: false };
+    return { tacticTag: tag, tacticCells: pat.get(tag).cells || [], tacticFromDiff: false };
+  } catch { return { tacticTag: null, tacticCells: [], tacticFromDiff: false }; }
+}
+
+// anchorCells for a fork = every cell of its winning windows (completing cells AND the player's
+// constituent discs), so the tie (Task 3) can detect when the opponent's punishment sits on a square
+// of the fork the best move was building (validated: c3r3 on 214444115623).
+function forkAnchorCells(half) {
+  const s = new Set();
+  for (const w of (half.forkWindows || [])) for (const c of w) s.add(c);
+  for (const c of (half.forkCells || [])) s.add(c);
+  return [...s];
+}
+
+// Name a WALKED win-half (fork-aware). A fork is named at the FORK NODE (where the deciding tactic
+// materialized), not at the root decision board (where it may not exist yet); a non-fork win is named
+// at the root as before. Used for both halves.
+async function nameWalkedHalf(solver, half, rootMs, perspective, { diffAgainst } = {}) {
+  if (half.terminal === 'fork') {
+    return nameFork(solver, half.finalMovestring, perspective, half.forkCase);
+  }
+  return nameHalf(solver, rootMs, perspective,
+    { diffAgainst, register: half.register, anchor: realizedLocus(half) });
+}
+
+// Walk solver-optimal moves (BOTH sides) from `ms` to terminal. Returns the resolution. With
+// `winnerMark`, STOPS at the first deciding double-threat fork after a winner move (D16) instead of
+// walking to the completed four.
+async function walkOptimal(solver, ms, winnerMark = null) {
   const start = ms.length;
   const pre = lastMoveWon(ms);
   if (pre) {
@@ -150,6 +215,13 @@ async function walkOptimal(solver, ms) {
       terminal: 'win', winner: pre.mover, completingCell: pre.completingCell,
       window: pre.window, pliesToEnd: 0, line: [], finalMovestring: ms,
     };
+  }
+  // D16: the deciding fork may already exist at the root (the winner's move that created it is the
+  // last disc of `ms`, e.g. bestRoot). Check before walking, else the loop's first move (opponent's)
+  // skips it.
+  if (winnerMark != null && ((ms.length % 2 === 1) ? 1 : 2) === winnerMark) {
+    const fork = detectForkAt(ms, winnerMark);
+    if (fork) return { terminal: 'fork', winner: winnerMark, ...fork, pliesToEnd: 0, line: [], finalMovestring: ms };
   }
   let cur = ms;
   const moves = [];
@@ -171,6 +243,16 @@ async function walkOptimal(solver, ms) {
         window: wins[0].map(([rr, cc]) => cellStr(rr, cc)),
         pliesToEnd: cur.length - start, line: moves, finalMovestring: cur,
       };
+    }
+    // D16: after the winner moves, stop at the deciding fork (do not walk on to the four).
+    if (winnerMark != null && mover === winnerMark) {
+      const fork = detectForkAt(cur, winnerMark);
+      if (fork) {
+        return {
+          terminal: 'fork', winner: winnerMark, ...fork,
+          pliesToEnd: cur.length - start, line: moves, finalMovestring: cur,
+        };
+      }
     }
     if (cur.length === 42) break;
   }
@@ -247,7 +329,13 @@ function tieTo(caseName, lost, punish) {
 // `extra.rootMs` + `extra.winnerMark` (when present) drive the parity-attribution enrichment for
 // parity-register wins; they are consumed here and not emitted as raw fields.
 function renderHalf(kind, walk, fwd, extra = {}) {
-  const register = registerOf(fwd);
+  const isFork = walk.terminal === 'fork';
+  // D16: a fork is a tactical resolution (decisive in <=3 plies), NEVER a parity win. Its register is
+  // tactical — `immediate` when the fork exists at the decision board, else `forced_sequence` (show
+  // the line to it). `fwd` is no longer consulted for forks (this supersedes D5's parity proxy).
+  const register = isFork
+    ? ((walk.line && walk.line.length > 0) ? 'forced_sequence' : 'immediate')
+    : registerOf(fwd);
   const { rootMs, winnerMark, ...rest } = extra;
   const half = {
     kind,
@@ -260,6 +348,13 @@ function renderHalf(kind, walk, fwd, extra = {}) {
     entryCell: (walk.line && walk.line[0]) ? walk.line[0].cell : (walk.completingCell ?? null),
     ...rest,
   };
+  if (isFork) {
+    half.terminal = 'fork';
+    half.forkCase = walk.forkCase;
+    half.forkCells = walk.forkCells;
+    half.forkWindows = walk.forkWindows;
+  }
+  // parityAttribution fires ONLY for a genuine parity win (no fork found on the whole PV) — D16/D7.
   if (register === 'parity' && walk.terminal === 'win' && rootMs != null && winnerMark != null) {
     const attr = attributeParityWin(rootMs, walk.window, walk.completingCell, winnerMark);
     if (attr) half.parityAttribution = attr;
@@ -394,11 +489,11 @@ export async function computeReason(movestring, playedCol, { solver }) {
   if (bestScore > 0 && playedScore === 0) {
     // ── win_to_draw ──
     out.case = CASES.WIN_TO_DRAW;
-    const aWalk = await walkOptimal(solver, bestRoot);
+    const aWalk = await walkOptimal(solver, bestRoot, player);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
-      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
-    out.lostResource.anchorCells = winningMoveCells(movestring, scores);
+    Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
+    out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
+      ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
     // half (b): the opponent's SINGLE saving reply (neutralization). Find the non-losing reply.
     const oppScores = await solver.query(playedRoot);
     const oppLegal = legalCols(oppScores);
@@ -420,15 +515,14 @@ export async function computeReason(movestring, playedCol, { solver }) {
   } else if (bestScore > 0 && playedScore < 0) {
     // ── win_to_lose ──
     out.case = CASES.WIN_TO_LOSE;
-    const aWalk = await walkOptimal(solver, bestRoot);
+    const aWalk = await walkOptimal(solver, bestRoot, player);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
-      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
-    out.lostResource.anchorCells = winningMoveCells(movestring, scores);
-    const bWalk = await walkOptimal(solver, playedRoot);
+    Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
+    out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
+      ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
+    const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
-      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
+    Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
   } else if (bestScore === 0 && playedScore < 0) {
     // ── draw_to_lose ──
     out.case = CASES.DRAW_TO_LOSE;
@@ -459,10 +553,9 @@ export async function computeReason(movestring, playedCol, { solver }) {
     const anchorForLost = hit ? [holdCell] : (out.lostResource.completingCell ? [out.lostResource.completingCell] : []);
     Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = anchorForLost;
-    const bWalk = await walkOptimal(solver, playedRoot);
+    const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
-      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
+    Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
   } else if (bestScore < 0 && playedScore < 0) {
     // ── lose_to_faster_lose ── (only real search: the gate)
     out.case = CASES.LOSE_TO_FASTER_LOSE;
@@ -484,21 +577,20 @@ export async function computeReason(movestring, playedCol, { solver }) {
     };
     // half (a): conditional_swindle — demonstrate the win available after the opponent's mistake.
     const swindleRoot = gate.node + String(gate.devCol);
-    const aWalk = await walkOptimal(solver, swindleRoot);
+    const aWalk = await walkOptimal(solver, swindleRoot, player);
     const aFwd = fwdOf(gate.devVal, gate.node.length); // |devVal| ~ player's win magnitude after mistake
     out.lostResource = renderHalf('conditional_swindle', aWalk, aFwd, {
       rootMs: swindleRoot, winnerMark: player,
       witness: { node: gate.node, devCol: gate.devCol, devCols: gate.devCols, oppPlies: gate.oppPlies },
     });
     const { heights: gh } = buildBoard(gate.node);
-    Object.assign(out.lostResource, await nameHalf(solver, swindleRoot, player,
-      { register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
+    Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, swindleRoot, player));
+    // anchor stays the practical-chance MOVE (the deviation), even when the swindle resolves via a fork.
     out.lostResource.anchorCells = [cellStr(gh[gate.devCol], gate.devCol)];
     // half (b): the faster forced loss the played move walks into.
-    const bWalk = await walkOptimal(solver, playedRoot);
+    const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent,
-      { register: out.opponentPunishment.register, anchor: realizedLocus(out.opponentPunishment) }));
+    Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
   } else {
     // bestScore < 0 && playedScore === 0  -> played is BETTER than best (impossible: best is max).
     // bestScore === 0 && playedScore === 0 -> not a blunder (both draw).
