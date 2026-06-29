@@ -7,6 +7,10 @@ import { buildBoard } from './board.js';
  *
  * Player assignment: odd move index (0-based) = 'yellow'; even = 'red'.
  * i.e. move 0 (first move) is red, move 1 is yellow, etc.
+ *
+ * NOTE: 'red'/'yellow' are kept for historical reasons — they are internal
+ * player-1/player-2 identity tokens, NOT display colors. The Board renders
+ * 'red' as a GREEN disc and 'yellow' as a GRAY disc.
  */
 
 /** Parse a movestring into a 6×7 board array ('empty' | 'red' | 'yellow'). */

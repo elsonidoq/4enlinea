@@ -96,6 +96,16 @@ There is no `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, or client-side Supaba
 
 Board is a 2D array `board[row][col]` where row 0 is the bottom row.
 Cell values: `'empty'`, `'red'` (player 1), `'yellow'` (player 2).
+
+> **Disc-color naming — kept for historical reasons.** `'red'`/`'yellow'` are
+> internal **player-identity tokens, not display colors.** The game originally
+> rendered red and yellow discs; the palette migrated to green/gray but the token
+> names were retained to avoid a churning, error-prone rename across board logic,
+> the movestring parser, the lesson schema, the DB, and the test suite. The Board
+> renders **`'red'` → GREEN disc** (`--disc-green`) and **`'yellow'` → GRAY disc**
+> (`--disc-gray`). Whenever you describe what the user *sees*, say green/gray;
+> `'red'`/`'yellow'` only ever appear as data tokens. A holistic rename is tracked
+> as Epic 12 — do not do it piecemeal. (See `reference_board_color_inversion.md`.)
 Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wire, and in all frontend logic. The +1 conversion to 1-indexed happens only inside `c4solver-wrapper.js` on the server.
 
 ## Board Component API

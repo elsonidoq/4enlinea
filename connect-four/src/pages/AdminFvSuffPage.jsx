@@ -95,9 +95,27 @@ const Chip = ({ text, bg, fg }) => (
   <span style={{ padding: '1px 7px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>{text}</span>
 );
 
+// Numbered lookahead moves: every disc in `ms` placed AFTER the pre-move board (index >= baseLen),
+// in play order, as a Board `stepLabels` map "row,col" -> number. Lets the reader follow how the
+// board evolves from the decision point to the half's resolution (keeps green/gray disc colors).
+function lookaheadSteps(ms, baseLen) {
+  if (!ms) return {};
+  const heights = [0, 0, 0, 0, 0, 0, 0];
+  const out = {};
+  let step = 0;
+  for (let i = 0; i < ms.length; i++) {
+    const col = Number(ms[i]);
+    if (Number.isNaN(col)) continue;
+    const row = heights[col]++;
+    if (i >= baseLen) out[`${row},${col}`] = ++step;
+  }
+  return out;
+}
+
 // One labelled board for a half of the evidence. Renders the half's finalMovestring with the
-// completingCell + window cells overlaid (amber). Falls back to a note when there is no cell.
-function HalfBoard({ title, subtitle, half }) {
+// completingCell + window cells overlaid (amber), and the lookahead moves numbered in play order.
+// Falls back to a note when there is no cell.
+function HalfBoard({ title, subtitle, half, baseLen = 0 }) {
   const ms = half?.finalMovestring;
   const boardObj = useMemo(() => buildBoard(ms || ''), [ms]);
   const overlays = useMemo(() => {
@@ -108,13 +126,14 @@ function HalfBoard({ title, subtitle, half }) {
     if (cc) out.push({ ...cc, type: 'td' });
     return out;
   }, [half]);
+  const steps = useMemo(() => lookaheadSteps(ms, baseLen), [ms, baseLen]);
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>{title}</div>
       <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>{subtitle}</div>
       {half && ms
-        ? <Board board={boardObj.board} compact canPlay={false} overlays={overlays} />
+        ? <Board board={boardObj.board} compact canPlay={false} overlays={overlays} stepLabels={steps} />
         : <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#a16207', padding: 8, border: '1px dashed #e2e8f0', borderRadius: 6 }}>
             {half ? 'no board cell (parity-naming deferred / draw-save swindle)' : 'no half'}
           </div>}
@@ -316,13 +335,15 @@ function ReasonViewer() {
                 </div>
                 <HalfBoard
                   title="lostResource (half a)"
-                  subtitle={entry.lostResource ? `${entry.lostResource.kind} · amber = completing/window` : 'null'}
+                  subtitle={entry.lostResource ? `${entry.lostResource.kind} · amber = completing/window · ① = lookahead` : 'null'}
                   half={entry.lostResource}
+                  baseLen={(entry.movestring || '').length}
                 />
                 <HalfBoard
                   title="opponentPunishment (half b)"
-                  subtitle={entry.opponentPunishment ? `${entry.opponentPunishment.kind} · amber = completing/window` : 'null'}
+                  subtitle={entry.opponentPunishment ? `${entry.opponentPunishment.kind} · amber = completing/window · ① = lookahead` : 'null'}
                   half={entry.opponentPunishment}
+                  baseLen={(entry.movestring || '').length}
                 />
               </div>
 

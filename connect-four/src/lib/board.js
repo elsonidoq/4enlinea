@@ -1,5 +1,9 @@
 // Shared board utility — used by ChallengeScreen and other screens.
 // Row 0 = bottom, row 5 = top. Cell values: 'empty', 'red', 'yellow'.
+// NOTE: 'red'/'yellow' are kept for historical reasons — they are internal
+// player-1/player-2 identity tokens, NOT display colors. The Board renders
+// 'red' as a GREEN disc and 'yellow' as a GRAY disc. Do not rename without
+// the holistic Epic 12 migration. See docs/architecture/frontend-conventions.md.
 
 const COLS = 7;
 const ROWS = 6;

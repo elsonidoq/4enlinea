@@ -46,6 +46,8 @@ export function validateLesson(lesson) {
   if (typeof lesson.id !== 'string') return 'missing or invalid field: id (must be string)';
   if (typeof lesson.title !== 'string') return 'missing or invalid field: title (must be string)';
   if (typeof lesson.free !== 'boolean') return 'missing or invalid field: free (must be boolean)';
+  // 'red'/'yellow' kept for historical reasons: internal player-1/player-2 tokens,
+  // not display colors. 'red' renders as a GREEN disc, 'yellow' as a GRAY disc.
   if (lesson.userPerspective !== 'red' && lesson.userPerspective !== 'yellow') {
     return 'missing or invalid field: userPerspective (must be "red" or "yellow")';
   }

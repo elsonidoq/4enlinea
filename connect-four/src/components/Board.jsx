@@ -93,6 +93,9 @@ export function Board({
   interactionMode = 'single_move',
   // Deprecated shim — CurationWorkspace.jsx only. [row, col, role, step?] tuples.
   highlightedCells = [],
+  // Numbered move labels keyed "row,col" -> label. Rendered ON TOP of the green/gray disc without
+  // recoloring it (unlike the red/yellow shim above). Used by the fv-suff lookahead numbering.
+  stepLabels = {},
   // Coach-mention zone highlights — Array<{color: string, cells: Array<{c,r}>}> (0-indexed).
   zhCells = [],
 }) {
@@ -268,6 +271,7 @@ export function Board({
             {[5, 4, 3, 2, 1, 0].map(r => {
               const value = board[r]?.[col] ?? 'empty';
               const ovType = ovMap[`${col},${r}`];
+              const stepLabel = stepLabels[`${r},${col}`];
               // Deprecated shim lookup
               const shimEntry = highlightedCells.find(([hr, hc]) => hr === r && hc === col);
               const shimRole = shimEntry?.[2] ?? null;
@@ -292,7 +296,10 @@ export function Board({
                     cursor: onCellClick ? 'crosshair' : undefined,
                   }}
                 >
-                  {/* New-API disc (green/gray) — skipped when shim overrides this cell */}
+                  {/* New-API disc (green/gray) — skipped when shim overrides this cell.
+                      The 'red'/'yellow' cell values are kept for historical reasons:
+                      they are player-1/player-2 identity tokens, not display colors.
+                      'red' → GREEN disc (--disc-green), 'yellow' → GRAY disc (--disc-gray). */}
                   {value !== 'empty' && !shimRole && (
                     <div style={{
                       width: '84%', height: '84%', borderRadius: '50%', position: 'relative',
@@ -306,6 +313,18 @@ export function Board({
                     }}>
                       {/* Specular highlight */}
                       <span style={{ position: 'absolute', inset: '22% 22% auto 22%', height: '26%', borderRadius: '50%', background: 'rgba(255,255,255,0.22)' }} />
+                    </div>
+                  )}
+
+                  {/* Numbered lookahead label — keeps the green/gray disc, adds a teal ring + number */}
+                  {stepLabel != null && value !== 'empty' && (
+                    <div style={{
+                      position: 'absolute', inset: 0, borderRadius: '50%',
+                      boxShadow: '0 0 0 2px #14b8a6, 0 0 8px rgba(20,184,166,.6)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      pointerEvents: 'none', userSelect: 'none',
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,.6)' }}>{stepLabel}</span>
                     </div>
                   )}
 
