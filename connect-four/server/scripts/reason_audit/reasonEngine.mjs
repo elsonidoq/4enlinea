@@ -145,6 +145,13 @@ function lastMoveWon(ms) {
   return { mover, completingCell: cellStr(r, lastCol), window: wins[0].map(([rr, cc]) => cellStr(rr, cc)) };
 }
 
+// A position the solver legitimately REJECTS (throws) as terminal: someone just won, or the board is
+// full. Used to tell a genuine terminal rejection apart from a transient IPC error — only the latter
+// must downgrade an `exhaustive` claim (M3: never inflate a solver error into a full-tree proof; I2).
+function isTerminalPosition(ms) {
+  return lastMoveWon(ms) !== null || ms.length >= ROWS * COLS;
+}
+
 // ── fork detection (D16): an unstoppable double-threat for `winnerMark` on board `ms`. ──
 // Reuses the PRODUCTION detectors (I8/I12): detectDoubleThreat (Case A = >=2 gravity-top cols;
 // Case B = stacked consecutive in one col) gated by detectImmediateThreat(opponent) === false (the
@@ -402,6 +409,7 @@ export async function swindleGate(solver, node, { exhaustive }) {
   const stack = [{ ms: node, oppPlies: 0 }];
   const seen = new Set();
   let nodesVisited = 0;
+  let errored = false; // a non-terminal solver throw skipped a real subtree -> exhaustion not clean (M3)
   while (stack.length) {
     const { ms, oppPlies } = stack.pop();
     if (!exhaustive && oppPlies > gateDepth) continue;
@@ -409,7 +417,7 @@ export async function swindleGate(solver, node, { exhaustive }) {
     seen.add(ms);
     nodesVisited++;
     let oppScores;
-    try { oppScores = await solver.query(ms); } catch { continue; }
+    try { oppScores = await solver.query(ms); } catch { if (!isTerminalPosition(ms)) errored = true; continue; }
     const legal = legalCols(oppScores);
     if (!legal.length) continue;
     const nonWin = legal.filter((c) => oppScores[c] <= 0); // non-winning for opponent => >=0 for player
@@ -419,7 +427,7 @@ export async function swindleGate(solver, node, { exhaustive }) {
       for (const c of nonWin) if (oppScores[c] < oppScores[dev]) dev = c;
       return {
         found: true, node: ms, devCols: nonWin, devCol: dev, devVal: oppScores[dev],
-        oppPlies, nodesVisited, oppScores,
+        oppPlies, nodesVisited, oppScores, errored,
       };
     }
     // all opponent moves win: branch over winning moves (least-winning first = most fragile).
@@ -431,7 +439,7 @@ export async function swindleGate(solver, node, { exhaustive }) {
       branches++;
       const afterOpp = ms + String(oc);
       let pScores;
-      try { pScores = await solver.query(afterOpp); } catch { continue; }
+      try { pScores = await solver.query(afterOpp); } catch { if (!isTerminalPosition(afterOpp)) errored = true; continue; }
       const pLegal = legalCols(pScores);
       if (!pLegal.length) continue;
       const maxP = Math.max(...pLegal.map((c) => pScores[c]));
@@ -440,7 +448,7 @@ export async function swindleGate(solver, node, { exhaustive }) {
       for (const pc of best) stack.push({ ms: afterOpp + String(pc), oppPlies: oppPlies + 1 });
     }
   }
-  return { found: false, nodesVisited };
+  return { found: false, nodesVisited, errored };
 }
 
 // A window (array of cellStr) is LIVE for the winner on `ms` if it holds no opponent disc; the
@@ -464,12 +472,15 @@ export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, {
   const parent = new Map();                          // child -> { ms, mover, col, cell, score }
   let frontier = [blunderRoot];
   const seen = new Set([blunderRoot]);
+  let errored = false; // a non-terminal solver throw -> a real subtree was skipped, so NOT exhaustive (M3)
   const lineTo = (ms) => { const out = []; let c = ms; while (parent.has(c)) { const e = parent.get(c); out.unshift({ ply: c.length, mover: e.mover, col: e.col, cell: e.cell, score: e.score }); c = e.ms; } return out; };
 
   for (let depth = 0; depth < depthCap; depth++) {
     const next = [];
     for (const ms of frontier) {
-      let scores; try { scores = await solver.query(ms); } catch { continue; } // terminal/won
+      let scores;
+      try { scores = await solver.query(ms); }
+      catch { if (!isTerminalPosition(ms)) errored = true; continue; } // genuine terminal vs IPC error
       const mover = (ms.length % 2 === 0) ? 1 : 2;
       const legal = []; let best = -Infinity;
       for (let c = 0; c < COLS; c++) { if (scores[c] === INVALID_MOVE) continue; legal.push(c); if (scores[c] > best) best = scores[c]; }
@@ -487,7 +498,7 @@ export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, {
         if (!seen.has(child)) { seen.add(child); parent.set(child, { ms, mover, col: c, cell, score: scores[c] }); next.push(child); }
       }
     }
-    if (!next.length) return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: true };
+    if (!next.length) return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: !errored };
     frontier = next;
   }
   return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: false };
@@ -635,13 +646,13 @@ export async function computeReason(movestring, playedCol, { solver }) {
     if (!gate.found) {
       out.notABlunder = true;
       out.gate = {
-        ran: true, exhaustive, verdict: 'NotABlunder', witness: null,
+        ran: true, exhaustive: exhaustive && !gate.errored, verdict: 'NotABlunder', witness: null,
         nodesVisited: gate.nodesVisited,
       };
       return out;
     }
     out.gate = {
-      ran: true, exhaustive, verdict: 'Blunder',
+      ran: true, exhaustive: exhaustive && !gate.errored, verdict: 'Blunder',
       witness: { node: gate.node, devCols: gate.devCols, devCol: gate.devCol, devVal: gate.devVal, oppPlies: gate.oppPlies },
       nodesVisited: gate.nodesVisited,
     };

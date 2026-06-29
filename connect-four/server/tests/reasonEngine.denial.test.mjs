@@ -2,7 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason, denyOpponentPunishment } from '../scripts/reason_audit/reasonEngine.mjs';
+import { computeReason, denyOpponentPunishment, swindleGate } from '../scripts/reason_audit/reasonEngine.mjs';
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -37,4 +37,24 @@ test('occupation: 214444115623 played 4 -> opponent takes c3r3, killing the row-
   assert.equal(d.cell, 'c3r3');
   assert.ok(d.window.includes('c3r3') && d.window.includes('c4r3'), 'killed the row-3 fork window');
   assert.ok(d.line.length >= 1 && d.finalMovestring.startsWith('2144441156234'));
+});
+
+// M3 (final-review follow-up): a solver throw is only "terminal" when the position genuinely is
+// (won / full). A throw on a NON-terminal node is a real error and must NOT be reported as a
+// full-tree proof (exhaustive). Injected throwing solver — no real solver needed (I2 honesty).
+const throwingSolver = { query: async () => { throw new Error('simulated solver IPC error'); } };
+
+test('M3: denyOpponentPunishment no_occupation is NOT exhaustive when a non-terminal node errors', async () => {
+  // blunderRoot 2144441156234 is a non-terminal mid-game position; the solver throw is an error, not terminal.
+  const d = await denyOpponentPunishment(throwingSolver, '2144441156234',
+    [['c3r3', 'c4r3', 'c5r3', 'c6r3']], { opponent: 2, depthCap: DEPTH });
+  assert.equal(d.verdict, 'no_occupation');
+  assert.equal(d.exhaustive, false); // must downgrade from the spurious exhaustive:true the old catch gave
+});
+
+test('M3: swindleGate flags errored when a non-terminal node errors', async () => {
+  // 3333325662555225 is a non-terminal ltfl board; the throw is a real error, not a terminal rejection.
+  const g = await swindleGate(throwingSolver, '3333325662555225', { exhaustive: true });
+  assert.equal(g.found, false);
+  assert.equal(g.errored, true);
 });
