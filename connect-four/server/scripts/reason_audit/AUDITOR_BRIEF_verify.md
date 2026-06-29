@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # Auditor Brief — VERIFY pass (freeze the golden `reason` for one case)
 
 You are an **auditor** in the **pre-implementation verification** of the *unified* `reason` algorithm

@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # eval-24 — VERIFY — verdict: SOUND — grain: `zugzwang_class`
 
 Maps cleanly onto the **eval-2 zugzwang_class template** (deep win→draw FLIP, diffuse, no canonical

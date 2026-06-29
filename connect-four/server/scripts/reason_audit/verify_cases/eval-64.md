@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # eval-64 — VERIFY verdict: SOUND (grain `not_a_blunder`)
 
 **Case:** movestring `3333545554434344605506060060` (28 discs), played col 2 (display 3), best col 1 (display 2), pattern_category `z_threat`, severity 0, blunder_severity null. BOTH-LOSE same-floor (best −4, played −5).

@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # eval-15 — VERIFY pass — verdict: **SOUND** (grain `line`, winner opponent)
 
 **The iteration-2 `MISSING_FIELD` is RESOLVED by the iteration-3 dual-PV §4 contract.** The prior audit

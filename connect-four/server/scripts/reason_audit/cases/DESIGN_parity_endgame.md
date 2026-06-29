@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # DESIGN — parity/zugzwang classifier return shape (endgame, threats already on board)
 
 Residue B design investigation. Cases: eval-5 (z_threat), eval-49, eval-58 (z_threat flips);

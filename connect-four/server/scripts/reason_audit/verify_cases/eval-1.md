@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # eval-1 — VERIFY pass — verdict: SOUND (grain `zugzwang_class`)
 
 **One-line:** Draw→loss flip on a 2-disc opening. The router correctly REFUSES to name a four

@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # Blunder Reason Field Epic
 
 **Status:** ready for spec (created 2026-06-28; revised 2026-06-28 after a board/solver critique —

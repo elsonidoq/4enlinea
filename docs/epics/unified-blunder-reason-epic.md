@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # Unified Blunder-Reason Field Epic (the dual-PV reason)
 
 **Status:** ready for spec (created 2026-06-28; **verified + revised 2026-06-28** against the golden-fixture

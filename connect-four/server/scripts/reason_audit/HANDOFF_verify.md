@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # VERIFY pass — golden-fixture handoff log
 
 Pre-implementation verification of the *unified* `reason` algorithm (`docs/epics/unified-blunder-reason-epic.md`).

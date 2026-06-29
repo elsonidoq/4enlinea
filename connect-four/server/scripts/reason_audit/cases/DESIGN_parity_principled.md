@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # DESIGN — can a PRINCIPLED Allis-style PARITY argument (rule of parity / claimeven control), computed from board features WITHOUT a deep forward search, soundly explain the deep zugzwang FLIPs?
 
 Decisive question: the user wants the deep board-fill zugzwang cases (no winning four on the board when

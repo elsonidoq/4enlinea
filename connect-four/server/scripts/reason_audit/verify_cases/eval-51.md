@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # VERIFY — eval-51 (figure_7 / draw→loss FLIP — DECISIVENESS GATE stress: winningLines=1 fork)
 
 ## verdict: SOUND

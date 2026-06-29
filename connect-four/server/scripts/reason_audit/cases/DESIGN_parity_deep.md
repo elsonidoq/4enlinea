@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED / ABANDONED 2026-06-28** — the reason-field design described or assumed here branched off and is no longer the plan. Restarting from `docs/architecture/my_pseudocode.md`. Do NOT use this file as guidance; treat it as historical only.
+
 # DESIGN — deep-parity FLIP residue: can a FORWARD parity projection ground them?
 
 Question (Residue B): these FLIP cases have NO decisive threat on the current board — the deciding
