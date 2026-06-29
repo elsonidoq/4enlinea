@@ -441,6 +441,56 @@ export async function swindleGate(solver, node, { exhaustive }) {
   return { found: false, nodesVisited };
 }
 
+// A window (array of cellStr) is LIVE for the winner on `ms` if it holds no opponent disc; the
+// opponent's move into `cell` kills it. Returns the killed window or null.
+function killedWindow(ms, cell, forkWindows, opponent) {
+  const { grid } = buildBoard(ms);                 // board BEFORE the opponent move
+  const p = parseCell(cell); if (!p) return null;
+  for (const w of forkWindows) {
+    if (!w.includes(cell)) continue;
+    const live = w.every((s) => { const q = parseCell(s); return grid[q.r][q.c] !== opponent; });
+    if (live) return w;                             // live before -> dead after this move
+  }
+  return null;
+}
+
+// Shortest optimal line where the opponent occupies a fork-window cell (window LIVE->DEAD).
+// BFS strictly by ply (never prunes a depth level), both sides branch ALL score-ties, dedup. I0/I2/I6.
+export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, { opponent, depthCap }) {
+  const windows = forkWindows || [];
+  const patternCells = new Set(windows.flat());
+  const parent = new Map();                          // child -> { ms, mover, col, cell, score }
+  let frontier = [blunderRoot];
+  const seen = new Set([blunderRoot]);
+  const lineTo = (ms) => { const out = []; let c = ms; while (parent.has(c)) { const e = parent.get(c); out.unshift({ ply: c.length, mover: e.mover, col: e.col, cell: e.cell, score: e.score }); c = e.ms; } return out; };
+
+  for (let depth = 0; depth < depthCap; depth++) {
+    const next = [];
+    for (const ms of frontier) {
+      let scores; try { scores = await solver.query(ms); } catch { continue; } // terminal/won
+      const mover = (ms.length % 2 === 0) ? 1 : 2;
+      const legal = []; let best = -Infinity;
+      for (let c = 0; c < COLS; c++) { if (scores[c] === INVALID_MOVE) continue; legal.push(c); if (scores[c] > best) best = scores[c]; }
+      if (!legal.length) continue;                    // full board (draw terminal)
+      for (const c of legal) {
+        if (scores[c] !== best) continue;             // optimal (score-tying) moves only
+        const { heights } = buildBoard(ms);
+        const cell = cellStr(heights[c], c);
+        const child = ms + String(c);
+        if (mover === opponent && patternCells.has(cell)) {
+          const w = killedWindow(ms, cell, windows, opponent);
+          if (w) { parent.set(child, { ms, mover, col: c, cell, score: scores[c] });
+                   return { verdict: 'occupation', line: lineTo(child), finalMovestring: child, cell, window: w }; }
+        }
+        if (!seen.has(child)) { seen.add(child); parent.set(child, { ms, mover, col: c, cell, score: scores[c] }); next.push(child); }
+      }
+    }
+    if (!next.length) return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: true };
+    frontier = next;
+  }
+  return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: false };
+}
+
 /**
  * Compute the structured blunder-reason evidence vector.
  * @param {string} movestring  pre-move board (0-indexed columns)
