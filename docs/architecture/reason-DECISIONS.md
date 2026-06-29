@@ -113,3 +113,44 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   `max(scores)>0` the selector grabs `losing_either_way` boards (a different case).
 - **Status:** LOCKED.
 - **Source:** evidence doc §9.
+
+### D13 — Tactic naming: classifyPattern PROPOSES, the solver DISPOSES (two gates)
+- **Decision:** Each half may carry a `tacticTag` (+ `tacticCells`, `tacticFromDiff`) from
+  `classifyPattern`, but only through two solver gates: **Gate 1 register-class consistency** (a
+  tactical tag — immediate_threat/double_threat/figure_7/… — may name a half only in
+  `immediate`/`forced_sequence` registers; a structural tag — z_threat/claimeven/major_threat_parity/…
+  — only in `parity`; contextual tags are last-resort any register) and **Gate 2 realized-locus
+  alignment** (the tag's cells must intersect the solver-realized window ∪ PV-line ∪ parity group).
+  The best-vs-played diff is a tiebreak, not a gate. No admissible tag → honest `tacticTag: null`.
+- **Rationale:** Implements I2 (never fabricate). `classifyPattern` reports every tactic *present* on
+  the board, agnostic to which one the solver actually rides; on `214444115623` (parity win) it
+  proposes `immediate_threat{c3r4}` — a real but BLOCKED tempo decoy that is not how the win happens.
+  Register-class + locus gating rejects it; the win is the parity row-2 group instead. Reuses the
+  tested production detector rather than reinventing one (I8).
+- **Status:** LOCKED. Implemented in `reasonEngine.mjs` (`nameHalf`/`registerClassOk`/`realizedLocus`).
+- **Source:** owner directive + case audit (2026-06-29); `reason-engine-pseudocode.md`.
+
+### D14 — The tie is whole-algorithm; half (b) is verified against half (a) via `anchorCells`
+- **Decision:** `opponentPunishment` (half b) is computed *against* `lostResource` (half a) and emits a
+  verified `tie`: `tied` (the punishment's entry/completing cell ∈ `lostResource.anchorCells`),
+  `independent` (no shared cell — e.g. `draw_to_lose` zugzwang, by design per D8), or `temporal`
+  (`lose_to_faster_lose`: played loss faster than the swindle grind). Every lost resource carries
+  `anchorCells` = the MOVE-LEVEL squares that define it (for win cases, the winning-move cells —
+  scores>0 — NOT the eventual completing cell).
+- **Rationale:** Each case's reason is a *relationship* between what was preserved and how it was lost
+  (the `win_to_draw` lesson is literally "your winning square was the opponent's only escape").
+  Computing the halves independently and hoping they align fabricates. The tie is verified against the
+  resource object (`anchorCells`), not a re-derived proxy (an earlier `winningCols` shortcut was
+  rejected for this reason). Reporting `independent`/`temporal` honestly is information, not a gap.
+- **Status:** LOCKED. Implemented as `tieTo(...)` + `entryCell` in `reasonEngine.mjs`.
+- **Source:** owner directive + case audit (2026-06-29); `reason-engine-pseudocode.md`.
+
+### D15 — `win_to_lose` tie uses the uniform spatial test; "enabled-by-vacating" deferred
+- **Decision:** The `win_to_lose` tie uses the same spatial `anchorCells` intersection as the other
+  cases. The stricter causal test — "the opponent wins on the very square you vacated by not playing
+  the win" — is an accepted known-gap, deferred.
+- **Rationale:** The uniform mechanism (D14) is sound and covers the common case; the stricter test
+  needs more design and a labeled set to validate. Deferring keeps one mechanism (I9/Occam) until the
+  loose version is shown to mislabel.
+- **Status:** ACCEPTED known-gap — revisit if the loose tie produces a misleading `tied`/`independent`.
+- **Source:** case audit (2026-06-29); `reason-engine-pseudocode.md` honest-limits.

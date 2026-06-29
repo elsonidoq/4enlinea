@@ -1,0 +1,246 @@
+# Blunder-reason engine — integrated pseudocode
+
+Successor to [`my_pseudocode.md`](./my_pseudocode.md) (the authoritative 5-case sign taxonomy) and
+companion to [`blunder-reason-evidence.md`](./blunder-reason-evidence.md) (the two-half engine,
+registers, gate, validated boards). Folds in the enrichments developed afterward:
+
+1. **Parity attribution** — for parity-register wins (line too long to show), describe the
+   solver-realized *controlling group* + zugzwang *lever* instead of a bare distant cell.
+2. **Solver-gated tactic naming** — `classifyPattern` (the tested production detector) PROPOSES a
+   tactic label; the solver DISPOSES via two gates (register-class consistency + realized-resource
+   alignment). Honest `null` rather than a misleading name.
+3. **The tie principle (whole-algorithm)** — `opponentPunishment` (half b) is never independent: it
+   is the causal counterpart of `lostResource` (half a). Half (b) is computed *against* half (a) and
+   emits a **verified** relationship. The tie may legitimately be `independent` (and saying so is
+   information, not a failure).
+
+Abstraction level matches `my_pseudocode.md`: a skeleton, not an implementation. Two truth sources —
+the SOLVER proves the case, the realized win, and every tie (authoritative); `classifyPattern` only
+names tactics (proposer). The solver always disposes.
+
+```python
+# ════════════════════════════════════════════════════════════════════════════
+#  reason(movestring, playedCol)
+#    -> { case, lostResource, opponentPunishment, replyHistogram, gate }
+# ════════════════════════════════════════════════════════════════════════════
+
+def reason(movestring, playedCol):
+    scores       = solver.query(movestring)        # side-to-move (player) perspective
+    bestCol      = argmax(scores)
+    bestScore    = scores[bestCol]
+    playedScore  = scores[playedCol]
+    player       = side_to_move(movestring); opponent = other(player)
+    bestRoot     = movestring + bestCol
+    playedRoot   = movestring + playedCol
+
+    # ── 1. classify by the (bestScore, playedScore) sign pair ──
+    if bestScore > 0 and playedScore > 0:   raise NotABlunder()      # win_to_slower_win (out of scope)
+    if   bestScore > 0 and playedScore == 0: case = 'win_to_draw'
+    elif bestScore > 0 and playedScore <  0: case = 'win_to_lose'
+    elif bestScore == 0 and playedScore < 0: case = 'draw_to_lose'
+    elif bestScore <  0 and playedScore < 0: case = 'lose_to_faster_lose'
+    else:                                     raise NotABlunder()    # both draw / impossible
+
+    gate = None
+
+    # ── 2. half (a): the lost resource — WHAT THE BEST MOVE PRESERVED ──
+    #   Every resource carries `anchorCells`: the MOVE-LEVEL squares that define it (NOT necessarily
+    #   the eventual completing cell). The tie in step 3 is verified against these.
+    if case in ('win_to_draw', 'win_to_lose'):
+        lostResource = win_half(bestRoot, winner=player, diffAgainst=playedRoot)
+        # anchorCells = the winning MOVES the player had = { landing_cell(movestring,c) : scores[c] > 0 }
+        lostResource.anchorCells = winning_move_cells(movestring, scores)
+
+    elif case == 'draw_to_lose':
+        lostResource = defensive_half(movestring, bestRoot, player, diffAgainst=playedRoot)
+        #   tactical -> anchorCells = { the forced-block cell the draw move occupied }
+        #   zugzwang -> anchorCells = { parity lever cell }  (best-effort; Allis naming DEFERRED)
+
+    elif case == 'lose_to_faster_lose':
+        gate = swindle_gate(bestRoot)               # exhaustive if <=10 empties, else bounded
+        if not gate.found: raise NotABlunder()      # lost anyway, no reachable swindle -> not a blunder
+        lostResource = win_half(gate.node + gate.devCol, winner=player)   # conditional_swindle
+        lostResource.anchorCells = { landing_cell(gate.node, gate.devCol) }  # the practical-chance move
+
+    # ── half (b): the opponent punishment — computed AGAINST lostResource (the tie principle) ──
+    opponentPunishment = punish_half(case, movestring, playedRoot, opponent, against=lostResource)
+
+    # ── 3. counterplay signal ──
+    replyHistogram = { afterBest:   non_losing_reply_count(bestRoot),
+                       afterPlayed: non_losing_reply_count(playedRoot) }
+
+    return { case, lostResource, opponentPunishment, replyHistogram, gate }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  HALF (b): punish_half — ALWAYS computed against half (a), ALWAYS verifies the tie
+# ════════════════════════════════════════════════════════════════════════════
+
+def punish_half(case, movestring, playedRoot, opponent, against):     # against = lostResource
+    if case == 'win_to_draw':
+        # the played move only DRAWS: half (b) is the opponent's single saving reply.
+        oppScores = solver.query(playedRoot)
+        saving    = [c for c in legal(playedRoot) if oppScores[c] >= 0]
+        savingCol = best_of(saving)                                   # the one save (histogram == 1)
+        half = { kind:'neutralization', register:'immediate',
+                 entryCell: landing_cell(playedRoot, savingCol),       # where the opponent escapes
+                 savingCol, savingReplyCount: len(saving) }
+    else:
+        # the played move LOSES (or loses faster): half (b) is the opponent's winning line.
+        half = win_half(playedRoot, winner=opponent)                  # kind = winning_line
+        half.entryCell = half.line[0].cell if half.line else half.completingCell  # opp's capitalizing move
+
+    # ── THE TIE — verify the causal relationship to half (a); never assume it ──
+    half.tie = tie_to(case, against, half)
+    return half
+
+
+# tie_to: does the punishment exploit the very resource that was given up?  Returns the VERIFIED
+# relationship (which may be `independent`).  Spatial for most cases; temporal for lose_to_faster_lose.
+def tie_to(case, lost, punish):
+    if case == 'lose_to_faster_lose':
+        # both sides are lost; the tie is SPEED: the played loss is faster than the swindle grind.
+        return { kind:'temporal',
+                 tied: punish.pliesToEnd < lost.pliesToEnd,
+                 playedPlies: punish.pliesToEnd, swindlePlies: lost.pliesToEnd }
+    # spatial: the opponent's entry/completing square coincides with a square of the lost resource.
+    shared = lost.anchorCells ∩ { punish.entryCell, punish.completingCell }
+    return { kind: ('tied' if shared else 'independent'), sharedCells: list(shared) }
+    #   win_to_draw : shared != ∅  ->  "your winning square was their only escape."
+    #   win_to_lose : shared != ∅  ->  "they win on the very square you vacated."
+    #   draw_to_lose: tactical -> tied (hold cell == completing cell);
+    #                 zugzwang -> independent BY DESIGN (hold cell != completing cell) — honest, not a gap.
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  win_half — one bounded optimal walk, enriched three ways (used by both halves)
+# ════════════════════════════════════════════════════════════════════════════
+
+def win_half(root, winner, diffAgainst=None):
+    walk = walk_optimal(root)                       # both-optimal PV to terminal; O(plies) queries
+    fwd  = 43 - 2*abs(score_of(winner, root)) - len(root)
+    reg  = register(fwd)                            # immediate | forced_sequence | parity
+
+    half = { kind:'winning_line', register: reg,
+             completingCell: walk.completingCell, window: walk.window,
+             line: walk.line if shows_line(reg) else None,    # parity line suppressed (too long to teach)
+             finalMovestring: walk.finalMovestring, pliesToEnd: walk.pliesToEnd }
+
+    if reg == 'parity' and walk.terminal == 'win':            # enrichment A: parity attribution
+        half.parityAttribution = attribute_parity_win(root, walk.window, walk.completingCell, winner)
+
+    half.tactic = name_half(root, winner, reg,                # enrichment B: solver-gated tactic name
+                            anchor=realized_locus(walk, half), diffAgainst=diffAgainst)
+    return half
+
+
+def register(fwd):                                  # fwd = free proxy for "is there something short to show"
+    fwd <= 2  -> 'immediate'                         # state as fact: "col C completes your four at <cell>"
+    fwd <= 6  -> 'forced_sequence'                   # render the literal short line (most instructive)
+    else      -> 'parity'                            # do NOT render the line; describe the structure
+
+
+# parity attribution: project the SOLVER-realized window back onto the root; describe the group.
+#   KB: community-z-threat (height-relative count); allen-parity raw-row trap AVOIDED.  Solver-free.
+def attribute_parity_win(root, window, completingCell, winner):
+    if window has any LOSER disc:  return { nameable: False }      # multi-window board-fill (unnameable)
+    empties = [ {cell, zcount = row_1indexed - colHeight, parity: odd|even}  for empty in window ]
+    levers  = [ e.cell for e in empties if e.parity == 'odd' ]     # zugzwang levers (z-threats)
+    return { nameable: True, controllingGroup: window, leverCells: levers, completingCell,
+             forcedFirstRequired: (levers == []),                  # no lever -> needs forced-first layer
+             parityNamingDeferred: True }                          # canonical V1/Aftereven naming DEFERRED
+
+
+# defensive_half (draw_to_lose half a): the draw-preserving resource.  Sets anchorCells.
+def defensive_half(movestring, bestRoot, player, diffAgainst=None):
+    if best move occupies an opponent gravity-top win-in-one cell:        # TACTICAL
+        return { kind:'defensive_hold', register:'immediate', completingCell: holdCell,
+                 anchorCells: { holdCell }, ... ,
+                 tactic: name_half(bestRoot, player, 'immediate', anchor={holdCell}, diffAgainst) }
+    else:                                                                 # ZUGZWANG
+        lever = parity_lever_cell(movestring, player)   # best-effort; precise Allis naming DEFERRED
+        return { kind:'parity_group', register:'parity', completingCell: lever,
+                 anchorCells: ({lever} if lever else ∅), parityNamingDeferred: True, line: None }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  TACTIC NAMING — classifyPattern PROPOSES, the solver DISPOSES (two gates)
+#    Principle: a tag may name a half ONLY IF consistent with the solver-proven
+#    NATURE (register) and LOCUS (the realized win) of that half's outcome.
+# ════════════════════════════════════════════════════════════════════════════
+
+def name_half(root, perspective, register, anchor, diffAgainst=None):
+    present  = classifyPattern(root, perspective)            # Map<tag,{cells}> — ALL tactics on board
+    uniqueTo = present \ classifyPattern(diffAgainst, perspective)  if diffAgainst else present
+    #   the tagBlunder Phase-C diff: what BEST builds that PLAYED does not.
+
+    admissible = [ tag for tag in present
+                   if register_class_ok(tag, register)              # GATE 1: nature
+                   and cells_touch(present[tag].cells, anchor) ]    # GATE 2: locus (>=1 cell on the win)
+
+    if admissible == []:  return None                        # honest null — never fabricate a name
+    chosen = best_by(admissible, key=(is_in(uniqueTo), TAG_PRIORITY_rank))   # diff = tiebreak, NOT a gate
+    return { tag: chosen, cells: present[chosen].cells, fromDiff: chosen in uniqueTo }
+
+
+# GATE 1 — register-class consistency. INVARIANT: register is a function of win-distance, so a short
+#   tactic cannot win a long (parity) position and vice-versa.
+#     tactical   {immediate_threat, double_threat, forced_win, figure_7, j_shape, undercut, overcut}
+#                admissible iff register in {immediate, forced_sequence}
+#     structural {z_threat, odd_even_threat, claimeven, major_threat_parity, major_threat_nonparity}
+#                admissible iff register == 'parity'
+#     contextual {forced_block, forbidden_columns, minor_threat}  -> last-resort only (any register)
+
+# GATE 2 — realized-resource alignment. The tag must PARTICIPATE in the solver's actual win.
+#   anchor = realized_locus = window ∪ PV-line cells ∪ parity controllingGroup/levers
+#   Causal test: a figure_7/undercut LEVER sits on the PV even if not a completion cell -> survives;
+#   an incidental same-class tactic the solver never rides -> dropped.
+def realized_locus(walk, half):
+    return cells(walk.window) | cells(walk.line) | cells(half.parityAttribution.controllingGroup?)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  SHARED PRIMITIVES (unchanged from my_pseudocode.md / blunder-reason-evidence.md)
+# ════════════════════════════════════════════════════════════════════════════
+
+def walk_optimal(root):               # both sides argmax to terminal -> {completingCell, window, line, ...}
+    ...                               # under optimal play each side collapses to one line; no branching.
+
+def non_losing_reply_count(node):     # free counterplay signal (one already-computed score vector)
+    return count(c for c in legal(node) if oppScore[c] >= 0)
+
+def swindle_gate(node):               # the ONLY branching search; bounded, or exhaustive <=10 empties
+    DFS opponent nodes (DEPTH=6, BRANCH=3, player tied-best capped 2; dedup by movestring):
+        if min(oppScores) <= 0:  return BLUNDER witness   # player keeps a forced threat -> swindle exists
+    return NOT_A_BLUNDER              # SOUND for Blunder; EXACT NotABlunder only when exhaustive.
+```
+
+## The tie principle, stated once
+
+Half (b) takes half (a) and the solver, and emits `tie = { kind, ... }`:
+
+- `tied` — the punishment exploits a square of the lost resource (`win_to_draw` save == your winning
+  square; `win_to_lose` they win where you vacated; `draw_to_lose` tactical they win on your hold cell).
+- `independent` — no shared square (`draw_to_lose` zugzwang, by design — the hold cell is *not* the
+  opponent's completing cell). Reporting this is the honest output; the canonical "you handed it to
+  them" sentence must NOT be emitted here.
+- `temporal` — `lose_to_faster_lose`: the tie is speed (played loss faster than the swindle grind),
+  not a shared cell.
+
+This replaces the earlier `winningCols` shortcut: the relationship is verified against
+`lostResource.anchorCells` (the resource object), not a re-derived proxy, and it is applied in **every**
+case rather than only `win_to_draw`.
+
+## Honest limits (carried forward)
+
+- **Parity naming deferred** — `parityAttribution` emits the controlling group + lever cells but NOT
+  the canonical Allis odd/even / V1 / Aftereven name. `forcedFirstRequired: true` marks boards whose
+  win has no z-threat lever and therefore *needs* the deferred forced-first layer to explain.
+- **Tactic naming falls to `null`** when no `classifyPattern` tag passes both gates — correct, not a
+  gap; `parityAttribution` carries the explanation for parity wins.
+- **Tie may be `independent`/`temporal`** — not every case shares a cell; the engine reports the
+  relationship rather than forcing one.
+- **`contextual` class precedence** (`forced_block`/`forbidden_columns`/`minor_threat`) not yet pinned.
+- **Provisional thresholds** — `forced_sequence <= 6`, `parity > ~12`, gate `DEPTH=6 / BRANCH=3`,
+  `TAG_PRIORITY` order — all unvalidated against a labeled set.
+```

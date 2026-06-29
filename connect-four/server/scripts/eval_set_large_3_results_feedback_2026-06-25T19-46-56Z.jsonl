@@ -1,0 +1,7 @@
+{"id":"eval-4","human_note":"It does not explain why","flagged_at":"2026-06-25T21:20:13.776Z"}
+{"id":"eval-5","human_note":"Instead of \"odd even threat\" we should be talking about parity aligned threat. Also the definition of odd even threat in the knowledge base is related to the puzzle, the tactic is a parity aligned threat","flagged_at":"2026-06-25T21:46:08.859Z"}
+{"id":"eval-33","human_note":"the user played column 6, not 2","flagged_at":"2026-06-25T21:50:05.779Z"}
+{"id":"eval-10","human_note":"the zone tag is not rendering correctly","flagged_at":"2026-06-25T21:52:12.221Z"}
+{"id":"eval-19","human_note":"the opponent j-shape should have been highlighted, also the j-shape term","flagged_at":"2026-06-25T21:54:53.500Z"}
+{"id":"eval-25","human_note":"the user played in column 1","flagged_at":"2026-06-25T21:55:29.842Z"}
+{"id":"eval-23","human_note":"lookahead did not fire, why?","flagged_at":"2026-06-25T21:57:48.232Z"}

@@ -1,0 +1,1311 @@
+[
+  {
+    "id": "eval-0",
+    "board_state": "33",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P33",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-1",
+    "board_state": "332",
+    "move_played": 0,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 6,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P17",
+      "P32",
+      "P34"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-2",
+    "board_state": "332046",
+    "move_played": 2,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 0,
+        "col": 1
+      },
+      {
+        "row": 0,
+        "col": 5
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P11",
+      "P32",
+      "P34"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-3",
+    "board_state": "3333",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P33",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-4",
+    "board_state": "33334222325653022011004665565650",
+    "move_played": 1,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 4,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P12",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-5",
+    "board_state": "",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-6",
+    "board_state": "416453333022",
+    "move_played": 1,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P23",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-7",
+    "board_state": "41645333302212",
+    "move_played": 6,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 2,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P17",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-8",
+    "board_state": "41645333302212616",
+    "move_played": 6,
+    "correct_move": 4,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 0
+      },
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 6
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P02",
+      "P08",
+      "P11",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-9",
+    "board_state": "333335555025",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P30",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-10",
+    "board_state": "33",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-11",
+    "board_state": "3342324400",
+    "move_played": 1,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P12",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-12",
+    "board_state": "",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-13",
+    "board_state": "222333336110550300112606640455",
+    "move_played": 6,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 4,
+        "col": 4
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P17",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-14",
+    "board_state": "3333311115555",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-15",
+    "board_state": "333331111555545536416610",
+    "move_played": 6,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-16",
+    "board_state": "",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-17",
+    "board_state": "42",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-18",
+    "board_state": "4255",
+    "move_played": 1,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P06",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-19",
+    "board_state": "42551",
+    "move_played": 1,
+    "correct_move": 4,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-20",
+    "board_state": "42551136311",
+    "move_played": 3,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 2
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-21",
+    "board_state": "4255113631135434456",
+    "move_played": 5,
+    "correct_move": 3,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 2
+      },
+      {
+        "row": 4,
+        "col": 3
+      }
+    ],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "forced_block",
+    "predicates": [
+      "P02",
+      "P03",
+      "P06",
+      "P10",
+      "P13",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-22",
+    "board_state": "33336404360114",
+    "move_played": 2,
+    "correct_move": 4,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 5
+      },
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 3,
+    "blunder_severity": null,
+    "pattern_category": "forced_block",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P13",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-23",
+    "board_state": "25315313133211052",
+    "move_played": 1,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P22",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-24",
+    "board_state": "311253313656556",
+    "move_played": 2,
+    "correct_move": 6,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "undercut",
+    "predicates": [
+      "P02",
+      "P03",
+      "P07",
+      "P10",
+      "P18",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-25",
+    "board_state": "35523033322",
+    "move_played": 1,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "odd_even_threat",
+    "predicates": [
+      "P02",
+      "P03",
+      "P07",
+      "P10",
+      "P27",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-26",
+    "board_state": "355230333221241",
+    "move_played": 0,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P02",
+      "P03",
+      "P07",
+      "P10",
+      "P15",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-27",
+    "board_state": "333330242244",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 1
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P23",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-28",
+    "board_state": "333332526444464136",
+    "move_played": 4,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P15",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-29",
+    "board_state": "333331465225653555001112",
+    "move_played": 0,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 4
+      },
+      {
+        "row": 4,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "overcut",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P19",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-30",
+    "board_state": "21454426406122166515415502",
+    "move_played": 2,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 3
+      },
+      {
+        "row": 2,
+        "col": 3
+      },
+      {
+        "row": 3,
+        "col": 3
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "undercut",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P18",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-31",
+    "board_state": "214544264061221665154155022401",
+    "move_played": 6,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 3
+      },
+      {
+        "row": 2,
+        "col": 3
+      },
+      {
+        "row": 3,
+        "col": 3
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P16",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-32",
+    "board_state": "33333111161636660265524554022",
+    "move_played": 0,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 5,
+        "col": 0
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "figure_7",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P21",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-33",
+    "board_state": "3320",
+    "move_played": 3,
+    "correct_move": 4,
+    "threat_cells": [],
+    "severity": 4,
+    "blunder_severity": null,
+    "pattern_category": "double_threat",
+    "predicates": [
+      "P01",
+      "P06",
+      "P10",
+      "P16",
+      "P34"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-34",
+    "board_state": "34024452230340303002",
+    "move_played": 3,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 1,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "j_shape",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P22",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-35",
+    "board_state": "33333621252266364",
+    "move_played": 1,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "figure_7",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P21",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-36",
+    "board_state": "232233233200630211440",
+    "move_played": 1,
+    "correct_move": 4,
+    "threat_cells": [
+      {
+        "row": 4,
+        "col": 4
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P14",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-37",
+    "board_state": "33335264442133641664460622205552011050",
+    "move_played": 5,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P07",
+      "P10",
+      "P25",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-38",
+    "board_state": "443556652433",
+    "move_played": 6,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 0,
+        "col": 1
+      },
+      {
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 2,
+        "col": 6
+      },
+      {
+        "row": 3,
+        "col": 2
+      }
+    ],
+    "severity": 8,
+    "blunder_severity": null,
+    "pattern_category": "immediate_threat",
+    "predicates": [
+      "P01",
+      "P04",
+      "P08",
+      "P11",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-39",
+    "board_state": "4435566524336",
+    "move_played": 0,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 0,
+        "col": 1
+      },
+      {
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 2
+      }
+    ],
+    "severity": 7,
+    "blunder_severity": null,
+    "pattern_category": "forced_block",
+    "predicates": [
+      "P02",
+      "P04",
+      "P08",
+      "P10",
+      "P13",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-40",
+    "board_state": "2151511455444514020346363661",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 2
+      },
+      {
+        "row": 5,
+        "col": 3
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "forced_win",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P14",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-41",
+    "board_state": "33333024444222260006466160026435551155",
+    "move_played": 1,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 4,
+        "col": 1
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P24",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-42",
+    "board_state": "333330422356445404455650220012506626",
+    "move_played": 1,
+    "correct_move": 6,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 1
+      },
+      {
+        "row": 3,
+        "col": 1
+      },
+      {
+        "row": 5,
+        "col": 1
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P05",
+      "P10",
+      "P24",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-43",
+    "board_state": "315456435245",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 6
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "figure_7",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P20",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-44",
+    "board_state": "34101130331000221442345602243",
+    "move_played": 6,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 5
+      },
+      {
+        "row": 5,
+        "col": 5
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "overcut",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P19",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-45",
+    "board_state": "4443333310103",
+    "move_played": 4,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "odd_even_threat",
+    "predicates": [
+      "P02",
+      "P03",
+      "P08",
+      "P10",
+      "P27",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-46",
+    "board_state": "44433333101034",
+    "move_played": 5,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "odd_even_threat",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P26",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-47",
+    "board_state": "44433234044063106266",
+    "move_played": 1,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 5
+      },
+      {
+        "row": 3,
+        "col": 5
+      }
+    ],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "figure_7",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P20",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-48",
+    "board_state": "341016431133",
+    "move_played": 2,
+    "correct_move": 0,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 2
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "odd_even_threat",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P26",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-49",
+    "board_state": "3256522236335533",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 4
+      },
+      {
+        "row": 3,
+        "col": 4
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P29",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-50",
+    "board_state": "31133031144",
+    "move_played": 0,
+    "correct_move": 4,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P02",
+      "P03",
+      "P07",
+      "P10",
+      "P28",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-51",
+    "board_state": "311330311440",
+    "move_played": 6,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P29",
+      "P35"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-52",
+    "board_state": "3264433443611131022220362614146",
+    "move_played": 0,
+    "correct_move": 5,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 5
+      },
+      {
+        "row": 3,
+        "col": 0
+      },
+      {
+        "row": 3,
+        "col": 5
+      },
+      {
+        "row": 4,
+        "col": 0
+      },
+      {
+        "row": 5,
+        "col": 0
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "claimeven",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P28",
+      "P36"
+    ],
+    "is_sparse": false
+  },
+  {
+    "id": "eval-53",
+    "board_state": "2422114025",
+    "move_played": 5,
+    "correct_move": 4,
+    "threat_cells": [
+      {
+        "row": 3,
+        "col": 3
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "z_threat",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P25",
+      "P35"
+    ],
+    "is_sparse": false
+  }
+]
