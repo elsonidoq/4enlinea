@@ -37,10 +37,11 @@ function assertCellOnSnapshot(half, label) {
     return;
   }
   if (half.completingCell == null) {
-    // tolerated for the deferred parity_group half, and for a conditional_swindle whose deviation
-    // saves a DRAW (no single winning cell) rather than a win.
-    assert.ok(['parity_group', 'conditional_swindle'].includes(half.kind),
-      `${label}: null completingCell only allowed for parity_group / conditional_swindle, got ${half.kind}`);
+    // tolerated for the deferred parity_group half, for a conditional_swindle whose deviation
+    // saves a DRAW (no single winning cell) rather than a win, and for a denial where the
+    // opponent never occupies a fork-window cell within the depth cap (verdict=no_occupation).
+    assert.ok(['parity_group', 'conditional_swindle', 'denial'].includes(half.kind),
+      `${label}: null completingCell only allowed for parity_group / conditional_swindle / denial, got ${half.kind}`);
     return;
   }
   const cell = parseCell(half.completingCell);
@@ -85,7 +86,12 @@ for (const row of rows) {
     };
     if (row.expectedCase === 'win_to_draw') {
       regFromFwd(r.lostResource, r.bestScore);
-      assert.equal(r.opponentPunishment.kind, 'neutralization');
+      // D14: fork win_to_draw uses denial search; genuine-parity win_to_draw keeps neutralization.
+      if (r.lostResource.terminal === 'fork') {
+        assert.equal(r.opponentPunishment.kind, 'denial');
+      } else {
+        assert.equal(r.opponentPunishment.kind, 'neutralization');
+      }
     } else if (row.expectedCase === 'win_to_lose') {
       regFromFwd(r.lostResource, r.bestScore);
       regFromFwd(r.opponentPunishment, r.playedScore);

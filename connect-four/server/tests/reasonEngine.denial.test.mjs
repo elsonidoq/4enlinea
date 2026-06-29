@@ -21,6 +21,14 @@ test('no_occupation: 3333302111456114554542 played 2 draws without the opponent 
   assert.equal(d.exhaustive, false);
 });
 
+test('win_to_draw denial: 214444115623 opponentPunishment is occupation tied at c3r3', async () => {
+  const r = await computeReason('214444115623', 4, { solver });
+  assert.equal(r.opponentPunishment.kind, 'denial');
+  assert.equal(r.opponentPunishment.verdict, 'occupation');
+  assert.equal(r.opponentPunishment.tie.kind, 'tied');
+  assert.deepEqual(r.opponentPunishment.tie.sharedCells, ['c3r3']);
+});
+
 test('occupation: 214444115623 played 4 -> opponent takes c3r3, killing the row-3 window', async () => {
   const r = await computeReason('214444115623', 4, { solver });
   const d = await denyOpponentPunishment(solver, '214444115623' + '4', r.lostResource.forkWindows,

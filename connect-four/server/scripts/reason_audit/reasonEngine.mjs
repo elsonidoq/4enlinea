@@ -40,6 +40,8 @@ export const REASON_CONFIG = {
   immediateMax: 2,
   forcedSequenceMax: 6,
   parityMin: 12,
+  // win_to_draw denial search depth cap (D14).
+  denialDepth: 8,
   // lose_to_faster_lose gate budget (provisional).
   gateDepth: 6,        // opponent plies
   gateBranch: 3,       // winning opponent moves explored per node (least-winning first)
@@ -544,24 +546,42 @@ export async function computeReason(movestring, playedCol, { solver }) {
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
-    // half (b): the opponent's SINGLE saving reply (neutralization). Find the non-losing reply.
-    const oppScores = await solver.query(playedRoot);
-    const oppLegal = legalCols(oppScores);
-    const saving = oppLegal.filter((c) => oppScores[c] >= 0).sort((a, b) => oppScores[a] - oppScores[b]);
-    const saveCol = saving.length ? saving[saving.length - 1] : null; // the draw (score 0); prefer least-bad
-    let saveCell = null, saveWindow = null;
-    if (saveCol != null) {
-      const { heights } = buildBoard(playedRoot);
-      saveCell = cellStr(heights[saveCol], saveCol);
+    // half (b): how the played move allows the opponent to deny the fork resource (D14) —
+    // or, when lostResource is not a fork, the legacy neutralization saving-reply.
+    if (out.lostResource.terminal === 'fork') {
+      // Fork win_to_draw: search for opponent occupation of a fork-window cell (D14).
+      const denial = await denyOpponentPunishment(solver, playedRoot, out.lostResource.forkWindows || [],
+        { opponent, depthCap: REASON_CONFIG.denialDepth });
+      out.opponentPunishment = {
+        kind: 'denial', verdict: denial.verdict, register: 'forced_sequence',
+        line: denial.line, finalMovestring: denial.finalMovestring,
+        completingCell: denial.cell ?? null, window: denial.window ?? null,
+        cell: denial.cell ?? null, exhaustive: denial.exhaustive,
+        entryCell: denial.cell ?? null,
+      };
+      out.opponentPunishment.tie = denial.verdict === 'occupation'
+        ? { kind: 'tied', sharedCells: [denial.cell] }
+        : { kind: 'independent', sharedCells: [] };
+    } else {
+      // Genuine-parity win_to_draw (no fork): keep the legacy neutralization block.
+      const oppScores = await solver.query(playedRoot);
+      const oppLegal = legalCols(oppScores);
+      const saving = oppLegal.filter((c) => oppScores[c] >= 0).sort((a, b) => oppScores[a] - oppScores[b]);
+      const saveCol = saving.length ? saving[saving.length - 1] : null; // the draw (score 0); prefer least-bad
+      let saveCell = null, saveWindow = null;
+      if (saveCol != null) {
+        const { heights } = buildBoard(playedRoot);
+        saveCell = cellStr(heights[saveCol], saveCol);
+      }
+      out.opponentPunishment = {
+        kind: 'neutralization', register: 'immediate',
+        completingCell: saveCell, window: saveWindow, pliesToEnd: null, line: null,
+        finalMovestring: saveCol != null ? playedRoot + String(saveCol) : null,
+        entryCell: saveCell,
+        savingCol: saveCol, savingReplyCount: saving.length,
+      };
+      Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
     }
-    out.opponentPunishment = {
-      kind: 'neutralization', register: 'immediate',
-      completingCell: saveCell, window: saveWindow, pliesToEnd: null, line: null,
-      finalMovestring: saveCol != null ? playedRoot + String(saveCol) : null,
-      entryCell: saveCell,
-      savingCol: saveCol, savingReplyCount: saving.length,
-    };
-    Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
   } else if (bestScore > 0 && playedScore < 0) {
     // ── win_to_lose ──
     out.case = CASES.WIN_TO_LOSE;
@@ -649,7 +669,8 @@ export async function computeReason(movestring, playedCol, { solver }) {
     return out;
   }
 
-  if (out.lostResource && out.opponentPunishment) {
+  // The denial path (fork win_to_draw) builds its own constructive tie — do not overwrite it.
+  if (out.lostResource && out.opponentPunishment && out.opponentPunishment.kind !== 'denial') {
     out.opponentPunishment.tie = tieTo(out.case, out.lostResource, out.opponentPunishment);
   }
 
