@@ -14,9 +14,11 @@ test('no_occupation: 3333302111456114554542 played 2 draws without the opponent 
   const ms = '3333302111456114554542', col = 2;  // sourced 2026-06-29, exhaustive:false (depthCap=8 not exhausted)
   const r = await computeReason(ms, col, { solver });
   const d = await denyOpponentPunishment(solver, ms + String(col), r.lostResource.forkWindows,
-    { opponent: r.opponent, depthCap: 8 });
+    { opponent: r.opponent, depthCap: DEPTH });
   assert.equal(d.verdict, 'no_occupation');
-  assert.equal(typeof d.exhaustive, 'boolean');
+  // exhaustive:false: depthCap=8 reached without finding occupation in the optimal drawn lines —
+  // exercises the fallback code-path, NOT a full-tree proof of no_occupation (spec §7, I7 asymmetry).
+  assert.equal(d.exhaustive, false);
 });
 
 test('occupation: 214444115623 played 4 -> opponent takes c3r3, killing the row-3 window', async () => {
