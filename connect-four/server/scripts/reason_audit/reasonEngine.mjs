@@ -120,8 +120,8 @@ async function nameHalf(solver, rootMs, perspective, { diffAgainst, register, an
     const admissible = [...pRoot.keys()].filter(ok);
     if (!admissible.length) return { tacticTag: null, tacticCells: [], tacticFromDiff: false };
     const inDiff = (t) => (exclude ? !exclude.has(t) : false);
-    admissible.sort((a, b) => (inDiff(b) - inDiff(a))
-      || (TAG_PRIORITY.indexOf(a) - TAG_PRIORITY.indexOf(b)));   // diff = tiebreak, NOT a gate
+    const rank = (t) => { const i = TAG_PRIORITY.indexOf(t); return i === -1 ? Infinity : i; };
+    admissible.sort((a, b) => (inDiff(b) - inDiff(a)) || (rank(a) - rank(b)));   // diff = tiebreak, NOT a gate
     const tag = admissible[0];
     return { tacticTag: tag, tacticCells: pRoot.get(tag).cells || [], tacticFromDiff: inDiff(tag) };
   } catch {
@@ -442,8 +442,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
       };
     }
     const anchorForLost = hit ? [holdCell] : (out.lostResource.completingCell ? [out.lostResource.completingCell] : []);
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player,
-      { diffAgainst: playedRoot, register: out.lostResource.register, anchor: realizedLocus(out.lostResource) }));
+    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = anchorForLost;
     const bWalk = await walkOptimal(solver, playedRoot);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
