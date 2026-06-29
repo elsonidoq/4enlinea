@@ -482,7 +482,7 @@ export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, {
         if (mover === opponent && patternCells.has(cell)) {
           const w = killedWindow(ms, cell, windows, opponent);
           if (w) { parent.set(child, { ms, mover, col: c, cell, score: scores[c] });
-                   return { verdict: 'occupation', line: lineTo(child), finalMovestring: child, cell, window: w }; }
+                   return { verdict: 'occupation', line: lineTo(child), finalMovestring: child, cell, window: w, exhaustive: true }; }
         }
         if (!seen.has(child)) { seen.add(child); parent.set(child, { ms, mover, col: c, cell, score: scores[c] }); next.push(child); }
       }
@@ -553,7 +553,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
       const denial = await denyOpponentPunishment(solver, playedRoot, out.lostResource.forkWindows || [],
         { opponent, depthCap: REASON_CONFIG.denialDepth });
       out.opponentPunishment = {
-        kind: 'denial', verdict: denial.verdict, register: 'forced_sequence',
+        kind: 'denial', verdict: denial.verdict, register: (denial.line && denial.line.length > 1) ? 'forced_sequence' : 'immediate',
         line: denial.line, finalMovestring: denial.finalMovestring,
         completingCell: denial.cell ?? null, window: denial.window ?? null,
         cell: denial.cell ?? null, exhaustive: denial.exhaustive,

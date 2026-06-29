@@ -40,7 +40,8 @@ function assertCellOnSnapshot(half, label) {
     // tolerated for the deferred parity_group half, for a conditional_swindle whose deviation
     // saves a DRAW (no single winning cell) rather than a win, and for a denial where the
     // opponent never occupies a fork-window cell within the depth cap (verdict=no_occupation).
-    assert.ok(['parity_group', 'conditional_swindle', 'denial'].includes(half.kind),
+    assert.ok((['parity_group', 'conditional_swindle'].includes(half.kind)
+               || (half.kind === 'denial' && half.verdict !== 'occupation')),
       `${label}: null completingCell only allowed for parity_group / conditional_swindle / denial, got ${half.kind}`);
     return;
   }
