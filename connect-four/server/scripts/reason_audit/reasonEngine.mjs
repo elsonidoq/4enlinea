@@ -40,7 +40,7 @@ export const REASON_CONFIG = {
   immediateMax: 2,
   forcedSequenceMax: 6,
   parityMin: 12,
-  // win_to_draw denial search depth cap (D14).
+  // win_to_draw denial search depth cap (D17).
   denialDepth: 8,
   // lose_to_faster_lose gate budget (provisional).
   gateDepth: 6,        // opponent plies
@@ -546,10 +546,10 @@ export async function computeReason(movestring, playedCol, { solver }) {
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
-    // half (b): how the played move allows the opponent to deny the fork resource (D14) —
+    // half (b): how the played move allows the opponent to deny the fork resource (D17) —
     // or, when lostResource is not a fork, the legacy neutralization saving-reply.
     if (out.lostResource.terminal === 'fork') {
-      // Fork win_to_draw: search for opponent occupation of a fork-window cell (D14).
+      // Fork win_to_draw: search for opponent occupation of a fork-window cell (D17).
       const denial = await denyOpponentPunishment(solver, playedRoot, out.lostResource.forkWindows || [],
         { opponent, depthCap: REASON_CONFIG.denialDepth });
       out.opponentPunishment = {

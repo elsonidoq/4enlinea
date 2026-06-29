@@ -156,7 +156,7 @@ def denial_search(blunderRoot, opponent, forkWindows):
     # no occupation found within depth cap (or tree exhausted)
     exhaustive = all nodes in visited are terminal draws
     return { kind:'denial', verdict:'no_occupation',
-             line: [], finalMovestring: None,
+             line: [], finalMovestring: blunderRoot,
              exhaustive: exhaustive,           # True = confirmed no opp ever needs a pattern cell
              tie: { kind:'independent', sharedCells:[] } }
 
