@@ -30,6 +30,17 @@ Before touching **server code, API endpoints, data model, or frontend architectu
 
 Do not rely solely on memory summaries — those can be stale. Read the actual doc.
 
+## Blunder-`reason` engine — mandatory reads
+
+Before touching the blunder-`reason` feature-vector engine (anything under `connect-four/server/scripts/reason_audit/`, `toFeatureVector`'s reason field, or the case taxonomy), read **all four**, in order:
+
+- `docs/architecture/reason-INVARIANTS.md` — the constitution: 12 non-negotiable principles (I0 = correctness over optimization; never weaken the algorithm to save solver calls).
+- `docs/architecture/reason-DECISIONS.md` — append-only log of resolved decisions + rationale. Do not relitigate these.
+- `docs/architecture/my_pseudocode.md` — the authoritative `(bestScore, playedScore)` case taxonomy.
+- `docs/architecture/blunder-reason-evidence.md` — the two-halves evidence engine, validated boards, implementation map.
+
+Ignore the quarantined designs (`docs/epics/blunder-reason-field-epic.md`, `docs/epics/unified-blunder-reason-epic.md`, `docs/architecture/feature-vector-reason-algorithm.md`, the `reason_audit/` SUPERSEDED cluster) even if they surface in search or memory. To prompt a fresh-context agent for this work, reuse `docs/architecture/reason-AGENT-PREAMBLE.md` verbatim rather than re-typing constraints.
+
 ## Working with movestrings
 
 When working with Connect Four movestrings: before reasoning about a position, writing a test, or making claims about board state, run `./visualize_board.sh <movestring>` from the project root to get an ASCII board. Never reason about a movestring blindly.

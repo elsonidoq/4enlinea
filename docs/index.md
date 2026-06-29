@@ -58,6 +58,18 @@
 
 [architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether feature vector + glossary is enough context to explain a blunder: isolated OpenAI answerer + tools-enabled Claude grader, stratified set, ablation, counterexample output — running or extending the sufficiency experiment
 
+### Blunder-`reason` engine (read all four before touching it)
+
+[architecture/reason-INVARIANTS.md](architecture/reason-INVARIANTS.md) — **CONSTITUTION** — 12 non-negotiable principles for the blunder-`reason` engine (I0 = correctness over optimization; vector-is-the-artifact; no-fabrication; two-halves; bounded-by-depth; reuse classifier detectors) — before any reason-engine change
+
+[architecture/reason-DECISIONS.md](architecture/reason-DECISIONS.md) — **DECISION LOG** — append-only resolved decisions + rationale (restart/quarantine, gate, provisional thresholds, fixture strategy) — do not relitigate these
+
+[architecture/my_pseudocode.md](architecture/my_pseudocode.md) — **AUTHORITATIVE** — the `(bestScore, playedScore)` 5-case taxonomy keyed by sign comparison
+
+[architecture/blunder-reason-evidence.md](architecture/blunder-reason-evidence.md) — the two-halves evidence engine, register selection, the `lose_to_faster_lose` gate, validated boards, tooling + implementation map
+
+[architecture/reason-AGENT-PREAMBLE.md](architecture/reason-AGENT-PREAMBLE.md) — reusable prompt preamble for fresh-context reason-engine agents — paste verbatim instead of re-typing constraints
+
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 
 [architecture/index-conventions.md](architecture/index-conventions.md) — 0-indexed vs 1-indexed breakdown for move strings, DB columns, API fields, and frontend state — diagnosing off-by-one bugs or adding new coordinate-bearing fields
