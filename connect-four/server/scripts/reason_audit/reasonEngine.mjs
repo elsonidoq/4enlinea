@@ -230,6 +230,19 @@ function winningMoveCells(movestring, scores) {
   return out;
 }
 
+// The tie: is the opponent's punishment exploiting the very resource that was given up?
+// spatial for most cases; temporal for lose_to_faster_lose. May legitimately be 'independent'.
+function tieTo(caseName, lost, punish) {
+  if (caseName === CASES.LOSE_TO_FASTER_LOSE) {
+    const playedPlies = punish.pliesToEnd ?? null, swindlePlies = lost.pliesToEnd ?? null;
+    return { kind: 'temporal', playedPlies, swindlePlies,
+      tied: (playedPlies != null && swindlePlies != null && playedPlies < swindlePlies) };
+  }
+  const anchor = new Set(lost.anchorCells || []);
+  const shared = [...new Set([punish.entryCell, punish.completingCell])].filter((c) => c && anchor.has(c));
+  return { kind: shared.length ? 'tied' : 'independent', sharedCells: shared };
+}
+
 // Render a half: attach register and null out the line when the register forbids showing it.
 // `extra.rootMs` + `extra.winnerMark` (when present) drive the parity-attribution enrichment for
 // parity-register wins; they are consumed here and not emitted as raw fields.
@@ -244,6 +257,7 @@ function renderHalf(kind, walk, fwd, extra = {}) {
     pliesToEnd: walk.pliesToEnd ?? null,
     line: showsLine(register) ? (walk.line ?? null) : null,
     finalMovestring: walk.finalMovestring ?? null, // board on which completingCell is occupied
+    entryCell: (walk.line && walk.line[0]) ? walk.line[0].cell : (walk.completingCell ?? null),
     ...rest,
   };
   if (register === 'parity' && walk.terminal === 'win' && rootMs != null && winnerMark != null) {
@@ -399,6 +413,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
       kind: 'neutralization', register: 'immediate',
       completingCell: saveCell, window: saveWindow, pliesToEnd: null, line: null,
       finalMovestring: saveCol != null ? playedRoot + String(saveCol) : null,
+      entryCell: saveCell,
       savingCol: saveCol, savingReplyCount: saving.length,
     };
     Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
@@ -490,6 +505,10 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = bestScore === 0 ? 'draw_to_draw' : 'unclassified';
     out.notABlunder = true;
     return out;
+  }
+
+  if (out.lostResource && out.opponentPunishment) {
+    out.opponentPunishment.tie = tieTo(out.case, out.lostResource, out.opponentPunishment);
   }
 
   // ── reply histogram (shared counterplay signal) ──
