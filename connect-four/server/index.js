@@ -674,6 +674,42 @@ app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
   }
 });
 
+// ── Blunder-reason evidence browser ────────────────────────────────────────────
+// Serves precomputed reasonEngine evidence (one object per line, produced by
+// server/scripts/reason_audit/build_evidence.mjs). Read-only, localhost-admin only.
+// No solver runs in the web server. See docs/architecture/blunder-reason-evidence.md.
+
+function isReasonEvidenceFile(name) {
+  return typeof name === 'string' && /^reason_evidence_[\w.-]*\.jsonl$/.test(name);
+}
+
+app.get('/api/admin/reason/files', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir).filter(isReasonEvidenceFile).sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  const fileName = req.query.file || 'reason_evidence_all.jsonl';
+  if (!isReasonEvidenceFile(fileName)) {
+    return res.status(400).json({ error: 'invalid reason evidence filename' });
+  }
+  try {
+    const rows = readFileSync(join(scriptsDir, basename(fileName)), 'utf-8')
+      .trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    res.json({ rows });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'reason evidence file not found' });
+    logError('[admin/reason]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
 app.get('/api/admin/lessons', requireAdmin, (req, res) => {

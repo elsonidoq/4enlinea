@@ -3,37 +3,19 @@ import { ProfileStoreProvider } from '../store/ProfileStore.jsx';
 import { Board } from '../components/Board.jsx';
 import { buildBoard } from '../lib/board.js';
 
+// Blunder-reason EVIDENCE browser. Renders reasonEngine output (precomputed by
+// server/scripts/reason_audit/build_evidence.mjs, served by GET /api/admin/reason) so the
+// solver-derived evidence can be verified by eye against the rendered boards.
+//
+// Each row is the engine's evidence object: { movestring, playedCol, bestCol, scores, case,
+// lostResource, opponentPunishment, replyHistogram, gate, ... } + fixture ground-truth labels.
+// (Component/route still named AdminFvSuff for historical reasons — see memory
+// project_admin_fv_suff_repurposed.md.)
+
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-// ── Compact collapsible JSON tree (ported from AdminDeepRevealEvalPage) ──────────
+// ── Compact collapsible JSON tree ───────────────────────────────────────────────
 const JSON_COLORS = { key: '#7c3aed', str: '#16a34a', num: '#2563eb', bool: '#db2777', null: '#94a3b8' };
-
-function fvIsZeroOrBlankDeep(v) {
-  if (v === null || v === undefined || v === '') return true;
-  if (typeof v === 'number') return v === 0;
-  if (typeof v === 'boolean' || typeof v === 'string') return false;
-  if (Array.isArray(v)) return v.length === 0;
-  if (typeof v === 'object') return Object.values(v).every(fvIsZeroOrBlankDeep);
-  return false;
-}
-function fvIsDroppable(v) {
-  if (v === null || v === undefined || v === '') return true;
-  if (Array.isArray(v)) return v.length === 0;
-  if (typeof v === 'object') return Object.keys(v).length === 0 || fvIsZeroOrBlankDeep(v);
-  return false;
-}
-function pruneFeatureVectorDeep(value) {
-  if (Array.isArray(value)) return value.map(pruneFeatureVectorDeep).filter((v) => !fvIsDroppable(v));
-  if (value && typeof value === 'object') {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      const pv = pruneFeatureVectorDeep(v);
-      if (!fvIsDroppable(pv)) out[k] = pv;
-    }
-    return out;
-  }
-  return value;
-}
 
 function JsonLeaf({ value }) {
   let color = JSON_COLORS.num, text = String(value);
@@ -90,79 +72,132 @@ function JsonView({ value }) {
   );
 }
 
-// ── key_cells "cNrM" (1-indexed) → board overlay {c, r} (0-indexed) ──────────────
-function parseKeyCell(s) {
+// "cNrM" (1-indexed) → board overlay {c, r} (0-indexed)
+function parseCell(s) {
   const m = /^c(\d+)r(\d+)$/i.exec(String(s).trim());
   if (!m) return null;
-  return { c: parseInt(m[1], 10) - 1, r: parseInt(m[2], 10) - 1 };
+  const cell = { c: parseInt(m[1], 10) - 1, r: parseInt(m[2], 10) - 1 };
+  if (cell.r < 0 || cell.r >= 6 || cell.c < 0 || cell.c >= 7) return null;
+  return cell;
 }
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 8 }}>
       <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink)' }}>{children}</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ink)' }}>{children}</div>
     </div>
   );
 }
 
-function AnswerView({ answer, parse_error, call_error, raw }) {
-  if (!answer) {
-    return (
-      <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#475569' }}>
-        <div style={{ color: '#dc2626', marginBottom: 8 }}>
-          No structured answer{call_error ? ` — call_error: ${call_error}` : parse_error ? ` — parse_error: ${parse_error}` : ''}
-        </div>
-        {raw && <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, color: '#64748b' }}>{raw}</pre>}
-      </div>
-    );
-  }
-  const outcomeColor = (o) => (o === 'win' ? '#16a34a' : o === 'loss' ? '#dc2626' : '#a16207');
+const REGISTER_COLOR = { immediate: '#16a34a', forced_sequence: '#2563eb', parity: '#a16207' };
+const Chip = ({ text, bg, fg }) => (
+  <span style={{ padding: '1px 7px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>{text}</span>
+);
+
+// One labelled board for a half of the evidence. Renders the half's finalMovestring with the
+// completingCell + window cells overlaid (amber). Falls back to a note when there is no cell.
+function HalfBoard({ title, subtitle, half }) {
+  const ms = half?.finalMovestring;
+  const boardObj = useMemo(() => buildBoard(ms || ''), [ms]);
+  const overlays = useMemo(() => {
+    if (!half) return [];
+    const out = [];
+    for (const w of (half.window || [])) { const c = parseCell(w); if (c) out.push({ ...c, type: 'td' }); }
+    const cc = parseCell(half.completingCell);
+    if (cc) out.push({ ...cc, type: 'td' });
+    return out;
+  }, [half]);
+
   return (
-    <div>
-      <Field label="better move (1-indexed)">
-        <span style={{ fontWeight: 700, fontSize: 16 }}>{answer.better_move ?? '--'}</span>
-      </Field>
-      <div style={{ display: 'flex', gap: 24, marginBottom: 10 }}>
-        <Field label="played outcome">
-          <span style={{ color: outcomeColor(answer.played_outcome), fontWeight: 700 }}>{answer.played_outcome ?? '--'}</span>
-        </Field>
-        <Field label="best outcome">
-          <span style={{ color: outcomeColor(answer.best_outcome), fontWeight: 700 }}>{answer.best_outcome ?? '--'}</span>
-        </Field>
-        <Field label="confidence">{answer.confidence ?? '--'}</Field>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>{title}</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>{subtitle}</div>
+      {half && ms
+        ? <Board board={boardObj.board} compact canPlay={false} overlays={overlays} />
+        : <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#a16207', padding: 8, border: '1px dashed #e2e8f0', borderRadius: 6 }}>
+            {half ? 'no board cell (parity-naming deferred / draw-save swindle)' : 'no half'}
+          </div>}
+    </div>
+  );
+}
+
+const TIE_STYLE = {
+  tied: { bg: '#dcfce7', fg: '#15803d' },
+  temporal: { bg: '#ede9fe', fg: '#6d28d9' },
+  independent: { bg: '#fee2e2', fg: '#b91c1c' },
+};
+
+function HalfDetail({ label, half }) {
+  if (!half) return <Field label={label}><span style={{ color: '#94a3b8' }}>null (notABlunder / out of scope)</span></Field>;
+  const pa = half.parityAttribution;
+  const tie = half.tie;
+  return (
+    <div style={{ marginBottom: 10, borderLeft: '3px solid #e2e8f0', paddingLeft: 8 }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+        <Chip text={half.kind} bg="#eef2ff" fg="#4338ca" />
+        <Chip text={half.register} bg="#f1f5f9" fg={REGISTER_COLOR[half.register] || '#475569'} />
+        {half.tacticTag && <Chip text={`◆ ${half.tacticTag}${half.tacticFromDiff ? ' (diff)' : ''}`} bg="#ecfeff" fg="#0e7490" />}
+        {half.tacticTag && (half.tacticCells || []).length > 0 && (
+          <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#0e7490' }}>{half.tacticCells.join(' ')}</span>
+        )}
+        {tie && (
+          <Chip
+            text={`⇄ ${tie.kind}${tie.sharedCells?.length ? ' ' + tie.sharedCells.join(' ') : ''}`}
+            bg={(TIE_STYLE[tie.kind] || {}).bg || '#f1f5f9'}
+            fg={(TIE_STYLE[tie.kind] || {}).fg || '#475569'}
+          />
+        )}
+        {half.completingCell && <span style={{ fontFamily: 'monospace', fontSize: 12 }}>cell <b>{half.completingCell}</b></span>}
+        {half.pliesToEnd != null && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>plies {half.pliesToEnd}</span>}
+        {half.savingCol != null && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>saveCol {half.savingCol + 1}</span>}
       </div>
-      <Field label="mechanism">{answer.mechanism ?? '--'}</Field>
-      {answer.unsure_about ? <Field label="unsure about">{answer.unsure_about}</Field> : null}
-      {(answer.key_cells || []).length > 0 && (
-        <Field label="key cells">
-          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{(answer.key_cells || []).join(', ')}</span>
-        </Field>
+      {(half.line || []).length > 0 && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569' }}>
+          line: {half.line.map((m, i) => (
+            <span key={i}>{i ? ' · ' : ''}<span style={{ color: m.mover === 1 ? '#2faa5a' : '#64748b' }}>{m.cell}</span></span>
+          ))}
+        </div>
       )}
-      {(answer.fields_relied_on || []).length > 0 && (
-        <Field label="fields relied on">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {(answer.fields_relied_on || []).map((f, i) => (
-              <span key={i} style={{ padding: '1px 6px', borderRadius: 8, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontFamily: 'monospace' }}>{f}</span>
-            ))}
+      {(half.anchorCells || []).length > 0 && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b', marginTop: 2 }}>
+          anchorCells: {half.anchorCells.join(' ')}
+        </div>
+      )}
+      {tie && tie.kind === 'temporal' && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#6d28d9', marginTop: 2 }}>
+          tie: played {tie.playedPlies} vs swindle {tie.swindlePlies} plies — {tie.tied ? 'faster (blunder)' : 'not faster'}
+        </div>
+      )}
+      {pa?.nameable && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569', marginTop: 4, padding: '4px 6px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>
+          <b style={{ color: '#a16207' }}>parity attribution</b>{' '}
+          <Chip text={pa.groupKind} bg="#fef3c7" fg="#92400e" />{' '}
+          group: {pa.controllingGroup.join(' ')}
+          <div>
+            levers (odd z-threat): {pa.leverCells.length
+              ? <b style={{ color: '#16a34a' }}>{pa.leverCells.join(' ')}</b>
+              : <b style={{ color: '#dc2626' }}>none → forcedFirstRequired (deferred)</b>}
           </div>
-        </Field>
+        </div>
       )}
     </div>
   );
 }
 
-function FvSuffViewer() {
-  const [answerFiles, setAnswerFiles] = useState([]);
-  const [answersFile, setAnswersFile] = useState('fv_suff_answers_all.jsonl');
-  const [vectors, setVectors] = useState([]);
-  const [answers, setAnswers] = useState([]);
+const CASE_COLOR = {
+  win_to_draw: '#a16207', win_to_lose: '#dc2626', draw_to_lose: '#b45309',
+  lose_to_faster_lose: '#7c3aed', win_to_slower_win: '#64748b',
+};
+
+function ReasonViewer() {
+  const [files, setFiles] = useState([]);
+  const [file, setFile] = useState('reason_evidence_all.jsonl');
+  const [rows, setRows] = useState([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [collapseEmpty, setCollapseEmpty] = useState(false);
-  const [condition, setCondition] = useState('A');
-  const [runIndex, setRunIndex] = useState(0);
 
   const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1100);
   useEffect(() => {
@@ -172,109 +207,65 @@ function FvSuffViewer() {
   }, []);
 
   useEffect(() => {
-    fetch(`${API}/api/admin/fv-suff/files`)
+    fetch(`${API}/api/admin/reason/files`)
       .then(r => r.ok ? r.json() : { files: [] })
-      .then(data => setAnswerFiles(data.files || []))
+      .then(data => setFiles(data.files || []))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${API}/api/admin/fv-suff?answers=${encodeURIComponent(answersFile)}`)
+    fetch(`${API}/api/admin/reason?file=${encodeURIComponent(file)}`)
       .then(r => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); })
-      .then(data => {
-        setVectors(data.vectors || []);
-        setAnswers(data.answers || []);
-        setIndex(0);
-        setLoading(false);
-      })
+      .then(data => { setRows(data.rows || []); setIndex(0); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [answersFile]);
+  }, [file]);
 
-  const entry = vectors[index];
+  const entry = rows[index];
 
-  // answers for the current entry, indexed by condition → run_index
-  const entryAnswers = useMemo(
-    () => (entry ? answers.filter(a => a.id === entry.id) : []),
-    [answers, entry]
-  );
-  const conditions = useMemo(
-    () => [...new Set(entryAnswers.map(a => a.condition))].sort(),
-    [entryAnswers]
-  );
-  const runs = useMemo(
-    () => [...new Set(entryAnswers.filter(a => a.condition === condition).map(a => a.run_index))].sort((x, y) => x - y),
-    [entryAnswers, condition]
-  );
-  const currentAnswer = useMemo(
-    () => entryAnswers.find(a => a.condition === condition && a.run_index === runIndex) ?? null,
-    [entryAnswers, condition, runIndex]
-  );
-
-  // Keep condition/run valid as the entry changes.
-  useEffect(() => {
-    if (conditions.length && !conditions.includes(condition)) setCondition(conditions[0]);
-  }, [conditions]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (runs.length && !runs.includes(runIndex)) setRunIndex(runs[0]);
-  }, [runs]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const boardObj = useMemo(() => {
-    if (!entry) return { board: [], heights: [] };
-    return buildBoard(entry.board_state || '');
-  }, [entry]);
-
-  const overlays = useMemo(() => {
+  const preBoard = useMemo(() => buildBoard(entry?.movestring || ''), [entry]);
+  const preOverlays = useMemo(() => {
     if (!entry) return [];
-    const result = [];
-    const playedRow = boardObj.heights[entry.move_played];
-    if (playedRow != null && playedRow < 6) result.push({ c: entry.move_played, r: playedRow, type: 'tr' });
-    const bestRow = boardObj.heights[entry.correct_move];
-    if (bestRow != null && bestRow < 6) result.push({ c: entry.correct_move, r: bestRow, type: 'tg' });
-    for (const s of (currentAnswer?.answer?.key_cells || [])) {
-      const cell = parseKeyCell(s);
-      if (cell && cell.r >= 0 && cell.r < 6 && cell.c >= 0 && cell.c < 7) result.push({ ...cell, type: 'td' });
-    }
-    return result;
-  }, [entry, boardObj, currentAnswer]);
+    const out = [];
+    const playedRow = preBoard.heights[entry.playedCol];
+    if (playedRow != null && playedRow < 6) out.push({ c: entry.playedCol, r: playedRow, type: 'tr' });
+    const bestRow = preBoard.heights[entry.bestCol];
+    if (bestRow != null && bestRow < 6) out.push({ c: entry.bestCol, r: bestRow, type: 'tg' });
+    return out;
+  }, [entry, preBoard]);
 
   function handlePrev() { if (index > 0) setIndex(index - 1); }
-  function handleNext() { if (index < vectors.length - 1) setIndex(index + 1); }
+  function handleNext() { if (index < rows.length - 1) setIndex(index + 1); }
 
   if (!isDesktop) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: 32, textAlign: 'center', background: '#0f172a', color: '#94a3b8', fontFamily: 'monospace', fontSize: 14, lineHeight: 1.6 }}>
-        The FV-Sufficiency browser is desktop-only. Please open it on a wider screen (≥ 1100px).
+        The blunder-reason evidence browser is desktop-only. Please open it on a wider screen (≥ 1100px).
       </div>
     );
   }
 
-  const featureVector = entry?.feature_vector ?? null;
-  const isGreen = entry ? entry.board_state.length % 2 === 0 : false;
+  const isGreen = entry ? entry.player === 1 : false;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12, background: '#1e293b', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, color: '#94a3b8' }}>
-          FV sufficiency browser
+          Blunder-reason evidence browser
         </span>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11, color: '#94a3b8', cursor: 'pointer' }}>
-          <input type="checkbox" checked={collapseEmpty} onChange={e => setCollapseEmpty(e.target.checked)} />
-          collapse empty
-        </label>
         <select
-          value={answersFile}
-          onChange={e => setAnswersFile(e.target.value)}
+          value={file}
+          onChange={e => setFile(e.target.value)}
           style={{ fontFamily: 'monospace', fontSize: 12, background: '#0f172a', color: '#e2e8f0', border: '1px solid #475569', borderRadius: 4, padding: '4px 8px', maxWidth: 360 }}
         >
-          {!answerFiles.includes(answersFile) && <option value={answersFile}>{answersFile}</option>}
-          {answerFiles.map(f => <option key={f} value={f}>{f}</option>)}
+          {!files.includes(file) && <option value={file}>{file}</option>}
+          {files.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
-        {vectors.length > 0 && (
+        {rows.length > 0 && (
           <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>
-            {index + 1} / {vectors.length}
+            {index + 1} / {rows.length}
           </span>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -282,31 +273,24 @@ function FvSuffViewer() {
             style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: (!entry || index === 0) ? '#334155' : '#475569', color: (!entry || index === 0) ? '#64748b' : '#e2e8f0', cursor: (!entry || index === 0) ? 'default' : 'pointer', fontSize: 13 }}>
             ← Prev
           </button>
-          <button onClick={handleNext} disabled={!entry || index === vectors.length - 1}
-            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: (!entry || index === vectors.length - 1) ? '#334155' : '#475569', color: (!entry || index === vectors.length - 1) ? '#64748b' : '#e2e8f0', cursor: (!entry || index === vectors.length - 1) ? 'default' : 'pointer', fontSize: 13 }}>
+          <button onClick={handleNext} disabled={!entry || index === rows.length - 1}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: (!entry || index === rows.length - 1) ? '#334155' : '#475569', color: (!entry || index === rows.length - 1) ? '#64748b' : '#e2e8f0', cursor: (!entry || index === rows.length - 1) ? 'default' : 'pointer', fontSize: 13 }}>
             Next →
           </button>
         </div>
       </div>
 
-      {/* Predicate chips */}
-      {entry && (entry.predicates || []).length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 20px', background: '#1e293b', borderBottom: '1px solid #334155' }}>
-          {(entry.predicates || []).map(p => (
-            <span key={p} style={{ padding: '2px 8px', borderRadius: 10, background: '#0f4c81', color: '#7dd3fc', fontSize: 11, fontFamily: 'monospace', fontWeight: 700 }}>{p}</span>
-          ))}
-        </div>
-      )}
-
       {/* Meta row */}
       {entry && (
-        <div style={{ display: 'flex', gap: 20, padding: '8px 20px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', padding: '8px 20px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap' }}>
+          <Chip text={entry.case} bg="#0f172a" fg={CASE_COLOR[entry.case] || '#94a3b8'} />
+          {entry.notABlunder && <Chip text="notABlunder" bg="#0f172a" fg="#64748b" />}
+          {entry.caseMatches === false && <Chip text="case≠expected" bg="#7f1d1d" fg="#fecaca" />}
           <span>player: <span style={{ color: isGreen ? '#2faa5a' : '#94a3b8', fontWeight: 700 }}>{isGreen ? 'Green' : 'Gray'}</span></span>
-          <span>id: <span style={{ color: '#94a3b8' }}>{entry.id ?? '--'}</span></span>
-          <span>ms: <span style={{ color: '#94a3b8' }}>{entry.board_state || '(empty)'}</span></span>
-          <span>sev: <span style={{ color: '#94a3b8' }}>{entry.severity ?? '--'}</span></span>
-          <span>tag: <span style={{ color: '#94a3b8' }}>{entry.pattern_category ?? '--'}</span></span>
-          <span>col: <span style={{ color: '#94a3b8' }}>{entry.move_played + 1}</span> → best: <span style={{ color: '#94a3b8' }}>{entry.correct_move + 1}</span></span>
+          <span>ms: <span style={{ color: '#94a3b8' }}>{entry.movestring || '(empty)'}</span></span>
+          <span>col: <span style={{ color: '#e8543e', fontWeight: 700 }}>{entry.playedCol + 1}</span> → best: <span style={{ color: '#2faa5a', fontWeight: 700 }}>{entry.bestCol + 1}</span></span>
+          <span>scores: <span style={{ color: '#94a3b8' }}>[{(entry.scores || []).join(',')}]</span></span>
+          {entry.bucket && <span>bucket: <span style={{ color: '#94a3b8' }}>{entry.bucket}</span></span>}
         </div>
       )}
 
@@ -317,64 +301,58 @@ function FvSuffViewer() {
         ) : error ? (
           <div style={{ padding: 24, color: '#dc2626', fontFamily: 'monospace', fontSize: 13 }}>Error: {error}</div>
         ) : !entry ? (
-          <div style={{ padding: 24, color: '#64748b', fontFamily: 'monospace', fontSize: 13 }}>No vectors found.</div>
+          <div style={{ padding: 24, color: '#64748b', fontFamily: 'monospace', fontSize: 13 }}>No evidence rows found.</div>
         ) : (
           <>
-            {/* Left: board + explanation */}
-            <div style={{ flex: '0 0 42%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: 16, gap: 16 }}>
-              <div style={{ maxWidth: 380 }}>
-                <Board board={boardObj.board} compact canPlay={false} overlays={overlays} />
-              </div>
-              <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8' }}>
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>red</span> = played ·{' '}
-                <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> = best ·{' '}
-                <span style={{ color: '#a16207', fontWeight: 700 }}>amber</span> = answer key_cells
+            {/* Left: the three boards + evidence detail */}
+            <div style={{ flex: '0 0 58%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: 16, gap: 14 }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>pre-move board</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>
+                    <span style={{ color: '#e8543e', fontWeight: 700 }}>red</span> played · <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> best
+                  </div>
+                  <Board board={preBoard.board} compact canPlay={false} overlays={preOverlays} />
+                </div>
+                <HalfBoard
+                  title="lostResource (half a)"
+                  subtitle={entry.lostResource ? `${entry.lostResource.kind} · amber = completing/window` : 'null'}
+                  half={entry.lostResource}
+                />
+                <HalfBoard
+                  title="opponentPunishment (half b)"
+                  subtitle={entry.opponentPunishment ? `${entry.opponentPunishment.kind} · amber = completing/window` : 'null'}
+                  half={entry.opponentPunishment}
+                />
               </div>
 
-              {/* Explanation controls + output */}
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <label style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    condition
-                    <select value={condition} onChange={e => setCondition(e.target.value)}
-                      style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 6px' }}>
-                      {conditions.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-                  <label style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    run
-                    <select value={runIndex} onChange={e => setRunIndex(parseInt(e.target.value, 10))}
-                      style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 6px' }}>
-                      {runs.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </label>
-                  {currentAnswer && (
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{currentAnswer.model}</span>
+                <HalfDetail label="lostResource — what the best move preserved" half={entry.lostResource} />
+                <HalfDetail label="opponentPunishment — how the played move loses" half={entry.opponentPunishment} />
+
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 6 }}>
+                  {entry.replyHistogram && (
+                    <Field label="reply histogram (opp non-losing replies)">
+                      afterBest <b>{entry.replyHistogram.afterBest}</b> · afterPlayed <b>{entry.replyHistogram.afterPlayed}</b>
+                    </Field>
+                  )}
+                  {entry.gate && (
+                    <Field label="gate (lose_to_faster_lose)">
+                      <Chip text={entry.gate.verdict} bg={entry.gate.verdict === 'Blunder' ? '#fee2e2' : '#dcfce7'} fg={entry.gate.verdict === 'Blunder' ? '#b91c1c' : '#15803d'} />
+                      {' '}exhaustive <b>{String(entry.gate.exhaustive)}</b>
+                      {entry.gate.witness && <> · devCols [{(entry.gate.witness.devCols || []).map(c => c + 1).join(',')}] · oppPlies {entry.gate.witness.oppPlies}</>}
+                    </Field>
                   )}
                 </div>
-                {currentAnswer ? (
-                  <AnswerView
-                    answer={currentAnswer.answer}
-                    parse_error={currentAnswer.parse_error}
-                    call_error={currentAnswer.call_error}
-                    raw={currentAnswer.raw}
-                  />
-                ) : (
-                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#94a3b8' }}>
-                    No answer for this position in the selected file.
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Right: feature vector */}
-            <aside style={{ flex: 1, minWidth: 400, borderLeft: '1px solid #e2e8f0', background: '#fff', overflowY: 'auto', padding: '16px 18px' }}>
+            {/* Right: raw evidence JSON */}
+            <aside style={{ flex: 1, minWidth: 360, borderLeft: '1px solid #e2e8f0', background: '#fff', overflowY: 'auto', padding: '16px 18px' }}>
               <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>
-                Feature Vector{collapseEmpty ? ' (collapsed)' : ''}
+                Raw evidence
               </div>
-              {featureVector
-                ? <JsonView value={collapseEmpty ? pruneFeatureVectorDeep(featureVector) : featureVector} />
-                : <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#94a3b8' }}>No feature_vector on this record.</div>}
+              <JsonView value={entry} />
             </aside>
           </>
         )}
@@ -400,7 +378,7 @@ export default function AdminFvSuffPage() {
 
   return (
     <ProfileStoreProvider>
-      <FvSuffViewer />
+      <ReasonViewer />
     </ProfileStoreProvider>
   );
 }
