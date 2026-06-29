@@ -109,11 +109,11 @@ try {
     // ── Step 1: Build explain context ─────────────────────────────────────
     let context;
     try {
-      // prompt_data look-ahead config: 20-ply window, dedupe-by-score pruning, no budget cap
+      // prompt_data look-ahead config: 13-ply window, dedupe-by-score pruning, no budget cap
       // (only depth limits the search). Matches server/scripts/print_lookahead.mjs.
       context = await buildExplainContext(entry.board_state, entry.move_played, 1, solver, {
         alwaysLookahead: true,
-        lookaheadDepth: 20,
+        lookaheadDepth: 13,
         lookaheadBudget: null,
         lookaheadDedupeByScore: true,
       });

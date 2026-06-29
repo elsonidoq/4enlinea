@@ -1,0 +1,25 @@
+{
+  "id": "eval-43",
+  "grain": "not_a_blunder",
+  "outcomeDelta": { "best": "win", "played": "win" },
+  "register": {
+    "bestPlies": 4,
+    "playedPlies": 24,
+    "phase": "forced_sequence",
+    "word": "forced_sequence"
+  },
+  "winner": "none",
+  "betterMoveDoes": "position already decided; this move did not change the result reachably.",
+  "_evidence": {
+    "preMoveScores": [3, 3, 3, -3, 13, 3, 3],
+    "discs": 13,
+    "moverPerspective": "P2 (Gray) to move",
+    "bestCol": 4,
+    "playedCol": 6,
+    "bestBranchPV": { "terminal": "win", "winner": "second(Gray/P2)", "completingCell": "c4r2", "completingPly": 18, "window": ["c3r2","c4r2","c5r2","c6r2"], "decisive_check": "BLOCKABLE" },
+    "playedBranchPV": { "terminal": "win", "winner": "second(Gray/P2)", "completingCell": "c4r2", "completingPly": 38, "window": ["c3r2","c4r2","c5r2","c6r2"], "decisive_check": "BLOCKABLE" },
+    "standingThreatPreMove": "c4r2 (Gy) already a major threat on the pre-move board",
+    "discriminatingFour": false,
+    "rationale": "Same standing winning four (c4r2) wins both branches; the cell is blockable (zugzwang win, not decisive immediate threat); neither move creates or destroys it. Only timing differs (ply gap ~20). No discriminating reachable line -> §5 router rule 1 + §8 gate 6 -> not_a_blunder. 'wins sooner' is explicitly forbidden by gate 6."
+  }
+}

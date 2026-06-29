@@ -1,0 +1,18 @@
+{
+  "id": "eval-1",
+  "boardState": "44",
+  "movePlayed": 4,
+  "correctMove": 3,
+  "category": "suboptimal_move",
+  "grain": "zugzwang_class",
+  "winner": "opponent",
+  "outcomeDelta": { "best": "draw", "played": "loss" },
+  "register": {
+    "bestPlies": "none",
+    "playedPlies": 39,
+    "phase": "slow_zugzwang",
+    "word": "slow_zugzwang"
+  },
+  "zugzwang": { "noThreatWithinPlies": 20 },
+  "betterMoveDoes": "Holds the draw instead of conceding a long-range zugzwang loss that resolves only as the board fills (~ply 42); no winning four or standing threat is nameable within 20 plies."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "eval-40",
+  "boardState": "241",
+  "movePlayed": 2,
+  "correctMove": 1,
+  "category": "drawing_move",
+  "grain": "zugzwang_class",
+  "winner": "player",
+  "outcomeDelta": { "best": "win", "played": "draw" },
+  "register": {
+    "bestPlies": 38,
+    "playedPlies": "none",
+    "phase": "slow_zugzwang",
+    "word": "slow_zugzwang"
+  },
+  "zugzwang": { "noThreatWithinPlies": 26 },
+  "betterMoveDoes": "Playing col c2 (drop at c2r2) keeps a razor-thin zugzwang win that resolves only as the board fills (~ply 42); the played move col c3 (drop at c3r2) lets it slip to a draw. No winning four or standing threat is nameable within 26 plies, and an empty-square parity count would mislabel the controller, so no cell can be named."
+}

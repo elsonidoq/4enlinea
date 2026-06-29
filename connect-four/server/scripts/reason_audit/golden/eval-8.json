@@ -1,0 +1,13 @@
+{
+  "id": "eval-8",
+  "grain": "not_a_blunder",
+  "winner": "none",
+  "outcomeDelta": { "best": "loss", "played": "loss" },
+  "register": {
+    "bestPlies": 40,
+    "playedPlies": 38,
+    "phase": "opening",
+    "word": "opening"
+  },
+  "betterMoveDoes": "position already decided; this move did not change the result reachably."
+}

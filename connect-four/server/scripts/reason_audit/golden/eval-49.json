@@ -1,0 +1,32 @@
+{
+  "id": "eval-49",
+  "board_state": "33241034112213235544401245230150005",
+  "move_played": 6,
+  "correct_move": 5,
+  "grain": "line_parity",
+  "winner": "player",
+  "outcomeDelta": { "best": "win", "played": "draw" },
+  "register": {
+    "bestPlies": 2,
+    "playedPlies": "none",
+    "phase": "immediate",
+    "word": "immediate"
+  },
+  "line": {
+    "bestLine": {
+      "completingCell": "c7r2",
+      "window": ["c4r2", "c5r2", "c6r2", "c7r2"],
+      "completingPly": 38,
+      "forced": "yes"
+    },
+    "playedLine": "absent"
+  },
+  "parity": {
+    "controller": "player",
+    "mechanism": "z_threat",
+    "ownerParity": "even",
+    "surrenderedCell": "c7r2",
+    "enabledCell": "c6r6"
+  },
+  "betterMoveDoes": "Playing c6 fills the second-to-last column and forces Green into the only open column (c7), where Gray's standing row-2 four (c4r2·c5r2·c6r2·c7r2) completes at c7r2 — turning the played draw into a win."
+}

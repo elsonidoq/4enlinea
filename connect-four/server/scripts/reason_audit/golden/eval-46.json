@@ -1,0 +1,30 @@
+{
+  "id": "eval-46",
+  "movestring": "333444343342525611",
+  "move_played": 1,
+  "correct_move": 2,
+  "outcomeDelta": { "best": "win", "played": "loss" },
+  "register": {
+    "bestPlies": 19,
+    "playedPlies": 15,
+    "phase": "midgame",
+    "word": "slow_zugzwang"
+  },
+  "grain": "line",
+  "winner": "opponent",
+  "line": {
+    "playedLine": {
+      "completingCell": "c1r2",
+      "window": ["c1r2", "c2r2", "c3r2", "c4r2"],
+      "completingPly": 34,
+      "forced": "yes"
+    },
+    "bestLine": {
+      "completingCell": "c2r5",
+      "window": ["c2r5", "c3r5", "c4r5", "c5r5"],
+      "completingPly": 37,
+      "forced": "no"
+    }
+  },
+  "betterMoveDoes": "Playing col2 (drop at c3r3) wins for you by completing a four at c2r5; the move you played, col1 (drop at c2r3), forgoes that win and lets the opponent complete a four at c1r2 around ply 34 (slow_zugzwang)."
+}

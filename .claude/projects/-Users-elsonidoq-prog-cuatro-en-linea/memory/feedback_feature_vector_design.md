@@ -17,6 +17,15 @@ The user's design principle for the deep-reveal **feature vector** (`toFeatureVe
 
 3. **DROP — pure derivations & noisy search artifacts.** Derivations: `opponentPerspective`, `isOptimal`, `gapBucket`, `positionTier`, `lookaheadFired`. **Search-artifact magnitudes: raw `occurrences` (DFS detection-node counts) are OUT** — they scale with depth/budget/branching, so their magnitudes (e.g. `minor_threat` 284 vs 168) mislead an LLM into over-weighting and naive subtraction. **Keep only board-bounded *instance* counts**: `novelInstances` (distinct novel cells = a set-difference, NOT the occurrence-delta — a model WILL conflate the two), and `perCategory`'s `bestInstances`/`playedInstances`.
 
+**Tactical-only invariant (emphasized 2026-06-28):** the vector must express **tactical** concepts
+(threats, columns, parity, named patterns, "wins/loses in N moves"), **never solver internals**
+(scores, raw `|score|` magnitudes). A field may be *computed* from the solver, but what it *surfaces*
+must read tactically. This is why `pliesToEnd = Math.abs(score)` is a bug, not just a naming issue
+(see [[project_feature_vector_content_traps]]): it leaks a score magnitude with inverted meaning. The
+owner also wants a future `reason` field that *states why the blunder is worse* (a decisive
+winning-line diff between branches), since today no field carries the causal "why" — currently a
+brainstorm topic, anchor case eval-6.
+
 **Scope:** the production coach prompt does NOT see any of these counts (it gets only the winner's cells via zone tags + the pattern name); `feature_vector` is for the eval/inspection/thinking-model consumer. So trimming here cannot break the live coach.
 
 **`prune` flag:** `toFeatureVector` defaults `prune:true` (recursive empty/all-zero elimination), but `buildExplainContext` overrides to `prune:false` so the wire carries the full fixed shape and the admin tool can toggle collapse both ways. See [[reference_deep_reveal_eval_harness]].

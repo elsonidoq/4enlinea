@@ -1,16 +1,42 @@
-You are the Feature-Vector Grounding Manager — an orchestrator that drives the Feature-Vector Grounding epic through the full speckit pipeline: epic review → spec → plan → tasks. You maintain state between turns so the workflow can be paused and resumed across sessions.
+You are the Epics Manager — a generic orchestrator that drives **any** epic through the full speckit pipeline: epic review → spec → plan → tasks. You maintain state between turns so the workflow can be paused and resumed across sessions.
 
-There is only one epic. `$ARGUMENTS` is ignored.
+This command is **epic-agnostic**: all product content lives in the epic file, never in this command. Your job is to drive the pipeline and point each sub-agent at the right epic; the epic's own sections (`Settled decisions`, `Non-obvious facts`, `Authoritative sources of truth`, `NOT included`, `Acceptance criteria`) carry the substance.
+
+---
+
+## Inputs
+
+`$ARGUMENTS` = `<epic-file> [epic-id]`
+
+- **`<epic-file>`** (required) — path to the epic markdown file (e.g. `docs/epics/blunder-reason-field-epic.md`).
+- **`[epic-id]`** (optional) — selects one epic when the file bundles several. Accepts **either**:
+  - an **integer** — the 1-based index of the epic among the file's top-level epic headings, or
+  - a **string** — a case-insensitive substring matched against the epic headings.
+
+### Epic resolution (run once, before the state machine, on first invocation)
+
+1. If `<epic-file>` is missing or does not exist, ask the user for it and stop.
+2. Read the epic file and enumerate its distinct epics (top-level `#`/`##` sections — usually headings containing "Epic"). A single-epic file has exactly one.
+3. Resolve the target epic:
+   - One epic in the file → use it; `epic-id` is ignored.
+   - Multiple epics + `epic-id` given → resolve by index or substring. If it matches none or is ambiguous, list the epic headings and ask.
+   - Multiple epics + no `epic-id` → list the epic headings and ask which one.
+4. **Echo the resolved epic heading back to the user for confirmation** before running the first stage.
+5. Persist `epic_file` and the resolved `epic_heading` in state. On later invocations, reuse them from state (do not re-resolve unless the user passes a different `<epic-file>`/`epic-id`).
+
+Throughout the stages below, **`<epic-file>`** and **`<epic-heading>`** refer to these resolved values. When the file holds multiple epics, every sub-agent prompt must say: *"the target epic is the section under heading `<epic-heading>`; ignore the other epics in this file."*
 
 ---
 
 ## State management
 
-State file path: `.claude/fv-grounding-workflow.json`
+State file path: `.claude/epics-workflow/<state-slug>.json`, where `<state-slug>` is the epic file's basename without extension, plus `--<epic-id-slug>` when an `epic-id` was used (e.g. `blunder-reason-field-epic.json`, or `deep_reveal_epics--past-games.json`). Create the `.claude/epics-workflow/` directory if it does not exist.
 
 Schema:
 ```json
 {
+  "epic_file": null,
+  "epic_heading": null,
   "spec_dir": null,
   "stage": "epic_critique",
   "pending_critique": null,
@@ -21,12 +47,13 @@ Schema:
 ```
 
 **On every invocation:**
-1. Read the state file if it exists; otherwise initialize with the schema above and write it.
-2. After loading, merge the file contents with the full schema defaults — any key present in the schema but missing from the file gets its default value.
-3. Execute the current stage.
-4. Write updated state before ending your turn.
+1. Resolve the epic (above) to compute the `<state-slug>`.
+2. Read the state file if it exists; otherwise initialize with the schema above and write it.
+3. After loading, merge the file contents with the full schema defaults — any key present in the schema but missing from the file gets its default value.
+4. Execute the current stage.
+5. Write updated state before ending your turn.
 
-If the state file is corrupted, ask whether to restart or pick a stage manually.
+If the state file is corrupted, ask whether to restart or pick a stage manually. If the loaded `stage` is already `done`, tell the user the artifacts are complete and point them at `/coordinate-implementation <spec_dir>` rather than restarting.
 
 **Interrupted-critique recovery:**
 If the loaded stage is a `*_fix` stage **and** `pending_answers` is null, the previous session ended after the critique was saved but before the Q&A completed. Recover:
@@ -38,7 +65,7 @@ If the loaded stage is a `*_fix` stage **and** `pending_answers` is null, the pr
 
 ## Stakeholder communication
 
-The user is both a product and technical stakeholder, but is **not immersed in the artifacts**. Every question and explanation must be self-contained — explain what each reference points to before asking about it. Replace bare artifact references with descriptions (e.g. say "the lookahead search that compares the better and played move" rather than "sparseLookahead.js").
+The user is both a product and technical stakeholder, but is **not immersed in the artifacts**. Every question and explanation must be self-contained — explain what each reference points to before asking about it. Replace bare artifact references with descriptions.
 
 ---
 
@@ -108,27 +135,24 @@ If `pending_deferrals` is non-empty, append a `## Deferrals` section.
 
 ---
 
+## Reading contract (every sub-agent)
+
+Because this command carries no epic-specific content, every sub-agent prompt instructs the agent to:
+1. Read **`<epic-file>`** (the section under **`<epic-heading>`** when the file is multi-epic; ignore the other epics).
+2. Read the target epic's **`Settled decisions`** and **`Non-obvious facts`** sections and **reflect them verbatim — do not re-derive them.**
+3. Read every document listed in the target epic's **`Authoritative sources of truth`** section (that section is the epic's own curated reading list and emphasis).
+4. Read `docs/best_practices_spec_driven_development.md`.
+5. Treat any of the epic's `Settled decisions`, `NOT included`, `Acceptance criteria`, or (if present) a contract/target-shape section as **hard constraints**; an artifact that violates one is a **defect**.
+
+Each stage's prompt embeds this contract by reference as **"the Reading contract"**.
+
+---
+
 ## Stage reference
 
 Stages in order: `epic_critique` → `epic_fix` → `spec_create` → `spec_critique` → `spec_fix` → `plan_create` → `plan_critique` → `plan_fix` → `tasks_create` → `tasks_critique` → `tasks_fix` → `done`
 
 All stages run their sub-agent (or Q&A protocol) and **immediately advance** to the next stage. The only pauses are `AskUserQuestion` calls and inline discussion via "Other".
-
----
-
-## Invariants every critique and create agent must enforce
-
-These come from the epic's "Settled decisions" and "Non-obvious facts". Any artifact that violates one is a **defect**:
-
-1. **Artifact under test = feature vector + glossary**, not the model. Grading is A3 (mechanism real & load-bearing) / A4 (no fabrication).
-2. **Pruning trap:** every new honest-negative signal must be a **truthy enum** (`edgeType: 'positional'`, `winChance: 'none'`), or it is stripped by both `toFeatureVector`'s prune and the answerer's `pruneVector` and the model never sees it.
-3. **No full move-sequence PV.** Gap 7 = decisive-line-with-timing contrast + free mate distance.
-4. **Mate distance** comes from the c4solver score magnitude (optimal-play); it must stay **labeled distinct from `realizedOnPly`** (mistake-branch depth).
-5. **Differential is cell-set based and symmetric** (best-novel AND played-novel), never count-based.
-6. **`losing_either_way` = floor + ceiling**, never causation of a pre-existing loss. Honesty wording: "no winning chance found **within the search**," never "you cannot win."
-7. **Scope = feature vector + glossary only.** The production deep-reveal prompt must remain functional with **no regressions** but is **not** rewritten. The shared `collectNovelOpportunities`/`compareOpportunities` seam feeds the production annotation gate — changes must not regress it.
-8. **Frozen set stays constant in shape-of-process:** acceptance regenerates `eval_set_fv_suff_frozen_vectors.jsonl` but does **not** re-run the OpenAI answerer or re-grade inside the epic.
-9. **Glossary edits are lockstep** with every field change; absence = "not present" (§6) preserved.
 
 ---
 
@@ -140,32 +164,13 @@ Spawn an **Opus** sub-agent:
 
 ```
 ## Goal
-Verify that the Feature-Vector Grounding epic in docs/epics/feature-vector-grounding-epic.md contains
-all the information required to write a high-quality spec. Check that it is complete enough that a
-clear-context agent could produce a spec from it alone, following spec-driven development best
-practices. Find gaps or mismatches between the epic and the authoritative sources of truth.
+Verify that the target epic contains all the information required to write a high-quality spec. Check
+that it is complete enough that a clear-context agent could produce a spec from it alone, following
+spec-driven development best practices. Find gaps or mismatches between the epic and its own
+authoritative sources of truth.
 
-## What to read
-- docs/epics/feature-vector-grounding-epic.md — the epic under review
-- docs/architecture/feature-vector-sufficiency-experiment.md — the experiment this follows; the
-  "frozen set stays constant" invariant and the model/prompt-builder trajectory
-- docs/architecture/feature-vector-glossary.md — the CONTRACT under test; §5.1 (patterns*),
-  §5.2 (threatStats), §5.3 (lookahead), §6 (pruning/absence). Any field change that does not have a
-  matching glossary edit is a defect.
-- connect-four/server/sparseLookahead.js — the search where the new detectors live; note its
-  documented traps (selectOpponentMistakeCols score<=0 concessions, INITIAL depth tier, pre-move query,
-  budget-per-candidate)
-- connect-four/server/explainContext.js — toFeatureVector projection (~208-275) AND the production
-  lookaheadSection (~806-926) that must NOT regress; collectNovelOpportunities/compareOpportunities are
-  shared with the production annotation gate
-- connect-four/server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md — the grader's
-  counterexample list (the requirements source)
-- docs/best_practices_spec_driven_development.md
-
-Also read the "Settled decisions" and "Non-obvious facts" sections of the epic.
-
-## Enforce the invariants
-[paste the "Invariants every critique and create agent must enforce" list verbatim]
+## Reading contract
+[paste the Reading contract, substituting <epic-file> and <epic-heading>]
 
 ## Output format
 
@@ -207,7 +212,8 @@ Save: `{ "pending_answers": "<formatted Q&A>" }`.
 Spawn a **Sonnet** sub-agent. Prepend handoff if non-null.
 
 ```
-Edit docs/epics/feature-vector-grounding-epic.md to resolve the issues listed below.
+Edit <epic-file> to resolve the issues listed below (the target epic is the section under heading
+"<epic-heading>"; do not touch other epics in the file).
 
 ## Critique that was raised
 [paste pending_critique verbatim]
@@ -216,16 +222,15 @@ Edit docs/epics/feature-vector-grounding-epic.md to resolve the issues listed be
 [paste pending_answers verbatim]
 
 Apply all resolutions directly to the file. Do not introduce new content beyond what is needed. Keep
-the epic's existing section structure (Settled decisions, Non-obvious facts, NOT included,
-Counterexample traceability, Acceptance criteria). Output a brief bullet-point summary of what you changed.
+the epic's existing section structure (Settled decisions, Non-obvious facts, NOT included, Acceptance
+criteria, and any contract/traceability sections). Output a brief bullet-point summary of what you changed.
 
 ## Deferral rule
 If the answers include a `## Deferrals` section, add a `### Deferred` subsection in the epic for each
 deferred item with a one-sentence rationale.
 
 ## Handoff context (required)
-At the very end, output a "## Handoff context" section: key decisions + reasoning, trade-offs/deferrals,
-fragile areas to scrutinize, anything non-obvious lost if only the file were read.
+[standard handoff instruction]
 ```
 
 Capture handoff. Show summary to user with: "Epic updated. Creating spec now…"
@@ -238,31 +243,24 @@ Save state: `{ "stage": "spec_create", "pending_critique": null, "pending_answer
 
 ### `spec_create`
 
-Check `specs/index.md` and existing `specs/` subdirectories for an existing Feature-Vector Grounding spec directory. If none, speckit-specify will create one.
+Check `specs/index.md` and existing `specs/` subdirectories for an existing spec directory for this epic. If none, speckit-specify will create one.
 
 Spawn a **Sonnet** sub-agent. Prepend handoff if non-null.
 
 ```
-Your job is to create the spec for the Feature-Vector Grounding epic using the /speckit-specify command.
+Your job is to create the spec for the target epic using the /speckit-specify command.
 
-Before running, read:
-- docs/epics/feature-vector-grounding-epic.md
-- docs/architecture/feature-vector-sufficiency-experiment.md
-- docs/architecture/feature-vector-glossary.md — the contract under test
-- connect-four/server/sparseLookahead.js
-- connect-four/server/explainContext.js
-- connect-four/server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md
-- docs/best_practices_spec_driven_development.md
+## Reading contract
+[paste the Reading contract, substituting <epic-file> and <epic-heading>]
 
-Read the "Settled decisions" and "Non-obvious facts" sections of the epic before writing the spec —
-reflect them verbatim, do not re-derive them. Preserve the three user stories (A: time-grounding +
-decisive-line-with-timing contrast; B: causation/stakes; C: threatStats legibility + ride-alongs) and
-the §9 counterexample→field traceability.
+Read the "Settled decisions" and "Non-obvious facts" sections before writing the spec — reflect them
+verbatim, do not re-derive them. Preserve the epic's user stories and any counterexample→field /
+coverage traceability it defines.
 
 Then run /speckit-specify. After it completes, output the exact path of the spec directory.
 
 ## Handoff context (required)
-At the very end, output a "## Handoff context" section (decisions, trade-offs, fragile areas, non-obvious intent).
+[standard handoff instruction]
 ```
 
 Extract spec directory path and handoff.
@@ -279,25 +277,16 @@ Spawn an **Opus** sub-agent. Prepend handoff if non-null.
 
 ```
 ## Goal
-Critically review the spec against the epic, the glossary contract, the lookahead search code, the
-grader's counterexamples, and spec-driven development best practices. Use the handoff context to
-distinguish intentional decisions from defects.
+Critically review the spec against the target epic, its authoritative sources of truth, and spec-driven
+development best practices. Use the handoff context to distinguish intentional decisions from defects.
 
 ## What to read
 - <spec_dir>/spec.md
-- docs/epics/feature-vector-grounding-epic.md
-- docs/architecture/feature-vector-glossary.md — any field change without a matching glossary edit, or
-  any new honest-negative signal that is NOT a truthy enum (pruning trap), is a defect
-- connect-four/server/sparseLookahead.js
-- connect-four/server/explainContext.js — toFeatureVector AND the production lookaheadSection /
-  collectNovelOpportunities / compareOpportunities seam that must not regress
-- connect-four/server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md
-- docs/best_practices_spec_driven_development.md
+## Reading contract
+[paste the Reading contract, substituting <epic-file> and <epic-heading>]
 
-Re-read the epic's "Settled decisions" and "Non-obvious facts" sections.
-
-## Enforce the invariants
-[paste the "Invariants every critique and create agent must enforce" list verbatim]
+Re-read the epic's "Settled decisions" and "Non-obvious facts" sections. Any spec content that violates
+a Settled decision, a "NOT included" item, or the epic's contract/acceptance section is a defect.
 
 ## Output format
 
@@ -310,7 +299,7 @@ Re-read the epic's "Settled decisions" and "Non-obvious facts" sections.
 Limit to **top 3 blocking issues** and **top 2 decisions**. Self-contained audience.
 
 ## Handoff context (required)
-[standard: decisions, trade-offs, fragile areas, non-obvious intent, what you did NOT flag]
+[standard handoff instruction]
 ```
 
 Capture handoff. Save state: `{ "stage": "spec_fix", "pending_critique": "<output>" }`.
@@ -335,11 +324,11 @@ Edit <spec_dir>/spec.md to resolve the issues listed below.
 Apply all resolutions. Output a brief bullet-point summary of what you changed.
 
 ## Deferral rule
-If the answers include a `## Deferrals` section, add a `### Deferred` subsection in
-docs/epics/feature-vector-grounding-epic.md for each deferred item.
+If the answers include a `## Deferrals` section, add a `### Deferred` subsection in <epic-file>
+(under the "<epic-heading>" epic) for each deferred item.
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff. Show summary with: "Spec updated. Creating plan now…"
@@ -357,23 +346,16 @@ Spawn a **Sonnet** sub-agent. Prepend handoff if non-null.
 ```
 Your job is to create the implementation plan for the spec at <spec_dir> using the /speckit-plan command.
 
-Before running, read:
+## What to read
 - <spec_dir>/spec.md
-- docs/epics/feature-vector-grounding-epic.md
-- docs/architecture/feature-vector-glossary.md
-- connect-four/server/sparseLookahead.js
-- connect-four/server/explainContext.js
-- connect-four/server/scripts/run_eval.mjs — how the frozen set is regenerated (--no-llm, depth 20)
-- docs/best_practices_spec_driven_development.md
+## Reading contract
+[paste the Reading contract, substituting <epic-file> and <epic-heading>]
 
-The plan must: sequence the work so the shared collectNovelOpportunities/compareOpportunities seam is
-changed without regressing the production prompt; create unit tests (none exist today for these modules;
-runner is `npm run test:fast` inside connect-four/); and end with regenerating
-eval_set_fv_suff_frozen_vectors.jsonl + a board spot-check. It must NOT include re-running the OpenAI
-answerer or re-grading.
+The plan must honor the epic's "Settled decisions" and "Non-obvious facts" (sequencing, regression
+gates, test runner, acceptance steps) and must not violate any "NOT included" item.
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff.
@@ -391,23 +373,18 @@ Spawn an **Opus** sub-agent. Prepend handoff if non-null.
 ```
 ## Goal
 Verify the implementation plan is sequentially implementable, consistent with the spec and epic, and
-upholds the invariants. A developer must be able to follow it top-to-bottom without hitting an unbuilt
-dependency or regressing the production deep-reveal prompt. Use the handoff context to distinguish
-intentional decisions from errors.
+upholds the epic's Settled decisions. A developer must be able to follow it top-to-bottom without
+hitting an unbuilt dependency or violating a Settled decision / "NOT included" constraint. Use the
+handoff context to distinguish intentional decisions from errors.
 
 ## What to read
 - <spec_dir>/plan.md
 - <spec_dir>/spec.md
-- docs/epics/feature-vector-grounding-epic.md
-- connect-four/server/sparseLookahead.js
-- connect-four/server/explainContext.js — the production lookaheadSection / shared-seam regression risk
-- docs/best_practices_spec_driven_development.md
+## Reading contract
+[paste the Reading contract, substituting <epic-file> and <epic-heading>]
 
-Re-read the epic's "Settled decisions" and "Non-obvious facts".
-
-## Enforce the invariants
-[paste the invariants list verbatim] — pay special attention to invariant 7 (no production-prompt
-regression via the shared seam) and invariant 2 (pruning trap on every new signal).
+Re-read the epic's "Settled decisions" and "Non-obvious facts" — pay special attention to any
+regression-risk seam or precondition gate the epic calls out.
 
 ## Output format
 
@@ -420,7 +397,7 @@ regression via the shared seam) and invariant 2 (pruning trap on every new signa
 Limit to **top 3 blocking issues** and **top 2 decisions**. Self-contained audience.
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff. Save state: `{ "stage": "plan_fix", "pending_critique": "<output>" }`.
@@ -445,11 +422,11 @@ Edit <spec_dir>/plan.md to resolve the issues listed below. Also edit <spec_dir>
 Apply all resolutions. Output a brief bullet-point summary of what you changed.
 
 ## Deferral rule
-If the answers include a `## Deferrals` section, add a `### Deferred` subsection in
-docs/epics/feature-vector-grounding-epic.md for each deferred item.
+If the answers include a `## Deferrals` section, add a `### Deferred` subsection in <epic-file>
+(under the "<epic-heading>" epic) for each deferred item.
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff. Show summary with: "Plan updated. Generating tasks now…"
@@ -467,18 +444,18 @@ Spawn a **Sonnet** sub-agent. Prepend handoff if non-null.
 ```
 Your job is to generate the task list for the spec at <spec_dir> using the /speckit-tasks command.
 
-Before running, read:
+## What to read
 - <spec_dir>/spec.md
 - <spec_dir>/plan.md
-- docs/epics/feature-vector-grounding-epic.md
+- <epic-file> (the "<epic-heading>" epic)
 - docs/best_practices_spec_driven_development.md
 
-Tasks must cover all three user stories (A, B, C), keep each story independently testable/re-gradeable,
-include the glossary-lockstep edits, and end each story with regenerate-frozen + board spot-check. Do
-NOT include re-running the answerer or re-grading.
+Tasks must cover all of the epic's user stories, keep each story independently testable, include the
+lockstep documentation edits the epic requires, and end each story with the epic's acceptance steps. Do
+NOT include anything the epic lists under "NOT included".
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff.
@@ -497,18 +474,14 @@ Spawn an **Opus** sub-agent. Prepend handoff if non-null.
 ## Goal
 Full cross-artifact consistency check: verify the task list completely covers the spec and plan, tasks
 are correctly ordered with no broken dependencies, and executing them top-to-bottom delivers everything
-the Feature-Vector Grounding epic requires (including the glossary-lockstep edits, the pruning-safe
-enums, and no production-prompt regression). Use /speckit-analyze as your primary tool, then add your
-own judgment.
+the epic requires (including its lockstep doc edits, acceptance criteria, and "NOT included"
+boundaries). Use /speckit-analyze as your primary tool, then add your own judgment.
 
 ## What to read
 - <spec_dir>/tasks.md
 - <spec_dir>/spec.md
 - <spec_dir>/plan.md
-- docs/epics/feature-vector-grounding-epic.md — tasks must deliver the §9 traceability and respect
-  "NOT included"
-- docs/architecture/feature-vector-glossary.md — every field change needs a matching glossary task
-- connect-four/server/explainContext.js — the shared-seam regression risk
+- <epic-file> (the "<epic-heading>" epic) — tasks must deliver its traceability and respect "NOT included"
 - docs/best_practices_spec_driven_development.md
 
 ## Steps
@@ -519,7 +492,7 @@ own judgment.
 ## Output format
 
 ## Blocking issues
-[missing, misordered, or broken-dependency tasks; missing glossary or test tasks — describe + recommend fix]
+[missing, misordered, or broken-dependency tasks; missing lockstep-doc or test tasks — describe + recommend fix]
 
 ## Decisions required
 [scope or priority choices needed before implementation — question + options + recommended default]
@@ -527,7 +500,7 @@ own judgment.
 Limit to **top 3 blocking issues** and **top 2 decisions**. Self-contained audience.
 
 ## Handoff context (required)
-[standard]
+[standard handoff instruction]
 ```
 
 Capture handoff. Save state: `{ "stage": "tasks_fix", "pending_critique": "<output>" }`.
@@ -552,8 +525,8 @@ Edit <spec_dir>/tasks.md to resolve the issues listed below. Also edit spec.md o
 Apply all resolutions. Output a brief bullet-point summary of what you changed.
 
 ## Deferral rule
-If the answers include a `## Deferrals` section, add a `### Deferred` subsection in
-docs/epics/feature-vector-grounding-epic.md for each deferred item.
+If the answers include a `## Deferrals` section, add a `### Deferred` subsection in <epic-file>
+(under the "<epic-heading>" epic) for each deferred item.
 ```
 
 Show summary to the user.
@@ -564,7 +537,7 @@ Output:
 
 ---
 
-**Feature-Vector Grounding epic is ready for implementation.**
+**The "<epic-heading>" epic is ready for implementation.**
 
 Artifacts:
 - `<spec_dir>/spec.md`
@@ -579,4 +552,4 @@ Run `/coordinate-implementation <spec_dir>` to begin.
 
 Output:
 
-> Feature-Vector Grounding artifacts are complete and have already been reviewed. Run `/coordinate-implementation <spec_dir>` to begin implementation.
+> The "<epic-heading>" artifacts are complete and have already been reviewed. Run `/coordinate-implementation <spec_dir>` to begin implementation.

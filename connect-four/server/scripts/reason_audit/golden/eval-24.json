@@ -1,0 +1,18 @@
+{
+  "id": "eval-24",
+  "boardState": "333332562100",
+  "movePlayed": 4,
+  "correctMove": 0,
+  "category": "drawing_move",
+  "grain": "zugzwang_class",
+  "winner": "player",
+  "outcomeDelta": { "best": "win", "played": "draw" },
+  "register": {
+    "bestPlies": 27,
+    "playedPlies": "none",
+    "phase": "slow_zugzwang",
+    "word": "slow_zugzwang"
+  },
+  "zugzwang": { "noThreatWithinPlies": 27 },
+  "betterMoveDoes": "Keeps a slow endgame win (5 of 7 columns win, including the played-over edge col1) that the played move throws away to a draw; the win resolves only as the board fills (~ply 27 forward), with no standing threat or single winning four nameable now."
+}

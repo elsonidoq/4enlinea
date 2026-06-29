@@ -1,0 +1,18 @@
+{
+  "id": "eval-0",
+  "grain": "opening_principle",
+  "winner": "player",
+  "outcomeDelta": { "best": "win", "played": "draw" },
+  "register": {
+    "bestPlies": 41,
+    "playedPlies": "none",
+    "phase": "opening",
+    "word": "opening"
+  },
+  "principle": {
+    "name": "line_participation",
+    "bestCellFours": 7,
+    "playedCellFours": 5
+  },
+  "betterMoveDoes": "Taking the center landing cell c4r1 (it sits in 7 possible fours vs 5 for c5r1) keeps the opening win that the played move concedes to a draw."
+}

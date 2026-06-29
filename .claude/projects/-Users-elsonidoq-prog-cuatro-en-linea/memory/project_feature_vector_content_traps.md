@@ -1,6 +1,6 @@
 ---
 name: project_feature_vector_content_traps
-description: "Two feature_vector content traps found via the sufficiency experiment: null lookahead outcomes on losing_either_way; patternsOpponent board-snapshot ambiguity"
+description: "feature_vector content traps from the sufficiency experiment: null lookahead outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd inverted semantics; immediate_threat severity stamped from tag name"
 metadata: 
   node_type: memory
   type: project
@@ -32,5 +32,28 @@ model error — exactly the counterexample class the sufficiency experiment exis
 Candidate fix: pin/clarify the snapshot in the glossary, or have `toFeatureVector` emit
 `patternsOpponent` per-snapshot.
 
+**3. `lookahead.outcomeTiming.*.pliesToEnd` is inverted, and the glossary describes it backwards.**
+`toPliesToEnd` (`server/sparseLookahead.js`) returns `Math.abs(score)`. Per `reference_c4solver_scores`,
+a SMALL `|score|` resolves LATE (slow) and a LARGE one resolves SOON — the opposite of a forward
+"plies from now" count. So `played.pliesToEnd:1` on eval-6 is a **~22-ply zugzwang loss**, not a
+1-ply loss. The strong floor model read it as "loses at once" and fabricated. The glossary (~line 323,
+339) was corrected 2026-06-28 to flag this; the code is still `Math.abs(score)`. **How to apply:**
+never treat `pliesToEnd` as "moves from now"; the proposed fix is `endMove(score) - movestring.length`
+(end-move via c4solver inverse formula). Surface it *tactically* — the vector must not mention solver
+scores.
+
+**4. `immediate_threat` severity is stamped from the tag name, not verified.** `patternSeverity`
+(`server/explainContext.js` ~line 86-92) returns `'immediate'` for any `immediate_threat`/`double_threat`
+tag unconditionally; `classifyPattern` can emit `immediate_threat` on a cell that does NOT complete a
+4-in-a-row (eval-6: `patternsOpponent.immediate_threat:["c3r2"]` while c3r2 is simultaneously in
+`opponentMinor` and only DRAWS). Project rule (`reference_cat5_forced_block_detection`): never infer
+immediacy from a tag/score — verify with `checkWin` at the gravity-top cell. **How to apply:** gate
+`severity:'immediate'` on a real win-completion check before trusting the field as a decisive threat.
+
+Cross-cutting principle (from the v2 sufficiency run): **a confidently-wrong field is worse than an
+absent one** — Condition B (fields stripped) abstains; Conditions A/C with misleading fields fabricate
+at high confidence. Prune/verify aggressively; absence is safer than a plausible-but-wrong value.
+
 Related: [[feedback_feature_vector_design]], [[project_explain_prompt_grounding_traps]],
-[[reference_deep_reveal_eval_harness]].
+[[reference_deep_reveal_eval_harness]], [[reference_c4solver_scores]],
+[[reference_cat5_forced_block_detection]].

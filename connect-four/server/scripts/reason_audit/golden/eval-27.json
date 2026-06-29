@@ -1,0 +1,27 @@
+{
+  "id": "eval-27",
+  "grain": "line",
+  "winner": "opponent",
+  "outcomeDelta": { "best": "win", "played": "loss" },
+  "register": {
+    "bestPlies": 34,
+    "playedPlies": 2,
+    "phase": "immediate",
+    "word": "immediate"
+  },
+  "line": {
+    "playedLine": {
+      "completingCell": "c2r5",
+      "window": ["c2r2", "c2r3", "c2r4", "c2r5"],
+      "completingPly": 9,
+      "forced": "yes"
+    },
+    "bestLine": {
+      "completingCell": "c6r6",
+      "window": ["c3r3", "c4r4", "c5r5", "c6r6"],
+      "completingPly": 42,
+      "forced": "no"
+    }
+  },
+  "betterMoveDoes": "the better move blocks the opponent's threat at c2r5, turning a loss into a win"
+}

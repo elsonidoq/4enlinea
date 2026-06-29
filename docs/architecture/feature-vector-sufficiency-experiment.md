@@ -3,7 +3,20 @@
 **Status:** experimental (apparatus implemented 2026-06-26; first grading run complete 2026-06-26 —
 8/18 cases passed Condition A; all 10 failures were A3/A4. Report:
 `server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md`. Remediation staged as
-`docs/epics/feature-vector-grounding-epic.md`, driven by `/fv-grounding-manager`.)
+`docs/epics/feature-vector-grounding-epic.md`, driven by the generic `/epics-manager` command
+(`/epics-manager docs/epics/feature-vector-grounding-epic.md`). Iteration 2 — the `reason` field —
+is `docs/epics/blunder-reason-field-epic.md`.)
+
+Second grading run 2026-06-28 (`fv_suff_answers_all_v2.jsonl`, N=2 runs/case; report
+`server/scripts/fv_suff_answers_all_v2_grade_report.md`): **Condition A 9/18, B 0/18, C 10/18.**
+Two findings: (1) **C ≥ A on every axis** (A4 27/36 vs 22/36) — the `movestring` in A tempts the
+model to re-derive the board and *fabricate* present-tense threats; the distilled fields alone are
+*safer*. (2) **A confidently-wrong field is worse than an absent one** — B (fields stripped) honestly
+abstains, A/C with misleading fields fabricate at high confidence. Dominant A3/A4 drivers: threat-cell
+fields lacking a snapshot/severity anchor, `pliesToEnd` inverted semantics (see glossary known-issue),
+and `losing_either_way` carrying no "loses slower" signal. Anchor case for the next iteration: eval-6.
+Note: N differs from run 1 (3 vs 2), so case-pass counts are not directly comparable — trust
+run-level axis rates.
 **Created:** 2026-06-26
 
 ## 1. Background / why this exists

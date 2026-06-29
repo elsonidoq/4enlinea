@@ -1,5 +1,9 @@
 # Memory index — trigger-first
 
+## Before driving a speckit epic / looking for a `*-manager` command
+
+- [Epics-manager consolidation](project_epics_manager_consolidation.md) — 8 per-epic managers deleted; use generic `/epics-manager <epic-file> [epic-id]`; epics must self-carry Settled decisions/Non-obvious facts/Authoritative sources
+
 ## Before writing a game simulation / random-position loop
 
 - [Game simulation harness](reference_game_simulation_harness.md) — all self-play centralized in server/gameSampling.js (playGame/simulateGame/harvestBlunders); don't hand-roll
@@ -134,7 +138,8 @@
 - [Deep reveal zone fixes](deep_reveal_zone_validation_fixes.md) — P5strong:tg zero-count trap; P3 markup stripping; normalizeZoneTags
 - [Deep reveal failures table](reference_deep_reveal_failures.md) — debugging tool for annotation rejections
 - [eval_set_large_3_sparse subset](reference_eval_set_large_3_sparse_subset.md) — strict subset of eval_set_large_3.json; don't combine
-- [Feature vector content traps](project_feature_vector_content_traps.md) — lookahead outcomes null on losing_either_way (use solver); patternsOpponent snapshot ambiguity
+- [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd inverted (=|score|); immediate_threat severity from tag; wrong field worse than absent
+- [Reason-field unification](project_reason_field_unification.md) — the 5 blunder-reason kinds collapse to ONE rule: exhibit the winning connect-4 line(s) + compare timing/availability across branches; no opponent line reachable → OMIT (not a blunder); audit in reason_audit/
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
 - [Eval design methodology](feedback_eval_design_methodology.md) — when validating LLM artifacts: floor test w/ stronger same-vendor model, counterexamples not averages, ablation, separate from run_eval
@@ -190,6 +195,7 @@
 - [Answer before editing](feedback_answer_before_editing.md)
 - [Empirical first](feedback_empirical_first.md)
 - [LLM output root-cause](feedback_llm_output_root_cause.md) — goal-first, then RCA across render/context/generator; a missing signal is a question, not a fact; observe with tools
+- [Occam + principled extrapolation](feedback_occam_principled_extrapolation.md) — one unifying mechanism over many special-case kinds; generalize from examples, don't enumerate cases
 
 - [Use rg/fd/sg not grep/find](feedback_use_ripgrep.md)
 - [Mark tasks completed promptly](feedback_update_tasks_promptly.md)

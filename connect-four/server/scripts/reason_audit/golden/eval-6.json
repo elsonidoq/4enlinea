@@ -1,0 +1,25 @@
+{
+  "id": "eval-6",
+  "board_state": "444423333643535655",
+  "move_played": 1,
+  "correct_move": 2,
+  "grain": "line",
+  "winner": "opponent",
+  "outcomeDelta": { "best": "draw", "played": "loss" },
+  "register": {
+    "bestPlies": "none",
+    "playedPlies": 23,
+    "phase": "slow_zugzwang",
+    "word": "slow_zugzwang"
+  },
+  "line": {
+    "playedLine": {
+      "completingCell": "c7r6",
+      "window": ["c4r3", "c5r4", "c6r5", "c7r6"],
+      "completingPly": 42,
+      "forced": "yes"
+    },
+    "bestLine": "absent"
+  },
+  "betterMoveDoes": "Playing column c3 holds the draw (best=draw) instead of conceding the loss the played move (column c2) reaches."
+}

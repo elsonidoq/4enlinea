@@ -320,7 +320,7 @@ move would have held the draw; your move loses."* (`null` = the outcome could no
 | Field | Meaning |
 |---|---|
 | `best.outcome` | Outcome of the better move under optimal play: `'win'` \| `'draw'` \| `'loss'`. |
-| `best.pliesToEnd` | Number of moves until the decisive outcome appears under optimal play (from solver score magnitude). `null` for draws or when the solver cannot provide a magnitude. |
+| `best.pliesToEnd` | ⚠️ **Currently the absolute solver-score magnitude (`Math.abs(score)`), NOT a forward ply count.** Per solver semantics a **smaller** magnitude resolves **later** (near game end / slow) and a **larger** magnitude resolves **sooner**. `null` for draws or unknown. **Known issue:** the field name and the prose below imply a "moves from now until the outcome" count, which is the *opposite* of the value's actual direction — it misreads as "loses immediately" on slow-zugzwang positions (anchor case: eval-6, where `played.pliesToEnd:1` is a ~22-ply loss, not a 1-ply loss). A fix to emit a true forward ply distance is proposed (compute end-move from score then subtract `movestring.length`). |
 | `played.outcome` | Same for the played move. |
 | `played.pliesToEnd` | Same for the played move. |
 
@@ -336,9 +336,12 @@ solver-score magnitude. **Three distinct timing concepts — do not conflate:**
 still carries information. `outcomeTiming` is never pruned when a lookahead result exists. Absent
 only when `lookahead` itself is `null`.
 
-**Read jointly with `reachability`**: a losing-floor side with a LARGER `pliesToEnd` loses slower —
-more turns for the opponent to err before the decisive outcome. This is the primary reason a
-losing-floor move may still be better than a faster-losing alternative.
+**Read jointly with `reachability`**: with the field as currently implemented (`Math.abs(score)`), a
+losing-floor side with a **SMALLER** `pliesToEnd` loses *slower* (smaller magnitude = resolves later
+= more turns for the opponent to err). ⚠️ This is the **opposite** of the prior wording here and of
+what the field name suggests — see the known-issue note in the table above. This slower-loss
+distinction is the primary reason a losing-floor move may still beat a faster-losing alternative; once
+the field is reworked to a true forward ply distance, the direction flips back to "larger = slower."
 
 **`decisiveLine`** — the completing 4-window found within the search horizon:
 

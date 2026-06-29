@@ -1,0 +1,30 @@
+{
+  "id": "eval-7",
+  "board_state": "44442333364353565516",
+  "move_played": 5,
+  "correct_move": 6,
+  "grain": "line",
+  "winner": "opponent",
+  "outcomeDelta": { "best": "loss", "played": "loss" },
+  "register": {
+    "bestPlies": 21,
+    "playedPlies": 1,
+    "phase": "immediate",
+    "word": "immediate"
+  },
+  "line": {
+    "playedLine": {
+      "completingCell": "c7r4",
+      "window": ["c7r1", "c7r2", "c7r3", "c7r4"],
+      "completingPly": 22,
+      "forced": "yes"
+    },
+    "bestLine": {
+      "completingCell": "c7r6",
+      "window": ["c4r3", "c5r4", "c6r5", "c7r6"],
+      "completingPly": 42,
+      "forced": "yes"
+    }
+  },
+  "betterMoveDoes": "Playing column c7 blocks Gray's immediate vertical win at c7r4 (the four c7r1·c7r2·c7r3·c7r4); the played move (column c6) lets Gray complete it on the very next move. Both branches still lose, but c7 forces Gray to grind ~20 more plies (terminal ply 42) instead of conceding on ply 22."
+}

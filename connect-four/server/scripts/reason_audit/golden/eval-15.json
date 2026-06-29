@@ -1,0 +1,32 @@
+{
+  "id": "eval-15",
+  "movestring": "3333302555551413111222444416",
+  "move_played": 0,
+  "correct_move": 2,
+  "reason": {
+    "outcomeDelta": { "best": "win", "played": "loss" },
+    "register": {
+      "bestPlies": 11,
+      "playedPlies": 3,
+      "phase": "endgame",
+      "word": "forced_sequence"
+    },
+    "grain": "line",
+    "winner": "opponent",
+    "betterMoveDoes": "Col2 puts your disc on c3r5 — the exact square the opponent needs for a diagonal four — while your standing threat at c1r3 still wins (you connect at c1r3, win in 11). Col0 instead lets the opponent take c1r3 and then complete that diagonal at c3r5, losing in 3.",
+    "line": {
+      "playedLine": {
+        "completingCell": "c3r5",
+        "window": ["c1r3", "c2r4", "c3r5", "c4r6"],
+        "completingPly": 32,
+        "forced": "yes"
+      },
+      "bestLine": {
+        "completingCell": "c1r3",
+        "window": ["c1r3", "c2r3", "c3r3", "c4r3"],
+        "completingPly": 39,
+        "forced": "no"
+      }
+    }
+  }
+}

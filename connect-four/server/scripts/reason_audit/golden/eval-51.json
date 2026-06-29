@@ -1,0 +1,25 @@
+{
+  "id": "eval-51",
+  "board_state": "4333345154",
+  "move_played": 0,
+  "correct_move": 5,
+  "grain": "line",
+  "winner": "opponent",
+  "outcomeDelta": { "best": "draw", "played": "loss" },
+  "register": {
+    "bestPlies": "none",
+    "playedPlies": 7,
+    "phase": "forced_sequence",
+    "word": "forced_sequence"
+  },
+  "line": {
+    "playedLine": {
+      "completingCell": "c3r2",
+      "window": ["c2r1", "c3r2", "c4r3", "c5r4"],
+      "completingPly": 18,
+      "forced": "yes"
+    },
+    "bestLine": "absent"
+  },
+  "betterMoveDoes": "Playing column c6 holds the draw (best=draw); the played move (column c1) lets the opponent force the winning four at c3r2 that the better move avoids (played=loss)."
+}
