@@ -36,3 +36,17 @@ export function gradesFilenameFor(name) {
   if (!isFvSuffAnswersFile(name)) return null;
   return name.replace(/\.jsonl$/, '_grades.jsonl');
 }
+
+// Derive the {id, pattern_category, feature_vector} eval-set rows the /admin/fv-suff Eval-answers
+// browser needs, straight from the answers file (each answer row embeds its feature_vector). One
+// row per unique id (first occurrence wins); rows without a feature_vector are skipped.
+export function deriveSetFromAnswers(answerRows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of answerRows) {
+    if (!r || !r.feature_vector || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ id: r.id, pattern_category: r.pattern_category, feature_vector: r.feature_vector });
+  }
+  return out;
+}

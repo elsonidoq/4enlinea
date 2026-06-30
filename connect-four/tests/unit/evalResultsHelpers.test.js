@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isValidEvalFilename, feedbackFilenameFor,
   isFvSuffAnswersFile, isReasonEvalSetFile, gradesFilenameFor,
+  deriveSetFromAnswers,
 } from '../../server/evalResultsHelpers.js';
 
 test('accepts valid eval result filenames', () => {
@@ -78,4 +79,21 @@ test('gradesFilenameFor appends _grades before .jsonl, null for invalid', () => 
   );
   assert.equal(gradesFilenameFor('fv_suff_answers_all.jsonl'), 'fv_suff_answers_all_grades.jsonl');
   assert.equal(gradesFilenameFor('eval_set.json'), null);
+});
+
+test('deriveSetFromAnswers dedupes by id, keeps {id,pattern_category,feature_vector}', () => {
+  const answers = [
+    { id: 'eval-1', condition: 'A', run_index: 0, pattern_category: 'win_to_draw', feature_vector: { case: 'win_to_draw', bestCol: 1 } },
+    { id: 'eval-1', condition: 'A', run_index: 1, pattern_category: 'win_to_draw', feature_vector: { case: 'win_to_draw', bestCol: 1 } },
+    { id: 'eval-2', condition: 'B', run_index: 0, pattern_category: 'draw_to_lose', feature_vector: { case: 'draw_to_lose', bestCol: 3 } },
+  ];
+  const set = deriveSetFromAnswers(answers);
+  assert.deepEqual(set, [
+    { id: 'eval-1', pattern_category: 'win_to_draw', feature_vector: { case: 'win_to_draw', bestCol: 1 } },
+    { id: 'eval-2', pattern_category: 'draw_to_lose', feature_vector: { case: 'draw_to_lose', bestCol: 3 } },
+  ]);
+});
+
+test('deriveSetFromAnswers skips rows without feature_vector', () => {
+  assert.deepEqual(deriveSetFromAnswers([{ id: 'eval-1', pattern_category: 'x' }]), []);
 });
