@@ -21,6 +21,8 @@ test('draw_to_lose ZUGZWANG: half-a denial occupies c4r6 of the opponent window;
   assert.equal(r.lostResource.cell, 'c4r6');
   assert.ok(r.lostResource.window.includes('c4r6'));
   assert.ok(r.lostResource.finalMovestring && r.lostResource.line.length >= 1);
+  // I12 window-awareness: the occupied cell must lie INSIDE the opponent's conceded window (tied, not independent).
+  assert.ok(r.opponentPunishment.window.includes(r.lostResource.cell));
   // the constructive tie is now WINDOW-AWARE: c4r6 is inside the opponent's window -> tied (NOT independent).
   assert.equal(r.opponentPunishment.tie.kind, 'tied');
   assert.deepEqual(r.opponentPunishment.tie.sharedCells, ['c4r6']);
