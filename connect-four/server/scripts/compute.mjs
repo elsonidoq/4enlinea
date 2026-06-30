@@ -231,6 +231,7 @@ async function runLlm(evidenceRows) {
 
   let done = 0, failed = 0;
   for (const row of evidenceRows) {
+    if (row.evidence?.notABlunder) continue;   // non-blunder: nothing to narrate (matches the engine's semantics)
     // toNarratorVector produces the UN-pruned narrator vector; per-condition pruning happens inside
     // buildPrompt via projectVector. feature_vector in the output line is always the full nv so the
     // grader and /admin/fv-suff can re-project under any condition without recomputing.

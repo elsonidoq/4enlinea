@@ -1,14 +1,14 @@
 ---
 name: grade-fv-sufficiency
-description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from explain_from_vector.mjs) against the frozen reason-engine eval set (fv_eval_set.jsonl) — scores axes A1–A4 and emits a counterexample report attributing failures to feature-field / glossary gaps
-argument-hint: "<path-to-fv_suff_answers_*.jsonl> [--vectors <fv_eval_set.jsonl>]"
+description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from compute.mjs --llm) — scores axes A1–A4 and emits a counterexample report attributing failures to feature-field / glossary gaps
+argument-hint: "<path-to-fv_suff_answers_*.jsonl> [--vectors <fv_suff_answers_*.jsonl>]"
 user-invocable: true
 ---
 
 # Feature-Vector Sufficiency Grader
 
 You are grading a batch of structured blunder-explanations produced by the answerer
-`server/scripts/explain_from_vector.mjs` (the "answerer"). Each explanation was written by a model
+`server/scripts/compute.mjs --llm` (the "answerer"). Each explanation was written by a model
 that saw **only** the **reason-engine feature vector** + the glossary
 (`docs/architecture/feature-vector-glossary.md`) — no tools, no solver ground truth. **You are the
 oracle:** you have the solver, the board, and the frozen record's `feature_vector` fields. Read the
@@ -89,8 +89,8 @@ Two files, joined by `id`:
                  "unsure_about":"…", "confidence":"medium" },
      "raw":"…", "parse_error":null, "call_error":null }
    ```
-2. **Frozen eval set jsonl** (default: the `fv_eval_set.jsonl` next to the answers, or `--vectors
-   <path>`): one row per case, shape `{ id, pattern_category, feature_vector }`. **All oracle fields
+2. **Vectors source** (default: the same answers file, or `--vectors <fv_suff_answers_*.jsonl>`):
+   each answers row embeds its `feature_vector`; there is no separate eval-set file. Shape `{ id, pattern_category, feature_vector }`. **All oracle fields
    are inside `feature_vector`:** `movestring` (the pre-move board), `bestCol` (= the correct move,
    0-indexed), `playedCol` (= the move played, 0-indexed), `case` (the outcome class), `bestScore`,
    `playedScore` (your-perspective solver scores on the decision board), and the two halves

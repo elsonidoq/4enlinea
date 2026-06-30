@@ -46,8 +46,6 @@ node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.json
 #   rows: { id, evidence, groundTruth }
 ```
 
-`--input` defaults to `server/scripts/reason_engine/reason_fixture.jsonl`.
-
 ---
 
 ## Step 2b — run the LLM answerer (PAID: calls `EXPLAIN_MODEL`)
