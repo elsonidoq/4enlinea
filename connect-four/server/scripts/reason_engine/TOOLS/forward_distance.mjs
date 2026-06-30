@@ -10,7 +10,7 @@
 // documented realizedOnPly:23). Smallest |score| => LARGEST distance (slow zugzwang).
 //
 // Usage (from connect-four/):
-//   node server/scripts/reason_audit/TOOLS/forward_distance.mjs <movestring> <col> [<col2> ...]
+//   node server/scripts/reason_engine/TOOLS/forward_distance.mjs <movestring> <col> [<col2> ...]
 // Prints outcome, forward plies, and suggested register for playing each col on the pre-move board.
 
 import { readFileSync } from 'fs';

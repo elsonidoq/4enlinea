@@ -13,7 +13,7 @@
 // only on <=10-empty boards, which is what we deliberately collect for the NotABlunder row).
 //
 // Usage (from connect-four/):
-//   node server/scripts/reason_audit/build_fixture.mjs
+//   node server/scripts/reason_engine/build_fixture.mjs
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

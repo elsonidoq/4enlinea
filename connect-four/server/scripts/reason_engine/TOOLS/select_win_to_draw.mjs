@@ -4,7 +4,7 @@
 // (score == 0). That legal draw column is a valid "played" win_to_draw blunder.
 //
 // Usage (from connect-four/):
-//   node server/scripts/reason_audit/TOOLS/select_win_to_draw.mjs [nGames] [seed]
+//   node server/scripts/reason_engine/TOOLS/select_win_to_draw.mjs [nGames] [seed]
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

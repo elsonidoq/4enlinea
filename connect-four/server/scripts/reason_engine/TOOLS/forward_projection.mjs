@@ -10,7 +10,7 @@
 // deep-zugzwang FLIP, or whether the win is a diffuse board-fill with no single nameable cell.
 //
 // Usage (from connect-four/):
-//   node server/scripts/reason_audit/TOOLS/forward_projection.mjs <movestring> [maxPlies]
+//   node server/scripts/reason_engine/TOOLS/forward_projection.mjs <movestring> [maxPlies]
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

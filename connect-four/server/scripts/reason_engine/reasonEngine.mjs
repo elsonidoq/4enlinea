@@ -7,7 +7,7 @@
 //   docs/architecture/blunder-reason-evidence.md  (two-half engine, registers, gate, validated boards)
 //
 // CLI (run from connect-four/):
-//   node server/scripts/reason_audit/reasonEngine.mjs <movestring> <playedCol>
+//   node server/scripts/reason_engine/reasonEngine.mjs <movestring> <playedCol>
 //
 // Every reason = TWO HALVES kept in SEPARATE fields:
 //   lostResource       (a) — what the BEST move preserved (kind varies by case)

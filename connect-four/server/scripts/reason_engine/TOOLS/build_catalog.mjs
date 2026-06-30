@@ -2,7 +2,7 @@
 // build_catalog.mjs — produce the full-66 routing catalog for the reason-field audit.
 //
 // Usage (from connect-four/):
-//   node server/scripts/reason_audit/TOOLS/build_catalog.mjs > server/scripts/reason_audit/CATALOG.md
+//   node server/scripts/reason_engine/TOOLS/build_catalog.mjs > server/scripts/reason_engine/CATALOG.md
 //
 // For each case in eval_set_large_3.json it queries the solver on the PRE-MOVE board,
 // reads the score of bestCol (correct_move) and playedCol (move_played), maps each to a
