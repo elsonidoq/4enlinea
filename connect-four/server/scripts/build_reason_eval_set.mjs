@@ -88,18 +88,40 @@ async function main() {
   const satisfied = () => [...counts.values()].length > 0 && [...counts.values()].every((c) => c >= TARGET_PER_PREDICATE);
   const collected = [];
   const seen = new Set();
-  let boards = 0, games = 0;
+  let boards = 0, games = 0, checked = 0;
   // Discovery floor: we don't know all reachable predicates up front, so stop on a coverage plateau
   // (no new predicate AND every seen predicate at target) or MAX_GAMES — whichever first.
   let lastNewAt = 0;
 
+  // Progress log every 5s: boards checked, boards generated, and the predicates still under target
+  // (count < TARGET). A predicate stuck at 1 keeps satisfied() false and the harvest running to
+  // MAX_GAMES — this surfaces exactly which one is holding it up.
+  const startedAt = Date.now();
+  let lastLogAt = startedAt;
+  const logProgress = () => {
+    const now = Date.now();
+    if (now - lastLogAt < 5000) return;
+    lastLogAt = now;
+    const under = [...counts.entries()]
+      .filter(([, c]) => c < TARGET_PER_PREDICATE)
+      .sort((a, b) => a[1] - b[1])
+      .map(([p, c]) => `${p}(${c})`);
+    const elapsed = ((now - startedAt) / 1000).toFixed(0);
+    process.stderr.write(
+      `[${elapsed}s] checked ${checked} · generated ${boards} · games ${games} · `
+      + `predicates ${counts.size} · under-target(${under.length}): ${under.join(' ') || 'none'}\n`,
+    );
+  };
+
   try {
     for await (const ply of harvestBlunders(solver, { maxGames: MAX_GAMES })) {
       games = ply.gameIndex;
-      const { boardState, movePlayed, gameIndex } = ply;
+      const { boardState, movePlayed } = ply;
+      logProgress();                       // time-based (every 5s), independent of board rate
       const key = `${boardState}|${movePlayed}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      checked++;                           // unique blunder positions examined
 
       let r;
       try { r = await computeReason(boardState, movePlayed, { solver }); }
@@ -125,7 +147,6 @@ async function main() {
       });
       writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n'); // crash-safe
       boards++;
-      if (boards % 10 === 0) process.stderr.write(`board ${boards}  game ${gameIndex}  predicates ${counts.size}  under-target ${[...counts.values()].filter((c) => c < TARGET_PER_PREDICATE).length}\n`);
       if (satisfied() && boards - lastNewAt > 200) break;
     }
   } finally {
