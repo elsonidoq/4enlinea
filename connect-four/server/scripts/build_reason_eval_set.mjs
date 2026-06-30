@@ -89,9 +89,6 @@ async function main() {
   const collected = [];
   const seen = new Set();
   let boards = 0, games = 0, checked = 0;
-  // Discovery floor: we don't know all reachable predicates up front, so stop on a coverage plateau
-  // (no new predicate AND every seen predicate at target) or MAX_GAMES — whichever first.
-  let lastNewAt = 0;
 
   // Progress log every 5s: boards checked, boards generated, and the predicates still under target
   // (count < TARGET). A predicate stuck at 1 keeps satisfied() false and the harvest running to
@@ -129,14 +126,10 @@ async function main() {
       if (r.notABlunder || !r.case || r.case === 'win_to_slower_win') continue;
 
       const preds = reasonPredicates(r);
-      // a board is useful if any predicate is still under target
+      // Keep the board only if it pushes some predicate toward the target; if every predicate it
+      // carries is already at target, it adds no coverage — skip it.
       const advancing = [...preds].filter((p) => (counts.get(p) || 0) < TARGET_PER_PREDICATE);
-      if (advancing.length === 0) {
-        // plateau check: if we've gone 400 boards with no under-target predicate and all are satisfied, stop
-        if (satisfied() && boards - lastNewAt > 400) break;
-        continue;
-      }
-      lastNewAt = boards;
+      if (advancing.length === 0) continue;
 
       for (const p of preds) counts.set(p, (counts.get(p) || 0) + 1);
       collected.push({
@@ -147,7 +140,8 @@ async function main() {
       });
       writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n'); // crash-safe
       boards++;
-      if (satisfied() && boards - lastNewAt > 200) break;
+      // Every predicate seen so far has reached the target → coverage complete, stop now.
+      if (satisfied()) break;
     }
   } finally {
     solver.destroy();
