@@ -1,10 +1,28 @@
 ---
 name: project_admin_fv_suff_repurposed
-description: /admin/fv-suff was repurposed (2026-06-29) into the blunder-reason evidence browser; the FV-sufficiency browser & its endpoints are GONE
+description: /admin/fv-suff has TWO modes (Evidence vectors + Eval answers LLM/grade); each reads a DIFFERENT file
 metadata: 
   node_type: memory
   type: project
   originSessionId: 8129d05b-a8c9-410f-9723-82e11e9622a5
+---
+
+**UPDATE 2026-06-30 — the page now has TWO modes (a tab toggle in `AdminFvSuffPage.jsx`), reading
+DIFFERENT files:**
+- **Evidence** — the blunder-reason vectors: `reason_evidence_*.jsonl` via `GET /api/admin/reason`
+  (build_evidence.mjs output). This is the original repurpose below.
+- **Eval answers** — board + vector + LLM answer + A1–A4 grade. The legacy `GET /api/admin/fv-suff`
+  was **REVIVED** (the "dead endpoint" note below is now obsolete): it serves `{ set, answers, grades }`
+  joined by `id`. `set` = an eval set (`(fv|reason)_eval_set*.jsonl`, narrator vectors); `answers` =
+  `fv_suff_answers_*.jsonl` (explain_from_vector.mjs); `grades` = `<answers-stem>_grades.jsonl`
+  (grade-fv-sufficiency side-output). **Gotcha:** the `set` you pick MUST be the same `--input` you
+  gave `explain_from_vector.mjs`, or the ids don't join (board shows blank). Filename prefixes are
+  load-bearing (validators in `server/evalResultsHelpers.js`): the `/files` answers list excludes
+  `*_grades.jsonl`; `build_evidence --out` must start `reason_evidence_` to appear in the Evidence
+  dropdown. **A consolidation is planned** (4 board/vector scripts → `select_boards.mjs` +
+  `compute.mjs(--llm)` + grade skill, one evidence file feeding both tabs) — see the handoff; don't
+  add more scripts.
+
 ---
 
 `/admin/fv-suff` (component still named `src/pages/AdminFvSuffPage.jsx`) **no longer shows the
@@ -32,7 +50,10 @@ History gotcha: the ReasonViewer page + `/api/admin/reason` endpoints were once 
 `build_evidence.mjs`) were also untracked and are now committed. If tests pass but a clean checkout
 fails to import, suspect untracked files.
 
-Gotcha that wasted time: a **stale running server instance serves the old routes** — after editing
-`server/index.js` you must kill and restart it, or `/api/admin/reason` falls through to the SPA
-catch-all and returns index.html instead of JSON. Implementation map lives in
+Gotcha that wasted time: a **stale running server instance serves the old routes/code** — after
+editing `server/index.js` you must kill and restart it. Two failure modes seen: (1) `/api/admin/reason`
+falls through to the SPA catch-all and returns index.html instead of JSON; (2) a lingering server
+holds the port, so your new `node server/index.js` silently fails with EADDRINUSE and curl keeps
+hitting the OLD code (symptom: the endpoint returns the previous response shape). Fix:
+`lsof -ti tcp:3001 | xargs kill -9` before re-booting. Implementation map lives in
 `docs/architecture/blunder-reason-evidence.md`.

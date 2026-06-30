@@ -145,7 +145,7 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 - `tests/integration/undercut_overcut.test.js`
 - `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer)
 
-**`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js` and `tests/blunder/insertGameBlunder.test.js` but **excludes** `tests/integration/candidate-generator.test.js`.
+**`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js`, `tests/blunder/insertGameBlunder.test.js`, the reason-engine suite `server/tests/reasonEngine{,.denial,.drawToLose,.enrichment,.witness}.test.mjs` (solver-backed but fast), and `server/tests/reasonNarratorVector.test.mjs` (pure) but **excludes** `tests/integration/candidate-generator.test.js`. (The reason-engine tests are in `test:fast` but **not** in the slower `test` script.)
 
 Files in `tests/difficulty/` and `tests/scores/` exist but are **not included** in either script — add them explicitly when they are ready.
 
