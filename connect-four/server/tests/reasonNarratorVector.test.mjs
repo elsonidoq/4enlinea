@@ -3,10 +3,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  toNarratorVector, pruneVector, pruneValue, HIDDEN_FIELDS, RESEARCH_LABELS,
+  toNarratorVector, pruneVector, pruneValue, HIDDEN_FIELDS,
 } from '../scripts/reasonNarratorVector.mjs';
 
-// A representative win_to_draw evidence row (with build_evidence labels appended), trimmed.
+// A representative win_to_draw evidence row — pure computeReason output, no research labels.
 const RAW = {
   movestring: '3325', playedCol: 5, bestCol: 1,
   scores: [-3, 18, 2, 3, -3, 0, -3],
@@ -16,9 +16,6 @@ const RAW = {
   opponentPunishment: { kind: 'denial', verdict: 'occupation', tie: { kind: 'tied', sharedCells: ['c2r1'] } },
   replyHistogram: { afterBest: 0, afterPlayed: 1 },
   gate: null,
-  // build_evidence.mjs labels (NOT part of computeReason):
-  expectedCase: 'win_to_draw', expectedGate: null, expectedExhaustive: null,
-  bucket: 'anchor', caseMatches: true,
 };
 
 test('toNarratorVector strips the raw per-column scores oracle', () => {
@@ -27,10 +24,6 @@ test('toNarratorVector strips the raw per-column scores oracle', () => {
   assert.deepEqual(HIDDEN_FIELDS, ['scores']);
 });
 
-test('toNarratorVector strips every fixture research label', () => {
-  const fv = toNarratorVector(RAW);
-  for (const label of RESEARCH_LABELS) assert.equal(label in fv, false, `${label} leaked`);
-});
 
 test('toNarratorVector keeps the engineered reason fields verbatim', () => {
   const fv = toNarratorVector(RAW);

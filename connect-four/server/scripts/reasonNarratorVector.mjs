@@ -11,28 +11,25 @@
 //   - (future) the production coach, which will call computeReason LIVE on the request and then
 //     this same projection — the eval and production share ONE definition of "what the LLM sees".
 //
-// Two things are removed from the raw evidence:
+// One thing is removed from the raw evidence:
 //   1. HIDDEN_FIELDS — raw solver ground truth the narrator must not see (per-column `scores`).
 //      The engineered halves (lostResource / opponentPunishment / case / bestScore / playedScore)
 //      carry the reason; the raw all-column score array is oracle leakage (cf. the old experiment's
 //      forbidden premove_scores). I1/I2: the vector is the artifact, not a solver dump.
-//   2. RESEARCH_LABELS — fixture ground-truth columns appended by build_evidence.mjs
-//      (expectedCase / expectedGate / expectedExhaustive / bucket / caseMatches). These are NOT part
-//      of computeReason's output; they only exist in the offline corpus and must never reach the LLM.
+//   Research labels (expectedCase / expectedGate / expectedExhaustive / bucket / caseMatches) now
+//   live in the sibling `groundTruth` field of the evidence row (never inside `evidence`), so they
+//   are never present in the object passed to toNarratorVector.
 
 // Raw solver oracle — present on computeReason output, hidden from the narrator.
 export const HIDDEN_FIELDS = ['scores'];
 
-// Fixture labels appended by build_evidence.mjs — not part of computeReason, never shown.
-export const RESEARCH_LABELS = ['expectedCase', 'expectedGate', 'expectedExhaustive', 'bucket', 'caseMatches'];
-
 /**
  * Project a raw reason-engine evidence object to the narrator-facing feature vector.
- * @param {object} reason  computeReason output (optionally with build_evidence labels).
- * @returns {object} a shallow copy with HIDDEN_FIELDS + RESEARCH_LABELS removed.
+ * @param {object} reason  computeReason output (pure evidence, no research labels).
+ * @returns {object} a shallow copy with HIDDEN_FIELDS removed.
  */
 export function toNarratorVector(reason) {
-  const omit = new Set([...HIDDEN_FIELDS, ...RESEARCH_LABELS]);
+  const omit = new Set(HIDDEN_FIELDS);
   const out = {};
   for (const [k, v] of Object.entries(reason)) if (!omit.has(k)) out[k] = v;
   return out;
