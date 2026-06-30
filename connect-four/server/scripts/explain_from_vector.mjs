@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 // explain_from_vector.mjs — Feature-Vector Sufficiency Experiment, the ANSWERER.
 //
-// Reads a frozen run_eval --no-llm jsonl, and for each record asks an OpenAI model to
-// explain WHY the played move was a blunder, using ONLY the feature vector + the glossary.
-// The prompt is ISOLATED: glossary text + the feature_vector JSON + the task. No tools, and
-// NEVER any solver ground truth (premove/played/best scores, correct_move). The model returns
-// the §4 structured-answer JSON, which the grader skill later checks against the board.
+// Reads a frozen reason-engine eval set (built by build_fv_eval_set.mjs from the reason corpus),
+// and for each record asks an OpenAI model to explain WHY the played move was a blunder, using
+// ONLY the feature vector + the glossary. The prompt is ISOLATED: glossary text + the
+// feature_vector JSON + the task. No tools, and NEVER any raw solver ground truth — the per-column
+// `scores` array is already stripped by toNarratorVector (reasonNarratorVector.mjs). The model
+// returns the structured-answer JSON, which the grade-fv-sufficiency skill later checks against
+// the board.
+//
+// The vector is the reason-engine evidence object (computeReason output, minus raw scores). In
+// PRODUCTION the same vector is computed LIVE from the request; here we read a frozen subset of the
+// offline corpus so iterations stay comparable. The LLM-facing projection (toNarratorVector +
+// pruneVector) is shared with production via reasonNarratorVector.mjs.
 //
 // Usage (from connect-four/):
-//   node server/scripts/explain_from_vector.mjs [--input <vectors.jsonl>] [--out <answers.jsonl>]
+//   node server/scripts/explain_from_vector.mjs [--input <eval_set.jsonl>] [--out <answers.jsonl>]
 //        [--n 3] [--condition A|B|C|all] [--model <id>]
 //
 // Env (connect-four/server/.env, manually parsed): EXPLAIN_MODEL (required, NOT OPENAI_MODEL —
@@ -22,6 +29,7 @@
 import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { pruneVector } from './reasonNarratorVector.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,7 +47,7 @@ function argVal(name, def) {
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : def;
 }
 const ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
-const inputPath = argVal('--input', join(__dirname, 'eval_set_fv_suff_frozen_vectors.jsonl'));
+const inputPath = argVal('--input', join(__dirname, 'fv_eval_set.jsonl'));
 const outPath = argVal('--out', join(__dirname, `fv_suff_answers_${ts}.jsonl`));
 const N = parseInt(argVal('--n', '3'), 10);
 const model = argVal('--model', process.env.EXPLAIN_MODEL);
@@ -52,44 +60,16 @@ if (!model) throw new Error('EXPLAIN_MODEL not set (and no --model given)');
 const GLOSSARY_PATH = join(__dirname, '../../../docs/architecture/feature-vector-glossary.md');
 const glossaryText = readFileSync(GLOSSARY_PATH, 'utf8');
 
-// ── pruneVector — honor glossary §6 (absence = "not present") ────────────────────
-// buildExplainContext writes the vector with prune:false, so all-zero threatStats buckets
-// and empty maps are present on the wire. The glossary the model reads says absent = not
-// present, so we recursively drop empties to match that contract. movestring is preserved
-// even when "" (empty board is meaningful) — handled by the top-level guard below.
-function pruneValue(v) {
-  if (Array.isArray(v)) {
-    const arr = v.map(pruneValue).filter((x) => x !== undefined);
-    return arr.length ? arr : undefined;
-  }
-  if (v && typeof v === 'object') {
-    // {count, cells} bucket that is all-zero/empty → drop
-    const out = {};
-    for (const [k, val] of Object.entries(v)) {
-      const pv = pruneValue(val);
-      if (pv !== undefined) out[k] = pv;
-    }
-    return Object.keys(out).length ? out : undefined;
-  }
-  if (v === null || v === false || v === '' || v === 0) return undefined;
-  return v;
-}
-function pruneVector(fv) {
-  const out = {};
-  for (const [k, val] of Object.entries(fv)) {
-    if (k === 'movestring') { out.movestring = val ?? ''; continue; } // keep even when ""
-    const pv = pruneValue(val);
-    if (pv !== undefined) out[k] = pv;
-  }
-  return out;
-}
-
 // ── Project the vector for a given ablation condition ───────────────────────────
+// pruneVector (shared with production via reasonNarratorVector.mjs) honors the glossary's
+// absence-contract: empty containers / null are dropped; meaningful scalars (0, false) are kept.
 function projectVector(fv, condition) {
   if (condition === 'B') {
+    // board-only: the bare decision, no engineered reason fields. `perspective` is the reason
+    // vector's `player` (the side whose move is under scrutiny).
     return {
       movestring: fv.movestring ?? '',
-      perspective: fv.perspective,
+      perspective: fv.player,
       playedCol: fv.playedCol,
       bestCol: fv.bestCol,
     };
@@ -117,7 +97,7 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
   "best_outcome":     "win" | "draw" | "loss",   // result of the BETTER move, with best play
   "mechanism":        "<1-3 sentences: the load-bearing reason the played move is worse>",
   "key_cells":        ["c5r4", ...],   // squares the mechanism rests on, cNrM (1-indexed); [] if none
-  "fields_relied_on": ["lookahead.case", "threatStats.best.opponentMajorParityAligned", ...],
+  "fields_relied_on": ["case", "lostResource.tacticTag", "opponentPunishment.tie.kind", ...],
   "unsure_about":     "<what the vector did NOT let you determine, or empty string>",
   "confidence":       "high" | "medium" | "low"
 }

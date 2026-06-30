@@ -1,460 +1,421 @@
-# Deep-Reveal Feature Vector — Glossary for an LLM Reader
+# Blunder-Reason Feature Vector — Glossary for an LLM Reader
 
-You are reading a **feature vector**: a compact, board-grounded description of a single Connect
-Four position in which one move (the "played" move) is being compared against the engine's best
-move (the "better" move). Your job, when given one, is to explain **why the played move was a
-mistake (a "blunder")** using only the facts in the vector and the board it describes — naming
-reproducible board features, never inventing tactics that are not present.
+You are reading a **blunder-reason feature vector**: a compact, solver-grounded description of a
+single Connect Four decision in which the move actually **played** is compared against the engine's
+**best** move. Your job, when given one, is to explain **why the played move was a blunder** using
+only the facts in this vector and the board its `movestring` describes — naming reproducible board
+features, never inventing tactics, cells, or lines that the vector does not carry.
+
+This vector is produced by the reason engine (`computeReason(movestring, playedCol)`). In production
+it is computed **live from the game position**; for offline evaluation a frozen subset is read from a
+corpus. Either way the shape is identical, and **everything you need is in the vector** — if a fact
+isn't here, treat it as "not established," not "go derive it from the board."
 
 This file defines **every field and every enumerated value** the vector can contain. It is
-self-contained: you do not need any other document to interpret a vector.
+self-contained.
 
 ---
 
-## 0. How to read a feature vector (start here)
+## 0. How to read a reason vector (start here)
 
-1. The vector describes **one decision**: at board `movestring`, the player to move played
-   column `playedCol` when `bestCol` was at least as good.
-2. **`tag` + `direction`** tell you the *kind* of mistake (e.g. "missed an immediate win,"
-   "failed to block," "handed the opponent a fork").
-3. **`threatStats`** and the **`patterns*`** maps tell you *what is concretely on the board* at
-   three snapshots: before the move, after the best move, after the played move.
-4. **`lookahead`** tells you *what changes in the near future* between the better and played
-   lines — including how best play punishes the blunder.
-5. **`gapBucket`** and the **`*Outcome`** labels tell you *how bad* it was, qualitatively.
+1. The vector describes **one decision**: at board `movestring`, the player to move played column
+   `playedCol` when `bestCol` was better.
+2. **`case`** is the single most important field. It is one of five sign-classified outcomes (§2)
+   and tells you the *shape* of the whole explanation — e.g. `win_to_draw` = "you had a forced win
+   and threw it away to a draw."
+3. The reason always has **two halves, in two separate fields** (§3):
+   - **`lostResource`** — what the **best** move preserved (the win, the draw-holding defense, or the
+     surviving swindle).
+   - **`opponentPunishment`** — how the **played** move loses or fails to win (the opponent's reply).
+   These are **never merged.** A cell in one half is not a cell in the other unless the `tie` (§4)
+   explicitly says they coincide.
+4. **`opponentPunishment.tie`** states the verified *relationship* between the two halves — whether
+   the punishment exploits the very resource you gave up (`tied`), is unrelated to it
+   (`independent`), or is a speed comparison (`temporal`). `independent` is honest information, not a
+   gap.
+5. **`replyHistogram`** and **`gate`** quantify how much counterplay survived.
 
-A field that is absent was empty/zero and was pruned away (see §6). Absence means "this signal
-was not present," not "unknown."
+A field that is **absent** was empty/null/zero-length and was pruned away (§ pruning). Absence means
+"this signal was not present" — never "unknown, fill it in."
 
 ---
 
 ## 1. Global conventions
 
-- **Coordinates / cell strings.** Every cell is written `cNrM` — **column N, row M, both
-  1-indexed for display**: `c1r1` is the bottom-left square, `c7r6` the top-right. Column counts
-  left→right (1–7); row counts bottom→top (1–6). (Internally the code is 0-indexed, but every
-  cell string you see in the vector is already 1-indexed — read them literally.)
-- **Column fields** (`playedCol`, `bestCol`) are **0-indexed** integers (0 = leftmost column,
-  i.e. display column 1). Add 1 to match a `cNrM` column number.
-- **The two players.** `perspective` identifies the player whose move is being explained — call
-  them **"you"**; the other player is **"your opponent."**
-  - `perspective: 1` — the **first player** (moves first). Wins by completing four on **odd
-    rows** (rows 1, 3, 5). Displayed elsewhere as "Green".
-  - `perspective: 2` — the **second player**. Wins on **even rows** (rows 2, 4, 6). Displayed
-    as "Gray".
-  - All `patterns*` and `threatStats.*.player*` data is from **your** perspective; `*.opponent*`
-    and `patternsOpponent` are from the opponent's.
-- **`owner` on cell groups.** Every non-empty `cells`/`ways` group carries `owner: "player"`
-  (yours) or `owner: "opponent"`. Trust it literally — never re-attribute a cell to the other
-  side. An absent `owner` only ever co-occurs with an empty group (pruned away).
-- **"Major" vs "minor" vs "immediate" threat.** Non-empty threat groups carry `severity`:
-  - `"immediate"` — a major threat whose completing cell is **gravity-top (playable this move /
-    win-in-one)**. Structural tactical patterns (`figure_7`, `j_shape`, `undercut`, `overcut`,
-    `forced_block`, `forced_win`, `z_threat`, `claimeven`) carry **no `severity`** — the tag
-    names the shape, not a threat-window category.
-  - `"major"` — a **3-in-window latent threat** whose cell is not immediately playable.
-  - `"minor"` — a **2-in-window developing setup** (two-moves-away).
-  - Structural tactical patterns carry **no `severity`** — the tag name is the meaning.
-  A **major threat** is a 4-in-a-row window holding **three of one player's discs and one empty
-  cell** (filling the empty cell wins). A **minor threat** is a window holding **two discs and
-  two empties** (a developing, two-moves-away setup).
-- **"With best play."** Every outcome word (`win`/`draw`/`loss`) means the game-theoretic result
-  **assuming both sides play optimally from here on**. A `win` means you *can force* a win with
-  correct continuation — it is **not** a guarantee produced by this single move. The only move
-  that guarantees a win by itself is one that completes four-in-a-row (see `immediate_threat`).
-  Never tell the player a positive position "wins" as if no further correct play were required.
+- **Cell strings `cNrM`.** Every cell is `cNrM` = **column N, row M, both 1-indexed for display**:
+  `c1r1` is bottom-left, `c7r6` top-right. Columns count left→right (1–7), rows bottom→top (1–6).
+  (Internally the engine is 0-indexed, but every `cNrM` string you see is already 1-indexed — read
+  it literally.)
+- **Column integers are 0-indexed.** `playedCol`, `bestCol`, and the per-move `col` inside a `line`
+  are **0-indexed** (0 = leftmost = display column 1). **Add 1** to get the display column / the `cN`
+  of a cell. (So `bestCol: 1` means "play column 2 in display.")
+- **Who is "you".** `player` is the side whose move is being explained — call them **"you"**;
+  `opponent` is the other side. Both are `1` or `2`.
+  - `player: 1` — the **first player** (moved first); wins by completing four on **odd** rows
+    (1, 3, 5). Displayed elsewhere as "Green".
+  - `player: 2` — the **second player**; wins on **even** rows (2, 4, 6). Displayed as "Gray".
+  - The `lostResource` half is always **your** resource; the `opponentPunishment` half is always the
+    **opponent's** reply.
+- **Solver scores: `bestScore`, `playedScore`.** Both are from **your** (the side-to-move's)
+  perspective at the decision board `movestring`:
+  - **sign** = outcome with best play: `> 0` you win, `= 0` draw, `< 0` you lose.
+  - **magnitude** `|score|` ≈ **how soon** it resolves: **larger = sooner**, smaller = a longer
+    grind. (A `+18` is a fast win; a `+1` is a deep endgame win 20+ plies away.)
+  - `bestScore` is by definition ≥ `playedScore` (best is the maximum). The **pair of signs** is
+    exactly what `case` encodes (§2).
+  - Do **not** confuse `|score|` with `pliesToEnd` (§ register): `pliesToEnd` is a *counted* ply
+    distance along a walked line; `|score|` is the solver's soonness proxy. They correlate but are
+    not equal.
+- **"With best play."** Every outcome word means the game-theoretic result **assuming both sides
+  play optimally from here on**. A win means you *can force* a win with correct continuation — it is
+  **not** guaranteed by the single move. The only move that wins by itself is one that completes
+  four-in-a-row (`register: immediate` on an immediate win).
+- **`register`** (on each half) says **how far** the resolution is and therefore **how to render**
+  it — `immediate`, `forced_sequence`, or `parity`. See § register. It governs whether a literal
+  move `line` is shown.
 
 ---
 
-## 2. Top-level fields
+## 2. Top-level fields and the 5-case taxonomy
 
 | Field | Type | Meaning |
 |---|---|---|
-| `movestring` | string | The position before the move, as a sequence of played columns (each char a 0-indexed column). Empty string = empty board. The board you reason about. |
-| `perspective` | `1` \| `2` | The player who made the move being explained ("you"). See §1. |
+| `movestring` | string | The board **before** the move: a sequence of 0-indexed columns. `""` = empty board. The board you reason about. |
 | `playedCol` | int (0-indexed) | The column actually played — the move under scrutiny. |
-| `bestCol` | int (0-indexed) | The column the engine treats as the better alternative ("the better move"). May equal a different tiebreak than naive expectation; trust this field. |
-| `playedCell` | `cNrM` | The exact square the played disc lands on. |
-| `bestCell` | `cNrM` | The exact square the better move's disc lands on. |
-| `gapBucket` | enum | Qualitative size of the mistake. See §3.3. |
-| `tag` | enum | The *kind* of blunder. See §3.1. |
-| `direction` | enum | Whose stake the blunder is about (your missed gain vs. opponent's gain). See §3.2. |
-| `isSparse` | bool | `true` when the position has little concrete tactical structure (e.g. openings / quiet positions). On a sparse board, expect fewer `patterns*`/`threatStats` entries and rely more on `lookahead` and positional reasoning. |
-| `centerDominance` | bool | `true` when the decisive positional factor is control of the center. On early/positional boards this may be the *only* structural signal present. |
-| `patternsBest` | map | Named tactical patterns present **after the better move**. See §4 + §5.1. |
-| `patternsPreMove` | map | Named tactical patterns present **on the pre-move board** (before either move). See §5.1. |
-| `patternsPostBlunder` | map | Named tactical patterns present **after the played move**. See §5.1. |
-| `patternsOpponent` | map | Opponent-perspective patterns, a direction-specific augmentation (e.g. the opponent's existing/forced threats). May be absent. |
-| `threatStats` | object | Parity-bucketed major/minor threat **counts + cells** at three snapshots. See §5.2. |
-| `lookahead` | object \| null | Forward search comparing the better and played lines. See §5.3. |
+| `bestCol` | int (0-indexed) | The column the engine treats as best (the "better move"). Trust this field; add 1 for display. |
+| `discs` | int | Number of discs on `movestring` (its length). |
+| `boardState` | enum | `opening` (<15 discs) / `mid-game` (<30) / `closing` (≥30). Coarse phase only. |
+| `player` | `1`\|`2` | The side who made the move ("you"). |
+| `opponent` | `1`\|`2` | The other side. |
+| `bestScore` | int | Your solver score after the best move (§1 sign/magnitude). |
+| `playedScore` | int | Your solver score after the played move. |
+| `case` | enum | The sign-classified outcome — the shape of the explanation. See below. |
+| `notABlunder` | bool | `true` only for out-of-scope decisions (`win_to_slower_win`, exhausted `lose_to_faster_lose`, draws). In a blunder vector this is `false`. |
+| `lostResource` | object | Half (a): what the **best** move preserved. §3, § per-case. |
+| `opponentPunishment` | object | Half (b): how the **played** move loses/fails. §3, § per-case. |
+| `replyHistogram` | object\|absent | Counterplay counts after each move. § replyHistogram. |
+| `gate` | object\|absent | `lose_to_faster_lose` only: the swindle-gate result. § gate. |
 
-> **Raw solver scores are intentionally absent.** The vector does **not** include per-column
-> engine scores or a numeric gap — their magnitudes are easy to over-read. Use `gapBucket` for
-> severity and the `*Outcome` labels for the result.
+### The five cases (`case`)
 
----
+`case` is determined purely by the `(bestScore, playedScore)` sign pair. Each has a fixed
+**narrative shape** — the one sentence your explanation should produce:
 
-## 3. Scalar value vocabularies
+| `case` | Signs (best, played) | What happened | Shape of your explanation |
+|---|---|---|---|
+| `win_to_draw` | (+, 0) | You had a forced win; the played move only draws. | "You could have forced a win (`lostResource`); the move you played lets the opponent neutralize every threat (`opponentPunishment`), so it only draws." |
+| `win_to_lose` | (+, −) | You had a forced win; the played move loses. | "You had a forced win (`lostResource`); your move instead lets the opponent force *their* win (`opponentPunishment`)." |
+| `draw_to_lose` | (0, −) | You were holding a draw; the played move loses. | "You were holding the draw by occupying `lostResource.cell` (inside the opponent's winning window); your move gives that square up and the opponent now completes their four (`opponentPunishment`)." |
+| `lose_to_faster_lose` | (−, −) | You were already losing, but the best move kept a practical swindle; the played move loses faster. | "You were lost either way, but the best move kept a real swindle (`lostResource`: if the opponent slips you still win); your move throws it away and loses sooner (`tie.temporal`)." |
+| `win_to_slower_win` | (+, +) | You'd still win, just slower. | **Out of scope** — `notABlunder: true`; you will not be asked to explain these. |
 
-### 3.1 `tag` — the kind of blunder
-
-`tag` is produced by the blunder classifier and is **one** of the following. (This vocabulary is
-**distinct** from the pattern-map keys in §4 — see the note at the end.)
-
-**Tactical / decisive:**
-
-| `tag` | Meaning |
-|---|---|
-| `immediate_threat` | An immediate win-in-one was involved — either you **had** a winning move and didn't play it (`missed_own`), or your move **gave the opponent** a winning move (`enabled_opponent`). |
-| `forced_block` | Your opponent had an immediate winning threat and you **failed to block it** (always `defensive_miss`). |
-| `forced_win` | A guaranteed multi-step winning sequence was at stake — you let your own forced win slip (`missed_own`) or handed the opponent one (`enabled_opponent`). |
-| `double_threat` | A single move creating **two** simultaneous immediate threats (a fork) — the opponent can only block one. You missed building it, or let the opponent build it. |
-| `figure_7` | A five-disc "7"-shaped structure generating two major threats in one column (a zugzwang trap the opponent can't block both of). |
-| `j_shape` | A four-disc L/J-shaped cluster generating multiple minor threats equivalent to a major odd-row threat — a trap the opponent can't unravel. |
-| `undercut` | Your move let the opponent place a disc **below** your threat in the same column, killing your win (their lower threat fires first). Always about *your* exposure. |
-| `overcut` | A column where **your** lower-vs-upper threat geometry lets your higher threat win despite the opponent's lower one — you missed playing it. |
-| `z_threat` | A major threat with an **odd** count of empty cells beneath it, conferring zugzwang ("parity") control — abandoned or handed away. |
-| `claimeven` | An endgame "pairing" of empty cells (lower-odd / upper-even) that hands the controller the even squares — you lost or conceded that control. |
-
-**Parity-aware latent threats** (generic; chosen when no more specific pattern applies):
-
-| `tag` | Meaning |
-|---|---|
-| `major_threat_parity` | A latent major threat whose empty winning cell sits on **your natural parity row**, so the opponent's claimeven pairing cannot neutralize it — the stronger kind. You could have set one up, or let the opponent get theirs. |
-| `major_threat_nonparity` | A latent major threat **off** your parity row — strong but neutralizable. |
-| `minor_threat` | A developing two-in-a-window threat aimed at four — a longer-range plan. |
-
-**Fallbacks** (no named pattern matched):
-
-| `tag` | Meaning |
-|---|---|
-| `drawing_move` | The played move gave up a winning/holding balance for a draw — a better move would have held at least a draw. |
-| `suboptimal_move` | A stronger move existed but no specific named pattern characterizes the loss; the move simply gives ground. |
-
-**Valid `tag`+`direction` pairings** (others do not occur):
-
-- `missed_own`: `immediate_threat`, `forced_win`, `double_threat`, `overcut`, `figure_7`,
-  `j_shape`, `z_threat`, `major_threat_parity`, `major_threat_nonparity`, `minor_threat`,
-  `claimeven`, `drawing_move`, `suboptimal_move`.
-- `defensive_miss`: `forced_block` only.
-- `enabled_opponent`: `immediate_threat`, `forced_win`, `double_threat`, `undercut`,
-  `figure_7`, `j_shape`, `z_threat`, `major_threat_parity`, `major_threat_nonparity`,
-  `minor_threat`, `claimeven`.
-
-### 3.2 `direction` — whose stake
-
-| `direction` | Meaning |
-|---|---|
-| `missed_own` | Playing `bestCol` would have **built `tag` for you** (or taken your own win); the move you played did not. This is about a gain you *forwent*, not necessarily something you already had and lost. |
-| `defensive_miss` | The opponent **already had** an immediate threat at the pre-move board and you did not take it off the board. |
-| `enabled_opponent` | Your move **handed the opponent** `tag` — a new threat/win that the better move would have avoided. |
-
-### 3.3 `gapBucket` — severity
-
-How much worse the played move is than the better move, qualitatively (small magnitude diffs are
-deliberately not exposed).
-
-| `gapBucket` | Meaning |
-|---|---|
-| `small` | Slight loss of ground; the moves are close in value. |
-| `moderate` | A clear mistake; one move crosses a win↔draw or draw↔loss boundary (one side is a draw), or a mid-size score gap. |
-| `large` | A severe mistake; the two moves land on **opposite** decisive outcomes (e.g. win vs. loss), or a big score gap. |
+> **No raw per-column scores.** The vector deliberately omits the solver's full per-column score
+> array. Use `bestScore`/`playedScore` for the two relevant columns and `case` for the outcome
+> shape. Do not claim anything about other columns' values.
 
 ---
 
-## 4. Pattern names (keys of the `patterns*` maps)
+## 3. The two halves — `lostResource` and `opponentPunishment`
 
-Each `patterns*` map is `{ <patternTag>: { cells: [<cNrM>, ...], owner, severity? } }`. A key
-present means that pattern is detected on that snapshot's board (from the relevant perspective);
-`cells` are the grounding squares involved. `patternsBest`/`patternsPreMove`/`patternsPostBlunder`
-carry `owner:"player"`; `patternsOpponent` carries `owner:"opponent"`. Threat-window tags also
-carry `severity` (see §1); structural shape tags do not. The possible keys:
+Every blunder reason is **two solver-grounded walks**, kept in **two separate fields** (this
+separation is a hard invariant — never merge their cells):
 
-| Pattern key | Meaning |
-|---|---|
-| `immediate_threat` | A major threat whose empty cell is **playable right now** (gravity-top) — playing it wins this move. |
-| `double_threat` | A fork: two simultaneous immediate threats from one move. |
-| `forced_block` | The opponent has an immediate threat and exactly one column prevents the loss. |
-| `forced_win` | A guaranteed multi-step winning sequence (threat the opponent must block, then a winning continuation). |
-| `forbidden_columns` | In a losing position, the columns whose play would immediately hand the opponent a win (columns you must avoid). |
-| `z_threat` | A major threat with an odd number of empty cells beneath it — confers zugzwang/parity control. |
-| `odd_even_threat` | A puzzle-detector pattern about choosing which minor threat to promote so the resulting major threat lands on your parity row. **Note:** this is a *detector* tag only — it is **not** a blunder `tag` (see §3.1) and never appears in the top-level `tag` field. |
-| `undercut` | Your threat is dead because the opponent has a reachable threat at or below it in the same column. |
-| `overcut` | Your higher major threat wins despite the opponent's lower threat in the same column (their lower threat lacks the parity to neutralize yours). |
-| `figure_7` | A "7"-shaped five-disc structure generating two major threats in one column (zugzwang trap). |
-| `j_shape` | An L/J-shaped four-disc cluster generating minor threats equivalent to a major odd-row threat. |
-| `claimeven` | A pairing of empty cells handing the controller the even squares in the endgame. |
+- **`lostResource`** (half a) — one bounded optimal-line walk from `movestring + bestCol`. It is
+  **what the best move preserved**: a winning line/fork, a draw-holding defensive occupation, or a
+  surviving swindle. Its `kind` varies by case (§ per-case).
+- **`opponentPunishment`** (half b) — one opponent-optimal walk from `movestring + playedCol`. It is
+  **how the played move is punished**: the opponent's winning line, their fork-denial, or their one
+  saving reply.
 
-**Not in these maps:** `major_threat_parity`, `major_threat_nonparity`, and `minor_threat` are
-**deliberately excluded** from the `patterns*` maps because their cells are duplicated — and more
-richly classified — inside `threatStats` (§5.2). If you want major/minor parity-threat cells,
-read `threatStats`, not `patterns*`. Also note `forbidden_columns` and `odd_even_threat` are
-detector-only and never appear as a blunder `tag`.
-
----
-
-## 5. Nested structures
-
-### 5.1 `patternsBest` / `patternsPreMove` / `patternsPostBlunder` / `patternsOpponent`
-
-Shape: `{ <patternTag>: { cells: [<cNrM>, ...] } }` (keys from §4).
-
-The three board snapshots let you reason about what the blunder **failed to create** or
-**allowed**:
-
-- `patternsPreMove` — the baseline: patterns on the board *before* you moved (your decision
-  position).
-- `patternsBest` — patterns *after the better move* (what the right move would have established).
-- `patternsPostBlunder` — patterns *after your move* (what you actually produced).
-
-A pattern present in `patternsBest` but absent in `patternsPostBlunder` is something the better
-move would have built and your move did not — usually the heart of a `missed_own` blunder.
-`patternsOpponent` (when present) carries opponent-side structure relevant to the `direction`
-(e.g. a pre-existing opponent threat for a `defensive_miss`, or the opponent's punishing threat).
-
-**Snapshot provenance** — which board each map describes:
-- `patternsPreMove` — the board **before either move** (root position, `movestring` exactly).
-- `patternsBest` — the board **after the better move** lands (the board produced with `bestCol`).
-- `patternsPostBlunder` — the board **after the played move** lands (the board you actually produced).
-- `patternsOpponent` — the **opponent's structures on the pre-move board** (classifier run from
-  the opponent's perspective on `movestring`, before either move was made). This is NOT the
-  opponent's structures after the played move — it is a static snapshot of the pre-move threat
-  landscape from the opponent's side.
-
-### 5.2 `threatStats`
-
-Three snapshots, each with six parity-classified buckets:
-
-```
-threatStats: {
-  pre:    { ...buckets },   // before the move
-  best:   { ...buckets },   // after the better move
-  played: { ...buckets },   // after the played move
-}
-```
-
-Each snapshot has these six buckets, every non-empty one
-`{ count: <int>, cells: [<cNrM>, ...], owner, severity }`. The `owner` field matches the bucket
-name (`player*` → `"player"`, `opponent*` → `"opponent"`). The `severity` field is `"major"` for
-latent major buckets (the cell is not immediately playable), or `"immediate"` if all cells in the
-bucket are gravity-top on the snapshot board (vanishingly rare — gravity-top majors are normally
-pre-routed to `patterns.immediate_threat`). Minor buckets carry `severity:"minor"`. Empty buckets
-have neither field (and are pruned away in the default output).
-
-| Bucket | Meaning |
-|---|---|
-| `playerMajorParityAligned` | **Your** latent major threats whose empty winning cell is on **your** parity row (odd rows if `perspective:1`, even if `perspective:2`). Strongest — gravity hands you the cell and claimeven cannot neutralize it. |
-| `playerMajorNonParity` | Your latent major threats **off** your parity row. |
-| `playerMinor` | Your minor threats (two-in-a-window developing setups). |
-| `opponentMajorParityAligned` | The opponent's parity-aligned latent major threats. |
-| `opponentMajorNonParity` | The opponent's off-parity latent major threats. |
-| `opponentMinor` | The opponent's minor threats. |
-
-**Important:** the major buckets count **latent** threats only — a major threat whose cell is
-*immediately playable* (gravity-top) is excluded here and instead surfaces as `immediate_threat`
-in the `patterns*` maps. So "no major threats in `threatStats`" does **not** mean "no winning
-move now" — check `patterns*` for `immediate_threat`.
-
-Compare the same bucket across `pre → best → played` to see what the blunder changed (e.g. a
-`playerMajorParityAligned` that appears in `best` but not `played` is a strong threat the better
-move would have created).
-
-**Major-threat totals** — each snapshot also carries `playerMajorTotal` (sum of
-`playerMajorParityAligned.count` and `playerMajorNonParity.count`) and `opponentMajorTotal` (sum
-of the two opponent major buckets). When either total is zero, the field is absent (pruned —
-absence = "no major threats"). **"Zero parity-aligned majors ≠ zero majors."** A player with
-`playerMajorParityAligned` absent but `playerMajorNonParity` present still has a major threat —
-`playerMajorTotal` (and the `playerMajorNonParity` bucket) make this explicit.
-
-### 5.3 `lookahead`
-
-> **Present-vs-projected discipline.** The `lookahead` block describes structures found during a
-> forward search, not structures on the current board. Every `realizedOnPly` value (whether in
-> `categoryExamples`, `decisiveLine`, or `oppCategoryExamples`) tells you how many plies into the
-> future the structure was found. A `realizedOnPly` of 1 means it appears on the immediate
-> resulting board; larger values mean deeper in the search. **Never describe a structure with
-> `realizedOnPly > 1` as already present on the board.**
-
-A forward search comparing the **better line** and the **played line**, plus how best play
-punishes the blunder. `null` when no look-ahead ran.
-
-```
-lookahead: {
-  case:                <enum>,                       // which comparison was run
-  bestOutcome:         <outcome> | null,             // result of the better move, with best play
-  postBlunderOutcome:  <outcome> | null,             // result of the played move, with best play
-  outcomeTiming:       { best: { outcome, pliesToEnd }, played: { outcome, pliesToEnd } },
-  decisiveLine:        { owner, cells, completingCell, winningLinesThroughCell, fastSide,
-                         fastSideRealizedOnPly, slowSideRealizedOnPly } | absent,
-  reachability:        { best: { floor, ceiling }, played: { floor, ceiling } } | absent,
-  edgeType:            'tactical' | 'positional' | 'marginal',
-  categoryExamples:    [ { tag, bestNovel?, playedNovel?, novelInstances, owner, severity? }, ... ],
-  oppCategoryExamples: [ { tag, bestNovel?, novelInstances, owner, severity? }, ... ],
-  // perCategory REMOVED — superseded by symmetric categoryExamples
-}
-```
-
-**`case`** — one of:
-
-| `case` | Meaning |
-|---|---|
-| `better_holds_played_loses` | The better move holds (wins or draws) but the played move **loses**. The decisive fact is that your move flips the outcome to a loss; `oppCategoryExamples` (if present) grounds how best play punishes it. |
-| `both_moves_hold_better_stronger` | **Both** moves hold (neither loses), but the better move is stronger. `categoryExamples` shows the extra structure the better move opens. |
-| `losing_either_way` | Even the better move loses. Carries `oppCategoryExamples` (how the opponent punishes, the dominant content) and `categoryExamples` (what *you* could still punish if the opponent slips). |
-
-**`bestOutcome` / `postBlunderOutcome`** — the with-best-play result of each move, one of:
-
-| Outcome | Meaning |
-|---|---|
-| `win_with_best_play` | This move **can force a win** with correct continuation (not an automatic win — see §1). |
-| `draw_with_best_play` | With best play by both sides this move leads to a **draw** (it *holds* the draw). |
-| `loss_with_best_play` | With best play the **opponent can force a win** — this move loses. |
-
-Because the better move is never worse than the played move, `bestOutcome` is never worse than
-`postBlunderOutcome`. The interesting contrast is when they differ — e.g.
-`bestOutcome: draw_with_best_play`, `postBlunderOutcome: loss_with_best_play` means *"the better
-move would have held the draw; your move loses."* (`null` = the outcome could not be determined.)
-
-**`outcomeTiming`** — per-side outcome and distance to decisive event:
+Both halves share a common sub-shape (fields that are present depend on `kind`/`register`):
 
 | Field | Meaning |
 |---|---|
-| `best.outcome` | Outcome of the better move under optimal play: `'win'` \| `'draw'` \| `'loss'`. |
-| `best.pliesToEnd` | ⚠️ **Currently the absolute solver-score magnitude (`Math.abs(score)`), NOT a forward ply count.** Per solver semantics a **smaller** magnitude resolves **later** (near game end / slow) and a **larger** magnitude resolves **sooner**. `null` for draws or unknown. **Known issue:** the field name and the prose below imply a "moves from now until the outcome" count, which is the *opposite* of the value's actual direction — it misreads as "loses immediately" on slow-zugzwang positions (anchor case: eval-6, where `played.pliesToEnd:1` is a ~22-ply loss, not a 1-ply loss). A fix to emit a true forward ply distance is proposed (compute end-move from score then subtract `movestring.length`). |
-| `played.outcome` | Same for the played move. |
-| `played.pliesToEnd` | Same for the played move. |
+| `kind` | What this half *is*: `winning_line` / `denial` / `neutralization` / `conditional_swindle`. See § per-case. |
+| `register` | `immediate` / `forced_sequence` / `parity` — how far off, and whether the `line` is shown. § register. |
+| `completingCell` | The `cNrM` square that completes the four (or, for a fork, a representative fork cell). |
+| `window` | The 4-cell winning window `[cNrM×4]` the line/fork rides. |
+| `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count, **not** `|score|`). |
+| `line` | The literal move sequence `[{ply, mover, col, cell, score}, …]` **when the register shows it**; `null`/absent for `parity` (too long to teach). § register. |
+| `finalMovestring` | The board on which `completingCell` is occupied (the end of the walk). |
+| `entryCell` | The square where this half's action begins (first move of `line`, or the completing/occupying cell). |
+| `anchorCells` | The **move-level** squares that *define* this resource — the squares the `tie` (§4) is checked against. For a fork: all cells of the fork windows. For a non-fork win: the winning-move landing squares. For a draw-hold denial: the single occupied cell. |
+| `tacticTag` | A named tactic (§ tactic naming) or **`null`**. Null is correct, not a gap. |
+| `tacticCells` | The cells of the named tactic (present only when `tacticTag` is non-null). |
+| `tacticFromDiff` | `true` if the tactic is something the best move builds that the played move does not. |
 
-Used **comparatively** between the two lines: "you lose N moves faster on the played line." It is
-**NOT** the same as `realizedOnPly` (which measures depth along the mistake branch) and **NOT** raw
-solver-score magnitude. **Three distinct timing concepts — do not conflate:**
-- `realizedOnPly` — depth in plies at which a structure appears in the forward search.
-- `outcomeTiming.pliesToEnd` — moves until the game-theoretic decisive outcome appears under optimal play.
-- "mate distance" — classical chess concept; neither field above is a direct equivalent.
-
-**Presence rule**: `outcomeTiming` is always present when `lookahead` ran — it is NOT conditional on
-`reachability` or `decisiveLine`. A draw position yields `pliesToEnd: null` but `outcome: 'draw'`
-still carries information. `outcomeTiming` is never pruned when a lookahead result exists. Absent
-only when `lookahead` itself is `null`.
-
-**Read jointly with `reachability`**: with the field as currently implemented (`Math.abs(score)`), a
-losing-floor side with a **SMALLER** `pliesToEnd` loses *slower* (smaller magnitude = resolves later
-= more turns for the opponent to err). ⚠️ This is the **opposite** of the prior wording here and of
-what the field name suggests — see the known-issue note in the table above. This slower-loss
-distinction is the primary reason a losing-floor move may still beat a faster-losing alternative; once
-the field is reworked to a true forward ply distance, the direction flips back to "larger = slower."
-
-**`decisiveLine`** — the completing 4-window found within the search horizon:
-
-| Field | Meaning |
-|---|---|
-| `owner` | `'player'` when it is your win; `'opponent'` when the opponent's win punishes your blunder. |
-| `cells` | The 4-cell window (cNrM strings, 1-indexed), from the fastest-surfacing tally. |
-| `completingCell` | The unique gravity-top empty cell in the window — the cell that would complete the win. |
-| `winningLinesThroughCell` | Count of 4-windows that include `completingCell`. `1` = single-line win; `>1` = genuine fork ("double threat"). |
-| `fastSide` | `'best'` or `'played'` — which move line surfaces this win soonest. |
-| `fastSideRealizedOnPly` | Ply at which the fastest side's `immediate_threat` fires in the search. |
-| `slowSideRealizedOnPly` | Ply for the other side; `null` if not found within the search horizon. |
-
-Absent (pruned) when no concrete winning line was found within the search depth — in that case,
-`edgeType` is `"positional"`. Never describe a cell from `decisiveLine` as already present on the
-board if `fastSideRealizedOnPly > 1`.
-
-**`reachability`** — floor / ceiling per side, emitted when at least one side's floor is `'loss'`:
-
-| Field | Meaning |
-|---|---|
-| `best.floor` | Outcome under perfect opponent play for the better move. |
-| `best.ceiling` | Best outcome reachable on the better line if the opponent errs, **within the search**. For non-losing floor sides (floor ≠ 'loss'), ceiling equals floor. |
-| `played.floor` | Outcome under perfect opponent play for the played move. |
-| `played.ceiling` | Best outcome reachable on the played line if the opponent errs, **within the search**. |
-
-Ceiling is **never** "provably" achievable — it is the best result found within the bounded search
-depth. `ceiling = 'win'` or `'draw'` on a losing-floor side means a punishable opponent-mistake
-line was found within the search. `ceiling = 'loss'` means no such line was found within the search
-— **do NOT say** "lost cause," "you cannot win," or "provably lost"; a mistake beyond the search
-horizon may still exist.
-
-Absent when neither side's floor is `'loss'`. When emitted, BOTH sides are always present in the
-shape (the non-losing side carries ceiling = floor).
-
-**Read jointly with `outcomeTiming`**: a losing-floor side with a larger `pliesToEnd` loses slower
-= more chances for the opponent to err. Combine with `reachability.*.ceiling` to assess whether
-any punishable mistake was actually found within the search.
-
-**`edgeType`** — nature of the positional difference (always present when `lookahead` ran):
-
-| Value | Meaning |
-|---|---|
-| `'tactical'` | The outcomes diverge between the two lines (different `outcomeTiming.*.outcome` values). |
-| `'positional'` | No decisive line found within the search horizon on either side (`decisiveLine` absent). |
-| `'marginal'` | Catch-all: same outcome on both lines. Covers positions with a decisive line on one side, both sides, or neither (e.g. both draw). |
-
-Derived via a total ordered if/else — every position maps to exactly one value. Fine-grained K/D
-threshold branch (using `pliesToEnd` magnitudes) is DEFERRED to a follow-up iteration.
-
-**`categoryExamples`** — symmetric cell-set diff showing what structurally changed between the two lines. Each entry:
-
-| Field | Meaning |
-|---|---|
-| `tag` | A pattern category (from §4's vocabulary) that differs between the two lines. |
-| `bestNovel` | Cell-sets present on the better line but absent on the played line — `[{ cells: [<cNrM>...], realizedOnPly }]`. Absent when the better line has no novel cells for this category. |
-| `playedNovel` | Cell-sets present on the played line but absent on the better line. Absent when the played line has no novel cells. |
-| `novelInstances` | Count of distinct novel cell-sets across both directions. |
-| `owner` | `"player"` for `categoryExamples`; `"opponent"` for `oppCategoryExamples`. |
-| `severity` | Threat-window severity — `"immediate"`, `"major"`, or `"minor"` — for threat tags; absent for structural tags. |
-
-A category appears only when its cell-sets differ between the two lines (true cell-set ties are
-dropped — the category is not a differentiator). **`realizedOnPly`** on every cell tells you how
-many plies into the future that structure was found — a high `realizedOnPly` is a *projected*
-future structure, **not** a threat on the current board; never describe it as already present.
-
-`oppCategoryExamples` carries the **opponent's** punishing structure on the played line (used in
-`losing_either_way` and when a blunder flips the outcome to a loss).
-
-*(The old `ways` field (now `bestNovel`) and the old `perCategory` count-table have been removed.
-`perCategory` is no longer part of the feature vector.)*
+Forks, denials, parity wins, swindles, and neutralizations each add their own fields — defined
+per-case next.
 
 ---
 
-## 6. Pruning, absence, and how to avoid fabricating
+## 3a. Per-case field shapes
 
-- **Absence = empty/zero.** Empty maps, empty arrays, all-zero `threatStats` buckets, `null`s,
-  and `false`-equivalents are pruned out of the vector. A missing field means that signal was not
-  present — treat it as a genuine "nothing here," not as "unknown, fill it in."
-- **An honestly quiet position yields a small vector.** If a position has little structure
-  (`isSparse: true`, few patterns), do not manufacture tactics to fill space. Lean on `tag`,
-  `direction`, `gapBucket`, the `*Outcome` labels, and `centerDominance`.
-- **Never overstate an outcome.** A `win_with_best_play` is *winnable with correct play*, not a
-  move that wins on its own. The only self-guaranteeing win is `immediate_threat` (a four
-  completed this move). The `_with_best_play` suffix is there precisely so you do not claim a
-  guaranteed win from a merely-winning position.
-- **Only name cells that appear in the vector.** Every square you reference in an explanation
-  should come from a `cells` / `ways` list, `playedCell`/`bestCell`, or be directly derivable
-  from `movestring`. Do not invent coordinates.
+### `win_to_draw` and `win_to_lose` — `lostResource.kind = "winning_line"`
+
+The best move's winning walk. **Two sub-shapes:**
+
+- **Fork-stopped** (the common, teachable shape): the walk stops at the deciding **double-threat
+  fork** rather than walking to the completed four. Extra fields:
+  - `terminal: "fork"`, `forkCase: "A"` (≥2 gravity-top winning cells) or `"B"` (a stacked
+    pair in one column),
+  - `forkCells` — the fork's key squares, `forkWindows` — the 4-windows that make it unstoppable.
+  - `register` is `immediate` (fork already present at the decision) or `forced_sequence` (a short
+    line leads to it); `anchorCells` = every cell of the fork windows.
+  - Narrative: "the best move builds an unstoppable fork at `forkCells` — two threats the opponent
+    can't both answer."
+- **Parity win** (no fork on the whole line — a deep zugzwang win): `register: "parity"`, `line:
+  null`, plus **`parityAttribution`** (§ parityAttribution) describing the controlling group instead
+  of a literal line. `anchorCells` = the winning-move landing squares.
+
+For `win_to_lose`, `opponentPunishment.kind = "winning_line"` too — the **opponent's** own
+fork-stopped/parity winning walk (the same shape, opponent perspective). Its `tie` (§4) is spatial.
+
+### `win_to_draw` — `opponentPunishment` is a **denial** or a **neutralization**
+
+- **Fork case → `kind: "denial"`** (an occupation witness). The opponent, under optimal play,
+  **occupies a cell of your lost fork's window**, killing it:
+  - `verdict: "occupation"` — fields `cell` (the killing square), `window` (the window it killed),
+    `line` (the optimal walk to that moment), `finalMovestring`, `exhaustive: true`.
+  - `verdict: "no_occupation"` — the draw held within the depth cap without the opponent ever taking
+    a pattern cell; `exhaustive` distinguishes a confirmed full-walk (`true`) from a budget cap
+    (`false`). No `cell`.
+  - **Read denial as TWO separate claims, never collapsed** (§ denial semantics).
+- **Non-fork case → `kind: "neutralization"`** — the opponent's **single saving reply**:
+  `completingCell` = the save square, `savingCol` (0-indexed), `savingReplyCount` (= 1 when it is
+  the only drawing reply). Narrative: "the square that would have won for you is the opponent's only
+  drawing reply."
+
+### `draw_to_lose` — `lostResource.kind = "denial"`, `opponentPunishment.kind = "winning_line"`
+
+This case is **computed half-(b)-first**: the engine finds the opponent's winning line after the
+played move (`opponentPunishment`), then shows how the **best** move denied that exact window.
+
+- `opponentPunishment` = the opponent's winning walk (`winning_line`; often `register: parity` with
+  `parityAttribution`, `line: null`). `completingCell`/`window` = where/how the opponent now wins.
+- `lostResource` = `kind: "denial"`, `verdict: "occupation"` (normally): `cell` = the square the
+  **best** move occupies **inside the opponent's conceded `window`**, holding the draw. `register`
+  is `immediate` (the defensive occupation is the best move itself — a ply-0 hold) or
+  `forced_sequence`. `anchorCells = [cell]`.
+- The `tie` is **constructive and window-aware**: `opponentPunishment.tie = { kind: "tied",
+  sharedCells: [lostResource.cell] }` — the very square that held the draw lies inside the window the
+  opponent now completes. **The two halves still describe different things** (your defensive
+  occupation vs. their completing cell `opponentPunishment.completingCell`); the tie only asserts the
+  hold-square is *inside* the opponent's window. Narrative: "your best move sits on `cell`, plugging
+  the opponent's winning window `window`; the move you played vacates it and the opponent fills it."
+
+### `lose_to_faster_lose` — `lostResource.kind = "conditional_swindle"`, `opponentPunishment.kind = "winning_line"`
+
+You are losing either way; the move is a blunder only because the best move kept a **practical
+swindle** (a reachable opponent mistake that would let you win/draw) that the played move discards.
+
+- `lostResource` = `conditional_swindle` — the win you'd get **if the opponent slips**. Extra field
+  `witness: { node, devCol, devCols, oppPlies }`: `devCols` = the opponent replies that would let you
+  back in (0-indexed columns), `oppPlies` = how deep the slip is (0 = the opponent's very next move —
+  the most practical chance). It may itself fork-stop (`terminal: "fork"`). `anchorCells` = the
+  deviation/practical-chance square.
+- `opponentPunishment` = the **faster** forced loss your played move walks into (`winning_line`,
+  opponent perspective).
+- `tie.kind = "temporal"` (§4): `playedPlies` vs `swindlePlies`, `tied: true` when the played loss is
+  strictly faster. Narrative: "you were lost, but the best move kept a swindle — if the opponent
+  played any of `devCols` you'd still win; your move loses in `playedPlies` plies instead."
+- See also `gate` (§ gate) for whether the swindle search was exhaustive.
 
 ---
 
-## 7. Worked reading (illustrative)
+## 4. The tie — `opponentPunishment.tie`
 
-Given (abbreviated):
+`tie` states the **verified relationship** between half (b) and half (a). Always one of:
+
+| `tie.kind` | Fields | Meaning / what to say |
+|---|---|---|
+| `tied` | `sharedCells: [cNrM, …]` | The punishment exploits a **square of the lost resource**. `win_to_draw`: the opponent's denial cell / saving reply is a cell of your lost win. `win_to_lose`: the opponent wins on a square your resource occupied. `draw_to_lose`: your draw-holding square is inside the opponent's winning window. **This is the heart of the lesson** — name the shared square. |
+| `independent` | `sharedCells: []` | **No shared square** — the punishment is geometrically unrelated to the lost resource. This is **honest information**, not a missing signal: e.g. a `win_to_draw` denial that drew without the opponent ever taking a pattern cell. Do **not** invent a connection; say the two are independent. |
+| `temporal` | `playedPlies`, `swindlePlies`, `tied` | `lose_to_faster_lose` only: the relationship is **speed**, not a shared cell — the played move loses in `playedPlies` vs the swindle's `swindlePlies`. |
+
+**Never upgrade `independent` to `tied`.** If `sharedCells` is empty, the explanation must not claim
+"you handed it to them on that square."
+
+---
+
+## 5. Denial / occupation semantics (`kind: "denial"`)
+
+A `denial` half (the `win_to_draw` punishment and the `draw_to_lose` lost resource) carries **two
+separate claims that must never be collapsed**:
+
+- **LOCAL (proved by the witness):** "the denier occupies `cell`, killing window `window`." This is
+  verified cell-by-cell (the window was live before the move, dead after). It is a claim about **one
+  square and one window**.
+- **GLOBAL (proved by the outcome / `case`):** "and the line only draws — the win never forms." This
+  is carried by the case, as a **separate** clause.
+
+**Do NOT merge these into "this move refutes everything"** or "this single move kills the win." The
+honest statement is the conjunction of a *local* occupation and a *global* drawn result. For
+`draw_to_lose` the roles invert (the **player's** best move is the denier holding the draw), but the
+two-claim rule is identical.
+
+`verdict: "no_occupation"` (win_to_draw only) means no occupation witness was found:
+`exhaustive: true` = the optimal line was walked to a terminal draw (confirmed the opponent never
+needs a pattern cell); `exhaustive: false` = only the depth budget was hit ("no witness within
+budget" — an honest residual, not proof). With `no_occupation`, `tie` is `independent`.
+
+---
+
+## 6. `register`, `line`, `finalMovestring` — when a line is shown
+
+`register` is derived from how soon the resolution is (`fwd = 43 − 2·|score| − discs`, or directly
+from a fork node):
+
+| `register` | Meaning | `line` |
+|---|---|---|
+| `immediate` | Resolves now / the fork already exists. State it as a fact: "column C completes your four at `<cell>`." | empty/short |
+| `forced_sequence` | A short forced line (≈≤6 plies). **The most instructive form** — walk through `line` move by move. | shown |
+| `parity` | A long zugzwang resolution (>~12 plies). **Too long to teach as a sequence** — `line` is `null`. Describe the structure via `parityAttribution` instead. | `null` |
+
+- `line` entries are `{ ply, mover, col, cell, score }`: `mover` is `1`/`2`, `col` is **0-indexed**,
+  `cell` is the `cNrM` landing square, `score` is the mover's solver score at that step.
+- `finalMovestring` is the board at the end of the walk (where `completingCell` is occupied). You may
+  reference cells from `line`/`window`/`completingCell`; do **not** invent cells beyond them.
+- A `null` line on a `parity` register is **expected** — it is "the win is real but too deep to
+  spell out," not a missing signal. Lean on `parityAttribution`.
+
+---
+
+## 7. `parityAttribution`, `anchorCells`, `tacticTag` (gated naming)
+
+### `parityAttribution` (parity-register wins only)
+
+Describes the controlling structure of a deep win when the line is suppressed. Shape:
+
+| Field | Meaning |
+|---|---|
+| `nameable` | `true` if a single controlling group dominates; `false` (with `reason`) for an unnameable multi-window board-fill — then say only "a parity/zugzwang advantage," no geometry. |
+| `controllingGroup` | The 4-cell window `[cNrM×4]` whose parity decides the game. |
+| `ownDiscs`, `groupKind` | How many of your discs are in it; `"major"` (3) or `"minor"` (2). |
+| `empties` | Per empty cell `{ cell, zcount, parity }` — `zcount` = height-relative count; `parity` `odd`/`even`. |
+| `leverCells` | The **odd**-parity empties — the zugzwang levers (z-threats). |
+| `forcedFirstRequired` | `true` when there is **no** lever — the win rests on a forced-first / Aftereven argument (deferred; do not name a specific rule). |
+| `completingCell` | The cell that eventually completes the four. |
+| `parityNamingDeferred`, `namedRule: null` | The canonical Allis/V-rule **name is intentionally not given.** Describe the group + lever cells; do **not** invent a rule name. |
+
+Narrative for parity wins: "the win is a long zugzwang — you control the parity of group
+`controllingGroup` (lever at `leverCells`), so the opponent eventually has to give you
+`completingCell`." Keep it structural; never fabricate a forced line.
+
+### `anchorCells`
+
+The move-level squares that **define** the lost resource; the `tie` (§4) is verified against these
+(not against the eventual completing cell). Use them when you need to point at "the resource you gave
+up." They are already listed in the vector — do not derive your own.
+
+### `tacticTag` — a name, gated by the solver (may be `null`)
+
+Each half may carry a `tacticTag` (with `tacticCells`) — a named tactic from the production
+classifier (`double_threat`, `immediate_threat`, `figure_7`, `j_shape`, `undercut`, `overcut`,
+`z_threat`, `claimeven`, `major_threat_parity`, …). It is admitted **only** when it is consistent
+with the solver-proven nature and location of the win. **`tacticTag: null` is common and correct** —
+it means no named tactic passed the gate, **not** that nothing happened. When `tacticTag` is present,
+you may name it; when it is `null`, explain the mechanism from the half's `window`/`line`/fork/parity
+fields **without** inventing a tactic name. `tacticFromDiff: true` means the best move builds this
+tactic and the played move does not — a strong "this is what you gave up" signal.
+
+---
+
+## 8. `replyHistogram` and `gate`
+
+### `replyHistogram` — `{ afterBest, afterPlayed }`
+
+Counts of the **opponent's non-losing replies** after each move (how much counterplay each move
+leaves the opponent). Typical readings:
+- `win_to_draw`: `afterBest: 0` (the win leaves the opponent no escape), `afterPlayed: 1` (the draw
+  move leaves the opponent exactly one saving reply).
+- A larger `afterPlayed` than `afterBest` quantifies "how much you let the opponent off the hook."
+
+It is a counterplay magnitude, not a geometry claim — don't name cells from it.
+
+### `gate` — `lose_to_faster_lose` only
+
+The swindle-gate result: `{ ran, exhaustive, verdict, witness, nodesVisited }`.
+- `verdict: "Blunder"` — a reachable swindle exists (the move is a real blunder). `witness` = `{
+  node, devCols, devCol, devVal, oppPlies }`: the opponent replies (`devCols`, 0-indexed) that let
+  you back in and how deep (`oppPlies`).
+- `verdict: "NotABlunder"` with `notABlunder: true` — no reachable swindle; losing one move later is
+  not a teachable mistake (these are filtered out of the eval).
+- `exhaustive` — whether the subtree was fully searched (`true`) or only depth-bounded (`false`,
+  "no swindle within budget"). Soundness is asymmetric: a `Blunder` verdict is always solver-true; a
+  `NotABlunder` is exact only when `exhaustive: true`.
+
+---
+
+## 9. Pruning, absence, and how to avoid fabricating
+
+- **Absence = empty/null.** Empty arrays/objects and `null` fields are pruned out. A missing field
+  means that signal was not present — a genuine "nothing here," not "unknown, fill it in." (Unlike
+  some vectors, meaningful **scalars are kept** — `playedScore: 0` means draw, `tie.tied: false` is
+  real; do not treat a `0`/`false` as absence.)
+- **`tacticTag: null` / `parity` line `null` / `tie.independent`** are all **honest signals**, not
+  gaps. Narrate them as "no named tactic," "too deep to spell out," "geometrically unrelated."
+- **Never overstate an outcome.** A winning position is *winnable with correct play*, not an
+  automatic win. Only a four-in-a-row completes by itself.
+- **Only name cells the vector carries.** Every square you reference must come from a `cells` /
+  `window` / `line` / `forkCells` / `anchorCells` / `completingCell` / `cell` field, or be directly
+  derivable from `movestring`. Do not invent coordinates, lines, or controllers.
+- **Keep the two halves separate** (§3). Do not attribute a half-(b) cell to half (a) unless `tie`
+  says they coincide.
+
+---
+
+## 10. Worked reading (illustrative)
+
+### A `win_to_draw` (board `3325`, you = player 1, played col 5, best col 1)
 
 ```jsonc
 {
-  "movestring": "44", "perspective": 1, "playedCol": 4, "bestCol": 3,
-  "playedCell": "c5r1", "bestCell": "c4r1",
-  "gapBucket": "moderate", "tag": "drawing_move", "direction": "missed_own",
-  "lookahead": {
-    "case": "better_holds_played_loses",
-    "bestOutcome": "draw_with_best_play",
-    "postBlunderOutcome": "loss_with_best_play",
-    "oppCategoryExamples": [ { "tag": "double_threat", "ways": [{ "cells": ["c5r4"], "realizedOnPly": 2 }], "novelInstances": 1 } ]
+  "movestring": "3325", "playedCol": 5, "bestCol": 1,
+  "player": 1, "opponent": 2, "bestScore": 18, "playedScore": 0, "case": "win_to_draw",
+  "lostResource": {
+    "kind": "winning_line", "register": "immediate", "terminal": "fork", "forkCase": "A",
+    "forkCells": ["c1r1", "c5r1"], "forkWindows": [["c1r1","c2r1","c3r1","c4r1"], ["c2r1","c3r1","c4r1","c5r1"]],
+    "tacticTag": "double_threat", "anchorCells": ["c1r1","c2r1","c3r1","c4r1","c5r1"]
+  },
+  "opponentPunishment": {
+    "kind": "denial", "verdict": "occupation", "cell": "c2r1", "window": ["c1r1","c2r1","c3r1","c4r1"],
+    "tie": { "kind": "tied", "sharedCells": ["c2r1"] }
+  },
+  "replyHistogram": { "afterBest": 0, "afterPlayed": 1 }
+}
+```
+
+Reading: *You (player 1) played column 6; **column 2** (`bestCol 1`) wins. The best move builds an
+unstoppable **double-threat fork** on the bottom row — two winning windows sharing `c1r1`/`c5r1` the
+opponent can't both block (`afterBest: 0`). The move you played instead lets the opponent **occupy
+`c2r1`, killing the `c1r1–c4r1` window** (`denial / occupation`), and the position only draws — and
+`c2r1` is a square of the very fork you gave up (`tie: tied`).* Do **not** say column 6 "loses" (it
+draws), and do **not** say one opponent move "refutes the fork" — state the local occupation **and**
+the global drawn result separately (§5).
+
+### A `draw_to_lose` (board `333301463554`, you = player 1, played col 0, best col 1)
+
+```jsonc
+{
+  "case": "draw_to_lose", "playedCol": 0, "bestCol": 1, "bestScore": 0, "playedScore": -3,
+  "lostResource": {
+    "kind": "denial", "verdict": "occupation", "register": "immediate",
+    "cell": "c2r2", "window": ["c2r2","c3r2","c4r2","c5r2"], "anchorCells": ["c2r2"], "tacticTag": null
+  },
+  "opponentPunishment": {
+    "kind": "winning_line", "register": "parity", "completingCell": "c3r2",
+    "window": ["c2r2","c3r2","c4r2","c5r2"], "line": null,
+    "parityAttribution": { "nameable": true, "controllingGroup": ["c2r2","c3r2","c4r2","c5r2"], "leverCells": ["c2r2"] },
+    "tie": { "kind": "tied", "sharedCells": ["c2r2"] }
   }
 }
 ```
 
-Reading: *You (first player) played column 5; column 4 was better. The better move would have
-**held a draw**; your move **loses** with best play — a moderate-to-decisive error. After your
-move, best play lets the opponent build a **double threat** around `c5r4` that you can't answer.
-The right move (`c4`, landing on `c4r1`) would have kept the balance.* Note what you must **not**
-say: that column 4 "wins" (it only draws), or that your move loses "immediately" (the punishment
-is a forced future fork, not a four completed now).
+Reading: *You were **holding a draw** (`bestScore 0`). The best move (**column 2**) occupies
+**`c2r2`**, plugging the opponent's winning window `c2r2–c5r2` (`lostResource` denial). The move you
+played (column 1) **vacates `c2r2`**, and the opponent now wins on that window — a long parity win
+(`line` is `null`; the controlling group is `c2r2–c5r2`, lever `c2r2`). The square that held the draw
+(`c2r2`) sits **inside** the opponent's winning window (`tie: tied`).* `tacticTag` is `null` — do not
+name a tactic; explain it from the window + parity group. Do not spell out a forced line (`register:
+parity`, `line: null`).

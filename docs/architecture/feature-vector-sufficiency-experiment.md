@@ -1,5 +1,16 @@
 # Feature-Vector Sufficiency Experiment
 
+> **Current state (2026-06-30): the apparatus now runs on the BLUNDER-REASON vector.** The vector
+> under test is the reason-engine evidence object (`computeReason`, raw `scores` stripped by
+> `toNarratorVector`), **not** the old `toFeatureVector`/`run_eval --no-llm` vector. The data
+> generator is `server/scripts/build_fv_eval_set.mjs` (freezes a subset of the reason corpus →
+> `fv_eval_set.jsonl`), the answerer is `explain_from_vector.mjs` (unchanged dials: `EXPLAIN_MODEL` +
+> `buildPrompt`), and the glossary is `docs/architecture/feature-vector-glossary.md` (rewritten for
+> the reason vector). The methodology below — floor test, A/B/C ablation, counterexample-list
+> deliverable, all-N-runs pass rule — is **unchanged and vector-agnostic**; only the field names and
+> the generator changed. Authoritative field semantics: the glossary. Operational steps: `RUNBOOK_fv_sufficiency.md`.
+> The "as built 2026-06-26" notes in §3/§4/§11 below are **historical** (the old-FV iteration).
+
 **Status:** experimental (apparatus implemented 2026-06-26; first grading run complete 2026-06-26 —
 8/18 cases passed Condition A; all 10 failures were A3/A4. Report:
 `server/scripts/fv_suff_answers_2026-06-26T18-15-36Z_grade_report.md`. Remediation staged as

@@ -3,66 +3,57 @@
 How to run the experiment loop. Full design: `docs/architecture/feature-vector-sufficiency-experiment.md`.
 The grader's contract: `.claude/skills/grade-fv-sufficiency/SKILL.md`.
 
-**Three dials**: the model (`EXPLAIN_MODEL` in `connect-four/server/.env`) and the prompt-builder
-(`buildPrompt` in `explain_from_vector.mjs`) change between runs; the **frozen vector set and the
+> **The vector under test is the BLUNDER-REASON vector** (`computeReason`, raw `scores` stripped by
+> `toNarratorVector`). Field semantics: `docs/architecture/feature-vector-glossary.md`. In production
+> this vector is computed LIVE from the request; here we freeze a subset of the offline corpus so
+> iterations are comparable.
+
+**Two dials**: the model (`EXPLAIN_MODEL` in `connect-four/server/.env`) and the prompt-builder
+(`buildPrompt` in `explain_from_vector.mjs`) change between runs; the **frozen eval set and the
 grader stay constant** so iterations are comparable.
 
 All commands run from `connect-four/`.
 
 ---
 
-## Step 0 (occasional) — (re)build the frozen case set
+## Step 1 — build the frozen eval set (free; no solver, no LLM)
 
-Only when you want to change which positions are in the set. Produces the 18-case selection.
+Freezes a subset of the precomputed reason corpus (`reason_evidence_all.jsonl`) into the answerer's
+input. Each row is `{ id, pattern_category, feature_vector }` where `feature_vector =
+toNarratorVector(corpus row)` (raw `scores` + fixture labels removed). `notABlunder` rows are
+dropped.
 
 ```bash
-node server/scripts/freeze_fv_set.mjs
-# → server/scripts/eval_set_fv_suff_frozen.json   (18 cases, all 13 categories / 3 directions / 3 lookahead cases)
+node server/scripts/build_fv_eval_set.mjs
+# → server/scripts/fv_eval_set.jsonl   (one row per blunder case, all 4 cases covered)
+# Options: --input <corpus.jsonl>  --out <set.jsonl>  --per-case <k> (cap rows per case for a balanced/smaller set)
 ```
 
-To resize: raise the per-category caps in `freeze_fv_set.mjs`, then rerun. The answerer + grader are size-agnostic.
+**To grow the set** (the corpus is the offline fixture, not production): enlarge the fixture
+(`reason_audit/build_fixture.mjs`, raise its sampling) → recompute the corpus
+(`reason_audit/build_evidence.mjs`) → re-run this step. The answerer + grader are size-agnostic.
 
----
-
-## Step 1 — generate the frozen vectors (free; local solver only)
-
-Turns the case set into the model's input vectors via `run_eval --no-llm` (builds the feature
-vector + solver ground truth, **no** LLM calls).
+Sanity check the set carries what you expect (cases covered, no raw scores leaked):
 
 ```bash
-# ⚠️ run_eval has RESUME MODE: it SKIPS ids already in the output file.
-# To regenerate after a code change, DELETE the output first or it re-emits the stale file.
-rm -f server/scripts/eval_set_fv_suff_frozen_vectors.jsonl
-
-# positional args (NOT --input/--out):  <case_set.json> [output.jsonl] [--no-llm]
-node server/scripts/run_eval.mjs \
-  server/scripts/eval_set_fv_suff_frozen.json \
-  server/scripts/eval_set_fv_suff_frozen_vectors.jsonl \
-  --no-llm
-# → 18 records. Uses the real solver per record → can take a few minutes.
-```
-
-Sanity check the vectors carry what you expect (labels, lost-position flood, ply depth):
-
-```bash
-node -e "const r=require('fs').readFileSync('server/scripts/eval_set_fv_suff_frozen_vectors.jsonl','utf8').trim().split('\n').map(JSON.parse);const s=JSON.stringify(r.map(x=>x.feature_vector));console.log('owner',(s.match(/\"owner\"/g)||[]).length,'severity',(s.match(/\"severity\"/g)||[]).length,'realizedOnPly',(s.match(/realizedOnPly/g)||[]).length);"
+node -e "const r=require('fs').readFileSync('server/scripts/fv_eval_set.jsonl','utf8').trim().split('\n').map(JSON.parse);const c={};r.forEach(x=>c[x.feature_vector.case]=(c[x.feature_vector.case]||0)+1);console.log('cases',JSON.stringify(c),'| any scores leaked:',r.some(x=>'scores' in x.feature_vector));"
 ```
 
 ---
 
 ## Step 2 — run the answerer (PAID: calls `EXPLAIN_MODEL` via OpenAI)
 
-`EXPLAIN_MODEL` is read from `connect-four/server/.env` (default `gpt-5.4`). Cost = `records × conditions × n`.
-For the 18-case set, `--condition all --n 3` = **162 calls**. Always write to a fresh `--out` (a new
-name per run keeps prior runs comparable; the script appends).
+`EXPLAIN_MODEL` is read from `connect-four/server/.env` (default `gpt-5.4`). Cost = `records ×
+conditions × n`. The answerer defaults `--input` to `server/scripts/fv_eval_set.jsonl`. Always write
+to a fresh `--out` (a new name per run keeps prior runs comparable; the script appends).
 
 ```bash
 node server/scripts/explain_from_vector.mjs \
-  --input  server/scripts/eval_set_fv_suff_frozen_vectors.jsonl \
-  --out    server/scripts/fv_suff_answers_all_v2.jsonl \
+  --input  server/scripts/fv_eval_set.jsonl \
+  --out    server/scripts/fv_suff_answers_$(date +%Y%m%dT%H%M%SZ).jsonl \
   --n 3 \
   --condition all          # A=full vector · B=board-only · C=features-without-movestring · all=A,B,C
-# → 162 rows, expect 0 parse/call failures.
+# → records × 3 conditions × 3 runs rows, expect 0 parse/call failures.
 ```
 
 Optional flags: `--model <id>` overrides `EXPLAIN_MODEL`; `--condition A` for just the headline condition.
@@ -71,16 +62,14 @@ Optional flags: `--model <id>` overrides `EXPLAIN_MODEL`; `--condition A` for ju
 
 ## Step 3 — grade (free on the Max plan; spawns grading sub-agents)
 
-Invoke the grader skill on the answers + the frozen vectors. It scores A1–A4, applies the
+Invoke the grader skill on the answers + the frozen eval set. It scores A1–A4, applies the
 all-N-runs pass rule, and writes a report next to the answers.
 
 ```
-/grade-fv-sufficiency server/scripts/fv_suff_answers_all_v2.jsonl server/scripts/eval_set_fv_suff_frozen_vectors.jsonl
-# → server/scripts/fv_suff_answers_all_v2_grade_report.md
+/grade-fv-sufficiency server/scripts/fv_suff_answers_<ts>.jsonl server/scripts/fv_eval_set.jsonl
+# → server/scripts/fv_suff_answers_<ts>_grade_report.md
 ```
 
-Compare the new report's **Condition-A pass count** and **A3/A4 pass-rates** against the prior
-baseline report (`fv_suff_answers_all_grade_report.md` — baseline: Condition A 8/18, A3 30/54, A4 29/54).
 The deliverable is the **counterexample list** (failures attributed to a missing/ambiguous feature
 field or glossary gap), not the pass number.
 
@@ -90,8 +79,9 @@ field or glossary gap), not the pass number.
 
 - **Change the prompt-builder** (`buildPrompt` in `explain_from_vector.mjs`) or the **glossary**
   (`docs/architecture/feature-vector-glossary.md`, loaded at runtime) → rerun **Step 2 → Step 3**
-  only (vectors unchanged).
-- **Change the feature vector** (`toFeatureVector` / `runSparseLookahead`) → rerun **Step 1 → 2 → 3**
-  (don't forget the `rm` in Step 1).
+  only (eval set unchanged).
+- **Change the feature vector** (the reason engine, or `toNarratorVector` in
+  `reasonNarratorVector.mjs`) → rerun **Step 1 → 2 → 3** (rebuild the corpus first if you changed the
+  engine: `reason_audit/build_evidence.mjs`).
 - **Dial the model down** toward `gpt-5.4-mini` via `EXPLAIN_MODEL` (or `--model`) as the prompt
   improves; the frozen set + grader stay fixed.

@@ -1,7 +1,7 @@
 ---
 name: grade-fv-sufficiency
-description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from explain_from_vector.mjs) against the frozen run_eval --no-llm vectors — scores axes A1–A4 and emits a counterexample report attributing failures to feature-field / glossary gaps
-argument-hint: "<path-to-fv_suff_answers_*.jsonl> [--vectors <frozen_vectors.jsonl>]"
+description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from explain_from_vector.mjs) against the frozen reason-engine eval set (fv_eval_set.jsonl) — scores axes A1–A4 and emits a counterexample report attributing failures to feature-field / glossary gaps
+argument-hint: "<path-to-fv_suff_answers_*.jsonl> [--vectors <fv_eval_set.jsonl>]"
 user-invocable: true
 ---
 
@@ -9,11 +9,19 @@ user-invocable: true
 
 You are grading a batch of structured blunder-explanations produced by the answerer
 `server/scripts/explain_from_vector.mjs` (the "answerer"). Each explanation was written by a model
-that saw **only** the feature vector + the glossary
+that saw **only** the **reason-engine feature vector** + the glossary
 (`docs/architecture/feature-vector-glossary.md`) — no tools, no solver ground truth. **You are the
-oracle:** you have the solver, the board, and the frozen record's ground-truth fields. Read the
+oracle:** you have the solver, the board, and the frozen record's `feature_vector` fields. Read the
 experiment spec first: `docs/architecture/feature-vector-sufficiency-experiment.md` (§4 schema, §5
 axes + pass rule, §7 output).
+
+**The vector under test is the reason-engine evidence object** (`computeReason` output, with the raw
+per-column `scores` array stripped by `toNarratorVector`). Its fields are `case`, `bestCol`,
+`playedCol`, `bestScore`, `playedScore`, `player`/`opponent`, `lostResource`, `opponentPunishment`
+(each with `kind`/`register`/`window`/`tacticTag`/`parityAttribution`/…), `opponentPunishment.tie`,
+`replyHistogram`, `gate`. The glossary defines every one. There is **no** separate ground-truth
+file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside** each eval
+record's `feature_vector`.
 
 ## Core principle: the feature vector + glossary are the artifact under test, not the model
 
@@ -35,15 +43,15 @@ does not. Never conflate the two.
 ## Core principle: observe the board with tools, never infer it from the vector
 
 You can run tools — use them to OBSERVE ground truth. Deciding "that fork exists" by reading the
-vector's `lookahead.ways` is circular (the vector is what's under test). Run the position through
+vector's `lostResource.forkWindows` is circular (the vector is what's under test). Run the position through
 the visualizer and read its threat annotations. Prefer the observation whenever a claim is concrete
 and load-bearing.
 
 - **`./visualize_board.sh <movestring>`** (from repo root) — authoritative board view: raw board,
   annotated board marking every major/minor threat cell, the `par` row (per-column parity), the
   `scr` row (solver score per column), and an explicit major-threat list. Build movestrings as
-  `board_state + correct_move` (after-best board) or `board_state + move_played` (after-played
-  board). Use it to fact-check any board claim in A3/A4.
+  `movestring + bestCol` (after-best board) or `movestring + playedCol` (after-played
+  board), 0-indexed. Use it to fact-check any board claim in A3/A4.
 - **The solver** — `createSolverProcess` from `connect-four/server/c4solver-wrapper.js`: `cd
   connect-four`, `await solver.query(movestring)`, and `solver.destroy()` in a `finally` or it hangs.
   Queries on terminal/won positions throw "Invalid position" — guard each individually. Use it to
@@ -54,17 +62,19 @@ and load-bearing.
 - `feature_vector` cells and the answer's `key_cells` are **`cNrM`, 1-indexed** (column 1 = leftmost,
   row 1 = bottom).
 - The answer's `better_move` is **1-indexed display** (1–7), as the answerer's prompt states.
-- The record's `correct_move`, `move_played`, and `feature_vector.{playedCol,bestCol}` are
-  **0-indexed**.
-- So A1 check is: `answer.better_move - 1 === record.correct_move`. When pasting columns into a
-  movestring for `visualize_board.sh`, use the **0-indexed** value.
+- The record's `feature_vector.{playedCol,bestCol}` and every `line[].col` are **0-indexed**.
+- So A1 check is: `answer.better_move - 1 === feature_vector.bestCol`. When pasting columns into a
+  movestring for `visualize_board.sh`, use the **0-indexed** value (`feature_vector.movestring` +
+  `feature_vector.bestCol` for the after-best board; `+ feature_vector.playedCol` for after-played).
 
 ## Pruning-aware reading
 
-The answerer prunes the vector to honor glossary §6 (absence = "not present"): empty maps, all-zero
-`{count,cells}` buckets, nulls/false/empty strings are dropped before the model sees them. So if a
-field is absent from the answer's `fields_relied_on` or the model says "no minor threats," that is
-the model correctly reading an absence — **never** score it as "the model failed to use a field."
+The answerer prunes the vector to honor the glossary's absence-contract (§ pruning): empty
+arrays/objects and `null` fields are dropped before the model sees them — but **meaningful scalars
+are kept** (`playedScore: 0` = draw; `tie.tied: false` is real). A `tacticTag: null`, a `parity`
+register's `line: null`, or `tie.kind: "independent"` are **honest signals**, not omissions: if the
+model narrates them as "no named tactic," "too deep to spell out a line," or "geometrically
+unrelated," that is **correct reading**, not a field-use failure.
 
 ## Input
 
@@ -72,19 +82,20 @@ Two files, joined by `id`:
 
 1. **Answers jsonl** (the argument): one line per `(id, run_index, condition)`. Shape:
    ```json
-   { "id":"eval-0", "run_index":0, "condition":"A", "model":"gpt-5.4",
-     "pattern_category":"drawing_move",
-     "answer": { "better_move":4, "played_outcome":"draw", "best_outcome":"win",
-                 "mechanism":"…", "key_cells":["c4r1",…], "fields_relied_on":["lookahead.case",…],
+   { "id":"wd-0", "run_index":0, "condition":"A", "model":"gpt-5.4",
+     "pattern_category":"win_to_draw",
+     "answer": { "better_move":2, "played_outcome":"draw", "best_outcome":"win",
+                 "mechanism":"…", "key_cells":["c1r1",…], "fields_relied_on":["case","lostResource.tacticTag",…],
                  "unsure_about":"…", "confidence":"medium" },
      "raw":"…", "parse_error":null, "call_error":null }
    ```
-2. **Frozen vectors jsonl** (default: the `eval_set_fv_suff_frozen_vectors.jsonl` next to the answers,
-   or `--vectors <path>`): the full `run_eval --no-llm` records. Oracle fields per record:
-   `correct_move`, `move_played`, `board_state` (== `feature_vector.movestring`), `premove_scores`,
-   `played_scores`, `best_scores` (the last two are **opponent-perspective**, after the move),
-   `feature_vector` (with `bestCol`, `playedCol`, `tag`, `direction`,
-   `lookahead.{bestOutcome,postBlunderOutcome}`, `threatStats`, `patterns*`), `prompt_data`.
+2. **Frozen eval set jsonl** (default: the `fv_eval_set.jsonl` next to the answers, or `--vectors
+   <path>`): one row per case, shape `{ id, pattern_category, feature_vector }`. **All oracle fields
+   are inside `feature_vector`:** `movestring` (the pre-move board), `bestCol` (= the correct move,
+   0-indexed), `playedCol` (= the move played, 0-indexed), `case` (the outcome class), `bestScore`,
+   `playedScore` (your-perspective solver scores on the decision board), and the two halves
+   (`lostResource`, `opponentPunishment`). Use the **solver** for any independent outcome check (the
+   raw per-column `scores` array is intentionally absent — it was the leak `toNarratorVector` removes).
 
 If a record has `call_error` or `parse_error` non-null, or `answer` is null, that run is a **parse
 failure** — count it, exclude it from axis scoring, and treat the case as failing the pass rule
@@ -97,8 +108,8 @@ Group answer rows by `(id, condition)`. Each group has up to N runs (default 3).
 
 | Axis | What | How | Weight |
 |---|---|---|---|
-| **A1 better move** | `better_move - 1 === correct_move` | code (record field) | sanity |
-| **A2 outcomes** | `played_outcome` matches `feature_vector.lookahead.postBlunderOutcome` and `best_outcome` matches `lookahead.bestOutcome` (strip the `_with_best_play` suffix → `win`/`draw`/`loss`); cross-check sign with the solver | code + solver | sanity |
+| **A1 better move** | `better_move - 1 === feature_vector.bestCol` | code (record field) | sanity |
+| **A2 outcomes** | `played_outcome`/`best_outcome` match what `feature_vector.case` implies (table below); cross-check sign with the solver | code + solver | sanity |
 | **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one) | board (`visualize_board.sh`) + solver | **high** |
 | **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded** | board verification | **high (zero tolerance)** |
 
@@ -106,11 +117,20 @@ A1/A2 are **sanity checks**: the vector already gives `bestCol` and the outcome 
 there is a **glossary-read** failure (the model couldn't even read the vector), which is itself a
 glossary counterexample. The substance is **A3/A4**.
 
-**A2 outcome mapping** — `feature_vector.lookahead.bestOutcome`/`postBlunderOutcome` are the
-reference. Map `win_with_best_play`→`win`, `draw_with_best_play`→`draw`, `loss_with_best_play`→`loss`.
-If `lookahead` is absent/null, derive from the solver: `best_scores`/`played_scores` are
-opponent-perspective after the move, so the moving player's outcome = sign of `-(opponent best
-legal score)` (>0 win, =0 draw, <0 loss).
+**A2 outcome mapping** — `feature_vector.case` fixes both outcomes (it is the sign pair of
+`bestScore`,`playedScore` from your perspective):
+
+| `case` | `best_outcome` | `played_outcome` |
+|---|---|---|
+| `win_to_draw` | win | draw |
+| `win_to_lose` | win | loss |
+| `draw_to_lose` | draw | loss |
+| `lose_to_faster_lose` | loss | loss |
+
+Cross-check with the solver when unsure: query `feature_vector.movestring + bestCol` (and `+
+playedCol`); each returns the opponent's scores after the move, so your outcome = sign of `−(best
+legal opponent score)` (>0 win, =0 draw, <0 loss). For `lose_to_faster_lose` both outcomes are
+`loss`, so A2 only checks the model didn't claim a win/draw.
 
 **Per-run vs per-case.** Score each axis on **every run** in the group. The **case passes iff A1–A4
 hold on ALL N runs** (spec §5). Intermittent success = **fail** — it exposes latent ambiguity in the
@@ -131,30 +151,33 @@ condition) across N independent runs. Output ONLY a valid JSON object — no pro
 You are an AGENT with shell access, run from the repo root. For any board-level claim (A3/A4) you
 MUST OBSERVE the board, not infer it from the feature vector (the vector is the artifact under
 test). Run `./visualize_board.sh <movestring>` and read its threat/par/score annotations:
-- after-best board:   <board_state><correct_move 0-indexed>
-- after-played board: <board_state><move_played 0-indexed>
+- after-best board:   <movestring><bestCol 0-indexed>
+- after-played board: <movestring><playedCol 0-indexed>
 For a move's true outcome, query the solver (createSolverProcess from
 connect-four/server/c4solver-wrapper.js; cd connect-four; await solver.query; destroy() in finally).
 
-## Case metadata (oracle — the model did NOT see these)
+## Case metadata (oracle — all from feature_vector; the model saw the vector but you VERIFY on the board)
 - id: <id>   condition: <condition>
-- board_state: <board_state> (pre-move movestring; append a 0-indexed column for a board)
-- move_played (0-indexed): <move_played>  → display column <move_played + 1>
-- correct_move (0-indexed): <correct_move> → display column <correct_move + 1>
-- pattern_category: <pattern_category>   tag: <feature_vector.tag>   direction: <feature_vector.direction>
-- lookahead.bestOutcome: <…>   lookahead.postBlunderOutcome: <…>
-- premove_scores: <…> (player-perspective)  best_scores / played_scores: <…> (opponent-perspective, after the move)
+- movestring: <feature_vector.movestring> (pre-move board; append a 0-indexed column for a board)
+- playedCol (0-indexed): <feature_vector.playedCol>  → display column <playedCol + 1>
+- bestCol (0-indexed): <feature_vector.bestCol> → display column <bestCol + 1>   (this is the correct move)
+- pattern_category / case: <feature_vector.case>
+- bestScore / playedScore (your-perspective, decision board): <…> / <…>
+- expected outcomes from case: best=<…> played=<…> (win_to_draw→win/draw, win_to_lose→win/loss,
+  draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
+- lostResource.kind / opponentPunishment.kind: <…> / <…>  (winning_line | denial | neutralization | conditional_swindle)
 
 Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the oracle
-cols above are 0-indexed. A1 holds iff better_move - 1 == correct_move.
+cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
 
 ## The N runs to grade
 <for each run: run_index, and the full `answer` JSON. Include any parse_error/call_error.>
 
 ## Score each axis on EACH run, then apply the pass rule
-- A1: better_move - 1 == correct_move?
-- A2: played_outcome == map(postBlunderOutcome) AND best_outcome == map(bestOutcome)
-      (win_with_best_play→win, etc.); cross-check sign with the solver if unsure.
+- A1: better_move - 1 == feature_vector.bestCol?
+- A2: best_outcome / played_outcome match what feature_vector.case implies
+      (win_to_draw→win/draw, win_to_lose→win/loss, draw_to_lose→draw/loss,
+      lose_to_faster_lose→loss/loss); cross-check sign with the solver if unsure.
 - A3: Does the mechanism's named tactic/threat exist on the after-best / after-played board
       (verify with visualize_board.sh), and is it the DECISIVE reason the better move wins/holds
       (not a true-but-peripheral observation)? Use the solver to confirm the outcome difference is
@@ -171,8 +194,10 @@ case fails. Note intermittency explicitly.
 
 ## Counterexample attribution (the deliverable)
 If the case fails A3 or A4, OR any run has a non-empty `unsure_about`, attribute it: name the
-specific feature-vector FIELD that was missing/ambiguous (e.g. "patternsPostBlunder lacked a
-figure_7 entry with cells") or the GLOSSARY ambiguity, and state the board finding that proves it.
+specific feature-vector FIELD that was missing/ambiguous (e.g. "lostResource.forkWindows did not
+include the window the mechanism named", "opponentPunishment.tie said independent but the model
+claimed a shared cell", "parityAttribution.leverCells absent so the model invented a lever") or the
+GLOSSARY ambiguity, and state the board finding that proves it.
 
 Output exactly:
 {
@@ -213,7 +238,7 @@ to the weak model). If C ≪ A, the distilled fields alone don't carry the reaso
 (one row per case; A1–A4 = "all runs pass" / "k/N" when mixed)
 
 For each failing or intermittent case, a notes block below its row:
-> eval-N (cond A): A3 fail on run 2 — claimed a figure_7 fork the after-played board does not show;
+> dl-N (cond A): A3 fail on run 2 — claimed a double_threat fork the after-played board does not show;
 > A4 ok. Board: visualize_board.sh shows "Major threats: none" at c4r4.
 
 ## Counterexample list (THE DELIVERABLE)
@@ -227,12 +252,12 @@ Aggregate `fields_relied_on` across all answers. Which engineered fields are act
 removal or a sign the glossary doesn't surface it.
 
 ## Raw answers (per case)
-For each case: the board (`board_state`, played/correct cols) and each run's `answer` JSON.
+For each case: the board (`feature_vector.movestring`, played/best cols) and each run's `answer` JSON.
 ```
 
 ## Key rules recap
 
-- `better_move` is 1-indexed; oracle cols are 0-indexed (A1: `better_move - 1 == correct_move`).
+- `better_move` is 1-indexed; oracle cols are 0-indexed (A1: `better_move - 1 == feature_vector.bestCol`).
 - A case = one `(id, condition)`; it passes only if A1–A4 hold on **all N runs**.
 - `unsure_about` is excluded from A4 and logged as a field-gap counterexample.
 - Observe the board with `visualize_board.sh`/solver; never trust the vector to verify itself.
