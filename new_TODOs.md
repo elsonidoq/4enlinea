@@ -39,6 +39,8 @@
 
 - security checkup: would anyone be able to access the codebase? Explore ways that a hacker could access the codebase
 
+- each call to the openai llm must register the metadata the response has regarding spent tokens or spent dollars on that request
+
 - unify sub-optimal move with blunder. The screens must be the same, a sub optimal move is a less severe blunder. The games analysis showing sub optimal moves and blunders should be seen the same, but the blunder view and the explorer view must be unified. The "start a game from here" and "what should I have played" and "mark as reviewed" buttons must be in the new merged window. No old dead code should remain from this merge
 
 - The browser forgets i have signed in very quickly. I want the app to remember me
