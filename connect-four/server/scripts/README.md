@@ -11,11 +11,12 @@ tooling"** section of the repo-root `README.md` for the pipeline-grouped catalog
 Quick map:
 
 - **`reason_engine/`** — the blunder-reason engine (`reasonEngine.mjs` = `computeReason`),
-  `build_fixture.mjs` → `reason_fixture.jsonl` (regression fixture), `build_evidence.mjs` →
-  `reason_evidence_all.jsonl` (corpus), `lib/`, `TOOLS/`.
-- **Reason-vector LLM eval (Pipeline B):** `build_reason_eval_set.mjs` / `build_fv_eval_set.mjs`
-  (Stage ① board sets) → `explain_from_vector.mjs` (LLM answerer) → `grade-fv-sufficiency` skill.
-  Shared projection: `reasonNarratorVector.mjs`. Runbook: `RUNBOOK_fv_sufficiency.md`.
+  `reason_fixture.jsonl` (regression fixture; regenerated via `select_boards.mjs --strategy fixture`),
+  `lib/`, `TOOLS/`.
+- **Reason-vector LLM eval (Pipeline B):** `select_boards.mjs` (Stage ① board sets; `--strategy
+  coverage` or `--strategy fixture`) → `compute.mjs --input <boards>` (evidence; add `--llm` for LLM
+  answers) → `grade-fv-sufficiency` skill. Shared projection: `reasonNarratorVector.mjs`. Runbook:
+  `RUNBOOK_fv_sufficiency.md`.
 - **Deep-reveal coach eval (Pipeline A):** `generate_eval_set.mjs` → `run_eval.mjs` →
   `judge-deep-reveals`; `filter_failing_evals.mjs`, `corpus_annotation_check.mjs`, `print_lookahead.mjs`.
 - **Ops / diagnostics:** `set-tier.js`, `delete-user.mjs`, `import_papergames_blunders.mjs`,

@@ -1,5 +1,5 @@
 // reasonEngine.test.mjs — run the blunder-reason evidence engine on every fixture board and assert
-// the evidence is internally sound. Fixture is committed & deterministic (build_fixture.mjs).
+// the evidence is internally sound. Fixture is committed & deterministic (select_boards.mjs --strategy fixture).
 //
 // Per row asserts:
 //   - classified `case` === expectedCase (solver-ground-truth sign pair);

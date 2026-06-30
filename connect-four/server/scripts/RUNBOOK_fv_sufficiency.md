@@ -8,89 +8,102 @@ The grader's contract: `.claude/skills/grade-fv-sufficiency/SKILL.md`.
 > this vector is computed LIVE from the request; here we freeze a subset of the offline corpus so
 > iterations are comparable.
 
-**Two dials**: the model (`EXPLAIN_MODEL` in `connect-four/server/.env`) and the prompt-builder
-(`buildPrompt` in `explain_from_vector.mjs`) change between runs; the **frozen eval set and the
-grader stay constant** so iterations are comparable.
+**Two dials**: the model (`EXPLAIN_MODEL` in `connect-four/server/.env`) and the prompt inside
+`compute.mjs` change between runs; the **grader stays constant** so iterations are comparable.
 
 All commands run from `connect-four/`.
 
 ---
 
-## Step 1 — build the frozen eval set (free; no solver, no LLM)
+## Step 1 — select boards (free; no LLM)
 
-Freezes a subset of the precomputed reason corpus (`reason_evidence_all.jsonl`) into the answerer's
-input. Each row is `{ id, pattern_category, feature_vector }` where `feature_vector =
-toNarratorVector(corpus row)` (raw `scores` + fixture labels removed). `notABlunder` rows are
-dropped.
+Pick a set of blunder boards that covers the reason-vector predicate space.
 
 ```bash
-node server/scripts/build_fv_eval_set.mjs
-# → server/scripts/fv_eval_set.jsonl   (one row per blunder case, all 4 cases covered)
-# Options: --input <corpus.jsonl>  --out <set.jsonl>  --per-case <k> (cap rows per case for a balanced/smaller set)
+node server/scripts/select_boards.mjs --strategy coverage [--target N] [--max-games N]
+# → server/scripts/boards_coverage_<ts>.jsonl
+#   rows: { id, movestring, playedCol, strategy, selection: { predicates } }
 ```
 
-**To grow the set** (the corpus is the offline fixture, not production): enlarge the fixture
-(`reason_engine/build_fixture.mjs`, raise its sampling) → recompute the corpus
-(`reason_engine/build_evidence.mjs`) → re-run this step. The answerer + grader are size-agnostic.
+Options: `--target N` (boards per predicate, default 1); `--max-games N` (self-play game budget).
 
-Sanity check the set carries what you expect (cases covered, no raw scores leaked):
+**Regression fixture** — to regenerate the committed fixture used by `reasonEngine*.test.mjs`:
 
 ```bash
-node -e "const r=require('fs').readFileSync('server/scripts/fv_eval_set.jsonl','utf8').trim().split('\n').map(JSON.parse);const c={};r.forEach(x=>c[x.feature_vector.case]=(c[x.feature_vector.case]||0)+1);console.log('cases',JSON.stringify(c),'| any scores leaked:',r.some(x=>'scores' in x.feature_vector));"
+node server/scripts/select_boards.mjs --strategy fixture
+# → server/scripts/reason_engine/reason_fixture.jsonl  (deterministic anchor boards)
 ```
 
 ---
 
-## Step 2 — run the answerer (PAID: calls `EXPLAIN_MODEL` via OpenAI)
+## Step 2 — compute evidence (free; local solver)
 
-`EXPLAIN_MODEL` is read from `connect-four/server/.env` (default `gpt-5.4`). Cost = `records ×
-conditions × n`. The answerer defaults `--input` to `server/scripts/fv_eval_set.jsonl`, and
-auto-names its output `fv_suff_answers_<input-stem>_<launch-datetime>.jsonl` (traceable to the input
-set + when the run started; pass `--out` to override).
+Run `computeReason` over the board set to produce a nested evidence file.
 
 ```bash
-node server/scripts/explain_from_vector.mjs \
-  --input  server/scripts/fv_eval_set.jsonl \
-  --n 3 \
-  --condition all          # A=full vector · B=board-only · C=features-without-movestring · all=A,B,C
-# → server/scripts/fv_suff_answers_fv_eval_set_<datetime>.jsonl
-#   records × 3 conditions × 3 runs rows, expect 0 parse/call failures.
+node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.jsonl
+# → server/scripts/reason_evidence_<stem>.jsonl
+#   rows: { id, evidence, groundTruth }
 ```
 
-Optional flags: `--model <id>` overrides `EXPLAIN_MODEL`; `--condition A` for just the headline condition.
+`--input` defaults to `server/scripts/reason_engine/reason_fixture.jsonl`.
+
+---
+
+## Step 2b — run the LLM answerer (PAID: calls `EXPLAIN_MODEL`)
+
+`EXPLAIN_MODEL` is read from `connect-four/server/.env`. Cost = `records × conditions × n`.
+
+```bash
+node server/scripts/compute.mjs \
+  --input server/scripts/boards_coverage_<ts>.jsonl \
+  --llm \
+  [--condition all]   # A=full vector · B=board-only · C=features-without-movestring · all=A,B,C
+  [--n 3] \
+  [--model <id>]      # overrides EXPLAIN_MODEL
+# → server/scripts/fv_suff_answers_<stem>_<ts>.jsonl
+#   each row embeds its feature_vector (the answers file IS its own vectors source)
+```
+
+**Key efficiency note:** `--llm` reuses an existing `reason_evidence_<stem>.jsonl` if present —
+no solver calls are made. Iterating the glossary or prompt only requires rerunning Step 2b,
+not Step 2.
 
 ---
 
 ## Step 3 — grade (free on the Max plan; spawns grading sub-agents)
 
-Invoke the grader skill on the answers + the frozen eval set. It scores A1–A4, applies the
-all-N-runs pass rule, and writes a report next to the answers.
+The answers file is its own vectors source (each row embeds its `feature_vector`). Pass it as
+both the answers and the `--vectors` argument.
 
 ```
-/grade-fv-sufficiency server/scripts/fv_suff_answers_<ts>.jsonl server/scripts/fv_eval_set.jsonl
-# → server/scripts/fv_suff_answers_<ts>_grade_report.md   (human report)
-# → server/scripts/fv_suff_answers_<ts>_grades.jsonl       (structured per-id×condition; the UI reads this)
+/grade-fv-sufficiency server/scripts/fv_suff_answers_<stem>_<ts>.jsonl \
+  --vectors server/scripts/fv_suff_answers_<stem>_<ts>.jsonl
+# → server/scripts/fv_suff_answers_<stem>_<ts>_grades.jsonl   (structured per-id×condition; UI reads this)
+# → server/scripts/fv_suff_answers_<stem>_<ts>_grade_report.md (human counterexample report)
 ```
 
 The deliverable is the **counterexample list** (failures attributed to a missing/ambiguous feature
 field or glossary gap), not the pass number.
 
+---
+
 ## Step 4 — view board + vector + answer + grade in the UI
 
-Open **`/admin/fv-suff`** (desktop, localhost+admin) → **Eval answers** tab → pick the answers file
-(and eval set). Each case shows the boards + feature vector alongside the LLM's answer and its A1–A4
-grade — so a failing case points straight at the vector field / glossary gap to fix in the reason
-engine. (The **Evidence** tab browses the raw `reason_evidence_*.jsonl` vectors.)
+Open **`/admin/fv-suff`** (desktop, localhost+admin) → **Eval answers** tab → pick the answers
+file. No separate eval-set dropdown: the set is derived from the answers file itself via
+`deriveSetFromAnswers`. Each case shows the boards + feature vector alongside the LLM's answer
+and its A1–A4 grade — so a failing case points straight at the vector field / glossary gap to
+fix in the reason engine.
+
+(The **Evidence** tab browses the raw `reason_evidence_*.jsonl` vectors.)
 
 ---
 
 ## Iterating
 
-- **Change the prompt-builder** (`buildPrompt` in `explain_from_vector.mjs`) or the **glossary**
-  (`docs/architecture/feature-vector-glossary.md`, loaded at runtime) → rerun **Step 2 → Step 3**
-  only (eval set unchanged).
-- **Change the feature vector** (the reason engine, or `toNarratorVector` in
-  `reasonNarratorVector.mjs`) → rerun **Step 1 → 2 → 3** (rebuild the corpus first if you changed the
-  engine: `reason_engine/build_evidence.mjs`).
-- **Dial the model down** toward `gpt-5.4-mini` via `EXPLAIN_MODEL` (or `--model`) as the prompt
-  improves; the frozen set + grader stay fixed.
+- **Change the glossary** (`docs/architecture/feature-vector-glossary.md`) or the **prompt** in
+  `compute.mjs` → rerun **Step 2b** only (`--llm`; the evidence file is reused, no solver) → **Step 3**.
+- **Change the engine** (`reason_engine/reasonEngine.mjs`) or `toNarratorVector` in
+  `reasonNarratorVector.mjs` → rerun **Step 2** (recompute evidence) → **Step 2b** → **Step 3**.
+- **Dial the model** via `EXPLAIN_MODEL` (or `--model`) as the prompt improves; the grader stays fixed.

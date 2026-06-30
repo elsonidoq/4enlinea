@@ -44,35 +44,37 @@ request;** this offline pipeline mirrors that for evaluation.
 
 **The engine** (`server/scripts/reason_engine/`):
 - `reasonEngine.mjs` — `computeReason(movestring, playedCol, {solver})`. CLI: `node server/scripts/reason_engine/reasonEngine.mjs <movestring> <playedCol>`.
-- `build_fixture.mjs` → `reason_fixture.jsonl` — curated regression fixture (anchor boards + expected-case labels for `reasonEngine*.test.mjs`).
-- `build_evidence.mjs` → `server/scripts/reason_evidence_all.jsonl` — runs the engine over the fixture (the precomputed corpus).
 - `lib/boardUtils.mjs`, `TOOLS/*` — shared helpers + on-demand PV/parity/board inspectors.
 
-**To evaluate the reason engine** (Stage ① get boards → ② vector → ③ LLM → ④ grade):
+**To evaluate the reason engine** (Stage ① select boards → ② compute evidence → ③ LLM → ④ grade):
 
 ```bash
-# ① Get a DIVERSE board set (harvest self-play, select by reason-vector predicate coverage):
-node server/scripts/build_reason_eval_set.mjs --out server/scripts/reason_eval_set.jsonl
-#    …OR quickly freeze a subset of the existing precomputed corpus (no solver):
-node server/scripts/build_fv_eval_set.mjs            # → server/scripts/fv_eval_set.jsonl
+# ① Select a diverse board set by reason-vector predicate coverage:
+node server/scripts/select_boards.mjs --strategy coverage [--target N] [--max-games N]
+#    → server/scripts/boards_coverage_<ts>.jsonl  rows: {id, movestring, playedCol, strategy, selection}
+#    (--strategy fixture regenerates the committed regression fixture reason_engine/reason_fixture.jsonl)
 
-# ② vectors are already in the set rows (feature_vector = toNarratorVector(computeReason)).
+# ② Compute evidence locally (free, local solver):
+node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.jsonl
+#    → server/scripts/reason_evidence_<stem>.jsonl  rows: {id, evidence, groundTruth}
 
-# ③ Ask the LLM to explain each (PAID — EXPLAIN_MODEL in server/.env; conditions A/B/C):
-node server/scripts/explain_from_vector.mjs --input server/scripts/reason_eval_set.jsonl --n 3 --condition all
-#    → auto-named server/scripts/fv_suff_answers_reason_eval_set_<launch-datetime>.jsonl  (override with --out)
+# ② Ask the LLM to explain each (PAID — EXPLAIN_MODEL in server/.env; add --llm):
+node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.jsonl --llm --n 3 --condition all
+#    → server/scripts/fv_suff_answers_<stem>_<ts>.jsonl  (each row embeds its feature_vector)
+#    Note: --llm reuses an existing reason_evidence_<stem>.jsonl — no solver re-run needed
 
-# ④ Grade A1–A4 vs the board (Claude skill; writes a counterexample report AND a
-#   <stem>_grades.jsonl the UI reads, both next to the answers):
-/grade-fv-sufficiency server/scripts/fv_suff_answers_<ts>.jsonl server/scripts/reason_eval_set.jsonl
+# ③ Grade A1–A4 (Claude skill; answers file is its own vectors source):
+/grade-fv-sufficiency server/scripts/fv_suff_answers_<stem>_<ts>.jsonl \
+  --vectors server/scripts/fv_suff_answers_<stem>_<ts>.jsonl
+#    → <stem>_grades.jsonl (UI reads) + <stem>_grade_report.md (counterexample report)
 ```
 
 **View the whole loop in the UI at `/admin/fv-suff`** (desktop, localhost+admin) — two modes:
 - **Evidence** — browse the vectors (`reason_evidence_*.jsonl` ← `GET /api/admin/reason`); verify the
   engine's `computeReason` output by eye against the boards.
-- **Eval answers** — pick an answers file + eval set; for each case see the board + vector **and the
-  LLM's answer + its A1–A4 grade** side by side (← `GET /api/admin/fv-suff?answers=&set=`). This is
-  the iteration view: a failing grade points straight at the vector field / glossary gap to fix.
+- **Eval answers** — pick an answers file; the eval set is derived automatically from the answers
+  (each row embeds its `feature_vector`). For each case see the board + vector **and the LLM's answer
+  + its A1–A4 grade** side by side. A failing grade points straight at the vector field / glossary gap to fix.
 
 Field semantics: `docs/architecture/feature-vector-glossary.md`. Operational details:
 `RUNBOOK_fv_sufficiency.md`. Shared LLM-facing projection: `reasonNarratorVector.mjs`
@@ -80,22 +82,18 @@ Field semantics: `docs/architecture/feature-vector-glossary.md`. Operational det
 
 **Create a new evidence file for the `/admin/fv-suff` dropdown.** The browser's file dropdown lists
 every `server/scripts/reason_evidence_*.jsonl` (scanned by `GET /api/admin/reason/files`). To add an
-entry, run `build_evidence.mjs` over a fixture of your choice with a distinct `--out` name (it must
-match `reason_evidence_*.jsonl` to appear):
+entry, run `compute.mjs` over a board set with a distinct `--out` name (it must match
+`reason_evidence_*.jsonl` to appear):
 
 ```bash
-# (optional) make a custom fixture of {movestring, playedCol[, expectedCase, bucket]} rows, e.g.:
-node server/scripts/reason_engine/build_fixture.mjs        # → reason_fixture.jsonl  (or hand-curate one)
-# compute evidence into a NEW named file (the default invocation still writes reason_evidence_all.jsonl):
-node server/scripts/reason_engine/build_evidence.mjs \
-  --input server/scripts/reason_engine/reason_fixture.jsonl \
+# (optional) select a custom board set:
+node server/scripts/select_boards.mjs --strategy coverage --out boards_custom.jsonl
+# compute evidence into a NEW named file:
+node server/scripts/compute.mjs \
+  --input server/scripts/boards_custom.jsonl \
   --out   reason_evidence_<name>.jsonl
 # → server/scripts/reason_evidence_<name>.jsonl, now selectable in the /admin/fv-suff dropdown.
 ```
-
-`--input` defaults to `reason_fixture.jsonl`; `--out` defaults to `reason_evidence_all.jsonl` (a bare
-name lands in `server/scripts/`; a path is used as-is). Fixtures without `expectedCase` labels are
-fine — those rows just show no computed-vs-expected check.
 
 ## Pipeline A — Deep-reveal coach eval
 
