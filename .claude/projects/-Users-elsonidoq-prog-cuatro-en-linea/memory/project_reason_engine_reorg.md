@@ -1,8 +1,10 @@
 ---
 name: project_reason_engine_reorg
-description: 2026-06-30 reorg — reason_audit→reason_engine, from-vector eval on the reason vector, old FV still in production
-metadata:
+description: "2026-06-30 reorg — reason_audit→reason_engine, from-vector eval on the reason vector, old FV still in production"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 61e88999-b069-486a-ad42-b45dc5c3d949
 ---
 
 2026-06-30 reorg of the blunder-reason tooling (commit on branch `stagging`):
@@ -14,11 +16,21 @@ metadata:
   depth-preserving so internal `../../` imports stayed valid. `reason_evidence_all.jsonl` did NOT move
   (stays at `server/scripts/`; the `/api/admin/reason` endpoint + `build_evidence` write/read it there).
 
-- **The from-vector eval now runs on the REASON vector, not the old `toFeatureVector`.** Flow:
-  `build_reason_eval_set.mjs` (predicate-coverage harvest) or `build_fv_eval_set.mjs` (freeze corpus
-  subset) → `explain_from_vector.mjs` → `grade-fv-sufficiency`. The LLM-facing projection is
-  `reasonNarratorVector.mjs::toNarratorVector` (strips raw per-column `scores` + fixture labels) —
-  **shared with production** (production will call `computeReason` live + the same projection).
+- **The from-vector eval runs on the REASON vector, not the old `toFeatureVector`.** As of the
+  **2026-06-30 consolidation** the 5 eval scripts collapsed to **2** (the old ones were DELETED):
+  `select_boards.mjs --strategy {fixture|coverage}` (fixture = the old `build_fixture.mjs`, regenerates
+  `reason_engine/reason_fixture.jsonl` BYTE-IDENTICALLY; coverage = the old predicate-harvest
+  `build_reason_eval_set.mjs`, emits only a board list) → `compute.mjs` (the SOLE place `computeReason`
+  runs: writes `reason_evidence_<stem>.jsonl`; with `--llm` also `fv_suff_answers_<stem>_<ts>.jsonl`,
+  reusing an existing evidence file so iterating the prompt/glossary never re-runs the solver) →
+  `grade-fv-sufficiency` (UNCHANGED; `--vectors <answers file>` — each answers row embeds its
+  `feature_vector`). Deleted: `build_fixture.mjs`, `build_evidence.mjs`, `build_reason_eval_set.mjs`,
+  `build_fv_eval_set.mjs`, `explain_from_vector.mjs`. RUNBOOK: `server/scripts/RUNBOOK_fv_sufficiency.md`.
+- **Evidence rows are now NESTED**: `{ id:"eval-N", evidence:{computeReason output incl raw scores},
+  groundTruth:{case,gate,exhaustive,bucket,matches}|null }`. Because research labels live OUTSIDE
+  `evidence`, `toNarratorVector(row.evidence)` strips ONLY `scores` — the old `RESEARCH_LABELS`
+  strip-list was DELETED. The projection (`reasonNarratorVector.mjs::toNarratorVector`) is **shared
+  with production** (production will call `computeReason` live + the same projection).
 
 - **GOTCHA: the OLD feature vector still feeds PRODUCTION.** `toFeatureVector`/`buildExplainContext`
   in `server/explainContext.js` is the live coach behind `/api/explain*` (see [[project_explain_system]]).
