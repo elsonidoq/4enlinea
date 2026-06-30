@@ -25,7 +25,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
-import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, isReasonEvalSetFile, gradesFilenameFor } from './evalResultsHelpers.js';
+import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
@@ -642,35 +642,29 @@ app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) =
   const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   try {
     const all = readdirSync(scriptsDir);
-    // answers list excludes the *_grades.jsonl sidecars (they also match the answers pattern).
-    const answers = all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort();
-    res.json({ answers, sets: all.filter(isReasonEvalSetFile).sort() });
+    res.json({ answers: all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort() });
   } catch {
-    res.json({ answers: [], sets: [] });
+    res.json({ answers: [] });
   }
 });
 
 app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
   const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
-  const setName = req.query.set || 'fv_eval_set.jsonl';
   if (!isFvSuffAnswersFile(answersName)) return res.status(400).json({ error: 'invalid answers filename' });
-  if (!isReasonEvalSetFile(setName)) return res.status(400).json({ error: 'invalid eval-set filename' });
-  const parseJsonl = (path) =>
-    readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const parseJsonl = (path) => readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   try {
-    const set = parseJsonl(join(scriptsDir, basename(setName)));    // [{id, pattern_category, feature_vector}]
-    let answers = [], grades = [];
-    try { answers = parseJsonl(join(scriptsDir, basename(answersName))); }
-    catch (e) { if (e.code !== 'ENOENT') throw e; }                 // missing answers → empty, not fatal
+    const answers = parseJsonl(join(scriptsDir, basename(answersName)));
+    const set = deriveSetFromAnswers(answers);
+    let grades = [];
     const gradesName = gradesFilenameFor(basename(answersName));
     if (gradesName) {
       try { grades = parseJsonl(join(scriptsDir, gradesName)); }
-      catch (e) { if (e.code !== 'ENOENT') throw e; }               // grades optional
+      catch (e) { if (e.code !== 'ENOENT') throw e; }
     }
     res.json({ set, answers, grades });
   } catch (err) {
-    if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval-set file not found' });
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'answers file not found' });
     logError('[admin/fv-suff]', err);
     res.status(500).json({ error: err.message });
   }
