@@ -52,9 +52,19 @@ def reason(movestring, playedCol):
         lostResource.anchorCells = winning_move_cells(movestring, scores)
 
     elif case == 'draw_to_lose':
-        lostResource = defensive_half(movestring, bestRoot, player, diffAgainst=playedRoot)
-        #   tactical -> anchorCells = { the forced-block cell the draw move occupied }
-        #   zugzwang -> anchorCells = { parity lever cell }  (best-effort; Allis naming DEFERRED)
+        # D18: half (b) is computed FIRST to supply concededWindows to the occupation witness.
+        # The punish_half call below reuses this pre-computed oppHalf via the `against` argument.
+        oppHalf          = win_half(playedRoot, winner=opponent)     # half (b): opp winning line
+        concededWindows  = [oppHalf.window]                         # the window the player must have blocked
+        # Half (a): player's occupation of the opponent's conceded window on the bestRoot PV.
+        # Tactical sub-case (ply-0 root occupation) and zugzwang fall out of the same primitive.
+        lostResource     = find_occupation_witness(bestRoot, denier=player, windows=concededWindows,
+                                                   depthCap=42-len(bestRoot))
+        lostResource.anchorCells = ({lostResource.cell} if lostResource.verdict == 'occupation' else ∅)
+        # tie: the player's occupation cell is inside the opponent's window → kind:'tied'
+        oppHalf.entryCell = oppHalf.line[0].cell if oppHalf.line else oppHalf.completingCell
+        oppHalf.tie       = tie_to(case, lostResource, oppHalf)
+        return { case, lostResource, opponentPunishment: oppHalf, replyHistogram, gate }
 
     elif case == 'lose_to_faster_lose':
         gate = swindle_gate(bestRoot)               # exhaustive if <=10 empties, else bounded
@@ -79,10 +89,11 @@ def reason(movestring, playedCol):
 def punish_half(case, movestring, playedRoot, opponent, against):     # against = lostResource
     if case == 'win_to_draw':
         if against.terminal == 'fork':
-            # D17: half (b) is a fork-denial search (BFS over the optimal-play tree of blunderRoot).
-            # Both sides branch ALL score-preserving (score = 0) moves.  Return the shallowest node
-            # where the opponent occupies a cell of lostResource.forkWindows (LIVE->DEAD).
-            half = denial_search(playedRoot, opponent, against.forkWindows)
+            # D18: half (b) is the unified occupation-witness PV walk (replaces the D17 BFS).
+            # Walk the canonical argmax PV from playedRoot; return the first node where the opponent
+            # occupies a cell of lostResource.forkWindows (LIVE->DEAD).  depthCap = full board.
+            half = find_occupation_witness(playedRoot, denier=opponent, windows=against.forkWindows,
+                                           depthCap=42-len(playedRoot))
         else:
             # non-fork win_to_draw: legacy neutralization — the opponent's single saving reply.
             oppScores = solver.query(playedRoot)
@@ -114,50 +125,70 @@ def tie_to(case, lost, punish):
     return { kind: ('tied' if shared else 'independent'), sharedCells: list(shared) }
     #   win_to_draw : shared != ∅  ->  "your winning square was their only escape."
     #   win_to_lose : shared != ∅  ->  "they win on the very square you vacated."
-    #   draw_to_lose: tactical -> tied (hold cell == completing cell);
-    #                 zugzwang -> independent BY DESIGN (hold cell != completing cell) — honest, not a gap.
+    #   draw_to_lose: tied at the occupation cell (D18 — both tactical and zugzwang sub-cases;
+    #                 the witness is window-aware so the occupation cell is always inside the window).
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  denial_search — D17: fork-denial BFS for win_to_draw half (b)
-#    blunderRoot: movestring after the played (draw) move
-#    opponent: the side that played the blunder (now on move's OTHER side)
-#    forkWindows: list of fork windows from lostResource (lostResource.forkWindows)
+#  find_occupation_witness — D18: unified PV-walk primitive (replaces the D17 denial_search BFS)
+#    root:     starting movestring (playedRoot for win_to_draw; bestRoot for draw_to_lose)
+#    denier:   the side whose occupation we look for (opponent for win_to_draw; player for draw_to_lose)
+#    windows:  list of windows to watch (lostResource.forkWindows; or opponent's conceded window)
+#    depthCap: maximum plies to walk; use 42-len(root) for a full-board guarantee
 #
-#  Contract: BFS strictly by ply; both sides branch ALL score-preserving (score=0) moves
-#  (I2: every node is solver-grounded optimal play).  Returns the shallowest node where
-#  the opponent occupies a cell of forkWindows, killing it (LIVE before -> DEAD after).
-#  Tie-break frontier ordering toward forkWindows is permitted but must NOT prune depth.
+#  Theorem: a drawn full board fills every winning-for-S window with ≥1 not-S disc, so a single
+#  PV walk to the terminal always yields a LIVE→DEAD occupation.  With depthCap = 42-len(root)
+#  the witness is ALWAYS found; no_occupation only fires on a smaller cap or a solver error.
+#
+#  Contract: walk the canonical argmax (both-sides optimal) PV step by step.  At each denier
+#  move check whether the landing cell kills a watched window (LIVE before → DEAD after).
+#  Return the FIRST such node.  The first-on-PV witness may differ from the globally-shallowest-
+#  across-all-optimal-lines witness of D17 §3 — that difference was already declared non-
+#  contractual in D17 §3a; correctness (a LIVE→DEAD occupation exists) is unchanged (D18).
 # ════════════════════════════════════════════════════════════════════════════
 
-def denial_search(blunderRoot, opponent, forkWindows):
-    queue   = [(blunderRoot, [])]           # (movestring, line_so_far)
-    visited = {blunderRoot}
-    while queue:
-        node, line = queue.pop(0)                                     # strict BFS
-        scores     = solver.query(node)
-        mover      = side_to_move(node)
-        for col in [c for c in legal(node) if scores[c] == 0]:       # all score-preserving moves
-            child    = node + col
-            cell     = landing_cell(node, col)
-            new_line = line + [{ ply: len(line), mover, col, cell, score: 0 }]
-            if mover == opponent:                                      # check for window kill
-                for win in forkWindows:
-                    if (cell in win
-                            and window_live_before(node, win, opponent)   # no opp disc yet
-                            and window_dead_after(child, win, opponent)):  # opp disc now present
-                        return { kind:'denial', verdict:'occupation',
-                                 line: new_line, finalMovestring: child,
-                                 cell: cell, window: win,
-                                 tie: { kind:'tied', sharedCells:[cell] } }
-            if child not in visited and not is_terminal(child):
-                visited.add(child)
-                queue.append((child, new_line))
-    # no occupation found within depth cap (or tree exhausted)
-    exhaustive = all nodes in visited are terminal draws
+def find_occupation_witness(root, denier, windows, depthCap):
+    # Root pre-check: if denier's last move (the move that arrived at root) already occupies a
+    # watched window — this handles the tactical sub-case of draw_to_lose at ply 0.
+    if root is non-empty:
+        lastCell = landing_cell(root[:-1], root[-1])
+        mover    = side_to_move(root[:-1])      # who played the last move
+        if mover == denier:
+            for win in windows:
+                if (lastCell in win
+                        and window_live_before(root[:-1], win, denier)
+                        and window_dead_after(root,       win, denier)):
+                    return { kind:'denial', verdict:'occupation',
+                             line: [], finalMovestring: root,
+                             cell: lastCell, window: win,
+                             tie: { kind:'tied', sharedCells:[lastCell] } }
+
+    node = root; line = []
+    for _ in range(depthCap):
+        if is_terminal(node): break
+        scores = solver.query(node)
+        col    = argmax(scores)                 # both sides play the single canonical argmax move
+        child  = node + col
+        cell   = landing_cell(node, col)
+        mover  = side_to_move(node)
+        line   = line + [{ ply: len(line), mover, col, cell, score: scores[col] }]
+        if mover == denier:
+            for win in windows:
+                if (cell in win
+                        and window_live_before(node,  win, denier)
+                        and window_dead_after(child, win, denier)):
+                    return { kind:'denial', verdict:'occupation',
+                             line: line, finalMovestring: child,
+                             cell: cell, window: win,
+                             tie: { kind:'tied', sharedCells:[cell] } }
+        node = child
+
+    # No occupation found (depth cap hit before terminal, or a non-terminal solver error).
+    # exhaustive:true only when the walk actually reached a terminal — guarantees no witness exists.
+    exhaustive = is_terminal(node)
     return { kind:'denial', verdict:'no_occupation',
-             line: [], finalMovestring: blunderRoot,
-             exhaustive: exhaustive,           # True = confirmed no opp ever needs a pattern cell
+             line: [], finalMovestring: root,
+             exhaustive: exhaustive,    # False = honest "none within budget"; True = theorem-verified
              tie: { kind:'independent', sharedCells:[] } }
 
 
@@ -221,16 +252,10 @@ def attribute_parity_win(root, window, completingCell, winner):
              parityNamingDeferred: True }                          # canonical V1/Aftereven naming DEFERRED
 
 
-# defensive_half (draw_to_lose half a): the draw-preserving resource.  Sets anchorCells.
-def defensive_half(movestring, bestRoot, player, diffAgainst=None):
-    if best move occupies an opponent gravity-top win-in-one cell:        # TACTICAL
-        return { kind:'defensive_hold', register:'immediate', completingCell: holdCell,
-                 anchorCells: { holdCell }, ... ,
-                 tactic: name_half(bestRoot, player, 'immediate', anchor={holdCell}, diffAgainst) }
-    else:                                                                 # ZUGZWANG
-        lever = parity_lever_cell(movestring, player)   # best-effort; precise Allis naming DEFERRED
-        return { kind:'parity_group', register:'parity', completingCell: lever,
-                 anchorCells: ({lever} if lever else ∅), parityNamingDeferred: True, line: None }
+# defensive_half — SUPERSEDED by D18 for draw_to_lose half (a).
+# The draw_to_lose half (a) is now find_occupation_witness(bestRoot, denier=player, windows=concededWindows).
+# The tactical sub-case (ply-0 root occupation) and the zugzwang sub-case both fall out of the unified
+# primitive; no separate defensive_half dispatch is needed.  Retained here for historical reference only.
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -290,10 +315,11 @@ def swindle_gate(node):               # the ONLY branching search; bounded, or e
 Half (b) takes half (a) and the solver, and emits `tie = { kind, ... }`:
 
 - `tied` — the punishment exploits a square of the lost resource (`win_to_draw` save == your winning
-  square; `win_to_lose` they win where you vacated; `draw_to_lose` tactical they win on your hold cell).
-- `independent` — no shared square (`draw_to_lose` zugzwang, by design — the hold cell is *not* the
-  opponent's completing cell). Reporting this is the honest output; the canonical "you handed it to
-  them" sentence must NOT be emitted here.
+  square; `win_to_lose` they win where you vacated; `draw_to_lose` the player's occupation cell is
+  inside the opponent's conceded window — D18, both tactical and zugzwang sub-cases).
+- `independent` — no shared square. Can still occur for `win_to_draw` `no_occupation` (honest: the
+  draw holds without the opponent ever occupying a pattern cell). Reporting this is the honest
+  output; the canonical "you handed it to them" sentence must NOT be emitted here.
 - `temporal` — `lose_to_faster_lose`: the tie is speed (played loss faster than the swindle grind),
   not a shared cell.
 

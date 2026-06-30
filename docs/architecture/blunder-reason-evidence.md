@@ -33,15 +33,16 @@ varies by case:
 
 | case | half (a) kind | half (b) kind |
 |---|---|---|
-| `win_to_draw` (fork) | `winning_line` (stops at fork — D16) | `denial` (fork-denial search — D17) |
+| `win_to_draw` (fork) | `winning_line` (stops at fork — D16) | `denial` (occupation-witness PV walk — D18, replaces D17 BFS) |
 | `win_to_draw` (no fork) | `winning_line` | `neutralization` (opponent's single saving reply) |
 | `win_to_lose` | `winning_line` (stops at fork — D16) | `winning_line` (stops at fork — D16) |
-| `draw_to_lose` | `defensive_hold` (tactical) or `parity_group` (zugzwang) | `winning_line` |
+| `draw_to_lose` (tactical) | `denial` (occupation-witness PV walk — D18, ply-0 root occupation) | `winning_line` |
+| `draw_to_lose` (zugzwang) | `denial` (occupation-witness PV walk — D18, deeper PV node) | `winning_line` |
 | `lose_to_faster_lose` | `conditional_swindle` (gated) | `winning_line` (faster) |
 
 **D16 fork-stop (applies to `win_to_draw` and `win_to_lose` half (a) and half (b)).** `walkOptimal` does NOT walk every win to the completed four. After each winner move it checks for an unstoppable double-threat fork (`detectDoubleThreat` + `!detectImmediateThreat(opponent)`) and stops there, returning the fork cells and windows as the resource (`terminal:'fork'`). This means `lostResource` for these cases describes **where the fork forms**, not where the four completes. The `win_to_draw`/`win_to_lose` half (b) also uses this fork-stopped position as the basis for its search. See DECISIONS **D16**.
 
-**D17 fork-denial (`win_to_draw` half (b) when half (a) found a fork).** Half (b) is no longer a "single saving reply" (`neutralization`) but a **fork-denial search**: a BFS over the depth-bounded optimal-play tree of the blunder position (both sides branch all score-preserving moves, BFS by ply) finding the shallowest node where the opponent occupies a cell of `lostResource.forkWindows` and kills it (LIVE→DEAD). Verdict: `occupation` (the occupied cell is the constructive D14-tie) or `no_occupation` (two-valued by `exhaustive`). Non-fork `win_to_draw` keeps `neutralization`. See DECISIONS **D17**.
+**D18 occupation-witness PV walk (unified primitive).** The unified `findOccupationWitness` primitive replaces the D17 BFS (`denyOpponentPunishment`, deleted) **and** provides the `draw_to_lose` half-a denial. For `win_to_draw` half (b) with a fork: walk the canonical argmax PV from `playedRoot`; return the first node where the opponent occupies a cell of `lostResource.forkWindows` (LIVE→DEAD). Verdict: `occupation` (the occupied cell is the constructive D14-tie) or `no_occupation` (two-valued by `exhaustive`). For `draw_to_lose` half (a): walk the canonical argmax PV from `bestRoot`; return the first node where the player occupies a cell of the opponent's conceded window (from the half-b walk). Both tactical and zugzwang sub-cases use this single primitive; tie is `tied` at the occupation cell in both cases. Non-fork `win_to_draw` keeps `neutralization`. See DECISIONS **D17**, **D18**.
 
 **Keep the two halves in separate fields.** In `draw_to_lose` the half-(a) parity/hold cell is *not*
 the half-(b) opponent completing cell (validated board below: `c2r3` vs `c7r6`). Merging them into a
@@ -149,8 +150,10 @@ pattern.
   *unique* draw. Holding resource = opponent's gravity-top win-in-one at `c2r4`; the draw move
   occupies it, every other move surrenders it. `decisive_check` verdict `DECISIVE`.
 - **Zugzwang** `2444422235255630400333` (Green, scores `[-1,0,0,0,0,-1,-1]`): draw held by parity of
-  a contested column; opponent's win completes at `c7r6` near board-fill. The parity hold cell
-  (`c2r3`) ≠ the opponent completing cell (`c7r6`) — separate fields.
+  a contested column; opponent's winning window completes at `c7r6` near board-fill. Half (a) is now
+  the D18 occupation witness: the player's best-move PV occupies `c4r6` — a cell **inside** the
+  opponent's conceded winning window — tie `tied` (not `independent`). The former `c2r3` parity-lever
+  cell was the old `parity_group` anchorCell; the D18 witness supersedes it for half (a).
 
 ### lose_to_faster_lose
 - **BLUNDER** `3333325662555225` (Green, all cols lose; best col0 = −3, played col1 = −12). After
@@ -176,8 +179,15 @@ in even earlier (the completing cell is the even cell of a column whose parity t
 **Therefore: name deep zugzwang wins by their parity-aligned group of 4 + odd/even completing cell,
 detected via z-threat / Allis odd-even threat detection — not via major-threat materialization.** The
 only genuinely unnameable case is a *multi-window* board-fill where no single controlling parity group
-dominates. This collapses `draw_to_lose`'s zugzwang register and the deep `win_to_*` cases onto one
-mechanism (`parity_group`) rather than three different fallbacks.
+dominates. This collapses the deep `win_to_*` cases onto one mechanism (`parity_group`) rather than
+multiple fallbacks.
+
+**D18 update for `draw_to_lose`:** the `parity_group` fallback for `draw_to_lose` half (a) is
+superseded by the D18 occupation-witness PV walk. The zugzwang zugzwang hold is now described by
+the concrete cell the player occupies inside the opponent's conceded window (constructive
+window-aware tie), NOT by a parity-lever cell. Parity *prose* naming for `draw_to_lose` remains
+deferred per D7 — the occupation cell is the anchor, the parity language around it is not yet
+canonicalized.
 
 See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`,
 `reference_allis_rule_examples`.

@@ -1,5 +1,11 @@
 # Spec — `opponentPunishment` fork-denial (occupation witness) for `win_to_draw`
 
+> **Superseded in part by D18 (2026-06-30):** the `win_to_draw` BFS (`denyOpponentPunishment`)
+> described in §3 has been replaced by the unified `findOccupationWitness` PV walk. §3's
+> "shallowest-by-BFS" contract is replaced by "first-on-canonical-PV." The output shape (§4)
+> and the two-honest-claims rule (§5) are unchanged. The same primitive now also provides the
+> `draw_to_lose` half-a denial (see DECISIONS D18 and `reason-engine-pseudocode.md`).
+
 > Status: IMPLEMENTED (2026-06-29). Commits: f339220, 66cae80, fcfdae9, 0ac62cd, 2835e3c, 761401e.
 > 45/45 tests pass. Canonicalized into DECISIONS (D17), blunder-reason-evidence.md,
 > reason-engine-pseudocode.md, and my_pseudocode.md. Subordinate to the four canonical docs

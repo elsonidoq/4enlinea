@@ -31,8 +31,9 @@ if bestScore * playedScore > 0
 elif bestScore > 0 and playedScore = 0
     case = 'win_to_draw' # if the opponent plays optimal, you will draw if you play optimal
     reason = You could have won like this or that, now the opponent can neutralize all your threats like this and that
-    # half (b): when half (a) found a fork (D16), half (b) is the fork-denial search (D17) — BFS to
-    # the shallowest optimal node where the opponent occupies+kills a fork window (LIVE->DEAD).
+    # half (b): when half (a) found a fork (D16), half (b) is the unified occupation-witness PV walk
+    # (D18 — replaces the D17 BFS): walk the canonical argmax PV from playedRoot; return the first
+    # node where the opponent occupies+kills a fork window (LIVE->DEAD).
     # Non-fork win_to_draw keeps legacy neutralization. See reason-engine-pseudocode.md.
 
 elif bestScore > 0 and playedScore < 0
@@ -42,6 +43,12 @@ elif bestScore > 0 and playedScore < 0
 elif bestScore = 0 and playedScore < 0
     case 'draw_to_lose' 
     reason = you were waiting for your opponent to make a mistake going for a draw if he didn't, with this mistake your opponent can now win you this way
+    # half (a): the unified occupation-witness PV walk (D18) — walk the canonical argmax PV from
+    # bestRoot; return the first node where the player occupies a cell of the opponent's conceded
+    # winning window (LIVE->DEAD).  Both tactical (ply-0) and zugzwang sub-cases use this one
+    # primitive; the tie is window-aware (kind:'tied') in both cases.
+    # half (b) is computed first (opponent win_half from playedRoot) to supply concededWindows.
+    # See reason-engine-pseudocode.md and DECISIONS D18.
 
 elif bestScore < 0 and playedScore < 0
     case 'lose_to_faster_lose'
