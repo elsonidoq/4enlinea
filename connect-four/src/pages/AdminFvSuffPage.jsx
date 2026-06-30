@@ -242,17 +242,18 @@ function ReasonViewer() {
   }, [file]);
 
   const entry = rows[index];
+  const ev = entry?.evidence || {};
 
-  const preBoard = useMemo(() => buildBoard(entry?.movestring || ''), [entry]);
+  const preBoard = useMemo(() => buildBoard(ev.movestring || ''), [ev]);
   const preOverlays = useMemo(() => {
     if (!entry) return [];
     const out = [];
-    const playedRow = preBoard.heights[entry.playedCol];
-    if (playedRow != null && playedRow < 6) out.push({ c: entry.playedCol, r: playedRow, type: 'tr' });
-    const bestRow = preBoard.heights[entry.bestCol];
-    if (bestRow != null && bestRow < 6) out.push({ c: entry.bestCol, r: bestRow, type: 'tg' });
+    const playedRow = preBoard.heights[ev.playedCol];
+    if (playedRow != null && playedRow < 6) out.push({ c: ev.playedCol, r: playedRow, type: 'tr' });
+    const bestRow = preBoard.heights[ev.bestCol];
+    if (bestRow != null && bestRow < 6) out.push({ c: ev.bestCol, r: bestRow, type: 'tg' });
     return out;
-  }, [entry, preBoard]);
+  }, [ev, preBoard]);
 
   function handlePrev() { if (index > 0) setIndex(index - 1); }
   function handleNext() { if (index < rows.length - 1) setIndex(index + 1); }
@@ -265,7 +266,7 @@ function ReasonViewer() {
     );
   }
 
-  const isGreen = entry ? entry.player === 1 : false;
+  const isGreen = entry ? ev.player === 1 : false;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
@@ -302,14 +303,14 @@ function ReasonViewer() {
       {/* Meta row */}
       {entry && (
         <div style={{ display: 'flex', gap: 18, alignItems: 'center', padding: '8px 20px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap' }}>
-          <Chip text={entry.case} bg="#0f172a" fg={CASE_COLOR[entry.case] || '#94a3b8'} />
-          {entry.notABlunder && <Chip text="notABlunder" bg="#0f172a" fg="#64748b" />}
-          {entry.caseMatches === false && <Chip text="case≠expected" bg="#7f1d1d" fg="#fecaca" />}
+          <Chip text={ev.case} bg="#0f172a" fg={CASE_COLOR[ev.case] || '#94a3b8'} />
+          {ev.notABlunder && <Chip text="notABlunder" bg="#0f172a" fg="#64748b" />}
+          {entry.groundTruth?.matches === false && <Chip text="case≠expected" bg="#7f1d1d" fg="#fecaca" />}
           <span>player: <span style={{ color: isGreen ? '#2faa5a' : '#94a3b8', fontWeight: 700 }}>{isGreen ? 'Green' : 'Gray'}</span></span>
-          <span>ms: <span style={{ color: '#94a3b8' }}>{entry.movestring || '(empty)'}</span></span>
-          <span>col: <span style={{ color: '#e8543e', fontWeight: 700 }}>{entry.playedCol + 1}</span> → best: <span style={{ color: '#2faa5a', fontWeight: 700 }}>{entry.bestCol + 1}</span></span>
-          <span>scores: <span style={{ color: '#94a3b8' }}>[{(entry.scores || []).join(',')}]</span></span>
-          {entry.bucket && <span>bucket: <span style={{ color: '#94a3b8' }}>{entry.bucket}</span></span>}
+          <span>ms: <span style={{ color: '#94a3b8' }}>{ev.movestring || '(empty)'}</span></span>
+          <span>col: <span style={{ color: '#e8543e', fontWeight: 700 }}>{ev.playedCol + 1}</span> → best: <span style={{ color: '#2faa5a', fontWeight: 700 }}>{ev.bestCol + 1}</span></span>
+          <span>scores: <span style={{ color: '#94a3b8' }}>[{(ev.scores || []).join(',')}]</span></span>
+          {entry.groundTruth?.bucket && <span>bucket: <span style={{ color: '#94a3b8' }}>{entry.groundTruth?.bucket}</span></span>}
         </div>
       )}
 
@@ -335,33 +336,33 @@ function ReasonViewer() {
                 </div>
                 <HalfBoard
                   title="lostResource (half a)"
-                  subtitle={entry.lostResource ? `${entry.lostResource.kind} · amber = completing/window · ① = lookahead` : 'null'}
-                  half={entry.lostResource}
-                  baseLen={(entry.movestring || '').length}
+                  subtitle={ev.lostResource ? `${ev.lostResource.kind} · amber = completing/window · ① = lookahead` : 'null'}
+                  half={ev.lostResource}
+                  baseLen={(ev.movestring || '').length}
                 />
                 <HalfBoard
                   title="opponentPunishment (half b)"
-                  subtitle={entry.opponentPunishment ? `${entry.opponentPunishment.kind} · amber = completing/window · ① = lookahead` : 'null'}
-                  half={entry.opponentPunishment}
-                  baseLen={(entry.movestring || '').length}
+                  subtitle={ev.opponentPunishment ? `${ev.opponentPunishment.kind} · amber = completing/window · ① = lookahead` : 'null'}
+                  half={ev.opponentPunishment}
+                  baseLen={(ev.movestring || '').length}
                 />
               </div>
 
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <HalfDetail label="lostResource — what the best move preserved" half={entry.lostResource} />
-                <HalfDetail label="opponentPunishment — how the played move loses" half={entry.opponentPunishment} />
+                <HalfDetail label="lostResource — what the best move preserved" half={ev.lostResource} />
+                <HalfDetail label="opponentPunishment — how the played move loses" half={ev.opponentPunishment} />
 
                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 6 }}>
-                  {entry.replyHistogram && (
+                  {ev.replyHistogram && (
                     <Field label="reply histogram (opp non-losing replies)">
-                      afterBest <b>{entry.replyHistogram.afterBest}</b> · afterPlayed <b>{entry.replyHistogram.afterPlayed}</b>
+                      afterBest <b>{ev.replyHistogram.afterBest}</b> · afterPlayed <b>{ev.replyHistogram.afterPlayed}</b>
                     </Field>
                   )}
-                  {entry.gate && (
+                  {ev.gate && (
                     <Field label="gate (lose_to_faster_lose)">
-                      <Chip text={entry.gate.verdict} bg={entry.gate.verdict === 'Blunder' ? '#fee2e2' : '#dcfce7'} fg={entry.gate.verdict === 'Blunder' ? '#b91c1c' : '#15803d'} />
-                      {' '}exhaustive <b>{String(entry.gate.exhaustive)}</b>
-                      {entry.gate.witness && <> · devCols [{(entry.gate.witness.devCols || []).map(c => c + 1).join(',')}] · oppPlies {entry.gate.witness.oppPlies}</>}
+                      <Chip text={ev.gate.verdict} bg={ev.gate.verdict === 'Blunder' ? '#fee2e2' : '#dcfce7'} fg={ev.gate.verdict === 'Blunder' ? '#b91c1c' : '#15803d'} />
+                      {' '}exhaustive <b>{String(ev.gate.exhaustive)}</b>
+                      {ev.gate.witness && <> · devCols [{(ev.gate.witness.devCols || []).map(c => c + 1).join(',')}] · oppPlies {ev.gate.witness.oppPlies}</>}
                     </Field>
                   )}
                 </div>
@@ -443,9 +444,8 @@ function AnswerPanel({ answer, grade, runIdx }) {
 }
 
 function AnswerViewer() {
-  const [files, setFiles] = useState({ answers: [], sets: [] });
+  const [files, setFiles] = useState({ answers: [] });
   const [answersFile, setAnswersFile] = useState('');
-  const [setFile, setSetFile] = useState('fv_eval_set.jsonl');
   const [data, setData] = useState({ set: [], answers: [], grades: [] });
   const [index, setIndex] = useState(0);
   const [condition, setCondition] = useState('A');
@@ -455,11 +455,10 @@ function AnswerViewer() {
 
   useEffect(() => {
     fetch(`${API}/api/admin/fv-suff/files`)
-      .then((r) => r.ok ? r.json() : { answers: [], sets: [] })
+      .then((r) => r.ok ? r.json() : { answers: [] })
       .then((d) => {
-        setFiles({ answers: d.answers || [], sets: d.sets || [] });
+        setFiles({ answers: d.answers || [] });
         if ((d.answers || []).length && !answersFile) setAnswersFile(d.answers[d.answers.length - 1]);
-        if ((d.sets || []).length && !d.sets.includes(setFile)) setSetFile(d.sets[0]);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -468,11 +467,11 @@ function AnswerViewer() {
   useEffect(() => {
     if (!answersFile) return;
     setLoading(true); setError(null);
-    fetch(`${API}/api/admin/fv-suff?answers=${encodeURIComponent(answersFile)}&set=${encodeURIComponent(setFile)}`)
+    fetch(`${API}/api/admin/fv-suff?answers=${encodeURIComponent(answersFile)}`)
       .then((r) => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); })
       .then((d) => { setData({ set: d.set || [], answers: d.answers || [], grades: d.grades || [] }); setIndex(0); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
-  }, [answersFile, setFile]);
+  }, [answersFile]);
 
   // index maps
   const conditions = useMemo(() => [...new Set(data.answers.map((a) => a.condition))].sort(), [data.answers]);
@@ -516,11 +515,6 @@ function AnswerViewer() {
         <select value={answersFile} onChange={(e) => setAnswersFile(e.target.value)} style={{ ...sel, maxWidth: 320 }}>
           {!files.answers.length && <option value="">(no fv_suff_answers_*.jsonl found)</option>}
           {files.answers.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>set</span>
-        <select value={setFile} onChange={(e) => setSetFile(e.target.value)} style={{ ...sel, maxWidth: 220 }}>
-          {!files.sets.includes(setFile) && <option value={setFile}>{setFile}</option>}
-          {files.sets.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>cond</span>
         <select value={condition} onChange={(e) => { setCondition(e.target.value); setRun(0); }} style={sel}>
