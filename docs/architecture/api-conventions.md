@@ -660,14 +660,17 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 ## Admin Blunder-Reason Browser Endpoints
 
-Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), which browses **blunder-reason evidence** — the `computeReason` output precomputed by `server/scripts/reason_engine/build_evidence.mjs`. (The route is still named `fv-suff` for historical reasons; see memory `project_admin_fv_suff_repurposed`.) Read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`.
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons; see memory `project_admin_fv_suff_repurposed`). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
+
+**Evidence mode** — browses **blunder-reason evidence** (the `computeReason` output precomputed by `server/scripts/reason_engine/build_evidence.mjs`):
 
 - `GET /api/admin/reason/files` → `{ files }` — evidence-file names matching `reason_evidence_*.jsonl`, sorted.
-- `GET /api/admin/reason?file=<name>` → `{ rows }` — the full parsed evidence file (default `reason_evidence_all.jsonl`). The `file` param is validated against `/^reason_evidence_[\w.-]*\.jsonl$/` to block path traversal; a missing file is a 404.
+- `GET /api/admin/reason?file=<name>` → `{ rows }` — the full parsed evidence file (default `reason_evidence_all.jsonl`). `file` is validated against `/^reason_evidence_[\w.-]*\.jsonl$/`; a missing file is a 404.
 
-**Legacy (kept, unused):** `GET /api/admin/fv-suff{,/files}` served the *old* `toFeatureVector` experiment (frozen vectors + `fv_suff_answers_*.jsonl`, joined client-side). The page no longer calls it, and its fixed `eval_set_fv_suff_frozen_vectors.jsonl` was removed in the 2026-06-30 cleanup, so it returns 404; the endpoint code is retained but dead.
+**Eval-answers mode** — joins, by `id`, an eval **set**, the LLM **answers**, and the **grades**, so each board+vector shows its LLM answer + A1–A4 grade:
 
-Unlike the eval-results endpoint, the vectors response is **not field-whitelisted** — records are returned whole (they carry `feature_vector`, `prompt`, `predicates`, etc.).
+- `GET /api/admin/fv-suff/files` → `{ answers, sets }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars); `sets` = `(fv|reason)_eval_set*.jsonl`.
+- `GET /api/admin/fv-suff?answers=<name>&set=<name>` → `{ set, answers, grades }`. `set` (default `fv_eval_set.jsonl`, validated `isReasonEvalSetFile`) = `{id, pattern_category, feature_vector}` rows; `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `explain_from_vector.mjs` rows; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. A missing `set` file is a 404; missing answers/grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
 
 ## Papergames Import Endpoints (spec 038)
 

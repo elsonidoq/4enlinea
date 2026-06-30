@@ -67,11 +67,19 @@ all-N-runs pass rule, and writes a report next to the answers.
 
 ```
 /grade-fv-sufficiency server/scripts/fv_suff_answers_<ts>.jsonl server/scripts/fv_eval_set.jsonl
-# → server/scripts/fv_suff_answers_<ts>_grade_report.md
+# → server/scripts/fv_suff_answers_<ts>_grade_report.md   (human report)
+# → server/scripts/fv_suff_answers_<ts>_grades.jsonl       (structured per-id×condition; the UI reads this)
 ```
 
 The deliverable is the **counterexample list** (failures attributed to a missing/ambiguous feature
 field or glossary gap), not the pass number.
+
+## Step 4 — view board + vector + answer + grade in the UI
+
+Open **`/admin/fv-suff`** (desktop, localhost+admin) → **Eval answers** tab → pick the answers file
+(and eval set). Each case shows the boards + feature vector alongside the LLM's answer and its A1–A4
+grade — so a failing case points straight at the vector field / glossary gap to fix in the reason
+engine. (The **Evidence** tab browses the raw `reason_evidence_*.jsonl` vectors.)
 
 ---
 

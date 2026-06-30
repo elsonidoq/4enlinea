@@ -15,3 +15,24 @@ export function feedbackFilenameFor(filename) {
   if (!isValidEvalFilename(filename)) return null;
   return filename.replace('_results_', '_results_feedback_');
 }
+
+// ── Reason-vector LLM-eval browser (/admin/fv-suff "Eval answers" mode) ──────────
+// The page joins three files by id: an eval SET ({id, pattern_category, feature_vector},
+// from build_fv_eval_set.mjs / build_reason_eval_set.mjs), an ANSWERS jsonl (explain_from_vector.mjs),
+// and an optional GRADES jsonl (grade-fv-sufficiency). These validators/derivers guard the filenames.
+
+export function isFvSuffAnswersFile(name) {
+  return typeof name === 'string' && /^fv_suff_answers_[\w.-]+\.jsonl$/.test(name);
+}
+
+export function isReasonEvalSetFile(name) {
+  return typeof name === 'string' && /^(fv|reason)_eval_set[\w.-]*\.jsonl$/.test(name);
+}
+
+// Derive the structured-grades sidecar for an answers file (what grade-fv-sufficiency writes):
+//   fv_suff_answers_<ts>.jsonl → fv_suff_answers_<ts>_grades.jsonl
+// Returns null if `name` is not a valid answers filename.
+export function gradesFilenameFor(name) {
+  if (!isFvSuffAnswersFile(name)) return null;
+  return name.replace(/\.jsonl$/, '_grades.jsonl');
+}

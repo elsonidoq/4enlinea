@@ -216,9 +216,17 @@ Output exactly:
 Collect each sub-agent's JSON as it completes. A malformed/no response → record the case as
 `case_pass:false` with notes "sub-agent error".
 
-## Output — the report
+## Output — the structured grades + the report
 
-Write to `<answers-dir>/<answers-stem>_grade_report.md`:
+**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Write every collected
+sub-agent JSON object — one per line — to `<answers-dir>/<answers-stem>_grades.jsonl`. Each line is
+exactly the sub-agent's output (`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,unsure_about}],
+case_pass, intermittent, notes, counterexamples }`). The server (`GET /api/admin/fv-suff`) derives
+this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so the UI
+shows the A1–A4 chips + pass/fail next to each board+vector+answer. (If you skip this file, the UI
+just shows answers without grades — the markdown report below is still the human deliverable.)
+
+**2. The report.** Write to `<answers-dir>/<answers-stem>_grade_report.md`:
 
 ```
 # Feature-Vector Sufficiency Report — <answers filename>

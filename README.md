@@ -62,14 +62,21 @@ node server/scripts/build_fv_eval_set.mjs            # → server/scripts/fv_eva
 node server/scripts/explain_from_vector.mjs --input server/scripts/reason_eval_set.jsonl \
      --out server/scripts/fv_suff_answers_$(date +%Y%m%dT%H%M%SZ).jsonl --n 3 --condition all
 
-# ④ Grade A1–A4 vs the board (Claude skill; writes a counterexample report next to the answers):
+# ④ Grade A1–A4 vs the board (Claude skill; writes a counterexample report AND a
+#   <stem>_grades.jsonl the UI reads, both next to the answers):
 /grade-fv-sufficiency server/scripts/fv_suff_answers_<ts>.jsonl server/scripts/reason_eval_set.jsonl
 ```
 
-Browse the precomputed evidence vectors in the UI at **`/admin/fv-suff`** (localhost+admin;
-`AdminFvSuffPage.jsx` ← `GET /api/admin/reason`). Field semantics:
-`docs/architecture/feature-vector-glossary.md`. Operational details: `RUNBOOK_fv_sufficiency.md`.
-Shared LLM-facing projection: `reasonNarratorVector.mjs` (`toNarratorVector` strips raw scores).
+**View the whole loop in the UI at `/admin/fv-suff`** (desktop, localhost+admin) — two modes:
+- **Evidence** — browse the vectors (`reason_evidence_*.jsonl` ← `GET /api/admin/reason`); verify the
+  engine's `computeReason` output by eye against the boards.
+- **Eval answers** — pick an answers file + eval set; for each case see the board + vector **and the
+  LLM's answer + its A1–A4 grade** side by side (← `GET /api/admin/fv-suff?answers=&set=`). This is
+  the iteration view: a failing grade points straight at the vector field / glossary gap to fix.
+
+Field semantics: `docs/architecture/feature-vector-glossary.md`. Operational details:
+`RUNBOOK_fv_sufficiency.md`. Shared LLM-facing projection: `reasonNarratorVector.mjs`
+(`toNarratorVector` strips raw scores).
 
 **Create a new evidence file for the `/admin/fv-suff` dropdown.** The browser's file dropdown lists
 every `server/scripts/reason_evidence_*.jsonl` (scanned by `GET /api/admin/reason/files`). To add an

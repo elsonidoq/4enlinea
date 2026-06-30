@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidEvalFilename, feedbackFilenameFor } from '../../server/evalResultsHelpers.js';
+import {
+  isValidEvalFilename, feedbackFilenameFor,
+  isFvSuffAnswersFile, isReasonEvalSetFile, gradesFilenameFor,
+} from '../../server/evalResultsHelpers.js';
 
 test('accepts valid eval result filenames', () => {
   assert.ok(isValidEvalFilename('eval_set_large_2_results_2026-06-24T01-16-56Z.jsonl'));
@@ -47,4 +50,32 @@ test('feedbackFilenameFor preserves the .enriched.jsonl extension', () => {
 test('feedbackFilenameFor returns null for invalid filenames', () => {
   assert.equal(feedbackFilenameFor('../../.env'), null);
   assert.equal(feedbackFilenameFor('eval_set.json'), null);
+});
+
+// ── fv-suff eval-answers browser helpers ──
+test('isFvSuffAnswersFile accepts answers files, rejects traversal/extension', () => {
+  assert.ok(isFvSuffAnswersFile('fv_suff_answers_2026-06-30T12-00-00Z.jsonl'));
+  assert.ok(isFvSuffAnswersFile('fv_suff_answers_all.jsonl'));
+  assert.equal(isFvSuffAnswersFile('fv_suff_answers_../secret.jsonl'), false);
+  assert.equal(isFvSuffAnswersFile('fv_suff_answers_all.json'), false);
+  assert.equal(isFvSuffAnswersFile('../../.env'), false);
+  assert.equal(isFvSuffAnswersFile(''), false);
+});
+
+test('isReasonEvalSetFile accepts fv_/reason_ eval sets, rejects others', () => {
+  assert.ok(isReasonEvalSetFile('fv_eval_set.jsonl'));
+  assert.ok(isReasonEvalSetFile('reason_eval_set.jsonl'));
+  assert.ok(isReasonEvalSetFile('reason_eval_set_v2.jsonl'));
+  assert.equal(isReasonEvalSetFile('eval_set_large_3.json'), false);
+  assert.equal(isReasonEvalSetFile('reason_evidence_all.jsonl'), false);
+  assert.equal(isReasonEvalSetFile('../x.jsonl'), false);
+});
+
+test('gradesFilenameFor appends _grades before .jsonl, null for invalid', () => {
+  assert.equal(
+    gradesFilenameFor('fv_suff_answers_2026-06-30T12-00-00Z.jsonl'),
+    'fv_suff_answers_2026-06-30T12-00-00Z_grades.jsonl'
+  );
+  assert.equal(gradesFilenameFor('fv_suff_answers_all.jsonl'), 'fv_suff_answers_all_grades.jsonl');
+  assert.equal(gradesFilenameFor('eval_set.json'), null);
 });

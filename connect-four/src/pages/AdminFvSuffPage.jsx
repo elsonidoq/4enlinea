@@ -268,7 +268,7 @@ function ReasonViewer() {
   const isGreen = entry ? entry.player === 1 : false;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: '#0f172a', color: '#e2e8f0' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12, background: '#1e293b', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14, color: '#94a3b8' }}>
@@ -382,6 +382,236 @@ function ReasonViewer() {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+//  Eval-answers mode: board + vector + the LLM's answer + its grade, joined by id.
+//  Data from GET /api/admin/fv-suff?answers=<file>&set=<file> → { set, answers, grades }.
+//  set row = { id, pattern_category, feature_vector }; answer = { id, condition, run_index,
+//  answer:{ better_move, played_outcome, best_outcome, mechanism, key_cells, unsure_about,
+//  confidence } }; grade = { id, condition, per_run:[{A1..A4}], case_pass }.
+// ════════════════════════════════════════════════════════════════════════════════
+
+const OUTCOME_COLOR = { win: '#16a34a', draw: '#a16207', loss: '#dc2626' };
+const AX = (v) => v === 'pass'
+  ? <Chip text="✓" bg="#dcfce7" fg="#15803d" />
+  : v === 'fail' ? <Chip text="✗" bg="#fee2e2" fg="#b91c1c" /> : <Chip text="–" bg="#f1f5f9" fg="#94a3b8" />;
+
+function AnswerPanel({ answer, grade, runIdx }) {
+  if (!answer) {
+    return <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#a16207', padding: 10, border: '1px dashed #e2e8f0', borderRadius: 6 }}>
+      No LLM answer for this case / condition / run.
+    </div>;
+  }
+  const a = answer.answer || {};
+  const perRun = grade?.per_run?.find((r) => r.run_index === runIdx) || grade?.per_run?.[0];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Chip text={`better → col ${a.better_move}`} bg="#dcfce7" fg="#15803d" />
+        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>
+          best <b style={{ color: OUTCOME_COLOR[a.best_outcome] || '#475569' }}>{a.best_outcome}</b>
+          {' · '}played <b style={{ color: OUTCOME_COLOR[a.played_outcome] || '#475569' }}>{a.played_outcome}</b>
+        </span>
+        <Chip text={`conf ${a.confidence}`} bg="#f1f5f9" fg="#475569" />
+        {answer.parse_error && <Chip text="parse_error" bg="#fee2e2" fg="#b91c1c" />}
+      </div>
+      {perRun && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontFamily: 'monospace', fontSize: 11 }}>
+          <span style={{ color: '#94a3b8', fontWeight: 700 }}>GRADE</span>
+          A1 {AX(perRun.A1)} A2 {AX(perRun.A2)} A3 {AX(perRun.A3)} A4 {AX(perRun.A4)}
+          <Chip text={grade.case_pass ? 'PASS' : 'FAIL'} bg={grade.case_pass ? '#dcfce7' : '#fee2e2'} fg={grade.case_pass ? '#15803d' : '#b91c1c'} />
+        </div>
+      )}
+      <Field label="mechanism (the LLM's load-bearing reason)">
+        <span style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.mechanism}</span>
+      </Field>
+      {(a.key_cells || []).length > 0 && (
+        <Field label="key cells (amber on pre-move board)">{a.key_cells.join(' ')}</Field>
+      )}
+      {a.fields_relied_on?.length > 0 && (
+        <Field label="fields relied on"><span style={{ fontSize: 11, color: '#64748b' }}>{a.fields_relied_on.join(' · ')}</span></Field>
+      )}
+      {a.unsure_about && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#92400e', padding: '4px 6px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>
+          <b>unsure:</b> {a.unsure_about}
+        </div>
+      )}
+      {perRun?.unsure_about && perRun.unsure_about !== a.unsure_about && (
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#92400e' }}>grader noted abstention: {perRun.unsure_about}</div>
+      )}
+    </div>
+  );
+}
+
+function AnswerViewer() {
+  const [files, setFiles] = useState({ answers: [], sets: [] });
+  const [answersFile, setAnswersFile] = useState('');
+  const [setFile, setSetFile] = useState('fv_eval_set.jsonl');
+  const [data, setData] = useState({ set: [], answers: [], grades: [] });
+  const [index, setIndex] = useState(0);
+  const [condition, setCondition] = useState('A');
+  const [run, setRun] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/api/admin/fv-suff/files`)
+      .then((r) => r.ok ? r.json() : { answers: [], sets: [] })
+      .then((d) => {
+        setFiles({ answers: d.answers || [], sets: d.sets || [] });
+        if ((d.answers || []).length && !answersFile) setAnswersFile(d.answers[d.answers.length - 1]);
+        if ((d.sets || []).length && !d.sets.includes(setFile)) setSetFile(d.sets[0]);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!answersFile) return;
+    setLoading(true); setError(null);
+    fetch(`${API}/api/admin/fv-suff?answers=${encodeURIComponent(answersFile)}&set=${encodeURIComponent(setFile)}`)
+      .then((r) => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); })
+      .then((d) => { setData({ set: d.set || [], answers: d.answers || [], grades: d.grades || [] }); setIndex(0); setLoading(false); })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, [answersFile, setFile]);
+
+  // index maps
+  const conditions = useMemo(() => [...new Set(data.answers.map((a) => a.condition))].sort(), [data.answers]);
+  const answersByKey = useMemo(() => {
+    const m = new Map();
+    for (const a of data.answers) { const k = `${a.id}|${a.condition}`; if (!m.has(k)) m.set(k, []); m.get(k).push(a); }
+    for (const arr of m.values()) arr.sort((x, y) => (x.run_index ?? 0) - (y.run_index ?? 0));
+    return m;
+  }, [data.answers]);
+  const gradesByKey = useMemo(() => {
+    const m = new Map();
+    for (const g of data.grades) m.set(`${g.id}|${g.condition}`, g);
+    return m;
+  }, [data.grades]);
+
+  const caseRow = data.set[index];
+  const fv = caseRow?.feature_vector;
+  const key = caseRow ? `${caseRow.id}|${condition}` : null;
+  const runs = key ? (answersByKey.get(key) || []) : [];
+  const answer = runs.find((r) => (r.run_index ?? 0) === run) || runs[0] || null;
+  const grade = key ? gradesByKey.get(key) : null;
+
+  const preBoard = useMemo(() => buildBoard(fv?.movestring || ''), [fv]);
+  const keyCellsStr = (answer?.answer?.key_cells || []).join(' '); // primitive dep (stable across renders)
+  const preOverlays = useMemo(() => {
+    if (!fv) return [];
+    const out = [];
+    const pr = preBoard.heights[fv.playedCol]; if (pr != null && pr < 6) out.push({ c: fv.playedCol, r: pr, type: 'tr' });
+    const br = preBoard.heights[fv.bestCol]; if (br != null && br < 6) out.push({ c: fv.bestCol, r: br, type: 'tg' });
+    for (const kc of (keyCellsStr ? keyCellsStr.split(' ') : [])) { const c = parseCell(kc); if (c) out.push({ ...c, type: 'td' }); }
+    return out;
+  }, [fv, preBoard, keyCellsStr]);
+
+  const isGreen = fv ? fv.player === 1 : false;
+  const sel = { fontFamily: 'monospace', fontSize: 12, background: '#0f172a', color: '#e2e8f0', border: '1px solid #475569', borderRadius: 4, padding: '4px 8px' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#0f172a', color: '#e2e8f0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 20px', gap: 10, background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>answers</span>
+        <select value={answersFile} onChange={(e) => setAnswersFile(e.target.value)} style={{ ...sel, maxWidth: 320 }}>
+          {!files.answers.length && <option value="">(no fv_suff_answers_*.jsonl found)</option>}
+          {files.answers.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>set</span>
+        <select value={setFile} onChange={(e) => setSetFile(e.target.value)} style={{ ...sel, maxWidth: 220 }}>
+          {!files.sets.includes(setFile) && <option value={setFile}>{setFile}</option>}
+          {files.sets.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>cond</span>
+        <select value={condition} onChange={(e) => { setCondition(e.target.value); setRun(0); }} style={sel}>
+          {(conditions.length ? conditions : ['A']).map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>run</span>
+        <select value={run} onChange={(e) => setRun(Number(e.target.value))} style={sel}>
+          {(runs.length ? runs : [{ run_index: 0 }]).map((r) => <option key={r.run_index} value={r.run_index ?? 0}>{r.run_index ?? 0}</option>)}
+        </select>
+        {data.set.length > 0 && <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>{index + 1} / {data.set.length}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={() => index > 0 && setIndex(index - 1)} disabled={!caseRow || index === 0}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: (!caseRow || index === 0) ? '#334155' : '#475569', color: '#e2e8f0', cursor: 'pointer', fontSize: 13 }}>← Prev</button>
+          <button onClick={() => index < data.set.length - 1 && setIndex(index + 1)} disabled={!caseRow || index === data.set.length - 1}
+            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: (!caseRow || index === data.set.length - 1) ? '#334155' : '#475569', color: '#e2e8f0', cursor: 'pointer', fontSize: 13 }}>Next →</button>
+        </div>
+      </div>
+
+      {caseRow && fv && (
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', padding: '8px 20px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap' }}>
+          <Chip text={caseRow.id} bg="#0f172a" fg="#94a3b8" />
+          <Chip text={fv.case} bg="#0f172a" fg={CASE_COLOR[fv.case] || '#94a3b8'} />
+          <span>player: <span style={{ color: isGreen ? '#2faa5a' : '#94a3b8', fontWeight: 700 }}>{isGreen ? 'Green' : 'Gray'}</span></span>
+          <span>ms: <span style={{ color: '#94a3b8' }}>{fv.movestring || '(empty)'}</span></span>
+          <span>col: <span style={{ color: '#e8543e', fontWeight: 700 }}>{fv.playedCol + 1}</span> → best: <span style={{ color: '#2faa5a', fontWeight: 700 }}>{fv.bestCol + 1}</span></span>
+          {grade && <Chip text={grade.case_pass ? 'graded: PASS' : 'graded: FAIL'} bg="#0f172a" fg={grade.case_pass ? '#16a34a' : '#dc2626'} />}
+        </div>
+      )}
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, background: '#fff', color: 'var(--ink)' }}>
+        {loading ? <div style={{ padding: 24, color: '#64748b', fontFamily: 'monospace' }}>Loading…</div>
+          : error ? <div style={{ padding: 24, color: '#dc2626', fontFamily: 'monospace' }}>Error: {error}</div>
+          : !caseRow ? <div style={{ padding: 24, color: '#64748b', fontFamily: 'monospace' }}>{answersFile ? 'No eval-set rows.' : 'Run explain_from_vector.mjs to produce an answers file, then pick it above.'}</div>
+          : (
+            <>
+              <div style={{ flex: '0 0 56%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: 16, gap: 14 }}>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>pre-move board</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>
+                      <span style={{ color: '#e8543e', fontWeight: 700 }}>red</span> played · <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> best · <span style={{ color: '#a16207', fontWeight: 700 }}>amber</span> answer key_cells
+                    </div>
+                    <Board board={preBoard.board} compact canPlay={false} overlays={preOverlays} />
+                  </div>
+                  <HalfBoard title="lostResource (half a)" subtitle={fv.lostResource ? fv.lostResource.kind : 'null'} half={fv.lostResource} baseLen={(fv.movestring || '').length} />
+                  <HalfBoard title="opponentPunishment (half b)" subtitle={fv.opponentPunishment ? fv.opponentPunishment.kind : 'null'} half={fv.opponentPunishment} baseLen={(fv.movestring || '').length} />
+                </div>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                  <HalfDetail label="lostResource — what the best move preserved" half={fv.lostResource} />
+                  <HalfDetail label="opponentPunishment — how the played move loses" half={fv.opponentPunishment} />
+                </div>
+              </div>
+              <aside style={{ flex: 1, minWidth: 380, borderLeft: '1px solid #e2e8f0', background: '#fff', overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>LLM answer · {condition} · run {run}</div>
+                  <AnswerPanel answer={answer} grade={grade} runIdx={run} />
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>Feature vector (what the LLM saw)</div>
+                  <JsonView value={fv} />
+                </div>
+              </aside>
+            </>
+          )}
+      </div>
+    </div>
+  );
+}
+
+function ModeSwitcher() {
+  const [mode, setMode] = useState('evidence');
+  const tab = (id, label) => (
+    <button onClick={() => setMode(id)} style={{
+      padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
+      background: mode === id ? '#2563eb' : '#334155', color: mode === id ? '#fff' : '#94a3b8',
+    }}>{label}</button>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#0f172a' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 20px', background: '#0f172a', borderBottom: '1px solid #1e3a5f', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: '#e2e8f0', marginRight: 8 }}>Reason eval</span>
+        {tab('evidence', 'Evidence (vectors)')}
+        {tab('answers', 'Eval answers (LLM + grade)')}
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {mode === 'evidence' ? <ReasonViewer /> : <AnswerViewer />}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminFvSuffPage() {
   // #root is globally capped at max-width:480px (mobile shell); widen it while this
   // full-width desktop tool is mounted, then restore on unmount.
@@ -399,7 +629,7 @@ export default function AdminFvSuffPage() {
 
   return (
     <ProfileStoreProvider>
-      <ReasonViewer />
+      <ModeSwitcher />
     </ProfileStoreProvider>
   );
 }

@@ -25,7 +25,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
-import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor } from './evalResultsHelpers.js';
+import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, isReasonEvalSetFile, gradesFilenameFor } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
@@ -630,45 +630,47 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
   }
 });
 
-// ── Feature-Vector Sufficiency browser ─────────────────────────────────────────
-// Serves the frozen vectors jsonl (board + feature_vector, produced by
-// freeze_fv_set.mjs → run_eval --no-llm) joined client-side with an answers jsonl
-// (produced by explain_from_vector.mjs). Read-only, localhost-admin only.
-
-const FV_SUFF_VECTORS_FILE = 'eval_set_fv_suff_frozen_vectors.jsonl';
-function isFvSuffAnswersFile(name) {
-  return typeof name === 'string' && /^fv_suff_answers_[\w.-]+\.jsonl$/.test(name);
-}
+// ── Reason-vector LLM-eval browser ("Eval answers" mode of /admin/fv-suff) ──────
+// Joins, by id, an eval SET ({id, pattern_category, feature_vector} from
+// build_fv_eval_set.mjs / build_reason_eval_set.mjs), an ANSWERS jsonl
+// (explain_from_vector.mjs), and an optional GRADES jsonl (grade-fv-sufficiency's
+// <stem>_grades.jsonl side-output). Lets you read board + vector + LLM answer +
+// grade together to spot reason-engine / glossary defects. Read-only, localhost-admin.
+// (Validators/derivers are in evalResultsHelpers.js, unit-tested.)
 
 app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) => {
   const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   try {
-    const files = readdirSync(scriptsDir).filter(isFvSuffAnswersFile).sort();
-    res.json({ files });
+    const all = readdirSync(scriptsDir);
+    // answers list excludes the *_grades.jsonl sidecars (they also match the answers pattern).
+    const answers = all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort();
+    res.json({ answers, sets: all.filter(isReasonEvalSetFile).sort() });
   } catch {
-    res.json({ files: [] });
+    res.json({ answers: [], sets: [] });
   }
 });
 
 app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
   const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
   const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
-  if (!isFvSuffAnswersFile(answersName)) {
-    return res.status(400).json({ error: 'invalid answers filename' });
-  }
+  const setName = req.query.set || 'fv_eval_set.jsonl';
+  if (!isFvSuffAnswersFile(answersName)) return res.status(400).json({ error: 'invalid answers filename' });
+  if (!isReasonEvalSetFile(setName)) return res.status(400).json({ error: 'invalid eval-set filename' });
   const parseJsonl = (path) =>
     readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   try {
-    const vectors = parseJsonl(join(scriptsDir, FV_SUFF_VECTORS_FILE));
-    let answers = [];
-    try {
-      answers = parseJsonl(join(scriptsDir, basename(answersName)));
-    } catch (e) {
-      if (e.code !== 'ENOENT') throw e; // missing answers file → empty, not fatal
+    const set = parseJsonl(join(scriptsDir, basename(setName)));    // [{id, pattern_category, feature_vector}]
+    let answers = [], grades = [];
+    try { answers = parseJsonl(join(scriptsDir, basename(answersName))); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }                 // missing answers → empty, not fatal
+    const gradesName = gradesFilenameFor(basename(answersName));
+    if (gradesName) {
+      try { grades = parseJsonl(join(scriptsDir, gradesName)); }
+      catch (e) { if (e.code !== 'ENOENT') throw e; }               // grades optional
     }
-    res.json({ vectors, answers });
+    res.json({ set, answers, grades });
   } catch (err) {
-    if (err.code === 'ENOENT') return res.status(404).json({ error: 'frozen vectors file not found' });
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval-set file not found' });
     logError('[admin/fv-suff]', err);
     res.status(500).json({ error: err.message });
   }
