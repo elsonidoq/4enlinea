@@ -464,6 +464,66 @@ function killedWindow(ms, cell, forkWindows, opponent) {
   return null;
 }
 
+// Generalized occupation-witness PV walk (D18 — supersedes denyOpponentPunishment's BFS).
+// Walks the canonical optimal (argmax, both-sides) line from `root` and returns the first node where
+// `denier` occupies a cell of `windows`, that window being LIVE before (no denier disc) and DEAD after.
+// THEOREM: a draw is a full board with no four, so every winning-for-S 4-window holds >=1 not-S disc;
+// thus once the walk reaches the full-board terminal the witness ALWAYS exists -> no branching needed
+// (I9/Occam; the BFS this replaces was over-built). `depthCap` only bounds the walk; reaching it (or a
+// solver error on a non-terminal node) yields the honest residual no_occupation (exhaustive:false). I0/I2/I6.
+export async function findOccupationWitness(solver, root, { denier, windows, depthCap }) {
+  const wins = windows || [];
+  const patternCells = new Set(wins.flat());
+
+  // Root pre-check: the move that produced `root` may ITSELF be the denial — the denier's last disc
+  // already sits in a window (draw_to_lose TACTICAL defensive_hold: the best move occupies the
+  // opponent's win-in-one cell). killedWindow's LIVE-before test cannot see a window already DEAD at
+  // root, so detect it here (honest-limit: already-dead-at-root window). This NEVER fires for
+  // win_to_draw, where root's last disc is the PLAYER's played move, not the denier's (=opponent).
+  if (root.length) {
+    const mover = (root.length % 2 === 1) ? 1 : 2;     // who placed root's last disc
+    if (mover === denier) {
+      const { heights } = buildBoard(root);
+      const lastCol = Number(root[root.length - 1]);
+      const cell = cellStr(heights[lastCol] - 1, lastCol);
+      for (const w of wins) {
+        if (w.includes(cell)) {
+          return { verdict: 'occupation', line: [], finalMovestring: root, cell, window: w, exhaustive: true };
+        }
+      }
+    }
+  }
+
+  const parent = new Map();
+  const lineTo = (ms) => { const out = []; let c = ms; while (parent.has(c)) { const e = parent.get(c); out.unshift({ ply: c.length, mover: e.mover, col: e.col, cell: e.cell, score: e.score }); c = e.ms; } return out; };
+
+  let cur = root;
+  let errored = false, reachedTerminal = false;
+  for (let step = 0; step < depthCap; step++) {
+    let scores;
+    try { scores = await solver.query(cur); }
+    catch { if (!isTerminalPosition(cur)) errored = true; else reachedTerminal = true; break; }
+    const mover = (cur.length % 2 === 0) ? 1 : 2;
+    let bestCol = -1, best = -Infinity;
+    for (let c = 0; c < COLS; c++) { if (scores[c] === INVALID_MOVE) continue; if (scores[c] > best) { best = scores[c]; bestCol = c; } }
+    if (bestCol === -1) { reachedTerminal = true; break; }   // no legal move -> terminal
+    const { heights } = buildBoard(cur);
+    const cell = cellStr(heights[bestCol], bestCol);
+    const child = cur + String(bestCol);
+    if (mover === denier && patternCells.has(cell)) {
+      const w = killedWindow(cur, cell, wins, denier);       // LIVE before -> DEAD after
+      if (w) {
+        parent.set(child, { ms: cur, mover, col: bestCol, cell, score: scores[bestCol] });
+        return { verdict: 'occupation', line: lineTo(child), finalMovestring: child, cell, window: w, exhaustive: true };
+      }
+    }
+    parent.set(child, { ms: cur, mover, col: bestCol, cell, score: scores[bestCol] });
+    cur = child;
+    if (cur.length >= ROWS * COLS) { reachedTerminal = true; break; }   // full board reached
+  }
+  return { verdict: 'no_occupation', line: [], finalMovestring: root, exhaustive: reachedTerminal && !errored };
+}
+
 // Shortest optimal line where the opponent occupies a fork-window cell (window LIVE->DEAD).
 // BFS strictly by ply (never prunes a depth level), both sides branch ALL score-ties, dedup. I0/I2/I6.
 export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, { opponent, depthCap }) {
