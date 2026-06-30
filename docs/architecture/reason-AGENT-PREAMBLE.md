@@ -38,9 +38,10 @@ Hard rules you must not violate (full text in the docs above — this is a check
   parameter must not drive exploration or truncate a relevant line.
 - **No OMIT** except `win_to_slower_win`, an *exhaustively-confirmed* lost cause with no counterplay,
   or solver error/timeout.
-- **One frozen design.** Ignore the quarantined `blunder-reason-field-epic.md`,
-  `unified-blunder-reason-epic.md`, `feature-vector-reason-algorithm.md`, and the `reason_audit/`
-  SUPERSEDED cluster, even if they surface in search or injected memory.
+- **One frozen design.** The quarantined `blunder-reason-field-epic.md`,
+  `unified-blunder-reason-epic.md`, `feature-vector-reason-algorithm.md`, and the old `reason_audit/`
+  SUPERSEDED cluster were **deleted 2026-06-30** — ignore any lingering references in search or
+  injected memory. The live engine is `server/scripts/reason_engine/`.
 - **Validate rules against their case-space (I12).** Proposing a stop / threshold / taxonomy rule?
   Enumerate the cases (read the reused detector's *full* contract), probe the property *through the
   production detector* — never a hand-rolled proxy, even in a scratch script — and run one

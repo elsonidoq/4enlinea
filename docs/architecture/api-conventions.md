@@ -658,12 +658,14 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 **Errors**: `400 { "error": "invalid filename" }` / `{ "error": "id is required" }`; `500` on write failure.
 
-## Admin FV-Sufficiency Browser Endpoints
+## Admin Blunder-Reason Browser Endpoints
 
-Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), which browses the Feature-Vector Sufficiency Experiment outputs (board + feature vector + one LLM answer). All read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`.
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), which browses **blunder-reason evidence** — the `computeReason` output precomputed by `server/scripts/reason_engine/build_evidence.mjs`. (The route is still named `fv-suff` for historical reasons; see memory `project_admin_fv_suff_repurposed`.) Read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`.
 
-- `GET /api/admin/fv-suff/files` → `{ files }` — answer-file names matching `fv_suff_answers_*.jsonl` (produced by `explain_from_vector.mjs`), sorted.
-- `GET /api/admin/fv-suff?answers=<name>` → `{ vectors, answers }`. `vectors` is the full parsed `eval_set_fv_suff_frozen_vectors.jsonl` (fixed filename — the frozen vectors); `answers` is the full parsed answers file named by the `answers` query param (default `fv_suff_answers_all.jsonl`). The two are joined client-side by `id`. A missing answers file yields `answers: []` (not an error); a missing vectors file is a 404. The `answers` param is validated against `/^fv_suff_answers_[\w.-]+\.jsonl$/` to block path traversal.
+- `GET /api/admin/reason/files` → `{ files }` — evidence-file names matching `reason_evidence_*.jsonl`, sorted.
+- `GET /api/admin/reason?file=<name>` → `{ rows }` — the full parsed evidence file (default `reason_evidence_all.jsonl`). The `file` param is validated against `/^reason_evidence_[\w.-]*\.jsonl$/` to block path traversal; a missing file is a 404.
+
+**Legacy (kept, unused):** `GET /api/admin/fv-suff{,/files}` served the *old* `toFeatureVector` experiment (frozen vectors + `fv_suff_answers_*.jsonl`, joined client-side). The page no longer calls it, and its fixed `eval_set_fv_suff_frozen_vectors.jsonl` was removed in the 2026-06-30 cleanup, so it returns 404; the endpoint code is retained but dead.
 
 Unlike the eval-results endpoint, the vectors response is **not field-whitelisted** — records are returned whole (they carry `feature_vector`, `prompt`, `predicates`, etc.).
 

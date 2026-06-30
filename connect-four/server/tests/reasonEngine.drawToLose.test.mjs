@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason } from '../scripts/reason_audit/reasonEngine.mjs';
+import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });

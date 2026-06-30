@@ -27,8 +27,8 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   abandoned.
 - **Rationale:** Both prior designs drifted into combinatorial-explosion fears and discriminated-union
   complexity. The conceptual `(bestScore, playedScore)` taxonomy is simpler and provably bounded.
-- **Status:** LOCKED. Quarantined files are historical only (INVARIANTS I11).
-- **Source:** restart prompt (2026-06-29); `reason_audit/_QUARANTINE.md`.
+- **Status:** LOCKED. Quarantined files were deleted 2026-06-30 (INVARIANTS I11).
+- **Source:** restart prompt (2026-06-29); `reason_audit/_QUARANTINE.md` (removed 2026-06-30 with the scaffolding).
 
 ### D3 — `win_to_slower_win` is out of scope (NotABlunder)
 - **Decision:** `bestScore>0 && playedScore>0` → raise `NotABlunder`; no reason computed.
@@ -97,7 +97,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Source:** evidence doc §3, §10.
 
 ### D11 — Engine + fixture implemented; tested via `npm run test:fast`
-- **Decision:** Engine is `reason_audit/reasonEngine.mjs` (`computeReason` + CLI); fixture built by
+- **Decision:** Engine is `reason_engine/reasonEngine.mjs` (`computeReason` + CLI); fixture built by
   `build_fixture.mjs` (stratified rejection sampling, fixed seed, + curated anchor boards); evidence
   precomputed by `build_evidence.mjs`; regression in `server/tests/reasonEngine.test.mjs`.
 - **Rationale:** A thin solver-backed engine over a committed fixture turns "does it cover 100%?" into
@@ -200,7 +200,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 
 ### D18 — `findOccupationWitness` unified PV primitive; draw_to_lose flip; `no_occupation` as depth artifact; supersedes the "shallowest-by-BFS" portion of D17 §3
 
-- **Decision:** One unified `findOccupationWitness(solver, root, { denier, windows, depthCap })` primitive in `connect-four/server/scripts/reason_audit/reasonEngine.mjs` replaces the `win_to_draw` BFS (`denyOpponentPunishment`, now deleted) **and** provides the `draw_to_lose` half-a denial. It walks the canonical argmax (both-sides optimal) PV from `root` and returns the **first** node where `denier` occupies a cell of `windows` with the window LIVE before → DEAD after. Roles by case:
+- **Decision:** One unified `findOccupationWitness(solver, root, { denier, windows, depthCap })` primitive in `connect-four/server/scripts/reason_engine/reasonEngine.mjs` replaces the `win_to_draw` BFS (`denyOpponentPunishment`, now deleted) **and** provides the `draw_to_lose` half-a denial. It walks the canonical argmax (both-sides optimal) PV from `root` and returns the **first** node where `denier` occupies a cell of `windows` with the window LIVE before → DEAD after. Roles by case:
   - `win_to_draw` → `denier=opponent`, `root=playedRoot`, `windows=lostResource.forkWindows`
   - `draw_to_lose` → `denier=player`, `root=bestRoot`, `windows=` opponent's conceded winning window(s) (sourced from the half-b walk of `playedRoot`).
 - **Supersedes the "shallowest-by-BFS" portion of D17 §3:** the witness is now the *first occupation on the canonical optimal PV*, not the *globally shallowest across all optimal lines*. Shallowest was already declared non-contractual in D17 §3a; correctness (a LIVE→DEAD occupation exists) is unchanged. Rationale: I9/Occam (one mechanism, roles swapped) + the theorem: a drawn full board fills every winning-for-S window with ≥1 not-S disc, so a single PV walk to terminal always yields the witness — the BFS was over-built.

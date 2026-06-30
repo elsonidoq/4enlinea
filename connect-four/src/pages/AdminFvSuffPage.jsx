@@ -4,7 +4,7 @@ import { Board } from '../components/Board.jsx';
 import { buildBoard } from '../lib/board.js';
 
 // Blunder-reason EVIDENCE browser. Renders reasonEngine output (precomputed by
-// server/scripts/reason_audit/build_evidence.mjs, served by GET /api/admin/reason) so the
+// server/scripts/reason_engine/build_evidence.mjs, served by GET /api/admin/reason) so the
 // solver-derived evidence can be verified by eye against the rendered boards.
 //
 // Each row is the engine's evidence object: { movestring, playedCol, bestCol, scores, case,

@@ -32,14 +32,14 @@ Do not rely solely on memory summaries — those can be stale. Read the actual d
 
 ## Blunder-`reason` engine — mandatory reads
 
-Before touching the blunder-`reason` feature-vector engine (anything under `connect-four/server/scripts/reason_audit/`, `toFeatureVector`'s reason field, or the case taxonomy), read **all four**, in order:
+Before touching the blunder-`reason` feature-vector engine (anything under `connect-four/server/scripts/reason_engine/`, `toFeatureVector`'s reason field, or the case taxonomy), read **all four**, in order:
 
 - `docs/architecture/reason-INVARIANTS.md` — the constitution: 13 non-negotiable principles (I0 = correctness over optimization; never weaken the algorithm to save solver calls; I12 = validate a classification/stop rule against its full case-space + a counterexample per case, through the production detector — not the motivating example).
 - `docs/architecture/reason-DECISIONS.md` — append-only log of resolved decisions + rationale. Do not relitigate these.
 - `docs/architecture/my_pseudocode.md` — the authoritative `(bestScore, playedScore)` case taxonomy.
 - `docs/architecture/blunder-reason-evidence.md` — the two-halves evidence engine, validated boards, implementation map.
 
-Ignore the quarantined designs (`docs/epics/blunder-reason-field-epic.md`, `docs/epics/unified-blunder-reason-epic.md`, `docs/architecture/feature-vector-reason-algorithm.md`, the `reason_audit/` SUPERSEDED cluster) even if they surface in search or memory. To prompt a fresh-context agent for this work, reuse `docs/architecture/reason-AGENT-PREAMBLE.md` verbatim rather than re-typing constraints.
+The quarantined designs (`blunder-reason-field-epic.md`, `unified-blunder-reason-epic.md`, `feature-vector-reason-algorithm.md`, and the old `reason_audit/` SUPERSEDED cluster) were **deleted 2026-06-30**; ignore any lingering references to them in search or memory. The live engine is `connect-four/server/scripts/reason_engine/`. To prompt a fresh-context agent for this work, reuse `docs/architecture/reason-AGENT-PREAMBLE.md` verbatim rather than re-typing constraints.
 
 ## Working with movestrings
 

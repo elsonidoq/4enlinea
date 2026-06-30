@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-The blunder-reason case classifier (`connect-four/server/scripts/reason_audit/reasonEngine.mjs`)
+The blunder-reason case classifier (`connect-four/server/scripts/reason_engine/reasonEngine.mjs`)
 classifies by the sign pair `(bestScore, playedScore)` where `bestScore = max(legal solver scores)`
 and `playedScore = scores[playedCol]`, both **player (side-to-move) perspective**.
 

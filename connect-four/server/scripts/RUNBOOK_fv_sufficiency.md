@@ -30,8 +30,8 @@ node server/scripts/build_fv_eval_set.mjs
 ```
 
 **To grow the set** (the corpus is the offline fixture, not production): enlarge the fixture
-(`reason_audit/build_fixture.mjs`, raise its sampling) → recompute the corpus
-(`reason_audit/build_evidence.mjs`) → re-run this step. The answerer + grader are size-agnostic.
+(`reason_engine/build_fixture.mjs`, raise its sampling) → recompute the corpus
+(`reason_engine/build_evidence.mjs`) → re-run this step. The answerer + grader are size-agnostic.
 
 Sanity check the set carries what you expect (cases covered, no raw scores leaked):
 
@@ -82,6 +82,6 @@ field or glossary gap), not the pass number.
   only (eval set unchanged).
 - **Change the feature vector** (the reason engine, or `toNarratorVector` in
   `reasonNarratorVector.mjs`) → rerun **Step 1 → 2 → 3** (rebuild the corpus first if you changed the
-  engine: `reason_audit/build_evidence.mjs`).
+  engine: `reason_engine/build_evidence.mjs`).
 - **Dial the model down** toward `gpt-5.4-mini` via `EXPLAIN_MODEL` (or `--model`) as the prompt
   improves; the frozen set + grader stay fixed.

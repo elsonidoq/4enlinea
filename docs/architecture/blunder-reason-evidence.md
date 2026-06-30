@@ -127,8 +127,8 @@ temptation, yet both pass the binary gate. Grade by `oppPlies` (shallower = more
 ## 6. Validated boards
 
 All boards 0-indexed; render with `./visualize_board.sh <movestring>`. Selectors written during the
-investigation: `reason_audit/TOOLS/wtl_selector.mjs`, `reason_audit/TOOLS/select_win_to_draw.mjs`,
-`reason_audit/TOOLS/select_w2d_byregister.mjs`, `scratchpad/select_draw_to_lose.mjs`,
+investigation: `reason_engine/TOOLS/wtl_selector.mjs`, `reason_engine/TOOLS/select_win_to_draw.mjs`,
+`reason_engine/TOOLS/select_w2d_byregister.mjs`, `scratchpad/select_draw_to_lose.mjs`,
 `scratchpad/select_ltfl.mjs`. All stream `playGame` (gameSampling.js) and filter by the case's sign
 pattern.
 
@@ -194,7 +194,7 @@ See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`
 
 ## 8. Tooling map
 
-| Tool (`reason_audit/TOOLS/`) | Use |
+| Tool (`reason_engine/TOOLS/`) | Use |
 |---|---|
 | `optimal_line.mjs` | both-optimal PV walk → completing cell + line (all cases) |
 | `forward_projection.mjs` | PV trace + earliest major-threat appearance per window |
@@ -236,11 +236,11 @@ All under `connect-four/`. Coordinates 0-indexed internally; the engine emits `c
 
 | File | Role |
 |---|---|
-| `server/scripts/reason_audit/reasonEngine.mjs` | the engine + CLI. `computeReason(movestring, playedCol, {solver})` → evidence JSON. CLI: `node server/scripts/reason_audit/reasonEngine.mjs <ms> <playedCol>`. Holds `REASON_CONFIG` (the provisional thresholds + gate budget — one named object, do not scatter). |
-| `server/scripts/reason_audit/lib/boardUtils.mjs` | shared board helpers (buildBoard / winningWindows / cellStr / parseCell / loadEnv). |
-| `server/scripts/reason_audit/build_fixture.mjs` | stratified rejection-sampling fixture builder (fixed seed) + curated ANCHOR boards from §6; writes `reason_fixture.jsonl`. |
-| `server/scripts/reason_audit/reason_fixture.jsonl` | committed fixture: `{movestring, playedCol, bestCol, scores, discs, expectedCase, expectedGate?, expectedExhaustive?, bucket}`. |
-| `server/scripts/reason_audit/build_evidence.mjs` | runs the engine over the fixture → `server/scripts/reason_evidence_all.jsonl` (each row = evidence + ground-truth labels). |
+| `server/scripts/reason_engine/reasonEngine.mjs` | the engine + CLI. `computeReason(movestring, playedCol, {solver})` → evidence JSON. CLI: `node server/scripts/reason_engine/reasonEngine.mjs <ms> <playedCol>`. Holds `REASON_CONFIG` (the provisional thresholds + gate budget — one named object, do not scatter). |
+| `server/scripts/reason_engine/lib/boardUtils.mjs` | shared board helpers (buildBoard / winningWindows / cellStr / parseCell / loadEnv). |
+| `server/scripts/reason_engine/build_fixture.mjs` | stratified rejection-sampling fixture builder (fixed seed) + curated ANCHOR boards from §6; writes `reason_fixture.jsonl`. |
+| `server/scripts/reason_engine/reason_fixture.jsonl` | committed fixture: `{movestring, playedCol, bestCol, scores, discs, expectedCase, expectedGate?, expectedExhaustive?, bucket}`. |
+| `server/scripts/reason_engine/build_evidence.mjs` | runs the engine over the fixture → `server/scripts/reason_evidence_all.jsonl` (each row = evidence + ground-truth labels). |
 | `server/tests/reasonEngine.test.mjs` | `node --test` (in `npm run test:fast`): asserts case == expectedCase, completingCell occupied on each half's `finalMovestring`, register matches the fwd formula, gate verdict/exhaustive present for ltfl. |
 
 **Evidence object shape** (per `(movestring, playedCol)`): `{ case, notABlunder, bestScore,

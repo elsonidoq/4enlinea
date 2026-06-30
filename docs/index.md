@@ -54,9 +54,9 @@
 
 [architecture/llm-coach-endpoints.md](architecture/llm-coach-endpoints.md) — `explain_move` and `recommend_next_move` PoC architecture: shared infrastructure, data flows, prompt structures, flat table format, server endpoint conversion guide — adding LLM coaching features or converting CLI scripts to server routes
 
-[architecture/feature-vector-glossary.md](architecture/feature-vector-glossary.md) — field-by-field semantics of the deep-reveal feature vector (`toFeatureVector`) for an LLM reader: every field + enum value (`tag`, `direction`, `gapBucket`, `*_with_best_play`, `lookahead.case`, pattern keys, `threatStats` buckets), pruning/absence rules, anti-fabrication rules — reading/extending the feature vector or building a prompt from it
+[architecture/feature-vector-glossary.md](architecture/feature-vector-glossary.md) — field-by-field semantics of the **blunder-reason** feature vector (`computeReason`) for an LLM reader: the 5-case taxonomy, the two halves (`lostResource`/`opponentPunishment`), `tie`, denial/occupation local-vs-global, `register`/`line`, `parityAttribution`/`anchorCells`/`tacticTag`, `replyHistogram`/`gate`, pruning/absence + anti-fabrication rules — reading/extending the reason vector or building a prompt from it
 
-[architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether feature vector + glossary is enough context to explain a blunder: isolated OpenAI answerer + tools-enabled Claude grader, stratified set, ablation, counterexample output — running or extending the sufficiency experiment
+[architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether the reason vector + glossary is enough context to explain a blunder: isolated OpenAI answerer (`explain_from_vector.mjs`) + tools-enabled Claude grader (`grade-fv-sufficiency`), frozen set from the reason corpus, ablation, counterexample output — running or extending the sufficiency experiment
 
 ### Blunder-`reason` engine (read all four before touching it)
 

@@ -110,7 +110,7 @@ saving move against `anchorCells`:
 
 ## 9. Integration points
 
-- `connect-four/server/scripts/reason_audit/reasonEngine.mjs` — replace the `win_to_draw` half-(b)
+- `connect-four/server/scripts/reason_engine/reasonEngine.mjs` — replace the `win_to_draw` half-(b)
   block; reuse `lostResource.forkWindows`.
 - `reason_evidence_all.jsonl` — regenerate via `build_evidence.mjs` (line now multi-ply → the
   `/admin/fv-suff` lookahead numbering already renders it).

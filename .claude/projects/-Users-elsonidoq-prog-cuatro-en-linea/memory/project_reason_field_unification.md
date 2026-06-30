@@ -42,9 +42,10 @@ fast / winning slower with nothing to exhibit is not a blunder"). NEVER fabricat
 when re-solve-confirmed decisive OR a FORCED terminal board-fill (non-canonical terminals refused). OMIT
 reserved for solver error only — every real case emits one of the 5 grains (100% coverage, user requirement).
 
-Verification: `reason_audit/PROMPT_verify_unified_reason.md` (coordinator prompt, pre-implementation,
-produces a golden expected-reason fixture per case). Decide via [[feedback_occam_principled_extrapolation]].
-Audit + evidence: `reason_audit/REPORT.md` + `cases/` + `cases/UNIFY_*.md` + `cases/DESIGN_parity_*.md`;
-tools in `reason_audit/TOOLS/` (optimal_line, forward_distance, parity_cells, decisive_check,
+Verification (scaffolding removed 2026-06-30): the coordinator prompt + audit reports + `cases/`
+that drove the unification (`PROMPT_verify_unified_reason.md`, `REPORT.md`, `cases/UNIFY_*.md`,
+`cases/DESIGN_parity_*.md`) were one-off research artifacts and are deleted. Decide via
+[[feedback_occam_principled_extrapolation]]. The engine + its regression fixture survive in
+`reason_engine/`; tools in `reason_engine/TOOLS/` (optimal_line, forward_distance, parity_cells, decisive_check,
 forward_projection) prototype the build. Builds on [[feedback_feature_vector_design]],
 [[project_feature_vector_content_traps]], [[project_lookahead_shared_seam]].

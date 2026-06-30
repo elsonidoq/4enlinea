@@ -4,9 +4,9 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason } from '../scripts/reason_audit/reasonEngine.mjs';
+import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
 const __d = dirname(fileURLToPath(import.meta.url));
-const fixtureRows = readFileSync(join(__d, '../scripts/reason_audit/reason_fixture.jsonl'), 'utf8')
+const fixtureRows = readFileSync(join(__d, '../scripts/reason_engine/reason_fixture.jsonl'), 'utf8')
   .trim().split('\n').map((l) => JSON.parse(l));
 
 let solver;

@@ -13,11 +13,11 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason, fwdOf, registerOf, REASON_CONFIG } from '../scripts/reason_audit/reasonEngine.mjs';
-import { buildBoard, parseCell } from '../scripts/reason_audit/lib/boardUtils.mjs';
+import { computeReason, fwdOf, registerOf, REASON_CONFIG } from '../scripts/reason_engine/reasonEngine.mjs';
+import { buildBoard, parseCell } from '../scripts/reason_engine/lib/boardUtils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE = join(__dirname, '../scripts/reason_audit/reason_fixture.jsonl');
+const FIXTURE = join(__dirname, '../scripts/reason_engine/reason_fixture.jsonl');
 const rows = readFileSync(FIXTURE, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 const VALID_REGISTERS = new Set(['immediate', 'forced_sequence', 'parity']);

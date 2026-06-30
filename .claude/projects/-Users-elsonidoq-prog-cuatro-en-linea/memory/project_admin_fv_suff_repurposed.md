@@ -19,7 +19,7 @@ What changed — surprises for anyone expecting the old tool:
   minimize collateral risk. Harmless; delete later if desired.
 - The page now reads precomputed `connect-four/server/scripts/reason_evidence_all.jsonl` (one
   reasonEngine evidence object per line; regenerate with
-  `node server/scripts/reason_audit/build_evidence.mjs`). It renders 3 boards (pre-move,
+  `node server/scripts/reason_engine/build_evidence.mjs`). It renders 3 boards (pre-move,
   lostResource, opponentPunishment) + an evidence panel with chips: `kind`, `register`, `tacticTag`
   (◆), `tie` (⇄ tied/independent/temporal), and a `parityAttribution` box + raw-JSON aside. No
   solver runs in the web server.
@@ -28,7 +28,7 @@ What changed — surprises for anyone expecting the old tool:
 
 History gotcha: the ReasonViewer page + `/api/admin/reason` endpoints were once UNCOMMITTED and a
 `git reset` discarded them (unrecoverable from git). They were rebuilt and are now committed; the
-`reason_audit/` engine deps (`lib/boardUtils.mjs`, `reason_fixture.jsonl`, the baseline test,
+`reason_engine/` engine deps (`lib/boardUtils.mjs`, `reason_fixture.jsonl`, the baseline test,
 `build_evidence.mjs`) were also untracked and are now committed. If tests pass but a clean checkout
 fails to import, suspect untracked files.
 

@@ -676,7 +676,7 @@ app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
 
 // ── Blunder-reason evidence browser ────────────────────────────────────────────
 // Serves precomputed reasonEngine evidence (one object per line, produced by
-// server/scripts/reason_audit/build_evidence.mjs). Read-only, localhost-admin only.
+// server/scripts/reason_engine/build_evidence.mjs). Read-only, localhost-admin only.
 // No solver runs in the web server. See docs/architecture/blunder-reason-evidence.md.
 
 function isReasonEvidenceFile(name) {

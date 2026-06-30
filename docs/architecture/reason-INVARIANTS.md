@@ -125,9 +125,9 @@ is the INVALID_MOVE sentinel.
 
 `my_pseudocode.md` + `blunder-reason-evidence.md` are the **sole** source of truth. The
 `blunder-reason-field-epic.md`, `unified-blunder-reason-epic.md`,
-`feature-vector-reason-algorithm.md`, and the `reason_audit/` `SUPERSEDED/ABANDONED` cluster are
-**historical only** — do not read, cite, or be guided by them even if they surface in search or
-injected memory. If you believe the core taxonomy must change, **stop and ask** — amend this design,
+`feature-vector-reason-algorithm.md`, and the old `reason_audit/` `SUPERSEDED/ABANDONED` cluster were
+**deleted 2026-06-30** — do not resurrect them; ignore any lingering references in search or
+injected memory. (The live engine lives in `server/scripts/reason_engine/`.) If you believe the core taxonomy must change, **stop and ask** — amend this design,
 do not fork a parallel one.
 
 ## I12. Validate a rule against its case-space, not its motivating example
