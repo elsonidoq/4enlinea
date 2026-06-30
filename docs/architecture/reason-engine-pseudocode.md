@@ -55,15 +55,21 @@ def reason(movestring, playedCol):
         # D18: half (b) is computed FIRST to supply concededWindows to the occupation witness.
         # The punish_half call below reuses this pre-computed oppHalf via the `against` argument.
         oppHalf          = win_half(playedRoot, winner=opponent)     # half (b): opp winning line
-        concededWindows  = [oppHalf.window]                         # the window the player must have blocked
+        # the window(s) the player must have blocked: the fork windows if half (b) fork-stopped (D16),
+        # else the single winning window.
+        concededWindows  = oppHalf.forkWindows if oppHalf.terminal == 'fork' else [oppHalf.window]
         # Half (a): player's occupation of the opponent's conceded window on the bestRoot PV.
         # Tactical sub-case (ply-0 root occupation) and zugzwang fall out of the same primitive.
         lostResource     = find_occupation_witness(bestRoot, denier=player, windows=concededWindows,
                                                    depthCap=42-len(bestRoot))
         lostResource.anchorCells = ({lostResource.cell} if lostResource.verdict == 'occupation' else ∅)
-        # tie: the player's occupation cell is inside the opponent's window → kind:'tied'
+        # tie: CONSTRUCTIVE and window-aware — set DIRECTLY from the half-(a) occupation cell, NOT via
+        # tie_to (whose anchorCells intersection would wrongly report `independent`). The player's
+        # occupation cell lies inside the opponent's window → kind:'tied'.
         oppHalf.entryCell = oppHalf.line[0].cell if oppHalf.line else oppHalf.completingCell
-        oppHalf.tie       = tie_to(case, lostResource, oppHalf)
+        oppHalf.tie       = ({ kind:'tied', sharedCells:[lostResource.cell] }
+                             if lostResource.verdict == 'occupation'
+                             else { kind:'independent', sharedCells:[] })
         return { case, lostResource, opponentPunishment: oppHalf, replyHistogram, gate }
 
     elif case == 'lose_to_faster_lose':
@@ -150,14 +156,18 @@ def tie_to(case, lost, punish):
 def find_occupation_witness(root, denier, windows, depthCap):
     # Root pre-check: if denier's last move (the move that arrived at root) already occupies a
     # watched window — this handles the tactical sub-case of draw_to_lose at ply 0.
+    # NOTE (code parity): the implementation checks ONLY `lastCell in win` here — it deliberately
+    # SKIPS the window_live_before/dead_after test, because killedWindow's LIVE-before guard cannot
+    # see a window already DEAD at root (the honest-limit). This can never yield a wrong cell: the
+    # only firing case (draw_to_lose tactical) has the window provably LIVE before the best move —
+    # best/played boards are identical except their last disc, and the opponent's conceded window
+    # cannot already contain a denier(=player) disc on that shared pre-move board.
     if root is non-empty:
         lastCell = landing_cell(root[:-1], root[-1])
         mover    = side_to_move(root[:-1])      # who played the last move
         if mover == denier:
             for win in windows:
-                if (lastCell in win
-                        and window_live_before(root[:-1], win, denier)
-                        and window_dead_after(root,       win, denier)):
+                if lastCell in win:             # implementation: w.includes(lastCell) only (see NOTE)
                     return { kind:'denial', verdict:'occupation',
                              line: [], finalMovestring: root,
                              cell: lastCell, window: win,
