@@ -4,7 +4,7 @@
 // Per row asserts:
 //   - classified `case` === expectedCase (solver-ground-truth sign pair);
 //   - both halves' completingCell parses to a real cell that is OCCUPIED on that half's
-//     finalMovestring snapshot board (skipped only for the deferred parity_group half);
+//     finalMovestring snapshot board (skipped only for denial half with no_occupation verdict);
 //   - each fwd-derived register equals registerOf(fwd) recomputed independently from the formula;
 //   - for lose_to_faster_lose: gate.verdict / gate.exhaustive present and === expected.
 import { test, before, after } from 'node:test';
@@ -37,12 +37,12 @@ function assertCellOnSnapshot(half, label) {
     return;
   }
   if (half.completingCell == null) {
-    // tolerated for the deferred parity_group half, for a conditional_swindle whose deviation
-    // saves a DRAW (no single winning cell) rather than a win, and for a denial where the
-    // opponent never occupies a fork-window cell within the depth cap (verdict=no_occupation).
-    assert.ok((['parity_group', 'conditional_swindle'].includes(half.kind)
+    // tolerated for a conditional_swindle whose deviation saves a DRAW (no single winning cell)
+    // rather than a win, and for a denial where the witness never occupies a window cell within
+    // the depth cap (verdict=no_occupation).
+    assert.ok((['conditional_swindle'].includes(half.kind)
                || (half.kind === 'denial' && half.verdict !== 'occupation')),
-      `${label}: null completingCell only allowed for parity_group / conditional_swindle / denial, got ${half.kind}`);
+      `${label}: null completingCell only allowed for conditional_swindle / denial(no_occupation), got ${half.kind}`);
     return;
   }
   const cell = parseCell(half.completingCell);
@@ -98,7 +98,7 @@ for (const row of rows) {
       regFromFwd(r.opponentPunishment, r.playedScore);
     } else if (row.expectedCase === 'draw_to_lose') {
       regFromFwd(r.opponentPunishment, r.playedScore);
-      assert.ok(['defensive_hold', 'parity_group'].includes(r.lostResource.kind), 'd2l lostResource kind');
+      assert.equal(r.lostResource.kind, 'denial', 'd2l lostResource kind');
     } else if (row.expectedCase === 'lose_to_faster_lose') {
       // 4) gate verdict/flag present and correct
       assert.ok(r.gate, 'ltfl gate present');

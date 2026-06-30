@@ -24,7 +24,6 @@ import {
   ROWS, COLS, INVALID_MOVE, loadEnv, buildBoard, winningWindows, cellStr, legalCols, emptyCellCount,
   parseCell,
 } from './lib/boardUtils.mjs';
-import { parityCells } from './TOOLS/parity_cells.mjs';
 import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
 } from '../../classifier.js';
@@ -382,25 +381,6 @@ async function nonLosingReplyCount(solver, ms) {
   return legal.filter((c) => scores[c] >= 0).length;
 }
 
-// Opponent gravity-top "win-in-one" cells on the pre-move board (3 opponent discs + 1 empty,
-// the empty being the next-droppable cell of its column). Used to detect a tactical defensive_hold.
-function opponentImmediateThreatCells(ms, opponent) {
-  const { grid, heights } = buildBoard(ms);
-  const out = [];
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) for (const [dr, dc] of DIRS) {
-    const cells = [];
-    for (let k = 0; k < 4; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) { cells.length = 0; break; } cells.push([rr, cc]); }
-    if (cells.length !== 4) continue;
-    let cnt = 0; const empties = [];
-    for (const [rr, cc] of cells) { if (grid[rr][cc] === opponent) cnt++; else if (grid[rr][cc] === 0) empties.push([rr, cc]); else { cnt = -99; break; } }
-    if (cnt === 3 && empties.length === 1) {
-      const [er, ec] = empties[0];
-      if (heights[ec] === er) out.push({ cell: cellStr(er, ec), window: cells.map(([rr, cc]) => cellStr(rr, cc)) });
-    }
-  }
-  return out;
-}
-
 // ── lose_to_faster_lose GATE (lifted from select_ltfl.mjs; + exhaustive mode) ──
 // From opponent-to-move `node`, search for an opponent node where the opponent has a non-winning
 // reply (min oppScore <= 0 => the player still has a forced threat => a practical swindle exists).
@@ -628,38 +608,36 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
     Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
   } else if (bestScore === 0 && playedScore < 0) {
-    // ── draw_to_lose ──
+    // ── draw_to_lose (D18 flip) ──
     out.case = CASES.DRAW_TO_LOSE;
-    const { heights } = buildBoard(movestring);
-    const holdCell = cellStr(heights[bestCol], bestCol); // the draw move's own landing cell
-    const oppThreats = opponentImmediateThreatCells(movestring, opponent);
-    const hit = oppThreats.find((t) => t.cell === holdCell);
-    if (hit) {
-      // tactical defensive_hold: the draw move occupies the opponent's win-in-one square.
-      out.lostResource = {
-        kind: 'defensive_hold', register: 'immediate',
-        completingCell: holdCell, window: hit.window, pliesToEnd: 1, line: null,
-        finalMovestring: bestRoot, // the draw move occupies holdCell on this board
-      };
-    } else {
-      // zugzwang parity_group — precise Allis odd/even attribution DEFERRED (decision 2).
-      // TODO(parity-naming-milestone): name the controlling Allis odd/even group; here we emit a
-      // best-effort z-threat cell (or null) WITHOUT group attribution, register=parity, line=null.
-      const pc = parityCells(movestring, player);
-      const cell = pc.zThreatCells[0] ?? pc.allThreatCells[0] ?? null;
-      out.lostResource = {
-        kind: 'parity_group', register: 'parity',
-        completingCell: cell, window: null, pliesToEnd: null, line: null,
-        finalMovestring: null, // parity group not walked; precise naming deferred (decision 2)
-        parityNamingDeferred: true,
-      };
-    }
-    const anchorForLost = hit ? [holdCell] : (out.lostResource.completingCell ? [out.lostResource.completingCell] : []);
-    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
-    out.lostResource.anchorCells = anchorForLost;
+    // half (b) FIRST, UNCHANGED: the opponent's conceded winning line after the blunder.
     const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
     Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
+    // the window(s) the opponent rides: fork windows if fork-stopped, else the single winning window.
+    const concededWindows = (out.opponentPunishment.terminal === 'fork')
+      ? (out.opponentPunishment.forkWindows || [])
+      : (out.opponentPunishment.window ? [out.opponentPunishment.window] : []);
+    // half (a): how the BEST (draw) move denies that window — the player (denier) occupies a cell of W.
+    // THEOREM: bestRoot draws -> its full-board terminal fills W with >=1 player disc -> occupation
+    // always exists; tactical defensive_hold falls out as a ply-0 root occupation (no special-case).
+    const denial = await findOccupationWitness(solver, bestRoot, {
+      denier: player, windows: concededWindows, depthCap: ROWS * COLS - bestRoot.length,
+    });
+    out.lostResource = {
+      kind: 'denial', verdict: denial.verdict,
+      register: (denial.line && denial.line.length > 0) ? 'forced_sequence' : 'immediate',
+      line: denial.line, finalMovestring: denial.finalMovestring,
+      completingCell: denial.cell ?? null, window: denial.window ?? null,
+      cell: denial.cell ?? null, exhaustive: denial.exhaustive,
+      anchorCells: denial.cell ? [denial.cell] : [],
+    };
+    Object.assign(out.lostResource, await nameHalf(solver, bestRoot, player, { diffAgainst: playedRoot }));
+    // constructive, window-aware tie (fixes the false `independent`): the player's blocking cell is
+    // inside the opponent's window -> tied at that cell. (D8: still two separate fields.)
+    out.opponentPunishment.tie = denial.verdict === 'occupation'
+      ? { kind: 'tied', sharedCells: [denial.cell] }
+      : { kind: 'independent', sharedCells: [] };
   } else if (bestScore < 0 && playedScore < 0) {
     // ── lose_to_faster_lose ── (only real search: the gate)
     out.case = CASES.LOSE_TO_FASTER_LOSE;
@@ -703,8 +681,9 @@ export async function computeReason(movestring, playedCol, { solver }) {
     return out;
   }
 
-  // The denial path (fork win_to_draw) builds its own constructive tie — do not overwrite it.
-  if (out.lostResource && out.opponentPunishment && out.opponentPunishment.kind !== 'denial') {
+  // Constructive denial ties (win_to_draw half b; draw_to_lose half a) are already set — do not overwrite.
+  if (out.lostResource && out.opponentPunishment
+      && out.lostResource.kind !== 'denial' && out.opponentPunishment.kind !== 'denial') {
     out.opponentPunishment.tie = tieTo(out.case, out.lostResource, out.opponentPunishment);
   }
 
