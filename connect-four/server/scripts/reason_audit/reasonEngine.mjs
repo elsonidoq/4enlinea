@@ -524,46 +524,6 @@ export async function findOccupationWitness(solver, root, { denier, windows, dep
   return { verdict: 'no_occupation', line: [], finalMovestring: root, exhaustive: reachedTerminal && !errored };
 }
 
-// Shortest optimal line where the opponent occupies a fork-window cell (window LIVE->DEAD).
-// BFS strictly by ply (never prunes a depth level), both sides branch ALL score-ties, dedup. I0/I2/I6.
-export async function denyOpponentPunishment(solver, blunderRoot, forkWindows, { opponent, depthCap }) {
-  const windows = forkWindows || [];
-  const patternCells = new Set(windows.flat());
-  const parent = new Map();                          // child -> { ms, mover, col, cell, score }
-  let frontier = [blunderRoot];
-  const seen = new Set([blunderRoot]);
-  let errored = false; // a non-terminal solver throw -> a real subtree was skipped, so NOT exhaustive (M3)
-  const lineTo = (ms) => { const out = []; let c = ms; while (parent.has(c)) { const e = parent.get(c); out.unshift({ ply: c.length, mover: e.mover, col: e.col, cell: e.cell, score: e.score }); c = e.ms; } return out; };
-
-  for (let depth = 0; depth < depthCap; depth++) {
-    const next = [];
-    for (const ms of frontier) {
-      let scores;
-      try { scores = await solver.query(ms); }
-      catch { if (!isTerminalPosition(ms)) errored = true; continue; } // genuine terminal vs IPC error
-      const mover = (ms.length % 2 === 0) ? 1 : 2;
-      const legal = []; let best = -Infinity;
-      for (let c = 0; c < COLS; c++) { if (scores[c] === INVALID_MOVE) continue; legal.push(c); if (scores[c] > best) best = scores[c]; }
-      if (!legal.length) continue;                    // full board (draw terminal)
-      for (const c of legal) {
-        if (scores[c] !== best) continue;             // optimal (score-tying) moves only
-        const { heights } = buildBoard(ms);
-        const cell = cellStr(heights[c], c);
-        const child = ms + String(c);
-        if (mover === opponent && patternCells.has(cell)) {
-          const w = killedWindow(ms, cell, windows, opponent);
-          if (w) { parent.set(child, { ms, mover, col: c, cell, score: scores[c] });
-                   return { verdict: 'occupation', line: lineTo(child), finalMovestring: child, cell, window: w, exhaustive: true }; }
-        }
-        if (!seen.has(child)) { seen.add(child); parent.set(child, { ms, mover, col: c, cell, score: scores[c] }); next.push(child); }
-      }
-    }
-    if (!next.length) return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: !errored };
-    frontier = next;
-  }
-  return { verdict: 'no_occupation', line: [], finalMovestring: blunderRoot, exhaustive: false };
-}
-
 /**
  * Compute the structured blunder-reason evidence vector.
  * @param {string} movestring  pre-move board (0-indexed columns)
@@ -620,11 +580,14 @@ export async function computeReason(movestring, playedCol, { solver }) {
     // half (b): how the played move allows the opponent to deny the fork resource (D17) —
     // or, when lostResource is not a fork, the legacy neutralization saving-reply.
     if (out.lostResource.terminal === 'fork') {
-      // Fork win_to_draw: search for opponent occupation of a fork-window cell (D17).
-      const denial = await denyOpponentPunishment(solver, playedRoot, out.lostResource.forkWindows || [],
-        { opponent, depthCap: REASON_CONFIG.denialDepth });
+      // Fork win_to_draw (D18): the opponent (denier) occupies a fork-window cell under optimal play.
+      const denial = await findOccupationWitness(solver, playedRoot, {
+        denier: opponent, windows: out.lostResource.forkWindows || [],
+        depthCap: ROWS * COLS - playedRoot.length,
+      });
       out.opponentPunishment = {
-        kind: 'denial', verdict: denial.verdict, register: (denial.line && denial.line.length > 1) ? 'forced_sequence' : 'immediate',
+        kind: 'denial', verdict: denial.verdict,
+        register: (denial.line && denial.line.length > 1) ? 'forced_sequence' : 'immediate',
         line: denial.line, finalMovestring: denial.finalMovestring,
         completingCell: denial.cell ?? null, window: denial.window ?? null,
         cell: denial.cell ?? null, exhaustive: denial.exhaustive,

@@ -2,22 +2,32 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason, denyOpponentPunishment, swindleGate } from '../scripts/reason_audit/reasonEngine.mjs';
+import { computeReason, findOccupationWitness, swindleGate } from '../scripts/reason_audit/reasonEngine.mjs';
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
 after(() => { if (solver) solver.destroy(); });
 
-const DEPTH = 8;
-
-test('no_occupation: 3333302111456114554542 played 2 draws without the opponent taking a fork cell', async () => {
-  const ms = '3333302111456114554542', col = 2;  // sourced 2026-06-29, exhaustive:false (depthCap=8 not exhausted)
+test('occupation (cap-to-terminal): 3333302111456114554542 played 2 -> under full depth the theorem finds occupation', async () => {
+  // Under cap-to-terminal the PV walk eventually reaches a full board where every fork window must hold
+  // >=1 opponent disc (D18 theorem), so verdict is occupation — not a proof of "opponent took it early".
+  const ms = '3333302111456114554542', col = 2;
   const r = await computeReason(ms, col, { solver });
-  const d = await denyOpponentPunishment(solver, ms + String(col), r.lostResource.forkWindows,
-    { opponent: r.opponent, depthCap: DEPTH });
+  const d = await findOccupationWitness(solver, ms + String(col), {
+    denier: r.opponent, windows: r.lostResource.forkWindows, depthCap: 42 - (ms.length + 1),
+  });
+  assert.equal(d.verdict, 'occupation');
+});
+
+test('no_occupation (depthCap:2): 3333302111456114554542 played 2 is no_occupation and non-exhaustive at cap 2', async () => {
+  // A shallow cap hits the depth limit without finding occupation — exercises the cap-hit fallback
+  // (exhaustive:false). NOT a proof of no_occupation (I7 asymmetry); just the cap-hit code-path.
+  const ms = '3333302111456114554542', col = 2;
+  const r = await computeReason(ms, col, { solver });
+  const d = await findOccupationWitness(solver, ms + String(col), {
+    denier: r.opponent, windows: r.lostResource.forkWindows, depthCap: 2,
+  });
   assert.equal(d.verdict, 'no_occupation');
-  // exhaustive:false: depthCap=8 reached without finding occupation in the optimal drawn lines —
-  // exercises the fallback code-path, NOT a full-tree proof of no_occupation (spec §7, I7 asymmetry).
   assert.equal(d.exhaustive, false);
 });
 
@@ -30,9 +40,11 @@ test('win_to_draw denial: 214444115623 opponentPunishment is occupation tied at 
 });
 
 test('occupation: 214444115623 played 4 -> opponent takes c3r3, killing the row-3 window', async () => {
-  const r = await computeReason('214444115623', 4, { solver });
-  const d = await denyOpponentPunishment(solver, '214444115623' + '4', r.lostResource.forkWindows,
-    { opponent: r.opponent, depthCap: DEPTH });
+  const ms = '214444115623';
+  const r = await computeReason(ms, 4, { solver });
+  const d = await findOccupationWitness(solver, ms + '4', {
+    denier: r.opponent, windows: r.lostResource.forkWindows, depthCap: 42 - (ms.length + 1),
+  });
   assert.equal(d.verdict, 'occupation');
   assert.equal(d.cell, 'c3r3');
   assert.ok(d.window.includes('c3r3') && d.window.includes('c4r3'), 'killed the row-3 fork window');
@@ -44,12 +56,13 @@ test('occupation: 214444115623 played 4 -> opponent takes c3r3, killing the row-
 // full-tree proof (exhaustive). Injected throwing solver — no real solver needed (I2 honesty).
 const throwingSolver = { query: async () => { throw new Error('simulated solver IPC error'); } };
 
-test('M3: denyOpponentPunishment no_occupation is NOT exhaustive when a non-terminal node errors', async () => {
+test('M3: findOccupationWitness no_occupation is NOT exhaustive when a non-terminal node errors', async () => {
   // blunderRoot 2144441156234 is a non-terminal mid-game position; the solver throw is an error, not terminal.
-  const d = await denyOpponentPunishment(throwingSolver, '2144441156234',
-    [['c3r3', 'c4r3', 'c5r3', 'c6r3']], { opponent: 2, depthCap: DEPTH });
+  const d = await findOccupationWitness(throwingSolver, '2144441156234', {
+    denier: 2, windows: [['c3r3', 'c4r3', 'c5r3', 'c6r3']], depthCap: 8,
+  });
   assert.equal(d.verdict, 'no_occupation');
-  assert.equal(d.exhaustive, false); // must downgrade from the spurious exhaustive:true the old catch gave
+  assert.equal(d.exhaustive, false); // non-terminal error must NOT inflate to exhaustive:true
 });
 
 test('M3: swindleGate flags errored when a non-terminal node errors', async () => {
