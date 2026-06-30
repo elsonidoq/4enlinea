@@ -59,8 +59,8 @@ node server/scripts/build_fv_eval_set.mjs            # → server/scripts/fv_eva
 # ② vectors are already in the set rows (feature_vector = toNarratorVector(computeReason)).
 
 # ③ Ask the LLM to explain each (PAID — EXPLAIN_MODEL in server/.env; conditions A/B/C):
-node server/scripts/explain_from_vector.mjs --input server/scripts/reason_eval_set.jsonl \
-     --out server/scripts/fv_suff_answers_$(date +%Y%m%dT%H%M%SZ).jsonl --n 3 --condition all
+node server/scripts/explain_from_vector.mjs --input server/scripts/reason_eval_set.jsonl --n 3 --condition all
+#    → auto-named server/scripts/fv_suff_answers_reason_eval_set_<launch-datetime>.jsonl  (override with --out)
 
 # ④ Grade A1–A4 vs the board (Claude skill; writes a counterexample report AND a
 #   <stem>_grades.jsonl the UI reads, both next to the answers):

@@ -28,7 +28,7 @@
 
 import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, basename } from 'path';
 import { pruneVector } from './reasonNarratorVector.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +48,12 @@ function argVal(name, def) {
 }
 const ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
 const inputPath = argVal('--input', join(__dirname, 'fv_eval_set.jsonl'));
-const outPath = argVal('--out', join(__dirname, `fv_suff_answers_${ts}.jsonl`));
+// Default output traces the run to its input set + launch datetime:
+//   fv_suff_answers_<input-stem>_<ts>.jsonl
+// The `fv_suff_answers_` prefix is kept on purpose — the grader's auto-discovery and the
+// /admin/fv-suff dropdown both match /^fv_suff_answers_[\w.-]+\.jsonl$/.
+const inputStem = basename(inputPath).replace(/\.(jsonl|json)$/i, '');
+const outPath = argVal('--out', join(__dirname, `fv_suff_answers_${inputStem}_${ts}.jsonl`));
 const N = parseInt(argVal('--n', '3'), 10);
 const model = argVal('--model', process.env.EXPLAIN_MODEL);
 const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();

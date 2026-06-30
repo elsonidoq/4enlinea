@@ -44,16 +44,17 @@ node -e "const r=require('fs').readFileSync('server/scripts/fv_eval_set.jsonl','
 ## Step 2 — run the answerer (PAID: calls `EXPLAIN_MODEL` via OpenAI)
 
 `EXPLAIN_MODEL` is read from `connect-four/server/.env` (default `gpt-5.4`). Cost = `records ×
-conditions × n`. The answerer defaults `--input` to `server/scripts/fv_eval_set.jsonl`. Always write
-to a fresh `--out` (a new name per run keeps prior runs comparable; the script appends).
+conditions × n`. The answerer defaults `--input` to `server/scripts/fv_eval_set.jsonl`, and
+auto-names its output `fv_suff_answers_<input-stem>_<launch-datetime>.jsonl` (traceable to the input
+set + when the run started; pass `--out` to override).
 
 ```bash
 node server/scripts/explain_from_vector.mjs \
   --input  server/scripts/fv_eval_set.jsonl \
-  --out    server/scripts/fv_suff_answers_$(date +%Y%m%dT%H%M%SZ).jsonl \
   --n 3 \
   --condition all          # A=full vector · B=board-only · C=features-without-movestring · all=A,B,C
-# → records × 3 conditions × 3 runs rows, expect 0 parse/call failures.
+# → server/scripts/fv_suff_answers_fv_eval_set_<datetime>.jsonl
+#   records × 3 conditions × 3 runs rows, expect 0 parse/call failures.
 ```
 
 Optional flags: `--model <id>` overrides `EXPLAIN_MODEL`; `--condition A` for just the headline condition.
