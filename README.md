@@ -58,12 +58,12 @@ node server/scripts/select_boards.mjs --strategy coverage [--target N] [--max-ga
 node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.jsonl
 #    → server/scripts/reason_evidence_<stem>.jsonl  rows: {id, evidence, groundTruth}
 
-# ② Ask the LLM to explain each (PAID — EXPLAIN_MODEL in server/.env; add --llm):
+# ③ Ask the LLM to explain each (PAID — EXPLAIN_MODEL in server/.env; add --llm):
 node server/scripts/compute.mjs --input server/scripts/boards_coverage_<ts>.jsonl --llm --n 3 --condition all
 #    → server/scripts/fv_suff_answers_<stem>_<ts>.jsonl  (each row embeds its feature_vector)
 #    Note: --llm reuses an existing reason_evidence_<stem>.jsonl — no solver re-run needed
 
-# ③ Grade A1–A4 (Claude skill; answers file is its own vectors source):
+# ④ Grade A1–A4 (Claude skill; answers file is its own vectors source):
 /grade-fv-sufficiency server/scripts/fv_suff_answers_<stem>_<ts>.jsonl \
   --vectors server/scripts/fv_suff_answers_<stem>_<ts>.jsonl
 #    → <stem>_grades.jsonl (UI reads) + <stem>_grade_report.md (counterexample report)
