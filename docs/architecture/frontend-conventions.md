@@ -125,6 +125,7 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `selectedCols` | `Array<number>` | `[]` | Multi-select mode: columns show red tint + ✕ badge |
 | `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
 | `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
+| `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
 
 ### OverlayType enum (LOCKED — cross-epic contract)
 
