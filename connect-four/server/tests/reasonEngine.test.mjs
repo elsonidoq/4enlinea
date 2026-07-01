@@ -149,16 +149,15 @@ test('D16 Case A: 214444115623 played 4 -> double_threat fork, not parity', asyn
     `tie shares c3r3 (fork constituent), got ${JSON.stringify(r.opponentPunishment.tie.sharedCells)}`);
 });
 
-test('D16 Case B (diverted): 3333344440625621503122 played 6 -> tagged double_threat via realized/denied router', async () => {
+test('D16 Case B (diverted): 3333344440625621503122 played 6 -> tagged figure_7 via realized/denied router', async () => {
   const r = await computeReason('3333344440625621503122', 6, { solver });
   assert.equal(r.case, 'win_to_draw', 'case');
-  // This board diverts to the tag-first realized/denied router (Task 3): the tag comes straight
-  // from tagBlunder, not nameFork's Case A/B disambiguation (which prefers figure_7 for a stacked
-  // single-column fork on the sign-engine path — see the sign-route test below for that path).
-  // The Case-A/B naming distinction is therefore not applicable here; what D16 still requires —
-  // forced tactical register (never parity) and the correct gravity-top completing cell — is
-  // asserted below.
+  // This board diverts to the tag-first realized/denied router (Task 3), but the router is now
+  // forkCase-aware (final-review fix): it refines tagBlunder's tag by the shape's actual forkCase
+  // (from detectForkAt, via realizedPattern), so a stacked Case-B fork is named figure_7 here too,
+  // aligning with nameFork's Case A/B disambiguation on the sign-engine path (see the test below).
   assert.equal(r.route, 'realized_denied', 'this movestring always diverts (Task 4)');
+  assert.equal(r.tag, 'figure_7', 'stacked Case-B fork is named figure_7, aligned with nameFork');
   assert.ok(REALIZED_DENIED_TAGS.has(r.tag), `tag ${r.tag} in realized/denied set`);
   assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
   assert.ok(r.lostResource.cells.includes('c1r3'),

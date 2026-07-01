@@ -195,7 +195,7 @@ export function realizedPattern(rootMs, owner, tag) {
   if (tag === 'double_threat' || tag === 'figure_7') {
     const fork = detectForkAt(rootMs, owner);
     if (!fork) return null;
-    return { cells: fork.forkCells, windows: fork.forkWindows, completingCell: fork.completingCell };
+    return { cells: fork.forkCells, windows: fork.forkWindows, completingCell: fork.completingCell, forkCase: fork.forkCase };
   }
   // immediate_threat / forced_block: the owner's win-in-1.
   const cboard = new Board(rootMs);
@@ -222,6 +222,8 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
   const correctRoot = movestring + String(bestCol);
   const playedRoot = movestring + String(playedCol);
 
+  if (direction !== 'missed_own' && direction !== 'enabled_opponent' && direction !== 'defensive_miss') return null;
+
   let owner, denier, realizedRoot, deniedRoot;
   if (direction === 'missed_own') {
     owner = player; denier = opponent; realizedRoot = correctRoot; deniedRoot = playedRoot;
@@ -234,8 +236,16 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
   const rp = realizedPattern(realizedRoot, owner, tag);
   if (!rp) return null; // detector can't confirm the tag as a one-move pattern -> fall through (I2: don't fabricate)
 
+  // Fork tags: refine to the forkCase-appropriate name so the router aligns with nameFork's naming
+  // (Case A -> double_threat; Case B -> figure_7). Non-fork tags (immediate_threat/forced_block) are
+  // untouched since rp.forkCase is undefined for them.
+  let refinedTag = tag;
+  if ((tag === 'double_threat' || tag === 'figure_7') && rp.forkCase) {
+    refinedTag = rp.forkCase === 'B' ? 'figure_7' : 'double_threat';
+  }
+
   const realized = {
-    kind: 'realized_pattern', tag, owner, register: 'immediate',
+    kind: 'realized_pattern', tag: refinedTag, owner, register: 'immediate',
     cells: rp.cells, windows: rp.windows,
     completingCell: rp.completingCell, window: rp.windows[0] ?? null,
     finalMovestring: realizedRoot, entryCell: rp.completingCell,
@@ -264,7 +274,7 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
   out.opponentPunishment.tie = tie;
 
   out.route = 'realized_denied';
-  out.tag = tag;
+  out.tag = refinedTag;
   out.direction = direction;
   out.case = classifySignCase(bestScore, playedScore);
   out.replyHistogram = {
