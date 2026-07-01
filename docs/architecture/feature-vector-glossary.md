@@ -417,6 +417,21 @@ Narrative for parity wins: "the win is a long zugzwang — you control the parit
 `controllingGroup` (lever at `leverCells`), so the opponent eventually has to give you
 `completingCell`." Keep it structural; never fabricate a forced line.
 
+### `optimalWinSamples` — evidence-only; **not in the vector you read**
+
+For the same parity-register wins, the engine also samples the *distribution* of optimal winning
+realizations (many seeded random optimal walks from `movestring + bestCol`): `{ n, distinct,
+orientation: {horizontal, vertical, diagonal}, oddCompletingFraction, lines: [{ window,
+completingCell, orientation, completingParity, pliesToEnd, count }] }`. It lives on the raw evidence
+object (inspectable in `/admin/fv-suff`'s evidence view) as `lostResource.optimalWinSamples`, and
+exists to answer "is this win always odd? is its orientation fixed, or just an artifact of the one
+walked line?".
+
+It is a **diagnostic, deliberately stripped from the narrator vector** (`toNarratorVector` removes it
+— see `HIDDEN_HALF_FIELDS`). **You will never see it, and you must not reference or expect it.** If
+you find yourself reasoning about it, that is a sign you are reading raw evidence rather than the
+narrator vector. The teachable content of a parity win is `parityAttribution` above — use that.
+
 ### `anchorCells`
 
 The move-level squares that **define** the lost resource; the `tie` (§4) is verified against these
