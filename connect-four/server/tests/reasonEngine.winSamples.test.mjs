@@ -41,3 +41,38 @@ ntest('walkOptimal refactor: lostResource window unchanged on a known parity win
   assert.deepEqual(r.lostResource.window, ['c4r5', 'c5r5', 'c6r5', 'c7r5']);
   assert.equal(r.lostResource.completingCell, 'c7r5');
 });
+
+// Keep sample counts small so the integration tests stay fast; deterministic regardless of n.
+process.env.REASON_WIN_SAMPLES = '8';
+
+ntest('optimalWinSamples: present + well-formed on a parity win (eval-14)', async () => {
+  const r = await computeReason('333333451225', 2, { solver });
+  const s = r.lostResource.optimalWinSamples;
+  assert.ok(s, 'optimalWinSamples attached');
+  assert.equal(s.n, 8);
+  assert.ok(s.distinct >= 1 && s.distinct <= s.n, 'distinct within [1, n]');
+  assert.equal(s.orientation.horizontal + s.orientation.vertical + s.orientation.diagonal, s.n,
+    'orientation histogram sums to n');
+  assert.ok(s.oddCompletingFraction >= 0 && s.oddCompletingFraction <= 1);
+  for (const line of s.lines) {
+    assert.equal(line.window.length, 4);
+    assert.ok(['horizontal', 'vertical', 'diagonal'].includes(line.orientation));
+    assert.ok(['odd', 'even'].includes(line.completingParity));
+    assert.ok(line.count >= 1 && line.pliesToEnd > 0);
+  }
+  // lines are sorted most-frequent-first
+  for (let i = 1; i < s.lines.length; i++) assert.ok(s.lines[i - 1].count >= s.lines[i].count);
+});
+
+ntest('optimalWinSamples: deterministic across runs (seeded RNG)', async () => {
+  const a = await computeReason('333333451225', 2, { solver });
+  const b = await computeReason('333333451225', 2, { solver });
+  assert.deepEqual(a.lostResource.optimalWinSamples, b.lostResource.optimalWinSamples);
+});
+
+ntest('optimalWinSamples: NOT attached on a non-parity (fork) win', async () => {
+  // 214444115623 played 4 is a win_to_draw fork (register forced_sequence/immediate, terminal fork).
+  const r = await computeReason('214444115623', 4, { solver });
+  assert.equal(r.lostResource.terminal, 'fork');
+  assert.equal(r.lostResource.optimalWinSamples, undefined);
+});

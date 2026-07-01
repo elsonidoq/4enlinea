@@ -723,6 +723,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = CASES.WIN_TO_DRAW;
     const aWalk = await walkOptimal(solver, bestRoot, player);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
+    await attachWinSamples(solver, out.lostResource, { rootMs: bestRoot, winnerMark: player });
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
@@ -770,6 +771,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = CASES.WIN_TO_LOSE;
     const aWalk = await walkOptimal(solver, bestRoot, player);
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
+    await attachWinSamples(solver, out.lostResource, { rootMs: bestRoot, winnerMark: player });
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
