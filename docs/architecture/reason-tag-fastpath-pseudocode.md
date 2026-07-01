@@ -79,12 +79,25 @@ the intended one-sentence lesson, no parity swindle.
 - **Guard 1 kept (D3):** `bestScore>0 && playedScore>0` (`win_to_slower_win`) → NotABlunder, before
   `tagBlunder` is consulted. You win either way.
 - **Not actually worse:** `playedScore === bestScore` → NotABlunder (no outcome lost).
-- **On genuine blunders, the tag routes regardless of sign side.** The realized/denied engine handles
-  the tactical tags across *all* sign cases. This means, e.g., `win_to_draw` missed-fork
-  (`214444115623`) is now produced by `realized_denied_reason` — but it **reproduces** today's D18
-  output (realized = your fork on `correctRoot`; denied = opponent occupies `c3r3` on `playedRoot`),
-  so there is no regression. The lose-side gate machinery is only reached for the *non-tactical*
-  fall-through tags.
+- **The route fires only for tactics that are actually near-term AND detector-confirmable — otherwise
+  it falls through.** Two gates, both required, keep it conservative (verified during implementation
+  2026-07-01):
+  1. **`tagBlunder` must name a realized/denied tag.** `tagBlunder`'s Phase C looks only **one ply**
+     past `correctCol`, so a fork that materializes deep (e.g. the `win_to_draw` board `214444115623`,
+     whose fork is ~10 plies down the forced line) is tagged `drawing_move`, **not** `double_threat`.
+     Such deep forks never enter the route; they stay on the sign engine and keep their D18
+     occupation-witness (`214444115623` → `c3r3`) unchanged. This is the desired split — the realized
+     half must be a *one-move* pattern, and a deep fork is not one.
+  2. **`realizedPattern` must confirm the tag on the realized board.** When `tagBlunder` names a tag
+     that `realizedPattern`'s stricter production detector cannot exhibit as a one-move pattern
+     (detector disagreement — e.g. `detectForkAt`'s unstoppable-guard rejects a `classifyPattern`
+     double_threat), `realized_denied_reason` returns **null** and `computeReason` **falls through to
+     the sign engine**. I2: never fabricate a resource we cannot show; prefer the proven full engine.
+
+  Net effect: the route fires for genuinely near-term, cell-exhibitable tactics (the motivating
+  `3321234543` `forced_block/defensive_miss`); everything else — deep forks, detector mismatches, and
+  all non-tactical tags — is handled by the unchanged sign-taxonomy engine. There is no regression
+  because every non-firing case reverts to today's behavior.
 
 ## Pseudocode
 
@@ -103,8 +116,11 @@ def reason(movestring, playedCol):
     tag, direction = tagBlunder(movestring, playedCol, bestCol, solver)   # may raise NotABlunder
 
     if tag in REALIZED_DENIED_TAGS:
-        return realized_denied_reason(movestring, playedCol, bestCol,
-                                      tag, direction, player, opponent, scores)
+        rd = realized_denied_reason(movestring, playedCol, bestCol,
+                                    tag, direction, player, opponent, scores)
+        if rd is not None:            # realizedPattern confirmed the tag as a one-move pattern
+            return rd
+        # else: detector could not exhibit the tag -> fall through to the sign engine (I2, no fabrication)
 
     return sign_taxonomy_engine(movestring, playedCol)          # unchanged (D16/D17/D18/D19)
 
