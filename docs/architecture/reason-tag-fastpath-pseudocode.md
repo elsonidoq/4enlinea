@@ -1,185 +1,186 @@
-# Blunder-reason engine — the tagBlunder fast-path (design)
+# Blunder-reason engine — the tagBlunder realized/denied router (design)
 
 > **Read the four canonical reason docs first** (`reason-INVARIANTS.md`, `reason-DECISIONS.md`,
-> `my_pseudocode.md`, `blunder-reason-evidence.md`) — this design amends the top-level dispatch only.
-> It is a **wrapper in front of** the sign-taxonomy engine (`reason-engine-pseudocode.md`), not a
-> rewrite of it. Everything below the fast-path (D16/D17/D18/D19, the two-halves walks, the
-> occupation witness, the swindle gate, parity attribution) is preserved unchanged.
+> `my_pseudocode.md`, `blunder-reason-evidence.md`) plus `reason-engine-pseudocode.md`. This design
+> **generalizes the D18 `findOccupationWitness` primitive** across move directions and routes the
+> short, cell-nameable tactical tags through it. It does **not** reverse D16/D17/D18 — it subsumes the
+> `win_to_draw` fork case as one instance of a symmetric rule.
 
-Status: **DESIGN — approved 2026-06-30**, not yet implemented.
+Status: **DESIGN — approved-in-principle 2026-06-30** (owner-directed), not yet implemented.
 
 ## Motivation — one worked case
 
 `3321234543`, played col 0, best col 3 (0-indexed). Green to move; Gray holds a standing
-three-in-a-column at col 4 (`c4r2·c4r3·c4r4`, `c4r5` open and gravity-top). The correct move is the
-block at col 3; playing col 0 lets Gray complete the four at `c4r5` next move.
+three-in-a-column at col 4 (`c4r2·c4r3·c4r4`, `c4r5` open, gravity-top). Correct move blocks at col 3;
+playing col 0 lets Gray complete at `c4r5`.
 
-- `tagBlunder` tags it **`forced_block / defensive_miss`** — correct, one sentence: *you conceded an
-  immediate threat.*
+- `tagBlunder` tags it **`forced_block / defensive_miss`** — one sentence: *you conceded an immediate
+  threat.*
 - The sign engine sees `bestScore=-4, playedScore=-16` → both `<0` → `lose_to_faster_lose`, runs the
-  swindle gate, and emits a `conditional_swindle` with a **parity attribution on a diagonal**
-  (`c1r4`), `tacticTag: minor_threat`, `pliesToEnd: 15`. A convoluted, misleading story for "you
-  didn't block a mate-in-1."
+  swindle gate, and emits a `conditional_swindle` with a **parity attribution on a diagonal** (`c1r4`),
+  `tacticTag: minor_threat`, `pliesToEnd: 15`. Convoluted and misleading for "you didn't block a
+  mate-in-1."
 
-When `tagBlunder` finds a **short, concrete, cell-nameable tactic**, that fact — not the deep
-two-halves parity machinery — is the reason. This design routes those tags to a cheap direct payload
-and leaves the structural/zugzwang cases on the existing engine.
+## The unifying insight — realized vs. denied (asymmetry is cost, not rigor)
 
-## Locked design decisions (this amendment)
+Every tactical-tag blunder decomposes into the same two halves:
 
-1. **Tag-first fast-path.** `tagBlunder` runs in front of the sign taxonomy. Its `(tag, direction)`
-   decides whether we take the **direct** route or fall through to the existing engine. The sign
-   taxonomy (I5) and all its LOCKED decisions stay intact for the fall-through.
-2. **Direct set = short concrete tactics only.** `{ immediate_threat, forced_block, double_threat,
-   figure_7, forced_win, j_shape }` (any direction) → direct route. Everything else (`claimeven`,
-   `z_threat`, `overcut`, `undercut`, `major_threat_parity`, `major_threat_nonparity`, `minor_threat`,
-   `drawing_move`, `suboptimal_move`) → existing two-simulation engine.
-3. **Direct payload = detector cells + one short opponent walk.** Half (a) `lostResource` comes
-   straight from `classifyPattern`/detector cells (no optimal walk). Half (b) `opponentPunishment` is
-   ONE opponent-optimal walk from `playedRoot` capped at ~2 plies. Uniform across directions.
-4. **NotABlunder — override only the lose side.** Guard 1 stays: `bestScore>0 && playedScore>0`
-   (`win_to_slower_win`, D3) is NotABlunder even with a tactical tag — you win either way. On the
-   lose/draw side, a direct tag ALWAYS produces a reason: the direct route **overrides** the
-   `lose_to_faster_lose` no-practical-chance gate (D4/D19). Conceding/enabling a mate is always
-   teachable.
-5. **Two halves stay separate (I3)** even on the fast-path; they are never merged.
+- **Realized half — trivial.** A pattern that forms in **one move** is exhibited straight from
+  `classifyPattern`: here are the cells, one drop makes it. No search.
+- **Denied half — a solver simulation, potentially multi-move.** Proving a pattern **cannot** be formed
+  (or can't be re-formed) under optimal play is the hard half. It needs a bounded solver walk. This is
+  true for **every** case. `immediate_threat` only *looks* trivial here because its denial resolves in
+  one move (a single block); `double_threat` / `figure_7` need the multi-move occupation-witness to
+  prove the fork is dismantled.
+
+The denied half **is** `findOccupationWitness` (the D18 primitive), generalized so `denier` and `root`
+flip with the **direction** instead of being hard-wired to `opponent`/`playedRoot`.
+
+### Direction is symmetric — it just swaps which board is which
+
+| tag / direction | realized half (`classifyPattern`, 1 move) | denied half (`findOccupationWitness`, 1…N moves) |
+|---|---|---|
+| `double_threat`/`figure_7` `missed_own` | `correctRoot`, **you** form the fork | from `playedRoot`, **opponent** denies your fork |
+| `double_threat`/`figure_7` `enabled_opponent` | `playedRoot`, **opponent** forms the fork | from `correctRoot`, **you** deny the opponent's fork |
+| `immediate_threat` `missed_own` | `moves`, **you** have the win-in-1 | from `playedRoot`, **opponent** blocks it |
+| `immediate_threat` `enabled_opponent` | `playedRoot`, **opponent** has the new win-in-1 | from `correctRoot`, **you** block it |
+| `forced_block` `defensive_miss` (**`3321234543`**) | `moves`, **opponent** already has the threat | from `correctRoot`, **you** block it (occupation at `c4r5`, ply 0) |
+
+### Which I3 field each half becomes — decided by who OWNS the pattern
+
+I3 is preserved: `lostResource` (a) = what the best move preserved; `opponentPunishment` (b) = how the
+played move loses.
+
+- **Pattern is YOURS** (`missed_own`): realized → `lostResource`; denied → `opponentPunishment`.
+- **Pattern is the OPPONENT's** (`enabled_opponent` / `defensive_miss`): denied → `lostResource` (the
+  defense you had); realized → `opponentPunishment` (the threat you handed over).
+
+For `3321234543` this yields: `lostResource` = "block at `c4r5`" (denied, occupation at ply 0);
+`opponentPunishment` = "opponent completes at `c4r5`" (realized). `tie` = `c4r5` (shared cell). Exactly
+the intended one-sentence lesson, no parity swindle.
+
+## Routing — tag-first
+
+`tagBlunder` runs in front and its `tag` picks the engine:
+
+- **Realized/denied set** = `{ immediate_threat, forced_block, double_threat, figure_7 }`. These are the
+  tags with a one-move-realizable half. Routed through `realized_denied_reason`.
+- **Everything else** — structural/zugzwang (`claimeven`, `z_threat`, `overcut`, `undercut`,
+  `major_threat_parity`, `major_threat_nonparity`, `minor_threat`) and score fallbacks
+  (`drawing_move`, `suboptimal_move`) — falls through **unchanged** to the existing sign-taxonomy
+  two-walk engine (D16/D17/D18/D19). "Two full simulations" is exactly the case where **neither** half
+  is a one-move pattern, so both halves must be walked.
+- **`forced_win` and `j_shape` are deliberately OUT** of the realized/denied set: `forced_win` is not a
+  one-move pattern, and `j_shape` is a minor-threat/zugzwang precursor (KB `allen-j-configuration`; D16
+  excludes it from the fork-stop). Both route to the two-walk engine. *(Open — confirm.)*
+
+### Relationship to the sign taxonomy and the NotABlunder guards
+
+- **Guard 1 kept (D3):** `bestScore>0 && playedScore>0` (`win_to_slower_win`) → NotABlunder, before
+  `tagBlunder` is consulted. You win either way.
+- **Not actually worse:** `playedScore === bestScore` → NotABlunder (no outcome lost).
+- **On genuine blunders, the tag routes regardless of sign side.** The realized/denied engine handles
+  the tactical tags across *all* sign cases. This means, e.g., `win_to_draw` missed-fork
+  (`214444115623`) is now produced by `realized_denied_reason` — but it **reproduces** today's D18
+  output (realized = your fork on `correctRoot`; denied = opponent occupies `c3r3` on `playedRoot`),
+  so there is no regression. The lose-side gate machinery is only reached for the *non-tactical*
+  fall-through tags.
 
 ## Pseudocode
 
 ```python
-# ════════════════════════════════════════════════════════════════════════════
-#  reason(movestring, playedCol)   —  TAG-FIRST wrapper around the sign engine
-# ════════════════════════════════════════════════════════════════════════════
-
-# The six tags whose story is short, concrete, and cell-nameable.
-# For these we do NOT run the two-halves walks (no occupation-witness, no swindle
-# gate, no parity attribution).
-DIRECT_TAGS = { immediate_threat, forced_block, double_threat,
-                figure_7, forced_win, j_shape }
+REALIZED_DENIED_TAGS = { immediate_threat, forced_block, double_threat, figure_7 }
 
 def reason(movestring, playedCol):
-    scores      = solver.query(movestring)        # player (side-to-move) perspective
-    bestCol     = argmax(scores)
-    bestScore   = scores[bestCol]
+    scores      = solver.query(movestring)
+    bestCol     = argmax(scores); bestScore = scores[bestCol]
     playedScore = scores[playedCol]
     player      = side_to_move(movestring); opponent = other(player)
 
-    # ── GUARD 1 (kept): you win either way → out of scope, even with a tactical tag.
-    #    "You had a mate-in-1 but chose a slower win" is D3 NotABlunder.
-    if bestScore > 0 and playedScore > 0:
-        raise NotABlunder()          # win_to_slower_win
+    if bestScore > 0 and playedScore > 0: raise NotABlunder()   # win_to_slower_win (D3)
+    if playedScore == bestScore:          raise NotABlunder()   # nothing lost
 
-    # ── Ask the production classifier what KIND of blunder this is.
-    #    tagBlunder may itself raise NotABlunderError (terminal / full board) → propagate.
-    tag, direction = tagBlunder(movestring, playedCol, bestCol, solver)
+    tag, direction = tagBlunder(movestring, playedCol, bestCol, solver)   # may raise NotABlunder
 
-    # ── FAST-PATH. A short concrete tactic on the lose/draw side ALWAYS gets the
-    #    direct reason — this overrides the lose_to_faster_lose "no practical chance"
-    #    gate. Conceding / enabling a mate is always worth teaching.
-    if tag in DIRECT_TAGS:
-        return direct_reason(movestring, playedCol, bestCol,
-                             tag, direction, player, opponent, scores)
+    if tag in REALIZED_DENIED_TAGS:
+        return realized_denied_reason(movestring, playedCol, bestCol,
+                                      tag, direction, player, opponent, scores)
 
-    # ── Everything else (claimeven, z_threat, overcut, undercut, major_threat_*,
-    #    minor_threat, drawing_move, suboptimal_move) falls through UNCHANGED to the
-    #    existing sign-taxonomy two-halves engine (D16/D17/D18/D19 all intact).
-    return sign_taxonomy_engine(movestring, playedCol)      # my_pseudocode.md / reason-engine-pseudocode.md
+    return sign_taxonomy_engine(movestring, playedCol)          # unchanged (D16/D17/D18/D19)
 
 
-# ════════════════════════════════════════════════════════════════════════════
-#  direct_reason  —  cheap, cell-nameable, no optimal walks on half (a)
-#    Still emits the two separate halves (I3): a lost resource and a punishment.
-# ════════════════════════════════════════════════════════════════════════════
-
-def direct_reason(movestring, playedCol, bestCol, tag, direction, player, opponent, scores):
-    playedRoot  = movestring + playedCol
+def realized_denied_reason(movestring, playedCol, bestCol, tag, direction, player, opponent, scores):
     correctRoot = movestring + bestCol
+    playedRoot  = movestring + playedCol
 
-    # ── half (a): the lost resource — straight from the detectors, NO walk ──
+    # ── who owns the pattern, where it is REALIZED (one move), where it is DENIED ──
     if direction == 'missed_own':
-        # You could have BUILT (or already had) the tactic. Name its cells on the
-        # board the correct move reaches (for immediate_threat/missed_own the win
-        # already exists on `movestring` itself).
-        source = movestring if tag == 'immediate_threat' else correctRoot
-        cells  = classifyPattern(source, player)[tag].cells        # tested detector (I8)
-        lostResource = { kind:'missed_tactic', tag, cells,
-                         anchorCells: cells,
-                         register: 'immediate' if tag=='immediate_threat' else 'forced_sequence',
-                         finalMovestring: correctRoot }
+        owner, denier = player, opponent
+        realizedRoot  = correctRoot            # the best move forms YOUR pattern
+        deniedRoot    = playedRoot             # after the blunder, the opponent denies it
+    else:  # 'enabled_opponent' | 'defensive_miss'
+        owner, denier = opponent, player
+        realizedRoot  = (movestring if direction == 'defensive_miss' else playedRoot)
+        deniedRoot    = correctRoot            # the best move would have denied it
 
-    else:   # direction in ('enabled_opponent', 'defensive_miss')
-        # The resource you gave up is the DEFENSE. Name the opponent's threat cells
-        # and the block you had.
-        #   defensive_miss   → opponent's threat already stands on `movestring`
-        #   enabled_opponent → the played move created it, so read it on playedRoot
-        source = movestring if direction == 'defensive_miss' else playedRoot
-        threatCells = classifyPattern(source, opponent)[tag].cells
-        blockCell   = landing_cell(movestring, bestCol)            # the safe move you had
-        lostResource = { kind:'missed_defense', tag, threatCells, blockCell,
-                         anchorCells: [blockCell], register:'immediate',
-                         finalMovestring: correctRoot }
+    # ── REALIZED half: trivial, straight from the detector ──
+    pat      = classifyPattern(realizedRoot, owner)[tag]        # cells (tested detector, I8)
+    windows  = pattern_windows(realizedRoot, owner, tag)        # detector's winning window(s)
+    realized = { kind:'realized_pattern', tag, owner,
+                 cells: pat.cells, windows, completingCell: windows[0].openCell,
+                 register:'immediate', finalMovestring: realizedRoot }
 
-    # ── half (b): the punishment — ONE short opponent-optimal walk, capped ~2 plies ──
-    opp = walk_optimal_capped(playedRoot, winner=opponent, cap=2)
-    if opp.reached_win:                        # opponent wins within the cap
-        opponentPunishment = { kind:'winning_line', register: opp.register,   # immediate | forced_sequence
-                               completingCell: opp.completingCell, window: opp.window,
-                               line: opp.line, pliesToEnd: opp.plies,
-                               finalMovestring: opp.finalMovestring,
-                               entryCell: opp.line[0].cell }
-    else:                                      # no near win; the tactic is simply gone
-        opponentPunishment = { kind:'neutralization', register:'immediate',
-                               note:'no immediate opponent win — the missed tactic no longer exists',
-                               playedScore: scores[playedCol],
-                               finalMovestring: playedRoot }
+    # ── DENIED half: the generalized D18 occupation-witness (bounded by DEPTH, not a cap) ──
+    denied = find_occupation_witness(deniedRoot, denier=denier, windows=windows,
+                                     depthCap=42-len(deniedRoot))
+    #   occupation  -> denier occupies+kills a window cell (LIVE->DEAD); that cell is the tie.
+    #   no_occupation(exhaustive) -> the pattern is NOT deniable here (the owner's threat stands).
 
-    # ── the tie (cheap spatial, I3/D14): does the punishment land on the resource? ──
-    #    enabled/defensive → opponent usually completes on the very cell you failed to
-    #    block → 'tied'.   missed_own → often 'independent' (you lost YOUR win).
-    shared = lostResource.anchorCells ∩ { opponentPunishment.get(entryCell),
-                                          opponentPunishment.get(completingCell) }
-    opponentPunishment.tie = { kind:('tied' if shared else 'independent'),
-                               sharedCells: list(shared) }
+    # ── assign to the I3 fields by WHO owns the pattern ──
+    if owner == player:                        # missed_own: you owned the resource
+        lostResource, opponentPunishment = realized, denied
+    else:                                      # enabled/defensive: opponent owns the threat
+        lostResource, opponentPunishment = denied, realized
 
-    replyHistogram = { afterBest:   non_losing_reply_count(correctRoot),
-                       afterPlayed: non_losing_reply_count(playedRoot) }
+    tie = ({ kind:'tied', sharedCells:[denied.cell] } if denied.verdict == 'occupation'
+           else { kind:'independent', sharedCells:[] })
 
-    return { route:'direct', tag, direction,
-             lostResource, opponentPunishment, replyHistogram, gate: None }
+    return { route:'realized_denied', tag, direction,
+             case: sign_case(bestScore, playedScore),   # kept for continuity
+             lostResource, opponentPunishment, tie,
+             replyHistogram: { afterBest:   non_losing_reply_count(correctRoot),
+                               afterPlayed: non_losing_reply_count(playedRoot) },
+             gate: None }
 ```
 
-## How the motivating tags read out
+## Invariant / decision reconciliation
 
-| tag / direction | half (a) lostResource | half (b) opponentPunishment |
-|---|---|---|
-| `forced_block/defensive_miss` (**`3321234543`**) | opponent's standing threat cells `c4r2·c4r3·c4r4·c4r5`, the block you had = `c4r5` | opponent completes at `c4r5` in 1 ply → **tie: tied** |
-| `immediate_threat/enabled_opponent` | the block/safe move you skipped | opponent's new win in 1–2 |
-| `immediate_threat/missed_own` | your own winning cell (on `movestring`) | usually `neutralization` — you threw your own win |
-| `double_threat`/`figure_7` `missed_own` | the fork cells you could have built | short opp walk; often `independent` |
-
-## Invariant reconciliation
-
-- **I3 (two halves, separate) — kept.** The fast-path still emits `lostResource` and
-  `opponentPunishment` as distinct fields; they are never merged.
-- **I8 (reuse detectors) — kept.** Half (a) reuses `classifyPattern`'s tested detector cells rather
-  than re-deriving geometry.
-- **I2 (never fabricate) — bounded exception, stated explicitly.** Half (a) cells now come from a
-  detector *without* a solver optimal-walk confirming they are the realized win/threat. This is
-  acceptable **only because** `tagBlunder` already gated these tags via score/threat checks, and half
-  (b)'s short walk is solver-grounded. This is the one place the fast-path trades a walk for a
-  detector; it must be validated per I12 before locking (a counterexample per direction through the
-  production `tagBlunder`).
-- **I5 (sign taxonomy) / D16–D18 — untouched** for the fall-through route.
-- **D3 preserved; D4/D19 overridden on the lose side** — per decision 4 above.
+- **I3 (two separate halves) — kept.** Realized and denied are distinct fields; the owner mapping
+  assigns them to `lostResource` / `opponentPunishment`. Never merged.
+- **I8 (reuse detectors) — kept and extended.** Realized half = `classifyPattern`; denied half =
+  `findOccupationWitness`. No reinvented geometry.
+- **I9 / Occam — strengthened.** One primitive (`findOccupationWitness`) now serves every denied half
+  by flipping `denier`/`root`; the sign-case dispatch shrinks to the non-tactical tags.
+- **I2 (never fabricate).** The realized pattern is decisive because the **sign gate** proves it
+  (`bestScore>0` for a missed win; `playedScore<0` for a handed loss); the denied half is
+  solver-grounded by the witness walk. Neither half is asserted without a solver guarantee.
+- **D16/D17/D18 — generalized, not reversed.** D18 hard-wired `denier=opponent, root=playedRoot`
+  (`win_to_draw`) and `denier=player, root=bestRoot` (`draw_to_lose`). This design keeps the primitive
+  and derives `denier`/`root` from the tag direction; the two D18 instances become special cases.
+- **D3 preserved; D4/D19 (`lose_to_faster_lose` gate) only reached for non-tactical fall-through.**
 
 ## Open items for the implementation plan
 
-- Where the wrapper lives: `computeReason` in `reasonEngine.mjs` gains the tag-first branch; the
-  existing body becomes `sign_taxonomy_engine`.
-- `walk_optimal_capped(playedRoot, opponent, cap=2)` — a small bounded variant of `walk_optimal`
-  (reuse, don't reinvent). Confirm `register` derivation (`immediate` vs `forced_sequence`) at the cap.
-- Output-shape compatibility with `/admin/fv-suff` and the LLM narrator: the new top-level keys
-  (`route`, `tag`, `direction`) and the `missed_tactic` / `missed_defense` / `neutralization` half
-  kinds must be threaded through the viewer and the explain prompt.
-- I12 validation: a counterexample board per `(tag, direction)` in the direct set, run through the
-  real `tagBlunder` + the new `direct_reason`, added to `reason_fixture.jsonl`.
+- `pattern_windows(root, owner, tag)`: reuse `detectDoubleThreat` / `detectFigure7` /
+  `detectImmediateThreat` / `getWinningWindows` to return the winning window(s) + open cell for the tag.
+- Confirm `forced_win` / `j_shape` stay out of `REALIZED_DENIED_TAGS`.
+- `find_occupation_witness` is already generalized (D18) — verify it accepts arbitrary `denier`/`root`
+  cleanly and that the ply-0 root-occupation pre-check fires for `defensive_miss` (block at ply 0).
+- Fixture regression: run the new engine over `reason_fixture.jsonl`; label each row with `route`
+  (`realized_denied` | `sign`); gate the existing sign-shape assertions on `route === 'sign'`; add
+  realized/denied assertions. Confirm `214444115623` reproduces its D18 witness under the new route.
+- I12 validation: a sourced counterexample board per `(tag, direction)` in the realized/denied set
+  (via `gameSampling`, never hand-rolled), run through the real `tagBlunder` + `realized_denied_reason`,
+  added to `reason_fixture.jsonl`.
+- Output-shape threading: `route` / `tag` / `direction` and the `realized_pattern` half kind into
+  `build_evidence.mjs`, `/admin/fv-suff`, and the explain prompt.
