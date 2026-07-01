@@ -121,6 +121,7 @@
 
 ## When touching the LLM coach / deep reveal
 
+- [Narrator vector: zero solver scores](project_narrator_vector_no_scores.md) — toNarratorVector DEEP-scrubs the score family (`/^scores?$|Score$/`)+optimalWinSamples; flat top-level strip leaked nested line[].score/bestScore; outcomes from `case`; glossary solver-free (D21)
 - [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs (solver ground-truth) + /judge-deep-reveals (3 axes); admin flag→feedback sidecar left-joined by id
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations/occurrence-artifacts; keep instance counts
 - [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
