@@ -59,6 +59,17 @@ const CASES = {
   LOSE_TO_FASTER_LOSE: 'lose_to_faster_lose',
 };
 
+// Tags routed through the realized/denied fast path (docs/architecture/reason-tag-fastpath-pseudocode.md).
+export const REALIZED_DENIED_TAGS = new Set(['immediate_threat', 'forced_block', 'double_threat', 'figure_7']);
+
+function classifySignCase(bestScore, playedScore) {
+  if (bestScore > 0 && playedScore === 0) return CASES.WIN_TO_DRAW;
+  if (bestScore > 0 && playedScore < 0) return CASES.WIN_TO_LOSE;
+  if (bestScore === 0 && playedScore < 0) return CASES.DRAW_TO_LOSE;
+  if (bestScore < 0 && playedScore < 0) return CASES.LOSE_TO_FASTER_LOSE;
+  return 'unclassified';
+}
+
 // ── register selection (fwd proxy; the search ALWAYS runs to terminal regardless) ──
 export function fwdOf(score, discs) {
   if (score === undefined || score === INVALID_MOVE || score === 0) return null; // draw / invalid
@@ -199,6 +210,68 @@ export function realizedPattern(rootMs, owner, tag) {
     }
   }
   return { cells: it.cells, windows, completingCell: it.cells[0] ?? null };
+}
+
+// Realized/denied reason builder (docs/architecture/reason-tag-fastpath-pseudocode.md).
+// One half is the pattern realized in one move (realizedPattern); the other is the pattern denied
+// (findOccupationWitness) with denier/root flipped by `direction`. Owner of the pattern decides which
+// half is lostResource vs opponentPunishment.
+export async function realizedDeniedReason(out, tag, direction, { solver }) {
+  const { movestring, playedCol, bestCol, player, opponent, bestScore, playedScore } = out;
+  const correctRoot = movestring + String(bestCol);
+  const playedRoot = movestring + String(playedCol);
+
+  let owner, denier, realizedRoot, deniedRoot;
+  if (direction === 'missed_own') {
+    owner = player; denier = opponent; realizedRoot = correctRoot; deniedRoot = playedRoot;
+  } else { // enabled_opponent | defensive_miss
+    owner = opponent; denier = player;
+    realizedRoot = (direction === 'defensive_miss') ? movestring : playedRoot;
+    deniedRoot = correctRoot;
+  }
+
+  const rp = realizedPattern(realizedRoot, owner, tag);
+  if (!rp) throw new Error(`realizedDeniedReason: pattern ${tag} absent for owner ${owner} on ${realizedRoot}`);
+
+  const realized = {
+    kind: 'realized_pattern', tag, owner, register: 'immediate',
+    cells: rp.cells, windows: rp.windows,
+    completingCell: rp.completingCell, window: rp.windows[0] ?? null,
+    finalMovestring: realizedRoot, entryCell: rp.completingCell,
+    anchorCells: rp.cells,
+  };
+
+  const witness = await findOccupationWitness(solver, deniedRoot, {
+    denier, windows: rp.windows, depthCap: ROWS * COLS - deniedRoot.length,
+  });
+  const denied = {
+    kind: 'denial', verdict: witness.verdict,
+    register: (witness.line && witness.line.length > 1) ? 'forced_sequence' : 'immediate',
+    line: witness.line, finalMovestring: witness.finalMovestring,
+    completingCell: witness.cell ?? null, window: witness.window ?? null,
+    cell: witness.cell ?? null, exhaustive: witness.exhaustive,
+    entryCell: witness.cell ?? null,
+    anchorCells: witness.cell ? [witness.cell] : [],
+  };
+
+  if (owner === player) { out.lostResource = realized; out.opponentPunishment = denied; }
+  else { out.lostResource = denied; out.opponentPunishment = realized; }
+
+  const tie = witness.verdict === 'occupation'
+    ? { kind: 'tied', sharedCells: [witness.cell] }
+    : { kind: 'independent', sharedCells: [] };
+  out.opponentPunishment.tie = tie;
+
+  out.route = 'realized_denied';
+  out.tag = tag;
+  out.direction = direction;
+  out.case = classifySignCase(bestScore, playedScore);
+  out.replyHistogram = {
+    afterBest: await nonLosingReplyCount(solver, correctRoot),
+    afterPlayed: await nonLosingReplyCount(solver, playedRoot),
+  };
+  out.gate = null;
+  return out;
 }
 
 // Name a fork half via classifyPattern (I8): Case A → double_threat; Case B → figure_7 if that
