@@ -14,26 +14,44 @@ isn't here, treat it as "not established," not "go derive it from the board."
 This file defines **every field and every enumerated value** the vector can contain. It is
 self-contained.
 
+**The vector comes in two shapes, decided by the top-level `route` field.** Read `route` first:
+
+- **`route: "realized_denied"`** — a *tag-first* explanation for a short, cell-nameable tactic
+  (a conceded/handed/missed immediate threat or fork). Its halves are a **`realized_pattern`** (the
+  one-move tactic) and a **`denial`** (the solver proof it is prevented). See §3b. `tag`/`direction`
+  are present; `gate` is `null`.
+- **`route` absent** — the default *sign-taxonomy* explanation (the 5 `case`s, §2), whose halves are
+  `winning_line` / `denial` / `neutralization` / `conditional_swindle`.
+
+Every other field below is shared. Where a field behaves differently under `route: "realized_denied"`,
+it is called out.
+
 ---
 
 ## 0. How to read a reason vector (start here)
 
 1. The vector describes **one decision**: at board `movestring`, the player to move played column
    `playedCol` when `bestCol` was better.
-2. **`case`** is the single most important field. It is one of five sign-classified outcomes (§2)
-   and tells you the *shape* of the whole explanation — e.g. `win_to_draw` = "you had a forced win
-   and threw it away to a draw."
-3. The reason always has **two halves, in two separate fields** (§3):
+2. **Check `route` first.** If `route: "realized_denied"`, jump to §3b — the explanation is a named
+   tactic (`tag`) that was missed, conceded, or handed over (`direction`), and its two halves are a
+   `realized_pattern` + a `denial`. If `route` is absent, use the 5-case sign taxonomy below.
+   (`case` is still set on a `realized_denied` vector for continuity, but `route` governs the shape.)
+3. **`case`** is the single most important field of a **sign-taxonomy** vector. It is one of five
+   sign-classified outcomes (§2) and tells you the *shape* of the whole explanation — e.g.
+   `win_to_draw` = "you had a forced win and threw it away to a draw."
+4. The reason always has **two halves, in two separate fields** (§3):
    - **`lostResource`** — what the **best** move preserved (the win, the draw-holding defense, or the
      surviving swindle).
    - **`opponentPunishment`** — how the **played** move loses or fails to win (the opponent's reply).
    These are **never merged.** A cell in one half is not a cell in the other unless the `tie` (§4)
-   explicitly says they coincide.
-4. **`opponentPunishment.tie`** states the verified *relationship* between the two halves — whether
+   explicitly says they coincide. (On a `realized_denied` vector the two halves are still
+   `lostResource`/`opponentPunishment`, but which one is the tactic vs. the proof depends on
+   `direction` — see §3b.)
+5. **`opponentPunishment.tie`** states the verified *relationship* between the two halves — whether
    the punishment exploits the very resource you gave up (`tied`), is unrelated to it
    (`independent`), or is a speed comparison (`temporal`). `independent` is honest information, not a
    gap.
-5. **`replyHistogram`** and **`gate`** quantify how much counterplay survived.
+6. **`replyHistogram`** and **`gate`** quantify how much counterplay survived.
 
 A field that is **absent** was empty/null/zero-length and was pruned away (§ pruning). Absence means
 "this signal was not present" — never "unknown, fill it in."
@@ -89,7 +107,10 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 | `opponent` | `1`\|`2` | The other side. |
 | `bestScore` | int | Your solver score after the best move (§1 sign/magnitude). |
 | `playedScore` | int | Your solver score after the played move. |
-| `case` | enum | The sign-classified outcome — the shape of the explanation. See below. |
+| `case` | enum | The sign-classified outcome — the shape of a **sign-taxonomy** explanation. See below. Still set on a `realized_denied` vector, but there `route` governs the shape. |
+| `route` | `"realized_denied"`\|absent | Present (= `"realized_denied"`) when a tag-first tactic explanation applies (§3b). Absent = the default sign-taxonomy shape. **Read this before `case`.** |
+| `tag` | enum\|absent | `realized_denied` only: the named tactic (§3b tag list) — the *what*. |
+| `direction` | enum\|absent | `realized_denied` only: `missed_own` / `enabled_opponent` / `defensive_miss` — the *who* (§3b). |
 | `notABlunder` | bool | `true` only for out-of-scope decisions (`win_to_slower_win`, exhausted `lose_to_faster_lose`, draws). In a blunder vector this is `false`. |
 | `lostResource` | object | Half (a): what the **best** move preserved. §3, § per-case. |
 | `opponentPunishment` | object | Half (b): how the **played** move loses/fails. §3, § per-case. |
@@ -131,7 +152,7 @@ Both halves share a common sub-shape (fields that are present depend on `kind`/`
 
 | Field | Meaning |
 |---|---|
-| `kind` | What this half *is*: `winning_line` / `denial` / `neutralization` / `conditional_swindle`. See § per-case. |
+| `kind` | What this half *is*: `winning_line` / `denial` / `neutralization` / `conditional_swindle` (sign-taxonomy), or `realized_pattern` (`realized_denied` route, §3b). See § per-case. |
 | `register` | `immediate` / `forced_sequence` / `parity` — how far off, and whether the `line` is shown. § register. |
 | `completingCell` | The `cNrM` square that completes the four (or, for a fork, a representative fork cell). |
 | `window` | The 4-cell winning window `[cNrM×4]` the line/fork rides. |
@@ -223,6 +244,100 @@ swindle** (a reachable opponent mistake that would let you win/draw) that the pl
 
 ---
 
+## 3b. The realized/denied route (`route: "realized_denied"`)
+
+When the blunder is a **short, cell-nameable tactic**, the vector uses a tag-first shape instead of
+the sign taxonomy. It answers two questions directly:
+
+- **`tag`** — *what* tactic is at stake (a name from `tagBlunder`, §3b tag list).
+- **`direction`** — *who* the tactic belongs to and how it changed hands:
+  - **`missed_own`** — **you** could have formed/held the tactic and didn't.
+  - **`enabled_opponent`** — your move **handed the opponent** the tactic (a new one).
+  - **`defensive_miss`** — the opponent **already had** the tactic (an immediate threat) and you
+    failed to remove it.
+
+The two halves are still `lostResource` (a) and `opponentPunishment` (b), but each is one of:
+
+- **`kind: "realized_pattern"`** — the tactic **formed in one move**, read straight from the board
+  detectors (no search). Fields: `tag`, `owner` (`1`\|`2`, who holds the pattern), `cells` (its key
+  squares), `windows` (the 4-cell winning windows), `completingCell`/`window`, `register:
+  "immediate"`, `finalMovestring`, `entryCell`, `anchorCells`. Narrative: "one drop makes it — here
+  are the cells."
+- **`kind: "denial"`** — the **solver proof** the tactic is (or would be) prevented under optimal
+  play: an occupation witness, identical in shape to the sign-engine denial (§5). `verdict:
+  "occupation"` carries the killing `cell` + `window` + `line`; `no_occupation` is the honest "no
+  witness within budget." For `immediate_threat`/`forced_block` the denial is a **single block** (a
+  ply-0 occupation); for `double_threat`/`figure_7` it is the multi-move fork-dismantling walk.
+
+**Which half is which depends on who OWNS the tactic** (the `owner` of the `realized_pattern`):
+
+| `direction` | pattern owner | `lostResource` (a) | `opponentPunishment` (b) |
+|---|---|---|---|
+| `missed_own` | **you** | `realized_pattern` — the tactic you could have formed | `denial` — the opponent prevents you re-forming it |
+| `enabled_opponent` | opponent | `denial` — the defense you had (you would have prevented it) | `realized_pattern` — the tactic you handed over |
+| `defensive_miss` | opponent | `denial` — the block you had | `realized_pattern` — the threat the opponent completes |
+
+`opponentPunishment.tie` is set the same way as everywhere else (§4): `tied` with
+`sharedCells: [cell]` when the denial's occupied cell coincides with the pattern (the usual case for
+a conceded/missed immediate threat), else `independent`. `gate` is `null` on this route.
+
+### `tag` — the full `tagBlunder` vocabulary
+
+`tag` (and the half-level `tacticTag`, §7) are drawn from this fixed set. Only the **four routed**
+tags produce a `realized_denied` vector; every other tag is explained through the sign taxonomy (its
+board simply wasn't a one-move tactic — a deep fork, a structural/zugzwang pattern, or no pattern at
+all — so it fell through).
+
+| `tag` | Meaning | Routed to realized/denied? |
+|---|---|---|
+| `immediate_threat` | A win-in-one (three-in-line with a gravity-top open fourth). | **Yes** |
+| `forced_block` | The opponent has an immediate threat that must be blocked (only ever `defensive_miss`). | **Yes** |
+| `double_threat` | A fork: two winning threats the opponent can't both answer (Case A = ≥2 gravity-top; Case B = stacked pair in one column). | **Yes** |
+| `figure_7` | A Case-B stacked fork, named specifically. **`tagBlunder` never assigns this** (it prefers `double_threat`); the router *refines* a Case-B fork's emitted `tag` to `figure_7` via `forkCase`. | **Yes** |
+| `forced_win` | A forced winning sequence (not a one-move pattern). | No → sign taxonomy |
+| `j_shape` | Allen J-configuration (three minor threats winning in zugzwang — a precursor). | No |
+| `z_threat` | Odd/even zugzwang threat. | No |
+| `overcut` / `undercut` | A threat overcut/undercut in the same column (`undercut` uses direction `enabled_self`). | No |
+| `claimeven` | Claimeven parity control. | No |
+| `major_threat_parity` / `major_threat_nonparity` | A major (3-of-4) threat, parity-aligned or not. | No |
+| `minor_threat` | A minor (2-of-4) latent threat. | No |
+| `drawing_move` | Score fallback: a win dropped to a draw with no named pattern. | No |
+| `suboptimal_move` | Score fallback: sub-optimal with no named pattern. | No |
+
+`direction` values across the whole vocabulary: `missed_own`, `enabled_opponent`, `defensive_miss`,
+and `enabled_self` (the last used only by `undercut`, which is never routed). On a `realized_denied`
+vector `direction` is always one of the first three.
+
+### Worked reading — a `defensive_miss` (board `3321234543`, you = player 1, played col 0, best col 3)
+
+```jsonc
+{
+  "movestring": "3321234543", "playedCol": 0, "bestCol": 3,
+  "player": 1, "opponent": 2, "bestScore": -4, "playedScore": -16,
+  "case": "lose_to_faster_lose", "route": "realized_denied",
+  "tag": "forced_block", "direction": "defensive_miss", "gate": null,
+  "lostResource": {
+    "kind": "denial", "verdict": "occupation", "register": "immediate",
+    "cell": "c4r5", "window": ["c4r2","c4r3","c4r4","c4r5"], "anchorCells": ["c4r5"]
+  },
+  "opponentPunishment": {
+    "kind": "realized_pattern", "tag": "forced_block", "owner": 2,
+    "completingCell": "c4r5", "window": ["c4r2","c4r3","c4r4","c4r5"],
+    "tie": { "kind": "tied", "sharedCells": ["c4r5"] }
+  }
+}
+```
+
+Reading: *You (player 1) are losing either way, but that is not the lesson. The opponent already
+held an **immediate threat** — three in column 4 (`c4r2`–`c4r4`) with `c4r5` open and playable
+(`opponentPunishment`, `realized_pattern`, owner 2). The **block was `c4r5`** (`bestCol 3`), and your
+best move would have taken it (`lostResource`, `denial`/`occupation` at `c4r5`). You played column 1
+instead, so the opponent completes the four at `c4r5` — the very square you failed to block
+(`tie: tied`).* Do not reach for the sign-taxonomy swindle machinery here (`gate` is `null`); the
+lesson is simply the conceded immediate threat.
+
+---
+
 ## 4. The tie — `opponentPunishment.tie`
 
 `tie` states the **verified relationship** between half (b) and half (a). Always one of:
@@ -311,8 +426,11 @@ up." They are already listed in the vector — do not derive your own.
 ### `tacticTag` — a name, gated by the solver (may be `null`)
 
 Each half may carry a `tacticTag` (with `tacticCells`) — a named tactic from the production
-classifier (`double_threat`, `immediate_threat`, `figure_7`, `j_shape`, `undercut`, `overcut`,
-`z_threat`, `claimeven`, `major_threat_parity`, …). It is admitted **only** when it is consistent
+classifier (drawn from the same vocabulary as `tag`; the full list is in §3b —
+`double_threat`, `immediate_threat`, `figure_7`, `j_shape`, `undercut`, `overcut`, `z_threat`,
+`claimeven`, `major_threat_parity`, …). Note this half-level `tacticTag` is distinct from the
+top-level `tag`: `tag` is the `tagBlunder` classification that *routed* the vector, while `tacticTag`
+is a solver-gated name on a sign-taxonomy half. It is admitted **only** when it is consistent
 with the solver-proven nature and location of the win. **`tacticTag: null` is common and correct** —
 it means no named tactic passed the gate, **not** that nothing happened. When `tacticTag` is present,
 you may name it; when it is `null`, explain the mechanism from the half's `window`/`line`/fork/parity
@@ -358,8 +476,8 @@ The swindle-gate result: `{ ran, exhaustive, verdict, witness, nodesVisited }`.
 - **Never overstate an outcome.** A winning position is *winnable with correct play*, not an
   automatic win. Only a four-in-a-row completes by itself.
 - **Only name cells the vector carries.** Every square you reference must come from a `cells` /
-  `window` / `line` / `forkCells` / `anchorCells` / `completingCell` / `cell` field, or be directly
-  derivable from `movestring`. Do not invent coordinates, lines, or controllers.
+  `window` / `windows` / `line` / `forkCells` / `anchorCells` / `completingCell` / `cell` field, or be
+  directly derivable from `movestring`. Do not invent coordinates, lines, or controllers.
 - **Keep the two halves separate** (§3). Do not attribute a half-(b) cell to half (a) unless `tie`
   says they coincide.
 
