@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// DEPRECATED (2026-07-01): the old LLM-explanation eval is retired — it is no longer evaluated.
+// The reason feature-vector eval is `compute.mjs`; a glossary-derived prompt evaluator will replace
+// this runner. `run_eval.mjs` + `eval_set_*.json` + `buildExplainContext` are swept when that lands.
+// Do not build new work on this file.
 // run_eval.mjs — Deep Reveal eval harness, Phase 1: data collection.
 //
 // Usage (run from connect-four/):
