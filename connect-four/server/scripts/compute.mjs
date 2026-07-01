@@ -72,34 +72,41 @@ const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
 const CONDITIONS = condArg === 'all' ? ['A', 'B', 'C'] : condArg.toUpperCase().split(',');
 
 // ── Evidence pass ─────────────────────────────────────────────────────────────
+// Build one evidence row; isolates a throwing/terminal board (ported from run_eval.mjs:120-126).
+export async function buildEvidenceRow(f, i, solver) {
+  const id = f.id ?? `eval-${i + 1}`;
+  const groundTruth = f.expectedCase != null
+    ? { case: f.expectedCase, gate: f.expectedGate ?? null, exhaustive: f.expectedExhaustive ?? null, bucket: f.bucket ?? null, matches: null }
+    : null;
+  try {
+    const evidence = await computeReason(f.movestring, f.playedCol, { solver });
+    if (groundTruth) groundTruth.matches = evidence.case === f.expectedCase;
+    return { id, evidence, error: null, groundTruth };
+  } catch (err) {
+    return { id, evidence: null, error: err.message, groundTruth };
+  }
+}
+
 async function runEvidence() {
   const fixture = readFileSync(INPUT, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   const solver = createSolverProcess();
   const rows = [];
+  writeFileSync(evidenceOut, ''); // fresh run; crash-safe appends below
   try {
     for (let i = 0; i < fixture.length; i++) {
-      const f = fixture[i];
-      const evidence = await computeReason(f.movestring, f.playedCol, { solver });
-      const id = f.id ?? `eval-${i + 1}`;
-      const groundTruth = f.expectedCase != null
-        ? {
-            case: f.expectedCase,
-            gate: f.expectedGate ?? null,
-            exhaustive: f.expectedExhaustive ?? null,
-            bucket: f.bucket ?? null,
-            matches: evidence.case === f.expectedCase,
-          }
-        : null;
-      rows.push({ id, evidence, groundTruth });
+      const row = await buildEvidenceRow(fixture[i], i, solver);
+      rows.push(row);
+      appendFileSync(evidenceOut, JSON.stringify(row) + '\n'); // crash-safe incremental write
+      if (row.error) process.stdout.write(`  ${row.id}: ERROR ${row.error}\n`);
     }
   } finally {
     solver.destroy();
   }
-  writeFileSync(evidenceOut, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
   const mism = rows.filter((r) => r.groundTruth?.matches === false).length;
+  const errored = rows.filter((r) => r.error).length;
   const labeled = rows.filter((r) => r.groundTruth !== null).length;
   console.log(`wrote ${rows.length} evidence rows to ${evidenceOut}`);
-  console.log(`case mismatches vs fixture ground truth: ${mism}${labeled < rows.length ? ` (${rows.length - labeled} rows unlabeled)` : ''}`);
+  console.log(`case mismatches vs fixture ground truth: ${mism}${labeled < rows.length ? ` (${rows.length - labeled} rows unlabeled)` : ''}${errored ? `; ${errored} errored` : ''}`);
   return rows;
 }
 
@@ -231,7 +238,7 @@ async function runLlm(evidenceRows) {
 
   let done = 0, failed = 0;
   for (const row of evidenceRows) {
-    if (row.evidence?.notABlunder) continue;   // non-blunder: nothing to narrate (matches the engine's semantics)
+    if (!row.evidence || row.evidence.notABlunder) continue; // error row or non-blunder: nothing to narrate
     // toNarratorVector produces the UN-pruned narrator vector; per-condition pruning happens inside
     // buildPrompt via projectVector. feature_vector in the output line is always the full nv so the
     // grader and /admin/fv-suff can re-project under any condition without recomputing.
