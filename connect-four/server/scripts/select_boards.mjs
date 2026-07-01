@@ -2,8 +2,10 @@
 // select_boards.mjs — unified board-selector for the reason-eval pipeline.
 //
 // Strategies:
-//   --strategy fixture   Regenerates reason_engine/reason_fixture.jsonl (byte-identical to committed).
-//                        Ports build_fixture.mjs verbatim; changes only import paths.
+//   --strategy fixture   Regenerates reason_engine/reason_fixture.jsonl sampled rows.
+//                        Committed fixture additionally carries route/expectedTag/expectedDirection
+//                        and d19-witness labels added by D19/D20 test commits; this strategy does
+//                        not re-emit those labels (output not byte-identical to committed).
 //   --strategy coverage  Harvests a diverse coverage set for the from-vector eval.
 //                        Ports the harvest loop from build_reason_eval_set.mjs; emits board-list
 //                        rows (no toNarratorVector call).
@@ -47,10 +49,10 @@ const MAX_GAMES = parseInt(argVal('--max-games', '4000'), 10);
 
 // ════════════════════════════════════════════════════════════════════════════
 // STRATEGY: fixture
-// Body ported VERBATIM from reason_engine/build_fixture.mjs — only import
-// paths differ (now at server/scripts/ depth). Byte-identity depends on:
-// same fixed seed, same anchors, same stratified loop, same rows.sort(), and
-// the same JSON key order (JSON.stringify insertion order).
+// Regenerates sampled rows from the same fixed seed and stratified loop logic.
+// NOTE: Committed reason_fixture.jsonl carries additional route/expectedTag/
+// expectedDirection and d19-witness labels (added by D19/D20 test commits
+// 0a85b0c, 7c06e24, bb36202). This strategy's output does not re-emit those.
 // ════════════════════════════════════════════════════════════════════════════
 if (strategy === 'fixture') {
   // ── config knobs ──
