@@ -24,6 +24,7 @@ import {
   ROWS, COLS, INVALID_MOVE, loadEnv, buildBoard, winningWindows, cellStr, legalCols, emptyCellCount,
   parseCell,
 } from './lib/boardUtils.mjs';
+import { optimalCols, attachWinSamples } from './sampleWins.mjs';
 import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
   tagBlunder, NotABlunderError,
@@ -345,9 +346,10 @@ async function walkOptimal(solver, ms, winnerMark = null) {
   for (let step = 0; step < 50; step++) {
     const scores = await solver.query(cur);
     const mover = (cur.length % 2 === 0) ? 1 : 2;
-    let bestCol = -1, bestScore = -Infinity;
-    for (let c = 0; c < COLS; c++) { if (scores[c] === INVALID_MOVE) continue; if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; } }
-    if (bestCol === -1) break;
+    const opt = optimalCols(scores);
+    if (!opt.length) break;
+    const bestCol = opt[0];
+    const bestScore = scores[bestCol];
     const { heights } = buildBoard(cur);
     const r = heights[bestCol];
     cur += String(bestCol);

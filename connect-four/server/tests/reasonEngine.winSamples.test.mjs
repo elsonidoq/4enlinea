@@ -24,3 +24,20 @@ test('orientationOf: classifies horizontal / vertical / diagonal windows', () =>
   assert.equal(orientationOf(['c3r1', 'c3r2', 'c3r3', 'c3r4']), 'vertical');
   assert.equal(orientationOf(['c1r1', 'c2r2', 'c3r3', 'c4r4']), 'diagonal');
 });
+
+import { before, after, test as ntest } from 'node:test';
+import { createSolverProcess } from '../c4solver-wrapper.js';
+import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
+
+let solver;
+before(async () => { solver = await createSolverProcess(); });
+after(() => { if (solver) solver.destroy(); });
+
+ntest('walkOptimal refactor: lostResource window unchanged on a known parity win', async () => {
+  // eval-14: win_to_draw parity win, best col 4, window c4r5..c7r5, completing c7r5.
+  const r = await computeReason('333333451225', 2, { solver });
+  assert.equal(r.case, 'win_to_draw');
+  assert.equal(r.lostResource.register, 'parity');
+  assert.deepEqual(r.lostResource.window, ['c4r5', 'c5r5', 'c6r5', 'c7r5']);
+  assert.equal(r.lostResource.completingCell, 'c7r5');
+});
