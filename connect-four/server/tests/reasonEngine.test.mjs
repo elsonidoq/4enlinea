@@ -146,25 +146,38 @@ test('D16 Case A: 214444115623 played 4 -> double_threat fork, not parity', asyn
     `tie shares c3r3 (fork constituent), got ${JSON.stringify(r.opponentPunishment.tie.sharedCells)}`);
 });
 
-test('D16 Case B: 3333344440625621503122 played 6 -> figure_7 stacked fork, not parity', async () => {
+test('D16 Case B (diverted): 3333344440625621503122 played 6 -> tagged double_threat via realized/denied router', async () => {
   const r = await computeReason('3333344440625621503122', 6, { solver });
   assert.equal(r.case, 'win_to_draw', 'case');
-  if (r.route === 'realized_denied') {
-    // This board now diverts to the tag-first realized/denied router (Task 3): the tag comes
-    // straight from tagBlunder, not nameFork's Case A/B disambiguation (which prefers figure_7 for
-    // a stacked single-column fork on the sign-engine path). The Case-A/B naming distinction is
-    // therefore not applicable here; what D16 still requires — forced tactical register (never
-    // parity) and the correct gravity-top completing cell — is asserted below.
-    assert.ok(REALIZED_DENIED_TAGS.has(r.tag), `tag ${r.tag} in realized/denied set`);
-    assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
-    assert.ok(r.lostResource.cells.includes('c1r3'),
-      `stacked fork includes gravity-top cell c1r3, got ${JSON.stringify(r.lostResource.cells)}`);
-    return;
-  }
+  // This board diverts to the tag-first realized/denied router (Task 3): the tag comes straight
+  // from tagBlunder, not nameFork's Case A/B disambiguation (which prefers figure_7 for a stacked
+  // single-column fork on the sign-engine path — see the sign-route test below for that path).
+  // The Case-A/B naming distinction is therefore not applicable here; what D16 still requires —
+  // forced tactical register (never parity) and the correct gravity-top completing cell — is
+  // asserted below.
+  assert.equal(r.route, 'realized_denied', 'this movestring always diverts (Task 4)');
+  assert.ok(REALIZED_DENIED_TAGS.has(r.tag), `tag ${r.tag} in realized/denied set`);
+  assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
+  assert.ok(r.lostResource.cells.includes('c1r3'),
+    `stacked fork includes gravity-top cell c1r3, got ${JSON.stringify(r.lostResource.cells)}`);
+});
+
+// D16 Case B on the SIGN ENGINE (not diverted): sourced via self-play (playGame stream, seed 777,
+// see server/scripts/reason_engine/scratchpad_harvest_figureB.mjs) — a DEEP win_to_draw board where
+// tagBlunder itself cannot confirm a one-move pattern at the decision node (tags it `drawing_move`,
+// so it stays on the sign engine), but the lost-resource walk reaches a stacked Case-B fork in
+// column 7 that nameFork's classifyPattern-based Case A/B disambiguation names `figure_7`. Restores
+// executing coverage of reasonEngine.mjs's nameFork Case-B figure_7 path (was dead after Task 4
+// diverted the previous fixture for this assertion).
+test('D16 Case B (sign engine): 34 played 3 -> figure_7 stacked fork, not parity', async () => {
+  const r = await computeReason('34', 3, { solver });
+  assert.equal(r.case, 'win_to_draw', 'case');
+  assert.notEqual(r.route, 'realized_denied', 'this board must stay on the sign engine');
   assert.equal(r.lostResource.terminal, 'fork', 'lostResource stops at a fork');
+  assert.equal(r.lostResource.forkCase, 'B', 'stacked single-column fork');
   assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
   // Case B (1 column, stacked) prefers the more specific figure_7 over the co-present double_threat tag
   assert.equal(r.lostResource.tacticTag, 'figure_7', 'Case B names figure_7');
-  assert.ok(r.lostResource.forkCells.includes('c1r3'),
-    `stacked fork includes gravity-top cell c1r3, got ${JSON.stringify(r.lostResource.forkCells)}`);
+  assert.ok(r.lostResource.forkCells.includes('c7r4'),
+    `stacked fork includes gravity-top cell c7r4, got ${JSON.stringify(r.lostResource.forkCells)}`);
 });
