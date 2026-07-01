@@ -46,30 +46,38 @@ function argVal(name, def) {
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : def;
 }
 
-const inputArg = argVal('--input', null);
-if (!inputArg) { console.error('Error: --input <boards.jsonl> is required'); process.exit(1); }
-const INPUT = isAbsolute(inputArg) ? inputArg : resolve(process.cwd(), inputArg);
-const inputStem = basename(INPUT).replace(/\.(jsonl|json)$/i, '');
+// ── CLI-only arg parsing (imperative; exits/side-effects on missing args) ──────
+// Guarded so importing this module (e.g. from tests, for buildEvidenceRow) never triggers
+// process.exit or depends on --input being present. Everything below this point that the CLI
+// entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
+// module scope and populated only when this file is the entry point.
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  inputArg = argVal('--input', null);
+  if (!inputArg) { console.error('Error: --input <boards.jsonl> is required'); process.exit(1); }
+  INPUT = isAbsolute(inputArg) ? inputArg : resolve(process.cwd(), inputArg);
+  inputStem = basename(INPUT).replace(/\.(jsonl|json)$/i, '');
 
-// Evidence --out: bare name → server/scripts/<name>; path with '/' → cwd-relative.
-const outArg = argVal('--out', null);
-const evidenceOut = outArg
-  ? (outArg.includes('/')
-    ? (isAbsolute(outArg) ? outArg : resolve(process.cwd(), outArg))
-    : join(__dirname, outArg))
-  : join(__dirname, `reason_evidence_${inputStem}.jsonl`);
+  // Evidence --out: bare name → server/scripts/<name>; path with '/' → cwd-relative.
+  const outArg = argVal('--out', null);
+  evidenceOut = outArg
+    ? (outArg.includes('/')
+      ? (isAbsolute(outArg) ? outArg : resolve(process.cwd(), outArg))
+      : join(__dirname, outArg))
+    : join(__dirname, `reason_evidence_${inputStem}.jsonl`);
 
-if (!/^reason_evidence_[\w.-]*\.jsonl$/.test(basename(evidenceOut))) {
-  console.warn(`⚠️  "${basename(evidenceOut)}" does not match reason_evidence_*.jsonl — it will NOT appear in the /admin/fv-suff dropdown.`);
+  if (!/^reason_evidence_[\w.-]*\.jsonl$/.test(basename(evidenceOut))) {
+    console.warn(`⚠️  "${basename(evidenceOut)}" does not match reason_evidence_*.jsonl — it will NOT appear in the /admin/fv-suff dropdown.`);
+  }
+
+  // --llm flags
+  useLlm = process.argv.includes('--llm');
+  ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
+  N = parseInt(argVal('--n', '3'), 10);
+  model = argVal('--model', process.env.EXPLAIN_MODEL);
+  const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
+  CONDITIONS = condArg === 'all' ? ['A', 'B', 'C'] : condArg.toUpperCase().split(',');
 }
-
-// --llm flags
-const useLlm = process.argv.includes('--llm');
-const ts = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z');
-const N = parseInt(argVal('--n', '3'), 10);
-const model = argVal('--model', process.env.EXPLAIN_MODEL);
-const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
-const CONDITIONS = condArg === 'all' ? ['A', 'B', 'C'] : condArg.toUpperCase().split(',');
 
 // ── Evidence pass ─────────────────────────────────────────────────────────────
 // Build one evidence row; isolates a throwing/terminal board (ported from run_eval.mjs:120-126).
@@ -281,16 +289,19 @@ async function runLlm(evidenceRows) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-(async () => {
-  let evidenceRows;
-  if (useLlm && existsSync(evidenceOut)) {
-    // Evidence file already exists — reuse it; skip solver entirely.
-    console.log(`Reusing existing evidence file: ${evidenceOut}`);
-    evidenceRows = readFileSync(evidenceOut, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  } else {
-    evidenceRows = await runEvidence();
-  }
-  if (useLlm) {
-    await runLlm(evidenceRows);
-  }
-})();
+// Guarded: only runs when this file is executed directly (CLI entry), never on import.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  (async () => {
+    let evidenceRows;
+    if (useLlm && existsSync(evidenceOut)) {
+      // Evidence file already exists — reuse it; skip solver entirely.
+      console.log(`Reusing existing evidence file: ${evidenceOut}`);
+      evidenceRows = readFileSync(evidenceOut, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    } else {
+      evidenceRows = await runEvidence();
+    }
+    if (useLlm) {
+      await runLlm(evidenceRows);
+    }
+  })();
+}
