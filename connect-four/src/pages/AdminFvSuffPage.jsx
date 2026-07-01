@@ -248,6 +248,13 @@ function ReasonViewer() {
   const preOverlays = useMemo(() => {
     if (!entry) return [];
     const out = [];
+    // optimalWinSamples (parity wins): overlay every distinct winning-line window in amber, so the
+    // spread of optimal realizations — where the win lands, and whether the orientation is fixed — is
+    // visible on the decision board. Drawn first, so the played (red) / best (green) markers win on
+    // any overlapping cell.
+    for (const ln of (ev.lostResource?.optimalWinSamples?.lines || [])) {
+      for (const w of (ln.window || [])) { const c = parseCell(w); if (c) out.push({ ...c, type: 'claim' }); }
+    }
     const playedRow = preBoard.heights[ev.playedCol];
     if (playedRow != null && playedRow < 6) out.push({ c: ev.playedCol, r: playedRow, type: 'tr' });
     const bestRow = preBoard.heights[ev.bestCol];
@@ -331,6 +338,7 @@ function ReasonViewer() {
                   <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>pre-move board</div>
                   <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>
                     <span style={{ color: '#e8543e', fontWeight: 700 }}>red</span> played · <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> best
+                    {ev.lostResource?.optimalWinSamples && <> · <span style={{ color: '#a16207', fontWeight: 700 }}>amber</span> win-sample windows ({ev.lostResource.optimalWinSamples.distinct})</>}
                   </div>
                   <Board board={preBoard.board} compact canPlay={false} overlays={preOverlays} />
                 </div>
