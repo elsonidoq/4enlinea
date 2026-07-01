@@ -241,3 +241,29 @@ If a future harvest (longer budget, targeted search, or hand-selected known cons
 `bucket:"rd-<tag>-<direction>"`, and `expectedCase`, per the Step-3 pattern in `reasonEngine.test.mjs`.
 Until then: I12 is NOT fully closed for the realized/denied router — this is a known, documented gap,
 not a fabricated pass.
+
+## Follow-up (separate change)
+
+Task 6 confirmed that `route`/`tag`/`direction` and the `realized_pattern`/`denial` half kinds
+survive into the precomputed evidence output (`computeReason`'s return is passed through
+`compute.mjs` untouched — no projection/whitelist strips them; see
+`connect-four/server/scripts/reason_evidence_all.jsonl`). Note: the previous "Output-shape
+threading" open item above referenced `build_evidence.mjs`, which was deleted 2026-06-30 as part
+of the reason-eval 2-script pipeline consolidation (commit `4c26b3a`); `compute.mjs` is its
+successor and is the file that actually needs to stay pass-through-safe going forward.
+
+**Still explicitly OUT OF SCOPE for this plan** — tracked here so it is not lost:
+
+- `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) does not yet render the `realized_pattern` /
+  `denial` half kinds or the new `route` / `tag` / `direction` fields in its Evidence or
+  Eval-answers views — it still assumes the older sign-shape half kinds. See memory
+  `project_admin_fv_suff_repurposed` for the current 2-mode browser design this must extend.
+- The explain prompt (`explainContext.js` / the LLM narrator, i.e. `compute.mjs`'s
+  `buildPrompt`/`TASK` and `reasonNarratorVector.mjs`'s `toNarratorVector`/`pruneVector`) does not
+  yet teach the model how to read `realized_pattern`/`denial` halves or `route`/`tag`/`direction`
+  when constructing an explanation. See memory `project_explain_system` for the current prompt
+  invariants and data flow this must extend without violating.
+
+Both are downstream UI/prompt consumers of the evidence shape, not blockers for the engine or
+evidence-generation work — but the new fields are inert (computed, never surfaced to a human or
+an LLM) until this follow-up lands.
