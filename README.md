@@ -95,15 +95,18 @@ node server/scripts/compute.mjs \
 # → server/scripts/reason_evidence_<name>.jsonl, now selectable in the /admin/fv-suff dropdown.
 ```
 
-## Pipeline A — Deep-reveal coach eval
+## Pipeline A — Deep-reveal coach eval (DEPRECATED)
 
-Evaluates the **live production coach** (`buildExplainContext` → `/api/explain*`). Kept because the
-coach is in production.
+Evaluated the **live production coach** (`buildExplainContext` → `/api/explain*`) against a hand-built
+35-predicate eval set describing the coach prompt (not the reason engine). **`generate_eval_set.mjs`
+is deleted** (redundant with the reason-eval board selector, `select_boards.mjs --strategy coverage`,
+above) and `run_eval.mjs` is DEPRECATED; this pipeline is retired in favor of evaluating the reason
+feature vector directly (Pipeline B, above). The full chain — `run_eval.mjs` + `eval_set_*.json` +
+`buildExplainContext` + the `/api/admin/eval-set` endpoint — is swept when the glossary-derived prompt
+evaluator lands. See `docs/architecture/reason-DECISIONS.md` D22.
 
 ```bash
-# ① Generate / expand the eval set (harvest blunders covering 35 tag/direction/phase predicates):
-node server/scripts/generate_eval_set.mjs server/scripts/eval_set_large_3.json
-# ② Run the coach pipeline over it → raw results jsonl:
+# ② (still runnable against the existing committed eval_set_large_3.json — step ① generator is gone)
 node server/scripts/run_eval.mjs server/scripts/eval_set_large_3.json out.jsonl
 # ③ Grade with the judge skill:
 /judge-deep-reveals out.jsonl

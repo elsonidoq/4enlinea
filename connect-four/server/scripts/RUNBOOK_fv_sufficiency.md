@@ -27,6 +27,15 @@ node server/scripts/select_boards.mjs --strategy coverage [--target N] [--max-ga
 
 Options: `--target N` (boards per predicate, default 1); `--max-games N` (self-play game budget).
 
+The coverage strategy enumerates the full named predicate universe (`REASON_UNIVERSE`) upfront,
+partitioned into `required` (must reach target — `satisfied()` gates on these) and `provisional`
+(known-rare/structurally-unreachable, reported non-blocking). As it harvests it logs
+fulfilled / under-target / never-seen predicates against the named universe (`*` marks provisional).
+**If `MAX_GAMES` is reached, that is not a normal exit — it means a REQUIRED predicate could not be
+filled and is a bug to investigate**, not a signal to just raise the budget and rerun. See
+`docs/architecture/reason-DECISIONS.md` D22 for the calibration numbers and the two predicates
+currently demoted to PROVISIONAL (`gate_exhaustive`, `lost_realized_forced_block`).
+
 **Regression fixture** — to regenerate the committed fixture used by `reasonEngine*.test.mjs`:
 
 ```bash

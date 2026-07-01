@@ -191,9 +191,10 @@ Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectD
 `server/gameSampling.js` is the **canonical game simulator** and the SOLE owner of all
 self-play. When you need real game positions — eval sets, test fixtures, blunder
 coverage, position sampling, finding a board with a given property — do NOT hand-roll a
-game loop. Every consumer now goes through this module: `generate_eval_set.mjs` and
+game loop. Every consumer now goes through this module: `select_boards.mjs` and
 `generate_tagblunder_fixtures.mjs` (via `harvestBlunders`), and `candidate-generator.js`'s
-`generateCandidates` (via `playGame`, see below). Use:
+`generateCandidates` (via `playGame`, see below). (`generate_eval_set.mjs`, a former consumer, was
+deleted 2026-07-01 — see `docs/architecture/reason-DECISIONS.md` D22.) Use:
 
 - **`playGame(solver, rng = Math.random, { maxMistakeProb = 0.5 } = {})`** — THE
   primitive. Async generator that plays one mistake-weighted self-play game, yielding

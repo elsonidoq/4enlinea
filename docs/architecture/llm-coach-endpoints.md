@@ -145,7 +145,7 @@ Cases 1 & 2 share one optimal-opponent best-vs-played search and return `{ tag, 
 - The found structure is rendered as a **future possibility** (`## What the better move leads to`), never as a current board fact.
 
 **`buildExplainContext` look-ahead surface:**
-- Optional 5th param `deps = {}`: `{ classifyFn }` injects `runSparseLookahead`'s classifier for tests; `skipLookahead: true` computes the gate (`isSparse`) but skips the expensive forward search (used by `generate_eval_set.mjs` to collect anchorless boards cheaply). The internal *grounding* `classifyPattern` calls are not injectable, so end-to-end firing is covered only by the real-solver e2e (`tests/sparseLookahead.e2e.test.js`, excluded from `test:fast`).
+- Optional 5th param `deps = {}`: `{ classifyFn }` injects `runSparseLookahead`'s classifier for tests; `skipLookahead: true` computes the gate (`isSparse`) but skips the expensive forward search (formerly used by `generate_eval_set.mjs`, deleted 2026-07-01 — see `docs/architecture/reason-DECISIONS.md` D22 — to collect anchorless boards cheaply; no current caller passes this flag). The internal *grounding* `classifyPattern` calls are not injectable, so end-to-end firing is covered only by the real-solver e2e (`tests/sparseLookahead.e2e.test.js`, excluded from `test:fast`).
 - Return adds `isSparse` (the `isAnchorlessPosition` gate decision) and `lookaheadFired` (true when a `## What the better move leads to` section was produced). Both are additive — existing 4-arg callers are unaffected.
 
 **Tunables** (exported named constants in `sparseLookahead.js`; tune from eval results):
