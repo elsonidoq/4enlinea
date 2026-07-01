@@ -176,6 +176,31 @@ function detectForkAt(ms, winnerMark) {
   return { forkCase, forkCells, forkWindows, completingCell: forkCells[0] ?? null, window: forkWindows[0] ?? null };
 }
 
+// Realized half (trivial): the pattern `owner` forms in ONE move on `rootMs`, straight from the
+// production detectors (I8). Forks (double_threat/figure_7) reuse detectForkAt so windows match D16/D18;
+// immediate_threat/forced_block use the win-in-1 detector + getWinningWindows. Returns null if absent.
+export function realizedPattern(rootMs, owner, tag) {
+  if (tag === 'double_threat' || tag === 'figure_7') {
+    const fork = detectForkAt(rootMs, owner);
+    if (!fork) return null;
+    return { cells: fork.forkCells, windows: fork.forkWindows, completingCell: fork.completingCell };
+  }
+  // immediate_threat / forced_block: the owner's win-in-1.
+  const cboard = new Board(rootMs);
+  const it = detectImmediateThreat(cboard, owner);
+  if (!it.matched) return null;
+  const { grid } = buildBoard(rootMs);
+  const windows = [];
+  for (const cs of it.cells) {
+    const p = parseCell(cs);
+    if (!p) continue;
+    for (const w of getWinningWindows(grid, p.r, p.c, owner)) {
+      windows.push(w.map(({ row, col }) => cellStr(row, col)));
+    }
+  }
+  return { cells: it.cells, windows, completingCell: it.cells[0] ?? null };
+}
+
 // Name a fork half via classifyPattern (I8): Case A → double_threat; Case B → figure_7 if that
 // (more specific) shape is present, else the co-present double_threat. classifyPattern PROPOSES; the
 // fork node IS the solver-realized win so Gate-2 (locus) is satisfied by construction.
