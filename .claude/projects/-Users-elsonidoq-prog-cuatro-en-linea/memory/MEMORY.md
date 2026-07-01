@@ -146,6 +146,7 @@
 - [Reason-engine case classifier trap](project_reason_engine_case_classifier_trap.md) — win_to_slower_win gated on bestScore>0 && playedScore>0, NOT bestScore*playedScore>0 (which swallows lose_to_faster_lose)
 - [LTFL gate admissible swindle](project_ltfl_gate_admissible_swindle.md) — D19: gate counts only ADMISSIBLE opponent mistakes (blocks win-in-1); witness ≠ shallowest min-oppScore node
 - [Denial is always occupation](project_reason_denial_always_occupation.md) — D18: unified PV witness (BFS retired); no_occupation:exhaustive=true is structurally impossible (depth artifact); D17 §3 / opponentPunishment-spec describe the superseded design
+- [Reason tag realized/denied router](project_reason_tag_realized_denied_router.md) — tag-first front-end (2026-07-01, stagging): 2-gated conservative (tagBlunder tag + realizedPattern confirm, else fall through); deep forks stay on sign engine (1-ply Phase C); tagBlunder never emits figure_7 (router refines Case-B via forkCase); denied half = generalized findOccupationWitness
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
 - [Eval design methodology](feedback_eval_design_methodology.md) — when validating LLM artifacts: floor test w/ stronger same-vendor model, counterexamples not averages, ablation, separate from run_eval

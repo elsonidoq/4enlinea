@@ -1,4 +1,9 @@
 
+> **This is the sign taxonomy — but a tag-first router now runs IN FRONT of it (D20).** For short,
+> cell-nameable tactics (`immediate_threat`/`forced_block`/`double_threat`/`figure_7`) `computeReason`
+> takes the realized/denied route instead of the cases below; everything else falls through here. See
+> `reason-tag-fastpath-pseudocode.md` and `reason-DECISIONS.md` D20.
+
 ```!python
 
 input: movestring
