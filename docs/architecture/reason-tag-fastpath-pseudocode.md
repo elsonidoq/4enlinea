@@ -200,3 +200,44 @@ def realized_denied_reason(movestring, playedCol, bestCol, tag, direction, playe
   added to `reason_fixture.jsonl`.
 - Output-shape threading: `route` / `tag` / `direction` and the `realized_pattern` half kind into
   `build_evidence.mjs`, `/admin/fv-suff`, and the explain prompt.
+
+## Honest-limits: I12 coverage gaps (Task 5, 2026-07-01)
+
+Per I12, every `(tag, direction)` pair in `REALIZED_DENIED_TAGS × {missed_own, enabled_opponent,
+defensive_miss}` should have a sourced fixture counterexample verified through `computeReason`. Four
+pairs are covered in `reason_fixture.jsonl` (`immediate_threat/missed_own`,
+`immediate_threat/enabled_opponent`, `forced_block/defensive_miss`, `double_threat/missed_own`).
+Three pairs are **PROVISIONAL — unsourced**:
+
+- `double_threat/enabled_opponent`
+- `figure_7/missed_own`
+- `figure_7/enabled_opponent`
+
+Harvest attempt: streamed `playGame` self-play (two parallel seeds, ~600 games combined, ~60,000
+candidate blunder columns checked via `tagBlunder`) looking for any of these three `(tag, direction)`
+pairs. Zero hits. Script: `scratchpad/harvest_realized_denied.mjs` (not committed — scratch, per
+convention).
+
+Why this is plausible rather than a bug (do NOT treat as blocking):
+- `figure_7` is checked in `MISSED_OWN_PRIORITY` / `ENABLED_OPP_PRIORITY` immediately AFTER
+  `double_threat` (`classifier.js` ~line 1726, ~1798). `detectDoubleThreat` matches BOTH Case A
+  (>=2 gravity-top columns) and Case B (single-column stacked) forks — i.e. every board
+  `detectFigure7` also matches is already claimed by the earlier `double_threat` check, unless
+  `isUndercutDoubleThreat()` / `isUndercutFigure7()` disagree (undercut only suppresses `double_threat`
+  for Case B, not `figure_7`, but in practice a genuine Case-B fork tends to satisfy both detectors
+  together, so `double_threat` wins the priority race). `figure_7` as a `tagBlunder`-assigned tag may
+  be effectively unreachable through ordinary self-play; it is NOT unreachable through the sign
+  engine's `nameFork` (see the `34`/played-3 sign-route test added in Task 5 sub-goal A), which uses
+  a DIFFERENT, forkCase-aware disambiguation not present in `tagBlunder`.
+- `double_threat/enabled_opponent` requires the OPPONENT (not the blunderer) to gain a fresh
+  double-threat fork under an optimal reply that the correct line's optimal replies never produce.
+  This is a narrower existential-over-optimal-replies condition than `missed_own` (which only needs
+  the blunderer's own correct-line board to hold the pattern); it may simply be rare in short
+  self-play games rather than absent.
+
+If a future harvest (longer budget, targeted search, or hand-selected known constructions run through
+`gameSampling`, never hand-rolled positions) finds any of these three, add the row to
+`reason_fixture.jsonl` with `route:"realized_denied"`, `expectedTag`, `expectedDirection`, a
+`bucket:"rd-<tag>-<direction>"`, and `expectedCase`, per the Step-3 pattern in `reasonEngine.test.mjs`.
+Until then: I12 is NOT fully closed for the realized/denied router — this is a known, documented gap,
+not a fabricated pass.

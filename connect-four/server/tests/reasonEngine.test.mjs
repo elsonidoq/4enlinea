@@ -70,6 +70,9 @@ for (const row of rows) {
       // exactly one half is a realized_pattern and one is a denial
       const kinds = [r.lostResource.kind, r.opponentPunishment.kind].sort();
       assert.deepEqual(kinds, ['denial', 'realized_pattern'], 'one realized + one denial half');
+      // I12: counterexample per (tag, direction) — assert the specific pair when the row pins one down
+      if (row.expectedTag) assert.equal(r.tag, row.expectedTag, 'expected tag');
+      if (row.expectedDirection) assert.equal(r.direction, row.expectedDirection, 'expected direction');
       return; // sign-shape assertions below do not apply
     }
 
