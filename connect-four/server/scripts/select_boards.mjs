@@ -341,11 +341,11 @@ if (strategy === 'fixture') {
   const startedAt = Date.now();
   let lastLogAt = startedAt;
   const predicateReport = () => {
-    const seen = new Set(counts.keys());
+    const seenPreds = new Set(counts.keys()); // predicates observed (distinct from the outer board-dedup `seen`)
     const fulfilled = REQUIRED.filter((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
-    const underTarget = REASON_UNIVERSE.filter((p) => seen.has(p) && (counts.get(p) || 0) < TARGET_PER_PREDICATE)
+    const underTarget = REASON_UNIVERSE.filter((p) => seenPreds.has(p) && (counts.get(p) || 0) < TARGET_PER_PREDICATE)
       .sort((a, b) => (counts.get(a) || 0) - (counts.get(b) || 0)).map((p) => `${p}(${counts.get(p) || 0})`);
-    const neverSeen = REASON_UNIVERSE.filter((p) => !seen.has(p)).map((p) => PROVISIONAL.has(p) ? `${p}*` : p);
+    const neverSeen = REASON_UNIVERSE.filter((p) => !seenPreds.has(p)).map((p) => PROVISIONAL.has(p) ? `${p}*` : p);
     return { fulfilled, underTarget, neverSeen };
   };
   const logProgress = () => {
