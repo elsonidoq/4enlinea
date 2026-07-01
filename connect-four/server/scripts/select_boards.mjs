@@ -289,6 +289,8 @@ if (strategy === 'fixture') {
     // severity band from the score gap (bestScore - playedScore), the engine's own magnitudes.
     const gap = (r.bestScore ?? 0) - (r.playedScore ?? 0);
     preds.add(gap >= 12 ? 'sev_large' : (gap >= 4 ? 'sev_moderate' : 'sev_small'));
+    preds.add(`route_${r.route || 'sign'}`);
+    if (r.route === 'realized_denied' && r.tag && r.direction) preds.add(`rd_${r.tag}_${r.direction}`);
 
     const lr = r.lostResource;
     if (lr) {
@@ -296,6 +298,7 @@ if (strategy === 'fixture') {
       else if (lr.kind === 'winning_line') preds.add('lost_parity_win');
       else if (lr.kind === 'denial') preds.add(`lost_denial_${lr.verdict}`);
       else if (lr.kind === 'conditional_swindle') preds.add('lost_conditional_swindle');
+      else if (lr.kind === 'realized_pattern') preds.add(`lost_realized_${lr.tag}`);
       if (lr.parityAttribution) {
         preds.add(lr.parityAttribution.nameable ? 'parity_nameable' : 'parity_unnameable');
         if (lr.parityAttribution.forcedFirstRequired) preds.add('parity_forcedFirst');
