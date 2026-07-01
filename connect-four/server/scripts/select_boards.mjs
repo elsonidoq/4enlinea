@@ -232,8 +232,10 @@ if (strategy === 'fixture') {
 
 // ════════════════════════════════════════════════════════════════════════════
 // STRATEGY: coverage
-// Ported from build_reason_eval_set.mjs: harvest loop + 5s heartbeat +
-// satisfied() termination. Drops toNarratorVector; emits board-list rows.
+// Harvests boards against a named, closed predicate universe (REASON_UNIVERSE, below),
+// partitioned into REQUIRED (blocks termination via satisfied()) and PROVISIONAL
+// (known-rare, reported but non-blocking). Any predicate the reason engine emits that
+// is not in REASON_UNIVERSE trips the discovered⊆named guard at insertion time.
 // ════════════════════════════════════════════════════════════════════════════
 } else if (strategy === 'coverage') {
   // The FULL closed predicate universe, named upfront (design: docs/architecture reason review 2026-07-01).
@@ -330,18 +332,24 @@ if (strategy === 'fixture') {
   // MAX_GAMES — this surfaces exactly which one is holding it up.
   const startedAt = Date.now();
   let lastLogAt = startedAt;
+  const predicateReport = () => {
+    const seen = new Set(counts.keys());
+    const fulfilled = REQUIRED.filter((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
+    const underTarget = REASON_UNIVERSE.filter((p) => seen.has(p) && (counts.get(p) || 0) < TARGET_PER_PREDICATE)
+      .sort((a, b) => (counts.get(a) || 0) - (counts.get(b) || 0)).map((p) => `${p}(${counts.get(p) || 0})`);
+    const neverSeen = REASON_UNIVERSE.filter((p) => !seen.has(p)).map((p) => PROVISIONAL.has(p) ? `${p}*` : p);
+    return { fulfilled, underTarget, neverSeen };
+  };
   const logProgress = () => {
     const now = Date.now();
     if (now - lastLogAt < 5000) return;
     lastLogAt = now;
-    const under = [...counts.entries()]
-      .filter(([, c]) => c < TARGET_PER_PREDICATE)
-      .sort((a, b) => a[1] - b[1])
-      .map(([p, c]) => `${p}(${c})`);
+    const { fulfilled, underTarget, neverSeen } = predicateReport();
     const elapsed = ((now - startedAt) / 1000).toFixed(0);
     process.stderr.write(
       `[${elapsed}s] checked ${checked} · generated ${boards} · games ${games} · `
-      + `predicates ${counts.size} · under-target(${under.length}): ${under.join(' ') || 'none'}\n`,
+      + `fulfilled ${fulfilled.length}/${REQUIRED.length} · under-target(${underTarget.length}): ${underTarget.join(' ') || 'none'} · `
+      + `never-seen(${neverSeen.length}): ${neverSeen.join(' ') || 'none'}\n`,
     );
   };
 
@@ -366,7 +374,10 @@ if (strategy === 'fixture') {
       const advancing = [...preds].filter((p) => (counts.get(p) || 0) < TARGET_PER_PREDICATE);
       if (advancing.length === 0) continue;
 
-      for (const p of preds) counts.set(p, (counts.get(p) || 0) + 1);
+      for (const p of preds) {
+        if (!REASON_UNIVERSE.includes(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE (I12 selector guard)`);
+        counts.set(p, (counts.get(p) || 0) + 1);
+      }
       collected.push({
         id: `eval-${collected.length + 1}`,
         movestring: boardState,
@@ -383,7 +394,10 @@ if (strategy === 'fixture') {
     solver.destroy();
   }
 
-  const under = [...counts.entries()].filter(([, c]) => c < TARGET_PER_PREDICATE).map(([p]) => p);
-  process.stderr.write(`\nDone: ${games} games, ${collected.length} boards → ${outPath}\n`);
-  process.stderr.write(`Predicates covered: ${counts.size}; under target (${TARGET_PER_PREDICATE}): ${under.length ? under.join(' ') : 'none'}\n`);
+  const { fulfilled, underTarget, neverSeen } = predicateReport();
+  const stopped = satisfied() ? 'all REQUIRED predicates satisfied' : `hit MAX_GAMES=${MAX_GAMES} — a REQUIRED predicate could not be filled (investigate)`;
+  process.stderr.write(`\nDone: ${games} games, ${collected.length} boards → ${outPath} (${stopped})\n`);
+  process.stderr.write(`Fulfilled (${fulfilled.length}/${REQUIRED.length})\n`);
+  process.stderr.write(`Under target ${TARGET_PER_PREDICATE} (${underTarget.length}): ${underTarget.join(' ') || 'none'}\n`);
+  process.stderr.write(`Never seen — * = provisional (${neverSeen.length}): ${neverSeen.join(' ') || 'none'}\n`);
 }
