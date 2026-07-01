@@ -70,8 +70,20 @@ scoped to terminal **win windows** (forks excluded), it does not need to mirror 
 
 ### Payload — `out.lostResource.optimalWinSamples`
 
-Attached **only when `lostResource.terminal === 'win'`** (skips fork/parity-fork and
-non-winning halves).
+Attached **only when `register === 'parity' && walk.terminal === 'win'`** — the same gate
+`attributeParityWin` already uses (`reasonEngine.mjs:475`). This is the class of **distant
+zugzwang/parity wins** where the completing four is far away, multiple optimal realizations
+plausibly exist (the "is it always odd? is it ever diagonal?" question), and the engine
+currently only describes *one* window structurally. It excludes:
+
+- `immediate` / `forced_sequence` wins — already emitted as concrete lines; no ambiguity, no need.
+- fork terminals (`terminal !== 'win'`) — per scope.
+
+`register` is a function of win-distance, so this is the true predicate for "the winning line is
+long / opening-like"; move-number or disc-count would merely be a proxy for it (rejected per
+I8/I12 — reuse the detector's own classification, don't hand-roll a threshold). The sampler is
+the natural sibling of `attributeParityWin`: it fires on the same nodes and adds the
+*distribution* of realizations next to the *single* structural window already computed.
 
 ```json
 "optimalWinSamples": {
@@ -91,8 +103,10 @@ lists distinct realizations, most-frequent-first, so the modal window leads.
 
 ### Wiring in `computeReason`
 
-- Called in the `win_to_draw` non-fork branch (motivating case) and, because it keys purely on
-  `lostResource.terminal === 'win'`, it uniformly also covers `win_to_lose` (I9, one mechanism).
+- Placed right next to `attributeParityWin` (inside `renderHalf`, or immediately after it in the
+  `win_to_draw` branch), keyed on the same `register === 'parity' && walk.terminal === 'win'`
+  gate. Because it keys on register/terminal — not on case — it uniformly covers `win_to_draw`
+  and `win_to_lose` whenever the lost resource is a parity win (I9, one mechanism).
 - `n` defaults to 20, overridable via env `REASON_WIN_SAMPLES`.
 
 ## Testing (`sampleWins.test.mjs`, in `test:fast`)
