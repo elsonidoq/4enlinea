@@ -6,6 +6,26 @@ import {
   toNarratorVector, pruneVector, pruneValue, HIDDEN_FIELDS,
 } from '../scripts/reasonNarratorVector.mjs';
 
+// A raw evidence row whose lostResource carries the evidence-only optimalWinSamples diagnostic
+// (attached by attachWinSamples). This must never reach the narrator projection, but a sibling
+// real field (register/window) must survive — proving the strip is surgical, not half-deleting.
+const RAW_WITH_WIN_SAMPLES = {
+  movestring: '3325', playedCol: 5, bestCol: 1,
+  scores: [-3, 18, 2, 3, -3, 0, -3],
+  discs: 4, boardState: 'opening', player: 1, opponent: 2,
+  bestScore: 18, playedScore: 0, case: 'win_to_draw', notABlunder: false,
+  lostResource: {
+    kind: 'winning_line',
+    register: 'parity',
+    window: ['c4r5', 'c5r5', 'c6r5', 'c7r5'],
+    optimalWinSamples: {
+      n: 8, distinct: 2, orientation: { horizontal: 6, vertical: 0, diagonal: 2 },
+      oddCompletingFraction: 1, lines: [],
+    },
+  },
+  gate: null,
+};
+
 // A representative win_to_draw evidence row — pure computeReason output, no research labels.
 const RAW = {
   movestring: '3325', playedCol: 5, bestCol: 1,
@@ -65,6 +85,16 @@ test('pruneVector preserves an empty movestring (empty board is meaningful)', ()
   const fv = pruneVector({ movestring: '', playedCol: 3 });
   assert.equal(fv.movestring, '');
   assert.equal(fv.playedCol, 3);
+});
+
+test('toNarratorVector strips optimalWinSamples nested in lostResource (evidence-only, must not reach LLM)', () => {
+  const fv = toNarratorVector(RAW_WITH_WIN_SAMPLES);
+  assert.equal(fv.lostResource.optimalWinSamples, undefined, 'optimalWinSamples must be stripped');
+  assert.equal(fv.lostResource.register, 'parity', 'sibling field register must survive (surgical strip)');
+  assert.deepEqual(fv.lostResource.window, ['c4r5', 'c5r5', 'c6r5', 'c7r5'], 'sibling field window must survive');
+
+  const pruned = pruneVector(fv);
+  assert.equal(JSON.stringify(pruned).includes('optimalWinSamples'), false, 'no trace of optimalWinSamples after pruning');
 });
 
 test('pruneValue keeps a non-empty nested structure intact', () => {

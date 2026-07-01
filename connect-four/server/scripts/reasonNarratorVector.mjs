@@ -23,15 +23,33 @@
 // Raw solver oracle — present on computeReason output, hidden from the narrator.
 export const HIDDEN_FIELDS = ['scores'];
 
+// Fields hidden from the narrator that live INSIDE an engineered half (lostResource /
+// opponentPunishment), not at the top level. `optimalWinSamples` is an evidence-only diagnostic
+// (the distribution of optimal winning realizations, for /admin/fv-suff inspection) — it must
+// never enter the LLM-facing vector. It stays on the raw evidence object; only this projection
+// drops it.
+const HIDDEN_HALF_FIELDS = ['optimalWinSamples'];
+
+function stripHalf(half) {
+  if (!half || typeof half !== 'object') return half;
+  if (!HIDDEN_HALF_FIELDS.some((f) => f in half)) return half;
+  const out = {};
+  for (const [k, v] of Object.entries(half)) if (!HIDDEN_HALF_FIELDS.includes(k)) out[k] = v;
+  return out;
+}
+
 /**
  * Project a raw reason-engine evidence object to the narrator-facing feature vector.
  * @param {object} reason  computeReason output (pure evidence, no research labels).
- * @returns {object} a shallow copy with HIDDEN_FIELDS removed.
+ * @returns {object} a shallow copy with HIDDEN_FIELDS removed at top level and HIDDEN_HALF_FIELDS
+ *   removed from the lostResource / opponentPunishment halves.
  */
 export function toNarratorVector(reason) {
   const omit = new Set(HIDDEN_FIELDS);
   const out = {};
   for (const [k, v] of Object.entries(reason)) if (!omit.has(k)) out[k] = v;
+  if (out.lostResource) out.lostResource = stripHalf(out.lostResource);
+  if (out.opponentPunishment) out.opponentPunishment = stripHalf(out.opponentPunishment);
   return out;
 }
 
