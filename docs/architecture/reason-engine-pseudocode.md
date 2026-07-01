@@ -316,8 +316,13 @@ def non_losing_reply_count(node):     # free counterplay signal (one already-com
 
 def swindle_gate(node):               # the ONLY branching search; bounded, or exhaustive <=10 empties
     DFS opponent nodes (DEPTH=6, BRANCH=3, player tied-best capped 2; dedup by movestring):
-        if min(oppScores) <= 0:  return BLUNDER witness   # player keeps a forced threat -> swindle exists
+        adm = [c in legal : detectImmediateThreat(node+c, player) is empty]  # D19: opponent blocks win-in-1
+        if player has immediate threat and adm == []: return BLUNDER (unblockable) # double/forced-col/poisoned
+        if min(oppScore over adm) <= 0:  return BLUNDER witness  # ADMISSIBLE non-winning reply -> swindle
+        branch over (adm ∩ winningCols) only                    # never descend an inadmissible reply
     return NOT_A_BLUNDER              # SOUND for Blunder; EXACT NotABlunder only when exhaustive.
+    # D19: an admissible mistake is one an opponent that always blocks IMMEDIATE (win-in-1) threats
+    # could still make. Never counts "opponent hangs a win-in-1". IMMEDIATE != MAJOR threat.
 ```
 
 ## The tie principle, stated once

@@ -84,30 +84,47 @@ count directly:
   move, **exactly 1**. The histogram establishes the counterplay count; the actual explanation for
   fork-based `win_to_draw` cases is the **denial search** (D17) — the first moment the opponent kills
   a fork window under optimal play — not the identity of the saving reply.
-- **`lose_to_faster_lose` gate:** fires iff `min(oppScores) ≤ 0` — i.e. the player still has a threat
-  the opponent is *forced* to answer (any non-answer scores ≤ 0). "Buying time" = keeping the
-  opponent on a narrow forced path.
+- **`lose_to_faster_lose` gate:** fires iff the opponent has an **admissible** non-winning reply
+  (`oppScore ≤ 0` AND the reply leaves the player no immediate win-in-1 threat), or the player's
+  immediate threat is **unblockable** (D19). A non-winning reply that hangs/creates a win-in-1 is not
+  counted — the opponent is assumed to block immediate threats. "Buying time" = keeping the opponent
+  on a narrow forced path of *admissible* moves.
 
 Both read the same histogram; it is the cheapest way to express "how much counterplay survived."
 
 ## 5. The `lose_to_faster_lose` gate (the only real search)
 
 Both `bestScore < 0` and `playedScore < 0`: the player is lost either way, so the move is a blunder
-**only if the best move preserved a practical chance** (a reachable opponent mistake that flips to
-≥ 0) that the played move throws away.
+**only if the best move preserved a practical chance** (a reachable *admissible* opponent mistake that
+flips to ≥ 0) that the played move throws away. **Admissible** (D19) = a mistake an opponent that
+always blocks IMMEDIATE (win-in-1, gravity-top) threats could still make — never "hang an immediate
+threat." An IMMEDIATE threat (a group of 3 completable by one gravity-top drop) is not a MAJOR threat
+(a group of 3 not completable in one move); the gate only ever consults `detectImmediateThreat`.
 
 ```
 GATE(P + bestCol):                    # opponent to move; player is lost so opponent HAS a winning move
   DFS over opponent nodes, tracking oppPlies:
     oppScores = query(node)
-    if min(legal oppScores) <= 0:     # opponent has a non-winning reply -> SWINDLE EXISTS
-        return BLUNDER, witness = { node, devCols = {c : oppScores[c] <= 0}, oppPlies }
-    for oc in winningCols sorted ascending by score [:BRANCH]:   # least-winning first = most fragile
-        for pc in argmax(playerScores(node+oc)) [:2]:            # player-optimal, tied-best capped at 2
+    # ADMISSIBLE (D19): moves after which the PLAYER has no immediate win-in-1
+    #   (blocks the existing threat AND creates none). Winning replies (oppScore>0) are always
+    #   admissible — an opponent win-in-1 leaves the player no win-in-1 — so this only filters ≤0 replies.
+    adm = { c in legalCols : detectImmediateThreat(node+c, player) is empty }
+    if player has an immediate threat AND adm is empty:   # unblockable: double / forced-col / poisoned block
+        return BLUNDER, witness = { node, unblockable, devCol = argmax oppScore }
+    if min(oppScore over adm) <= 0:                        # an ADMISSIBLE non-winning reply -> SWINDLE
+        return BLUNDER, witness = { node, devCols = {c in adm : oppScore[c] <= 0}, oppPlies }
+    for oc in (adm ∩ winningCols) sorted ascending by score [:BRANCH]:  # least-winning first = most fragile
+        for pc in argmax(playerScores(node+oc)) [:2]:                   # player-optimal, tied-best capped at 2
             descend(node + oc + pc, oppPlies+1)
     stop when oppPlies > DEPTH
   return NOT_A_BLUNDER
 ```
+
+The admissibility filter is what makes the witness *teachable*: without it, a player immediate threat
+lets the gate return a "swindle" that assumes the opponent ignored a win-in-1 (e.g. `332123` played 4
+formerly witnessed at `3321232` with the opponent skipping the `c3r4` block). With D19 the search
+descends *through* the forced block and the witness is the first node where the opponent could
+realistically go wrong (`332123` → witness `33212322543`).
 
 **Budget (provisional):** `DEPTH = 6` opponent plies, `BRANCH = 3`, player tied-best capped at 2,
 dedup by movestring. In practice the witness is found at `oppPlies = 0` (≈1 query); deep cases

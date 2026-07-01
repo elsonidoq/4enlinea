@@ -381,11 +381,34 @@ async function nonLosingReplyCount(solver, ms) {
   return legal.filter((c) => scores[c] >= 0).length;
 }
 
-// ── lose_to_faster_lose GATE (lifted from select_ltfl.mjs; + exhaustive mode) ──
-// From opponent-to-move `node`, search for an opponent node where the opponent has a non-winning
-// reply (min oppScore <= 0 => the player still has a forced threat => a practical swindle exists).
+// ── ADMISSIBLE opponent moves (D19: the opponent always blocks IMMEDIATE threats) ──
+// A move is admissible iff, AFTER the opponent plays it, the PLAYER has no immediate (win-in-1,
+// gravity-top) threat — i.e. it neither ignores an existing win-in-1 nor gifts a new one. This one
+// predicate collapses three ideas: block the existing threat, don't create one, and (when the set is
+// empty because the player has an unblockable win-in-1: double threat / forced-only-column / poisoned
+// block) the player simply wins. IMMEDIATE threat only (never MAJOR) — via `detectImmediateThreat`,
+// the gravity-top production detector (I8). Winning opponent replies (oppScore>0) can never leave the
+// player a win-in-1 (the opponent would win first), so this filter only ever removes NON-winning
+// replies — exactly the inadmissible "swindles" the old any-non-winning-reply rule over-credited.
+function admissibleOpponentCols(ms, legal, player) {
+  const board = new Board(ms);
+  const threatened = board.immediateThreats(player).length > 0;
+  const adm = legal.filter((c) => board.withMove(c).immediateThreats(player).length === 0);
+  return { adm, unblockable: threatened && adm.length === 0 };
+}
+
+// ── lose_to_faster_lose GATE (D4 + D19) ──
+// From opponent-to-move `node`, search for an opponent node where the opponent has an ADMISSIBLE
+// non-winning reply (oppScore <= 0 AND it blocks the player's immediate threats) => a practical
+// swindle that survives an opponent who blocks win-in-1 threats. `unblockable` (the opponent has NO
+// move clearing the player's win-in-1) is the strongest swindle — the player wins outright. A
+// non-winning reply that ignores/creates a win-in-1 is NOT counted (D19): assuming an opponent that
+// hangs an immediate threat is not a lesson worth teaching. Preserves the branching search over
+// admissible winning replies (I0 — don't weaken the search).
 export async function swindleGate(solver, node, { exhaustive }) {
   const { gateDepth, gateBranch, gatePlayerTiedCap } = REASON_CONFIG;
+  // player = the side that just moved into `node` (the blunderer); opponent is to move at `node`.
+  const player = ((node.length - 1) % 2 === 0) ? 1 : 2;
   const stack = [{ ms: node, oppPlies: 0 }];
   const seen = new Set();
   let nodesVisited = 0;
@@ -400,9 +423,21 @@ export async function swindleGate(solver, node, { exhaustive }) {
     try { oppScores = await solver.query(ms); } catch { if (!isTerminalPosition(ms)) errored = true; continue; }
     const legal = legalCols(oppScores);
     if (!legal.length) continue;
-    const nonWin = legal.filter((c) => oppScores[c] <= 0); // non-winning for opponent => >=0 for player
+    const { adm, unblockable } = admissibleOpponentCols(ms, legal, player);
+    if (unblockable) {
+      // The player has an immediate threat the opponent CANNOT clear -> the player wins outright.
+      // Witness the opponent's least-bad legal try; every legal reply loses to a win-in-1.
+      let dev = legal[0];
+      for (const c of legal) if (oppScores[c] > oppScores[dev]) dev = c;
+      return {
+        found: true, node: ms, devCols: legal, devCol: dev, devVal: oppScores[dev],
+        oppPlies, nodesVisited, oppScores, errored, unblockable: true,
+      };
+    }
+    const nonWin = adm.filter((c) => oppScores[c] <= 0); // admissible AND non-winning for opponent
     if (nonWin.length) {
-      // SWINDLE: opponent could deviate into a non-winning reply.
+      // SWINDLE: the opponent could block the immediate threat yet still deviate into a losing/drawing
+      // reply — a mistake a threat-blocking opponent could realistically make.
       let dev = nonWin[0];
       for (const c of nonWin) if (oppScores[c] < oppScores[dev]) dev = c;
       return {
@@ -410,8 +445,9 @@ export async function swindleGate(solver, node, { exhaustive }) {
         oppPlies, nodesVisited, oppScores, errored,
       };
     }
-    // all opponent moves win: branch over winning moves (least-winning first = most fragile).
-    const winning = legal.filter((c) => oppScores[c] > 0).sort((a, b) => oppScores[a] - oppScores[b]);
+    // every admissible reply wins for the opponent: branch over them (least-winning first = most
+    // fragile) and let the player reply optimally, looking deeper for an admissible swindle.
+    const winning = adm.filter((c) => oppScores[c] > 0).sort((a, b) => oppScores[a] - oppScores[b]);
     const branchCap = exhaustive ? winning.length : gateBranch;
     let branches = 0;
     for (const oc of winning) {

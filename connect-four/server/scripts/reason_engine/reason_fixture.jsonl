@@ -31,3 +31,4 @@
 {"movestring":"3333325662555225","playedCol":1,"bestCol":0,"scores":[-3,-12,-3,-3,-3,-3,-3],"discs":16,"expectedCase":"lose_to_faster_lose","bucket":"anchor","expectedGate":"Blunder","expectedExhaustive":false}
 {"movestring":"3333003110656002222266315615016551","playedCol":4,"bestCol":2,"scores":[-1000,-1000,-2,-1000,-3,-2,-1000],"discs":34,"expectedCase":"lose_to_faster_lose","expectedGate":"NotABlunder","expectedExhaustive":true,"bucket":"notABlunder"}
 {"movestring":"33343022442233255525004414106106605511","playedCol":6,"bestCol":1,"scores":[-1000,-1,-1000,-1000,-1000,-1000,-2],"discs":38,"expectedCase":"lose_to_faster_lose","bucket":"anchor","expectedGate":"NotABlunder","expectedExhaustive":true}
+{"movestring":"332123","playedCol":4,"bestCol":2,"scores":[-5,-5,-3,-3,-4,-3,-5],"discs":6,"expectedCase":"lose_to_faster_lose","expectedGate":"Blunder","expectedExhaustive":false,"bucket":"d19-witness"}
