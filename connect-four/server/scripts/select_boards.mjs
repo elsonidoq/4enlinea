@@ -236,6 +236,43 @@ if (strategy === 'fixture') {
 // satisfied() termination. Drops toNarratorVector; emits board-list rows.
 // ════════════════════════════════════════════════════════════════════════════
 } else if (strategy === 'coverage') {
+  // The FULL closed predicate universe, named upfront (design: docs/architecture reason review 2026-07-01).
+  // Every value of every axis the reason engine can emit. `discovered ⊆ REASON_UNIVERSE` is asserted at
+  // the end (Task 6): an engine-emitted predicate not listed here is a bug in this list, not the engine.
+  const REASON_UNIVERSE = [
+    'route_sign', 'route_realized_denied',
+    'case_win_to_draw', 'case_win_to_lose', 'case_draw_to_lose', 'case_lose_to_faster_lose',
+    'player_1', 'player_2',
+    'phase_opening', 'phase_mid-game', 'phase_closing',
+    'sev_small', 'sev_moderate', 'sev_large',
+    'rd_immediate_threat_missed_own', 'rd_immediate_threat_enabled_opponent',
+    'rd_forced_block_defensive_miss',
+    'rd_double_threat_missed_own', 'rd_double_threat_enabled_opponent',
+    'rd_figure_7_missed_own', 'rd_figure_7_enabled_opponent',
+    'lost_fork_A', 'lost_fork_B', 'lost_parity_win',
+    'lost_denial_occupation', 'lost_denial_no_occupation', 'lost_conditional_swindle',
+    'lost_realized_immediate_threat', 'lost_realized_forced_block',
+    'lost_realized_double_threat', 'lost_realized_figure_7',
+    'opp_winning_line', 'opp_denial', 'opp_neutralization', 'opp_realized_pattern',
+    'tie_tied', 'tie_independent', 'tie_temporal',
+    'reg_lost_immediate', 'reg_lost_forced_sequence', 'reg_lost_parity',
+    'reg_opp_immediate', 'reg_opp_forced_sequence', 'reg_opp_parity',
+    'tactic_lost_present', 'tactic_lost_null', 'tactic_opp_present', 'tactic_opp_null',
+    'parity_nameable', 'parity_unnameable', 'parity_forcedFirst',
+    'opp_parity_nameable', 'opp_parity_unnameable',
+    'gate_exhaustive', 'gate_bounded',
+  ];
+  // SEED partition — finalized empirically by Task 8 (calibration). Provisional = known-rare /
+  // possibly-unreachable in ordinary self-play; reported but NON-blocking (never gates satisfied()).
+  const PROVISIONAL = new Set([
+    'rd_double_threat_enabled_opponent', 'rd_figure_7_enabled_opponent', // 0/60k harvested (D20 honest-limits)
+    'tie_temporal',                        // lose_to_faster_lose only
+    'lost_denial_no_occupation',           // D18: depth artifact, near-unreachable
+    'lost_realized_figure_7', 'lost_fork_B', // figure_7/Case-B forks are rare
+    'parity_unnameable', 'opp_parity_unnameable', // multi-window board-fill only
+  ]);
+  const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
+
   // ── Reason-vector predicates: the diversity axes the selector covers. ──
   // Each is a tag the board "exhibits"; we keep harvesting until every tag has appeared TARGET times.
   function reasonPredicates(r) {
