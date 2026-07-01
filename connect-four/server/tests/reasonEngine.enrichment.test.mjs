@@ -13,12 +13,18 @@ let solver;
 before(async () => { solver = await createSolverProcess(); });
 after(() => { if (solver) solver.destroy(); });
 
-test('anchorCells: win_to_draw 3325 fork = fork-window cells', async () => {
-  const r = await computeReason('3325', 5, { solver });
-  // D16: the best move creates a Case-A fork (forkCells c1r1,c5r1). anchorCells are the cells of the
-  // fork windows (the row-1 group), so the tie can match a constituent the opponent occupies.
+test('anchorCells: win_to_draw 214444115623 fork = fork-window cells', async () => {
+  // Retargeted from 3325 (2026-07-01): 3325 now diverts to the realized/denied route (double_threat
+  // is in REALIZED_DENIED_TAGS), so it no longer exercises the sign-engine's forkAnchorCells path.
+  // 214444115623 played 4 is a win_to_draw double_threat fork that STAYS on the sign engine
+  // (see 'D16 Case A' in reasonEngine.test.mjs), so it still exercises this invariant.
+  const r = await computeReason('214444115623', 4, { solver });
+  // D16: the best move creates a Case-A fork (forkCells c4r3,c6r4). anchorCells are the cells of the
+  // fork windows (every window cell), so the tie can match a constituent the opponent occupies.
   assert.equal(r.lostResource.terminal, 'fork');
-  assert.deepEqual([...r.lostResource.anchorCells].sort(), ['c1r1', 'c2r1', 'c3r1', 'c4r1', 'c5r1']);
+  assert.deepEqual([...r.lostResource.anchorCells].sort(), [
+    'c3r1', 'c3r3', 'c4r2', 'c4r3', 'c5r3', 'c6r1', 'c6r2', 'c6r3', 'c6r4',
+  ]);
 });
 
 test('anchorCells present for every blunder case', async () => {
@@ -39,8 +45,11 @@ test('gated naming: 214444115623 names the double_threat fork, not the immediate
     'fork completing cells c4r3 & c6r4');
 });
 
-test('gated naming: 3325 keeps double_threat', async () => {
-  const r = await computeReason('3325', 5, { solver });
+test('gated naming: 214444115623 keeps double_threat', async () => {
+  // Retargeted from 3325 (2026-07-01): 3325 now diverts to the realized/denied route, so its tag
+  // comes from tagBlunder directly (not nameFork's gated classifyPattern naming). 214444115623
+  // played 4 stays on the sign engine and still exercises D13's gated tacticTag naming.
+  const r = await computeReason('214444115623', 4, { solver });
   assert.equal(r.lostResource.tacticTag, 'double_threat');
 });
 

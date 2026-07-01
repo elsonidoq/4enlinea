@@ -13,7 +13,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason, fwdOf, registerOf, REASON_CONFIG } from '../scripts/reason_engine/reasonEngine.mjs';
+import { computeReason, fwdOf, registerOf, REASON_CONFIG, REALIZED_DENIED_TAGS } from '../scripts/reason_engine/reasonEngine.mjs';
 import { buildBoard, parseCell } from '../scripts/reason_engine/lib/boardUtils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -61,8 +61,17 @@ for (const row of rows) {
   test(name, async () => {
     const r = await computeReason(row.movestring, row.playedCol, { solver });
 
-    // 1) case matches solver ground truth
+    // 1) case matches solver ground truth (holds for both routes)
     assert.equal(r.case, row.expectedCase, 'classified case');
+
+    if (row.route === 'realized_denied') {
+      assert.equal(r.route, 'realized_denied', 'diverted row uses realized/denied route');
+      assert.ok(REALIZED_DENIED_TAGS.has(r.tag), `tag ${r.tag} in realized/denied set`);
+      // exactly one half is a realized_pattern and one is a denial
+      const kinds = [r.lostResource.kind, r.opponentPunishment.kind].sort();
+      assert.deepEqual(kinds, ['denial', 'realized_pattern'], 'one realized + one denial half');
+      return; // sign-shape assertions below do not apply
+    }
 
     // 2) both halves cite a real, occupied cell on their snapshot
     assertCellOnSnapshot(r.lostResource, 'lostResource');
@@ -140,6 +149,18 @@ test('D16 Case A: 214444115623 played 4 -> double_threat fork, not parity', asyn
 test('D16 Case B: 3333344440625621503122 played 6 -> figure_7 stacked fork, not parity', async () => {
   const r = await computeReason('3333344440625621503122', 6, { solver });
   assert.equal(r.case, 'win_to_draw', 'case');
+  if (r.route === 'realized_denied') {
+    // This board now diverts to the tag-first realized/denied router (Task 3): the tag comes
+    // straight from tagBlunder, not nameFork's Case A/B disambiguation (which prefers figure_7 for
+    // a stacked single-column fork on the sign-engine path). The Case-A/B naming distinction is
+    // therefore not applicable here; what D16 still requires — forced tactical register (never
+    // parity) and the correct gravity-top completing cell — is asserted below.
+    assert.ok(REALIZED_DENIED_TAGS.has(r.tag), `tag ${r.tag} in realized/denied set`);
+    assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
+    assert.ok(r.lostResource.cells.includes('c1r3'),
+      `stacked fork includes gravity-top cell c1r3, got ${JSON.stringify(r.lostResource.cells)}`);
+    return;
+  }
   assert.equal(r.lostResource.terminal, 'fork', 'lostResource stops at a fork');
   assert.notEqual(r.lostResource.register, 'parity', 'a stacked figure_7 fork must NOT be register=parity');
   // Case B (1 column, stacked) prefers the more specific figure_7 over the co-present double_threat tag
