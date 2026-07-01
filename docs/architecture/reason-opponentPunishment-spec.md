@@ -8,8 +8,8 @@
 
 > Status: IMPLEMENTED (2026-06-29). Commits: f339220, 66cae80, fcfdae9, 0ac62cd, 2835e3c, 761401e.
 > 45/45 tests pass. Canonicalized into DECISIONS (D17), blunder-reason-evidence.md,
-> reason-engine-pseudocode.md, and my_pseudocode.md. Subordinate to the four canonical docs
-> (INVARIANTS / DECISIONS / my_pseudocode / blunder-reason-evidence). On conflict, the canonical
+> reason-engine-pseudocode.md, and reason-case-taxonomy.md. Subordinate to the four canonical docs
+> (INVARIANTS / DECISIONS / reason-case-taxonomy / blunder-reason-evidence). On conflict, the canonical
 > docs win.
 
 ## 1. Motivation

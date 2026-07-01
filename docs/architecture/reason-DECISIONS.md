@@ -5,7 +5,7 @@
 > entry that supersedes it** — do not edit history in place.
 >
 > Non-negotiable principles live in [`reason-INVARIANTS.md`](./reason-INVARIANTS.md). The taxonomy is
-> [`my_pseudocode.md`](./my_pseudocode.md); the engine is
+> [`reason-case-taxonomy.md`](./reason-case-taxonomy.md); the engine is
 > [`blunder-reason-evidence.md`](./blunder-reason-evidence.md).
 
 Format: **Decision** / **Rationale** / **Status** / **Source**.
@@ -22,7 +22,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Source:** owner directive (2026-06-29); memory `feedback_fv_grounding_correctness_over_speed`.
 
 ### D2 — Clean-slate restart; two prior epics quarantined
-- **Decision:** `my_pseudocode.md` + `blunder-reason-evidence.md` are the sole source of truth. The
+- **Decision:** `reason-case-taxonomy.md` + `blunder-reason-evidence.md` are the sole source of truth. The
   5-kind `blunder-reason-field-epic.md` and 5-grain `unified-blunder-reason-epic.md` designs are
   abandoned.
 - **Rationale:** Both prior designs drifted into combinatorial-explosion fears and discriminated-union
@@ -35,7 +35,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** Explaining "you'd have won faster" is hard to compute and low value; focus on the
   sub-optimal cases that actually cost an outcome.
 - **Status:** LOCKED.
-- **Source:** `my_pseudocode.md`.
+- **Source:** `reason-case-taxonomy.md`.
 
 ### D4 — `lose_to_faster_lose` is a blunder only if a practical chance existed
 - **Decision:** When both scores are `<0`, the move is a blunder only if the best move preserved a
@@ -45,7 +45,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   mistake could still be exploited; that hope is the lesson.
 - **Status:** LOCKED. Gate is sound-for-BLUNDER, incomplete-for-NotABlunder (INVARIANTS I7).
   **Amended by D19:** the reachable opponent-mistake must be *admissible* (the opponent always blocks immediate threats).
-- **Source:** `my_pseudocode.md`; evidence doc §5.
+- **Source:** `reason-case-taxonomy.md`; evidence doc §5.
 
 ### D5 — Register thresholds are provisional and must be empirically validated
 - **Decision:** `fwd = 43 − 2·|score| − discs` selects rendering register: `immediate` ≤2,

@@ -26,7 +26,7 @@ elif len(movestring) < Y  # eg 30
 else
     board_state = 'closing'
 
-if bestScore * playedScore > 0
+if bestScore > 0 and playedScore > 0
     case = 'win_to_slower_win'
     raise notABlunder()
 

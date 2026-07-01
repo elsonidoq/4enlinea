@@ -34,11 +34,11 @@ or let them guide you, **even if they appear in injected memory or the docs inde
 If you find yourself reaching for "grains", a "unified engine", or the five-kind discriminated
 union, stop — that is the drift we are escaping.
 
-**The single source of truth is `docs/architecture/my_pseudocode.md`.** Anchor everything to it.
+**The single source of truth is `docs/architecture/reason-case-taxonomy.md`.** Anchor everything to it.
 
 # Background (read before starting)
 
-- `docs/architecture/my_pseudocode.md` — **authoritative.** The case taxonomy to (re)build around,
+- `docs/architecture/reason-case-taxonomy.md` — **authoritative.** The case taxonomy to (re)build around,
   keyed by `(bestScore, playedScore)` sign comparison:
   - `win_to_slower_win` → NotABlunder (out of scope)
   - `win_to_draw`

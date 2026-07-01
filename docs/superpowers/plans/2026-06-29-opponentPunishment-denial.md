@@ -267,17 +267,17 @@ git commit -m "chore(reason): regenerate evidence with opponentPunishment denial
 **Files:**
 - Modify: `docs/architecture/reason-DECISIONS.md` (append D17)
 - Modify: `docs/architecture/blunder-reason-evidence.md` (opponentPunishment denial section; close the D16 sync gap)
-- Modify: `docs/architecture/my_pseudocode.md` (note half-b is now a denial search for win_to_draw)
+- Modify: `docs/architecture/reason-case-taxonomy.md` (note half-b is now a denial search for win_to_draw)
 - Modify: `docs/architecture/reason-engine-pseudocode.md` (fold `opponent_punishment` from the spec)
 - Modify: `docs/architecture/reason-opponentPunishment-spec.md` (status → IMPLEMENTED)
 
 - [ ] **Step 1: Append D17** (append-only) to `reason-DECISIONS.md`: the constructive occupation-witness contract; supersede the `win_to_draw` portion of D14's "tie via anchorCells intersection" with "tie produced constructively by the denial search"; reference I12 counterexamples + the spec.
 - [ ] **Step 2: Update `blunder-reason-evidence.md`** — add the opponentPunishment denial mechanism to §2/§4, and (closing the D16 lag) note that `win_to_draw`/`win_to_lose` lostResource halves stop at forks.
-- [ ] **Step 3: Fold `opponent_punishment` pseudocode** (spec §3 corrected block) into `reason-engine-pseudocode.md`; one line in `my_pseudocode.md` pointing half-b at it for `win_to_draw`.
+- [ ] **Step 3: Fold `opponent_punishment` pseudocode** (spec §3 corrected block) into `reason-engine-pseudocode.md`; one line in `reason-case-taxonomy.md` pointing half-b at it for `win_to_draw`.
 - [ ] **Step 4: Flip the spec status** to IMPLEMENTED with the commit refs.
 - [ ] **Step 5: Commit.**
 
 ```bash
-git add docs/architecture/reason-DECISIONS.md docs/architecture/blunder-reason-evidence.md docs/architecture/my_pseudocode.md docs/architecture/reason-engine-pseudocode.md docs/architecture/reason-opponentPunishment-spec.md
+git add docs/architecture/reason-DECISIONS.md docs/architecture/blunder-reason-evidence.md docs/architecture/reason-case-taxonomy.md docs/architecture/reason-engine-pseudocode.md docs/architecture/reason-opponentPunishment-spec.md
 git commit -m "docs(reason): D17 opponentPunishment denial + close D16 doc-sync"
 ```

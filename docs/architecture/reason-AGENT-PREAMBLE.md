@@ -18,7 +18,7 @@ in order, and treat them as binding:
    solver-call cost as a design objection.
 2. `docs/architecture/reason-DECISIONS.md` — append-only log of resolved decisions + their rationale.
    **Do not relitigate these.** If you think one is wrong, stop and ask — do not silently redesign.
-3. `docs/architecture/my_pseudocode.md` — the authoritative `(bestScore, playedScore)` case taxonomy.
+3. `docs/architecture/reason-case-taxonomy.md` — the authoritative `(bestScore, playedScore)` case taxonomy.
 4. `docs/architecture/blunder-reason-evidence.md` — the two-halves evidence engine, register
    selection, the `lose_to_faster_lose` gate, validated boards, and the implementation map (§11).
 

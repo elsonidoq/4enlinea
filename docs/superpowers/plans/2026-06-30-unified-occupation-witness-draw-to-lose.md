@@ -20,7 +20,7 @@
 - **Source boards from fixtures / `gameSampling.playGame`, never hand-roll** (memory `feedback_no_random_boards`).
 - **Two honest claims, never merged (D17/D18):** LOCAL = "the denier occupies cell X of window W" (verified LIVE→DEAD); GLOBAL = "the line draws" (carried by the case). Never claim "this one move refutes everything."
 - **Tests:** `npm run test:fast` inside `connect-four/`. Inline solver scripts must `await solver.query` and `solver.destroy()` in a `finally`.
-- **Do not relitigate the four canonical docs.** If anything conflicts with INVARIANTS / DECISIONS / my_pseudocode / blunder-reason-evidence, STOP and ask.
+- **Do not relitigate the four canonical docs.** If anything conflicts with INVARIANTS / DECISIONS / reason-case-taxonomy / blunder-reason-evidence, STOP and ask.
 
 **Validated anchor boards (ground truth, already observed):**
 - `draw_to_lose` ZUGZWANG: `2444422235255630400333` played `0` (best `1`). Opponent conceded window W = `c4r6 c5r6 c6r6 c7r6` (completes `c7r6`). From `bestRoot` the **player** occupies `c4r6` (ply 33) then `c5r6` (ply 35) → final window `Gn Gn Gy Gy` → draw. First player occupation = **`c4r6`** = the denial witness. (Current engine: half-a `parity_group c6r6`, tie falsely `independent`.)
@@ -37,7 +37,7 @@
 - Consumes: this plan + the four canonical docs + `reason-opponentPunishment-spec.md`.
 - Produces: a go/no-go sign-off; a list of any conflicts found.
 
-- [ ] **Step 1: Re-read the binding docs and check each design claim against them.** Read `reason-INVARIANTS.md`, `reason-DECISIONS.md` (esp. D7, D8, D14, D16, D17), `my_pseudocode.md`, `blunder-reason-evidence.md`, `reason-opponentPunishment-spec.md`, `reason-engine-pseudocode.md`. For each, confirm:
+- [ ] **Step 1: Re-read the binding docs and check each design claim against them.** Read `reason-INVARIANTS.md`, `reason-DECISIONS.md` (esp. D7, D8, D14, D16, D17), `reason-case-taxonomy.md`, `blunder-reason-evidence.md`, `reason-opponentPunishment-spec.md`, `reason-engine-pseudocode.md`. For each, confirm:
   - The PV-walk-replaces-BFS migration is consistent with I0/I6/I9 and that the **only** semantic change is D17's "shallowest" guarantee → "first-on-canonical-PV" (recorded as D18, Task 6). Confirm D17 §3a already declares the tie-break "NOT part of the contract" and correctness defined solely by §3 (a LIVE→DEAD occupation exists).
   - The `draw_to_lose` flip keeps the two halves in separate fields (D8): half a = denial witness (player blocks W), half b = the opponent's winning line (unchanged). The constructive tie lives on `opponentPunishment.tie` (consistent with D14/D17) but is produced by the half-a occupation cell.
   - Parity naming stays DEFERRED for *prose* (D7) — the occupation witness *exhibits* the blocking cell concretely without naming Allis/Aftereven, which is allowed.
@@ -461,7 +461,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 **Files:**
 - Modify: `docs/architecture/reason-DECISIONS.md` (append **D18**).
 - Modify: `docs/architecture/reason-engine-pseudocode.md` (replace `denial_search` BFS with the unified PV `find_occupation_witness`; update `punish_half` win_to_draw + the `draw_to_lose` half-a / tie).
-- Modify: `docs/architecture/my_pseudocode.md` (update the `draw_to_lose` reason comment + the `win_to_draw` half-b comment).
+- Modify: `docs/architecture/reason-case-taxonomy.md` (update the `draw_to_lose` reason comment + the `win_to_draw` half-b comment).
 - Modify: `docs/architecture/blunder-reason-evidence.md` (§2 half-a/half-b table for draw_to_lose; §7 note that the parity_group fallback is replaced by the occupation witness for draw_to_lose).
 - Modify: `docs/architecture/reason-opponentPunishment-spec.md` (status note: superseded-in-part by D18; BFS → PV).
 
@@ -473,7 +473,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 2: Update `reason-engine-pseudocode.md`:** replace the `denial_search` BFS section with `find_occupation_witness(root, denier, windows, depthCap)` (PV walk + root pre-check + the theorem note). In `punish_half`, `win_to_draw` fork → `find_occupation_witness(playedRoot, denier=opponent, against.forkWindows)`. Add the `draw_to_lose` half-a path: compute half b first, then `lostResource = find_occupation_witness(bestRoot, denier=player, concededWindows)`, set the constructive window-aware tie. Update the `tie_to` `draw_to_lose` note (no longer "independent by design" — now `tied` at the occupation cell; remove the stale "hold cell != completing cell" zugzwang claim).
 
-- [ ] **Step 3: Update `my_pseudocode.md`** `draw_to_lose` and `win_to_draw` comments to point at the unified occupation witness (the half-a denial for draw_to_lose; PV not BFS for win_to_draw).
+- [ ] **Step 3: Update `reason-case-taxonomy.md`** `draw_to_lose` and `win_to_draw` comments to point at the unified occupation witness (the half-a denial for draw_to_lose; PV not BFS for win_to_draw).
 
 - [ ] **Step 4: Update `blunder-reason-evidence.md`** §2 table: `draw_to_lose` half (a) kind becomes `denial` (occupation witness) for both sub-cases; §6 zugzwang `draw_to_lose` bullet: the hold/denial cell is `c4r6` **inside** the opponent window (tied), not `c2r3`/independent; §7: note the `parity_group` fallback is superseded by the occupation witness for `draw_to_lose` (parity *prose* naming still deferred per D7).
 
@@ -485,7 +485,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - [ ] **Step 7: Commit.**
 
 ```bash
-git add docs/architecture/reason-DECISIONS.md docs/architecture/reason-engine-pseudocode.md docs/architecture/my_pseudocode.md docs/architecture/blunder-reason-evidence.md docs/architecture/reason-opponentPunishment-spec.md
+git add docs/architecture/reason-DECISIONS.md docs/architecture/reason-engine-pseudocode.md docs/architecture/reason-case-taxonomy.md docs/architecture/blunder-reason-evidence.md docs/architecture/reason-opponentPunishment-spec.md
 git commit -m "docs(reason): D18 unified occupation witness; draw_to_lose flip; no_occupation as depth artifact
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"

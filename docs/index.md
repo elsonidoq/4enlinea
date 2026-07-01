@@ -64,7 +64,7 @@
 
 [architecture/reason-DECISIONS.md](architecture/reason-DECISIONS.md) — **DECISION LOG** — append-only resolved decisions + rationale (restart/quarantine, gate, provisional thresholds, fixture strategy) — do not relitigate these
 
-[architecture/my_pseudocode.md](architecture/my_pseudocode.md) — **AUTHORITATIVE** — the `(bestScore, playedScore)` 5-case taxonomy keyed by sign comparison
+[architecture/reason-case-taxonomy.md](architecture/reason-case-taxonomy.md) — **AUTHORITATIVE** — the `(bestScore, playedScore)` 5-case taxonomy keyed by sign comparison
 
 [architecture/blunder-reason-evidence.md](architecture/blunder-reason-evidence.md) — the two-halves evidence engine, register selection, the `lose_to_faster_lose` gate, validated boards, tooling + implementation map
 

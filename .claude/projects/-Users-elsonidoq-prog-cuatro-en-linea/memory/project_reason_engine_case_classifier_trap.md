@@ -1,6 +1,6 @@
 ---
 name: project_reason_engine_case_classifier_trap
-description: my_pseudocode.md's `bestScore*playedScore>0` first branch is a latent bug; win_to_slower_win must be both-POSITIVE
+description: reason-case-taxonomy.md's `bestScore*playedScore>0` first branch is a latent bug; win_to_slower_win must be both-POSITIVE
 metadata:
   type: project
 ---
@@ -9,7 +9,7 @@ The blunder-reason case classifier (`connect-four/server/scripts/reason_engine/r
 classifies by the sign pair `(bestScore, playedScore)` where `bestScore = max(legal solver scores)`
 and `playedScore = scores[playedCol]`, both **player (side-to-move) perspective**.
 
-**Trap:** `docs/architecture/my_pseudocode.md`'s first branch is written `if bestScore*playedScore>0
+**Trap:** `docs/architecture/reason-case-taxonomy.md`'s first branch is written `if bestScore*playedScore>0
 → win_to_slower_win (NotABlunder)`. That product is also positive when BOTH scores are **negative**,
 so a literal implementation silently swallows every `lose_to_faster_lose` blunder (both<0) as
 "not a blunder." The engine must gate `win_to_slower_win` on **`bestScore>0 && playedScore>0`**, not

@@ -7,7 +7,7 @@
 > re-typed, and occasionally violated across many sessions. These are **non-negotiable** unless this
 > file is explicitly amended.
 >
-> Authoritative companions: [`my_pseudocode.md`](./my_pseudocode.md) (the case taxonomy) and
+> Authoritative companions: [`reason-case-taxonomy.md`](./reason-case-taxonomy.md) (the case taxonomy) and
 > [`blunder-reason-evidence.md`](./blunder-reason-evidence.md) (the two-halves evidence engine, the
 > validated boards, the implementation map). Resolved choices + their rationale live in
 > [`reason-DECISIONS.md`](./reason-DECISIONS.md).
@@ -78,7 +78,7 @@ acceptable gap.
 ## I5. The case taxonomy is keyed on `(bestScore, playedScore)` signs
 
 The five cases (`win_to_slower_win`, `win_to_draw`, `win_to_lose`, `draw_to_lose`,
-`lose_to_faster_lose`) are defined by the sign comparison in `my_pseudocode.md`. **Implementation
+`lose_to_faster_lose`) are defined by the sign comparison in `reason-case-taxonomy.md`. **Implementation
 caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0`, **not** the literal
 `bestScore*playedScore>0` (which also matches both-negative and would swallow `lose_to_faster_lose`).
 See memory `project_reason_engine_case_classifier_trap`.
@@ -123,7 +123,7 @@ is the INVALID_MOVE sentinel.
 
 ## I11. One frozen design — do not restart, do not resurrect the quarantine
 
-`my_pseudocode.md` + `blunder-reason-evidence.md` are the **sole** source of truth. The
+`reason-case-taxonomy.md` + `blunder-reason-evidence.md` are the **sole** source of truth. The
 `blunder-reason-field-epic.md`, `unified-blunder-reason-epic.md`,
 `feature-vector-reason-algorithm.md`, and the old `reason_audit/` `SUPERSEDED/ABANDONED` cluster were
 **deleted 2026-06-30** — do not resurrect them; ignore any lingering references in search or

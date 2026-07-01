@@ -3,7 +3,7 @@
 //
 // Given a board (movestring) and the column actually played, emit a STRUCTURED JSON evidence
 // vector explaining why the move was a blunder. Authoritative design:
-//   docs/architecture/my_pseudocode.md            (5-case sign taxonomy)
+//   docs/architecture/reason-case-taxonomy.md            (5-case sign taxonomy)
 //   docs/architecture/blunder-reason-evidence.md  (two-half engine, registers, gate, validated boards)
 //
 // CLI (run from connect-four/):
@@ -48,7 +48,7 @@ export const REASON_CONFIG = {
   gateBranch: 3,       // winning opponent moves explored per node (least-winning first)
   gatePlayerTiedCap: 2,
   gateExhaustiveEmpties: 10, // <= this many empty cells -> run the gate exhaustively (exact verdict)
-  // board_state bands (my_pseudocode.md §opening/mid-game/closing).
+  // board_state bands (reason-case-taxonomy.md §opening/mid-game/closing).
   openingMaxDiscs: 15,
   midgameMaxDiscs: 30,
 };
@@ -684,12 +684,12 @@ export async function computeReason(movestring, playedCol, { solver }) {
   };
 
   // ── classify ──
-  // NOTE: my_pseudocode.md's first branch `bestScore*playedScore>0` ALSO matches both-negative,
+  // NOTE: reason-case-taxonomy.md's first branch `bestScore*playedScore>0` ALSO matches both-negative,
   // which would make lose_to_faster_lose unreachable. The companion doc treats both-negative as
   // in-scope, so win_to_slower_win is only when BOTH scores are positive.
   if (bestScore > 0 && playedScore > 0) {
     out.case = CASES.WIN_TO_SLOWER_WIN;
-    out.notABlunder = true; // out of scope per my_pseudocode.md
+    out.notABlunder = true; // out of scope per reason-case-taxonomy.md
     return out;
   }
 

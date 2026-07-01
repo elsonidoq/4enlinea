@@ -1,8 +1,8 @@
 # Blunder-Reason Feature Vector — Glossary for an LLM Reader
 
-You are reading a **blunder-reason feature vector**: a compact, solver-grounded description of a
-single Connect Four decision in which the move actually **played** is compared against the engine's
-**best** move. Your job, when given one, is to explain **why the played move was a blunder** using
+You are reading a **blunder-reason feature vector**: a compact, game-theoretically exact description
+of a single Connect Four decision in which the move actually **played** is compared against the
+**best** move (the outcome of each is the result under perfect play by both sides). Your job, when given one, is to explain **why the played move was a blunder** using
 only the facts in this vector and the board its `movestring` describes — naming reproducible board
 features, never inventing tactics, cells, or lines that the vector does not carry.
 
@@ -18,7 +18,7 @@ self-contained.
 
 - **`route: "realized_denied"`** — a *tag-first* explanation for a short, cell-nameable tactic
   (a conceded/handed/missed immediate threat or fork). Its halves are a **`realized_pattern`** (the
-  one-move tactic) and a **`denial`** (the solver proof it is prevented). See §3b. `tag`/`direction`
+  one-move tactic) and a **`denial`** (the proof it is prevented under optimal play). See §3b. `tag`/`direction`
   are present; `gate` is `null`.
 - **`route` absent** — the default *sign-taxonomy* explanation (the 5 `case`s, §2), whose halves are
   `winning_line` / `denial` / `neutralization` / `conditional_swindle`.
@@ -74,14 +74,13 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
   - `player: 2` — the **second player**; wins on **even** rows (2, 4, 6). Displayed as "Gray".
   - The `lostResource` half is always **your** resource; the `opponentPunishment` half is always the
     **opponent's** reply.
-- **No solver scores.** You do **not** receive the solver's numeric evaluations — not the
-  per-column array, not `bestScore`/`playedScore`, not the per-move `score` inside a `line`. They are
-  deliberately withheld so your explanation is grounded in the **board structure**, never in a number
-  like "+18". The outcome (win / draw / loss, for both the best and the played move) comes entirely
-  from **`case`** (§2), whose name IS the sign pair. Never assert or invent a score, a "you win in N,"
-  or a "how soon" magnitude — if you feel the need to cite a number, you are grounding on data you
-  were not given. Use `pliesToEnd` (§ register) when you need "how far off" — it is a *counted* ply
-  distance along a walked line, the only distance signal in the vector.
+- **No numeric evaluation.** The vector carries **no score of any kind** — no per-column numbers, no
+  overall win/loss magnitude. Your explanation must be grounded in the **board structure** (patterns,
+  parity, winning lines, threatened cells), never in a number like "+18" or "you win in 7." The
+  outcome (win / draw / loss, for both the best and the played move) comes entirely from **`case`**
+  (§2), whose name IS the outcome pair. If you feel the need to cite a number for how good a move is,
+  stop — that data is intentionally absent. For "how far off" a resolution is, use `pliesToEnd`
+  (§ register), a counted move-distance along the line — the only distance signal in the vector.
 - **"With best play."** Every outcome word means the game-theoretic result **assuming both sides
   play optimally from here on**. A win means you *can force* a win with correct continuation — it is
   **not** guaranteed by the single move. The only move that wins by itself is one that completes
@@ -127,16 +126,16 @@ explanation should produce:
 | `lose_to_faster_lose` | (−, −) | You were already losing, but the best move kept a practical swindle; the played move loses faster. | "You were lost either way, but the best move kept a real swindle (`lostResource`: if the opponent slips you still win); your move throws it away and loses sooner (`tie.temporal`)." |
 | `win_to_slower_win` | (+, +) | You'd still win, just slower. | **Out of scope** — `notABlunder: true`; you will not be asked to explain these. |
 
-> **No solver scores at all.** The vector deliberately omits every solver evaluation — the full
-> per-column array **and** `bestScore`/`playedScore`. Read the outcome from `case`; do not claim a
+> **No numeric evaluation at all.** The vector deliberately omits every position score — per-column
+> values and any overall best/played magnitude alike. Read the outcome from `case`; never claim a
 > score, a per-column value, or a numeric "how soon."
 
 ---
 
 ## 3. The two halves — `lostResource` and `opponentPunishment`
 
-Every blunder reason is **two solver-grounded walks**, kept in **two separate fields** (this
-separation is a hard invariant — never merge their cells):
+Every blunder reason is **two exact lines**, each traced under optimal play by both sides, kept in
+**two separate fields** (this separation is a hard invariant — never merge their cells):
 
 - **`lostResource`** (half a) — one bounded optimal-line walk from `movestring + bestCol`. It is
   **what the best move preserved**: a winning line/fork, a draw-holding defensive occupation, or a
@@ -153,7 +152,7 @@ Both halves share a common sub-shape (fields that are present depend on `kind`/`
 | `register` | `immediate` / `forced_sequence` / `parity` — how far off, and whether the `line` is shown. § register. |
 | `completingCell` | The `cNrM` square that completes the four (or, for a fork, a representative fork cell). |
 | `window` | The 4-cell winning window `[cNrM×4]` the line/fork rides. |
-| `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count; the only distance signal — solver scores are withheld). |
+| `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count; the only distance signal — no numeric evaluation is given). |
 | `line` | The literal move sequence `[{ply, mover, col, cell}, …]` **when the register shows it**; `null`/absent for `parity` (too long to teach). Teaches the move order and squares — no per-move score is included. § register. |
 | `finalMovestring` | The board on which `completingCell` is occupied (the end of the walk). |
 | `entryCell` | The square where this half's action begins (first move of `line`, or the completing/occupying cell). |
@@ -260,7 +259,7 @@ The two halves are still `lostResource` (a) and `opponentPunishment` (b), but ea
   squares), `windows` (the 4-cell winning windows), `completingCell`/`window`, `register:
   "immediate"`, `finalMovestring`, `entryCell`, `anchorCells`. Narrative: "one drop makes it — here
   are the cells."
-- **`kind: "denial"`** — the **solver proof** the tactic is (or would be) prevented under optimal
+- **`kind: "denial"`** — the **proof** the tactic is (or would be) prevented under optimal
   play: an occupation witness, identical in shape to the sign-engine denial (§5). `verdict:
   "occupation"` carries the killing `cell` + `window` + `line`; `no_occupation` is the honest "no
   witness within budget." For `immediate_threat`/`forced_block` the denial is a **single block** (a
@@ -385,7 +384,7 @@ is given to you ready-made — you never compute it:
 | `parity` | A long zugzwang resolution (>~12 plies). **Too long to teach as a sequence** — `line` is `null`. Describe the structure via `parityAttribution` instead. | `null` |
 
 - `line` entries are `{ ply, mover, col, cell }`: `mover` is `1`/`2`, `col` is **0-indexed**,
-  `cell` is the `cNrM` landing square. (No per-move `score` — solver evaluations are withheld, §1.)
+  `cell` is the `cNrM` landing square. (No per-move `score` — the vector carries no numeric evaluation, §1.)
 - `finalMovestring` is the board at the end of the walk (where `completingCell` is occupied). You may
   reference cells from `line`/`window`/`completingCell`; do **not** invent cells beyond them.
 - A `null` line on a `parity` register is **expected** — it is "the win is real but too deep to
@@ -435,15 +434,15 @@ The move-level squares that **define** the lost resource; the `tie` (§4) is ver
 (not against the eventual completing cell). Use them when you need to point at "the resource you gave
 up." They are already listed in the vector — do not derive your own.
 
-### `tacticTag` — a name, gated by the solver (may be `null`)
+### `tacticTag` — a verified name (may be `null`)
 
 Each half may carry a `tacticTag` (with `tacticCells`) — a named tactic from the production
 classifier (drawn from the same vocabulary as `tag`; the full list is in §3b —
 `double_threat`, `immediate_threat`, `figure_7`, `j_shape`, `undercut`, `overcut`, `z_threat`,
 `claimeven`, `major_threat_parity`, …). Note this half-level `tacticTag` is distinct from the
 top-level `tag`: `tag` is the `tagBlunder` classification that *routed* the vector, while `tacticTag`
-is a solver-gated name on a sign-taxonomy half. It is admitted **only** when it is consistent
-with the solver-proven nature and location of the win. **`tacticTag: null` is common and correct** —
+is a verified name on a sign-taxonomy half. It is admitted **only** when it is consistent
+with the proven nature and location of the win under optimal play. **`tacticTag: null` is common and correct** —
 it means no named tactic passed the gate, **not** that nothing happened. When `tacticTag` is present,
 you may name it; when it is `null`, explain the mechanism from the half's `window`/`line`/fork/parity
 fields **without** inventing a tactic name. `tacticFromDiff: true` means the best move builds this
@@ -472,7 +471,7 @@ The swindle-gate result: `{ ran, exhaustive, verdict, witness, nodesVisited }`.
 - `verdict: "NotABlunder"` with `notABlunder: true` — no reachable swindle; losing one move later is
   not a teachable mistake (these are filtered out of the eval).
 - `exhaustive` — whether the subtree was fully searched (`true`) or only depth-bounded (`false`,
-  "no swindle within budget"). Soundness is asymmetric: a `Blunder` verdict is always solver-true; a
+  "no swindle within budget"). Soundness is asymmetric: a `Blunder` verdict is always provably true; a
   `NotABlunder` is exact only when `exhaustive: true`.
 
 ---

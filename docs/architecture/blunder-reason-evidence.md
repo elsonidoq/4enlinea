@@ -1,6 +1,6 @@
 # Blunder-reason evidence collection
 
-Companion to [`my_pseudocode.md`](./my_pseudocode.md), which is the authoritative case taxonomy.
+Companion to [`reason-case-taxonomy.md`](./reason-case-taxonomy.md), which is the authoritative case taxonomy.
 That file defines *which* `reason` each `(bestScore, playedScore)` blunder gets; this file defines
 *how the evidence behind each reason is computed*, with the validated boards and budgets.
 
@@ -245,7 +245,7 @@ stratify/reject on `fwd` (or `|score|`)**. For `win_to_lose`, the selector must 
   low-specificity parity reason rather than invent geometry.
 - **Display cap is real information loss.** The show/don't-show ply threshold is a product knob, not a
   correctness threshold; raising it trades instructiveness for completeness.
-- **`win_to_slower_win`** is out of scope (NotABlunder) per `my_pseudocode.md`.
+- **`win_to_slower_win`** is out of scope (NotABlunder) per `reason-case-taxonomy.md`.
 
 ## 11. Implementation map (built 2026-06-29)
 
@@ -268,7 +268,7 @@ explicitly rather than from a walk). `gate` (ltfl only) = `{ ran, exhaustive, ve
 nodesVisited }`.
 
 **Case classifier caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0`, NOT the
-`my_pseudocode.md` literal `bestScore*playedScore>0` (which also matches both-negative and would
+`reason-case-taxonomy.md` literal `bestScore*playedScore>0` (which also matches both-negative and would
 swallow `lose_to_faster_lose`). See memory `project_reason_engine_case_classifier_trap`.
 
 **Viewer:** `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) browses `reason_evidence_*.jsonl` via

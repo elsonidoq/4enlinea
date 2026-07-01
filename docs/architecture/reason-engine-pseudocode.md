@@ -1,6 +1,6 @@
 # Blunder-reason engine — integrated pseudocode
 
-Successor to [`my_pseudocode.md`](./my_pseudocode.md) (the authoritative 5-case sign taxonomy) and
+Successor to [`reason-case-taxonomy.md`](./reason-case-taxonomy.md) (the authoritative 5-case sign taxonomy) and
 companion to [`blunder-reason-evidence.md`](./blunder-reason-evidence.md) (the two-half engine,
 registers, gate, validated boards). Folds in the enrichments developed afterward:
 
@@ -14,7 +14,7 @@ registers, gate, validated boards). Folds in the enrichments developed afterward
    emits a **verified** relationship. The tie may legitimately be `independent` (and saying so is
    information, not a failure).
 
-Abstraction level matches `my_pseudocode.md`: a skeleton, not an implementation. Two truth sources —
+Abstraction level matches `reason-case-taxonomy.md`: a skeleton, not an implementation. Two truth sources —
 the SOLVER proves the case, the realized win, and every tie (authoritative); `classifyPattern` only
 names tactics (proposer). The solver always disposes.
 
@@ -305,7 +305,7 @@ def realized_locus(walk, half):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  SHARED PRIMITIVES (unchanged from my_pseudocode.md / blunder-reason-evidence.md)
+#  SHARED PRIMITIVES (unchanged from reason-case-taxonomy.md / blunder-reason-evidence.md)
 # ════════════════════════════════════════════════════════════════════════════
 
 def walk_optimal(root):               # both sides argmax to terminal -> {completingCell, window, line, ...}

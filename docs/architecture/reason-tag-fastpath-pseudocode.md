@@ -1,7 +1,7 @@
 # Blunder-reason engine — the tagBlunder realized/denied router (design)
 
 > **Read the four canonical reason docs first** (`reason-INVARIANTS.md`, `reason-DECISIONS.md`,
-> `my_pseudocode.md`, `blunder-reason-evidence.md`) plus `reason-engine-pseudocode.md`. This design
+> `reason-case-taxonomy.md`, `blunder-reason-evidence.md`) plus `reason-engine-pseudocode.md`. This design
 > **generalizes the D18 `findOccupationWitness` primitive** across move directions and routes the
 > short, cell-nameable tactical tags through it. It does **not** reverse D16/D17/D18 — it subsumes the
 > `win_to_draw` fork case as one instance of a symmetric rule.
