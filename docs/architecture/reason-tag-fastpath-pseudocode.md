@@ -199,7 +199,7 @@ def realized_denied_reason(movestring, playedCol, bestCol, tag, direction, playe
   (via `gameSampling`, never hand-rolled), run through the real `tagBlunder` + `realized_denied_reason`,
   added to `reason_fixture.jsonl`.
 - Output-shape threading: `route` / `tag` / `direction` and the `realized_pattern` half kind into
-  `build_evidence.mjs`, `/admin/fv-suff`, and the explain prompt.
+  `compute.mjs` (successor to the deleted `build_evidence.mjs`), `/admin/fv-suff`, and the explain prompt.
 
 ## Honest-limits: I12 coverage gaps (Task 5, 2026-07-01)
 
@@ -243,6 +243,16 @@ If a future harvest (longer budget, targeted search, or hand-selected known cons
 Until then: I12 is NOT fully closed for the realized/denied router — this is a known, documented gap,
 not a fabricated pass.
 
+**Task-9 all-suboptimal-columns harvest (2026-07-01, post board-selection consolidation):** a second,
+more thorough harvest — probing EVERY suboptimal legal column per self-play position, not just the
+played move (broader than both the pre-fix ~60k harvest above and D20's played-move sweep) — examined
+**13,937 `enabled_opponent`-tagged blunders through `computeReason` across 44,110 suboptimal-column
+probes over 425 games and found ZERO** `double_threat/enabled_opponent` or `figure_7/enabled_opponent`
+forks. This reinforces rather than resolves the gap above: both pairs remain PROVISIONAL in the
+`select_boards.mjs --strategy coverage` named universe (see `reason-DECISIONS.md` D22). The deferred
+hypothesis (widen the per-player mistake-probability range in `gameSampling`/`harvestBlunders`) is
+recorded in D22 as a separate follow-up, not attempted here.
+
 ## Follow-up (separate change)
 
 Task 6 confirmed that `route`/`tag`/`direction` and the `realized_pattern`/`denial` half kinds
@@ -252,6 +262,12 @@ survive into the precomputed evidence output (`computeReason`'s return is passed
 threading" open item above referenced `build_evidence.mjs`, which was deleted 2026-06-30 as part
 of the reason-eval 2-script pipeline consolidation (commit `4c26b3a`); `compute.mjs` is its
 successor and is the file that actually needs to stay pass-through-safe going forward.
+
+**Live pipeline (2026-07-01, per `reason-DECISIONS.md` D22):** board generation is
+`select_boards.mjs --strategy coverage` (named-universe coverage selector) or
+`--strategy fixture` (committed `reason_fixture.jsonl`); evidence generation is `compute.mjs`
+over that board set. `generate_eval_set.mjs` (the old-explain board generator) is **deleted**;
+`run_eval.mjs` is DEPRECATED. Neither is part of the reason-eval pipeline going forward.
 
 **Still explicitly OUT OF SCOPE for this plan** — tracked here so it is not lost:
 

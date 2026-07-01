@@ -234,6 +234,23 @@ skew. To concentrate teachable cases, sample with the disc floor **and additiona
 stratify/reject on `fwd` (or `|score|`)**. For `win_to_lose`, the selector must also require
 `max(scores) > 0`, or it grabs `losing_either_way` boards, which are a different case.
 
+**Board selection is now a named-universe coverage selector.** `select_boards.mjs --strategy coverage`
+enumerates the full closed predicate universe (`REASON_UNIVERSE` — every value of `route`, `case`,
+`player`, `phase`, `severity`, the 7 `rd_<tag>_<direction>` pairs, `lost_*`, `opp_*`, `tie_*`, `reg_*`,
+`tactic_*`, `parity_*`, `gate_*`) upfront, partitioned into `required` (must reach target; `satisfied()`
+gates on these) and `provisional` (known-rare/structurally-unreachable, reported non-blocking). It logs
+fulfilled / under-target / never-seen predicates against the named universe (`*` marks provisional) and
+throws if the engine emits a predicate absent from the universe (`discovered ⊆ named` guard). `MAX_GAMES`
+is a bug-bound, not the expected exit path — see `reason-DECISIONS.md` D22.
+
+**Rare `(tag, direction)` pairs are sourced via an all-suboptimal-columns harvest, not played-move
+sampling alone.** `rd_double_threat_enabled_opponent` and `rd_figure_7_enabled_opponent` stayed
+PROVISIONAL/unsourced even after the coverage run; a targeted harvest probing *every* suboptimal legal
+column per self-play position (not just the played move) examined 13,937 `enabled_opponent`-tagged
+blunders through `computeReason` across 44,110 suboptimal-column probes over 425 games and found ZERO
+such forks — reinforcing D20's 0/60k finding that the enabled-direction fork is a narrow existential over
+optimal replies. See `reason-DECISIONS.md` D22 and `reason-tag-fastpath-pseudocode.md` §Honest-limits.
+
 ## 10. Honest limits (current)
 
 - **Provisional thresholds.** `forced_sequence ≤ ~6`, `parity > ~12`, gate `DEPTH=6 / BRANCH=3` were
@@ -255,9 +272,9 @@ All under `connect-four/`. Coordinates 0-indexed internally; the engine emits `c
 |---|---|
 | `server/scripts/reason_engine/reasonEngine.mjs` | the engine + CLI. `computeReason(movestring, playedCol, {solver})` → evidence JSON. CLI: `node server/scripts/reason_engine/reasonEngine.mjs <ms> <playedCol>`. Holds `REASON_CONFIG` (the provisional thresholds + gate budget — one named object, do not scatter). |
 | `server/scripts/reason_engine/lib/boardUtils.mjs` | shared board helpers (buildBoard / winningWindows / cellStr / parseCell / loadEnv). |
-| `server/scripts/reason_engine/build_fixture.mjs` | stratified rejection-sampling fixture builder (fixed seed) + curated ANCHOR boards from §6; writes `reason_fixture.jsonl`. |
+| `server/scripts/select_boards.mjs` | board generator, two strategies via `--strategy {fixture\|coverage}`. `fixture`: stratified rejection-sampling fixture builder (fixed seed) + curated ANCHOR boards from §6; writes `reason_engine/reason_fixture.jsonl`. `coverage`: named-universe (`REASON_UNIVERSE`) coverage harvester for the from-vector eval — see §9 and `reason-DECISIONS.md` D22. |
 | `server/scripts/reason_engine/reason_fixture.jsonl` | committed fixture: `{movestring, playedCol, bestCol, scores, discs, expectedCase, expectedGate?, expectedExhaustive?, bucket}`. |
-| `server/scripts/reason_engine/build_evidence.mjs` | runs the engine over the fixture → `server/scripts/reason_evidence_all.jsonl` (each row = evidence + ground-truth labels). |
+| `server/scripts/compute.mjs` | runs the engine over a board set (fixture or coverage output) → evidence JSONL (each row = evidence + ground-truth labels); per-board `try/catch` isolation + crash-safe incremental (`appendFileSync`) writes; `--llm` mode also produces `fv_suff_answers_*.jsonl` for `grade-fv-sufficiency`. Supersedes the deleted `build_fixture.mjs`/`build_evidence.mjs` pair. |
 | `server/tests/reasonEngine.test.mjs` | `node --test` (in `npm run test:fast`): asserts case == expectedCase, completingCell occupied on each half's `finalMovestring`, register matches the fwd formula, gate verdict/exhaustive present for ltfl. |
 
 **Evidence object shape** (per `(movestring, playedCol)`): `{ case, notABlunder, bestScore,
@@ -273,4 +290,4 @@ swallow `lose_to_faster_lose`). See memory `project_reason_engine_case_classifie
 
 **Viewer:** `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) browses `reason_evidence_*.jsonl` via
 `GET /api/admin/reason{,/files}` — see `api-conventions.md`. No solver in the web server; the file is
-fully precomputed by `build_evidence.mjs`.
+fully precomputed by `compute.mjs`.
