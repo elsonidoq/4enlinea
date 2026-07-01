@@ -266,14 +266,20 @@ if (strategy === 'fixture') {
     'opp_parity_nameable', 'opp_parity_unnameable',
     'gate_exhaustive', 'gate_bounded',
   ];
-  // SEED partition — finalized empirically by Task 8 (calibration). Provisional = known-rare /
-  // possibly-unreachable in ordinary self-play; reported but NON-blocking (never gates satisfied()).
+  // Partition CALIBRATED empirically (Task 8, 2026-07-01: coverage harvest, target 2, ~497 games).
+  // Provisional = known-rare / structurally-unreachable in ordinary self-play; reported but
+  // NON-blocking (never gates satisfied()). Observed: 45/47 REQUIRED filled by ~497 games; the
+  // predicates below never reached target within budget.
   const PROVISIONAL = new Set([
     'rd_double_threat_enabled_opponent', 'rd_figure_7_enabled_opponent', // 0/60k harvested (D20 honest-limits)
     'tie_temporal',                        // lose_to_faster_lose only
     'lost_denial_no_occupation',           // D18: depth artifact, near-unreachable
     'lost_realized_figure_7', 'lost_fork_B', // figure_7/Case-B forks are rare
     'parity_unnameable', 'opp_parity_unnameable', // multi-window board-fill only
+    // Calibration finding (Task 8): unmet under a full budget. DEFERRED — candidates for the post-plan
+    // sampling investigation (widen per-player mistake-probability range to reach these); see ledger.
+    'gate_exhaustive',                     // lose_to_faster_lose on a near-full board (exhaustive gate); only 1 hit / 497 games
+    'lost_realized_forced_block',          // never seen; missed_own forced_block as the LOST resource is rare in self-play
   ]);
   const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
 
