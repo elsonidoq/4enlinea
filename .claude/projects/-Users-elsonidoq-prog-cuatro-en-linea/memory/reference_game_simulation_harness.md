@@ -9,8 +9,9 @@ metadata:
 
 When you need real Connect Four game positions (eval sets, test fixtures, blunder
 coverage, position sampling), do NOT write a new self-play loop. Every self-play loop is
-now centralized in `server/gameSampling.js` — `generate_eval_set.mjs` and
-`generate_tagblunder_fixtures.mjs` use `harvestBlunders`, and `candidate-generator.js`'s
+now centralized in `server/gameSampling.js` — `select_boards.mjs` (coverage) and
+`generate_tagblunder_fixtures.mjs` use `harvestBlunders` (the old `generate_eval_set.mjs` did too,
+DELETED 2026-07-01 D22), and `candidate-generator.js`'s
 `generateCandidates` consumes `playGame`. The old hand-rolled loops (`solverWeightedPosition`,
 `solverWeightedPositionSoftmax`, `softmaxSample`, `diag_figure7.js`) were DELETED — don't
 resurrect them. Use the canonical module:

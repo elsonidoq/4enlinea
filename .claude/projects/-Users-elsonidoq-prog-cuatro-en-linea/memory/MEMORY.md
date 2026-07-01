@@ -122,7 +122,7 @@
 ## When touching the LLM coach / deep reveal
 
 - [Narrator vector: zero solver scores](project_narrator_vector_no_scores.md) — toNarratorVector DEEP-scrubs the score family (`/^scores?$|Score$/`)+optimalWinSamples; flat top-level strip leaked nested line[].score/bestScore; outcomes from `case`; glossary solver-free (D21)
-- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — run_eval.mjs (solver ground-truth) + /judge-deep-reveals (3 axes); admin flag→feedback sidecar left-joined by id
+- [Deep reveal eval harness](reference_deep_reveal_eval_harness.md) — DEPRECATED (old-explain eval retired, D22); run_eval.mjs + generate_eval_set.mjs(deleted); reason eval is compute.mjs; kept for judge rubric/history
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations/occurrence-artifacts; keep instance counts
 - [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
@@ -143,7 +143,7 @@
 - [Reason-engine reorg 2026-06-30](project_reason_engine_reorg.md) — reason_audit→server/scripts/reason_engine/ (scaffolding deleted); from-vector eval now on the reason vector via toNarratorVector; OLD toFeatureVector STILL feeds production /api/explain* (don't delete); reasonEngine tests now in test:fast; scripts-folder split principle
 - [Reason-field unification](project_reason_field_unification.md) — the 5 blunder-reason kinds collapse to ONE rule: exhibit the winning connect-4 line(s) + compare timing/availability across branches; no opponent line reachable → OMIT (not a blunder)
 - [Reason-engine docs are canonical](project_admin_fv_suff_repurposed.md) — before reason_engine/ work read the 4 docs (reason-INVARIANTS/DECISIONS, reason-case-taxonomy, blunder-reason-evidence) + reason-AGENT-PREAMBLE; engine emits tacticTag(gated)/tie/parityAttribution/anchorCells + fork-stop & unified occupation-denial witness (DECISIONS D13-D18, INVARIANT I12); /admin/fv-suff = 2-mode browser (Evidence vectors + Eval-answers LLM/grade)
-- [Reason eval-set selector](project_reason_eval_set_selector.md) — build_reason_eval_set covers SEEN predicates only (rare cases never appear, by design); stops on satisfied(); 5s heartbeat under-target list = the diagnostic; plateau bug fixed 2026-06-30
+- [Reason eval-set selector](project_reason_eval_set_selector.md) — select_boards.mjs coverage now enumerates a NAMED universe (REQUIRED/PROVISIONAL); satisfied()=all REQUIRED; MAX_GAMES=bug; discovered⊆named guard; SEEN-only SUPERSEDED (D22 2026-07-01)
 - [Reason-engine case classifier trap](project_reason_engine_case_classifier_trap.md) — win_to_slower_win gated on bestScore>0 && playedScore>0, NOT bestScore*playedScore>0 (which swallows lose_to_faster_lose)
 - [LTFL gate admissible swindle](project_ltfl_gate_admissible_swindle.md) — D19: gate counts only ADMISSIBLE opponent mistakes (blocks win-in-1); witness ≠ shallowest min-oppScore node
 - [Denial is always occupation](project_reason_denial_always_occupation.md) — D18: unified PV witness (BFS retired); no_occupation:exhaustive=true is structurally impossible (depth artifact); D17 §3 / opponentPunishment-spec describe the superseded design

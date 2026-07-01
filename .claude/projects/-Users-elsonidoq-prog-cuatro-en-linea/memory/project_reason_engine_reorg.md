@@ -19,8 +19,11 @@ metadata:
 - **The from-vector eval runs on the REASON vector, not the old `toFeatureVector`.** As of the
   **2026-06-30 consolidation** the 5 eval scripts collapsed to **2** (the old ones were DELETED):
   `select_boards.mjs --strategy {fixture|coverage}` (fixture = the old `build_fixture.mjs`, regenerates
-  `reason_engine/reason_fixture.jsonl` BYTE-IDENTICALLY; coverage = the old predicate-harvest
-  `build_reason_eval_set.mjs`, emits only a board list) → `compute.mjs` (the SOLE place `computeReason`
+  the SAMPLED rows of `reason_engine/reason_fixture.jsonl` — NOT byte-identical: the committed fixture
+  also carries `route`/`expectedTag`/`expectedDirection` + a `d19-witness` row added by the D19/D20
+  test commits, which the fixture strategy does not re-emit; coverage = the old predicate-harvest
+  `build_reason_eval_set.mjs`, emits a board list — UPGRADED by D22 to a NAMED predicate universe with
+  REQUIRED/PROVISIONAL partition, see [[project_reason_eval_set_selector]]) → `compute.mjs` (the SOLE place `computeReason`
   runs: writes `reason_evidence_<stem>.jsonl`; with `--llm` also `fv_suff_answers_<stem>_<ts>.jsonl`,
   reusing an existing evidence file so iterating the prompt/glossary never re-runs the solver) →
   `grade-fv-sufficiency` (UNCHANGED; `--vectors <answers file>` — each answers row embeds its

@@ -41,6 +41,6 @@ different axis from pattern tiers. And `reference_tier_source` is yet a third me
 **How to apply:** When asked anything about "Tier-1/2 patterns", read
 `explainContext.js` (TIER1_TAGS/TIER2_TAGS), not classifier.js. To check a board for
 no-Tier-1/2 pattern, run `classifyPattern(ms, perspective, solver)` for both
-perspectives and test its tag keys against the TIER1∪TIER2 set (this is what
-`generate_eval_set.mjs` does to collect its ≥10 no-Tier-1/2 boards). See
+perspectives and test its tag keys against the TIER1∪TIER2 set (the retired
+`generate_eval_set.mjs` did this to collect its ≥10 no-Tier-1/2 boards; DELETED 2026-07-01 D22). See
 [[project_explain_system]] and [[reference_deep_reveal_eval_harness]].

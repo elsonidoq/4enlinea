@@ -7,6 +7,11 @@ metadata:
   originSessionId: 29a169dd-5477-4b5f-aaf8-13766baa9aac
 ---
 
+> **HISTORICAL (D22, 2026-07-01):** these `eval_set_large_3*.json` files belong to the RETIRED
+> old-LLM-explanation eval (they carry `is_sparse` + `buildExplainContext` categories, not reason-vector
+> predicates). They are NOT the reason/glossary eval inputs — those come from `select_boards.mjs`.
+> Kept for history; do not use for the reason feature-vector eval. See [[project_reason_eval_set_selector]].
+
 `connect-four/server/scripts/eval_set_large_3_sparse.json` (20 entries, all `is_sparse`,
 only `drawing_move`/`suboptimal_move`) is a **strict subset** of
 `eval_set_large_3.json` (66 entries, 13 categories, 20 sparse). The two share the same

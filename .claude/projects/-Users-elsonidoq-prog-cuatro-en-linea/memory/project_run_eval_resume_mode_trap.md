@@ -7,6 +7,11 @@ metadata:
   originSessionId: 0770cec4-bac9-4baa-a15f-777ab13b8c84
 ---
 
+> **`run_eval.mjs` is DEPRECATED (D22, 2026-07-01) — the old LLM-explanation eval is retired.** The
+> reason feature-vector successor `compute.mjs` deliberately does NOT have resume mode (it reuses the
+> whole evidence file when present, and its evidence pass now truncates + appends per row for
+> crash-safety — no per-id skipping). The traps below apply only to the deprecated `run_eval.mjs`.
+
 `connect-four/server/scripts/run_eval.mjs` has two traps that make "regenerate the frozen
 vectors" silently no-op while still exiting 0:
 
