@@ -66,10 +66,12 @@ test('computeReason routes 3321234543 to realized_denied (not lose_to_faster_los
   assert.equal(r.opponentPunishment.completingCell, 'c4r5');
 });
 
-test('computeReason reproduces the D18 witness for 214444115623 played 4', async () => {
+test('computeReason keeps deep-fork 214444115623 on the sign engine (D18 witness c3r3 preserved)', async () => {
   const r = await computeReason('214444115623', 4, { solver });
-  // missed_own double_threat -> realized (your fork) is lostResource; denied (opp occupies) is punishment
-  assert.equal(r.route, 'realized_denied');
-  assert.equal(r.opponentPunishment.kind, 'denial');
+  // tagBlunder tags this board drawing_move (Phase C is 1-ply; the fork is 10 plies deep), so
+  // realizedPattern cannot confirm double_threat in one move on the played root -> falls through
+  // (Fix 1) to the sign-taxonomy engine rather than routing realized_denied.
+  assert.notEqual(r.route, 'realized_denied', 'deep fork must not fast-path via realized_denied');
+  // the sign-taxonomy engine still preserves the D18 occupation witness at c3r3.
   assert.equal(r.opponentPunishment.completingCell, 'c3r3', 'same occupation cell as D18');
 });

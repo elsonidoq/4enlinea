@@ -232,7 +232,7 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
   }
 
   const rp = realizedPattern(realizedRoot, owner, tag);
-  if (!rp) throw new Error(`realizedDeniedReason: pattern ${tag} absent for owner ${owner} on ${realizedRoot}`);
+  if (!rp) return null; // detector can't confirm the tag as a one-move pattern -> fall through (I2: don't fabricate)
 
   const realized = {
     kind: 'realized_pattern', tag, owner, register: 'immediate',
@@ -697,7 +697,10 @@ export async function computeReason(movestring, playedCol, { solver }) {
     throw err;
   }
   if (REALIZED_DENIED_TAGS.has(tagged.tag)) {
-    return realizedDeniedReason(out, tagged.tag, tagged.direction, { solver });
+    const rd = await realizedDeniedReason(out, tagged.tag, tagged.direction, { solver });
+    if (rd) return rd;
+    // realizedPattern could not exhibit the named tag as a one-move pattern -> fall through
+    // to the sign-taxonomy engine (honest: don't fabricate a resource we can't show). I2.
   }
 
   const playedRoot = movestring + String(playedCol);
