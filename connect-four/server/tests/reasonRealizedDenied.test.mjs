@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { realizedPattern, realizedDeniedReason } from '../scripts/reason_engine/reasonEngine.mjs';
+import { realizedPattern, realizedDeniedReason, computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -55,4 +55,21 @@ test('realizedDeniedReason: 3321234543 defensive_miss -> block c4r5 is lostResou
   assert.equal(r.lostResource.kind, 'denial');
   assert.equal(r.lostResource.completingCell, 'c4r5');
   assert.equal(r.lostResource.verdict, 'occupation');
+});
+
+test('computeReason routes 3321234543 to realized_denied (not lose_to_faster_lose swindle)', async () => {
+  const r = await computeReason('3321234543', 0, { solver });
+  assert.equal(r.route, 'realized_denied');
+  assert.equal(r.tag, 'forced_block');
+  assert.equal(r.direction, 'defensive_miss');
+  assert.equal(r.gate, null, 'no swindle gate on the realized/denied route');
+  assert.equal(r.opponentPunishment.completingCell, 'c4r5');
+});
+
+test('computeReason reproduces the D18 witness for 214444115623 played 4', async () => {
+  const r = await computeReason('214444115623', 4, { solver });
+  // missed_own double_threat -> realized (your fork) is lostResource; denied (opp occupies) is punishment
+  assert.equal(r.route, 'realized_denied');
+  assert.equal(r.opponentPunishment.kind, 'denial');
+  assert.equal(r.opponentPunishment.completingCell, 'c3r3', 'same occupation cell as D18');
 });

@@ -26,6 +26,7 @@ import {
 } from './lib/boardUtils.mjs';
 import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
+  tagBlunder, NotABlunderError,
 } from '../../classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -678,6 +679,25 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.case = CASES.WIN_TO_SLOWER_WIN;
     out.notABlunder = true; // out of scope per my_pseudocode.md
     return out;
+  }
+
+  // Nothing lost -> not a blunder (best is the max, so playedScore <= bestScore).
+  if (playedScore === bestScore) {
+    out.case = classifySignCase(bestScore, playedScore);
+    out.notABlunder = true;
+    return out;
+  }
+
+  // ── tag-first realized/denied router (reason-tag-fastpath-pseudocode.md) ──
+  let tagged;
+  try {
+    tagged = await tagBlunder(movestring, playedCol, bestCol, solver);
+  } catch (err) {
+    if (err instanceof NotABlunderError) { out.notABlunder = true; out.case = 'not_a_blunder'; return out; }
+    throw err;
+  }
+  if (REALIZED_DENIED_TAGS.has(tagged.tag)) {
+    return realizedDeniedReason(out, tagged.tag, tagged.direction, { solver });
   }
 
   const playedRoot = movestring + String(playedCol);
