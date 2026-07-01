@@ -320,7 +320,7 @@ if (strategy === 'fixture') {
 
   const solver = createSolverProcess();
   const counts = new Map();              // predicate -> #boards it has appeared in
-  const satisfied = () => [...counts.values()].length > 0 && [...counts.values()].every((c) => c >= TARGET_PER_PREDICATE);
+  const satisfied = () => REQUIRED.every((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
   const collected = [];
   const seen = new Set();
   let boards = 0, games = 0, checked = 0;
