@@ -3,8 +3,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  toNarratorVector, pruneVector, pruneValue, HIDDEN_FIELDS,
+  toNarratorVector, pruneVector, pruneValue, isNarratorHidden,
 } from '../scripts/reasonNarratorVector.mjs';
+
+// Recursively collect every key present anywhere in an object/array tree.
+function allKeys(o, acc = new Set()) {
+  if (Array.isArray(o)) o.forEach((v) => allKeys(v, acc));
+  else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { acc.add(k); allKeys(v, acc); }
+  return acc;
+}
 
 // A raw evidence row whose lostResource carries the evidence-only optimalWinSamples diagnostic
 // (attached by attachWinSamples). This must never reach the narrator projection, but a sibling
@@ -38,19 +45,48 @@ const RAW = {
   gate: null,
 };
 
-test('toNarratorVector strips the raw per-column scores oracle', () => {
-  const fv = toNarratorVector(RAW);
-  assert.equal('scores' in fv, false);
-  assert.deepEqual(HIDDEN_FIELDS, ['scores']);
+// A row that exercises EVERY solver-score surface: top-level `scores`, decision `bestScore`/
+// `playedScore`, and a per-move `score` nested inside a shown `line`. None may reach the narrator.
+const RAW_WITH_SCORES = {
+  movestring: '3325', playedCol: 5, bestCol: 1,
+  scores: [-3, 18, 2, 3, -3, 0, -3],
+  bestScore: 18, playedScore: 0, case: 'win_to_draw',
+  lostResource: {
+    kind: 'winning_line', register: 'forced_sequence',
+    line: [{ ply: 5, mover: 1, col: 1, cell: 'c2r1', score: 6 }],
+  },
+  opponentPunishment: {
+    kind: 'winning_line',
+    line: [{ ply: 6, mover: 2, col: 4, cell: 'c5r1', score: -3 }],
+  },
+};
+
+test('isNarratorHidden matches the whole solver-score family + optimalWinSamples, not pliesToEnd', () => {
+  for (const k of ['scores', 'score', 'bestScore', 'playedScore', 'optimalWinSamples']) {
+    assert.equal(isNarratorHidden(k), true, `${k} must be hidden`);
+  }
+  for (const k of ['pliesToEnd', 'case', 'bestCol', 'window', 'cell']) {
+    assert.equal(isNarratorHidden(k), false, `${k} must be kept`);
+  }
 });
 
+test('toNarratorVector removes NO solver score at ANY depth (scores, bestScore, playedScore, line[].score)', () => {
+  const fv = toNarratorVector(RAW_WITH_SCORES);
+  const keys = allKeys(fv);
+  for (const forbidden of ['scores', 'score', 'bestScore', 'playedScore']) {
+    assert.equal(keys.has(forbidden), false, `${forbidden} must not survive anywhere`);
+  }
+  // the line still teaches the sequence — ply/mover/col/cell survive, only score is gone
+  assert.deepEqual(fv.lostResource.line[0], { ply: 5, mover: 1, col: 1, cell: 'c2r1' });
+  assert.equal(fv.opponentPunishment.line[0].score, undefined);
+});
 
-test('toNarratorVector keeps the engineered reason fields verbatim', () => {
+test('toNarratorVector keeps the engineered reason fields (case/cells/tie), drops the scores', () => {
   const fv = toNarratorVector(RAW);
   assert.equal(fv.case, 'win_to_draw');
-  assert.equal(fv.bestCol, 1);
-  assert.equal(fv.playedScore, 0);
-  assert.equal(fv.bestScore, 18);
+  assert.equal(fv.bestCol, 1);          // a column, not a score — kept
+  assert.equal('playedScore' in fv, false);
+  assert.equal('bestScore' in fv, false);
   assert.deepEqual(fv.lostResource.anchorCells, ['c1r1', 'c5r1']);
   assert.equal(fv.opponentPunishment.tie.kind, 'tied');
 });
@@ -98,6 +134,8 @@ test('toNarratorVector strips optimalWinSamples nested in lostResource (evidence
 });
 
 test('pruneValue keeps a non-empty nested structure intact', () => {
-  const v = pruneValue({ line: [{ ply: 1, cell: 'c3r3', score: 9 }], window: ['c1r1'] });
-  assert.deepEqual(v, { line: [{ ply: 1, cell: 'c3r3', score: 9 }], window: ['c1r1'] });
+  // pruneValue only drops empties; score-stripping is toNarratorVector's job and runs first, so a
+  // narrator `line` reaching pruneValue has no `score`.
+  const v = pruneValue({ line: [{ ply: 1, mover: 1, cell: 'c3r3' }], window: ['c1r1'] });
+  assert.deepEqual(v, { line: [{ ply: 1, mover: 1, cell: 'c3r3' }], window: ['c1r1'] });
 });

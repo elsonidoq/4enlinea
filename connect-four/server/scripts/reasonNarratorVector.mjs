@@ -11,46 +11,43 @@
 //   - (future) the production coach, which will call computeReason LIVE on the request and then
 //     this same projection — the eval and production share ONE definition of "what the LLM sees".
 //
-// One thing is removed from the raw evidence:
-//   1. HIDDEN_FIELDS — raw solver ground truth the narrator must not see (per-column `scores`).
-//      The engineered halves (lostResource / opponentPunishment / case / bestScore / playedScore)
-//      carry the reason; the raw all-column score array is oracle leakage (cf. the old experiment's
-//      forbidden premove_scores). I1/I2: the vector is the artifact, not a solver dump.
+// Removed from the raw evidence at EVERY depth (see isNarratorHidden):
+//   1. The solver-score family — `scores` (per-column oracle), `score` (per-move score inside a
+//      shown `line`), and `bestScore` / `playedScore` (the `*Score` decision scores). These are raw
+//      solver ground truth. The narrator must explain from the ENGINEERED structure — `case`, the
+//      two halves, cells, registers — and NEVER by grounding on a numeric solver score. `case`
+//      already carries the outcome sign-pair (win_to_draw = (+,0), win_to_lose = (+,-),
+//      draw_to_lose = (0,-), lose_to_faster_lose = (-,-)); the prompt's win/draw/loss outcomes
+//      derive from `case`, not from a magnitude. Exposing `|score|` invites "you win in 7" grounding
+//      — exactly the fabrication surface I1/I2 forbid.
+//   2. `optimalWinSamples` — an evidence-only diagnostic (glossary §7), kept on the raw evidence for
+//      /admin/fv-suff, never shown to the narrator.
 //   Research labels (expectedCase / expectedGate / expectedExhaustive / bucket / caseMatches) now
 //   live in the sibling `groundTruth` field of the evidence row (never inside `evidence`), so they
 //   are never present in the object passed to toNarratorVector.
 
-// Raw solver oracle — present on computeReason output, hidden from the narrator.
-export const HIDDEN_FIELDS = ['scores'];
-
-// Fields hidden from the narrator that live INSIDE an engineered half (lostResource /
-// opponentPunishment), not at the top level. `optimalWinSamples` is an evidence-only diagnostic
-// (the distribution of optimal winning realizations, for /admin/fv-suff inspection) — it must
-// never enter the LLM-facing vector. It stays on the raw evidence object; only this projection
-// drops it.
-const HIDDEN_HALF_FIELDS = ['optimalWinSamples'];
-
-function stripHalf(half) {
-  if (!half || typeof half !== 'object') return half;
-  if (!HIDDEN_HALF_FIELDS.some((f) => f in half)) return half;
-  const out = {};
-  for (const [k, v] of Object.entries(half)) if (!HIDDEN_HALF_FIELDS.includes(k)) out[k] = v;
-  return out;
+// A key is hidden from the narrator if it is in the solver-score family or is the evidence-only
+// samples diagnostic. `pliesToEnd` (a counted ply distance, not a score) does NOT match and is kept.
+const SCORE_KEY = /^scores?$|Score$/;
+export function isNarratorHidden(key) {
+  return SCORE_KEY.test(key) || key === 'optimalWinSamples';
 }
 
 /**
- * Project a raw reason-engine evidence object to the narrator-facing feature vector.
+ * Project a raw reason-engine evidence object to the narrator-facing feature vector: a DEEP copy
+ * with every isNarratorHidden key removed at every depth. PURE — never mutates the input, so the raw
+ * evidence object retains all fields (the /admin/fv-suff evidence view and the frozen eval fixtures
+ * still carry scores / bestScore / playedScore / line[].score / optimalWinSamples).
  * @param {object} reason  computeReason output (pure evidence, no research labels).
- * @returns {object} a shallow copy with HIDDEN_FIELDS removed at top level and HIDDEN_HALF_FIELDS
- *   removed from the lostResource / opponentPunishment halves.
  */
 export function toNarratorVector(reason) {
-  const omit = new Set(HIDDEN_FIELDS);
-  const out = {};
-  for (const [k, v] of Object.entries(reason)) if (!omit.has(k)) out[k] = v;
-  if (out.lostResource) out.lostResource = stripHalf(out.lostResource);
-  if (out.opponentPunishment) out.opponentPunishment = stripHalf(out.opponentPunishment);
-  return out;
+  if (Array.isArray(reason)) return reason.map(toNarratorVector);
+  if (reason && typeof reason === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(reason)) if (!isNarratorHidden(k)) out[k] = toNarratorVector(v);
+    return out;
+  }
+  return reason;
 }
 
 // ── Pruning: absence = "signal not present" (glossary §pruning). ──

@@ -74,16 +74,14 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
   - `player: 2` — the **second player**; wins on **even** rows (2, 4, 6). Displayed as "Gray".
   - The `lostResource` half is always **your** resource; the `opponentPunishment` half is always the
     **opponent's** reply.
-- **Solver scores: `bestScore`, `playedScore`.** Both are from **your** (the side-to-move's)
-  perspective at the decision board `movestring`:
-  - **sign** = outcome with best play: `> 0` you win, `= 0` draw, `< 0` you lose.
-  - **magnitude** `|score|` ≈ **how soon** it resolves: **larger = sooner**, smaller = a longer
-    grind. (A `+18` is a fast win; a `+1` is a deep endgame win 20+ plies away.)
-  - `bestScore` is by definition ≥ `playedScore` (best is the maximum). The **pair of signs** is
-    exactly what `case` encodes (§2).
-  - Do **not** confuse `|score|` with `pliesToEnd` (§ register): `pliesToEnd` is a *counted* ply
-    distance along a walked line; `|score|` is the solver's soonness proxy. They correlate but are
-    not equal.
+- **No solver scores.** You do **not** receive the solver's numeric evaluations — not the
+  per-column array, not `bestScore`/`playedScore`, not the per-move `score` inside a `line`. They are
+  deliberately withheld so your explanation is grounded in the **board structure**, never in a number
+  like "+18". The outcome (win / draw / loss, for both the best and the played move) comes entirely
+  from **`case`** (§2), whose name IS the sign pair. Never assert or invent a score, a "you win in N,"
+  or a "how soon" magnitude — if you feel the need to cite a number, you are grounding on data you
+  were not given. Use `pliesToEnd` (§ register) when you need "how far off" — it is a *counted* ply
+  distance along a walked line, the only distance signal in the vector.
 - **"With best play."** Every outcome word means the game-theoretic result **assuming both sides
   play optimally from here on**. A win means you *can force* a win with correct continuation — it is
   **not** guaranteed by the single move. The only move that wins by itself is one that completes
@@ -105,9 +103,7 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 | `boardState` | enum | `opening` (<15 discs) / `mid-game` (<30) / `closing` (≥30). Coarse phase only. |
 | `player` | `1`\|`2` | The side who made the move ("you"). |
 | `opponent` | `1`\|`2` | The other side. |
-| `bestScore` | int | Your solver score after the best move (§1 sign/magnitude). |
-| `playedScore` | int | Your solver score after the played move. |
-| `case` | enum | The sign-classified outcome — the shape of a **sign-taxonomy** explanation. See below. Still set on a `realized_denied` vector, but there `route` governs the shape. |
+| `case` | enum | The sign-classified outcome — the shape of a **sign-taxonomy** explanation, and your ONLY source for the win/draw/loss outcomes (the underlying `bestScore`/`playedScore` are withheld, §1). Still set on a `realized_denied` vector, but there `route` governs the shape. |
 | `route` | `"realized_denied"`\|absent | Present (= `"realized_denied"`) when a tag-first tactic explanation applies (§3b). Absent = the default sign-taxonomy shape. **Read this before `case`.** |
 | `tag` | enum\|absent | `realized_denied` only: the named tactic (§3b tag list) — the *what*. |
 | `direction` | enum\|absent | `realized_denied` only: `missed_own` / `enabled_opponent` / `defensive_miss` — the *who* (§3b). |
@@ -119,8 +115,9 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 
 ### The five cases (`case`)
 
-`case` is determined purely by the `(bestScore, playedScore)` sign pair. Each has a fixed
-**narrative shape** — the one sentence your explanation should produce:
+`case` **is** the `(bestScore, playedScore)` sign pair (the scores themselves are withheld — §1).
+Read the outcome off the case name; each has a fixed **narrative shape** — the one sentence your
+explanation should produce:
 
 | `case` | Signs (best, played) | What happened | Shape of your explanation |
 |---|---|---|---|
@@ -130,9 +127,9 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 | `lose_to_faster_lose` | (−, −) | You were already losing, but the best move kept a practical swindle; the played move loses faster. | "You were lost either way, but the best move kept a real swindle (`lostResource`: if the opponent slips you still win); your move throws it away and loses sooner (`tie.temporal`)." |
 | `win_to_slower_win` | (+, +) | You'd still win, just slower. | **Out of scope** — `notABlunder: true`; you will not be asked to explain these. |
 
-> **No raw per-column scores.** The vector deliberately omits the solver's full per-column score
-> array. Use `bestScore`/`playedScore` for the two relevant columns and `case` for the outcome
-> shape. Do not claim anything about other columns' values.
+> **No solver scores at all.** The vector deliberately omits every solver evaluation — the full
+> per-column array **and** `bestScore`/`playedScore`. Read the outcome from `case`; do not claim a
+> score, a per-column value, or a numeric "how soon."
 
 ---
 
@@ -156,8 +153,8 @@ Both halves share a common sub-shape (fields that are present depend on `kind`/`
 | `register` | `immediate` / `forced_sequence` / `parity` — how far off, and whether the `line` is shown. § register. |
 | `completingCell` | The `cNrM` square that completes the four (or, for a fork, a representative fork cell). |
 | `window` | The 4-cell winning window `[cNrM×4]` the line/fork rides. |
-| `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count, **not** `|score|`). |
-| `line` | The literal move sequence `[{ply, mover, col, cell, score}, …]` **when the register shows it**; `null`/absent for `parity` (too long to teach). § register. |
+| `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count; the only distance signal — solver scores are withheld). |
+| `line` | The literal move sequence `[{ply, mover, col, cell}, …]` **when the register shows it**; `null`/absent for `parity` (too long to teach). Teaches the move order and squares — no per-move score is included. § register. |
 | `finalMovestring` | The board on which `completingCell` is occupied (the end of the walk). |
 | `entryCell` | The square where this half's action begins (first move of `line`, or the completing/occupying cell). |
 | `anchorCells` | The **move-level** squares that *define* this resource — the squares the `tie` (§4) is checked against. For a fork: all cells of the fork windows. For a non-fork win: the winning-move landing squares. For a draw-hold denial: the single occupied cell. |
@@ -313,7 +310,7 @@ vector `direction` is always one of the first three.
 ```jsonc
 {
   "movestring": "3321234543", "playedCol": 0, "bestCol": 3,
-  "player": 1, "opponent": 2, "bestScore": -4, "playedScore": -16,
+  "player": 1, "opponent": 2,
   "case": "lose_to_faster_lose", "route": "realized_denied",
   "tag": "forced_block", "direction": "defensive_miss", "gate": null,
   "lostResource": {
@@ -378,8 +375,8 @@ budget" — an honest residual, not proof). With `no_occupation`, `tie` is `inde
 
 ## 6. `register`, `line`, `finalMovestring` — when a line is shown
 
-`register` is derived from how soon the resolution is (`fwd = 43 − 2·|score| − discs`, or directly
-from a fork node):
+`register` is derived engine-side from how soon the resolution is (or directly from a fork node) and
+is given to you ready-made — you never compute it:
 
 | `register` | Meaning | `line` |
 |---|---|---|
@@ -387,8 +384,8 @@ from a fork node):
 | `forced_sequence` | A short forced line (≈≤6 plies). **The most instructive form** — walk through `line` move by move. | shown |
 | `parity` | A long zugzwang resolution (>~12 plies). **Too long to teach as a sequence** — `line` is `null`. Describe the structure via `parityAttribution` instead. | `null` |
 
-- `line` entries are `{ ply, mover, col, cell, score }`: `mover` is `1`/`2`, `col` is **0-indexed**,
-  `cell` is the `cNrM` landing square, `score` is the mover's solver score at that step.
+- `line` entries are `{ ply, mover, col, cell }`: `mover` is `1`/`2`, `col` is **0-indexed**,
+  `cell` is the `cNrM` landing square. (No per-move `score` — solver evaluations are withheld, §1.)
 - `finalMovestring` is the board at the end of the walk (where `completingCell` is occupied). You may
   reference cells from `line`/`window`/`completingCell`; do **not** invent cells beyond them.
 - A `null` line on a `parity` register is **expected** — it is "the win is real but too deep to
@@ -484,8 +481,9 @@ The swindle-gate result: `{ ran, exhaustive, verdict, witness, nodesVisited }`.
 
 - **Absence = empty/null.** Empty arrays/objects and `null` fields are pruned out. A missing field
   means that signal was not present — a genuine "nothing here," not "unknown, fill it in." (Unlike
-  some vectors, meaningful **scalars are kept** — `playedScore: 0` means draw, `tie.tied: false` is
-  real; do not treat a `0`/`false` as absence.)
+  some vectors, meaningful **scalars are kept** — `replyHistogram.afterBest: 0` means the opponent
+  has no non-losing reply, `playedCol: 0` is column 1, `tie.tied: false` is real; do not treat a
+  `0`/`false` as absence.)
 - **`tacticTag: null` / `parity` line `null` / `tie.independent`** are all **honest signals**, not
   gaps. Narrate them as "no named tactic," "too deep to spell out," "geometrically unrelated."
 - **Never overstate an outcome.** A winning position is *winnable with correct play*, not an
@@ -505,7 +503,7 @@ The swindle-gate result: `{ ran, exhaustive, verdict, witness, nodesVisited }`.
 ```jsonc
 {
   "movestring": "3325", "playedCol": 5, "bestCol": 1,
-  "player": 1, "opponent": 2, "bestScore": 18, "playedScore": 0, "case": "win_to_draw",
+  "player": 1, "opponent": 2, "case": "win_to_draw",
   "lostResource": {
     "kind": "winning_line", "register": "immediate", "terminal": "fork", "forkCase": "A",
     "forkCells": ["c1r1", "c5r1"], "forkWindows": [["c1r1","c2r1","c3r1","c4r1"], ["c2r1","c3r1","c4r1","c5r1"]],
@@ -531,7 +529,7 @@ the global drawn result separately (§5).
 
 ```jsonc
 {
-  "case": "draw_to_lose", "playedCol": 0, "bestCol": 1, "bestScore": 0, "playedScore": -3,
+  "case": "draw_to_lose", "playedCol": 0, "bestCol": 1,
   "lostResource": {
     "kind": "denial", "verdict": "occupation", "register": "immediate",
     "cell": "c2r2", "window": ["c2r2","c3r2","c4r2","c5r2"], "anchorCells": ["c2r2"], "tacticTag": null
@@ -545,7 +543,7 @@ the global drawn result separately (§5).
 }
 ```
 
-Reading: *You were **holding a draw** (`bestScore 0`). The best move (**column 2**) occupies
+Reading: *You were **holding a draw** (`case: draw_to_lose`). The best move (**column 2**) occupies
 **`c2r2`**, plugging the opponent's winning window `c2r2–c5r2` (`lostResource` denial). The move you
 played (column 1) **vacates `c2r2`**, and the opponent now wins on that window — a long parity win
 (`line` is `null`; the controlling group is `c2r2–c5r2`, lever `c2r2`). The square that held the draw
