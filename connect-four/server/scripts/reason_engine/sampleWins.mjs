@@ -110,6 +110,6 @@ export async function sampleOptimalWins(solver, rootMs, winnerMark, { n = 20 } =
 // n defaults to env REASON_WIN_SAMPLES (fallback 20).
 export async function attachWinSamples(solver, half, { rootMs, winnerMark, n } = {}) {
   if (!half || half.register !== 'parity' || !half.window) return;
-  const count = n ?? parseInt(process.env.REASON_WIN_SAMPLES ?? '20', 10);
+  const count = n ?? parseInt(process.env.REASON_WIN_SAMPLES ?? '40', 10);
   half.optimalWinSamples = await sampleOptimalWins(solver, rootMs, winnerMark, { n: count });
 }
