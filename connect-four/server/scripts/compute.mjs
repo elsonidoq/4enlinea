@@ -5,7 +5,8 @@
 // nested-shape JSONL rows { id, evidence, groundTruth|null }.
 //
 // LLM answerer (--llm): call an OpenAI model with the narrator vector; emit answers for grading.
-// If the evidence --out file already exists, the solver is skipped — the evidence file is reused.
+// The evidence pass always runs first, so the vectors handed to the LLM are freshly recomputed from
+// the current engine (the --out file is overwritten; a pre-existing one is never reused).
 //
 // Usage (from connect-four/):
 //   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
@@ -52,8 +53,9 @@ Two passes over the boards in --input:
   Evidence pass (always) — compute reason-engine evidence per board and write nested-shape
                            JSONL rows { id, evidence, groundTruth|null } to the --out file.
   LLM answerer (--llm)   — call an OpenAI model with the narrator vector and emit answers for
-                           grading. If the --out evidence file already exists, the solver is
-                           skipped and that file is reused.
+                           grading. The evidence pass always runs first, so vectors are freshly
+                           recomputed just before the LLM call (the --out file is overwritten,
+                           never reused).
 
 Usage (from connect-four/):
   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
@@ -325,14 +327,10 @@ async function runLlm(evidenceRows) {
 // Guarded: only runs when this file is executed directly (CLI entry), never on import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
-    let evidenceRows;
-    if (useLlm && existsSync(evidenceOut)) {
-      // Evidence file already exists — reuse it; skip solver entirely.
-      console.log(`Reusing existing evidence file: ${evidenceOut}`);
-      evidenceRows = readFileSync(evidenceOut, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
-    } else {
-      evidenceRows = await runEvidence();
-    }
+    // Vectors are ALWAYS recomputed from the solver here — immediately before the LLM pass — and the
+    // --out file is overwritten. We never reuse a stale on-disk evidence file: it would silently
+    // replay vectors from a prior engine version against the current LLM/glossary.
+    const evidenceRows = await runEvidence();
     if (useLlm) {
       await runLlm(evidenceRows);
     }

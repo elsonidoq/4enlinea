@@ -240,6 +240,8 @@ def win_half(root, winner, diffAgainst=None):
     half.tactic = name_half(root, winner, reg,                # enrichment B: solver-gated tactic name
                             anchor=realized_locus(walk, half), diffAgainst=diffAgainst)
     return half
+    # NOTE: the CALLER runs name_parity_rule(half, winner) AFTER this (each of the 6 walked-win-half
+    # sites) to fill parityAttribution.namedRule — see below and DECISIONS D27.
 
 
 def register(fwd):                                  # fwd = free proxy for "is there something short to show"
@@ -257,7 +259,31 @@ def attribute_parity_win(root, window, completingCell, winner):
     if window has any LOSER disc:  return { nameable: False }      # multi-window board-fill (unnameable)
     empties = [ {cell, zcount = row_1indexed - colHeight, parity: odd|even}  for empty in window ]
     return { nameable: True, controllingGroup: window, ownDiscs, empties, completingCell,
-             parityNamingDeferred: True }                          # canonical V1/Aftereven naming DEFERRED
+             parityNamingDeferred: True, namedRule: None }         # name filled later by name_parity_rule
+
+
+# name_parity_rule (D27, D7 milestone): fill parityAttribution.namedRule with a DETECTOR-CONFIRMED
+# Allen rule, else abstain (namedRule stays None). Runs after each walked-win-half's name_half.
+#   Gate: half.parityAttribution.nameable and reg == 'parity' and half.terminal == 'win'.
+def name_parity_rule(solver, half, winner):
+    # Step A (solver-free): first prefix of half.finalMovestring where the window is 3-of-4 for winner,
+    # 0 loser discs, completingCell empty, AND WINNER TO MOVE. Winner-to-move is load-bearing: the
+    # literal "first 3-of-4" node is loser-to-move (winner just placed the 3rd disc) and the detectors
+    # emit a capsule only on the non-recursive perspective==currentPlayer branch -> would name nothing.
+    lock = find_lock_in_node(half.finalMovestring, controllingGroup, completingCell, winner)  # {lockInPly, node, zcount}
+    if not lock: return                                     # abstain
+    # Step B (ONE solver query, I8): CONFIRM via the PRODUCTION detector at the lock-in node.
+    #   R1 CONTRACT TRAP: detectZThreat/detectOddEvenThreat return cells:[] — the locus is
+    #   highlightMetadata (capsule {column,fromRow,toRow,badgeCount} for detectZThreat; NULL for
+    #   detectOddEvenThreat). Confirm iff capsule present and cellStr(toRow,column) == completingCell.
+    if not (confirms(detectZThreat, lock.node, winner, completingCell)
+            or confirms(detectOddEvenThreat, ...)):  return  # abstain — never name from zcount alone (D24-F3)
+    # Step C — map (winner, zcount parity) -> rule; mismatch -> abstain.
+    #   winner P1 + odd -> allen-v3 ; winner P2 + even -> allen-v4 ; else abstain.
+    #   KNOWN GAP: allen-v4 NEVER confirms — detectOddEvenThreat's highlightMetadata is null, so its
+    #   fallback can't match a locus; P2/even wins abstain. Retained for a future even-parity detector.
+    half.parityAttribution.namedRule = { rule, basis:'z_threat', lockInPly, completingCell, zcount, parity }
+    half.parityAttribution.parityNamingDeferred = False
 
 
 # defensive_half — SUPERSEDED by D18 for draw_to_lose half (a).
@@ -342,12 +368,13 @@ case rather than only `win_to_draw`.
 
 ## Honest limits (carried forward)
 
-- **Parity naming deferred** — `parityAttribution` emits the controlling group + per-cell height
-  parity (`empties`) but NOT the canonical Allis odd/even / V1 / Aftereven name, and NOT a "lever" /
-  "z-threat" claim. The `leverCells` / `forcedFirstRequired` / `groupKind` fields were REMOVED
-  2026-07-02 (review F3 / D24): labeling an odd height-parity empty a "lever/z-threat" is an I2
-  fabrication (a z-threat is detector-backed — KB community-z-threat needs a MAJOR threat at the cell).
-  The detector-backed replacement is the deferred D7 milestone.
+- **Parity naming (D7 LANDED as `namedRule`, D27)** — `parityAttribution` emits the controlling group
+  + per-cell height parity (`empties`), and now a DETECTOR-CONFIRMED `namedRule` (`allen-v3`/`allen-v4`)
+  when the production z-threat detector confirms the completing cell at its winner-to-move lock-in node;
+  else `namedRule: null` (abstain). The removed F3 fields (`leverCells`/`forcedFirstRequired`/`groupKind`)
+  stay removed — an odd height-parity count is NOT a detector-backed z-threat. **Still deferred (I9):**
+  V1/V2 counting, T1–T7 simplification, per-branch odd-threat ledgers. **Known gap:** `allen-v4` never
+  confirms (detectOddEvenThreat exposes no completing-cell locus) → P2/even wins abstain.
 - **Tactic naming falls to `null`** when no `classifyPattern` tag passes both gates — correct, not a
   gap; `parityAttribution` carries the explanation for parity wins.
 - **Tie may be `independent`/`temporal`** — not every case shares a cell; the engine reports the

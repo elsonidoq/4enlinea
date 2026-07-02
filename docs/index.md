@@ -58,6 +58,8 @@
 
 [architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether the reason vector + glossary is enough context to explain a blunder: isolated OpenAI answerer (`explain_from_vector.mjs`) + tools-enabled Claude grader (`grade-fv-sufficiency`), frozen set from the reason corpus, ablation, counterexample output — running or extending the sufficiency experiment
 
+[architecture/reason-render-grounded-prompt.md](architecture/reason-render-grounded-prompt.md) — proposal for restructuring how the reason vector is presented to the answerer LLM (esp. `gpt-5.4-mini`): move cell-grounding + board rendering from the LLM into the engine's render step, stage the prompt by altitude (situation frame / pre-rendered boards / status-tagged cells / headline+horizon / contrast / do-not guardrails). Grounded in the 2026-07-02 FV-sufficiency failures (altitude + false-causality) — read before redesigning the from-vector prompt
+
 ### Blunder-`reason` engine (read all four before touching it)
 
 [architecture/reason-INVARIANTS.md](architecture/reason-INVARIANTS.md) — **CONSTITUTION** — 12 non-negotiable principles for the blunder-`reason` engine (I0 = correctness over optimization; vector-is-the-artifact; no-fabrication; two-halves; bounded-by-depth; reuse classifier detectors) — before any reason-engine change

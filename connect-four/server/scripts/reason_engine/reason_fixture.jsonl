@@ -33,3 +33,7 @@
 {"movestring":"33343022442233255525004414106106605511","playedCol":6,"bestCol":1,"scores":[-1000,-1,-1000,-1000,-1000,-1000,-2],"discs":38,"expectedCase":"lose_to_faster_lose","bucket":"anchor","expectedGate":"NotABlunder","expectedExhaustive":true,"route":"realized_denied"}
 {"movestring":"332123","playedCol":4,"bestCol":2,"scores":[-5,-5,-3,-3,-4,-3,-5],"discs":6,"expectedCase":"lose_to_faster_lose","expectedGate":"Blunder","expectedExhaustive":false,"bucket":"d19-witness"}
 {"movestring":"","playedCol":4,"bestCol":3,"scores":[-2,-1,0,1,0,-1,-2],"discs":0,"expectedCase":"win_to_draw","bucket":"d26-nonfork-denial"}
+{"movestring":"451444","playedCol":5,"bestCol":1,"scores":[-2,2,2,-2,-2,-2,-2],"discs":6,"expectedCase":"win_to_lose","bucket":"d7-v3-confirm-midpv","expectedNamedRule":"allen-v3","namedRuleHalf":"lostResource"}
+{"movestring":"326553335522204320","playedCol":0,"bestCol":3,"scores":[-4,-12,-4,-3,-12,-3,-3],"discs":18,"expectedCase":"lose_to_faster_lose","expectedGate":"Blunder","bucket":"d7-v3-confirm-term1","expectedNamedRule":"allen-v3","namedRuleHalf":"lostResource"}
+{"movestring":"341443334011","playedCol":6,"bestCol":3,"scores":[-5,-5,-5,1,1,-6,-3],"discs":12,"expectedCase":"win_to_lose","bucket":"d7-abstain-parity","expectedNamedRule":null,"namedRuleHalf":"lostResource"}
+{"movestring":"23","playedCol":5,"bestCol":2,"scores":[-5,-4,0,0,-3,-3,-5],"discs":2,"expectedCase":"draw_to_lose","bucket":"d7-abstain-p2-v4gap","expectedNamedRule":null,"namedRuleHalf":"opponentPunishment"}

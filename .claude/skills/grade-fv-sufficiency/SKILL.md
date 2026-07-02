@@ -136,6 +136,40 @@ legal opponent score)` (>0 win, =0 draw, <0 loss). For `lose_to_faster_lose` bot
 hold on ALL N runs** (spec §5). Intermittent success = **fail** — it exposes latent ambiguity in the
 context. Record which runs failed and how they differed (e.g. run 0 named the fork, run 2 didn't).
 
+## Failure triage — WHERE the fault lives (required for every failing case)
+
+A pass/fail is not enough. For every case that fails A3 or A4, classify the **root cause** into exactly
+one of three buckets. This is what tells the reader whether to fix the **vector**, the **glossary**, or
+the **prompt** — and it maps onto the experiment's two dials (vector/glossary vs. prompt-builder+model):
+
+| `failure_triage` | Meaning | The vector/glossary was… | Fix owner |
+|---|---|---|---|
+| **`vector_error`** | A field carried a **wrong or junk value**; the model relied on it faithfully and was led astray. | actively **misleading** | vector/engine — correct or suppress the field |
+| **`missing_info`** | The vector was **not wrong** but **lacked** a field the model needed to make the case decisive/complete; the model abstained or had to guess. | **incomplete** | vector/glossary — add the field |
+| **`prompt_confusion`** | The vector + glossary carried the **correct, sufficient** information, but the model **misread / mis-anchored / dropped a field / hallucinated beyond it**. | **OK** — the model was confused | prompt-builder / model |
+
+Deciding between them is itself an **oracle** job — you cannot read the triage off the board glance:
+
+- **Before calling `vector_error`, prove the field is actually wrong.** On deep or near-empty boards a
+  named cell/window/line can be **absent from the current board yet still solver-real** (a completing
+  cell for a 40-ply parity win legitimately sits on empty squares). "Nothing visible on the board" is
+  **inference from absence** — the same anti-pattern as trusting the vector. Trace the solver's winning
+  **principal variation** (or the relevant refutation) and check whether it actually passes through the
+  field's named cell/window. Only rule `vector_error` when the solver **contradicts** the field. If you
+  genuinely cannot resolve it with the tools, say so in `failure_summary` and pick the most defensible
+  bucket rather than guessing `vector_error`.
+- **`missing_info` vs `prompt_confusion`:** if the model **abstained** (`unsure_about`) or the needed
+  fact has **no field** in the vector → `missing_info`. If the fact **was** present in a field (correct
+  and unambiguous per the glossary) and the model still got it wrong, mis-anchored it, or invented past
+  it → `prompt_confusion`.
+- A case can have several defects; pick the **decisive** one (the reason the case fails). Note secondary
+  ones in `failure_summary`.
+
+Every failing case must carry a **one-sentence `failure_summary`**: plain-language "what went wrong,"
+naming the culprit field and the board/solver finding (e.g. *"Named the win completing at c5r5, but the
+solver's winning line never reaches that square — `parityAttribution.completingCell` is junk on a
+move-1 board (`vector_error`)."*). This sentence is surfaced verbatim after grading (see Output).
+
 ### Scoring via sub-agents
 
 For each `(id, condition)` group, spawn a fresh `general-purpose` sub-agent (it runs in the repo
@@ -155,6 +189,10 @@ test). Run `./visualize_board.sh <movestring>` and read its threat/par/score ann
 - after-played board: <movestring><playedCol 0-indexed>
 For a move's true outcome, query the solver (createSolverProcess from
 connect-four/server/c4solver-wrapper.js; cd connect-four; await solver.query; destroy() in finally).
+When a claim names a cell/window/line that is NOT visible on the board, do NOT rule it false from
+absence — on deep/near-empty positions a real winning line completes on currently-empty squares.
+Trace the solver's principal variation and check whether it passes through the named cell BEFORE
+calling the field wrong.
 
 ## Case metadata (oracle — all from feature_vector; the model saw the vector but you VERIFY on the board)
 - id: <id>   condition: <condition>
@@ -199,6 +237,18 @@ include the window the mechanism named", "opponentPunishment.tie said independen
 claimed a shared cell", "parityAttribution.leverCells absent so the model invented a lever") or the
 GLOSSARY ambiguity, and state the board finding that proves it.
 
+## Failure triage (required whenever the case fails A3 or A4)
+Classify the ROOT cause into exactly one bucket, and write a one-sentence plain-language summary:
+- `vector_error` — a field carried a WRONG/junk value the model faithfully relied on. Before choosing
+  this you MUST have shown the solver contradicts the field (trace the PV; do not infer from board
+  absence). Off-board-but-solver-real ≠ wrong.
+- `missing_info` — the vector was not wrong but LACKED a field the model needed; the model abstained
+  (`unsure_about`) or had to guess (no field carried the fact).
+- `prompt_confusion` — the correct, sufficient info WAS present in a field (unambiguous per glossary),
+  but the model misread / mis-anchored a cell / dropped the field / hallucinated past it.
+Pick the DECISIVE cause; mention secondaries in failure_summary. failure_summary must name the culprit
+field and the board/solver finding.
+
 Output exactly:
 {
   "id": "<id>", "condition": "<condition>", "n_runs": <int>,
@@ -206,6 +256,8 @@ Output exactly:
                  "A4":"pass|fail", "unsure_about":"<verbatim or empty>" }, … ],
   "case_pass": true|false,
   "intermittent": true|false,
+  "failure_triage": "vector_error|missing_info|prompt_confusion|null (null iff case_pass)",
+  "failure_summary": "<one sentence: what went wrong, naming the field + board/solver finding; empty iff case_pass>",
   "notes": "<one line per failing axis: what was wrong, with the board finding>",
   "counterexamples": [ { "axis":"A3|A4|abstention", "field_or_glossary":"<the missing/ambiguous
      feature field or glossary section>", "evidence":"<board finding proving it>" } ]
@@ -221,7 +273,7 @@ Collect each sub-agent's JSON as it completes. A malformed/no response → recor
 **1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Write every collected
 sub-agent JSON object — one per line — to `<answers-dir>/<answers-stem>_grades.jsonl`. Each line is
 exactly the sub-agent's output (`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,unsure_about}],
-case_pass, intermittent, notes, counterexamples }`). The server (`GET /api/admin/fv-suff`) derives
+case_pass, intermittent, failure_triage, failure_summary, notes, counterexamples }`). The server (`GET /api/admin/fv-suff`) derives
 this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so the UI
 shows the A1–A4 chips + pass/fail next to each board+vector+answer. (If you skip this file, the UI
 just shows answers without grades — the markdown report below is still the human deliverable.)
@@ -249,10 +301,16 @@ For each failing or intermittent case, a notes block below its row:
 > dl-N (cond A): A3 fail on run 2 — claimed a double_threat fork the after-played board does not show;
 > A4 ok. Board: visualize_board.sh shows "Major threats: none" at c4r4.
 
+## Failure triage (root cause per failing case)
+One row per failing case, its bucket, and its one-sentence summary. Then a count line
+(vector_error N · missing_info N · prompt_confusion N) — this split says whether the next iteration
+should fix the vector/glossary or the prompt-builder.
+| id | category | triage | one-sentence: what went wrong |
+
 ## Counterexample list (THE DELIVERABLE)
 Every A3/A4 failure and every non-empty `unsure_about`, attributed to a missing/ambiguous feature
 field or glossary ambiguity. Group by `field_or_glossary`; order by frequency.
-| field / glossary gap | axis | cases affected | evidence (board finding) | model's unsure_about |
+| field / glossary gap | axis | triage | cases affected | evidence (board finding) | model's unsure_about |
 
 ## fields_relied_on distribution
 Aggregate `fields_relied_on` across all answers. Which engineered fields are actually load-bearing
@@ -263,12 +321,32 @@ removal or a sign the glossary doesn't surface it.
 For each case: the board (`feature_vector.movestring`, played/best cols) and each run's `answer` JSON.
 ```
 
+**3. Present every failed eval in your reply (required).** After writing the two files, end your
+response with a **Failed evals** list — one bullet per failing case, showing its triage bucket and its
+one-sentence `failure_summary`:
+
+```
+## Failed evals (N)
+- eval-1 (vector_error) — Named the win completing at c5r5, but the solver's winning line never
+  reaches that square; `parityAttribution.completingCell` is junk on a move-1 board.
+- eval-8 (prompt_confusion) — The correct fork window was in `lostResource.window`, but the model
+  narrated a row-3 window that the board does not show.
+- …
+```
+
+Order by triage bucket (vector_error, then missing_info, then prompt_confusion) so the reader sees
+the vector/glossary fixes first. Do not omit this list even if the report file already contains it —
+it is the at-a-glance answer to "what went wrong."
+
 ## Key rules recap
 
 - `better_move` is 1-indexed; oracle cols are 0-indexed (A1: `better_move - 1 == feature_vector.bestCol`).
 - A case = one `(id, condition)`; it passes only if A1–A4 hold on **all N runs**.
 - `unsure_about` is excluded from A4 and logged as a field-gap counterexample.
-- Observe the board with `visualize_board.sh`/solver; never trust the vector to verify itself.
+- Observe the board with `visualize_board.sh`/solver; never trust the vector to verify itself — and
+  never rule a field wrong from board **absence**: trace the solver PV before calling `vector_error`.
+- Every failing case gets a **triage** (`vector_error` / `missing_info` / `prompt_confusion`) and a
+  one-sentence `failure_summary`; present all failed evals as bullets at the end of your reply.
 - The counterexample list (field/glossary attribution) is the point — not the pass rate.
 
 ## Do NOT reuse from the production judge

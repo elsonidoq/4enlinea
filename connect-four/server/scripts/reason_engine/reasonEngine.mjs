@@ -28,7 +28,7 @@ import {
 import { optimalCols, attachWinSamples, sampleOptimalWins } from './sampleWins.mjs';
 import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
-  tagBlunder, NotABlunderError,
+  tagBlunder, NotABlunderError, detectZThreat, detectOddEvenThreat,
 } from '../../classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -494,6 +494,106 @@ function attributeParityWin(rootMs, window, completingCell, winnerMark) {
   };
 }
 
+// ── D7: detector-backed Allen-rule naming of a parity win (namedRule) ──────────────────────────
+//
+// Step A (solver-free): scan prefixes of the winning walk's `finalMovestring` for the LOCK-IN NODE —
+// the FIRST board where the realized winning `window` is 3-of-4 for `winnerMark`, holds 0 loser
+// discs, `completingCell` is still empty, AND the winner is to move. This is where the parity threat
+// materializes and the winner can begin to convert it. Returns { lockInPly, node, zcount } or null.
+// `zcount` = (1-indexed row) - colHeight at the lock-in node — the KB community-z-threat
+// height-relative inclusive count (identical to detectZThreat's badgeCount).
+//
+// WINNER-TO-MOVE (D27, R1 reconciliation): the *literal* "first 3-of-4" node is ALWAYS the node right
+// after the winner places their 3rd window disc, so the LOSER is to move there — and the production
+// detectZThreat/detectOddEvenThreat only emit a nameable capsule on their NON-recursive branch, i.e.
+// when perspective (winnerMark) === currentPlayer. Empirically the literal node names 0/193 harvested
+// parity wins; the winner-to-move node (one ply later, e.g. `""` played 4 -> allen-v3, zcount 5) names
+// correctly. Requiring winner-to-move is the faithful realization of the D7 goal (the alternative
+// names nothing). Precedent: D23 advanceToEnabledFork advances a root to materialize a pattern.
+export function findLockInNode(finalMovestring, window, completingCell, winnerMark) {
+  if (!finalMovestring || !window || !window.length || !completingCell) return null;
+  const loser = winnerMark === 1 ? 2 : 1;
+  const cp = parseCell(completingCell);
+  if (!cp) return null;
+  for (let len = 0; len <= finalMovestring.length; len++) {
+    const node = finalMovestring.slice(0, len);
+    const winnerToMove = (node.length % 2 === 0 ? 1 : 2) === winnerMark;
+    if (!winnerToMove) continue;            // detector needs winner === currentPlayer to emit a capsule
+    const { grid, heights } = buildBoard(node);
+    if (grid[cp.r][cp.c] !== 0) continue; // completing cell must still be empty
+    let own = 0, loserDiscs = 0;
+    for (const s of window) {
+      const p = parseCell(s);
+      if (!p) { own = -1; break; }
+      const v = grid[p.r][p.c];
+      if (v === winnerMark) own++;
+      else if (v === loser) loserDiscs++;
+    }
+    if (own === 3 && loserDiscs === 0) {
+      const zcount = (cp.r + 1) - heights[cp.c];
+      return { lockInPly: len, node, zcount };
+    }
+  }
+  return null;
+}
+
+// Run a production parity detector at the lock-in node and CONFIRM it names `completingCell`.
+// R1: detectZThreat/detectOddEvenThreat never populate `cells` — the checkable locus is
+// highlightMetadata (capsule { column, toRow }). They only emit that capsule on the NON-recursive
+// branch (perspective === currentPlayer). We call with perspective=winnerMark and confirm only when
+// (a) the non-recursive capsule form is returned AND (b) cellStr(toRow, column) === completingCell.
+// Returns true (confirmed) or false (abstain). Never confirms from arithmetic — I2/D24-F3.
+async function detectorConfirmsCell(detector, node, scores, winnerMark, completingCell, solver) {
+  let res;
+  try { res = await detector(new Board(node), scores, winnerMark, solver); }
+  catch { return false; }
+  if (!res || !res.matched || !res.highlightMetadata) return false; // recursive branch / no match / no locus
+  const { column, toRow } = res.highlightMetadata;
+  if (column == null || toRow == null) return false;
+  return cellStr(toRow, column) === completingCell;
+}
+
+// D7 milestone (annotates D7/D24-F3): name a parity-register WIN with a detector-confirmed Allen
+// rule. Mutates `half.parityAttribution` in place (sets namedRule + clears parityNamingDeferred) ONLY
+// when the production z-threat / odd-even detector confirms `completingCell` at the lock-in node.
+// Otherwise ABSTAINS (leaves parityNamingDeferred:true, namedRule:null) — an honest gap (I2).
+// Explicitly OUT OF SCOPE (I9): V1/V2 multi-threat counting, T1-T7 simplification, per-branch ledgers.
+async function nameParityRule(solver, half, winnerMark) {
+  const pa = half && half.parityAttribution;
+  if (!(pa && pa.nameable && half.register === 'parity' && half.terminal === 'win')) return;
+
+  // Step A — solver-free lock-in-node scan.
+  const lock = findLockInNode(half.finalMovestring, pa.controllingGroup, half.completingCell, winnerMark);
+  if (!lock) return; // abstain
+
+  // Step B — ONE solver query at the lock-in node; confirm via the PRODUCTION detector (I8).
+  let scores;
+  try { scores = await solver.query(lock.node); } catch { return; } // solver error -> abstain (I2)
+  const confirmedZ = await detectorConfirmsCell(detectZThreat, lock.node, scores, winnerMark, half.completingCell, solver);
+  // Fallback detectOddEvenThreat: retained per the settled Step B, but it currently returns
+  // `highlightMetadata: null` (no completing-cell locus — its evidence is a parity-CHOICE, not a
+  // z-threat cell), so detectorConfirmsCell can never confirm through it. CONSEQUENCE (D27 known gap):
+  // `allen-v4` (winner P2 + even zcount, which detectZThreat's odd-only match rejects) currently
+  // NEVER confirms — P2/even parity wins abstain. Kept so a future locus-exposing detector activates
+  // v4 without re-plumbing. I0: the extra query is acceptable; I2: it only ever abstains, never names.
+  const confirmed = confirmedZ
+    || await detectorConfirmsCell(detectOddEvenThreat, lock.node, scores, winnerMark, half.completingCell, solver);
+  if (!confirmed) return; // abstain — never name from zcount arithmetic alone (D24-F3)
+
+  // Step C — map (winner, zcount parity) to the Allen rule. Mismatch -> abstain.
+  const parity = lock.zcount % 2 === 1 ? 'odd' : 'even';
+  let rule = null;
+  if (winnerMark === 1 && parity === 'odd') rule = 'allen-v3';       // Red / first player, odd-row threat
+  else if (winnerMark === 2 && parity === 'even') rule = 'allen-v4'; // Black / second player, even-row threat
+  if (!rule) return; // P1+even / P2+odd — abstain
+
+  pa.namedRule = {
+    rule, basis: 'z_threat',
+    lockInPly: lock.lockInPly, completingCell: half.completingCell, zcount: lock.zcount, parity,
+  };
+  pa.parityNamingDeferred = false;
+}
+
 // The MOVE-LEVEL squares that define the lost resource (the winning moves the player had).
 // The tie (Task 3) is verified against these, not against the eventual completing cell.
 function winningMoveCells(movestring, scores) {
@@ -550,6 +650,11 @@ function renderHalf(kind, walk, fwd, extra = {}) {
     half.forkCase = walk.forkCase;
     half.forkCells = walk.forkCells;
     half.forkWindows = walk.forkWindows;
+  } else if (walk.terminal) {
+    // R2 (D7): propagate the walk's terminal ('win' | 'draw') so a non-fork parity WIN is
+    // self-describing. nameParityRule gates on `half.terminal === 'win'`; only forks carried a
+    // terminal before. Additive — every existing check is `=== 'fork'`, unaffected.
+    half.terminal = walk.terminal;
   }
   // parityAttribution fires ONLY for a genuine parity win (no fork found on the whole PV) — D16/D7.
   if (register === 'parity' && walk.terminal === 'win' && rootMs != null && winnerMark != null) {
@@ -825,6 +930,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
     await attachWinSamples(solver, out.lostResource, { rootMs: bestRoot, winnerMark: player });
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
+    await nameParityRule(solver, out.lostResource, player); // D7: detector-backed Allen-rule naming
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
     // half (b): how the played move lets the opponent deny the winning resource — the unified
@@ -878,11 +984,13 @@ export async function computeReason(movestring, playedCol, { solver }) {
     out.lostResource = renderHalf('winning_line', aWalk, fwdOf(bestScore, discs), { rootMs: bestRoot, winnerMark: player });
     await attachWinSamples(solver, out.lostResource, { rootMs: bestRoot, winnerMark: player });
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
+    await nameParityRule(solver, out.lostResource, player); // D7
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
     const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
     Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
+    await nameParityRule(solver, out.opponentPunishment, opponent); // D7
   } else if (bestScore === 0 && playedScore < 0) {
     // ── draw_to_lose (D18 flip) ──
     out.case = CASES.DRAW_TO_LOSE;
@@ -890,6 +998,7 @@ export async function computeReason(movestring, playedCol, { solver }) {
     const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
     Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
+    await nameParityRule(solver, out.opponentPunishment, opponent); // D7: draw_to_lose punishment half
     // the window(s) the opponent rides: fork windows if fork-stopped, else the single winning window.
     const concededWindows = (out.opponentPunishment.terminal === 'fork')
       ? (out.opponentPunishment.forkWindows || [])
@@ -941,12 +1050,14 @@ export async function computeReason(movestring, playedCol, { solver }) {
     });
     const { heights: gh } = buildBoard(gate.node);
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, swindleRoot, player));
+    await nameParityRule(solver, out.lostResource, player); // D7: swindle-win half may be a parity win
     // anchor stays the practical-chance MOVE (the deviation), even when the swindle resolves via a fork.
     out.lostResource.anchorCells = [cellStr(gh[gate.devCol], gate.devCol)];
     // half (b): the faster forced loss the played move walks into.
     const bWalk = await walkOptimal(solver, playedRoot, opponent);
     out.opponentPunishment = renderHalf('winning_line', bWalk, fwdOf(playedScore, discs), { rootMs: playedRoot, winnerMark: opponent });
     Object.assign(out.opponentPunishment, await nameWalkedHalf(solver, out.opponentPunishment, playedRoot, opponent));
+    await nameParityRule(solver, out.opponentPunishment, opponent); // D7
   } else {
     // bestScore < 0 && playedScore === 0  -> played is BETTER than best (impossible: best is max).
     // bestScore === 0 && playedScore === 0 -> not a blunder (both draw).

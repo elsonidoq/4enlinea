@@ -133,6 +133,36 @@ test('toNarratorVector strips optimalWinSamples nested in lostResource (evidence
   assert.equal(JSON.stringify(pruned).includes('optimalWinSamples'), false, 'no trace of optimalWinSamples after pruning');
 });
 
+test('D7: namedRule (incl. zcount, lockInPly) survives toNarratorVector at depth', () => {
+  // Guardrail: the deep scrub drops /^scores?$|Score$/. The parity-naming payload must NOT be caught
+  // — the count field is `zcount` (lowercase, not *Score). A future rename to `...Score` would
+  // silently strip it; this test fails loudly if that happens.
+  const raw = {
+    movestring: '', playedCol: 4, bestCol: 3, case: 'win_to_draw',
+    lostResource: {
+      kind: 'winning_line', register: 'parity', terminal: 'win',
+      parityAttribution: {
+        nameable: true, controllingGroup: ['c2r5', 'c3r5', 'c4r5', 'c5r5'],
+        completingCell: 'c5r5', parityNamingDeferred: false,
+        namedRule: {
+          rule: 'allen-v3', basis: 'z_threat',
+          lockInPly: 38, completingCell: 'c5r5', zcount: 5, parity: 'odd',
+        },
+      },
+    },
+  };
+  const fv = toNarratorVector(raw);
+  const nr = fv.lostResource.parityAttribution.namedRule;
+  assert.ok(nr, 'namedRule object survives');
+  assert.equal(nr.rule, 'allen-v3');
+  assert.equal(nr.basis, 'z_threat');
+  assert.equal(nr.zcount, 5, 'zcount must NOT be scrubbed');
+  assert.equal(nr.lockInPly, 38, 'lockInPly must survive');
+  assert.equal(nr.parity, 'odd');
+  assert.equal(fv.lostResource.parityAttribution.parityNamingDeferred, false);
+  assert.equal(allKeys(fv).has('zcount'), true, 'zcount key present at depth');
+});
+
 test('pruneValue keeps a non-empty nested structure intact', () => {
   // pruneValue only drops empties; score-stripping is toNarratorVector's job and runs first, so a
   // narrator `line` reaching pruneValue has no `score`.

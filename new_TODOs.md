@@ -29,6 +29,8 @@
 
 - Except for forced_block, no puzzles can have a forced_block, unless the forced block is the move that creates the pattern / move
 
+- Incorporate allen T1-T7 transformations as well as the missing allen-v rules. Session: claude --resume cf6a4f19-5f8e-4928-b94f-05bb63c9cebc
+
 - For double threat we should not check against correct col to determine if the user performed the puzzle correctly, but wether the position generated a double threat (there are boards where there are more than one way to generate the double threat)
 
 - I don't like that "no mistakes" means no blunders. Performing a sub-optimal move is also a mistake. Also it is inconsistent to read that a game was lost and i performed no mistakes. Modify the number of mistakes to be the number of blunders + sub-optimal moves
