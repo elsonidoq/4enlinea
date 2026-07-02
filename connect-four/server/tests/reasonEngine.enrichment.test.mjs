@@ -60,10 +60,27 @@ test('tie: 3325 win_to_draw is tied at the winning square', async () => {
 });
 
 test('tie: lose_to_faster_lose is temporal', async () => {
-  const r = await computeReason('3333325662555225', 1, { solver });
+  // Uses a board that stays on the sign-engine ltfl swindle path (temporal tie). NB: the former
+  // board 3333325662555225 now reclassifies to the realized_denied router (figure_7/enabled_opponent,
+  // tied) after the enabled-fork router fix (D23), so this exercises the sign-engine temporal tie.
+  const r = await computeReason('3333311115555', 0, { solver });
   assert.equal(r.opponentPunishment.tie.kind, 'temporal');
   assert.equal(typeof r.opponentPunishment.tie.playedPlies, 'number');
   assert.equal(typeof r.opponentPunishment.tie.swindlePlies, 'number');
+});
+
+test('tie: temporal tied compares ABSOLUTE terminal disc counts, not cross-root plies (F2)', async () => {
+  // 332123 played 4 (d19-witness fixture row): sign-engine ltfl. The two halves are walked from
+  // DIFFERENT roots (playedRoot vs the deeper swindleRoot), so raw pliesToEnd are not comparable —
+  // the OLD rule (playedPlies < swindlePlies) returned tied:false (29 vs 25) even though the played
+  // loss terminates SOONER in absolute plies (36 vs 37). tied must reflect the common-frame comparison.
+  const r = await computeReason('332123', 4, { solver });
+  assert.equal(r.opponentPunishment.tie.kind, 'temporal');
+  const playedEnd = r.opponentPunishment.finalMovestring.length;
+  const swindleEnd = r.lostResource.finalMovestring.length;
+  assert.equal(r.opponentPunishment.tie.tied, playedEnd < swindleEnd,
+    'tied must equal absolute-terminal-count comparison');
+  assert.equal(r.opponentPunishment.tie.tied, true, '332123 played 4: played loss (36) is faster than swindle (37)');
 });
 
 test('tie: present with a valid kind on every blunder fixture row', async () => {

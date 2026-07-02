@@ -36,10 +36,10 @@ if bestScore > 0 and playedScore > 0
 elif bestScore > 0 and playedScore = 0
     case = 'win_to_draw' # if the opponent plays optimal, you will draw if you play optimal
     reason = You could have won like this or that, now the opponent can neutralize all your threats like this and that
-    # half (b): when half (a) found a fork (D16), half (b) is the unified occupation-witness PV walk
-    # (D18 — replaces the D17 BFS): walk the canonical argmax PV from playedRoot; return the first
-    # node where the opponent occupies+kills a fork window (LIVE->DEAD).
-    # Non-fork win_to_draw keeps legacy neutralization. See reason-engine-pseudocode.md.
+    # half (b): the unified occupation-witness PV walk for BOTH sub-cases (D18 + D26): walk the
+    # canonical argmax PV from playedRoot; return the first node where the opponent occupies+kills a
+    # cell of the winning window(s) (LIVE->DEAD) — fork windows (D18) or the single winning-line
+    # window (D26, replaces the legacy neutralization). See reason-engine-pseudocode.md.
 
 elif bestScore > 0 and playedScore < 0
     case = 'win_to_lose' # if the opponent plays optimal, you will loose if you play optimal

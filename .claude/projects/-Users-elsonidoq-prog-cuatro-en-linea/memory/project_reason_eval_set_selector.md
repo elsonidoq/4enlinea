@@ -29,12 +29,10 @@ Non-obvious consequences:
 - **A `discovered ⊆ REASON_UNIVERSE` guard THROWS** on any engine-emitted predicate not in the named
   universe (I12 on the selector). Add a new axis to `reasonPredicates` → you MUST add its values to
   `REASON_UNIVERSE` or the harvest crashes.
-- **Calibrated provisional set (D22):** `rd_double_threat_enabled_opponent`,
-  `rd_figure_7_enabled_opponent` (0 hits under an all-suboptimal-columns harvest — 13,937
-  enabled_opponent tags checked, 0 forks), `gate_exhaustive` (1 hit/497 games), `lost_realized_forced_block`
-  (never seen), `tie_temporal`, `lost_denial_no_occupation`, `lost_realized_figure_7`, `lost_fork_B`,
-  `parity_unnameable`, `opp_parity_unnameable`. DEFERRED hypothesis: widen the per-player
-  mistake-probability range in sampling to reach these.
+- **RESOLVED (D23, 2026-07-01) — the "provisional = rare" hypothesis was WRONG for the fork pairs; it was a ROUTER BUG.** The `enabled_opponent` forks (`rd_double_threat_enabled_opponent`, `rd_figure_7_enabled_opponent`) had WORKING symmetric twins yet 0 routed hits precisely because the router checked `realizedPattern(playedRoot, opponent, tag)` ONE PLY before the opponent's fork-forming reply — where a materialized fork is impossible (it would be an immediate win caught by tagBlunder Phase B). `tagBlunder` emits both tags readily (~9+5 per 3 games); the harvests only counted *routed* hits, hiding it. Fixed by `advanceToEnabledFork` (see [[project_reason_tag_realized_denied_router]]). After the fix, `rd_double_threat_enabled_opponent` is **REQUIRED** and fills in ~48 coverage games. Method that cracked it: instrument the harvest to record the raw `tagBlunder` tag, not just routed outcomes.
+- **`lost_realized_forced_block` is IMPOSSIBLE-by-construction — REMOVED from the universe (D23).** `forced_block` is definitionally `defensive_miss` (tagBlunder Phase A2 only) → owner=opponent → realized half is always `opponentPunishment`, never `lostResource`. Was mislabeled "rare". Do NOT re-add.
+- **`gate_exhaustive`/`gate_bounded` RETIRED → single `gate_ran` (D23).** The `lose_to_faster_lose` swindle gate is now one uniform depth-bounded search (`gateMaxPlies:15`, not-found→NotABlunder by policy); the exhaustive/bounded flag is gone.
+- **Current provisional set (post-D23):** `rd_figure_7_enabled_opponent` (Case-B enabled fork, reachable but rare), `tie_temporal`, `lost_denial_no_occupation`, `lost_realized_figure_7`, `lost_fork_B`, `parity_unnameable`, `opp_parity_unnameable`. (No longer provisional: the two removed above + `rd_double_threat_enabled_opponent`.)
 - **The 5s heartbeat + final summary** print fulfilled/under-target/never-seen against the named
   universe — the diagnostic for which REQUIRED predicate is holding up a run.
 

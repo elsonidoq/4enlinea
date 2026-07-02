@@ -21,7 +21,7 @@ self-contained.
   one-move tactic) and a **`denial`** (the proof it is prevented under optimal play). See §3b. `tag`/`direction`
   are present; `gate` is `null`.
 - **`route` absent** — the default *sign-taxonomy* explanation (the 5 `case`s, §2), whose halves are
-  `winning_line` / `denial` / `neutralization` / `conditional_swindle`.
+  `winning_line` / `denial` / `conditional_swindle`.
 
 Every other field below is shared. Where a field behaves differently under `route: "realized_denied"`,
 it is called out.
@@ -148,12 +148,12 @@ Both halves share a common sub-shape (fields that are present depend on `kind`/`
 
 | Field | Meaning |
 |---|---|
-| `kind` | What this half *is*: `winning_line` / `denial` / `neutralization` / `conditional_swindle` (sign-taxonomy), or `realized_pattern` (`realized_denied` route, §3b). See § per-case. |
+| `kind` | What this half *is*: `winning_line` / `denial` / `conditional_swindle` (sign-taxonomy), or `realized_pattern` (`realized_denied` route, §3b). See § per-case. |
 | `register` | `immediate` / `forced_sequence` / `parity` — how far off, and whether the `line` is shown. § register. |
 | `completingCell` | The `cNrM` square that completes the four (or, for a fork, a representative fork cell). |
 | `window` | The 4-cell winning window `[cNrM×4]` the line/fork rides. |
 | `pliesToEnd` | Counted plies from this half's root to its terminal/fork (a real move count; the only distance signal — no numeric evaluation is given). |
-| `line` | The literal move sequence `[{ply, mover, col, cell}, …]` **when the register shows it**; `null`/absent for `parity` (too long to teach). Teaches the move order and squares — no per-move score is included. § register. |
+| `line` | The literal move sequence `[{ply, mover, col, cell}, …]` **when the register shows it**; `null`/absent for `parity` on walked halves (too long to teach). **Exception:** `denial` halves (incl. the D26 non-fork `win_to_draw` half b) retain the full `line` even at `parity` register — the engine keeps the soundest evidence and defers "what to render" downstream. Teaches the move order and squares — no per-move score is included. § register. |
 | `finalMovestring` | The board on which `completingCell` is occupied (the end of the walk). |
 | `entryCell` | The square where this half's action begins (first move of `line`, or the completing/occupying cell). |
 | `anchorCells` | The **move-level** squares that *define* this resource — the squares the `tie` (§4) is checked against. For a fork: all cells of the fork windows. For a non-fork win: the winning-move landing squares. For a draw-hold denial: the single occupied cell. |
@@ -161,7 +161,7 @@ Both halves share a common sub-shape (fields that are present depend on `kind`/`
 | `tacticCells` | The cells of the named tactic (present only when `tacticTag` is non-null). |
 | `tacticFromDiff` | `true` if the tactic is something the best move builds that the played move does not. |
 
-Forks, denials, parity wins, swindles, and neutralizations each add their own fields — defined
+Forks, denials, parity wins, and swindles each add their own fields — defined
 per-case next.
 
 ---
@@ -188,20 +188,23 @@ The best move's winning walk. **Two sub-shapes:**
 For `win_to_lose`, `opponentPunishment.kind = "winning_line"` too — the **opponent's** own
 fork-stopped/parity winning walk (the same shape, opponent perspective). Its `tie` (§4) is spatial.
 
-### `win_to_draw` — `opponentPunishment` is a **denial** or a **neutralization**
+### `win_to_draw` — `opponentPunishment.kind = "denial"` (both sub-cases)
 
-- **Fork case → `kind: "denial"`** (an occupation witness). The opponent, under optimal play,
-  **occupies a cell of your lost fork's window**, killing it:
-  - `verdict: "occupation"` — fields `cell` (the killing square), `window` (the window it killed),
-    `line` (the optimal walk to that moment), `finalMovestring`, `exhaustive: true`.
-  - `verdict: "no_occupation"` — the draw held within the depth cap without the opponent ever taking
-    a pattern cell; `exhaustive` distinguishes a confirmed full-walk (`true`) from a budget cap
-    (`false`). No `cell`.
-  - **Read denial as TWO separate claims, never collapsed** (§ denial semantics).
-- **Non-fork case → `kind: "neutralization"`** — the opponent's **single saving reply**:
-  `completingCell` = the save square, `savingCol` (0-indexed), `savingReplyCount` (= 1 when it is
-  the only drawing reply). Narrative: "the square that would have won for you is the opponent's only
-  drawing reply."
+An occupation witness in **both** sub-cases: the opponent, under optimal play, **occupies a cell of
+the winning window you gave up**, killing it. (Fork sub-case → the window is one of your lost fork's
+`forkWindows`; non-fork sub-case → the single winning-line `window`. Same shape either way — the
+legacy `neutralization` kind was retired in D26.)
+
+- `verdict: "occupation"` — fields `cell` (the killing square), `window` (the window it killed),
+  `line` (the optimal walk to that moment), `finalMovestring`, `exhaustive: true`. The `tie` is
+  `tied` at `cell`.
+- `verdict: "no_occupation"` — the draw held within the depth cap without the opponent ever taking a
+  pattern cell; `exhaustive` distinguishes a confirmed full-walk (`true`) from a budget cap
+  (`false`). No `cell`.
+- **Read denial as TWO separate claims, never collapsed** (§ denial semantics).
+- For a deep parity win the killing move can be many plies out and `register` is `parity`, but the
+  full `line` is still present (rendering is decided downstream, not by the register). The count of
+  the opponent's non-losing replies (the old `savingReplyCount`) is `replyHistogram.afterPlayed`.
 
 ### `draw_to_lose` — `lostResource.kind = "denial"`, `opponentPunishment.kind = "winning_line"`
 
@@ -259,6 +262,18 @@ The two halves are still `lostResource` (a) and `opponentPunishment` (b), but ea
   squares), `windows` (the 4-cell winning windows), `completingCell`/`window`, `register:
   "immediate"`, `finalMovestring`, `entryCell`, `anchorCells`. Narrative: "one drop makes it — here
   are the cells."
+  - **`completingCell` is EMPTY, not the played square.** In a `realized_pattern` `window`, exactly
+    one cell — `completingCell` — is empty (the pending winning square); the other three already hold
+    the `owner`'s discs. For a pattern the best move **builds** (`double_threat`/`figure_7`
+    `missed_own`, or the advanced-ply `enabled_opponent` fork), the forming move lands on a
+    **non-`completingCell` window cell** (or, for a fork, a constituent cell of `windows`) — it does
+    **not** occupy `completingCell`, which stays the empty square the opponent must block. For a
+    standing win-in-1 the best move would **complete** (`immediate_threat` `missed_own`),
+    `completingCell` is likewise the empty square that move would fill. Never phrase this as the owner
+    "taking"/"landing on" `completingCell`; say the drop *creates the threat that completes at*
+    `completingCell`. (Concretely: a `figure_7` window `[c4r3,c5r3,c6r3,c7r3]` with `completingCell:
+    c7r3` means c4r3/c5r3/c6r3 are the owner's discs and **c7r3 is empty** — the just-played move was
+    the third disc c6r3, *not* c7r3.)
 - **`kind: "denial"`** — the **proof** the tactic is (or would be) prevented under optimal
   play: an occupation witness, identical in shape to the sign-engine denial (§5). `verdict:
   "occupation"` carries the killing `cell` + `window` + `line`; `no_occupation` is the honest "no
@@ -402,16 +417,20 @@ Describes the controlling structure of a deep win when the line is suppressed. S
 |---|---|
 | `nameable` | `true` if a single controlling group dominates; `false` (with `reason`) for an unnameable multi-window board-fill — then say only "a parity/zugzwang advantage," no geometry. |
 | `controllingGroup` | The 4-cell window `[cNrM×4]` whose parity decides the game. |
-| `ownDiscs`, `groupKind` | How many of your discs are in it; `"major"` (3) or `"minor"` (2). |
-| `empties` | Per empty cell `{ cell, zcount, parity }` — `zcount` = height-relative count; `parity` `odd`/`even`. |
-| `leverCells` | The **odd**-parity empties — the zugzwang levers (z-threats). |
-| `forcedFirstRequired` | `true` when there is **no** lever — the win rests on a forced-first / Aftereven argument (deferred; do not name a specific rule). |
+| `ownDiscs` | How many of your discs are already in the group (may be `0` — the group can be a pure parity claim not yet materialized as a threat). |
+| `empties` | Per empty cell `{ cell, zcount, parity }` — `zcount` = height-relative count; `parity` `odd`/`even`. This is the raw count only; it does **not** by itself identify a z-threat or a lever. |
 | `completingCell` | The cell that eventually completes the four. |
-| `parityNamingDeferred`, `namedRule: null` | The canonical Allis/V-rule **name is intentionally not given.** Describe the group + lever cells; do **not** invent a rule name. |
+| `parityNamingDeferred`, `namedRule: null` | The canonical Allis/V-rule **name is intentionally not given.** Describe the group structurally; do **not** invent a rule name, a "lever," or a "z-threat." |
+
+> **Retired fields (do not expect them):** `leverCells`, `groupKind`, and `forcedFirstRequired` were
+> removed (2026-07-02, review F3). They asserted a z-threat / "lever" / Aftereven claim from a raw
+> odd-height-parity count with no detector backing — an I2 fabrication that reached this narrator.
+> The detector-backed replacement (D7) is deferred. Until it lands, describe a parity win only by its
+> `controllingGroup` + `completingCell`; **do not** call any empty cell a lever or a z-threat.
 
 Narrative for parity wins: "the win is a long zugzwang — you control the parity of group
-`controllingGroup` (lever at `leverCells`), so the opponent eventually has to give you
-`completingCell`." Keep it structural; never fabricate a forced line.
+`controllingGroup`, so the opponent eventually has to give you `completingCell`." Keep it structural;
+never fabricate a forced line, a lever cell, or a rule name.
 
 ### `optimalWinSamples` — evidence-only; **not in the vector you read**
 
@@ -536,7 +555,7 @@ the global drawn result separately (§5).
   "opponentPunishment": {
     "kind": "winning_line", "register": "parity", "completingCell": "c3r2",
     "window": ["c2r2","c3r2","c4r2","c5r2"], "line": null,
-    "parityAttribution": { "nameable": true, "controllingGroup": ["c2r2","c3r2","c4r2","c5r2"], "leverCells": ["c2r2"] },
+    "parityAttribution": { "nameable": true, "controllingGroup": ["c2r2","c3r2","c4r2","c5r2"], "ownDiscs": 3, "completingCell": "c3r2" },
     "tie": { "kind": "tied", "sharedCells": ["c2r2"] }
   }
 }

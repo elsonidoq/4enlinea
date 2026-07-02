@@ -15,16 +15,17 @@
 // plus the opponent reply-histogram (counterplay signal) and, for lose_to_faster_lose, the gate.
 //
 // Solver-backed; O(plies) queries per board (no combinatorial explosion: optimal play collapses to
-// one argmax line per half). The only branching search is the lose_to_faster_lose gate (bounded,
-// or exhaustive when <= GATE_EXHAUSTIVE_EMPTIES empty cells).
+// one argmax line per half). The only branching search is the lose_to_faster_lose gate, a single
+// uniform depth-bounded search (REASON_CONFIG.gateMaxPlies; D23 — the old exhaustive/bounded two-mode
+// split is retired).
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../../c4solver-wrapper.js';
 import {
-  ROWS, COLS, INVALID_MOVE, loadEnv, buildBoard, winningWindows, cellStr, legalCols, emptyCellCount,
+  ROWS, COLS, INVALID_MOVE, loadEnv, buildBoard, winningWindows, cellStr, legalCols,
   parseCell,
 } from './lib/boardUtils.mjs';
-import { optimalCols, attachWinSamples } from './sampleWins.mjs';
+import { optimalCols, attachWinSamples, sampleOptimalWins } from './sampleWins.mjs';
 import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
   tagBlunder, NotABlunderError,
@@ -41,16 +42,21 @@ export const REASON_CONFIG = {
   immediateMax: 2,
   forcedSequenceMax: 6,
   parityMin: 12,
-  // win_to_draw denial search depth cap (D17).
-  denialDepth: 8,
-  // lose_to_faster_lose gate budget (provisional).
-  gateDepth: 6,        // opponent plies
-  gateBranch: 3,       // winning opponent moves explored per node (least-winning first)
+  // lose_to_faster_lose swindle gate (D23): a single uniform depth-bounded practical-chance search.
+  // A swindle FOUND within gateMaxPlies -> Blunder (sound, a real solver witness); NOT found within
+  // the cap -> NotABlunder by policy ("no practical swindle within N plies", not a completeness proof).
+  // The old exhaustive/bounded two-mode split (gateExhaustiveEmpties) is retired.
+  gateMaxPlies: 15,    // total plies searched from the gate root before giving up (NotABlunder)
+  gateBranch: 3,       // distinct-score winning opponent moves explored per node (least-winning first)
   gatePlayerTiedCap: 2,
-  gateExhaustiveEmpties: 10, // <= this many empty cells -> run the gate exhaustively (exact verdict)
+  gateNodeBudget: 20000, // hard node cap so a pathological board can't stall the harvest
   // board_state bands (reason-case-taxonomy.md §opening/mid-game/closing).
   openingMaxDiscs: 15,
   midgameMaxDiscs: 30,
+  // Global toggle for the opening/mid-game winning-line distributions (winSamples: {best, played},
+  // overlaid green/red on /admin/fv-suff). Disabled 2026-07-02 — not judged useful for explaining
+  // the blunder. Set true to re-enable; the code path is intact. See blunder-reason-evidence.md §11.
+  enableWinSamples: false,
 };
 
 const CASES = {
@@ -63,6 +69,10 @@ const CASES = {
 
 // Tags routed through the realized/denied fast path (docs/architecture/reason-tag-fastpath-pseudocode.md).
 export const REALIZED_DENIED_TAGS = new Set(['immediate_threat', 'forced_block', 'double_threat', 'figure_7']);
+// STANDING-threat tags: a pre-existing win-in-1 the best move COMPLETES (vs. forks, which the best move
+// BUILDS). Their realized pattern stands on the PRE-move board — detecting it on the post-move (already
+// won) board reports a phantom three-in-a-row one row above the just-completed four. See eval-26.
+const STANDING_THREAT_TAGS = new Set(['immediate_threat', 'forced_block']);
 
 function classifySignCase(bestScore, playedScore) {
   if (bestScore > 0 && playedScore === 0) return CASES.WIN_TO_DRAW;
@@ -84,8 +94,6 @@ export function registerOf(fwd) {
   return 'parity';
 }
 const showsLine = (reg) => reg === 'immediate' || reg === 'forced_sequence';
-
-const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
 
 // ── tactic NAMING via the production classifier (classifyPattern) ──
 // The solver stays authoritative (it decides the case / register / optimal line); classifyPattern
@@ -214,6 +222,28 @@ export function realizedPattern(rootMs, owner, tag) {
   return { cells: it.cells, windows, completingCell: it.cells[0] ?? null };
 }
 
+// Find an optimal opponent reply from `root` that MATERIALIZES the fork for `owner` (mirrors
+// tagBlunder Phase D's existential over the opponent's optimal — max-score-tied — replies). Returns the
+// deeper realized root + its realizedPattern, or null if no optimal reply forms the fork. Reuses the
+// production detector via realizedPattern (I8).
+async function advanceToEnabledFork(solver, root, owner, tag) {
+  let scores;
+  try { scores = await solver.query(root); } catch { return null; }
+  const { heights } = buildBoard(root);
+  let max = -Infinity;
+  for (let c = 0; c < COLS; c++) {
+    if (scores[c] === INVALID_MOVE || heights[c] >= ROWS) continue;
+    if (scores[c] > max) max = scores[c];
+  }
+  for (let c = 0; c < COLS; c++) {
+    if (scores[c] === INVALID_MOVE || heights[c] >= ROWS || scores[c] !== max) continue;
+    const deeper = root + String(c);
+    const rp = realizedPattern(deeper, owner, tag);
+    if (rp) return { realizedRoot: deeper, rp };
+  }
+  return null;
+}
+
 // Realized/denied reason builder (docs/architecture/reason-tag-fastpath-pseudocode.md).
 // One half is the pattern realized in one move (realizedPattern); the other is the pattern denied
 // (findOccupationWitness) with denier/root flipped by `direction`. Owner of the pattern decides which
@@ -227,14 +257,32 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
 
   let owner, denier, realizedRoot, deniedRoot;
   if (direction === 'missed_own') {
-    owner = player; denier = opponent; realizedRoot = correctRoot; deniedRoot = playedRoot;
+    owner = player; denier = opponent; deniedRoot = playedRoot;
+    // A STANDING win-in-1 (immediate_threat) that `bestCol` COMPLETES stands on the PRE-move board;
+    // detecting it on correctRoot — already WON by `owner` — makes detectImmediateThreat report a
+    // PHANTOM three-in-a-row one row above the just-completed four (eval-26: c2r5 instead of c2r4).
+    // Forks (double_threat/figure_7) are genuinely BUILT by the best move, so they detect on correctRoot.
+    realizedRoot = STANDING_THREAT_TAGS.has(tag) ? movestring : correctRoot;
   } else { // enabled_opponent | defensive_miss
     owner = opponent; denier = player;
     realizedRoot = (direction === 'defensive_miss') ? movestring : playedRoot;
     deniedRoot = correctRoot;
   }
 
-  const rp = realizedPattern(realizedRoot, owner, tag);
+  let rp = realizedPattern(realizedRoot, owner, tag);
+
+  // Router-locus fix: an enabled_opponent FORK materializes ONE ply deeper than playedRoot. tagBlunder's
+  // Phase D detects it after the opponent's fork-forming optimal reply, but the fork is NOT yet present
+  // on playedRoot (a fork present while the opponent is to move would be an immediate win, caught earlier
+  // as immediate_threat). So realizedPattern(playedRoot) is always null here. Advance realizedRoot by the
+  // opponent's fork-forming reply so the realized half can be exhibited — matching the pseudocode table's
+  // "playedRoot, opponent forms the fork". (immediate_threat/forced_block are standing threats already on
+  // their root, so they never need this.)
+  if (!rp && direction === 'enabled_opponent' && (tag === 'double_threat' || tag === 'figure_7')) {
+    const adv = await advanceToEnabledFork(solver, realizedRoot, owner, tag);
+    if (adv) { realizedRoot = adv.realizedRoot; rp = adv.rp; }
+  }
+
   if (!rp) return null; // detector can't confirm the tag as a one-move pattern -> fall through (I2: don't fabricate)
 
   // Fork tags: refine to the forkCase-appropriate name so the router aligns with nameFork's naming
@@ -282,7 +330,25 @@ export async function realizedDeniedReason(out, tag, direction, { solver }) {
     afterBest: await nonLosingReplyCount(solver, correctRoot),
     afterPlayed: await nonLosingReplyCount(solver, playedRoot),
   };
-  out.gate = null;
+  // D24 (review F1): when the board is BOTH-LOSING (lose_to_faster_lose signs), a conceded/handed
+  // one-move tactic is still a teachable blunder (D20's intent) — the route does NOT suppress it. But
+  // D4/I4 ask "was any practical counterplay preserved?" — a real signal the router would otherwise
+  // discard as `gate: null`. So run the swindle gate on bestRoot and CARRY its verdict for honest
+  // framing (a routed Blunder with gate.verdict === 'NotABlunder' means: you were losing regardless,
+  // AND this move handed over the tactic). The gate is diagnostic here, never a suppressor. Non-losing
+  // routed boards (win_to_*/draw_to_lose signs) keep gate: null — the gate does not apply.
+  if (bestScore < 0 && playedScore < 0) {
+    const gate = await swindleGate(solver, correctRoot, {});
+    out.gate = {
+      ran: true, verdict: gate.found ? 'Blunder' : 'NotABlunder',
+      witness: gate.found
+        ? { node: gate.node, devCols: gate.devCols, devCol: gate.devCol, devVal: gate.devVal, oppPlies: gate.oppPlies }
+        : null,
+      nodesVisited: gate.nodesVisited,
+    };
+  } else {
+    out.gate = null;
+  }
   return out;
 }
 
@@ -381,12 +447,22 @@ async function walkOptimal(solver, ms, winnerMark = null) {
 // Parity-attribution (PROTOTYPE): for a win whose line is too long to render (register=parity),
 // project the solver-realized winning `window` back onto the root board and describe the
 // CONTROLLING GROUP structurally instead of emitting a bare distant terminal cell.
-//   - height-relative parity per empty cell: zcount = (1-indexed row) - colHeight  (KB community-z-threat)
-//   - leverCells = empties with ODD zcount (the zugzwang levers); raw row parity is NOT used (KB
-//     allen-parity known-limitation: raw row inverts mid-game).
-//   - forcedFirstRequired = true when there is NO odd z-threat lever: the win rests on the global
-//     forced-first / Aftereven argument (KB derived-dead-space-parity / allis-aftereven), which is a
-//     DEFERRED later milestone — this payload flags that, it does not name the rule.
+//   - `empties` carries, per empty cell of the window, its height-relative parity:
+//     zcount = (1-indexed row) - colHeight  (KB community-z-threat arithmetic). This is a RAW
+//     description of the count, claimed as nothing more.
+//
+// RETRACTED (I2, review F3): earlier drafts also emitted `leverCells` (= the odd-zcount empties,
+// labeled "the zugzwang levers / z-threats") and `forcedFirstRequired` (= "the win rests on a
+// forced-first / Aftereven argument"). Both are DEFECTS under I2: a z-threat/lever is a
+// detector-backed concept (KB community-z-threat requires a MAJOR threat at the cell + a controlling
+// side), not "any empty cell with odd height-parity"; and "rests on Aftereven" is an unbacked
+// game-theoretic claim. `parityAttribution` reaches the LLM (toNarratorVector does NOT scrub it), so
+// these were a live fabrication surface. The detector-backed replacement (D7 — intersect the realized
+// window with the production z-threat/Allis odd-even detector) is a separate, I12-gated change; until
+// it lands the honest payload ABSTAINS on the lever/forced-first claims and emits only the raw
+// solver-validated window + per-cell parity arithmetic. `groupKind` (a major/minor THREAT label) is
+// likewise dropped: at the root board the window may hold 0 winner discs — it is not a threat yet, so
+// classifying it as major/minor is false. `ownDiscs` (the raw count) is retained.
 // The window is already solver-validated (it came from walkOptimal), so this step is solver-free.
 function attributeParityWin(rootMs, window, completingCell, winnerMark) {
   if (!window || !window.length) return null;
@@ -407,15 +483,11 @@ function attributeParityWin(rootMs, window, completingCell, winnerMark) {
   }
   if (loserDiscs > 0) return { nameable: false, reason: 'loser_disc_in_window' }; // multi-window board-fill
   if (completingCell && !window.includes(completingCell)) return { nameable: false, reason: 'completing_not_in_window' };
-  const leverCells = empties.filter((e) => e.parity === 'odd').map((e) => e.cell);
   return {
     nameable: true,
     controllingGroup: window,
     ownDiscs: own,
-    groupKind: own === 3 ? 'major' : 'minor',
     empties,
-    leverCells,
-    forcedFirstRequired: leverCells.length === 0,
     completingCell: completingCell ?? null,
     parityNamingDeferred: true,
     namedRule: null,
@@ -436,8 +508,14 @@ function winningMoveCells(movestring, scores) {
 function tieTo(caseName, lost, punish) {
   if (caseName === CASES.LOSE_TO_FASTER_LOSE) {
     const playedPlies = punish.pliesToEnd ?? null, swindlePlies = lost.pliesToEnd ?? null;
+    // The two halves are walked from DIFFERENT roots (playedRoot vs the deeper swindleRoot =
+    // gate.node + devCol), so their pliesToEnd are measured in different reference frames and are NOT
+    // directly comparable — comparing them biases `tied` by 2*oppPlies+2. Decide "is the played loss
+    // actually faster?" (D14) on a COMMON frame: absolute terminal disc counts (finalMovestring.length).
+    const playedEnd = punish.finalMovestring?.length ?? null;
+    const swindleEnd = lost.finalMovestring?.length ?? null;
     return { kind: 'temporal', playedPlies, swindlePlies,
-      tied: (playedPlies != null && swindlePlies != null && playedPlies < swindlePlies) };
+      tied: (playedEnd != null && swindleEnd != null && playedEnd < swindleEnd) };
   }
   const anchor = new Set(lost.anchorCells || []);
   const shared = [...new Set([punish.entryCell, punish.completingCell])].filter((c) => c && anchor.has(c));
@@ -516,20 +594,27 @@ function admissibleOpponentCols(ms, legal, player) {
 // non-winning reply that ignores/creates a win-in-1 is NOT counted (D19): assuming an opponent that
 // hangs an immediate threat is not a lesson worth teaching. Preserves the branching search over
 // admissible winning replies (I0 — don't weaken the search).
-export async function swindleGate(solver, node, { exhaustive }) {
-  const { gateDepth, gateBranch, gatePlayerTiedCap } = REASON_CONFIG;
+// D23: a single uniform DEPTH-BOUNDED search (the old exhaustive/bounded two-mode split is retired).
+// `depthCap` (default REASON_CONFIG.gateMaxPlies) bounds the total plies searched from `node`; a
+// `gateNodeBudget` hard-caps nodes so a pathological board bails to found:false in bounded time.
+// Found-within-cap => Blunder (sound witness); not-found => NotABlunder by policy (not a completeness
+// proof — I7 asymmetry made explicit and uniform).
+export async function swindleGate(solver, node, opts = {}) {
+  const { gateMaxPlies, gateBranch, gatePlayerTiedCap, gateNodeBudget } = REASON_CONFIG;
+  const depthCap = opts.depthCap ?? gateMaxPlies;
   // player = the side that just moved into `node` (the blunderer); opponent is to move at `node`.
   const player = ((node.length - 1) % 2 === 0) ? 1 : 2;
   const stack = [{ ms: node, oppPlies: 0 }];
   const seen = new Set();
   let nodesVisited = 0;
-  let errored = false; // a non-terminal solver throw skipped a real subtree -> exhaustion not clean (M3)
+  let errored = false;    // a non-terminal solver throw skipped a real subtree (M3)
+  let budgetHit = false;  // node budget exhausted -> bounded-time bail (not a proof of absence)
   while (stack.length) {
     const { ms, oppPlies } = stack.pop();
-    if (!exhaustive && oppPlies > gateDepth) continue;
+    if ((ms.length - node.length) > depthCap) continue;   // uniform total-ply depth cap
     if (seen.has(ms)) continue;
     seen.add(ms);
-    nodesVisited++;
+    if (++nodesVisited > gateNodeBudget) { budgetHit = true; break; }
     let oppScores;
     try { oppScores = await solver.query(ms); } catch { if (!isTerminalPosition(ms)) errored = true; continue; }
     const legal = legalCols(oppScores);
@@ -557,12 +642,15 @@ export async function swindleGate(solver, node, { exhaustive }) {
       };
     }
     // every admissible reply wins for the opponent: branch over them (least-winning first = most
-    // fragile) and let the player reply optimally, looking deeper for an admissible swindle.
+    // fragile), DEDUPED BY SCORE (one representative per distinct oppScore), and let the player reply
+    // optimally, looking deeper for an admissible swindle.
     const winning = adm.filter((c) => oppScores[c] > 0).sort((a, b) => oppScores[a] - oppScores[b]);
-    const branchCap = exhaustive ? winning.length : gateBranch;
+    const seenScore = new Set();
     let branches = 0;
     for (const oc of winning) {
-      if (branches >= branchCap) break;
+      if (seenScore.has(oppScores[oc])) continue;   // dedup by score
+      seenScore.add(oppScores[oc]);
+      if (branches >= gateBranch) break;
       branches++;
       const afterOpp = ms + String(oc);
       let pScores;
@@ -570,12 +658,11 @@ export async function swindleGate(solver, node, { exhaustive }) {
       const pLegal = legalCols(pScores);
       if (!pLegal.length) continue;
       const maxP = Math.max(...pLegal.map((c) => pScores[c]));
-      const tied = pLegal.filter((c) => pScores[c] === maxP);
-      const best = exhaustive ? tied : tied.slice(0, gatePlayerTiedCap);
-      for (const pc of best) stack.push({ ms: afterOpp + String(pc), oppPlies: oppPlies + 1 });
+      const tied = pLegal.filter((c) => pScores[c] === maxP).slice(0, gatePlayerTiedCap);
+      for (const pc of tied) stack.push({ ms: afterOpp + String(pc), oppPlies: oppPlies + 1 });
     }
   }
-  return { found: false, nodesVisited, errored };
+  return { found: false, nodesVisited, errored, budgetHit };
 }
 
 // A window (array of cellStr) is LIVE for the winner on `ms` if it holds no opponent disc; the
@@ -667,10 +754,8 @@ export async function computeReason(movestring, playedCol, { solver }) {
   for (const c of legal) if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; }
   const playedScore = scores[playedCol];
 
-  const board = buildBoard(movestring);
   const player = (discs % 2 === 0) ? 1 : 2;
   const opponent = player === 1 ? 2 : 1;
-  void board;
 
   const boardState = discs < REASON_CONFIG.openingMaxDiscs ? 'opening'
     : discs < REASON_CONFIG.midgameMaxDiscs ? 'mid-game' : 'closing';
@@ -681,12 +766,27 @@ export async function computeReason(movestring, playedCol, { solver }) {
     case: null, notABlunder: false,
     lostResource: null, opponentPunishment: null,
     replyHistogram: null, gate: null,
+    winSamples: null,
   };
 
+  // ── winning-line distributions (opening & mid-game only) ──
+  // Always compute (regardless of register/case) the distribution of optimal winning-line
+  // realizations from BOTH roots: `best` = the mover's forced win the best move preserves,
+  // `played` = the opponent's forced win the blunder concedes. sampleOptimalWins self-detects the
+  // winner via the real board, so a root that draws (no forced four) yields zero lines. Purely
+  // additive evidence; rendered on the /admin/fv-suff pre-move board (green = best, red = blunder).
+  if (REASON_CONFIG.enableWinSamples && boardState !== 'closing') {
+    const winN = parseInt(process.env.REASON_WIN_SAMPLES ?? '40', 10);
+    out.winSamples = {
+      best: await sampleOptimalWins(solver, movestring + String(bestCol), player, { n: winN }),
+      played: await sampleOptimalWins(solver, movestring + String(playedCol), opponent, { n: winN }),
+    };
+  }
+
   // ── classify ──
-  // NOTE: reason-case-taxonomy.md's first branch `bestScore*playedScore>0` ALSO matches both-negative,
-  // which would make lose_to_faster_lose unreachable. The companion doc treats both-negative as
-  // in-scope, so win_to_slower_win is only when BOTH scores are positive.
+  // NOTE: win_to_slower_win requires BOTH scores strictly positive. A naive `bestScore*playedScore>0`
+  // is wrong — it ALSO matches both-negative, which would make lose_to_faster_lose unreachable.
+  // reason-case-taxonomy.md's first branch is correctly `bestScore > 0 and playedScore > 0`.
   if (bestScore > 0 && playedScore > 0) {
     out.case = CASES.WIN_TO_SLOWER_WIN;
     out.notABlunder = true; // out of scope per reason-case-taxonomy.md
@@ -727,8 +827,8 @@ export async function computeReason(movestring, playedCol, { solver }) {
     Object.assign(out.lostResource, await nameWalkedHalf(solver, out.lostResource, bestRoot, player, { diffAgainst: playedRoot }));
     out.lostResource.anchorCells = out.lostResource.terminal === 'fork'
       ? forkAnchorCells(out.lostResource) : winningMoveCells(movestring, scores);
-    // half (b): how the played move allows the opponent to deny the fork resource (D17) —
-    // or, when lostResource is not a fork, the legacy neutralization saving-reply.
+    // half (b): how the played move lets the opponent deny the winning resource — the unified
+    // occupation-witness denial for BOTH sub-cases (D18 fork windows; D26 non-fork winning-line window).
     if (out.lostResource.terminal === 'fork') {
       // Fork win_to_draw (D18): the opponent (denier) occupies a fork-window cell under optimal play.
       const denial = await findOccupationWitness(solver, playedRoot, {
@@ -747,24 +847,29 @@ export async function computeReason(movestring, playedCol, { solver }) {
         ? { kind: 'tied', sharedCells: [denial.cell] }
         : { kind: 'independent', sharedCells: [] };
     } else {
-      // Genuine-parity win_to_draw (no fork): keep the legacy neutralization block.
-      const oppScores = await solver.query(playedRoot);
-      const oppLegal = legalCols(oppScores);
-      const saving = oppLegal.filter((c) => oppScores[c] >= 0).sort((a, b) => oppScores[a] - oppScores[b]);
-      const saveCol = saving.length ? saving[saving.length - 1] : null; // the draw (score 0); prefer least-bad
-      let saveCell = null, saveWindow = null;
-      if (saveCol != null) {
-        const { heights } = buildBoard(playedRoot);
-        saveCell = cellStr(heights[saveCol], saveCol);
-      }
+      // Non-fork win_to_draw (D26 — supersedes D18's "non-fork keeps neutralization"): the opponent
+      // neutralizes the winning LINE exactly as a fork is denied — walk the played line until the
+      // opponent occupies+kills a cell of lostResource.window (first LIVE->DEAD occupation on the
+      // canonical optimal PV; the D18 theorem guarantees it exists by the drawn full-board terminal).
+      // For a deep parity win this witness is many plies out (the winning row fills last), so the
+      // register is the fwd-based label (parity for deep wins) — but the FULL line is retained
+      // regardless of register (soundness-first; what to render to the LLM is a downstream concern).
+      // The counterplay count the old `savingReplyCount` carried now lives in replyHistogram.afterPlayed.
+      const denial = await findOccupationWitness(solver, playedRoot, {
+        denier: opponent, windows: out.lostResource.window ? [out.lostResource.window] : [],
+        depthCap: ROWS * COLS - playedRoot.length,
+      });
       out.opponentPunishment = {
-        kind: 'neutralization', register: 'immediate',
-        completingCell: saveCell, window: saveWindow, pliesToEnd: null, line: null,
-        finalMovestring: saveCol != null ? playedRoot + String(saveCol) : null,
-        entryCell: saveCell,
-        savingCol: saveCol, savingReplyCount: saving.length,
+        kind: 'denial', verdict: denial.verdict,
+        register: registerOf(fwdOf(bestScore, discs)),
+        line: denial.line, finalMovestring: denial.finalMovestring,
+        completingCell: denial.cell ?? null, window: denial.window ?? null,
+        cell: denial.cell ?? null, exhaustive: denial.exhaustive,
+        entryCell: denial.cell ?? null,
       };
-      Object.assign(out.opponentPunishment, await nameHalf(solver, playedRoot, opponent));
+      out.opponentPunishment.tie = denial.verdict === 'occupation'
+        ? { kind: 'tied', sharedCells: [denial.cell] }
+        : { kind: 'independent', sharedCells: [] };
     }
   } else if (bestScore > 0 && playedScore < 0) {
     // ── win_to_lose ──
@@ -797,7 +902,10 @@ export async function computeReason(movestring, playedCol, { solver }) {
     });
     out.lostResource = {
       kind: 'denial', verdict: denial.verdict,
-      register: (denial.line && denial.line.length > 0) ? 'forced_sequence' : 'immediate',
+      // A denial with a <=1-move line is `immediate` (the single occupation IS the move); only a
+      // multi-move walk is `forced_sequence`. Same rule as the win_to_draw / realized_denied denial
+      // halves (review F6 — was `> 0` here, inconsistent with the `> 1` used elsewhere).
+      register: (denial.line && denial.line.length > 1) ? 'forced_sequence' : 'immediate',
       line: denial.line, finalMovestring: denial.finalMovestring,
       completingCell: denial.cell ?? null, window: denial.window ?? null,
       cell: denial.cell ?? null, exhaustive: denial.exhaustive,
@@ -810,21 +918,16 @@ export async function computeReason(movestring, playedCol, { solver }) {
       ? { kind: 'tied', sharedCells: [denial.cell] }
       : { kind: 'independent', sharedCells: [] };
   } else if (bestScore < 0 && playedScore < 0) {
-    // ── lose_to_faster_lose ── (only real search: the gate)
+    // ── lose_to_faster_lose ── (only real search: the gate, D23 uniform depth-bounded)
     out.case = CASES.LOSE_TO_FASTER_LOSE;
-    const empties = emptyCellCount(movestring);
-    const exhaustive = empties <= REASON_CONFIG.gateExhaustiveEmpties;
-    const gate = await swindleGate(solver, bestRoot, { exhaustive });
+    const gate = await swindleGate(solver, bestRoot, {});
     if (!gate.found) {
       out.notABlunder = true;
-      out.gate = {
-        ran: true, exhaustive: exhaustive && !gate.errored, verdict: 'NotABlunder', witness: null,
-        nodesVisited: gate.nodesVisited,
-      };
+      out.gate = { ran: true, verdict: 'NotABlunder', witness: null, nodesVisited: gate.nodesVisited };
       return out;
     }
     out.gate = {
-      ran: true, exhaustive: exhaustive && !gate.errored, verdict: 'Blunder',
+      ran: true, verdict: 'Blunder',
       witness: { node: gate.node, devCols: gate.devCols, devCol: gate.devCol, devVal: gate.devVal, oppPlies: gate.oppPlies },
       nodesVisited: gate.nodesVisited,
     };

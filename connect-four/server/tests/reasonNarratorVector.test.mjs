@@ -61,8 +61,8 @@ const RAW_WITH_SCORES = {
   },
 };
 
-test('isNarratorHidden matches the whole solver-score family + optimalWinSamples, not pliesToEnd', () => {
-  for (const k of ['scores', 'score', 'bestScore', 'playedScore', 'optimalWinSamples']) {
+test('isNarratorHidden matches the whole solver-score family + win-sample diagnostics, not pliesToEnd', () => {
+  for (const k of ['scores', 'score', 'bestScore', 'playedScore', 'optimalWinSamples', 'winSamples']) {
     assert.equal(isNarratorHidden(k), true, `${k} must be hidden`);
   }
   for (const k of ['pliesToEnd', 'case', 'bestCol', 'window', 'cell']) {

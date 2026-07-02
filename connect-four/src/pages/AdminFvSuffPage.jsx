@@ -170,7 +170,6 @@ function HalfDetail({ label, half }) {
         )}
         {half.completingCell && <span style={{ fontFamily: 'monospace', fontSize: 12 }}>cell <b>{half.completingCell}</b></span>}
         {half.pliesToEnd != null && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>plies {half.pliesToEnd}</span>}
-        {half.savingCol != null && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>saveCol {half.savingCol + 1}</span>}
       </div>
       {(half.line || []).length > 0 && (
         <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569' }}>
@@ -192,13 +191,15 @@ function HalfDetail({ label, half }) {
       {pa?.nameable && (
         <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569', marginTop: 4, padding: '4px 6px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>
           <b style={{ color: '#a16207' }}>parity attribution</b>{' '}
-          <Chip text={pa.groupKind} bg="#fef3c7" fg="#92400e" />{' '}
+          <span style={{ color: '#92400e' }}>ownDiscs {pa.ownDiscs}</span>{' '}
           group: {pa.controllingGroup.join(' ')}
-          <div>
-            levers (odd z-threat): {pa.leverCells.length
-              ? <b style={{ color: '#16a34a' }}>{pa.leverCells.join(' ')}</b>
-              : <b style={{ color: '#dc2626' }}>none → forcedFirstRequired (deferred)</b>}
-          </div>
+          {/* leverCells / groupKind / forcedFirstRequired retired (review F3): they asserted an
+              unbacked z-threat/Aftereven claim. Per-cell height-parity lives in `empties`. */}
+          {(pa.empties || []).length > 0 && (
+            <div>
+              empties (height-parity): {pa.empties.map((e) => `${e.cell}:${e.parity}`).join(' ')}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -254,6 +255,15 @@ function ReasonViewer() {
     // any overlapping cell.
     for (const ln of (ev.lostResource?.optimalWinSamples?.lines || [])) {
       for (const w of (ln.window || [])) { const c = parseCell(w); if (c) out.push({ ...c, type: 'claim' }); }
+    }
+    // winSamples (opening/mid-game): the best-move winning-line windows (green) and the
+    // post-blunder opponent winning-line windows (red). Pushed after amber; red after green so a
+    // cell shared by both distributions renders as the danger (opponent) colour.
+    for (const ln of (ev.winSamples?.best?.lines || [])) {
+      for (const w of (ln.window || [])) { const c = parseCell(w); if (c) out.push({ ...c, type: 'tg' }); }
+    }
+    for (const ln of (ev.winSamples?.played?.lines || [])) {
+      for (const w of (ln.window || [])) { const c = parseCell(w); if (c) out.push({ ...c, type: 'tr' }); }
     }
     const playedRow = preBoard.heights[ev.playedCol];
     if (playedRow != null && playedRow < 6) out.push({ c: ev.playedCol, r: playedRow, type: 'tr' });
@@ -337,8 +347,9 @@ function ReasonViewer() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 2 }}>pre-move board</div>
                   <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', marginBottom: 4, minHeight: 14 }}>
-                    <span style={{ color: '#e8543e', fontWeight: 700 }}>red</span> played · <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> best
-                    {ev.lostResource?.optimalWinSamples && <> · <span style={{ color: '#a16207', fontWeight: 700 }}>amber</span> win-sample windows ({ev.lostResource.optimalWinSamples.distinct})</>}
+                    <span style={{ color: '#16a34a', fontWeight: 700 }}>green</span> best move + its winning lines · <span style={{ color: '#e8543e', fontWeight: 700 }}>red</span> played move + opponent's post-blunder winning lines
+                    {ev.winSamples && <> · win-line distinct: best {ev.winSamples.best?.distinct ?? 0} / played {ev.winSamples.played?.distinct ?? 0}</>}
+                    {ev.lostResource?.optimalWinSamples && <> · <span style={{ color: '#a16207', fontWeight: 700 }}>amber</span> parity win-sample windows ({ev.lostResource.optimalWinSamples.distinct})</>}
                   </div>
                   <Board board={preBoard.board} compact canPlay={false} overlays={preOverlays} />
                 </div>

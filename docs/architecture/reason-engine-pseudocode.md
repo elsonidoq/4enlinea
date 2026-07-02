@@ -94,20 +94,17 @@ def reason(movestring, playedCol):
 
 def punish_half(case, movestring, playedRoot, opponent, against):     # against = lostResource
     if case == 'win_to_draw':
-        if against.terminal == 'fork':
-            # D18: half (b) is the unified occupation-witness PV walk (replaces the D17 BFS).
-            # Walk the canonical argmax PV from playedRoot; return the first node where the opponent
-            # occupies a cell of lostResource.forkWindows (LIVE->DEAD).  depthCap = full board.
-            half = find_occupation_witness(playedRoot, denier=opponent, windows=against.forkWindows,
-                                           depthCap=42-len(playedRoot))
-        else:
-            # non-fork win_to_draw: legacy neutralization — the opponent's single saving reply.
-            oppScores = solver.query(playedRoot)
-            saving    = [c for c in legal(playedRoot) if oppScores[c] >= 0]
-            savingCol = best_of(saving)                               # the one save (histogram == 1)
-            half = { kind:'neutralization', register:'immediate',
-                     entryCell: landing_cell(playedRoot, savingCol),  # where the opponent escapes
-                     savingCol, savingReplyCount: len(saving) }
+        # D18 + D26: half (b) is the unified occupation-witness PV walk for BOTH sub-cases.
+        # Walk the canonical argmax PV from playedRoot; return the first node where the opponent
+        # occupies+kills a cell of the winning window(s) (LIVE->DEAD).  depthCap = full board.
+        #   fork sub-case      -> windows = lostResource.forkWindows        (D18)
+        #   non-fork sub-case  -> windows = [lostResource.window]           (D26, replaces neutralization)
+        windows = against.forkWindows if against.terminal == 'fork' else [against.window]
+        half = find_occupation_witness(playedRoot, denier=opponent, windows=windows,
+                                       depthCap=42-len(playedRoot))
+        # register: fork -> tactical (from denial line length, D16); non-fork -> registerOf(fwd(bestScore))
+        # as a LABEL, but the full `line` is retained regardless (soundness-first; rendering deferred).
+        # The counterplay count the old neutralization.savingReplyCount carried is replyHistogram.afterPlayed.
     else:
         # the played move LOSES (or loses faster): half (b) is the opponent's winning line.
         half = win_half(playedRoot, winner=opponent)                  # kind = winning_line
@@ -253,12 +250,13 @@ def register(fwd):                                  # fwd = free proxy for "is t
 
 # parity attribution: project the SOLVER-realized window back onto the root; describe the group.
 #   KB: community-z-threat (height-relative count); allen-parity raw-row trap AVOIDED.  Solver-free.
+#   NOTE (review F3, 2026-07-02): leverCells / forcedFirstRequired / groupKind were REMOVED as an I2
+#   fabrication — an odd height-parity count is NOT a detector-backed z-threat/lever. `empties` carries
+#   the raw parity only; detector-backed naming is deferred (D7 / D24).
 def attribute_parity_win(root, window, completingCell, winner):
     if window has any LOSER disc:  return { nameable: False }      # multi-window board-fill (unnameable)
     empties = [ {cell, zcount = row_1indexed - colHeight, parity: odd|even}  for empty in window ]
-    levers  = [ e.cell for e in empties if e.parity == 'odd' ]     # zugzwang levers (z-threats)
-    return { nameable: True, controllingGroup: window, leverCells: levers, completingCell,
-             forcedFirstRequired: (levers == []),                  # no lever -> needs forced-first layer
+    return { nameable: True, controllingGroup: window, ownDiscs, empties, completingCell,
              parityNamingDeferred: True }                          # canonical V1/Aftereven naming DEFERRED
 
 
@@ -344,9 +342,12 @@ case rather than only `win_to_draw`.
 
 ## Honest limits (carried forward)
 
-- **Parity naming deferred** — `parityAttribution` emits the controlling group + lever cells but NOT
-  the canonical Allis odd/even / V1 / Aftereven name. `forcedFirstRequired: true` marks boards whose
-  win has no z-threat lever and therefore *needs* the deferred forced-first layer to explain.
+- **Parity naming deferred** — `parityAttribution` emits the controlling group + per-cell height
+  parity (`empties`) but NOT the canonical Allis odd/even / V1 / Aftereven name, and NOT a "lever" /
+  "z-threat" claim. The `leverCells` / `forcedFirstRequired` / `groupKind` fields were REMOVED
+  2026-07-02 (review F3 / D24): labeling an odd height-parity empty a "lever/z-threat" is an I2
+  fabrication (a z-threat is detector-backed — KB community-z-threat needs a MAJOR threat at the cell).
+  The detector-backed replacement is the deferred D7 milestone.
 - **Tactic naming falls to `null`** when no `classifyPattern` tag passes both gates — correct, not a
   gap; `parityAttribution` carries the explanation for parity wins.
 - **Tie may be `independent`/`temporal`** — not every case shares a cell; the engine reports the

@@ -27,10 +27,12 @@ test('orientationOf: classifies horizontal / vertical / diagonal windows', () =>
 
 import { before, after, test as ntest } from 'node:test';
 import { createSolverProcess } from '../c4solver-wrapper.js';
-import { computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
+import { computeReason, REASON_CONFIG } from '../scripts/reason_engine/reasonEngine.mjs';
 
 let solver;
-before(async () => { solver = await createSolverProcess(); });
+// winSamples is globally disabled by default (not judged useful for explaining the blunder). The
+// code path is intact; enable it here so the distribution tests still exercise it.
+before(async () => { solver = await createSolverProcess(); REASON_CONFIG.enableWinSamples = true; });
 after(() => { if (solver) solver.destroy(); });
 
 ntest('walkOptimal refactor: lostResource window unchanged on a known parity win', async () => {
@@ -75,4 +77,48 @@ ntest('optimalWinSamples: NOT attached on a non-parity (fork) win', async () => 
   const r = await computeReason('214444115623', 4, { solver });
   assert.equal(r.lostResource.terminal, 'fork');
   assert.equal(r.lostResource.optimalWinSamples, undefined);
+});
+
+// ── top-level winSamples (opening/mid-game): best = player's win, played = opponent's win ──
+ntest('winSamples: both distributions on a win_to_lose; already-won best root does not crash', async () => {
+  // 463512252326 played 0 = win_to_lose (opening). Best (col2) is an IMMEDIATE vertical win, so its
+  // root is already terminal — sampleOptimalWins must return the completing window without querying
+  // the solver (a terminal position the solver rejects). Played (col0) hands the opponent a win.
+  const r = await computeReason('463512252326', 0, { solver });
+  assert.equal(r.case, 'win_to_lose');
+  assert.equal(r.boardState, 'opening');
+  assert.ok(r.winSamples, 'winSamples attached for opening board');
+  assert.ok(r.winSamples.best.distinct >= 1, 'best distribution populated (player win)');
+  assert.deepEqual(r.winSamples.best.lines[0].window, ['c3r2', 'c3r3', 'c3r4', 'c3r5']);
+  assert.ok(r.winSamples.played.distinct >= 1, 'played distribution populated (opponent win)');
+});
+
+ntest('winSamples: best is EMPTY when the best root has no win for the player (lose_to_faster_lose)', async () => {
+  // Both roots lose; the player has no forced win from either. best (winnerMark=player) must be
+  // empty; played (winnerMark=opponent) shows the opponent's faster win.
+  const r = await computeReason('3333325662555225', 1, { solver });
+  assert.equal(r.case, 'lose_to_faster_lose');
+  assert.ok(r.winSamples, 'winSamples attached');
+  assert.equal(r.winSamples.best.distinct, 0, 'no player win from the best root');
+  assert.equal(r.winSamples.best.n, 0);
+  assert.ok(r.winSamples.played.distinct >= 1, 'opponent win from the played root');
+});
+
+ntest('winSamples: NOT computed for closing boards (discs >= 30)', async () => {
+  // 33343022442233255525004414106106605511 played 6 = lose_to_faster_lose with 38 discs (closing).
+  const r = await computeReason('33343022442233255525004414106106605511', 6, { solver });
+  assert.equal(r.boardState, 'closing');
+  assert.equal(r.winSamples, null);
+});
+
+ntest('winSamples: null when the global toggle is off (disabled default)', async () => {
+  REASON_CONFIG.enableWinSamples = false;
+  try {
+    // Same opening win_to_lose that populates winSamples when enabled — now suppressed entirely.
+    const r = await computeReason('463512252326', 0, { solver });
+    assert.equal(r.boardState, 'opening');
+    assert.equal(r.winSamples, null);
+  } finally {
+    REASON_CONFIG.enableWinSamples = true; // restore for any later tests in this file
+  }
 });

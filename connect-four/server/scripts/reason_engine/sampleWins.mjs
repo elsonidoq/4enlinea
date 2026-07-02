@@ -65,13 +65,35 @@ function aggregate(samples) {
   };
 }
 
-// Sample N optimal winning realizations from a won root. `winnerMark` documents which side wins
-// (kept for readability/sanity; the walk detects the win via winningWindows on the real board).
-// completingParity uses the zcount convention (1-indexed row minus occupied count at rootMs) — the
-// same odd/even-threat notion attributeParityWin uses in reasonEngine.mjs.
+// Sample N optimal winning realizations from a root, restricted to wins by `winnerMark`. When
+// `winnerMark` is set (the intended side), only that side's forced fours are recorded — a root where
+// `winnerMark` has no forced win (a draw, or a loss to the other side) yields ZERO lines. When it is
+// null the walk records whichever side completes four (legacy detect-any behaviour). completingParity
+// uses the zcount convention (1-indexed row minus occupied count at rootMs) — the same odd/even-threat
+// notion attributeParityWin uses in reasonEngine.mjs.
 export async function sampleOptimalWins(solver, rootMs, winnerMark, { n = 20 } = {}) {
   const rng = mulberry32(hashStr(rootMs));
-  const { heights: rootHeights } = buildBoard(rootMs);
+  const enforce = winnerMark != null;              // filter samples to winnerMark's own wins
+  const { grid: rootGrid, heights: rootHeights } = buildBoard(rootMs);
+  // Already-won root: the move that produced rootMs completed a four (e.g. best is an immediate
+  // winning drop). The solver REJECTS a terminal position, so we must not query it — the winning
+  // line IS that completing window. Return a single-sample distribution (no walk needed) when the
+  // winner is the intended side, else empty. This is the only reachable terminal here:
+  // opening/mid-game roots are never board-full draws.
+  if (rootMs.length) {
+    const lastMover = (rootMs.length % 2 === 1) ? 1 : 2;
+    const rootWins = winningWindows(rootGrid, lastMover);
+    if (rootWins.length) {
+      if (enforce && lastMover !== winnerMark) return aggregate([]);
+      const lastCol = Number(rootMs[rootMs.length - 1]);
+      const window = rootWins[0].map(([rr, cc]) => cellStr(rr, cc));
+      const completingCell = cellStr(rootHeights[lastCol] - 1, lastCol);
+      return aggregate([{
+        window, completingCell, orientation: orientationOf(window),
+        completingParity: 'even', pliesToEnd: 0,
+      }]);
+    }
+  }
   const samples = [];
   for (let w = 0; w < n; w++) {
     let cur = rootMs;
@@ -87,17 +109,21 @@ export async function sampleOptimalWins(solver, rootMs, winnerMark, { n = 20 } =
       const { grid } = buildBoard(cur);
       const wins = winningWindows(grid, mover);
       if (wins.length) {
-        const window = wins[0].map(([rr, cc]) => cellStr(rr, cc));
-        const completingCell = cellStr(r, col);
-        const p = parseCell(completingCell);
-        const zcount = (p.r + 1) - rootHeights[p.c];
-        samples.push({
-          window,
-          completingCell,
-          orientation: orientationOf(window),
-          completingParity: zcount % 2 === 1 ? 'odd' : 'even',
-          pliesToEnd: cur.length - rootMs.length,
-        });
+        // A four ends the walk. Record it only if it belongs to the intended winner; otherwise the
+        // intended side has no forced win from this root (e.g. the position is already lost).
+        if (!enforce || mover === winnerMark) {
+          const window = wins[0].map(([rr, cc]) => cellStr(rr, cc));
+          const completingCell = cellStr(r, col);
+          const p = parseCell(completingCell);
+          const zcount = (p.r + 1) - rootHeights[p.c];
+          samples.push({
+            window,
+            completingCell,
+            orientation: orientationOf(window),
+            completingParity: zcount % 2 === 1 ? 'odd' : 'even',
+            pliesToEnd: cur.length - rootMs.length,
+          });
+        }
         break;
       }
     }
@@ -107,7 +133,7 @@ export async function sampleOptimalWins(solver, rootMs, winnerMark, { n = 20 } =
 
 // Attach optimalWinSamples to a lostResource half IN PLACE, gated to distant parity wins
 // (register 'parity' + a real winning window) — the same class attributeParityWin fires on.
-// n defaults to env REASON_WIN_SAMPLES (fallback 20).
+// n defaults to env REASON_WIN_SAMPLES (fallback 40).
 export async function attachWinSamples(solver, half, { rootMs, winnerMark, n } = {}) {
   if (!half || half.register !== 'parity' || !half.window) return;
   const count = n ?? parseInt(process.env.REASON_WIN_SAMPLES ?? '40', 10);

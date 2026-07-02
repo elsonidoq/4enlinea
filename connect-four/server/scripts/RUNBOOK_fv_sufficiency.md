@@ -33,8 +33,10 @@ partitioned into `required` (must reach target — `satisfied()` gates on these)
 fulfilled / under-target / never-seen predicates against the named universe (`*` marks provisional).
 **If `MAX_GAMES` is reached, that is not a normal exit — it means a REQUIRED predicate could not be
 filled and is a bug to investigate**, not a signal to just raise the budget and rerun. See
-`docs/architecture/reason-DECISIONS.md` D22 for the calibration numbers and the two predicates
-currently demoted to PROVISIONAL (`gate_exhaustive`, `lost_realized_forced_block`).
+`docs/architecture/reason-DECISIONS.md` D22 for the calibration numbers, and **D23** for the
+post-calibration cleanup: the two `enabled_opponent` fork pairs were a router bug (now fixed;
+`rd_double_threat_enabled_opponent` is REQUIRED), `lost_realized_forced_block` is impossible-by-
+construction (removed), and `gate_exhaustive`/`gate_bounded` are retired into a single `gate_ran`.
 
 **Regression fixture** — to regenerate the committed fixture used by `reasonEngine*.test.mjs`:
 

@@ -62,8 +62,22 @@ test('computeReason routes 3321234543 to realized_denied (not lose_to_faster_los
   assert.equal(r.route, 'realized_denied');
   assert.equal(r.tag, 'forced_block');
   assert.equal(r.direction, 'defensive_miss');
-  assert.equal(r.gate, null, 'no swindle gate on the realized/denied route');
+  // D24 (review F1): this board is BOTH-LOSING (lose_to_faster_lose signs). The route still emits a
+  // Blunder (the conceded forced_block is the lesson), but now CARRIES the swindle-gate verdict for
+  // honest counterplay framing instead of the old `gate: null`. The route never suppresses; the gate
+  // is diagnostic. (Non-losing routed boards — win_to_*/draw_to_lose signs — still get gate: null.)
+  assert.ok(r.gate && r.gate.ran === true, 'both-losing routed board carries a gate verdict (D24)');
+  assert.ok(['Blunder', 'NotABlunder'].includes(r.gate.verdict), 'carried gate verdict is valid');
   assert.equal(r.opponentPunishment.completingCell, 'c4r5');
+});
+
+test('D24: a non-losing routed board keeps gate: null (the swindle gate does not apply)', async () => {
+  // 3321234543 is both-losing; a win_to_draw / draw_to_lose routed board must NOT run the gate.
+  // 3325 played 5 is a win_to_draw double_threat that routes realized_denied (bestScore>0).
+  const r = await computeReason('3325', 5, { solver });
+  assert.equal(r.route, 'realized_denied');
+  assert.ok(r.bestScore > 0, 'not a both-losing board');
+  assert.equal(r.gate, null, 'gate is null on a non-both-losing routed board');
 });
 
 test('computeReason keeps deep-fork 214444115623 on the sign engine (D18 witness c3r3 preserved)', async () => {

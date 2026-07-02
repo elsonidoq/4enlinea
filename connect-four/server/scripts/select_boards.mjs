@@ -20,7 +20,7 @@ import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { playGame, harvestBlunders } from '../gameSampling.js';
 import { loadEnv, legalCols, emptyCellCount, INVALID_MOVE } from './reason_engine/lib/boardUtils.mjs';
-import { swindleGate, REASON_CONFIG } from './reason_engine/reasonEngine.mjs';
+import { swindleGate } from './reason_engine/reasonEngine.mjs';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +30,34 @@ loadEnv(join(__dirname, '../.env'));
 function argVal(name, def) {
   const i = process.argv.indexOf(name);
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : def;
+}
+
+const HELP = `select_boards.mjs — unified board-selector for the reason-eval pipeline.
+
+Strategies:
+  fixture   Regenerates the sampled rows of reason_engine/reason_fixture.jsonl from a fixed seed
+            and stratified per-case buckets. NOTE: the committed fixture also carries
+            route/expectedTag/expectedDirection and D19/D20 witness labels that this strategy does
+            NOT re-emit, so its output is not byte-identical to the committed file.
+  coverage  Harvests a diverse coverage set for the from-vector eval against a named, closed
+            predicate universe (REQUIRED predicates gate termination; PROVISIONAL ones are
+            reported but non-blocking). Emits board-list rows (no toNarratorVector call).
+
+Usage (from connect-four/):
+  node server/scripts/select_boards.mjs --strategy {fixture|coverage} [--out <path>]
+       [--target N] [--max-games N]
+
+Options:
+  --strategy fixture|coverage  REQUIRED. Which selector to run.
+  --out <path>                 Output file. Default: reason_engine/reason_fixture.jsonl (fixture)
+                               or boards_coverage_<timestamp>.jsonl (coverage).
+  --target <N>                 coverage only: boards required per predicate before stopping. Default: 2.
+  --max-games <N>              coverage only: max self-play games to harvest before giving up. Default: 4000.
+  -h, --help                   Show this help and exit.`;
+
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(HELP);
+  process.exit(0);
 }
 
 const strategy = argVal('--strategy', null);
@@ -138,10 +166,8 @@ if (strategy === 'fixture') {
       const { bestCol, expectedCase } = classifyByScores(scores, a.playedCol);
       const row = { movestring: a.movestring, playedCol: a.playedCol, bestCol, scores, discs: a.movestring.length, expectedCase, bucket: 'anchor' };
       if (expectedCase === 'lose_to_faster_lose') {
-        const exhaustive = emptyCellCount(a.movestring) <= REASON_CONFIG.gateExhaustiveEmpties;
-        const gate = await swindleGate(solver, a.movestring + String(bestCol), { exhaustive });
+        const gate = await swindleGate(solver, a.movestring + String(bestCol), {});
         row.expectedGate = gate.found ? 'Blunder' : 'NotABlunder';
-        row.expectedExhaustive = exhaustive;
       }
       push(row);
     }
@@ -196,18 +222,18 @@ if (strategy === 'fixture') {
           const worse = legal.filter((c) => scores[c] < bestScore);
           if (worse.length) {
             const playedCol = worse.reduce((a, b) => (scores[b] < scores[a] ? b : a));
-            const empties = emptyCellCount(ms);
-            const exhaustive = empties <= REASON_CONFIG.gateExhaustiveEmpties;
-            // need NotABlunder rows on small boards (exact); Blunder rows anywhere (sound).
-            const wantNAB = counts.lose_to_faster_lose.notABlunder < CFG.ltflNotABlunder && exhaustive;
+            // Prefer near-full boards for NotABlunder fixture rows (their not-found verdict is the most
+            // stable); this is only a sampling heuristic now, not tied to any engine flag (D23).
+            const nearFull = emptyCellCount(ms) <= 10;
+            const wantNAB = counts.lose_to_faster_lose.notABlunder < CFG.ltflNotABlunder && nearFull;
             const wantBlunder = counts.lose_to_faster_lose.blunder < CFG.ltflBlunder;
             const wantLow = counts.lose_to_faster_lose.low < CFG.perCaseLow && Math.abs(scores[playedCol]) <= CFG.lowMag;
             if (wantNAB || wantBlunder || wantLow) {
-              const gate = await swindleGate(solver, ms + String(bestCol), { exhaustive });
+              const gate = await swindleGate(solver, ms + String(bestCol), {});
               const verdict = gate.found ? 'Blunder' : 'NotABlunder';
               const row = {
                 movestring: ms, playedCol, bestCol, scores, discs,
-                expectedCase: 'lose_to_faster_lose', expectedGate: verdict, expectedExhaustive: exhaustive,
+                expectedCase: 'lose_to_faster_lose', expectedGate: verdict,
               };
               if (verdict === 'NotABlunder' && wantNAB) {
                 if (push({ ...row, bucket: 'notABlunder' })) counts.lose_to_faster_lose.notABlunder++;
@@ -255,31 +281,33 @@ if (strategy === 'fixture') {
     'rd_figure_7_missed_own', 'rd_figure_7_enabled_opponent',
     'lost_fork_A', 'lost_fork_B', 'lost_parity_win',
     'lost_denial_occupation', 'lost_denial_no_occupation', 'lost_conditional_swindle',
-    'lost_realized_immediate_threat', 'lost_realized_forced_block',
+    // NB: there is no `lost_realized_forced_block`. forced_block is definitionally a defensive_miss
+    // (you failed to answer the OPPONENT's pre-existing threat), so its realized pattern is always the
+    // opponentPunishment half, never the lostResource — the pairing is structurally impossible. (D23)
+    'lost_realized_immediate_threat',
     'lost_realized_double_threat', 'lost_realized_figure_7',
     'opp_winning_line', 'opp_denial', 'opp_neutralization', 'opp_realized_pattern',
     'tie_tied', 'tie_independent', 'tie_temporal',
     'reg_lost_immediate', 'reg_lost_forced_sequence', 'reg_lost_parity',
     'reg_opp_immediate', 'reg_opp_forced_sequence', 'reg_opp_parity',
     'tactic_lost_present', 'tactic_lost_null', 'tactic_opp_present', 'tactic_opp_null',
-    'parity_nameable', 'parity_unnameable', 'parity_forcedFirst',
+    'parity_nameable', 'parity_unnameable',
     'opp_parity_nameable', 'opp_parity_unnameable',
-    'gate_exhaustive', 'gate_bounded',
+    'gate_ran',   // D23: the gate is one uniform depth-bounded search; the exhaustive/bounded split is retired.
   ];
   // Partition CALIBRATED empirically (Task 8, 2026-07-01: coverage harvest, target 2, ~497 games).
   // Provisional = known-rare / structurally-unreachable in ordinary self-play; reported but
   // NON-blocking (never gates satisfied()). Observed: 45/47 REQUIRED filled by ~497 games; the
   // predicates below never reached target within budget.
   const PROVISIONAL = new Set([
-    'rd_double_threat_enabled_opponent', 'rd_figure_7_enabled_opponent', // 0/60k harvested (D20 honest-limits)
+    // rd_double_threat_enabled_opponent is now REQUIRED: the earlier "0/60k, rare" finding was a
+    // router-locus bug (realizedPattern was checked one ply before the fork forms), not rarity —
+    // the tag is common in self-play. Fixed in reasonEngine.realizedDeniedReason (D23).
+    'rd_figure_7_enabled_opponent',        // Case-B enabled fork: reachable post-fix but genuinely rare (like lost_fork_B)
     'tie_temporal',                        // lose_to_faster_lose only
     'lost_denial_no_occupation',           // D18: depth artifact, near-unreachable
     'lost_realized_figure_7', 'lost_fork_B', // figure_7/Case-B forks are rare
     'parity_unnameable', 'opp_parity_unnameable', // multi-window board-fill only
-    // Calibration finding (Task 8): unmet under a full budget. DEFERRED — candidates for the post-plan
-    // sampling investigation (widen per-player mistake-probability range to reach these); see ledger.
-    'gate_exhaustive',                     // lose_to_faster_lose on a near-full board (exhaustive gate); only 1 hit / 497 games
-    'lost_realized_forced_block',          // never seen; missed_own forced_block as the LOST resource is rare in self-play
   ]);
   const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
 
@@ -311,7 +339,8 @@ if (strategy === 'fixture') {
       else if (lr.kind === 'realized_pattern') preds.add(`lost_realized_${lr.tag}`);
       if (lr.parityAttribution) {
         preds.add(lr.parityAttribution.nameable ? 'parity_nameable' : 'parity_unnameable');
-        if (lr.parityAttribution.forcedFirstRequired) preds.add('parity_forcedFirst');
+        // `parity_forcedFirst` retired (review F3): forcedFirstRequired was an unbacked
+        // Aftereven claim; attributeParityWin no longer emits it.
       }
     }
     half(lr, 'lost');
@@ -324,7 +353,7 @@ if (strategy === 'fixture') {
     }
     half(op, 'opp');
 
-    if (r.gate) preds.add(r.gate.exhaustive ? 'gate_exhaustive' : 'gate_bounded');
+    if (r.gate) preds.add('gate_ran');   // D23: uniform depth-bounded gate (no exhaustive/bounded split)
     return preds;
   }
 

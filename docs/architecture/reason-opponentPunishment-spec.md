@@ -5,6 +5,10 @@
 > "shallowest-by-BFS" contract is replaced by "first-on-canonical-PV." The output shape (§4)
 > and the two-honest-claims rule (§5) are unchanged. The same primitive now also provides the
 > `draw_to_lose` half-a denial (see DECISIONS D18 and `reason-engine-pseudocode.md`).
+>
+> **Extended by D26 (2026-07-02):** the occupation witness now covers the **non-fork** `win_to_draw`
+> sub-case too (windows = `[lostResource.window]`), retiring the legacy `neutralization` described in
+> §1 entirely. Every `win_to_draw` half (b) is now a `denial`. §1 below describes the pre-D26 state.
 
 > Status: IMPLEMENTED (2026-06-29). Commits: f339220, 66cae80, fcfdae9, 0ac62cd, 2835e3c, 761401e.
 > 45/45 tests pass. Canonicalized into DECISIONS (D17), blunder-reason-evidence.md,

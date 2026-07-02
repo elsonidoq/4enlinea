@@ -46,6 +46,35 @@ function argVal(name, def) {
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : def;
 }
 
+const HELP = `compute.mjs — unified reason-eval entry point.
+
+Two passes over the boards in --input:
+  Evidence pass (always) — compute reason-engine evidence per board and write nested-shape
+                           JSONL rows { id, evidence, groundTruth|null } to the --out file.
+  LLM answerer (--llm)   — call an OpenAI model with the narrator vector and emit answers for
+                           grading. If the --out evidence file already exists, the solver is
+                           skipped and that file is reused.
+
+Usage (from connect-four/):
+  node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
+       [--llm [--condition A|B|C|all] [--n 3] [--model X]]
+
+Options:
+  --input <path>        REQUIRED. Boards JSONL to evaluate (absolute, or resolved from cwd).
+  --out <name>          Evidence file. Bare name → server/scripts/<name>; a path with '/' →
+                        resolved from cwd. Default: reason_evidence_<input-stem>.jsonl.
+                        Should match reason_evidence_*.jsonl to appear in the /admin/fv-suff dropdown.
+  --llm                 Run the LLM answerer pass after the evidence pass.
+  --condition A|B|C|all Ablation condition(s), comma-separated or "all". Default: A.
+                          A — full pruned narrator vector (production-faithful headline).
+                          B — board-only: glossary + {movestring, perspective, playedCol, bestCol}.
+                          C — features without movestring.
+  --n <N>               Runs per record per condition (--llm only). Default: 3.
+  --model <id>          OpenAI model (--llm only). Default: $EXPLAIN_MODEL.
+  -h, --help            Show this help and exit.
+
+Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server/.env.`;
+
 // ── CLI-only arg parsing (imperative; exits/side-effects on missing args) ──────
 // Guarded so importing this module (e.g. from tests, for buildEvidenceRow) never triggers
 // process.exit or depends on --input being present. Everything below this point that the CLI
@@ -53,6 +82,10 @@ function argVal(name, def) {
 // module scope and populated only when this file is the entry point.
 let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(HELP);
+    process.exit(0);
+  }
   inputArg = argVal('--input', null);
   if (!inputArg) { console.error('Error: --input <boards.jsonl> is required'); process.exit(1); }
   INPUT = isAbsolute(inputArg) ? inputArg : resolve(process.cwd(), inputArg);

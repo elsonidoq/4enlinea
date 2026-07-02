@@ -6,7 +6,7 @@
 //   - both halves' completingCell parses to a real cell that is OCCUPIED on that half's
 //     finalMovestring snapshot board (skipped only for denial half with no_occupation verdict);
 //   - each fwd-derived register equals registerOf(fwd) recomputed independently from the formula;
-//   - for lose_to_faster_lose: gate.verdict / gate.exhaustive present and === expected.
+//   - for lose_to_faster_lose: gate.verdict present and === expected (D23: exhaustive flag retired).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'fs';
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason, fwdOf, registerOf, REASON_CONFIG, REALIZED_DENIED_TAGS } from '../scripts/reason_engine/reasonEngine.mjs';
-import { buildBoard, parseCell } from '../scripts/reason_engine/lib/boardUtils.mjs';
+import { buildBoard, parseCell, winningWindows } from '../scripts/reason_engine/lib/boardUtils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../scripts/reason_engine/reason_fixture.jsonl');
@@ -73,6 +73,24 @@ for (const row of rows) {
       // I12: counterexample per (tag, direction) — assert the specific pair when the row pins one down
       if (row.expectedTag) assert.equal(r.tag, row.expectedTag, 'expected tag');
       if (row.expectedDirection) assert.equal(r.direction, row.expectedDirection, 'expected direction');
+      // Root-geometry invariant (eval-26 regression): a realized_pattern half describes a STANDING
+      // threat/fork — it must be claimed on a board its `owner` has NOT already won. Detecting a
+      // "win-in-1" on an already-won board reports a PHANTOM three-in-a-row one row above the
+      // just-completed four (the c2r5-vs-c2r4 bug). The completingCell must also be the sole EMPTY
+      // cell of its window, with the other three occupied by `owner`.
+      const realized = r.lostResource.kind === 'realized_pattern' ? r.lostResource : r.opponentPunishment;
+      const { grid: rgrid } = buildBoard(realized.finalMovestring);
+      assert.equal(winningWindows(rgrid, realized.owner).length, 0,
+        `realized_pattern claimed on a board already won by owner ${realized.owner}: ${realized.finalMovestring}`);
+      const cc = parseCell(realized.completingCell);
+      assert.ok(cc, `realized completingCell "${realized.completingCell}" parses`);
+      assert.equal(rgrid[cc.r][cc.c], 0, `realized completingCell ${realized.completingCell} must be the EMPTY pending cell`);
+      for (const s of (realized.window || [])) {
+        if (s === realized.completingCell) continue;
+        const p = parseCell(s);
+        assert.equal(rgrid[p.r][p.c], realized.owner,
+          `realized window cell ${s} must hold an owner-${realized.owner} disc on ${realized.finalMovestring}`);
+      }
       return; // sign-shape assertions below do not apply
     }
 
@@ -99,12 +117,11 @@ for (const row of rows) {
     };
     if (row.expectedCase === 'win_to_draw') {
       regFromFwd(r.lostResource, r.bestScore);
-      // D14: fork win_to_draw uses denial search; genuine-parity win_to_draw keeps neutralization.
-      if (r.lostResource.terminal === 'fork') {
-        assert.equal(r.opponentPunishment.kind, 'denial');
-      } else {
-        assert.equal(r.opponentPunishment.kind, 'neutralization');
-      }
+      // D26: BOTH fork and non-fork win_to_draw half (b) use the occupation-witness denial (the
+      // non-fork branch was legacy `neutralization` before D26; the winning LINE is now denied the
+      // same way a fork window is). The register is fwd-derived for the non-fork parity case, but the
+      // FULL line is retained regardless (soundness-first) — so no register assertion on half (b).
+      assert.equal(r.opponentPunishment.kind, 'denial');
     } else if (row.expectedCase === 'win_to_lose') {
       regFromFwd(r.lostResource, r.bestScore);
       regFromFwd(r.opponentPunishment, r.playedScore);
@@ -112,9 +129,9 @@ for (const row of rows) {
       regFromFwd(r.opponentPunishment, r.playedScore);
       assert.equal(r.lostResource.kind, 'denial', 'd2l lostResource kind');
     } else if (row.expectedCase === 'lose_to_faster_lose') {
-      // 4) gate verdict/flag present and correct
+      // 4) gate verdict present and correct (D23: single uniform depth-bounded gate; the old
+      // exhaustive/bounded flag is retired, so only the verdict is asserted).
       assert.ok(r.gate, 'ltfl gate present');
-      assert.equal(r.gate.exhaustive, row.expectedExhaustive, 'gate exhaustive flag');
       assert.equal(r.gate.verdict, row.expectedGate, 'gate verdict');
       assert.equal(r.notABlunder, row.expectedGate === 'NotABlunder', 'notABlunder mirrors gate verdict');
       if (row.expectedGate === 'Blunder') {
@@ -182,4 +199,25 @@ test('D16 Case B (sign engine): 34 played 3 -> figure_7 stacked fork, not parity
   assert.equal(r.lostResource.tacticTag, 'figure_7', 'Case B names figure_7');
   assert.ok(r.lostResource.forkCells.includes('c7r4'),
     `stacked fork includes gravity-top cell c7r4, got ${JSON.stringify(r.lostResource.forkCells)}`);
+});
+
+// Regression (eval-26): immediate_threat/missed_own where `bestCol` COMPLETES a standing VERTICAL
+// win-in-1. The realized pattern MUST be detected on the pre-move board (where the win-in-1 stands),
+// not on correctRoot (already won by owner), which reports a phantom three-in-a-row one row up
+// (c2r5 / window c2r2-c2r5 instead of the true c2r4 / window c2r1-c2r4).
+test('eval-26: immediate_threat/missed_own vertical completion → c2r4, not phantom c2r5', async () => {
+  const r = await computeReason('332123542241313', 5, { solver });
+  assert.equal(r.route, 'realized_denied', 'routes through realized/denied');
+  assert.equal(r.tag, 'immediate_threat');
+  assert.equal(r.direction, 'missed_own');
+  const lr = r.lostResource;
+  assert.equal(lr.kind, 'realized_pattern');
+  assert.equal(lr.completingCell, 'c2r4', 'true win-in-1 completing cell (NOT phantom c2r5)');
+  assert.deepEqual(lr.window, ['c2r1', 'c2r2', 'c2r3', 'c2r4'], 'true winning window (NOT c2r2-c2r5)');
+  assert.deepEqual(lr.cells, ['c2r4']);
+  assert.deepEqual(lr.anchorCells, ['c2r4']);
+  assert.equal(lr.entryCell, 'c2r4');
+  // the denial half already blocked at c2r4; its window must now agree with the corrected one
+  assert.deepEqual(r.opponentPunishment.window, ['c2r1', 'c2r2', 'c2r3', 'c2r4'], 'denial window agrees');
+  assert.deepEqual(r.opponentPunishment.tie.sharedCells, ['c2r4']);
 });

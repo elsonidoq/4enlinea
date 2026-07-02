@@ -13,6 +13,14 @@ IMPLEMENTED 2026-06-30 as **D18** (`reason-DECISIONS.md`): one unified PV-walk p
 `draw_to_lose` half-a (denier=player, root=bestRoot, windows=opponent's conceded window). The old
 BFS `denyOpponentPunishment` is DELETED.
 
+**D26 (2026-07-02) extended this to ALL `win_to_draw`:** the NON-fork sub-case (genuine parity/
+zugzwang win, `lostResource.terminal !== 'fork'`) also uses the occupation witness now — windows =
+`[lostResource.window]` (the single winning-line window). The legacy `neutralization` kind (with
+`savingCol`/`savingReplyCount`) is **retired** — every `win_to_draw` half-b is a `denial`. Register
+is `registerOf(fwdOf(bestScore, discs))` as a LABEL, but the full `line` is retained even at `parity`
+(soundness-first; rendering deferred downstream). Counterplay count moved to `replyHistogram.afterPlayed`.
+Anchor fixture: `""` (empty board) played 4 → witness `c2r5`, tie `tied`.
+
 **Theorem (now stated in D18).** A draw is a full board with no four, so any 4-window W that would
 win for side S has ≥1 cell held by the OTHER side at the drawn terminal. Therefore the non-winning
 side is FORCED to occupy a cell of W on the optimal drawn PV — a single argmax walk to terminal

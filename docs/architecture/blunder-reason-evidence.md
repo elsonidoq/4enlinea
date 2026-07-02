@@ -34,7 +34,7 @@ varies by case:
 | case | half (a) kind | half (b) kind |
 |---|---|---|
 | `win_to_draw` (fork) | `winning_line` (stops at fork — D16) | `denial` (occupation-witness PV walk — D18, replaces D17 BFS) |
-| `win_to_draw` (no fork) | `winning_line` | `neutralization` (opponent's single saving reply) |
+| `win_to_draw` (no fork) | `winning_line` | `denial` (occupation-witness PV walk on `lostResource.window` — D26, replaces the legacy `neutralization`) |
 | `win_to_lose` | `winning_line` (stops at fork — D16) | `winning_line` (stops at fork — D16) |
 | `draw_to_lose` (tactical) | `denial` (occupation-witness PV walk — D18, ply-0 root occupation) | `winning_line` |
 | `draw_to_lose` (zugzwang) | `denial` (occupation-witness PV walk — D18, deeper PV node) | `winning_line` |
@@ -42,7 +42,7 @@ varies by case:
 
 **D16 fork-stop (applies to `win_to_draw` and `win_to_lose` half (a) and half (b)).** `walkOptimal` does NOT walk every win to the completed four. After each winner move it checks for an unstoppable double-threat fork (`detectDoubleThreat` + `!detectImmediateThreat(opponent)`) and stops there, returning the fork cells and windows as the resource (`terminal:'fork'`). This means `lostResource` for these cases describes **where the fork forms**, not where the four completes. The `win_to_draw`/`win_to_lose` half (b) also uses this fork-stopped position as the basis for its search. See DECISIONS **D16**.
 
-**D18 occupation-witness PV walk (unified primitive).** The unified `findOccupationWitness` primitive replaces the D17 BFS (`denyOpponentPunishment`, deleted) **and** provides the `draw_to_lose` half-a denial. For `win_to_draw` half (b) with a fork: walk the canonical argmax PV from `playedRoot`; return the first node where the opponent occupies a cell of `lostResource.forkWindows` (LIVE→DEAD). Verdict: `occupation` (the occupied cell is the constructive D14-tie) or `no_occupation` (two-valued by `exhaustive`). For `draw_to_lose` half (a): walk the canonical argmax PV from `bestRoot`; return the first node where the player occupies a cell of the opponent's conceded window (from the half-b walk). Both tactical and zugzwang sub-cases use this single primitive; tie is `tied` at the occupation cell in both cases. Non-fork `win_to_draw` keeps `neutralization`. See DECISIONS **D17**, **D18**.
+**D18 occupation-witness PV walk (unified primitive).** The unified `findOccupationWitness` primitive replaces the D17 BFS (`denyOpponentPunishment`, deleted) **and** provides the `draw_to_lose` half-a denial. For `win_to_draw` half (b) with a fork: walk the canonical argmax PV from `playedRoot`; return the first node where the opponent occupies a cell of `lostResource.forkWindows` (LIVE→DEAD). Verdict: `occupation` (the occupied cell is the constructive D14-tie) or `no_occupation` (two-valued by `exhaustive`). For `draw_to_lose` half (a): walk the canonical argmax PV from `bestRoot`; return the first node where the player occupies a cell of the opponent's conceded window (from the half-b walk). Both tactical and zugzwang sub-cases use this single primitive; tie is `tied` at the occupation cell in both cases. **D26 (2026-07-02):** the non-fork `win_to_draw` half (b) now uses this same primitive on `[lostResource.window]` (the single winning-line window) — the legacy `neutralization` is retired; `register` is fwd-derived but the full `line` is retained regardless (soundness-first, rendering deferred downstream). See DECISIONS **D17**, **D18**, **D26**.
 
 **Keep the two halves in separate fields.** In `draw_to_lose` the half-(a) parity/hold cell is *not*
 the half-(b) opponent completing cell (validated board below: `c2r3` vs `c7r6`). Merging them into a
@@ -57,8 +57,10 @@ the walk fields above:
 - `tacticTag` / `tacticCells` / `tacticFromDiff` — a `classifyPattern` tactic name, admitted only
   through the two solver gates (register-class + realized-locus); `null` when none is admissible.
   See DECISIONS **D13**.
-- `parityAttribution` — for parity-register wins: controlling group + odd-z `leverCells`
-  (+ `forcedFirstRequired` when there is no lever). See DECISIONS **D7**.
+- `parityAttribution` — for parity-register wins: controlling group + per-cell height-parity
+  (`empties`). The `leverCells` / `forcedFirstRequired` / `groupKind` fields were removed 2026-07-02
+  (review F3) as an I2 fabrication — an odd height-parity count is not a detector-backed z-threat/lever.
+  The detector-backed naming is deferred (D7). See DECISIONS **D7**, **D24**.
 - `opponentPunishment.tie` — the verified relationship of half (b) to half (a):
   `tied` | `independent` | `temporal`. See DECISIONS **D14**, **D15**.
 
@@ -81,9 +83,12 @@ At any node `board + move`, the opponent's score vector — already computed —
 count directly:
 
 - **`win_to_draw`:** after the winning move the opponent has **0** non-losing replies; after the draw
-  move, **exactly 1**. The histogram establishes the counterplay count; the actual explanation for
-  fork-based `win_to_draw` cases is the **denial search** (D17) — the first moment the opponent kills
-  a fork window under optimal play — not the identity of the saving reply.
+  move, **exactly 1** (this is the counterplay count the old `neutralization.savingReplyCount` carried;
+  it now lives here in `replyHistogram.afterPlayed`). The histogram establishes the counterplay count;
+  the actual explanation for **all** `win_to_draw` cases is the **denial search** (D18/D26) — the first
+  moment the opponent occupies+kills a cell of the winning window(s) under optimal play (fork windows
+  for the fork sub-case, the single winning-line window for the non-fork sub-case) — not the identity
+  of the saving reply.
 - **`lose_to_faster_lose` gate:** fires iff the opponent has an **admissible** non-winning reply
   (`oppScore ≤ 0` AND the reply leaves the player no immediate win-in-1 threat), or the player's
   immediate threat is **unblockable** (D19). A non-winning reply that hangs/creates a win-in-1 is not
@@ -126,15 +131,17 @@ formerly witnessed at `3321232` with the opponent skipping the `c3r4` block). Wi
 descends *through* the forced block and the witness is the first node where the opponent could
 realistically go wrong (`332123` → witness `33212322543`).
 
-**Budget (provisional):** `DEPTH = 6` opponent plies, `BRANCH = 3`, player tied-best capped at 2,
-dedup by movestring. In practice the witness is found at `oppPlies = 0` (≈1 query); deep cases
-terminated in ≤ 5 nodes.
+**Budget (provisional, D23):** a single uniform depth-bounded search — `gateMaxPlies = 15` total plies
+from the gate root, `gateBranch = 3` (opponent winning replies, deduped by score), player tied-best
+capped at `gatePlayerTiedCap = 2`, `gateNodeBudget` hard node cap, dedup by movestring. In practice the
+witness is found at `oppPlies = 0` (≈1 query); deep cases terminate in a handful of nodes. The old
+exhaustive(≤10 empties)/bounded two-mode split is retired.
 
-**Soundness is asymmetric — respect it.** The gate is *sound for declaring BLUNDER* (every witness is
-solver-verified). It is *not complete for NotABlunder*: a swindle deeper than the budget is missed.
-Asserting NotABlunder is only **exact** when the subtree was exhausted — which is true in the
-near-full endgames where this case lives (validated NotABlunder board: 4 empty cells, 2 nodes
-searched). Elsewhere the honest posture is "no practical chance within budget."
+**Soundness is asymmetric — respect it (I7).** The gate is *sound for declaring BLUNDER* (every witness
+is solver-verified). It is *not complete for NotABlunder*: a swindle deeper than `gateMaxPlies` is
+missed. NotABlunder is therefore a **practical-chance policy** ("no practical swindle within 15 plies"),
+not a completeness proof — a single greedy PV cannot prove swindle-absence. This asymmetry is now
+uniform (no per-board "exhaustive" claim).
 
 **Grade the chance, don't just detect it.** A root-level swindle where the opponent has only one
 holding move out of seven is a far stronger practical chance than a 4-ply-deep single-column draw
@@ -253,11 +260,28 @@ optimal replies. See `reason-DECISIONS.md` D22 and `reason-tag-fastpath-pseudoco
 
 ## 10. Honest limits (current)
 
-- **Provisional thresholds.** `forced_sequence ≤ ~6`, `parity > ~12`, gate `DEPTH=6 / BRANCH=3` were
-  each validated on a handful of boards. Tune against a labeled set before locking.
-- **Gate incompleteness.** A swindle deeper than the gate budget → false NotABlunder unless the
-  subtree was exhausted. Safe only to *assert* NotABlunder when exhaustive; else report "no chance
-  within budget."
+- **Provisional thresholds.** `forced_sequence ≤ ~6`, `parity > ~12`, and the gate
+  `gateMaxPlies=15 / gateBranch=3 / gatePlayerTiedCap=2 / gateNodeBudget` were each validated on a
+  handful of boards. Tune against a labeled set before locking.
+- **Gate incompleteness (D23).** The `lose_to_faster_lose` gate is one uniform depth-bounded search
+  (`swindleGate`, cap `gateMaxPlies=15`): a swindle FOUND within the cap → Blunder (sound — a real
+  solver witness); NOT found → NotABlunder **by policy** ("no practical swindle within 15 plies", a
+  practical-chance threshold, NOT a completeness proof). This is the I7 asymmetry made uniform and
+  explicit; the old exhaustive(≤10 empties)/bounded two-mode split and the `exhaustive` flag are
+  retired. A single greedy PV cannot prove swindle-*absence* (worst-by-eventual-outcome ≠
+  worst-by-solver-score), so full completeness was never cheaply attainable and is not the goal.
+- **Gate is depth-AND-width incomplete — ACCEPTED known-gap (D25, owner decision 2026-07-02).** The
+  "NotABlunder = no swindle within 15 plies" policy is more precisely "no swindle within the depth bound
+  **AND** the width caps": the gate also prunes on solver SCORE (`gateBranch=3`, `gatePlayerTiedCap=2`,
+  and an unconditional dedup-by-score), and those width caps can drop real admissible swindles that
+  exist *within* `gateMaxPlies` → a rare false OMIT (`notABlunder:true` on a genuine blunder). Confirmed
+  via `TOOLS/gate_cap_ablation.mjs` (production `swindleGate` vs an uncapped/dedup-free reference at
+  equal depth): user-visible counterexample `20312225101223110055056066165433` played 3 (sign route),
+  ≈1 per ~470 ltfl boards. The I0-motivated fix (drop the score-caps, keep only `gateMaxPlies` +
+  `gateNodeBudget`) was **considered and declined on cost grounds** — the uncapped search is too
+  expensive for the ~0.2% miss. The width caps are the accepted practical-chance policy. Soundness for
+  declaring **Blunder** (I7) is unaffected — every emitted witness is still real. See DECISIONS **D25**
+  and memory `project_reason_gate_width_cap_bug`.
 - **Multi-window board-fill** (no dominant parity group) remains genuinely unnameable; emit a
   low-specificity parity reason rather than invent geometry.
 - **Display cap is real information loss.** The show/don't-show ply threshold is a product knob, not a
@@ -273,20 +297,36 @@ All under `connect-four/`. Coordinates 0-indexed internally; the engine emits `c
 | `server/scripts/reason_engine/reasonEngine.mjs` | the engine + CLI. `computeReason(movestring, playedCol, {solver})` → evidence JSON. CLI: `node server/scripts/reason_engine/reasonEngine.mjs <ms> <playedCol>`. Holds `REASON_CONFIG` (the provisional thresholds + gate budget — one named object, do not scatter). |
 | `server/scripts/reason_engine/lib/boardUtils.mjs` | shared board helpers (buildBoard / winningWindows / cellStr / parseCell / loadEnv). |
 | `server/scripts/select_boards.mjs` | board generator, two strategies via `--strategy {fixture\|coverage}`. `fixture`: stratified rejection-sampling fixture builder (fixed seed) + curated ANCHOR boards from §6; writes `reason_engine/reason_fixture.jsonl`. `coverage`: named-universe (`REASON_UNIVERSE`) coverage harvester for the from-vector eval — see §9 and `reason-DECISIONS.md` D22. |
-| `server/scripts/reason_engine/reason_fixture.jsonl` | committed fixture: `{movestring, playedCol, bestCol, scores, discs, expectedCase, expectedGate?, expectedExhaustive?, bucket}`. |
+| `server/scripts/reason_engine/reason_fixture.jsonl` | committed fixture: `{movestring, playedCol, bestCol, scores, discs, expectedCase, route?, expectedTag?, expectedDirection?, expectedGate?, bucket}` (`expectedExhaustive` retired per D23; some legacy rows still carry it, ignored). |
 | `server/scripts/compute.mjs` | runs the engine over a board set (fixture or coverage output) → evidence JSONL (each row = evidence + ground-truth labels); per-board `try/catch` isolation + crash-safe incremental (`appendFileSync`) writes; `--llm` mode also produces `fv_suff_answers_*.jsonl` for `grade-fv-sufficiency`. Supersedes the deleted `build_fixture.mjs`/`build_evidence.mjs` pair. |
-| `server/tests/reasonEngine.test.mjs` | `node --test` (in `npm run test:fast`): asserts case == expectedCase, completingCell occupied on each half's `finalMovestring`, register matches the fwd formula, gate verdict/exhaustive present for ltfl. |
+| `server/tests/reasonEngine.test.mjs` | `node --test` (in `npm run test:fast`): asserts case == expectedCase, completingCell occupied on each half's `finalMovestring`, register matches the fwd formula, gate verdict present for ltfl (realized_denied rows assert route/tag/direction instead). |
 
 **Evidence object shape** (per `(movestring, playedCol)`): `{ case, notABlunder, bestScore,
-playedScore, scores, lostResource, opponentPunishment, replyHistogram, gate }`. Each half =
+playedScore, scores, lostResource, opponentPunishment, replyHistogram, gate, winSamples }`. Each half =
 `{ kind, register, completingCell, window, pliesToEnd, line, finalMovestring }` (line nulled for the
-`parity` register; `defensive_hold`/`neutralization`/`parity_group` set `register`/`finalMovestring`
-explicitly rather than from a walk). `gate` (ltfl only) = `{ ran, exhaustive, verdict, witness,
-nodesVisited }`.
+`parity` register by `renderHalf`, but the `denial` halves — incl. the D26 non-fork `win_to_draw`
+half (b) — retain the full `line` regardless of register; `defensive_hold`/`parity_group` set
+`register`/`finalMovestring` explicitly rather than from a walk). `gate` (ltfl sign-route only; null on the realized_denied route)
+= `{ ran, verdict, witness, nodesVisited }` (`exhaustive` retired per D23).
 
-**Case classifier caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0`, NOT the
-`reason-case-taxonomy.md` literal `bestScore*playedScore>0` (which also matches both-negative and would
-swallow `lose_to_faster_lose`). See memory `project_reason_engine_case_classifier_trap`.
+**`winSamples` (DISABLED by default 2026-07-02 via `REASON_CONFIG.enableWinSamples`; `null` unless
+re-enabled).** Judged not useful for explaining the blunder, so the whole computation is gated off with
+the code path left intact — flip `enableWinSamples: true` to restore. When enabled: computed for
+opening & mid-game only (`null` for `closing`/`discs ≥ 30`). `{ best, played }`,
+each the `sampleOptimalWins` aggregate (`{ n, distinct, orientation, oddCompletingFraction, lines }`,
+see §sampleWins.mjs) of the optimal winning-line realizations from a root: `best` = the player's own
+forced win the best move preserves (from `movestring+bestCol`), `played` = the opponent's forced win
+the blunder concedes (from `movestring+playedCol`). Each is restricted to its `winnerMark`'s wins, so
+a root where that side has no forced win yields `distinct:0` (e.g. `best` is empty for
+`lose_to_faster_lose`/`draw_to_lose`; `played` is empty for `win_to_draw`). An already-won `best` root
+(best is an immediate winning drop) returns the completing window without querying the terminal
+position. **Evidence-only** — like `optimalWinSamples`, `winSamples` is stripped by `toNarratorVector`
+(`isNarratorHidden`) and never reaches the LLM; it drives the `/admin/fv-suff` pre-move overlay (green
+= `best` windows, red = `played` windows). Sample count from `REASON_WIN_SAMPLES` (default 40).
+
+**Case classifier caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0` (both
+strictly positive). A naive `bestScore*playedScore>0` is wrong — it also matches both-negative and would
+swallow `lose_to_faster_lose`. See memory `project_reason_engine_case_classifier_trap`.
 
 **Viewer:** `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) browses `reason_evidence_*.jsonl` via
 `GET /api/admin/reason{,/files}` — see `api-conventions.md`. No solver in the web server; the file is

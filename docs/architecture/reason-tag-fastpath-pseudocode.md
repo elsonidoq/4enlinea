@@ -42,7 +42,7 @@ flip with the **direction** instead of being hard-wired to `opponent`/`playedRoo
 |---|---|---|
 | `double_threat`/`figure_7` `missed_own` | `correctRoot`, **you** form the fork | from `playedRoot`, **opponent** denies your fork |
 | `double_threat`/`figure_7` `enabled_opponent` | `playedRoot`, **opponent** forms the fork | from `correctRoot`, **you** deny the opponent's fork |
-| `immediate_threat` `missed_own` | `moves`, **you** have the win-in-1 | from `playedRoot`, **opponent** blocks it |
+| `immediate_threat` `missed_own` | **`moves`** (the PRE-move board), **you** have the standing win-in-1 that `bestCol` COMPLETES — detect it on `moves`, NOT `correctRoot`, because `correctRoot` is already WON by you and `detectImmediateThreat` there reports a PHANTOM three-in-a-row one row up (eval-26: `c2r5` instead of `c2r4`; likewise diagonal/horizontal completions mis-report or spuriously fall through) | from `playedRoot`, **opponent** blocks it |
 | `immediate_threat` `enabled_opponent` | `playedRoot`, **opponent** has the new win-in-1 | from `correctRoot`, **you** block it |
 | `forced_block` `defensive_miss` (**`3321234543`**) | `moves`, **opponent** already has the threat | from `correctRoot`, **you** block it (occupation at `c4r5`, ply 0) |
 
@@ -130,9 +130,14 @@ def realized_denied_reason(movestring, playedCol, bestCol, tag, direction, playe
     playedRoot  = movestring + playedCol
 
     # ── who owns the pattern, where it is REALIZED (one move), where it is DENIED ──
+    STANDING_THREAT_TAGS = { 'immediate_threat', 'forced_block' }  # win-in-1 the best move COMPLETES
     if direction == 'missed_own':
         owner, denier = player, opponent
-        realizedRoot  = correctRoot            # the best move forms YOUR pattern
+        # A fork (double_threat/figure_7) is BUILT by the best move -> detect on correctRoot.
+        # A standing win-in-1 (immediate_threat) is COMPLETED by the best move; correctRoot is then
+        # already WON, and detectImmediateThreat there reports a PHANTOM 3-in-a-row one row up
+        # (eval-26). Detect it on the PRE-move board `movestring`, where the threat actually stands.
+        realizedRoot  = movestring if tag in STANDING_THREAT_TAGS else correctRoot
         deniedRoot    = playedRoot             # after the blunder, the opponent denies it
     else:  # 'enabled_opponent' | 'defensive_miss'
         owner, denier = opponent, player
@@ -202,6 +207,17 @@ def realized_denied_reason(movestring, playedCol, bestCol, tag, direction, playe
   `compute.mjs` (successor to the deleted `build_evidence.mjs`), `/admin/fv-suff`, and the explain prompt.
 
 ## Honest-limits: I12 coverage gaps (Task 5, 2026-07-01)
+
+> **RESOLVED (D23, 2026-07-01) — the two `enabled_opponent` fork pairs below were a ROUTER BUG, not
+> rarity.** This whole section attributed `double_threat/enabled_opponent` + `figure_7/enabled_opponent`
+> to a "narrow existential / 0/60k rarity." That conclusion was an artifact: every harvest counted only
+> *routed* hits and never the raw `tagBlunder` tag. Instrumenting the tag proved `tagBlunder` emits both
+> pairs readily (~9 + 5 per 3 self-play games). The route never fired because `realizedDeniedReason`
+> checked `realizedPattern(playedRoot, …)` — one ply BEFORE the opponent's fork-forming reply, where a
+> materialized fork is impossible (it would be an immediate win caught by Phase B). Fixed via
+> `advanceToEnabledFork` (advance the realized root by the fork-forming optimal reply). `double_threat/
+> enabled_opponent` is now REQUIRED and fills in ~48 coverage games; `figure_7/enabled_opponent` is
+> reachable (Case-B, kept PROVISIONAL). The text below is retained for history — read it as SUPERSEDED.
 
 Per I12, every `(tag, direction)` pair in `REALIZED_DENIED_TAGS × {missed_own, enabled_opponent,
 defensive_miss}` should have a sourced fixture counterexample verified through `computeReason`. **Five**

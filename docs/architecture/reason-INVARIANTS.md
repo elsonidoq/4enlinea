@@ -67,8 +67,9 @@ halves** — the half-(a) lost-resource cell is *not* the half-(b) opponent comp
 
 OMIT / "no reason" is reserved for:
 - `win_to_slower_win` (`bestScore>0 && playedScore>0`) — out of scope, raises `NotABlunder`.
-- `lose_to_faster_lose` with **no practical chance** — exact `NotABlunder` only when the gate
-  exhausted the subtree (see I7). "Lost anyway, no counterplay" is not a blunder.
+- `lose_to_faster_lose` with **no practical chance** — `NotABlunder` when the gate finds no swindle
+  within its depth bound (see I7; D23 made this a uniform depth-15 practical-chance policy). "Lost
+  anyway, no counterplay" is not a blunder.
 - Solver error / timeout.
 
 Every other case must produce a sound reason. A case that falls through the taxonomy, or routes to a
@@ -79,8 +80,8 @@ acceptable gap.
 
 The five cases (`win_to_slower_win`, `win_to_draw`, `win_to_lose`, `draw_to_lose`,
 `lose_to_faster_lose`) are defined by the sign comparison in `reason-case-taxonomy.md`. **Implementation
-caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0`, **not** the literal
-`bestScore*playedScore>0` (which also matches both-negative and would swallow `lose_to_faster_lose`).
+caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0` (both strictly positive).
+A naive `bestScore*playedScore>0` is **wrong** — it also matches both-negative and would swallow `lose_to_faster_lose`.
 See memory `project_reason_engine_case_classifier_trap`.
 
 ## I6. Search is bounded, but the bound is DEPTH — never a budget heuristic
@@ -94,10 +95,13 @@ doc §5).
 ## I7. The `lose_to_faster_lose` gate soundness is asymmetric — respect it
 
 The gate is **sound for declaring BLUNDER** (every witness is solver-verified) but **not complete for
-NotABlunder** (a swindle deeper than the budget is missed). Assert `NotABlunder` **only** when the
-subtree was exhausted; otherwise the honest posture is "no practical chance within budget." And
-**grade** the chance (shallower `oppPlies` = more practical; wider `devCols` = more instructive) —
-don't treat the binary gate as the whole story.
+NotABlunder** (a swindle deeper than the depth bound is missed). Per **D23** the gate is one uniform
+depth-bounded search (`gateMaxPlies=15`) and `NotABlunder` is a **practical-chance policy** ("no
+practical swindle within 15 plies"), not an exhaustive-subtree proof — a single greedy PV cannot prove
+swindle-absence, so completeness was never cheaply attainable and is not the goal. The asymmetry itself
+is unchanged; only made uniform (the old per-board `exhaustive` claim is retired). Still **grade** the
+chance (shallower `oppPlies` = more practical; wider `devCols` = more instructive) — don't treat the
+binary gate as the whole story.
 
 ## I8. Reuse existing detectors as evidence — do not reinvent
 

@@ -65,9 +65,20 @@ test('M3: findOccupationWitness no_occupation is NOT exhaustive when a non-termi
   assert.equal(d.exhaustive, false); // non-terminal error must NOT inflate to exhaustive:true
 });
 
+test('D23: swindleGate returns NotABlunder (found:false) on a losing-either-way board with no admissible swindle', async () => {
+  // bestRoot of a deep lose_to_faster_lose position: even the best move loses and no admissible
+  // opponent mistake within the depth cap flips it to >=0 -> found:false (NotABlunder by policy).
+  // Guards the uniform depth-bounded gate's NOT-FOUND path (the old exhaustive NotABlunder fixture row
+  // now reclassifies to the realized_denied router, so this exercises the sign-engine gate directly).
+  const g = await swindleGate(solver, '33330031106560022222663156150165512', {});
+  assert.equal(g.found, false);
+  assert.equal(g.budgetHit, false);      // resolved within budget, not a bail
+  assert.equal(g.errored, false);
+});
+
 test('M3: swindleGate flags errored when a non-terminal node errors', async () => {
   // 3333325662555225 is a non-terminal ltfl board; the throw is a real error, not a terminal rejection.
-  const g = await swindleGate(throwingSolver, '3333325662555225', { exhaustive: true });
+  const g = await swindleGate(throwingSolver, '3333325662555225', {});
   assert.equal(g.found, false);
   assert.equal(g.errored, true);
 });

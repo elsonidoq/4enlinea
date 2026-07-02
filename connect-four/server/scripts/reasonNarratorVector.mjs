@@ -20,17 +20,18 @@
 //      draw_to_lose = (0,-), lose_to_faster_lose = (-,-)); the prompt's win/draw/loss outcomes
 //      derive from `case`, not from a magnitude. Exposing `|score|` invites "you win in 7" grounding
 //      — exactly the fabrication surface I1/I2 forbid.
-//   2. `optimalWinSamples` — an evidence-only diagnostic (glossary §7), kept on the raw evidence for
-//      /admin/fv-suff, never shown to the narrator.
+//   2. `optimalWinSamples` and `winSamples` — evidence-only diagnostics (glossary §7), kept on the
+//      raw evidence for /admin/fv-suff (the win-line distribution overlays), never shown to the
+//      narrator.
 //   Research labels (expectedCase / expectedGate / expectedExhaustive / bucket / caseMatches) now
 //   live in the sibling `groundTruth` field of the evidence row (never inside `evidence`), so they
 //   are never present in the object passed to toNarratorVector.
 
-// A key is hidden from the narrator if it is in the solver-score family or is the evidence-only
+// A key is hidden from the narrator if it is in the solver-score family or is an evidence-only
 // samples diagnostic. `pliesToEnd` (a counted ply distance, not a score) does NOT match and is kept.
 const SCORE_KEY = /^scores?$|Score$/;
 export function isNarratorHidden(key) {
-  return SCORE_KEY.test(key) || key === 'optimalWinSamples';
+  return SCORE_KEY.test(key) || key === 'optimalWinSamples' || key === 'winSamples';
 }
 
 /**

@@ -36,8 +36,8 @@ Hard rules you must not violate (full text in the docs above — this is a check
   group + odd/even cell, not by major-threat materialization.
 - **Bounded by depth, never by a budget heuristic.** Search must terminate via a depth cap; a budget
   parameter must not drive exploration or truncate a relevant line.
-- **No OMIT** except `win_to_slower_win`, an *exhaustively-confirmed* lost cause with no counterplay,
-  or solver error/timeout.
+- **No OMIT** except `win_to_slower_win`, a lost cause with no practical counterplay (the D23 uniform
+  depth-15 gate finds no swindle), or solver error/timeout.
 - **One frozen design.** The quarantined `blunder-reason-field-epic.md`,
   `unified-blunder-reason-epic.md`, `feature-vector-reason-algorithm.md`, and the old `reason_audit/`
   SUPERSEDED cluster were **deleted 2026-06-30** — ignore any lingering references in search or
