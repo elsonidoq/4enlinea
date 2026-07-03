@@ -226,7 +226,7 @@ export async function* playPolicyGame(solver, policies, rng = Math.random) {
     const msNow = ms;
     const getScores = async () => {
       if (scores === null) {
-        scores = msNow === '' ? EMPTY_BOARD_SCORES : await solver.query(msNow);
+        scores = msNow === '' ? EMPTY_BOARD_SCORES.slice() : await solver.query(msNow);
       }
       return scores;
     };

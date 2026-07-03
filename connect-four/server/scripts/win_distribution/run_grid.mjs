@@ -31,14 +31,19 @@ Options:
 
 function parseArgs(argv) {
   const args = { targetWins: 10000, maxGames: 30000, seed: 42, out: null, combos: null };
+  const nextVal = (i, a) => {
+    const v = argv[i];
+    if (v === undefined) { console.error(`Missing value for ${a}`); process.exit(1); }
+    return v;
+  };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') { console.log(HELP); process.exit(0); }
-    else if (a === '--combos') args.combos = argv[++i].split(',').map(s => s.split(':'));
-    else if (a === '--target-wins') args.targetWins = parseInt(argv[++i], 10);
-    else if (a === '--max-games') args.maxGames = parseInt(argv[++i], 10);
-    else if (a === '--seed') args.seed = parseInt(argv[++i], 10);
-    else if (a === '--out') args.out = argv[++i];
+    else if (a === '--combos') args.combos = nextVal(++i, a).split(',').map(s => s.split(':'));
+    else if (a === '--target-wins') args.targetWins = parseInt(nextVal(++i, a), 10);
+    else if (a === '--max-games') args.maxGames = parseInt(nextVal(++i, a), 10);
+    else if (a === '--seed') args.seed = parseInt(nextVal(++i, a), 10);
+    else if (a === '--out') args.out = nextVal(++i, a);
     else { console.error(`Unknown arg: ${a}\n${HELP}`); process.exit(1); }
   }
   return args;
@@ -62,7 +67,13 @@ async function runCombo(solver, [p1Name, p2Name], { targetWins, maxGames, seed, 
   if (existsSync(file)) {
     for (const line of readFileSync(file, 'utf8').split('\n')) {
       if (!line.trim()) continue;
-      const row = JSON.parse(line);
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch {
+        console.warn(`[${p1Name} vs ${p2Name}] skipping malformed line in ${file}`);
+        continue;
+      }
       startG = Math.max(startG, row.g + 1);
       if (row.winner) wins[row.winner]++; else draws++;
     }
