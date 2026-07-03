@@ -85,3 +85,11 @@ test('L8 (eval-2): a draw abandoned; opponent now has a forced win', () => {
   assert.match(link.text, /occupying c4r4/);
   assert.match(link.text, /forced win/i);
 });
+
+test('L9 (eval-13): hedged parity, culprit not isolable', () => {
+  const { link } = classifyById('eval-13');
+  assert.equal(link.id, 'L9');
+  assert.match(link.text, /parity/i);
+  assert.match(link.text, /isn't cleanly isolable/i);
+  assert.doesNotMatch(link.text, /the culprit is c\d+r\d+/i);  // must NOT fabricate a crisp cause
+});

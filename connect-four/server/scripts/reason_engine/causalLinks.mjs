@@ -77,7 +77,8 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.lostResource?.register === 'parity' && !hasSharedCell(fv),
     covers: ['route', 'lostResource.terminal', 'opponentPunishment.terminal'],
-    guardrail: 'The culprit square is not cleanly isolable; hedge — do not fabricate a crisp cause.' },
+    guardrail: 'The culprit square is not cleanly isolable; hedge — do not fabricate a crisp cause.',
+    template: (fv) => `You had a parity/zugzwang win (resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}); the played move loses the parity battle — the exact culprit square isn't cleanly isolable. The winning group runs through ${cells(fv.lostResource?.window)}.` },
   { id: 'L5', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'denial',
