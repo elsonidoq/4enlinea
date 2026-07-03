@@ -50,7 +50,8 @@ export const CAUSAL_LINKS = [
   { id: 'L2', family: 'realized_denied', confidence: 'high',
     when: (fv, ctx) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent' && !branchInvariant(fv, ctx),
     covers: CODES_REALIZED,
-    guardrail: 'The played move genuinely handed the opponent the pattern; name the conceded cell.' },
+    guardrail: 'The played move genuinely handed the opponent the pattern; name the conceded cell.',
+    template: (fv) => `Your move let the opponent occupy ${fv.opponentPunishment?.completingCell}, completing their ${fv.opponentPunishment?.tag ?? 'threat'} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.` },
   // ── Family 2: sign (L9 refinement before L5/L6) ──
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',

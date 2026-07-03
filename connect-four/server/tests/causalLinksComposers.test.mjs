@@ -34,3 +34,11 @@ test('L1 (eval-22): completes YOUR tactic; opponent denial named', () => {
   assert.match(link.text, /c2r1/);                        // your completing cell
   assert.match(link.text, /c3r1/);                        // opponent denial cell
 });
+
+test('L2 (eval-21): played move handed the opponent the pattern', () => {
+  const { link } = classifyById('eval-21');
+  assert.equal(link.id, 'L2');
+  assert.match(link.text, /let the opponent occupy c2r1/);
+  assert.match(link.text, /double_threat/);
+  assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
+});
