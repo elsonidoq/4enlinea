@@ -11,7 +11,7 @@ import { renderDecisionPredicates, RENDER_REQUIRED, RENDER_PROVISIONAL } from '.
 // compute.mjs), pushes each record through the render pipeline, and asserts every REQUIRED render
 // predicate is exercised >=1. Solver-free (evidence is stored) — mirrors renderCoverageCorpus.test.mjs.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const EVIDENCE_FILE = join(__dirname, '../scripts/reason_evidence_boards_coverage_p4_2026-07-03T15-54-38Z.jsonl');
+const EVIDENCE_FILE = join(__dirname, '../scripts/reason_evidence_boards_coverage_2026-07-03T17-14-51Z.jsonl');
 
 test('the committed P4 coverage set exercises every REQUIRED render predicate', () => {
   const rows = readFileSync(EVIDENCE_FILE, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
