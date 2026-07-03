@@ -75,9 +75,11 @@ function decisiveFinalMovestring(fv) {
   return lr?.finalMovestring ?? null;
 }
 
-// Partition every PRESENT leaf path into rendered | covered | excluded (spec §3f). Mirrors
-// renderedFields' keep() logic: exclude → excluded; covered causal-code → covered; everything else
-// (render, transformed-to-board, uncovered causal-code) → rendered.
+// Partition every PRESENT leaf path into rendered | covered | excluded (spec §3f), from the grader's
+// "what did the model see" viewpoint: exclude → excluded; covered causal-code → covered; everything else
+// → rendered. NOTE: unlike renderedFields' keep() (which DROPS `transformed` from the JSON residue),
+// `transformed` fields are shown to the model via the board, so here they count as rendered (not excluded)
+// — the distinction that matters for the G2 over-removal audit is shown-anywhere vs. hidden.
 function fieldPartition(pruned, covers) {
   const covered = new Set(covers);
   const out = { rendered: [], covered: [], excluded: [] };

@@ -229,7 +229,7 @@ Deciding between them is itself an **oracle** job — you cannot read the triage
 
 Every failing case must carry a **one-sentence `failure_summary`**: plain-language "what went wrong,"
 naming the culprit field and the board/solver finding (e.g. *"Named the win completing at c5r5, but the
-solver's winning line never reaches that square — `parityAttribution.completingCell` is junk on a
+engine's own `finalMovestring` line never reaches that square — `parityAttribution.completingCell` is junk on a
 move-1 board (`vector_error`)."*). This sentence is surfaced verbatim after grading (see Output).
 
 ### Scoring via sub-agents
@@ -449,7 +449,7 @@ one-sentence `failure_summary`:
 
 ```
 ## Failed evals (N)
-- eval-1 (vector_error) — Named the win completing at c5r5, but the solver's winning line never
+- eval-1 (vector_error) — Named the win completing at c5r5, but the engine's own `finalMovestring` line never
   reaches that square; `parityAttribution.completingCell` is junk on a move-1 board.
 - eval-8 (prompt_confusion) — The correct fork window was in `lostResource.window`, but the model
   narrated a row-3 window that the board does not show.
