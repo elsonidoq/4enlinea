@@ -25,3 +25,12 @@ test('L5 (eval-3): deep fork framed as deep, not immediate', () => {
   assert.match(link.text, /c6r5/);                        // opponent denial cell named
   assert.doesNotMatch(link.text, /immediate|right now|current threat/i);
 });
+
+test('L1 (eval-22): completes YOUR tactic; opponent denial named', () => {
+  const { link } = classifyById('eval-22');
+  assert.equal(link.id, 'L1');
+  assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
+  assert.match(link.text, /double_threat/);
+  assert.match(link.text, /c2r1/);                        // your completing cell
+  assert.match(link.text, /c3r1/);                        // opponent denial cell
+});
