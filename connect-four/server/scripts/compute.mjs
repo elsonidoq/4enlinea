@@ -30,6 +30,7 @@ import { dirname, join, isAbsolute, resolve, basename } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt } from './renderReasonModel.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -111,7 +112,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   N = parseInt(argVal('--n', '3'), 10);
   model = argVal('--model', process.env.EXPLAIN_MODEL);
   const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
-  CONDITIONS = condArg === 'all' ? ['A', 'B', 'C'] : condArg.toUpperCase().split(',');
+  CONDITIONS = condArg === 'all' ? ['A', 'B', 'C', 'D'] : condArg.toUpperCase().split(',');
 }
 
 // ── Evidence pass ─────────────────────────────────────────────────────────────
@@ -206,7 +207,10 @@ Notes:
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
   \`_with_best_play\` outcomes mean "with correct continuation".`;
 
-function buildPrompt(glossary, fv, condition) {
+export function buildPromptForCondition(glossary, fv, condition) {
+  if (condition === 'D') {
+    return assembleGroundedPrompt(buildReasonRenderModel(fv));
+  }
   const projected = projectVector(fv, condition);
   return `${glossary}
 
@@ -287,7 +291,7 @@ async function runLlm(evidenceRows) {
     // grader and /admin/fv-suff can re-project under any condition without recomputing.
     const nv = toNarratorVector(row.evidence);
     for (const condition of CONDITIONS) {
-      const prompt = buildPrompt(glossaryText, nv, condition);
+      const prompt = buildPromptForCondition(glossaryText, nv, condition);
       for (let run_index = 0; run_index < N; run_index++) {
         // Per-call error isolation: a single failure drops ONE line, not the run.
         let raw = null, answer = null, parse_error = null, call_error = null;
