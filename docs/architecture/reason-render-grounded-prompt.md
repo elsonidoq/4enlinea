@@ -326,6 +326,71 @@ import it and the catalog — and nothing re-implements the rules:
 grader rubric, coverage universe, and the §6 completeness assertion all re-derive from it. A mistake
 in a rule is fixed in exactly one place, and the grader + coverage test surface its effects.
 
+## 3e. Selection decisions are catalog-driven, sampler-covered, grader-aware (general principle)
+
+Any render decision that **selects or prunes what the model sees** — not only causal-frame `covers` —
+is a first-class contract, never a silent local choice. Each such decision MUST be:
+
+1. **One declared rule** (single source of truth), the way `causalLinks.mjs` is for L1–L9.
+2. **A sampler coverage dimension** — `select_boards.mjs` adds a predicate for each variant the rule
+   can produce, so every branch is exercised by real harvested boards (and, being rare-aware, gets a
+   targeted harvest if self-play doesn't reach it).
+3. **Grader-aware** — `grade-fv-sufficiency` receives the rule's output (what was included/excluded
+   and *why*) and audits it: did an omission/removal cost the answer? (the over-omission / over-removal
+   audit).
+
+Instances of the pattern:
+- **Causal-frame `covers`** (§3b/§3d) — which semantic codes are hidden.
+- **Board selection** (below) — which boards reach the model.
+- Any future selection/pruning decision inherits the same three-consumer treatment by default.
+
+### Board selection (P2 rule; consumers in P4) — Option A, operationalized
+
+`selectBoards(fv, tags) -> [{ board, reason }]` — reuses the P2 tagger's curated tag-set (the same
+tags that drive the board glyphs), so "carries signal" means "changes the tactical picture":
+
+- **decision** — always (the position under judgment).
+- **after-best** — included iff its curated tag-set differs from the decision board's; omitted if
+  identical (an unchanged board teaches nothing).
+- **after-played** — included iff its curated tag-set differs from the decision board's.
+- **projected-deep** — included iff the resource is deep (`register ∈ {forced_sequence, parity}`),
+  rendering the fork/parity completion so a deep win is shown as deep.
+
+Consumer wiring (P4, alongside the causal-link consumers):
+- **Sampler predicates:** `board_afterbest_{shown,omitted}`, `board_afterplayed_{shown,omitted}`,
+  `board_projecteddeep_{shown,absent}` — so the corpus contains both boards where after-best is
+  redundant (omitted) and boards where it carries signal (shown), and both render paths are graded.
+- **Grader:** told which boards were rendered and each `reason`; runs an over-omission audit — if an
+  answer needed a board `selectBoards` dropped, that omission rule is wrong.
+
+## 3f. Grader rubric additions for condition D (P4) — consolidated
+
+The grader is the `grade-fv-sufficiency` skill (`.claude/skills/grade-fv-sufficiency/SKILL.md`). Today
+it grades condition A (glossary + JSON dump) on axes A1–A4. It is **not yet modified** — every item
+below is a P4 requirement, consolidated here so nothing raised during design is lost. The grader is a
+consumer of the same catalog as the composer and sampler (§3e), and its rubric must gain:
+
+- **G1 — Format-aware grading (from the board-format decision, §7.10).** Grade against the *grounded*
+  presentation the model actually saw: the clean board(s), the plain-language threat list, and the
+  causal-frame text — NOT the old glossary+JSON. Verify each concrete claim against the rendered
+  boards/threat-list as shown.
+- **G2 — Per-link rubric (from "the grader must know these rules", §3d).** For the fired link L1–L9:
+  (a) its `guardrail` was honored (e.g. L3 → the answer makes no "your move caused/enabled it" claim —
+  the mechanical eval-23 check); (b) over-removal audit — a `covers`-hidden code the answer actually
+  needed = the removal was wrong; (c) low-confidence links (L9) must hedge, not fabricate a crisp cause.
+- **G3 — Board-selection audit (from "the grader must be aware of it", §3e).** The grader is told which
+  boards `selectBoards` rendered and each `reason`; over-omission audit — if the answer needed a board
+  that was dropped, the selection rule is wrong.
+- **G4 — Engine-line grounding (from the eval-1/16 mis-grade lesson, §2).** Verify cells against the
+  engine's OWN winning line (`finalMovestring`), never an alternate solver PV — the bug that produced
+  the false convictions in the P1 grading run.
+- **G5 — Threat-list fidelity (from the board-format decision, §7.10).** The rendered threat list is
+  now part of the artifact under test; the grader must check each listed tactic is board-true on its
+  stated board. A wrong threat-list entry is a render bug the grader must catch, not narrate around.
+
+These are wired in P4 alongside the sampler's `link_<id>` / `board_*` predicates, all reading the one
+catalog (§3e principle).
+
 ## 4. Why this specifically helps `gpt-5.4-mini`
 
 Every change trades reasoning small models are bad at (board simulation, line-walking, code
@@ -447,6 +512,24 @@ field matching none of these halts the run.**
 4. **Systematic field removal → A (upstream scores/samples) + C1 (plumbing/diagnostics) only.** All
    C2 fields retained (`gate.witness.devCols/oppPlies` causal-frame-covered; `boardState`/`entryCell`/
    `ownDiscs` kept as low-priority render).
+
+### P2 decisions (decision pass 2026-07-02, post-P1)
+5. **General principle (§3e): every render selection/pruning decision is catalog-driven +
+   sampler-covered + grader-aware.** Board selection is the second instance after causal-frame covers.
+6. **Board selection → Option A (only signal-carrying boards).** `selectBoards` rule in §3e; decision
+   always, after-best/after-played only when their tag-set differs, projected-deep when `register` is
+   forced_sequence/parity. Sampler + grader wiring per §3e (P4).
+7. **`reachableInPlies` → derived from `finalMovestring`** (present 29/29), replaying to the cell's
+   fill-ply; the sparse `line` (≈7/29) is a cross-check only.
+8. **`horizon` enum → `immediate | deep-forced-line | deep-parity`,** mapped from `register`; no
+   "short" tier (corpus is bimodal); magnitude carried by `pliesToEnd`.
+9. **Array-traversal fix (required P2):** `renderedFields` recurses into array *elements* and
+   classifies per element-leaf (mirroring `leafPaths`), so a `transformed`/`exclude` subfield of a
+   grounded cell object (once `window` becomes `[{cell,status,…}]`) is dropped, not kept wholesale.
+10. **Tag presentation → (i) clean board + explicit plain-language threat list.** Discs only on the
+    ASCII grid (`A`/`B` with the you/opponent mapping stated); tactics listed beneath as sentences
+    (each = a grounded-cell object rendered as prose). No glyph legend. This is also a grader-rubric
+    input (see §3f G1/G5). Revisit only if the eval shows it hurts.
 
 ## 8. Open questions
 
