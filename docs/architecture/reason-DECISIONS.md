@@ -365,3 +365,58 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   `npm run test:fast` green; corpus completeness gate 29/29 zero-uncovered.
 - **Source:** Phase-3 design `docs/superpowers/specs/2026-07-03-grounded-render-prompt-phase3-design.md`;
   spec `reason-render-grounded-prompt.md` §3b/§3d/§6; I12.
+
+---
+
+### D29 — P4 lands: `render_decision` persisted as grader ground truth; coverage universe gains the render-layer joint predicates; flip-case (D28 I12) gap CLOSED
+
+- **Decision (three coupled P4 deliverables):**
+  1. **`buildRenderDecision(nv)` emits a per-record `render_decision` object, render-only, no engine
+     change.** Added to `renderReasonModel.mjs`, it captures `case`/`route`/`direction`,
+     `patternOnAfterBestBoard` (the D28 L2-vs-L3 branch-invariance value), the fired link
+     (`linkId`/`confidence`/`covers`/`guardrail`/composed `text`), `boards[{id, shown, reason}]`,
+     resource grounding (`completingCell`, `register → horizon`), the field partition
+     (`rendered`/`covered`/`excluded`), and `finalMovestring`. `compute.mjs` persists it on
+     **condition-D answers lines only** (`renderDecisionForCondition`) — condition A/B/C rows are
+     unaffected, and `computeReason` is untouched.
+  2. **The `grade-fv-sufficiency` grader now grades condition D via G1–G6, consuming `render_decision`
+     as ground truth — never re-deriving routing.** Per §3f, re-running `classifyCausalLink`,
+     recomputing branch-invariance, or re-selecting boards inside the grader was explicitly rejected as
+     the same class of drift that produced the eval-1/16/3 mis-grades. Two grounding fixes land with
+     it: **G4** — cells are verified against the engine's OWN `finalMovestring`, never an alternate
+     solver PV (the root cause of the eval-1/16 false convictions); and the **D28 covers semantics** —
+     a `covers`-hidden-but-absent field is normal (the covers list is a family-wide superset), not
+     `missing_info`.
+  3. **The coverage universe gains the render-layer joint predicates via a shared `renderUniverse.mjs`,**
+     consumed identically by `select_boards.mjs --strategy coverage` and the coverage test — spanning
+     `link_L1`–`link_L9`, the branch-invariance split (L2-vs-L3), `board_*` (decision/after-best/
+     after-played/projected-deep), covers-exercised, horizon, and the `case × route × direction` joint
+     space, plus a bounded directed rare-fill (`RARE_FILL_GAMES` cap + no-progress early-exit) added
+     after a tractability incident during harvesting (an earlier unbounded rare-fill run stalled/ran
+     away; the cap + early-exit make the sampler terminate deterministically on a bounded budget). A
+     **freshly regenerated 32-board set** (`boards_coverage_p4_2026-07-03T15-54-38Z.jsonl` +
+     precomputed `reason_evidence_boards_coverage_p4_2026-07-03T15-54-38Z.jsonl`) is committed and
+     graded by `renderCoverageUniverse.test.mjs`, which asserts all 35 `RENDER_REQUIRED` predicates
+     covered, solver-free (reads precomputed evidence only). **The frozen 29-board set
+     (`boards_coverage_2026-07-02T11-37-56Z.jsonl`) is retained** — not superseded — as the ablation
+     (A-vs-D) input and the P1–P3 regression anchor; it is a strict predecessor, not a duplicate, of
+     the P4 32-board coverage set.
+- **Flip-case (D28 I12 gap) disposition: CONFIRMED reachable-but-rare, gap CLOSED.** The Phase-4
+  directed all-suboptimal-column harvest surfaced two real boards carrying the `flip_case_l3`
+  predicate (`win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best,
+  routing correctly to L3 not L2) in the 32-board set — confirming Hypothesis H1 (reachable-but-rare)
+  over H2 (router bug); the routing/computation was verified correct on both harvested boards. Full
+  write-up: `docs/architecture/reason-flip-case-investigation.md`. `flip_case_l3` stays
+  PROVISIONAL-with-example in the coverage universe (rare, now sourced — not blocking, not fabricated).
+- **Rationale:** I2/I9 (the grader must consume one declared render-decision record rather than
+  re-implement the composer's rules — §3e's "one rule × three consumers" principle, generalized to a
+  fourth artifact: the persisted decision itself); I0 (the bounded rare-fill trades a small,
+  documented completeness gap for a tractable, terminating sampler after the tractability incident);
+  I12 (the flip-case gap is closed with real harvested counterexamples, not asserted away).
+- **Status:** IMPLEMENTED on `stagging` (Phase 4). Render-layer + tooling only — `computeReason` and
+  the engine are untouched. `renderReasonModel.mjs` (`buildRenderDecision`), `compute.mjs`
+  (`renderDecisionForCondition`), `grade-fv-sufficiency` SKILL (G1–G6 + G4 PV fix), `renderUniverse.mjs`
+  (shared universe) + `select_boards.mjs --strategy coverage`, `renderCoverageUniverse.test.mjs`.
+  `npm run test:fast` 795/795 green.
+- **Source:** Phase-4 design/task briefs (2026-07-03); spec `reason-render-grounded-prompt.md` §3e/§3f;
+  D28; `reason-flip-case-investigation.md`; I0/I2/I9/I12.

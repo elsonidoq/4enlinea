@@ -1,11 +1,14 @@
 # Grounded-Render Prompt — presenting the reason vector to the LLM
 
-**Status:** P1 (foundation) + P2 (grounding) + P3 (causal frames) IMPLEMENTED on `stagging` (modules
-in `connect-four/server/scripts/`: `reason_engine/causalLinks.mjs`, `fieldDisposition.mjs`,
-`renderReasonModel.mjs`, `reasonCellGrounding.mjs`, `reasonBoardTags.mjs`, `reasonBoardSelect.mjs`;
-wired as ablation condition D in `compute.mjs`). P3 shipped one composer + one test per L1–L9, the
-L2-vs-L3 branch-invariance computation (`patternOnAfterBestBoard`), and the static causal-code covers
-audit — see `reason-DECISIONS.md` D28. P4 (grader + sampler integration) remains a proposal below.
+**Status:** P1 (foundation) + P2 (grounding) + P3 (causal frames) + P4 (grader + sampler integration)
+IMPLEMENTED on `stagging` (modules in `connect-four/server/scripts/`: `reason_engine/causalLinks.mjs`,
+`fieldDisposition.mjs`, `renderReasonModel.mjs`, `reasonCellGrounding.mjs`, `reasonBoardTags.mjs`,
+`reasonBoardSelect.mjs`, `renderUniverse.mjs`; wired as ablation condition D in `compute.mjs`). P3
+shipped one composer + one test per L1–L9, the L2-vs-L3 branch-invariance computation
+(`patternOnAfterBestBoard`), and the static causal-code covers audit — see `reason-DECISIONS.md` D28.
+P4 shipped the persisted `render_decision` record (grader ground truth), the `grade-fv-sufficiency`
+G1–G6 rubric for condition D, the shared `renderUniverse.mjs` coverage universe + a freshly
+regenerated 32-board coverage set, and closed the flip-case (D28 I12) gap — see D29.
 **Owner layer:** the *render* step (downstream of engine soundness — see `reason-INVARIANTS.md`,
 and the memory rule "engine soundness first, render later"). This doc does **not** change what
 `computeReason` *stores*; it changes how the stored evidence is *grounded and presented* to the
@@ -522,10 +525,18 @@ is *narrate already-grounded, pre-prioritized facts in fluent prose.*
   cells (`status`/`horizon`/`reachableInPlies`) + projected deep board. Boards now uniform-tagged.
 - **P3 — causal frames.** Implement one composer + one test per link L1–L9 (text + `covers` + guardrail),
   incl. the L2-vs-L3 branch-invariance computation. The eval-3/eval-23 fixes land here.
-- **P4 — grader + sampler integration.** `grade-fv-sufficiency` per-link rubric (guardrail honored /
-  over-removal audit / low-confidence hedging) driven by the catalog · `select_boards.mjs` emits
-  `link_<id>` predicates + the two new distinctions + a targeted harvest for the rare links (L3-figure_7,
-  L9, `lost_fork_B`). Closes the loop: every rule is exercised and its output graded.
+- **P4 — grader + sampler integration. IMPLEMENTED (see D29).** A persisted per-record
+  `render_decision` (`buildRenderDecision`, condition-D lines only) is the grader's ground truth —
+  `grade-fv-sufficiency` grades condition D via G1–G6 (format-aware grading, per-link rubric,
+  board-selection audit, engine-line grounding via `finalMovestring` not an alternate solver PV,
+  threat-list fidelity, branch-invariance provenance) consuming that record directly, never
+  re-deriving routing. `select_boards.mjs --strategy coverage` + the coverage test share one
+  `renderUniverse.mjs` spanning `link_L1`–`link_L9`, the branch-invariance split, `board_*`,
+  covers-exercised, horizon, and `case × route × direction`, with a bounded directed rare-fill. A
+  freshly regenerated 32-board coverage set is committed with precomputed evidence
+  (`renderCoverageUniverse.test.mjs`, solver-free, 35/35 `RENDER_REQUIRED` predicates); the frozen 29
+  is retained as the ablation input + P1–P3 regression anchor. The flip-case (D28 I12) gap is
+  CLOSED — reachable-but-rare, confirmed via two harvested boards (`reason-flip-case-investigation.md`).
 
 **Acceptance:** corpus coverage test green (no field silently dropped) · condition-D vs A on the frozen
 set: eval-3/eval-23 fixed, no regression on the 27 passes · every L1–L9 link has ≥1 board in the
@@ -639,7 +650,10 @@ field matching none of these halts the run.**
 
 ## 8. Open questions
 
-1. **`reachableInPlies` source** — read off the stored `line` length to the cell, or recomputed?
+1. **RESOLVED (P2 decision 7, §7).** **`reachableInPlies` source** — read off the stored `line`
+   length to the cell, or recomputed? Answer: derived from `finalMovestring` (present 29/29),
+   replaying to the cell's fill-ply; the sparse `line` (≈7/29) is a cross-check only. (Left open here
+   at P1 write-up time; already answered by the time P2 shipped — noted resolved during P4 docs pass.)
 2. **RESOLVED (P3).** **Glossary residue** — which codes still need a short reading key once
    frames/guardrails are inlined. Answer: the 607-line glossary shrinks to a short reading key for the
    residual uncovered/low-confidence codes; see §3-⑥/§3d and the P3 design doc
