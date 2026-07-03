@@ -153,11 +153,14 @@ Deciding between them is itself an **oracle** job — you cannot read the triage
 - **Before calling `vector_error`, prove the field is actually wrong.** On deep or near-empty boards a
   named cell/window/line can be **absent from the current board yet still solver-real** (a completing
   cell for a 40-ply parity win legitimately sits on empty squares). "Nothing visible on the board" is
-  **inference from absence** — the same anti-pattern as trusting the vector. Trace the solver's winning
-  **principal variation** (or the relevant refutation) and check whether it actually passes through the
-  field's named cell/window. Only rule `vector_error` when the solver **contradicts** the field. If you
-  genuinely cannot resolve it with the tools, say so in `failure_summary` and pick the most defensible
-  bucket rather than guessing `vector_error`.
+  **inference from absence** — the same anti-pattern as trusting the vector. Trace the engine's own
+  `finalMovestring` (from the record's raw evidence — `lostResource.finalMovestring` when the lost
+  resource is a winning line, else `opponentPunishment.finalMovestring`) and check whether it actually
+  passes through the field's named cell/window. **Never ground on an alternate optimal solver line** —
+  multiple optimal lines can exist, and grounding on the wrong one (instead of the engine's own line) is
+  exactly the eval-1/16/3 mis-grade bug. Only rule `vector_error` when the engine's own line
+  **contradicts** the field. If you genuinely cannot resolve it with the tools, say so in
+  `failure_summary` and pick the most defensible bucket rather than guessing `vector_error`.
 - **`missing_info` vs `prompt_confusion`:** if the model **abstained** (`unsure_about`) or the needed
   fact has **no field** in the vector → `missing_info`. If the fact **was** present in a field (correct
   and unambiguous per the glossary) and the model still got it wrong, mis-anchored it, or invented past
@@ -191,8 +194,9 @@ For a move's true outcome, query the solver (createSolverProcess from
 connect-four/server/c4solver-wrapper.js; cd connect-four; await solver.query; destroy() in finally).
 When a claim names a cell/window/line that is NOT visible on the board, do NOT rule it false from
 absence — on deep/near-empty positions a real winning line completes on currently-empty squares.
-Trace the solver's principal variation and check whether it passes through the named cell BEFORE
-calling the field wrong.
+Trace the engine's OWN `finalMovestring` (given below) and check whether it passes through the named
+cell BEFORE calling the field wrong. Never ground on an alternate optimal solver line — multiple
+optimal lines exist and grounding on the wrong one is exactly the eval-1/16/3 mis-grade bug.
 
 ## Case metadata (oracle — all from feature_vector; the model saw the vector but you VERIFY on the board)
 - id: <id>   condition: <condition>
@@ -204,6 +208,10 @@ calling the field wrong.
 - expected outcomes from case: best=<…> played=<…> (win_to_draw→win/draw, win_to_lose→win/loss,
   draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
 - lostResource.kind / opponentPunishment.kind: <…> / <…>  (winning_line | denial | neutralization | conditional_swindle)
+- engine's own finalMovestring (the grounding line — use `lostResource.finalMovestring` when
+  `lostResource.kind` is a winning line, else `opponentPunishment.finalMovestring`): <…>. This is the
+  ONLY line to trace when checking whether a named cell/window is real — never substitute an alternate
+  optimal solver line.
 
 Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the oracle
 cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
@@ -240,8 +248,9 @@ GLOSSARY ambiguity, and state the board finding that proves it.
 ## Failure triage (required whenever the case fails A3 or A4)
 Classify the ROOT cause into exactly one bucket, and write a one-sentence plain-language summary:
 - `vector_error` — a field carried a WRONG/junk value the model faithfully relied on. Before choosing
-  this you MUST have shown the solver contradicts the field (trace the PV; do not infer from board
-  absence). Off-board-but-solver-real ≠ wrong.
+  this you MUST have shown the engine's own `finalMovestring` contradicts the field (trace that line;
+  do not infer from board absence, and never ground on an alternate optimal solver line — that
+  mis-grounding is exactly the eval-1/16/3 bug). Off-board-but-finalMovestring-real ≠ wrong.
 - `missing_info` — the vector was not wrong but LACKED a field the model needed; the model abstained
   (`unsure_about`) or had to guess (no field carried the fact).
 - `prompt_confusion` — the correct, sufficient info WAS present in a field (unambiguous per glossary),
@@ -344,7 +353,8 @@ it is the at-a-glance answer to "what went wrong."
 - A case = one `(id, condition)`; it passes only if A1–A4 hold on **all N runs**.
 - `unsure_about` is excluded from A4 and logged as a field-gap counterexample.
 - Observe the board with `visualize_board.sh`/solver; never trust the vector to verify itself — and
-  never rule a field wrong from board **absence**: trace the solver PV before calling `vector_error`.
+  never rule a field wrong from board **absence**: trace the engine's own `finalMovestring` before
+  calling `vector_error` (never an alternate solver PV — the eval-1/16/3 bug).
 - Every failing case gets a **triage** (`vector_error` / `missing_info` / `prompt_confusion`) and a
   one-sentence `failure_summary`; present all failed evals as bullets at the end of your reply.
 - The counterexample list (field/glossary attribution) is the point — not the pass rate.
