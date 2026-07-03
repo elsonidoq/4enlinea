@@ -37,6 +37,17 @@ function namedPatternOpts(fv) {
   return null;
 }
 
+// L2-vs-L3 branch-invariance (spec §3b): the opponent pattern is present on the after-best board iff
+// that board carries an opponent-owned tag at the pattern's completing cell. Reuses the P2 tagger so
+// the check equals what the model sees. Computed only for enabled_opponent records (by the caller).
+export function patternOnAfterBestBoard(fv) {
+  const cc = fv.opponentPunishment?.completingCell;
+  if (cc == null || fv.bestCol == null) return false;
+  const ms = (fv.movestring ?? '') + String(fv.bestCol);
+  return tagBoard(ms, fv.player).some(
+    (t) => t.owner === 'opp' && (t.cell === cc || (t.window || []).includes(cc)));
+}
+
 export function selectBoards(fv) {
   const you = fv.player;
   const applyCol = (ms, col) => (col == null ? ms : ms + String(col));

@@ -5,7 +5,7 @@
 import { pruneVector } from './reasonNarratorVector.mjs';
 import { classifyCausalLink } from './reason_engine/causalLinks.mjs';
 import { dispositionOf, assertCoverage } from './fieldDisposition.mjs';
-import { selectBoards, renderThreatList } from './reasonBoardSelect.mjs';
+import { selectBoards, renderThreatList, patternOnAfterBestBoard } from './reasonBoardSelect.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -50,7 +50,9 @@ function renderedFields(prunedFv, firedCovers = []) {
 
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
-  const link = classifyCausalLink(pruned, {});
+  const ctx = pruned.direction === 'enabled_opponent'
+    ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
+  const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
