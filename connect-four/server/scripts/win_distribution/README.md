@@ -34,6 +34,10 @@ Three stages, each a standalone module:
 3. **`aggregate.mjs`** — folds the per-game JSONL files into `data/summary.json`:
    per combo and per winning player, a 6×7 `P(cell ∈ winning four | that player
    wins)` heatmap, win/draw rates, mean game length, and odd/even-row parity mass.
+4. **`visualize.mjs`** — renders `summary.json` into a self-contained
+   `data/report.html`: each pairing's P1/P2 heatmaps side by side on a shared
+   color scale, board-oriented, with win rates and parity mass. No scripts, no
+   external resources — open it in any browser.
 
 `data/` is gitignored — game logs and `summary.json` are reproducible artifacts,
 not committed.
@@ -52,6 +56,9 @@ node run_grid.mjs --combos mp25:mp25 --target-wins 100000 --max-games 1800 --see
 
 # fold into data/summary.json and print a one-line-per-combo table
 node aggregate.mjs
+
+# render data/report.html (open in a browser)
+node visualize.mjs
 ```
 
 (The high `--target-wins` keeps the win target from binding, so `--max-games`
@@ -75,8 +82,10 @@ cd connect-four/server/scripts/win_distribution
 # all 16 combos, 10k wins/side target, 30k-game hard cap, base seed 42
 node run_grid.mjs --seed 42 --target-wins 10000 --max-games 30000
 
-# then aggregate everything into data/summary.json
+# then aggregate everything into data/summary.json, and render the full report
 node aggregate.mjs
+node visualize.mjs                    # → data/report.html (all 16 combos)
+node visualize.mjs --combo optimal:optimal   # or a single pairing
 ```
 
 The runner is **resumable and idempotent**: re-running the same command continues
@@ -130,5 +139,6 @@ odd 1-indexed rows (rows 1, 3, 5), per `docs/knowledge-base/allen-parity.md`.
 ## Tests
 
 Unit tests live in `connect-four/server/tests/winDistribution.*.test.mjs` and run
-under `npm run test:fast` (from `connect-four/`). `run_grid.mjs` has no unit test —
-it is validated by the quick-check recipe above.
+under `npm run test:fast` (from `connect-four/`) — covering `playPolicyGame`, the
+policies, `extractOutcome`, `aggregateRows`, and `visualize`'s `renderReport`.
+`run_grid.mjs` has no unit test — it is validated by the quick-check recipe above.
