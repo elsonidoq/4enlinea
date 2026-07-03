@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReasonRenderModel, assembleGroundedPrompt } from '../scripts/renderReasonModel.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from '../scripts/renderReasonModel.mjs';
 
 const NV = {
   movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
@@ -81,4 +81,35 @@ test('assembled prompt renders selected boards each with a Tactics list', () => 
   assert.match(prompt, /Tactics:/);               // threat list section present
   assert.doesNotMatch(prompt, /"scores"/);
   assert.doesNotMatch(prompt, /"movestring"/);
+});
+
+test('buildRenderDecision assembles the full decision set from render helpers', () => {
+  const rd = buildRenderDecision(NV); // NV from the top of this file (win_to_lose, sign, L6)
+  assert.equal(rd.link.id, 'L6');
+  assert.equal(rd.route, 'sign');
+  assert.equal(rd.case, 'win_to_lose');
+  assert.equal(rd.direction, null);              // sign route → no direction
+  assert.equal(rd.patternOnAfterBestBoard, null); // only computed for enabled_opponent
+  assert.ok(rd.boards.some((b) => b.id === 'decision' && b.shown === true));
+  assert.ok(rd.boards.every((b) => typeof b.shown === 'boolean' && b.reason));
+  // field partition classifies present leaves into exactly the three buckets
+  const all = [...rd.fieldPartition.rendered, ...rd.fieldPartition.covered, ...rd.fieldPartition.excluded];
+  assert.ok(all.includes('case'));                        // render
+  assert.ok(rd.fieldPartition.covered.includes('route')); // L6 covers route (present code → hidden)
+});
+
+test('buildRenderDecision records branch-invariance + finalMovestring for enabled_opponent', () => {
+  const fv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'lose_to_faster_lose', route: 'realized_denied', direction: 'enabled_opponent',
+    tag: 'double_threat',
+    lostResource: { kind: 'denial', verdict: 'occupation' },
+    opponentPunishment: { kind: 'realized_pattern', register: 'immediate', completingCell: 'c3r3',
+                          window: ['c3r3', 'c4r3', 'c5r3', 'c6r3'], finalMovestring: '3413306133' },
+  };
+  const rd = buildRenderDecision(fv);
+  assert.equal(rd.direction, 'enabled_opponent');
+  assert.equal(typeof rd.patternOnAfterBestBoard, 'boolean'); // computed, not null
+  assert.equal(rd.link.id, 'L3');                             // lose_to_faster_lose → branch-invariant
+  assert.equal(rd.finalMovestring, '3413306133');            // opponent's line (no lostResource winning_line)
 });

@@ -4,8 +4,10 @@
 
 import { pruneVector } from './reasonNarratorVector.mjs';
 import { classifyCausalLink } from './reason_engine/causalLinks.mjs';
-import { dispositionOf, assertCoverage } from './fieldDisposition.mjs';
-import { selectBoards, renderThreatList, patternOnAfterBestBoard } from './reasonBoardSelect.mjs';
+import { dispositionOf, assertCoverage, leafPaths } from './fieldDisposition.mjs';
+import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelectionDecisions } from './reasonBoardSelect.mjs';
+import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
+import { parseBoardState } from '../classifier.js';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -61,6 +63,69 @@ export function buildReasonRenderModel(nv) {
     boards: selectBoards(pruned),
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
+  };
+}
+
+// The engine's own decisive line for cell grounding (G4): the winning half's finalMovestring when
+// the lostResource is a winning line; otherwise the opponent's realized line. Never an alternate PV.
+function decisiveFinalMovestring(fv) {
+  const lr = fv.lostResource, op = fv.opponentPunishment;
+  if (lr?.kind === 'winning_line' && lr.finalMovestring) return lr.finalMovestring;
+  if (op?.finalMovestring) return op.finalMovestring;
+  return lr?.finalMovestring ?? null;
+}
+
+// Partition every PRESENT leaf path into rendered | covered | excluded (spec §3f). Mirrors
+// renderedFields' keep() logic: exclude → excluded; covered causal-code → covered; everything else
+// (render, transformed-to-board, uncovered causal-code) → rendered.
+function fieldPartition(pruned, covers) {
+  const covered = new Set(covers);
+  const out = { rendered: [], covered: [], excluded: [] };
+  for (const path of leafPaths(pruned)) {
+    const d = dispositionOf(path);
+    if (d === 'exclude') out.excluded.push(path);
+    else if (d === 'causal-code' && covered.has(path)) out.covered.push(path);
+    else out.rendered.push(path);
+  }
+  return out;
+}
+
+// Ground the load-bearing resource cell (status/horizon/reachableInPlies) against the decisive line.
+function groundResource(pruned) {
+  const half = pruned.lostResource?.kind === 'winning_line' ? pruned.lostResource
+    : (pruned.opponentPunishment?.completingCell ? pruned.opponentPunishment : pruned.lostResource);
+  const cell = half?.completingCell;
+  if (!cell) return null;
+  const { board, colHeights } = parseBoardState(pruned.movestring ?? '');
+  const grounded = groundCell(cell, {
+    board, colHeights, finalMovestring: decisiveFinalMovestring(pruned),
+    register: half.register, role: 'where the load-bearing resource completes',
+    perspectivePlayer: pruned.player,
+  });
+  return { completingCell: grounded,
+           registerToHorizon: { register: half.register ?? null, horizon: horizonForRegister(half.register) } };
+}
+
+// The complete render-layer decision set the grader consumes as ground truth (spec §3f). Derived
+// PURELY from the render helpers — no engine call. Reuses the same classify+assert path as
+// buildReasonRenderModel so routing is identical.
+export function buildRenderDecision(nv) {
+  const pruned = pruneVector(nv);
+  const ctx = pruned.direction === 'enabled_opponent'
+    ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
+  const link = classifyCausalLink(pruned, ctx);
+  assertCoverage(pruned, link.covers);
+  return {
+    case: pruned.case ?? null,
+    route: pruned.route === 'realized_denied' ? 'realized_denied' : 'sign',
+    direction: pruned.direction ?? null,
+    patternOnAfterBestBoard: pruned.direction === 'enabled_opponent' ? ctx.patternOnAfterBestBoard : null,
+    link: { id: link.id, confidence: link.confidence, covers: link.covers,
+            guardrail: link.guardrail, text: link.text },
+    boards: boardSelectionDecisions(pruned).map(({ id, shown, reason }) => ({ id, shown, reason })),
+    resource: groundResource(pruned),
+    fieldPartition: fieldPartition(pruned, link.covers),
+    finalMovestring: decisiveFinalMovestring(pruned),
   };
 }
 
