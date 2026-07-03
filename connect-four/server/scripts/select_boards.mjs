@@ -75,6 +75,7 @@ const defaultOut = strategy === 'fixture'
   : join(__dirname, `boards_coverage_${ts}.jsonl`);
 
 const outPath = argVal('--out', defaultOut);
+process.stderr.write(`Output will be written to: ${outPath}\n`);
 const TARGET_PER_PREDICATE = parseInt(argVal('--target', '2'), 10);
 const MAX_GAMES = parseInt(argVal('--max-games', '4000'), 10);
 
