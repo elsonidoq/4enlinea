@@ -4,7 +4,7 @@
 
 import { pruneVector } from './reasonNarratorVector.mjs';
 import { classifyCausalLink } from './reason_engine/causalLinks.mjs';
-import { leafPaths, dispositionOf, assertCoverage } from './fieldDisposition.mjs';
+import { dispositionOf, assertCoverage } from './fieldDisposition.mjs';
 
 // Rebuild a 6x7 board (row 0 bottom) from a 0-indexed movestring; render as ASCII.
 function boardFromMovestring(ms) {
@@ -30,6 +30,9 @@ function asciiBoard(ms) {
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
 // drop 'transformed'/'exclude', keep 'render' and (in P1, unapplied) 'causal-code'. Prune empties.
+// NOTE (P2): arrays are classified by their container path and kept wholesale; when window/forkWindows
+// become arrays of {cell,status,...} in P2, a transformed/excluded SUBfield would leak — reconcile with
+// leafPaths' element-leaf enumeration then.
 function renderedFields(prunedFv) {
   function prune(node, prefix) {
     if (node === null || typeof node !== 'object' || Array.isArray(node)) return node;
@@ -52,6 +55,8 @@ function renderedFields(prunedFv) {
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
   const link = classifyCausalLink(pruned, {});
+  // NOTE (P3): P1 registers all causal-code fields unconditionally (2nd arg unused); P3 must wire
+  // real covers-gating from the fired link or drop the param.
   assertCoverage(pruned, link.covers);
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },

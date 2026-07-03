@@ -34,6 +34,25 @@ test('L9 diffuse parity win (no shared cell) beats L6', () => {
   assert.equal(classifyCausalLink(fv).id, 'L9');
 });
 
+test('L4 defensive_miss', () => {
+  const fv = { case: 'draw_to_lose', route: 'realized_denied', direction: 'defensive_miss',
+               lostResource: { kind: 'denial' }, opponentPunishment: { kind: 'realized_pattern' } };
+  assert.equal(classifyCausalLink(fv).id, 'L4');
+});
+test('L8 draw abandoned (sign)', () => {
+  const fv = { case: 'draw_to_lose', route: 'sign',
+               lostResource: { kind: 'denial', register: 'forced_sequence' },
+               opponentPunishment: { kind: 'winning_line', register: 'parity' } };
+  assert.equal(classifyCausalLink(fv).id, 'L8');
+});
+test('L6 two winning lines (sign)', () => {
+  const fv = { case: 'win_to_lose', route: 'sign',
+               lostResource: { kind: 'winning_line', register: 'forced_sequence' },
+               opponentPunishment: { kind: 'winning_line', register: 'forced_sequence',
+                                     tie: { sharedCells: ['c4r5'] } } };
+  assert.equal(classifyCausalLink(fv).id, 'L6');
+});
+
 test('no rule matches throws', () => {
   assert.throws(() => classifyCausalLink({ case: 'nonsense', route: 'sign', lostResource: {}, opponentPunishment: {} }));
 });

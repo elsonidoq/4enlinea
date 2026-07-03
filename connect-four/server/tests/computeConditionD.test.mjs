@@ -16,6 +16,10 @@ test('condition D produces the grounded prompt (board + causal link), not the gl
   assert.match(prompt, /# Board/);
   assert.match(prompt, /causal link L6/);
   assert.doesNotMatch(prompt, /GLOSSARY-TEXT/); // D does not prepend the 607-line glossary
+  // The output-contract must be appended so D answers are gradeable (final-review Fix 1).
+  assert.match(prompt, /better_move/);
+  assert.match(prompt, /"mechanism"/);
+  assert.match(prompt, /key_cells/);
 });
 
 test('condition A is unchanged (glossary + JSON)', () => {

@@ -209,7 +209,11 @@ Notes:
 
 export function buildPromptForCondition(glossary, fv, condition) {
   if (condition === 'D') {
-    return assembleGroundedPrompt(buildReasonRenderModel(fv));
+    return `${assembleGroundedPrompt(buildReasonRenderModel(fv))}
+
+---
+
+${TASK}`;
   }
   const projected = projectVector(fv, condition);
   return `${glossary}
@@ -291,7 +295,31 @@ async function runLlm(evidenceRows) {
     // grader and /admin/fv-suff can re-project under any condition without recomputing.
     const nv = toNarratorVector(row.evidence);
     for (const condition of CONDITIONS) {
-      const prompt = buildPromptForCondition(glossaryText, nv, condition);
+      let prompt;
+      try {
+        prompt = buildPromptForCondition(glossaryText, nv, condition);
+      } catch (err) {
+        // Prompt-build failure (e.g. condition D's buildReasonRenderModel throwing
+        // UncoveredVectorFieldError / classifyCausalLink no-match on a novel record) must not
+        // abort the whole multi-record job — record it as a per-row call_error, same shape as
+        // an LLM call error below, and move on to the next record.
+        const line = {
+          id: row.id,
+          pattern_category: row.evidence.case,
+          condition,
+          run_index: 0,
+          model,
+          feature_vector: nv,
+          answer: null,
+          raw: null,
+          parse_error: null,
+          call_error: err.message,
+        };
+        appendFileSync(answersOut, JSON.stringify(line) + '\n');
+        failed++;
+        process.stdout.write(`  ${row.id} ${condition} run0: ERROR ${err.message}\n`);
+        continue;
+      }
       for (let run_index = 0; run_index < N; run_index++) {
         // Per-call error isolation: a single failure drops ONE line, not the run.
         let raw = null, answer = null, parse_error = null, call_error = null;
