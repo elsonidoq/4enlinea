@@ -33,7 +33,7 @@ export const CAUSAL_LINKS = [
     guardrail: 'The better move blocks the opponent pattern; frame it as a missed defense.' },
   { id: 'L3', family: 'realized_denied', confidence: 'high',
     when: (fv, ctx) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent' && branchInvariant(fv, ctx),
-    covers: [...CODES_REALIZED, 'lostResource.exhaustive', 'gate.witness.node', 'gate.witness.devVal'],
+    covers: CODES_REALIZED,
     guardrail: 'MUST NOT say the played move caused or enabled the pattern; both moves lose, played loses faster.' },
   { id: 'L2', family: 'realized_denied', confidence: 'high',
     when: (fv, ctx) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent' && !branchInvariant(fv, ctx),
@@ -42,7 +42,7 @@ export const CAUSAL_LINKS = [
   // ── Family 2: sign (L9 refinement before L5/L6) ──
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',
-    covers: [...CODES_SIGN, 'opponentPunishment.tie.playedPlies', 'opponentPunishment.tie.swindlePlies'],
+    covers: CODES_SIGN,
     guardrail: 'Neither move wins; the better move only kept a practical swindle. Do not claim a win.' },
   { id: 'L8', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.case === 'draw_to_lose',

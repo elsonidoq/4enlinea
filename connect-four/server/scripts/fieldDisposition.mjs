@@ -68,8 +68,15 @@ export function dispositionOf(path) {
   return null; // unknown → tripwire
 }
 
-export function assertCoverage(prunedFv, _firedCovers = []) {
+export function assertCoverage(prunedFv, firedCovers = []) {
   for (const path of leafPaths(prunedFv)) {
     if (dispositionOf(path) === null) throw new UncoveredVectorFieldError(path);
+  }
+  // A frame may only cover semantic CODES (never cells/counts/plumbing). A non-code covers entry
+  // is a catalog bug — throw loudly. (Absent codes are allowed: covers lists are family supersets.)
+  for (const c of firedCovers) {
+    if (dispositionOf(c) !== 'causal-code') {
+      throw new Error(`covers entry "${c}" is not a causal-code field (disposition=${dispositionOf(c)}); frames may only cover semantic codes`);
+    }
   }
 }

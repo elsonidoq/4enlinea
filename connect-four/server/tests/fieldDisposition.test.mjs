@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { leafPaths, dispositionOf, assertCoverage, UncoveredVectorFieldError } from '../scripts/fieldDisposition.mjs';
+import { CAUSAL_LINKS } from '../scripts/reason_engine/causalLinks.mjs';
 
 test('leafPaths collapses arrays to element shape', () => {
   const paths = leafPaths({ a: 1, b: [{ c: 2 }], d: { e: 3 } });
@@ -40,4 +41,25 @@ test('assertCoverage throws on an unregistered field', () => {
 
 test('gate.verdict is render, not causal-code (RENDER_PATHS override is live)', () => {
   assert.equal(dispositionOf('gate.verdict'), 'render');
+});
+
+test('every catalog covers entry resolves to a causal-code field', () => {
+  for (const link of CAUSAL_LINKS) {
+    for (const c of link.covers) {
+      assert.equal(dispositionOf(c), 'causal-code',
+        `${link.id} covers "${c}" has disposition ${dispositionOf(c)} (must be causal-code)`);
+    }
+  }
+});
+
+test('assertCoverage throws when a fired frame covers a non-code field', () => {
+  const fv = { route: 'sign', lostResource: { completingCell: 'c4r3' } };
+  // completingCell is a render field, not a code — a frame must never cover it.
+  assert.throws(() => assertCoverage(fv, ['lostResource.completingCell']), /not a causal-code/);
+});
+
+test('assertCoverage passes when covers name only present-or-absent codes', () => {
+  const fv = { route: 'sign', lostResource: { kind: 'winning_line' } };
+  // 'opponentPunishment.terminal' is a code that is absent here — allowed (superset covers).
+  assert.doesNotThrow(() => assertCoverage(fv, ['route', 'lostResource.kind', 'opponentPunishment.terminal']));
 });
