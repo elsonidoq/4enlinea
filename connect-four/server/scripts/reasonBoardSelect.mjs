@@ -48,7 +48,7 @@ export function patternOnAfterBestBoard(fv) {
     (t) => t.owner === 'opp' && (t.cell === cc || (t.window || []).includes(cc)));
 }
 
-export function selectBoards(fv) {
+export function boardSelectionDecisions(fv) {
   const you = fv.player;
   const applyCol = (ms, col) => (col == null ? ms : ms + String(col));
   const patternOpts = namedPatternOpts(fv);
@@ -57,7 +57,7 @@ export function selectBoards(fv) {
   const decisionTags = patternOpts                                     // displayed tags (+ named pattern)
     ? tagBoard(fv.movestring ?? '', you, patternOpts)
     : decisionStructuralTags;
-  const out = [{ id: 'decision', movestring: fv.movestring ?? '', tags: decisionTags,
+  const out = [{ id: 'decision', shown: true, movestring: fv.movestring ?? '', tags: decisionTags,
                  ascii: renderBoardAscii(fv.movestring ?? '', you),
                  reason: 'the position under judgment' }];
 
@@ -65,19 +65,23 @@ export function selectBoards(fv) {
                                 ['afterPlayed', fv.playedCol, 'the move you played']]) {
     const ms = applyCol(fv.movestring ?? '', col);
     const tags = tagBoard(ms, you);
-    if (tagKey(tags) !== decisionKey) {
-      out.push({ id, movestring: ms, tags, ascii: renderBoardAscii(ms, you),
-                 reason: `${why} — changes the tactical picture` });
-    }
+    const shown = tagKey(tags) !== decisionKey;
+    out.push({ id, shown, movestring: ms, tags, ascii: renderBoardAscii(ms, you),
+               reason: shown ? `${why} — changes the tactical picture`
+                             : `${why} — tag-set identical to the decision board, omitted` });
   }
 
   const deepHalf = [fv.lostResource, fv.opponentPunishment].find(
     (h) => h && DEEP.has(h.register) && h.finalMovestring);
-  if (deepHalf) {
-    out.push({ id: 'projectedDeep', movestring: deepHalf.finalMovestring,
-               tags: tagBoard(deepHalf.finalMovestring, you),
-               ascii: renderBoardAscii(deepHalf.finalMovestring, you),
-               reason: `where the deep ${deepHalf.register} resource resolves` });
-  }
+  out.push(deepHalf
+    ? { id: 'projectedDeep', shown: true, movestring: deepHalf.finalMovestring,
+        tags: tagBoard(deepHalf.finalMovestring, you), ascii: renderBoardAscii(deepHalf.finalMovestring, you),
+        reason: `where the deep ${deepHalf.register} resource resolves` }
+    : { id: 'projectedDeep', shown: false, movestring: null, tags: [], ascii: null,
+        reason: 'the resource is not deep (register is immediate) — no projected board' });
   return out;
+}
+
+export function selectBoards(fv) {
+  return boardSelectionDecisions(fv).filter((b) => b.shown);
 }

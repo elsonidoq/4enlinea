@@ -1,7 +1,7 @@
 // connect-four/server/tests/reasonBoardSelect.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderBoardAscii, renderThreatList, selectBoards } from '../scripts/reasonBoardSelect.mjs';
+import { renderBoardAscii, renderThreatList, selectBoards, boardSelectionDecisions } from '../scripts/reasonBoardSelect.mjs';
 
 test('renderBoardAscii labels You/Opp and states the mapping', () => {
   const ascii = renderBoardAscii('01020', 1);
@@ -77,4 +77,32 @@ test('immediate_threat/forced_block tags are NOT overlaid (only fork tags surfac
                           window: ['c4r1','c4r2','c4r3','c4r4'] } };
   const decision = selectBoards(fv).find((b) => b.id === 'decision');
   assert.ok(!decision.tags.some((t) => t.kind === 'immediate_threat' && t.cell === 'c4r1'));
+});
+
+test('boardSelectionDecisions reports all four slots with shown flags', () => {
+  // NV where afterBest changes nothing, afterPlayed changes the picture, resource is deep.
+  const fv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'win_to_lose', route: 'sign',
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5',
+                    finalMovestring: '34133061334' },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c3r3' },
+  };
+  const d = boardSelectionDecisions(fv);
+  assert.deepEqual(d.map((b) => b.id), ['decision', 'afterBest', 'afterPlayed', 'projectedDeep']);
+  assert.equal(d.find((b) => b.id === 'decision').shown, true);
+  assert.equal(d.find((b) => b.id === 'projectedDeep').shown, true); // deep resource → shown
+  for (const b of d) assert.ok(typeof b.reason === 'string' && b.reason.length > 0);
+});
+
+test('selectBoards equals the shown subset of boardSelectionDecisions', () => {
+  const fv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'win_to_lose', route: 'sign',
+    lostResource: { kind: 'winning_line', register: 'immediate', completingCell: 'c6r5' },
+    opponentPunishment: { kind: 'denial', completingCell: 'c3r3' },
+  };
+  const shownIds = boardSelectionDecisions(fv).filter((b) => b.shown).map((b) => b.id);
+  const selIds = selectBoards(fv).map((b) => b.id);
+  assert.deepEqual(selIds, shownIds);
 });
