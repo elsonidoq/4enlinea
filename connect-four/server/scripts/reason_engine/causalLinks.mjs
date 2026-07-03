@@ -78,7 +78,8 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'winning_line',
     covers: CODES_SIGN,
-    guardrail: 'You gave up a win AND handed the opponent their own; name both lines with their horizons.' },
+    guardrail: 'You gave up a win AND handed the opponent their own; name both lines with their horizons.',
+    template: (fv) => `You had a forced win via ${fv.lostResource?.completingCell} (${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)}); the played move gives it up AND lets the opponent force their own win via ${fv.opponentPunishment?.completingCell}.` },
 ];
 
 export function classifyCausalLink(fv, ctx = {}) {

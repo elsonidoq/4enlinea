@@ -61,3 +61,10 @@ test('L4 (eval-4): missed defense; occupies the block, names the opponent window
   assert.match(link.text, /occupies c5r4/);
   assert.match(link.text, /skipped that defense/i);
 });
+
+test('L6 (eval-6): gave up a win AND handed the opponent one', () => {
+  const { link } = classifyById('eval-6');
+  assert.equal(link.id, 'L6');
+  assert.match(link.text, /forced win via c2r5/);
+  assert.match(link.text, /opponent force their own win via c2r6/);
+});
