@@ -42,3 +42,14 @@ test('L2 (eval-21): played move handed the opponent the pattern', () => {
   assert.match(link.text, /double_threat/);
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
 });
+
+test('L3 (eval-23): no-causation wording; names the branch-invariant pattern', () => {
+  const { link } = classifyById('eval-23');
+  assert.equal(link.id, 'L3');
+  assert.match(link.text, /already losing/i);
+  assert.match(link.text, /figure_7/);
+  assert.match(link.text, /c4r3/);
+  assert.match(link.text, /does not create it/i);
+  assert.match(link.text, /loses faster/i);
+  assert.match(link.text, /do not say your move caused/i);
+});
