@@ -57,22 +57,37 @@ export function buildReasonRenderModel(nv) {
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
     link,
+    frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
   };
 }
 
+const READING_KEY = `# Reading key (the few coded fields shown below)
+- register: how far off the result is — "immediate" (now), "forced_sequence" (a deep forced line), "parity" (a deep zugzwang/parity battle).
+- pliesToEnd: plies until the line finishes, when known.
+- controllingGroup / parityAttribution: the group of four squares whose parity decides a deep win.
+- ownDiscs: how many of your discs already sit on the winning group.
+- replyHistogram.afterBest / afterPlayed: how many opponent replies still lose after each move.
+- "deep on a forced line" / "deep, via a parity battle": the completing square is many plies away and EMPTY now — not a current threat.
+- Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).`;
+
 export function assembleGroundedPrompt(model) {
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
+  const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
   return [
     `# Boards (you = player ${model.perspective.you})`,
     '',
     boards,
     '',
-    `# Reason (causal link ${model.link.id}, confidence ${model.link.confidence})`,
-    model.link.guardrail,
+    `# Why this move was a blunder (causal link ${model.link.id}, confidence ${model.link.confidence})`,
+    frames,
+    '',
+    `Guardrail: ${model.link.guardrail}`,
+    '',
+    READING_KEY,
     '',
     '# Vector facts',
     '```json',

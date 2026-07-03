@@ -42,6 +42,19 @@ test('assembled prompt contains the board and omits scores/movestring dump', () 
   assert.doesNotMatch(prompt, /"movestring"/); // raw movestring is transformed into the board
 });
 
+test('assembled prompt renders composed frame text + guardrail + reading key', () => {
+  const m = buildReasonRenderModel(NV);
+  assert.ok(m.frames && m.frames[0].text.length > 0);
+  const prompt = assembleGroundedPrompt(m);
+  assert.match(prompt, /causal link L6/);          // machine marker preserved (computeConditionD test)
+  assert.match(prompt, /forced win via c6r5/);     // composed L6 text present (NV's actual completingCell)
+  assert.match(prompt, /Guardrail:/);
+  assert.match(prompt, /# Reading key/);
+  assert.match(prompt, /register:/);               // key explains a residual coded field
+  assert.doesNotMatch(prompt, /"scores"/);
+  assert.doesNotMatch(prompt, /"movestring"/);
+});
+
 test('an unregistered field makes the model throw', () => {
   assert.throws(() => buildReasonRenderModel({ ...NV, opponentPunishment: { ...NV.opponentPunishment, brandNewField: 1 } }));
 });
