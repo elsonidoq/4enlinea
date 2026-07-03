@@ -321,6 +321,12 @@ if (strategy === 'fixture') {
   const ALL_PROVISIONAL = new Set([...PROVISIONAL, ...RENDER_PROVISIONAL]);
   const ALL_REQUIRED = [...REQUIRED, ...RENDER_REQUIRED];
 
+  // Rare-fill safety bounds (debug-stuck-jobs.md 2026-07-03): the directed post-pass probes computeReason
+  // on EVERY suboptimal column, so a full MAX_GAMES sweep chasing a near-unreachable predicate runs for
+  // tens of minutes with no progress. Cap its budget, and bail when a run of games adds no new board.
+  const RARE_FILL_GAMES = Math.min(MAX_GAMES, 200);
+  const RARE_FILL_NOPROGRESS_GAMES = 40;
+
   // ── Reason-vector predicates: the diversity axes the selector covers. ──
   // Each is a tag the board "exhibits"; we keep harvesting until every tag has appeared TARGET times.
   function reasonPredicates(r) {
@@ -452,8 +458,9 @@ if (strategy === 'fixture') {
     // plus a real legal (suboptimal) column. Bounded by the same MAX_GAMES budget.
     if (!satisfied()) {
       const rng2 = (() => { let a = 0x5EED; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
-      let fillGames = 0;
-      for (let g = 0; g < MAX_GAMES && !satisfied(); g++) {
+      let fillGames = 0, gamesSinceProgress = 0;
+      for (let g = 0; g < RARE_FILL_GAMES && !satisfied() && gamesSinceProgress < RARE_FILL_NOPROGRESS_GAMES; g++) {
+        const boardsBefore = boards;
         for await (const pos of playGame(solver, rng2)) {
           fillGames = g;
           logProgress();
@@ -484,8 +491,9 @@ if (strategy === 'fixture') {
           }
           if (satisfied()) break;
         }
+        gamesSinceProgress = (boards > boardsBefore) ? 0 : gamesSinceProgress + 1;
       }
-      process.stderr.write(`rare-fill: ${fillGames} extra games\n`);
+      process.stderr.write(`rare-fill: ${fillGames} extra games${gamesSinceProgress >= RARE_FILL_NOPROGRESS_GAMES ? ' (stopped early: no reachable target)' : ''}\n`);
     }
   } finally {
     solver.destroy();
