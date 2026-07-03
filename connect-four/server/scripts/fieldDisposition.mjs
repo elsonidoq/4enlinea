@@ -53,7 +53,9 @@ const isRender = (p) => RENDER_LEAVES.has(leaf(p)) || RENDER_PATHS.has(p);
 
 export function dispositionOf(path) {
   if (isTransformed(path)) return 'transformed';
-  if (EXCLUDE_LEAVES.has(leaf(path)) || EXCLUDE_PATHS.has(path)) return 'exclude';
+  if (EXCLUDE_PATHS.has(path)) return 'exclude';
+  if (RENDER_PATHS.has(path)) return 'render';
+  if (EXCLUDE_LEAVES.has(leaf(path))) return 'exclude';
   if (isCode(path)) return 'causal-code';
   if (isRender(path)) return 'render';
   return null; // unknown → tripwire

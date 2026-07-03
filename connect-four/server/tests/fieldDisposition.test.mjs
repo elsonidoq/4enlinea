@@ -37,3 +37,7 @@ test('assertCoverage throws on an unregistered field', () => {
   const fv = { case: 'win_to_lose', opponentPunishment: { brandNewField: 7 } };
   assert.throws(() => assertCoverage(fv, []), UncoveredVectorFieldError);
 });
+
+test('gate.verdict is render, not causal-code (RENDER_PATHS override is live)', () => {
+  assert.equal(dispositionOf('gate.verdict'), 'render');
+});
