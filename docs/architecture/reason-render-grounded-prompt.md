@@ -382,12 +382,38 @@ Consumer wiring (P4, alongside the causal-link consumers):
 - **Grader:** told which boards were rendered and each `reason`; runs an over-omission audit — if an
   answer needed a board `selectBoards` dropped, that omission rule is wrong.
 
-**Phase-4 sampler task (consolidating §3d item 3):** `select_boards.mjs` adds a `link_<id>` predicate
-per causal link, a branch-invariance-split predicate (`enabled_causal` vs `enabled_branch_invariant`,
-i.e. the L2-vs-L3 distinction made a first-class coverage axis), and a **targeted harvest** for the
-flip-case — `win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best — which
-is absent from the frozen 29-record corpus (see D28's I12 note) — plus the other rare links
-(L3-figure_7, L9, `lost_fork_B`). Keep the `discovered ⊆ REASON_UNIVERSE` guard (D22).
+**Phase-4 sampler task — a board set that MAXIMIZES coverage of the feature-vector × prompt-decision
+space, with a runnable coverage test (consolidating §3d item 3).** This is a first-class P4 deliverable,
+not just "add a few predicates." `select_boards.mjs` must produce a board set that **maximizes coverage
+of the joint universe** below, and P4 must ship a **coverage test that runs after Phase 4 completes** and
+asserts (or reports the gaps in) that coverage.
+
+- **The joint coverage universe** = (A) every **feature-vector field** the narrator vector can carry
+  (each leaf path the render pipeline can present — cells, halves' `kind`/`register`/`terminal`/`tag`,
+  `tie.*`, `gate.witness.*`, `parityAttribution.*`, `replyHistogram`, `pliesToEnd`, …) **×** (B) every
+  **prompt decision variant** the render layer can make:
+  - the fired **causal link** — one `link_<id>` predicate for each of L1–L9;
+  - the **branch-invariance branch** — `enabled_causal` (L2) vs `enabled_branch_invariant` (L3), made a
+    first-class axis (the L2-vs-L3 distinction turns on `patternOnAfterBestBoard`, not `direction`; D28);
+  - **board selection** — `board_afterbest_{shown,omitted}`, `board_afterplayed_{shown,omitted}`,
+    `board_projecteddeep_{shown,absent}` (both render paths of every board decision);
+  - **covers-gating** — for each link, at least one record where its `covers` actually hides a present
+    causal-code (so the covered-vs-rendered-vs-excluded partition is exercised, not just theoretical);
+  - **horizon / register** — `immediate` / `forced_sequence` (deep-forced-line) / `parity` (deep-parity);
+  - **case × route × direction** — every reachable combination (the D20 router + the sign taxonomy).
+- **Maximize, don't just sample.** Keep the upfront-named closed `REASON_UNIVERSE` + the
+  `discovered ⊆ REASON_UNIVERSE` guard (D22); `satisfied()` = every REQUIRED predicate met. Rare
+  predicates that self-play won't reach get a **targeted harvest** (directed search / higher budget,
+  never hand-built boards — `playGame` with a property filter; `feedback_no_random_boards`): the
+  flip-case (`win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best, absent
+  from the frozen 29-record corpus per D28's I12 note), plus L3-figure_7, L9, `lost_fork_B`.
+- **The coverage test (the acceptance artifact, runnable after P4):** load the board set
+  `select_boards.mjs` produced, run each board through the render pipeline (`toNarratorVector` →
+  `buildReasonRenderModel`/condition-D prompt), collect the predicates each record hits, and assert
+  **every REQUIRED predicate in the joint universe is covered ≥1** (fail listing the uncovered
+  predicates; PROVISIONAL/rare ones reported, non-blocking). This makes "the board set exercises every
+  feature-vector field and every prompt decision" a checkable claim, so Phase 4 can be validated
+  end-to-end against it.
 
 ## 3f. Grader rubric additions for condition D (P4) — consolidated
 
@@ -416,6 +442,44 @@ consumer of the same catalog as the composer and sampler (§3e), and its rubric 
 
 These are wired in P4 alongside the sampler's `link_<id>` / `board_*` predicates, all reading the one
 catalog (§3e principle).
+
+### The per-case render-decision record the grader consumes (so it can determine WHAT HAPPENED, not re-derive it)
+
+To grade a condition-D case the grader must be able to reconstruct **every decision the render layer
+made** for that case. It must **not** re-derive that routing itself (re-running `classifyCausalLink`,
+recomputing branch-invariance, re-selecting boards inside the grader risks the exact drift the single
+catalog exists to prevent, and the eval-1/16/3 PV-mismatch shows re-derivation is where graders go
+wrong). Instead, **the P4 render/compute pipeline MUST persist a per-record `render_decision` object**
+(emitted from `buildReasonRenderModel` into the answers/vectors jsonl, next to `feature_vector`), and
+the grader consumes it as ground truth. It carries the complete decision set:
+
+- **`case`** (sign taxonomy → the outcome pair) and **`route`** (`realized_denied` via the D20 tag-first
+  router, vs `sign`) and, for realized_denied, **`direction`** (`missed_own`/`enabled_opponent`/`defensive_miss`).
+- **`patternOnAfterBestBoard`** — the branch-invariance value (D28). *This is load-bearing: L2 vs L3
+  turns on it, not on `direction`.* The grader needs it to explain WHY the case is L2 or L3.
+- **The fired link:** `linkId` (L1–L9) + `confidence` + `covers[]` + `guardrail` + the composed `text`
+  (verbatim, as the model saw it).
+- **Board selection:** which of decision / after-best / after-played / projected-deep were rendered,
+  each with its `reason` and shown/omitted flag.
+- **Resource grounding:** `completingCell` `status`/`horizon`/`reachableInPlies`, and the
+  `register → horizon` mapping used.
+- **The field partition:** which vector fields were **rendered**, which were **covered** (hidden by the
+  fired frame), and which were **statically excluded** — so the grader knows exactly what the model saw.
+- **`finalMovestring`** — the engine's own winning line, for cell grounding (G4).
+
+- **G6 — branch-invariance provenance (the L2-vs-L3 audit).** Given `patternOnAfterBestBoard` + the
+  fired `linkId`, the grader audits BOTH (a) that the answer honored the fired link's guardrail (L3 → no
+  causal claim), AND (b) that the routing itself was correct for the after-best board — a miscomputed
+  `patternOnAfterBestBoard` (wrong L2/L3 pick) is a **render bug, attributable to the pipeline**, never
+  a model failure. This closes the eval-23 loop mechanically.
+
+**The grader must read the decision docs, because "what a case is" is DEFINED there, not in this file.**
+Before grading condition D, `grade-fv-sufficiency` must consult `reason-case-taxonomy.md` (the sign
+cases), `reason-DECISIONS.md` — especially **D20** (the tag-first realized/denied router that produces
+`route`/`direction`) and **D28** (the covers audit is a static causal-code check; a covered-but-absent
+field is normal, not `missing_info`) — and `causalLinks.mjs` (the L1–L9 semantics, the single source of
+truth for what each link asserts). Grading a case against a re-imagined notion of its meaning is the
+same class of error as grading against an alternate PV (G4).
 
 - **Phase-4 task: review all code from specs Phase 1–3 and update `grade-fv-sufficiency`** to
   (a) fix "trace the solver PV" → "trace the engine's own `finalMovestring`" (the eval-1/16/3
