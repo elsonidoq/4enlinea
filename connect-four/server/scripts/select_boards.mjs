@@ -388,6 +388,9 @@ if (strategy === 'fixture') {
   const collected = [];
   const seen = new Set();
   let boards = 0, games = 0, checked = 0;
+  // Rare-fill phase state, surfaced by logProgress so the post-pass shows live progress instead of the
+  // (frozen) main-loop counters. fillProbed = suboptimal candidates sent to computeReason so far.
+  let fillPhase = false, fillGame = 0, fillNoProgress = 0, fillProbed = 0;
 
   // Progress log every 5s: boards checked, boards generated, and the predicates still under target
   // (count < TARGET). A predicate stuck at 1 keeps satisfied() false and the harvest running to
@@ -408,8 +411,11 @@ if (strategy === 'fixture') {
     lastLogAt = now;
     const { fulfilled, underTarget, neverSeen } = predicateReport();
     const elapsed = ((now - startedAt) / 1000).toFixed(0);
+    const head = fillPhase
+      ? `[${elapsed}s] RARE-FILL game ${fillGame}/${RARE_FILL_GAMES} · no-progress ${fillNoProgress}/${RARE_FILL_NOPROGRESS_GAMES} · probed ${fillProbed} · generated ${boards}`
+      : `[${elapsed}s] checked ${checked} · generated ${boards} · games ${games}`;
     process.stderr.write(
-      `[${elapsed}s] checked ${checked} · generated ${boards} · games ${games} · `
+      `${head} · `
       + `fulfilled ${fulfilled.length}/${ALL_REQUIRED.length} · under-target(${underTarget.length}): ${underTarget.join(' ') || 'none'} · `
       + `never-seen(${neverSeen.length}): ${neverSeen.join(' ') || 'none'}\n`,
     );
@@ -458,12 +464,12 @@ if (strategy === 'fixture') {
     // than the diversity sweep. Never fabricates a board; each candidate is a real self-play position
     // plus a real legal (suboptimal) column. Bounded by the same MAX_GAMES budget.
     if (!satisfied()) {
+      fillPhase = true;
       const rng2 = (() => { let a = 0x5EED; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
-      let fillGames = 0, gamesSinceProgress = 0;
-      for (let g = 0; g < RARE_FILL_GAMES && !satisfied() && gamesSinceProgress < RARE_FILL_NOPROGRESS_GAMES; g++) {
+      for (let g = 0; g < RARE_FILL_GAMES && !satisfied() && fillNoProgress < RARE_FILL_NOPROGRESS_GAMES; g++) {
+        fillGame = g;
         const boardsBefore = boards;
         for await (const pos of playGame(solver, rng2)) {
-          fillGames = g;
           logProgress();
           const { ms, scores } = pos;
           const legal = legalCols(scores);
@@ -474,6 +480,7 @@ if (strategy === 'fixture') {
             if (col === bestCol || scores[col] >= bestScore) continue;   // suboptimal only
             const key = `${ms}|${col}`;
             if (seen.has(key)) continue;
+            fillProbed++;
             let r;
             try { r = await computeReason(ms, col, { solver }); } catch { continue; }
             if (r.notABlunder || !r.case || r.case === 'win_to_slower_win') continue;
@@ -492,9 +499,10 @@ if (strategy === 'fixture') {
           }
           if (satisfied()) break;
         }
-        gamesSinceProgress = (boards > boardsBefore) ? 0 : gamesSinceProgress + 1;
+        fillNoProgress = (boards > boardsBefore) ? 0 : fillNoProgress + 1;
       }
-      process.stderr.write(`rare-fill: ${fillGames} extra games${gamesSinceProgress >= RARE_FILL_NOPROGRESS_GAMES ? ' (stopped early: no reachable target)' : ''}\n`);
+      fillPhase = false;
+      process.stderr.write(`rare-fill: ${fillGame + 1} games probed${fillNoProgress >= RARE_FILL_NOPROGRESS_GAMES ? ' (stopped early: no reachable target)' : ''}\n`);
     }
   } finally {
     solver.destroy();
