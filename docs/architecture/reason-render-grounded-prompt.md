@@ -1,11 +1,11 @@
 # Grounded-Render Prompt — presenting the reason vector to the LLM
 
-**Status:** P1 (foundation) + P2 (grounding) IMPLEMENTED on `stagging` (modules in
-`connect-four/server/scripts/`: `reason_engine/causalLinks.mjs`, `fieldDisposition.mjs`,
+**Status:** P1 (foundation) + P2 (grounding) + P3 (causal frames) IMPLEMENTED on `stagging` (modules
+in `connect-four/server/scripts/`: `reason_engine/causalLinks.mjs`, `fieldDisposition.mjs`,
 `renderReasonModel.mjs`, `reasonCellGrounding.mjs`, `reasonBoardTags.mjs`, `reasonBoardSelect.mjs`;
-wired as ablation condition D in `compute.mjs`). P3 (causal frames — one composer + one test per
-L1–L9, incl. the L2-vs-L3 branch-invariance computation and confidence-gated `covers` removal) and
-P4 (grader + sampler integration) remain proposals below.
+wired as ablation condition D in `compute.mjs`). P3 shipped one composer + one test per L1–L9, the
+L2-vs-L3 branch-invariance computation (`patternOnAfterBestBoard`), and the static causal-code covers
+audit — see `reason-DECISIONS.md` D28. P4 (grader + sampler integration) remains a proposal below.
 **Owner layer:** the *render* step (downstream of engine soundness — see `reason-INVARIANTS.md`,
 and the memory rule "engine soundness first, render later"). This doc does **not** change what
 `computeReason` *stores*; it changes how the stored evidence is *grounded and presented* to the
@@ -238,6 +238,12 @@ the *cells*. Specifically:
 > present there too, the link is L3 (no causation) regardless of what `direction` says. This is why
 > the fix is a *render-layer* computation, not trusting the terse code.
 
+> **L3's shipped `covers` is a subset of the design list above.** `lostResource.exhaustive`,
+> `gate.witness.node`, and `gate.witness.devVal` were dropped from L3's `covers` — they are already
+> statically `exclude`d (§6) on every record, so a causal-code `covers` entry naming them would be
+> redundant, not load-bearing. This is exactly what the static causal-code audit (§6) checks: every
+> `covers` entry must resolve to a `causal-code` disposition, and these three never did.
+
 ### Family 2 — `route: sign` (deep `forced_sequence`/`parity` → confidence varies)
 
 | # | Link (trigger) | Composes (gist) | Confidence | Removes (covers) | Corpus n |
@@ -252,13 +258,19 @@ L9 is the graceful-degradation bucket: when the causal link can't be proven, we 
 remove — we keep `parityAttribution`, `register`, and the cells, and let the LLM reason. This is the
 concrete form of "cases we can't write an algorithm to exclude parts a-priori."
 
+> **L7's shipped `covers` also dropped `tie.playedPlies`/`tie.swindlePlies`.** These are `render`
+> counts, not causal codes — they stay grounded and are restated qualitatively in the composed
+> sentence ("a slip within N plies") rather than hidden. Same static-audit reasoning as L3 above:
+> a `covers` entry only belongs on a field with a `causal-code` disposition.
+
 ### Coverage check
 
 Every corpus record maps to exactly one link (L1–L9): realized_denied → L1–L4 (16 records);
 sign → L5–L9 (13 records). The `covers` lists above, unioned per record with §6's static excludes and
 the transformed/rendered fields, must account for **every** present field — enforced by the coverage
-assertion (§6), which throws if any link's `covers` names a field that isn't present, or if any
-present field is owned by nothing.
+assertion (§6), which throws if any *present* field is owned by nothing, and (statically, across the
+whole catalog rather than per record) if any `covers` entry names a field that isn't a `causal-code`
+disposition. See §6 and `reason-DECISIONS.md` D28 for why the audit is static, not per-record.
 
 ## 3c. Render-object schema
 
@@ -368,6 +380,13 @@ Consumer wiring (P4, alongside the causal-link consumers):
 - **Grader:** told which boards were rendered and each `reason`; runs an over-omission audit — if an
   answer needed a board `selectBoards` dropped, that omission rule is wrong.
 
+**Phase-4 sampler task (consolidating §3d item 3):** `select_boards.mjs` adds a `link_<id>` predicate
+per causal link, a branch-invariance-split predicate (`enabled_causal` vs `enabled_branch_invariant`,
+i.e. the L2-vs-L3 distinction made a first-class coverage axis), and a **targeted harvest** for the
+flip-case — `win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best — which
+is absent from the frozen 29-record corpus (see D28's I12 note) — plus the other rare links
+(L3-figure_7, L9, `lost_fork_B`). Keep the `discovered ⊆ REASON_UNIVERSE` guard (D22).
+
 ## 3f. Grader rubric additions for condition D (P4) — consolidated
 
 The grader is the `grade-fv-sufficiency` skill (`.claude/skills/grade-fv-sufficiency/SKILL.md`). Today
@@ -395,6 +414,16 @@ consumer of the same catalog as the composer and sampler (§3e), and its rubric 
 
 These are wired in P4 alongside the sampler's `link_<id>` / `board_*` predicates, all reading the one
 catalog (§3e principle).
+
+- **Phase-4 task: review all code from specs Phase 1–3 and update `grade-fv-sufficiency`** to
+  (a) fix "trace the solver PV" → "trace the engine's own `finalMovestring`" (the eval-1/16/3
+  mis-grade bug, §2/G4); (b) grade condition D against the grounded artifact (boards + composed
+  sentences + guardrails + reading key), reading `causalLinks.mjs` as the source of truth for the
+  per-link rubric (G2); (c) treat a covered code's absence as intended (not `missing_info`) and a
+  needed-but-covered field as over-removal — i.e. the grader must know that the covers audit changed
+  meaning (§6, D28) from "must this field be present" to "does every `covers` entry resolve to a
+  causal code," so a covered-but-absent field is normal, not a defect; (d) apply the L3 no-causation
+  guardrail check and the deep-horizon mechanical checks (register→horizon consistency).
 
 ## 4. Why this specifically helps `gpt-5.4-mini`
 
@@ -479,10 +508,16 @@ implicit drop):
      no action) from **present-but-unhandled** (a non-empty value with no registry entry — the error
      case). Coverage is checked over paths that are actually present after pruning, plus the known
      schema, so pruning never masks a missing registration.
-   - **Covers audit:** a `causal-covers` field counts as owned **only if a live frame actually names
-     it** in `covers[]`. If such a field is present but *no* firing frame covers it, it must fall back
-     to `render` (not silently vanish); and a frame whose `covers[]` names a field that isn't present
-     is itself a bug (throws). This is what makes confidence-gated removal auditable rather than lossy.
+   - **Covers audit — a static causal-code check, not a per-record presence check.** A `causal-covers`
+     field counts as owned **only if a live frame actually names it** in `covers[]`. If such a field is
+     present but *no* firing frame covers it, it must fall back to `render` (not silently vanish). The
+     audit on the `covers[]` side is **static**: every entry across the whole catalog must resolve to a
+     field with `causal-code` disposition — a `render`/`exclude`/typo entry throws. It is **not** a
+     per-record "this record must have this field present" throw — that was tried and found infeasible,
+     because `covers` lists are family-wide supersets shared by every link in a family
+     (`CODES_SIGN`/`CODES_REALIZED`), so every link legitimately names codes absent from many individual
+     records (verified across all 29 corpus records; see `reason-DECISIONS.md` D28). This is what makes
+     confidence-gated removal auditable rather than lossy, without over-constraining to one record's shape.
 
 3. **Registry-completeness test over the frozen corpus.** A test runs the renderer across the frozen
    `boards_coverage_*.jsonl` set and asserts **zero** `UncoveredVectorField` errors across all
@@ -539,9 +574,14 @@ field matching none of these halts the run.**
 ## 8. Open questions
 
 1. **`reachableInPlies` source** — read off the stored `line` length to the cell, or recomputed?
-2. **Glossary residue** — which codes still need a short reading key once frames/guardrails are inlined.
-3. **L2-vs-L3 branch-invariance check** — the exact predicate (pattern present on the after-best
-   board) and where it's computed in the render model.
+2. **RESOLVED (P3).** **Glossary residue** — which codes still need a short reading key once
+   frames/guardrails are inlined. Answer: the 607-line glossary shrinks to a short reading key for the
+   residual uncovered/low-confidence codes; see §3-⑥/§3d and the P3 design doc
+   (`docs/superpowers/specs/2026-07-03-grounded-render-prompt-phase3-design.md`).
+3. **RESOLVED (P3).** **L2-vs-L3 branch-invariance check** — the exact predicate (pattern present on
+   the after-best board) and where it's computed in the render model. Answer: computed at render time
+   via `patternOnAfterBestBoard`, reusing the P2 `tagBoard` on the after-best board — never read off
+   `direction`. See §3b Family 1 (L2/L3 rows), `causalLinks.mjs`, and `reason-DECISIONS.md` D28.
 4. **Two latent-error audit** — re-verify the *passing* parity/`finalMovestring` cases (eval-2, 8,
    9, 11, 13, 15) the same way, since the grader's PV-mismatch bug could have produced false passes
    too (lower risk, but unaudited).

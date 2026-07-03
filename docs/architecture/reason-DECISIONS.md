@@ -332,3 +332,33 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** D24-F3 retracted `leverCells`/`groupKind`/`forcedFirstRequired` as I2 fabrications and named the detector-backed replacement as the deferred D7 milestone. `parityAttribution` reaches the LLM unscrubbed, so a fabricated rule name is a live fabrication surface; a **detector-confirmed** name is sound (I2/I8), collapses onto one mechanism (I9), and is validated per I12 (a counterexample per `{winner}×{parity}×{confirm/abstain}×{lock-in locus}` cell, through the production detector — including the mandatory ghost/undercut ABSTAIN board). `namedRule.zcount` survives `toNarratorVector` (no `*Score` key; D21).
 - **Status:** IMPLEMENTED on `stagging` (2026-07-02). `reasonEngine.mjs` (`findLockInNode`, `detectorConfirmsCell`, `nameParityRule`, 6 wiring calls, R2 in `renderHalf`, detector imports); `reasonNarratorVector.test.mjs` (survival guardrail); `reasonEngine.enrichment.test.mjs` + `reason_fixture.jsonl` `d7-*` rows (I12 cells + abstain counterexample). Annotates D7/D24-F3. `npm run test:fast` green.
 - **Source:** owner directive (2026-07-02); lands D7; annotates D24-F3; I2/I8/I9/I12; D21.
+
+---
+
+### D28 — P3 causal frames: composers derive horizon from `register`; the covers audit is a static causal-code check (not per-record presence); L2-vs-L3 branch-invariance is computed at render time
+
+- **Decision:** Phase 3 adds a `template(fv, ctx)` composer per causal link (L1–L9) producing the coach
+  sentence; `classifyCausalLink` returns the composed `text`. Composed frames hide (cover) only the
+  semantic CODES they restate; cells and counts stay grounded. Three sub-decisions:
+  1. **Horizon from `register`, not `pliesToEnd`.** `pliesToEnd` is absent on all 29 corpus records, so
+     deep-vs-near framing derives from `register` (`forced_sequence` → "deep on a forced line", `parity`
+     → "deep, via a parity battle"); the plies count is appended only when present. This is the eval-3
+     fix (the deep fork is framed as deep, never "immediate").
+  2. **The covers over-removal audit is a STATIC causal-code check.** Every `covers` entry across the
+     catalog must resolve to a `causal-code` disposition; a `render`/`exclude`/typo entry throws. The
+     spec's earlier "a covers entry naming an absent field throws" is infeasible — `covers` are
+     family-wide supersets (`CODES_SIGN`/`CODES_REALIZED`) and every link legitimately names absent
+     codes (verified across the corpus). L3's covers dropped `lostResource.exhaustive`/`gate.witness.node`/
+     `gate.witness.devVal` (statically excluded); L7's dropped `tie.playedPlies`/`tie.swindlePlies`
+     (`render` counts, kept grounded).
+  3. **L2-vs-L3 branch-invariance is computed at render time** (`patternOnAfterBestBoard`, reusing the P2
+     `tagBoard` on the after-best board), never read off `direction`. This is the eval-23 fix.
+- **I12 note:** no corpus board is a `win_to_lose`/`draw_to_lose` + `enabled_opponent` +
+  pattern-present-on-after-best (the case where the computation flips a would-be-L2 into L3); the
+  computation is validated against real boards through `tagBoard` and the routing at the classifier
+  layer with synthetic ctx. The missing flip-board is a documented PROVISIONAL gap for a Phase-4
+  targeted harvest.
+- **Status:** IMPLEMENTED on `stagging` (Phase 3). Render-layer only; `computeReason` untouched.
+  `npm run test:fast` green; corpus completeness gate 29/29 zero-uncovered.
+- **Source:** Phase-3 design `docs/superpowers/specs/2026-07-03-grounded-render-prompt-phase3-design.md`;
+  spec `reason-render-grounded-prompt.md` §3b/§3d/§6; I12.
