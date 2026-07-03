@@ -22,21 +22,28 @@ export function leafPaths(obj, pre = '') {
   return pre ? [pre] : [];
 }
 
-const leaf = (path) => path.replace(/\[\]$/, '').split('.').pop();
+// Nested arrays (e.g. `windows[][]` = array-of-windows, each a cell array) collapse to one leaf name.
+const leaf = (path) => path.replace(/(\[\])+$/, '').split('.').pop();
 
 // A. statically excluded (spec §6 C1); the score/samples family is already gone upstream.
 const EXCLUDE_LEAVES = new Set(['notABlunder', 'discs', 'exhaustive', 'tacticFromDiff', 'nameable', 'parityNamingDeferred']);
-const EXCLUDE_PATHS = new Set(['gate.ran', 'gate.nodesVisited', 'gate.witness.node', 'gate.witness.devVal']);
+const EXCLUDE_PATHS = new Set([
+  'gate.ran', 'gate.nodesVisited', 'gate.witness.node', 'gate.witness.devVal',
+  // opaque solver-PV node id, same diagnostic role as gate.witness.node — not renderable.
+  'lostResource.witness.node',
+]);
 
 // B. transformed → the rendered board carries the info (raw field withheld).
 const TRANSFORMED_LEAVES = new Set(['movestring', 'finalMovestring']);
 const isTransformed = (p) => TRANSFORMED_LEAVES.has(leaf(p)) || /(^|\.)line(\[\]|\.|$)/.test(p);
 
 // C. causal-code → conditionally hidden by a live frame's covers; otherwise renders.
-const CODE_LEAVES = new Set(['route', 'tag', 'direction', 'kind', 'verdict', 'register', 'terminal', 'forkCase']);
+// devCol/devCols/oppPlies: solver-PV bookkeeping used to support a causal-link's branch-invariance
+// reasoning (e.g. L3's branchInvariant), not literal board cells — same disposition wherever nested
+// under a `witness` (gate.witness.* or lostResource.witness.*).
+const CODE_LEAVES = new Set(['route', 'tag', 'direction', 'kind', 'verdict', 'register', 'terminal', 'forkCase', 'devCol', 'devCols', 'oppPlies']);
 const CODE_PATHS = new Set([
   'opponentPunishment.tie.kind', 'opponentPunishment.tie.tied',
-  'gate.witness.devCols', 'gate.witness.oppPlies',
 ]);
 const isCode = (p) => CODE_LEAVES.has(leaf(p)) || CODE_PATHS.has(p);
 
