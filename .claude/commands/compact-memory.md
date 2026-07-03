@@ -136,12 +136,66 @@ check.
   docs over truncating hooks. Never hit the number by gutting a hook until it no longer says WHEN it
   applies — a trigger that lost its trigger is worthless.
 
-## Phase 5 — Report
+## Phase 5 — Audit (critique subagent)
+
+Once the pass is executed, **spawn a fresh critique subagent** to independently verify nothing was lost
+or garbled. Do NOT self-review — a fresh context catches what the executor rationalizes away. Use an
+**Opus** model for this (independent judgment on an unfamiliar diff — the project rule is
+`Opus for critique, Sonnet for apply`; see memory `feedback_agent_and_ui_workflow`).
+
+Give the critique agent, in its prompt:
+- The exact change list (every DROPPED slug + its claimed destination, every MERGE `sources → target`,
+  every doc migration), so it can check each individually rather than re-deriving.
+- **The authoritative pre-compaction source: `git HEAD`** (`git show HEAD:<repo-relative-path>`), NOT
+  the Phase-0 scratchpad backup. The pass is uncommitted, so HEAD still holds every deleted file and the
+  old `MEMORY.md`. (The scratchpad backup is a fallback only, and has been unreliable — see Phase 0.)
+- The memory dir, the arch-doc dir, and `CLAUDE.md` (for the two-destination rule).
+
+Instruct it to verify and report ONLY problems (skip what is fine):
+1. **No unexpected loss** — `diff` HEAD's file list vs current; every removed file must map to a listed
+   drop/merge/migrate. Flag any unexplained deletion.
+2. **Every dropped fact is still findable** — open each dropped memory, extract its concrete gotchas,
+   and confirm each is faithfully present in a surviving memory OR the cited doc (grep + read the
+   section — "claimed migrated" is not "actually there"). Special attention to operational TRAPS dropped
+   as "redundant with a design decision" whose actionable warning isn't actually in the decision text.
+3. **Merges are complete and clear** — every source fact present; a fresh agent could act on the result.
+4. **Migrations are correct** — the migrated fact is accurate and not confusingly worded; verify against
+   the actual code where the memory cited a file/function/flag (a stale memory must not import a stale
+   fact into a durable doc).
+5. **Navigation intact** — MEMORY.md section headers still discoverable for their triggers; no entry
+   hook lost the keyword that made it findable; no dead index links; no `[[wikilink]]` in any surviving
+   memory body pointing at a deleted slug; **no durable arch doc left pointing to a deleted memory
+   slug** ("see memory X" / `[[X]]` in `docs/architecture/*`).
+
+It must **write a severity-ranked, actionable findings file** to the scratchpad (stable IDs F1, F2, …;
+each with SEVERITY — Blocker = a real gotcha now unfindable / broken link / wrong migrated fact; Major =
+preserved but unclear/hard to find; Minor = polish — plus affected file(s), the quoted lost/unclear
+fact, and a concrete recommended fix naming the destination). Return the file path + severity counts.
+
+## Phase 6 — Fix (fixing subagent)
+
+If the audit found nothing actionable, skip this phase and say so. Otherwise **spawn a fixing subagent**
+(a **Sonnet** model — applying a known worklist, no open-ended judgment) whose spec is the findings
+file. Instruct it to:
+- Apply each finding using its recommended fix, honoring the two-destination rule (facts/contracts/traps
+  → `docs/architecture`; only pure trigger-gotchas → memory; do NOT recreate a deleted memory just to
+  re-home a fact that belongs in a doc).
+- Match each doc's existing voice/format; keep additions tight.
+- Leave `docs/superpowers/` untouched (throwaway).
+- **Verify before returning:** no NEW dead pointers or dangling `[[wikilinks]]` introduced; MEMORY.md
+  links still all resolve; the findings' offending references are gone from the docs.
+- Report a per-finding changelog (file + exact text changed, or "skipped — reason") + verification.
+
+Then re-run the Phase-5 checks yourself (line count + link resolution) to confirm the fixes didn't
+regress the index or re-inflate it past the band.
+
+## Phase 7 — Report
 
 List: (1) MIGRATED — slug → arch doc + section that gained the fact; (2) MERGED — which slugs collapsed
 into which; (3) DROPPED — slug + why (stale / git-owned / superseded); (4) KEPT — count; (5) new pointer
 memories added, if any; (6) final `MEMORY.md` line count; (7) STALE facts found vs the code (dropped,
-not migrated) so the owner knows where the code diverged; (8) the backup path from Phase 0.
+not migrated) so the owner knows where the code diverged; (8) the backup path from Phase 0; (9) the
+audit outcome — severity counts + how each finding was resolved (or why deferred).
 
 ## Hard rules
 

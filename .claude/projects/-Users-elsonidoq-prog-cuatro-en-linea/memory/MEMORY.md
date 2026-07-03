@@ -10,7 +10,7 @@
 - [Forced-block detection](reference_cat5_forced_block_detection.md) — use checkWin, not flat scores
 - [Binary stale/crash fix](feedback_binary_rebuild.md) — delete + make to recompile
 - [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/15-detector; +3 parity threats; Map priority
-- [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast
+- [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast; ALSO test:fast itself deadlocks if run concurrently with any solver harvest/dev server
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — formal predicates for figure_7/j_shape/undercut/overcut
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based algorithm; ~20 solver queries
 - [Z-threat detection](reference_z_threat_detection.md) — odd empty cell count; UI visualization spec
@@ -104,9 +104,9 @@
 
 ## Blunder-REASON evidence engine (reason_engine/) — read the 4 docs + D-log FIRST
 
-- [Reason-engine docs are canonical](project_admin_fv_suff_repurposed.md) — before reason_engine/ work read reason-INVARIANTS/DECISIONS(D1–D27)/case-taxonomy/blunder-reason-evidence + reason-AGENT-PREAMBLE; /admin/fv-suff = 2-mode browser (Evidence vectors + Eval-answers LLM/grade); stale-server restart trap (lsof kill 3001)
+- [Reason-engine docs are canonical](project_admin_fv_suff_repurposed.md) — before reason_engine/ work read reason-INVARIANTS/DECISIONS(D1–D29)/case-taxonomy/blunder-reason-evidence + reason-AGENT-PREAMBLE; /admin/fv-suff = 2-mode browser (Evidence vectors + Eval-answers LLM/grade); stale-server restart trap (lsof kill 3001)
 - [immediate_threat phantom cell](project_reason_immediate_threat_phantom.md) — immediate_threat/missed_own detects on PRE-move movestring, NOT correctRoot (already-won → phantom win-in-1 one row up: eval-26 c2r5 vs c2r4); forks keep correctRoot
-- [Grounded-render prompt + tripwire](project_reason_render_layer.md) — compute.mjs condition D; P1+P2 DONE (P3=causal frames next); closed fieldDisposition tripwire; selectBoards selection-safety (overlay display-only, baseline structural); boards NOT in coverage walk; §3e one rule × 3 consumers
+- [Grounded-render prompt + tripwire](project_reason_render_layer.md) — compute.mjs condition D; P1+P2+P3+P4 DONE (D29); render_decision is condition-D-only ground truth for the grader (never re-derive routing); closed fieldDisposition tripwire; covers are family SUPERSETS + STATIC causal-code audit (covered-but-absent is normal, D28); selectBoards selection-safety; boards NOT in coverage walk; §3e one rule × 3 consumers; flip_case_l3 gap CLOSED
 - [FV-suff grader PV-mismatch trap](project_fv_suff_grader_pv_mismatch.md) — verify vector cells against the engine's OWN finalMovestring, not an alternate solver PV; multiple optimal lines; mis-convicted eval-1/16/3 in the P1 grading run
 - [Eval design methodology](feedback_eval_design_methodology.md) — validating LLM artifacts: floor test w/ stronger same-vendor model, counterexamples not averages, ablation, separate from run_eval
 - [Reproduce one FV case from coverage](feedback_reproduce_fv_case_from_coverage.md) — extract the row from the frozen boards_coverage_*.jsonl (id=index unless explicit); glossary read fresh at prompt time; don't hand-build input
@@ -125,6 +125,7 @@
 ## Simulation, scripts, worktrees, epics & general workflow
 
 - [Game simulation harness](reference_game_simulation_harness.md) — all self-play centralized in server/gameSampling.js (playGame/simulateGame/harvestBlunders/playPolicyGame); don't hand-roll
+- [Coverage sampler rare-fill trap](project_coverage_sampler_rarefill_trap.md) — select_boards coverage "stuck": a near-unreachable REQUIRED predicate makes satisfied() never flip → full-budget solver burn; bound any harvest-until-satisfied loop
 - [gameSampling rng determinism trap](project_gamesampling_rng_determinism_trap.md) — changing rng usage shifts candidate-generator output; FR-011 minMoves floor protects T017
 - [Inline Node scripts](reference_inline_node_scripts.md) — absolute imports; export `createSolverProcess`; solver hangs (try/finally+close); async await query; solver-backed CLI in a shell for-loop → EMPTY stdout (run separately)
 - [Scripts need meaningful --help](feedback_scripts_meaningful_help.md) — every relevant CLI script ships a real --help/-h (purpose+options+defaults); check before required-arg validation; inside import.meta entry guard if also imported
