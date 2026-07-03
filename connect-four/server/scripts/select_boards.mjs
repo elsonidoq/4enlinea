@@ -22,6 +22,9 @@ import { playGame, harvestBlunders } from '../gameSampling.js';
 import { loadEnv, legalCols, emptyCellCount, INVALID_MOVE } from './reason_engine/lib/boardUtils.mjs';
 import { swindleGate } from './reason_engine/reasonEngine.mjs';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
+import { toNarratorVector } from './reasonNarratorVector.mjs';
+import { buildRenderDecision } from './renderReasonModel.mjs';
+import { renderDecisionPredicates, RENDER_UNIVERSE, RENDER_PROVISIONAL, RENDER_REQUIRED } from './renderUniverse.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../.env'));
@@ -311,6 +314,13 @@ if (strategy === 'fixture') {
   ]);
   const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
 
+  // Union the render-layer (Task 4) predicates into the joint universe the sampler must span
+  // (spec §3e): the coverage set now has to exercise both the engine's own axes AND the
+  // render_decision's link/board/branch-invariance/horizon/covers axes.
+  const FULL_UNIVERSE = new Set([...REASON_UNIVERSE, ...RENDER_UNIVERSE]);
+  const ALL_PROVISIONAL = new Set([...PROVISIONAL, ...RENDER_PROVISIONAL]);
+  const ALL_REQUIRED = [...REQUIRED, ...RENDER_REQUIRED];
+
   // ── Reason-vector predicates: the diversity axes the selector covers. ──
   // Each is a tag the board "exhibits"; we keep harvesting until every tag has appeared TARGET times.
   function reasonPredicates(r) {
@@ -354,12 +364,20 @@ if (strategy === 'fixture') {
     half(op, 'opp');
 
     if (r.gate) preds.add('gate_ran');   // D23: uniform depth-bounded gate (no exhaustive/bounded split)
+
+    // Render-layer predicates (spec §3e): derive the render_decision from this evidence and union in
+    // its link/board/branch-invariance/horizon/covers predicates. Failure (unroutable) → engine preds only.
+    try {
+      const rd = buildRenderDecision(toNarratorVector(r));
+      for (const rp of renderDecisionPredicates(rd)) preds.add(rp);
+    } catch { /* render pipeline can't route this board — keep engine predicates */ }
+
     return preds;
   }
 
   const solver = createSolverProcess();
   const counts = new Map();              // predicate -> #boards it has appeared in
-  const satisfied = () => REQUIRED.every((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
+  const satisfied = () => ALL_REQUIRED.every((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
   const collected = [];
   const seen = new Set();
   let boards = 0, games = 0, checked = 0;
@@ -371,10 +389,10 @@ if (strategy === 'fixture') {
   let lastLogAt = startedAt;
   const predicateReport = () => {
     const seenPreds = new Set(counts.keys()); // predicates observed (distinct from the outer board-dedup `seen`)
-    const fulfilled = REQUIRED.filter((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
-    const underTarget = REASON_UNIVERSE.filter((p) => seenPreds.has(p) && (counts.get(p) || 0) < TARGET_PER_PREDICATE)
+    const fulfilled = ALL_REQUIRED.filter((p) => (counts.get(p) || 0) >= TARGET_PER_PREDICATE);
+    const underTarget = [...FULL_UNIVERSE].filter((p) => seenPreds.has(p) && (counts.get(p) || 0) < TARGET_PER_PREDICATE)
       .sort((a, b) => (counts.get(a) || 0) - (counts.get(b) || 0)).map((p) => `${p}(${counts.get(p) || 0})`);
-    const neverSeen = REASON_UNIVERSE.filter((p) => !seenPreds.has(p)).map((p) => PROVISIONAL.has(p) ? `${p}*` : p);
+    const neverSeen = [...FULL_UNIVERSE].filter((p) => !seenPreds.has(p)).map((p) => ALL_PROVISIONAL.has(p) ? `${p}*` : p);
     return { fulfilled, underTarget, neverSeen };
   };
   const logProgress = () => {
@@ -385,7 +403,7 @@ if (strategy === 'fixture') {
     const elapsed = ((now - startedAt) / 1000).toFixed(0);
     process.stderr.write(
       `[${elapsed}s] checked ${checked} · generated ${boards} · games ${games} · `
-      + `fulfilled ${fulfilled.length}/${REQUIRED.length} · under-target(${underTarget.length}): ${underTarget.join(' ') || 'none'} · `
+      + `fulfilled ${fulfilled.length}/${ALL_REQUIRED.length} · under-target(${underTarget.length}): ${underTarget.join(' ') || 'none'} · `
       + `never-seen(${neverSeen.length}): ${neverSeen.join(' ') || 'none'}\n`,
     );
   };
@@ -412,7 +430,7 @@ if (strategy === 'fixture') {
       if (advancing.length === 0) continue;
 
       for (const p of preds) {
-        if (!REASON_UNIVERSE.includes(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE (I12 selector guard)`);
+        if (!FULL_UNIVERSE.has(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE/RENDER_UNIVERSE (I12 selector guard)`);
         counts.set(p, (counts.get(p) || 0) + 1);
       }
       collected.push({
@@ -427,6 +445,48 @@ if (strategy === 'fixture') {
       // Every predicate seen so far has reached the target → coverage complete, stop now.
       if (satisfied()) break;
     }
+
+    // ── Directed rare-fill: for still-unfilled predicates (mostly PROVISIONAL render/flip-case ones),
+    // probe every suboptimal legal column per position, not just the played move — a broader existential
+    // than the diversity sweep. Never fabricates a board; each candidate is a real self-play position
+    // plus a real legal (suboptimal) column. Bounded by the same MAX_GAMES budget.
+    if (!satisfied()) {
+      const rng2 = (() => { let a = 0x5EED; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+      let fillGames = 0;
+      for (let g = 0; g < MAX_GAMES && !satisfied(); g++) {
+        for await (const pos of playGame(solver, rng2)) {
+          fillGames = g;
+          logProgress();
+          const { ms, scores } = pos;
+          const legal = legalCols(scores);
+          if (legal.length < 2) continue;
+          let bestCol = legal[0], bestScore = scores[legal[0]];
+          for (const c of legal) if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; }
+          for (const col of legal) {
+            if (col === bestCol || scores[col] >= bestScore) continue;   // suboptimal only
+            const key = `${ms}|${col}`;
+            if (seen.has(key)) continue;
+            let r;
+            try { r = await computeReason(ms, col, { solver }); } catch { continue; }
+            if (r.notABlunder || !r.case || r.case === 'win_to_slower_win') continue;
+            const preds = reasonPredicates(r);
+            const advancing = [...preds].filter((p) => (counts.get(p) || 0) < TARGET_PER_PREDICATE);
+            if (advancing.length === 0) continue;                        // adds no coverage
+            seen.add(key);
+            for (const p of preds) {
+              if (!FULL_UNIVERSE.has(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE/RENDER_UNIVERSE (I12 selector guard)`);
+              counts.set(p, (counts.get(p) || 0) + 1);
+            }
+            collected.push({ id: `eval-${collected.length + 1}`, movestring: ms, playedCol: col,
+              strategy: 'coverage', selection: { predicates: [...preds].sort(), source: 'rare-fill' } });
+            writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n');
+            boards++;
+          }
+          if (satisfied()) break;
+        }
+      }
+      process.stderr.write(`rare-fill: ${fillGames} extra games\n`);
+    }
   } finally {
     solver.destroy();
   }
@@ -434,7 +494,7 @@ if (strategy === 'fixture') {
   const { fulfilled, underTarget, neverSeen } = predicateReport();
   const stopped = satisfied() ? 'all REQUIRED predicates satisfied' : `hit MAX_GAMES=${MAX_GAMES} — a REQUIRED predicate could not be filled (investigate)`;
   process.stderr.write(`\nDone: ${games} games, ${collected.length} boards → ${outPath} (${stopped})\n`);
-  process.stderr.write(`Fulfilled (${fulfilled.length}/${REQUIRED.length})\n`);
+  process.stderr.write(`Fulfilled (${fulfilled.length}/${ALL_REQUIRED.length})\n`);
   process.stderr.write(`Under target ${TARGET_PER_PREDICATE} (${underTarget.length}): ${underTarget.join(' ') || 'none'}\n`);
   process.stderr.write(`Never seen — * = provisional (${neverSeen.length}): ${neverSeen.join(' ') || 'none'}\n`);
 }
