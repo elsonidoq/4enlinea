@@ -30,8 +30,9 @@ test('rendered fields keep render cells but drop transformed/excluded (path-prec
 
 test('render model draws an ASCII decision board', () => {
   const m = buildReasonRenderModel(NV);
-  assert.match(m.boards.decision.ascii, /c1|col|\|/); // some board scaffold
-  assert.deepEqual(m.boards.decision.tags, []);       // untagged in P1
+  const decision = m.boards.find((b) => b.id === 'decision');
+  assert.ok(decision);
+  assert.match(decision.ascii, /c1|col|\|/); // some board scaffold
 });
 
 test('assembled prompt contains the board and omits scores/movestring dump', () => {
@@ -56,4 +57,15 @@ test('renderedFields prunes transformed/excluded subfields inside object arrays'
   assert.equal(w[0].cell, 'c4r3');                 // render subfield kept
   assert.equal(w[0].status, 'empty');              // render subfield kept
   assert.ok(!('finalMovestring' in w[0]));          // transformed subfield dropped
+});
+
+test('assembled prompt renders selected boards each with a Tactics list', () => {
+  const m = buildReasonRenderModel(NV);
+  assert.ok(Array.isArray(m.boards) && m.boards.length >= 1);
+  assert.ok(m.boards.every((b) => b.ascii && Array.isArray(b.tags) && b.reason));
+  const prompt = assembleGroundedPrompt(m);
+  assert.match(prompt, /Y = you \(player 2\)/);   // You/Opp board present
+  assert.match(prompt, /Tactics:/);               // threat list section present
+  assert.doesNotMatch(prompt, /"scores"/);
+  assert.doesNotMatch(prompt, /"movestring"/);
 });

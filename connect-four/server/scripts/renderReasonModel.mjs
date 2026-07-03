@@ -5,27 +5,7 @@
 import { pruneVector } from './reasonNarratorVector.mjs';
 import { classifyCausalLink } from './reason_engine/causalLinks.mjs';
 import { dispositionOf, assertCoverage } from './fieldDisposition.mjs';
-
-// Rebuild a 6x7 board (row 0 bottom) from a 0-indexed movestring; render as ASCII.
-function boardFromMovestring(ms) {
-  const cols = 7, rows = 6;
-  const heights = Array(cols).fill(0);
-  const grid = Array.from({ length: rows }, () => Array(cols).fill('.'));
-  [...(ms || '')].forEach((ch, i) => {
-    const c = Number(ch);
-    if (Number.isNaN(c) || c < 0 || c >= cols || heights[c] >= rows) return;
-    grid[heights[c]][c] = (i % 2 === 0) ? 'A' : 'B'; // A = player 1 move, B = player 2 move
-    heights[c] += 1;
-  });
-  return grid;
-}
-function asciiBoard(ms) {
-  const grid = boardFromMovestring(ms);
-  const header = '     ' + Array.from({ length: 7 }, (_, c) => `c${c + 1}`).join(' ');
-  const body = [];
-  for (let r = 5; r >= 0; r--) body.push(` r${r + 1} | ` + grid[r].join('  '));
-  return [header, ...body].join('\n');
-}
+import { selectBoards, renderThreatList } from './reasonBoardSelect.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -72,19 +52,21 @@ export function buildReasonRenderModel(nv) {
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
     link,
-    boards: { decision: { ascii: asciiBoard(pruned.movestring), tags: [] } },
+    boards: selectBoards(pruned),
     rendered: renderedFields(pruned),
     coverage: { ok: true, unowned: [] },
   };
 }
 
 export function assembleGroundedPrompt(model) {
+  const boards = model.boards.map((b) =>
+    `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
   return [
-    '# Board (you = player ' + model.perspective.you + ')',
+    `# Boards (you = player ${model.perspective.you})`,
     '',
-    model.boards.decision.ascii,
+    boards,
     '',
-    '# Reason (causal link ' + model.link.id + ', confidence ' + model.link.confidence + ')',
+    `# Reason (causal link ${model.link.id}, confidence ${model.link.confidence})`,
     model.link.guardrail,
     '',
     '# Vector facts',
