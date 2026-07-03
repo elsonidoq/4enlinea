@@ -21,6 +21,17 @@ const hasSharedCell = (fv) =>
 const branchInvariant = (fv, ctx) =>
   ctx.patternOnAfterBestBoard === true || fv.case === 'lose_to_faster_lose';
 
+// ── Composer helpers (P3) ──
+const col1 = (c) => (c == null ? '?' : c + 1);
+const denialCell = (h) => h?.cell ?? h?.completingCell ?? null;
+const horizonPhrase = (reg) =>
+  reg === 'forced_sequence' ? 'deep on a forced line'
+  : reg === 'parity' ? 'deep, via a parity battle'
+  : 'near-term';
+const forkOrParity = (h) => (h?.terminal === 'fork' ? 'fork' : h?.register === 'parity' ? 'parity line' : 'forced line');
+const pliesTail = (fv) => (fv?.pliesToEnd != null ? ` (~${fv.pliesToEnd} plies)` : '');
+const cells = (w) => (Array.isArray(w) ? w.join('·') : '');
+
 export const CAUSAL_LINKS = [
   // ── Family 1: realized_denied (checked first; L3 before L2) ──
   { id: 'L1', family: 'realized_denied', confidence: 'high',
@@ -57,7 +68,8 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'denial',
     covers: CODES_SIGN,
-    guardrail: 'You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.' },
+    guardrail: 'You had a forced win; state its horizon honestly (may be deep). The played move let the opponent deny it.',
+    template: (fv) => `You had a forced win — it resolves ${horizonPhrase(fv.lostResource?.register)}${pliesTail(fv)} via a ${forkOrParity(fv.lostResource)} completing at ${fv.lostResource?.completingCell}. The played move let the opponent deny it at ${denialCell(fv.opponentPunishment)}.` },
   { id: 'L6', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.opponentPunishment?.kind === 'winning_line',
@@ -68,7 +80,8 @@ export const CAUSAL_LINKS = [
 export function classifyCausalLink(fv, ctx = {}) {
   for (const link of CAUSAL_LINKS) {
     if (link.when(fv, ctx)) {
-      return { id: link.id, confidence: link.confidence, covers: link.covers, guardrail: link.guardrail };
+      return { id: link.id, confidence: link.confidence, covers: link.covers,
+               guardrail: link.guardrail, text: link.template ? link.template(fv, ctx) : '' };
     }
   }
   throw new Error(`classifyCausalLink: no rule matched (case=${fv.case} route=${fv.route} direction=${fv.direction})`);
