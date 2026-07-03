@@ -29,3 +29,15 @@ test('eval-23: routes to L3 and forbids the causation claim', () => {
   assert.match(p, /does not create it/i);
   assert.match(p, /do not say your move caused/i);
 });
+
+test('no composed frame text contains a literal "undefined" across the corpus', () => {
+  const bad = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    const p = buildPromptForCondition('GLOSSARY', toNarratorVector(row.evidence), 'D');
+    // check only the prose half (before the JSON dump) — a template that referenced a missing
+    // field would render the literal "undefined" there.
+    if (/\bundefined\b/.test(p.split('# Vector facts')[0])) bad.push(row.id);
+  }
+  assert.deepEqual(bad, [], `records with "undefined" in composed prose: ${bad.join(', ')}`);
+});
