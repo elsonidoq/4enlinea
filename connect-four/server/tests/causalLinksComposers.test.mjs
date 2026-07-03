@@ -53,3 +53,11 @@ test('L3 (eval-23): no-causation wording; names the branch-invariant pattern', (
   assert.match(link.text, /loses faster/i);
   assert.match(link.text, /do not say your move caused/i);
 });
+
+test('L4 (eval-4): missed defense; occupies the block, names the opponent window', () => {
+  const { link } = classifyById('eval-4');
+  assert.equal(link.id, 'L4');
+  assert.match(link.text, /better move \(col 5\)/);       // bestCol 4 -> display 5
+  assert.match(link.text, /occupies c5r4/);
+  assert.match(link.text, /skipped that defense/i);
+});
