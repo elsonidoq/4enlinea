@@ -53,7 +53,7 @@ const RENDER_LEAVES = new Set([
   'completingCell', 'window', 'windows', 'cell', 'cells', 'entryCell', 'anchorCells',
   'forkCells', 'forkWindows', 'tacticCells', 'tacticTag', 'supportingDiscs',
   'pliesToEnd', 'controllingGroup', 'ownDiscs', 'zcount', 'parity', 'basis', 'lockInPly', 'rule',
-  'afterBest', 'afterPlayed', 'sharedCells', 'playedPlies', 'swindlePlies',
+  'afterBest', 'afterPlayed', 'sharedCells', 'playedPlies', 'swindlePlies', 'status',
 ]);
 const RENDER_PATHS = new Set(['gate.verdict']);
 const isRender = (p) => RENDER_LEAVES.has(leaf(p)) || RENDER_PATHS.has(p);

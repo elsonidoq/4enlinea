@@ -30,20 +30,31 @@ function asciiBoard(ms) {
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
 // drop 'transformed'/'exclude', keep 'render' and (in P1, unapplied) 'causal-code'. Prune empties.
-// NOTE (P2): arrays are classified by their container path and kept wholesale; when window/forkWindows
-// become arrays of {cell,status,...} in P2, a transformed/excluded SUBfield would leak — reconcile with
-// leafPaths' element-leaf enumeration then.
+// For object arrays (e.g., window = [{cell, status, ...}]), recurse into each element and prune
+// transformed/excluded subfields element-wise, mirroring leafPaths' element-leaf enumeration.
 function renderedFields(prunedFv) {
+  function pruneArray(arr, prefix) {
+    return arr.map((el) => (el !== null && typeof el === 'object' && !Array.isArray(el))
+      ? prune(el, prefix + '[]')
+      : el);
+  }
   function prune(node, prefix) {
     if (node === null || typeof node !== 'object' || Array.isArray(node)) return node;
     const copy = {};
     for (const [key, val] of Object.entries(node)) {
       const path = prefix ? `${prefix}.${key}` : key;
-      if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
-        const child = prune(val, path);            // container: recurse, keep if non-empty
+      if (Array.isArray(val)) {
+        if (val.length && val[0] !== null && typeof val[0] === 'object') {
+          copy[key] = pruneArray(val, path);           // object array: prune each element
+        } else {
+          const d = dispositionOf(path);               // scalar/empty array: classify by path
+          if (d !== 'transformed' && d !== 'exclude') copy[key] = val;
+        }
+      } else if (val !== null && typeof val === 'object') {
+        const child = prune(val, path);                 // object container: recurse, keep if non-empty
         if (Object.keys(child).length) copy[key] = child;
       } else {
-        const d = dispositionOf(path);             // array or primitive: classify by path
+        const d = dispositionOf(path);
         if (d !== 'transformed' && d !== 'exclude') copy[key] = val;
       }
     }

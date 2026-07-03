@@ -44,3 +44,16 @@ test('assembled prompt contains the board and omits scores/movestring dump', () 
 test('an unregistered field makes the model throw', () => {
   assert.throws(() => buildReasonRenderModel({ ...NV, opponentPunishment: { ...NV.opponentPunishment, brandNewField: 1 } }));
 });
+
+test('renderedFields prunes transformed/excluded subfields inside object arrays', () => {
+  // window as an array of grounded-cell objects; `finalMovestring` (transformed) nested per element
+  // must be dropped, while `cell`/`status` (render) survive.
+  const m = buildReasonRenderModel({ ...NV,
+    lostResource: { ...NV.lostResource,
+      window: [{ cell: 'c4r3', status: 'empty', finalMovestring: 'zzz' },
+               { cell: 'c5r4', status: 'occupied-you', finalMovestring: 'zzz' }] } });
+  const w = m.rendered.lostResource.window;
+  assert.equal(w[0].cell, 'c4r3');                 // render subfield kept
+  assert.equal(w[0].status, 'empty');              // render subfield kept
+  assert.ok(!('finalMovestring' in w[0]));          // transformed subfield dropped
+});
