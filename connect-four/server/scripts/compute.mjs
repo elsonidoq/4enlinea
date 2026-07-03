@@ -30,7 +30,7 @@ import { dirname, join, isAbsolute, resolve, basename } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
-import { buildReasonRenderModel, assembleGroundedPrompt } from './renderReasonModel.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -229,6 +229,14 @@ ${JSON.stringify(projected, null, 2)}
 \`\`\``;
 }
 
+// The per-record render-decision ground-truth record for the grader (spec §3f). Only condition D
+// carries it (A/B/C use the glossary+JSON path). Never throws: a build failure (novel vector) yields
+// null, matching how the per-row call_error path already tolerates render failures.
+export function renderDecisionForCondition(nv, condition) {
+  if (condition !== 'D') return null;
+  try { return buildRenderDecision(nv); } catch { return null; }
+}
+
 // ── OpenAI call (own fn; reads EXPLAIN_MODEL; larger budget than callLLM) ────────
 let useJsonFormat = true; // disabled globally if the model rejects response_format
 async function callExplainLLM(prompt) {
@@ -314,12 +322,14 @@ async function runLlm(evidenceRows) {
           raw: null,
           parse_error: null,
           call_error: err.message,
+          render_decision: null,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         failed++;
         process.stdout.write(`  ${row.id} ${condition} run0: ERROR ${err.message}\n`);
         continue;
       }
+      const render_decision = renderDecisionForCondition(nv, condition);
       for (let run_index = 0; run_index < N; run_index++) {
         // Per-call error isolation: a single failure drops ONE line, not the run.
         let raw = null, answer = null, parse_error = null, call_error = null;
@@ -340,6 +350,7 @@ async function runLlm(evidenceRows) {
           raw,
           parse_error,
           call_error,
+          render_decision,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
