@@ -71,7 +71,8 @@ export const CAUSAL_LINKS = [
   { id: 'L8', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.case === 'draw_to_lose',
     covers: CODES_SIGN,
-    guardrail: 'The position was a draw; the played move abandoned a defensive resource.' },
+    guardrail: 'The position was a draw; the played move abandoned a defensive resource.',
+    template: (fv) => `The position was a draw; the better move (col ${col1(fv.bestCol)}) holds it by occupying ${fv.lostResource?.completingCell}. The played move abandons it — the opponent now has a forced win (${horizonPhrase(fv.opponentPunishment?.register)}${pliesTail(fv)}, completing at ${fv.opponentPunishment?.completingCell}).` },
   { id: 'L9', family: 'sign', confidence: 'low',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'winning_line'
                   && fv.lostResource?.register === 'parity' && !hasSharedCell(fv),

@@ -77,3 +77,11 @@ test('L7 (eval-8): practical swindle, neither move wins', () => {
   assert.match(link.text, /neither move wins/i);
   assert.doesNotMatch(link.text, /you (would )?win\b/i);   // must not claim a win
 });
+
+test('L8 (eval-2): a draw abandoned; opponent now has a forced win', () => {
+  const { link } = classifyById('eval-2');
+  assert.equal(link.id, 'L8');
+  assert.match(link.text, /position was a draw/i);
+  assert.match(link.text, /occupying c4r4/);
+  assert.match(link.text, /forced win/i);
+});
