@@ -30,14 +30,26 @@ test('eval-23: routes to L3 and forbids the causation claim', () => {
   assert.match(p, /do not say your move caused/i);
 });
 
-test('no composed frame text contains a literal "undefined" across the corpus', () => {
+test('no composed frame text contains a literal "undefined"/"null" across the corpus', () => {
   const bad = [];
   for (const row of rows) {
     if (!row.evidence || row.error) continue;
     const p = buildPromptForCondition('GLOSSARY', toNarratorVector(row.evidence), 'D');
     // check only the prose half (before the JSON dump) — a template that referenced a missing
-    // field would render the literal "undefined" there.
-    if (/\bundefined\b/.test(p.split('# Vector facts')[0])) bad.push(row.id);
+    // field would render the literal "undefined" (or "null", e.g. from a denialCell helper that
+    // can return null) there.
+    if (/\b(undefined|null)\b/.test(p.split('# Vector facts')[0])) bad.push(row.id);
   }
-  assert.deepEqual(bad, [], `records with "undefined" in composed prose: ${bad.join(', ')}`);
+  assert.deepEqual(bad, [], `records with "undefined"/"null" in composed prose: ${bad.join(', ')}`);
+});
+
+test('no score-family key or raw movestring key leaks into any condition-D prompt', () => {
+  const bad = [];
+  for (const row of rows) {
+    if (!row.evidence || row.error) continue;
+    const p = buildPromptForCondition('GLOSSARY', toNarratorVector(row.evidence), 'D');
+    // JSON keys of the scrubbed score family, or the board-transformed movestring keys.
+    if (/"[^"]*[Ss]core[^"]*"\s*:/.test(p) || /"(final)?[Mm]ovestring"\s*:/i.test(p)) bad.push(row.id);
+  }
+  assert.deepEqual(bad, [], `records leaking score/movestring keys: ${bad.join(', ')}`);
 });

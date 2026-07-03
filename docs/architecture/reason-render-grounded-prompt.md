@@ -207,8 +207,10 @@ implements **one composer + one test per link**.
 
 ### The removal principle (applies to every link)
 
-A composed frame **removes only the terse semantic *codes* it restates in plain language** — never
-the *cells*. Specifically:
+A composed frame **removes the terse semantic *codes* it subsumes in plain language** — never
+the *cells*. "Subsumes" is qualitative, not a verbatim-restatement test: once a fired frame narrates
+the family's routing/label story, the underlying codes (`route`, `tag`, `*.verdict`, etc.) are
+narratively redundant even when the sentence doesn't quote each one word-for-word. Specifically:
 
 - **Covered (removed when the frame fires):** the routing/label/semantic codes — `route`, `tag`,
   `direction`, `lostResource.kind`, `opponentPunishment.kind`, `*.verdict`, `*.terminal`,

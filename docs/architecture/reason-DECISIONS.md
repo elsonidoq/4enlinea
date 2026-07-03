@@ -338,8 +338,11 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 ### D28 — P3 causal frames: composers derive horizon from `register`; the covers audit is a static causal-code check (not per-record presence); L2-vs-L3 branch-invariance is computed at render time
 
 - **Decision:** Phase 3 adds a `template(fv, ctx)` composer per causal link (L1–L9) producing the coach
-  sentence; `classifyCausalLink` returns the composed `text`. Composed frames hide (cover) only the
-  semantic CODES they restate; cells and counts stay grounded. Three sub-decisions:
+  sentence; `classifyCausalLink` returns the composed `text`. Composed frames hide (cover) the semantic
+  CODES they subsume: a fired frame renders the family's routing/label codes (e.g. `register`/
+  `terminal`/`verdict`) redundant for narration, even where the sentence does not restate each one
+  word-for-word — the covers list names the whole family a frame makes narratively moot, not a literal
+  transcript of the sentence. Cells and counts stay grounded. Three sub-decisions:
   1. **Horizon from `register`, not `pliesToEnd`.** `pliesToEnd` is absent on all 29 corpus records, so
      deep-vs-near framing derives from `register` (`forced_sequence` → "deep on a forced line", `parity`
      → "deep, via a parity battle"); the plies count is appended only when present. This is the eval-3
