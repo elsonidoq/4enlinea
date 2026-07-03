@@ -342,6 +342,13 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 
 **Rate limit**: 120 req/min (default `/api/` bucket). No additional rate limiting.
 
+## Scores Endpoint
+
+`POST /api/scores` (**not** GET) — `server/index.js`.
+- **Request body**: `{ moves: string }` (the movestring so far, 0-indexed).
+- **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/aiDifficulty.js`).
+- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Callers: the deliberate-mistake mechanic (`secondBestColumn`) and the Hint overlay. Score semantics: see `reference_c4solver_scores` memory.
+
 ## Move Evaluation Endpoint
 
 `POST /api/evaluate-move` — scores a move and returns i18n keys for the Coach dialog and Tier-1 strip. Supports two paths: **user-move** (default, for puzzle attempts and sparring user clicks) and **AI-move** (for sparring AI move commentary).
@@ -643,7 +650,7 @@ Back the `admin/deep-reveal-eval` page (`src/pages/AdminDeepRevealEvalPage.jsx`)
 - `GET /api/admin/eval-sets` → `{ files }` — eval-set JSON filenames (`eval_set_*.json`).
 - `GET /api/admin/eval-set/:name` → the eval-set entries array.
 - `GET /api/admin/eval-results` → `{ files }` — result JSONL filenames (`eval_set_*_results_*.jsonl`, incl. `.enriched.jsonl`).
-- `GET /api/admin/eval-results/:filename` → `{ rows }` — each row `{ id, board_state, final_response, prompt, attempt1_failures, attempt2_failures }`.
+- `GET /api/admin/eval-results/:filename` → `{ rows }` — each row `{ id, board_state, final_response, prompt, prompt_data, feature_vector, filtered_prompt_data, attempt1_failures, attempt2_failures }`. Row fields are an explicit allow-list built in `index.js` (`GET /api/admin/eval-results/:filename` handler) — a new field added to the eval JSONL is silently dropped from the API response unless it is also added to that field map.
 
 ### `POST /api/admin/eval-feedback`
 

@@ -17,4 +17,4 @@ When writing or refining product docs in `docs/mvp/`, keep them **implementation
 - **Verify current-state claims against the actual code**, not against older docs — the user flagged a doc that read as a plan but whose Phase 1 was already shipped. Treat older docs as potentially stale.
 - Resolve genuine product decisions via AskUserQuestion (multiple choice), then fold answers in and empty the "Open product decisions" section.
 
-Related: [[project-coach-deep-reveal-product-docs]], [[feedback-empirical-first]], [[feedback_answer_before_editing]].
+Related: [[project-coach-deep-reveal-product-docs]], [[feedback-empirical-first]], [[feedback_prework_discipline]].

@@ -163,6 +163,12 @@ the model could not even *read* the vector → a glossary problem). The **substa
     weak model).
   - **C — features-without-movestring**: tests whether the distilled fields alone carry the
     reasoning.
+  - **D — grounded render** (added 2026-07-02): the staged, board-anchored prompt that replaces the
+    glossary+JSON dump — pre-rendered boards + threat lists + causal-frame text, built by
+    `renderReasonModel.mjs` instead of `buildPromptForCondition`'s A/B/C path. Motivated by this
+    experiment's A3/A4 failures (deep cells presented as near-term; terse codes narrated as false
+    causality). Design + phasing: `reason-render-grounded-prompt.md`. Phase 1 (foundation) shipped;
+    the rich causal frames that actually fix the failures land in Phase 3.
 
 ## 7. Success criteria & output
 

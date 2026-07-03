@@ -19,7 +19,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   eliminate. Soundness is the acceptance bar; latency is not. This was conceded-then-retracted by the
   owner more than once when agents raised solver-call cost — now locked.
 - **Status:** LOCKED. Do not relitigate; do not raise solver cost as a design objection.
-- **Source:** owner directive (2026-06-29); memory `feedback_fv_grounding_correctness_over_speed`.
+- **Source:** owner directive (2026-06-29); memory `feedback_fv_grounding_correctness_over_speed` (memory removed; migrated here).
 
 ### D2 — Clean-slate restart; two prior epics quarantined
 - **Decision:** `reason-case-taxonomy.md` + `blunder-reason-evidence.md` are the sole source of truth. The
@@ -254,6 +254,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** owner directive (2026-07-01) — exposing `|score|` invites "you win in 7" grounding, exactly the fabrication surface I1/I2 forbid; the reason must rest on board structure, not a number. `case` already carries the outcome losslessly, so no information is lost. Audit before the fix confirmed 3 leaking surfaces (`bestScore`, `playedScore`, both halves' `line[].score`); after, a recursive-key sweep over the coverage fixture shows zero score-family keys surviving into the narrator vector.
 - **Status:** IMPLEMENTED on `stagging` (not merged). `reasonNarratorVector.mjs` (`isNarratorHidden` + recursive `toNarratorVector`); regression in `reasonNarratorVector.test.mjs` (asserts no `score`-family key survives at any depth, incl. nested `line[].score`); glossary de-scored + de-solvered.
 - **Source:** owner directive (2026-07-01); I1/I2; `feature-vector-glossary.md`.
+- **Forward-looking trap:** the deep-scrub regex only catches `/^scores?$|Score$/` — a NEW non-score evidence-only field (e.g. a future diagnostic you want in raw evidence + `/admin/fv-suff` but NOT the LLM) passes straight through to the narrator unless its exact key is added to `isNarratorHidden`'s allow-list AND the `reasonNarratorVector.test.mjs` hidden-set assertion is updated to cover it.
 
 ---
 
@@ -300,7 +301,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Decision:** The `lose_to_faster_lose` `swindleGate` width pruning — `gateBranch=3` (distinct-score opponent winning replies branched per node), `gatePlayerTiedCap=2` (tied-best player replies followed), and the unconditional **dedup-by-score** on opponent replies — **stays as-is.** The gate's `NotABlunder`/OMIT verdict is therefore incomplete on **both** depth (`gateMaxPlies=15`) **and** width. This is now an **accepted known-gap**, not a bug to fix.
 - **Context (2026-07-02 code review, finding F4):** the width caps were shown to drop real admissible swindles that exist *within* the depth bound, producing a false OMIT (`computeReason → notABlunder:true`) on a genuine blunder. Verified through the production path with `connect-four/server/scripts/reason_engine/TOOLS/gate_cap_ablation.mjs` (production `swindleGate` vs an uncapped/dedup-free reference at equal depth): user-visible counterexample `20312225101223110055056066165433` played 3, best 6 (sign route); rate ≈ 1 per ~470 ltfl boards. The I0-motivated fix would have been to drop the score-caps and keep only `gateMaxPlies` + `gateNodeBudget`.
 - **Rationale (owner directive, 2026-07-02):** the uncapped/dedup-free search is **too expensive** — the reference gate visits many times more nodes per board (≈1k+ vs ≈200 on a diff, and unbounded in the worst case) and the harvest/offline-compute cost is not worth eliminating a ~0.2%-of-ltfl-boards false OMIT. The owner **explicitly keeps the caps as the practical-chance policy**: `NotABlunder` means "no swindle found within the depth bound AND the width caps," which is accepted as the operative definition of "no *practical* chance." This SUPERSEDES the review's I0-based recommendation to remove the caps — the owner weighs cost over that particular completeness gain here. (I0's "never weaken to save calls" still governs everywhere else; this is a scoped, owner-accepted exception for the ltfl gate's `NotABlunder` side, whose soundness-for-Blunder — I7 — is unaffected: every emitted witness is still real.)
-- **Status:** ACCEPTED known-gap (owner decision 2026-07-02). No code change. The caps in `REASON_CONFIG` stand. `blunder-reason-evidence.md` §10 and memory `project_reason_gate_width_cap_bug` reflect this as accepted, not open.
+- **Status:** ACCEPTED known-gap (owner decision 2026-07-02). No code change. The caps in `REASON_CONFIG` stand. `blunder-reason-evidence.md` §10 reflects this as accepted, not open.
 - **Source:** owner directive 2026-07-02 (kept the decision on cost grounds); code-review F4; `gate_cap_ablation.mjs`; I0/I7/D4/D23.
 
 ---

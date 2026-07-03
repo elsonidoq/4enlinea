@@ -218,7 +218,7 @@ here that is the half-(b) `opponentPunishment` winning line). The occupation cel
 parity language around half (a) is not canonicalized.
 
 See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`,
-`reference_allis_rule_examples`.
+`reference_verified_tactical_movestrings`.
 
 ## 8. Tooling map
 
@@ -284,8 +284,7 @@ optimal replies. See `reason-DECISIONS.md` D22 and `reason-tag-fastpath-pseudoco
   ≈1 per ~470 ltfl boards. The I0-motivated fix (drop the score-caps, keep only `gateMaxPlies` +
   `gateNodeBudget`) was **considered and declined on cost grounds** — the uncapped search is too
   expensive for the ~0.2% miss. The width caps are the accepted practical-chance policy. Soundness for
-  declaring **Blunder** (I7) is unaffected — every emitted witness is still real. See DECISIONS **D25**
-  and memory `project_reason_gate_width_cap_bug`.
+  declaring **Blunder** (I7) is unaffected — every emitted witness is still real. See DECISIONS **D25**.
 - **Multi-window board-fill** (no dominant parity group) remains genuinely unnameable; emit a
   low-specificity parity reason rather than invent geometry.
 - **Display cap is real information loss.** The show/don't-show ply threshold is a product knob, not a
@@ -330,8 +329,14 @@ position. **Evidence-only** — like `optimalWinSamples`, `winSamples` is stripp
 
 **Case classifier caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0` (both
 strictly positive). A naive `bestScore*playedScore>0` is wrong — it also matches both-negative and would
-swallow `lose_to_faster_lose`. See memory `project_reason_engine_case_classifier_trap`.
+swallow `lose_to_faster_lose`. (The same caution is inlined on the first branch of `reason-case-taxonomy.md`.)
 
 **Viewer:** `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) browses `reason_evidence_*.jsonl` via
 `GET /api/admin/reason{,/files}` — see `api-conventions.md`. No solver in the web server; the file is
 fully precomputed by `compute.mjs`.
+
+**Production coach still runs the OLD feature vector, NOT this engine.** `toFeatureVector` /
+`buildExplainContext` in `server/explainContext.js` remain the live coach behind `/api/explain*`
+(index.js). The 2026-06-30 reorg replaced only the *eval's* use of `toFeatureVector` with the reason
+engine — production still calls the old path. Do **not** delete `explainContext.js`/`toFeatureVector`
+as "old FV"; migrating production onto the reason engine is a separate, deferred effort.

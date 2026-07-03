@@ -19,7 +19,7 @@ produces the raw `classifyPattern` tags. The tier *grouping* lives in
   claimeven, drawing_move, suboptimal_move) is position-global, not added to allowedSet.
 
 A board "with no Tier-1/2 pattern" is exactly the `allowedSet === null` case in
-`buildAllowedSetFromPatternMaps` — see [[project_patterns_blunders_done]] (null vs []
+`buildAllowedSetFromPatternMaps` — see [[project_annotation_gate_and_zones]] (null vs []
 semantics for validateAnnotation).
 
 **Threat detectors emit cells but are deliberately NOT in `TIER1_TAGS`.** The 3
@@ -43,4 +43,4 @@ different axis from pattern tiers. And `reference_tier_source` is yet a third me
 no-Tier-1/2 pattern, run `classifyPattern(ms, perspective, solver)` for both
 perspectives and test its tag keys against the TIER1∪TIER2 set (the retired
 `generate_eval_set.mjs` did this to collect its ≥10 no-Tier-1/2 boards; DELETED 2026-07-01 D22). See
-[[project_explain_system]] and [[reference_deep_reveal_eval_harness]].
+[[project_explain_system]] and the retired old-explain eval (reason eval is now `compute.mjs`, D22).

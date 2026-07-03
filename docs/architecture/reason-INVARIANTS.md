@@ -30,8 +30,7 @@
 - If correctness and performance genuinely trade off, **choose correctness and defer optimization to
   a later, separate iteration** — and only after soundness is proven against the fixture.
 - This has been conceded-then-retracted before. It is now locked: agents must not relitigate it, and
-  must not raise solver-call cost as a design objection. See memory
-  `feedback_fv_grounding_correctness_over_speed`.
+  must not raise solver-call cost as a design objection. See `reason-DECISIONS.md` D1.
 
 ## I1. The vector is the artifact — the LLM narrates, it does not reason
 
@@ -82,7 +81,6 @@ The five cases (`win_to_slower_win`, `win_to_draw`, `win_to_lose`, `draw_to_lose
 `lose_to_faster_lose`) are defined by the sign comparison in `reason-case-taxonomy.md`. **Implementation
 caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0` (both strictly positive).
 A naive `bestScore*playedScore>0` is **wrong** — it also matches both-negative and would swallow `lose_to_faster_lose`.
-See memory `project_reason_engine_case_classifier_trap`.
 
 ## I6. Search is bounded, but the bound is DEPTH — never a budget heuristic
 
@@ -154,4 +152,4 @@ generalizes:
    test.
 
 This is the enforced, local form of `feedback_eval_design_methodology` (counterexamples, not
-averages) and `feedback_empirical_first`.
+averages) and `feedback_prework_discipline`.

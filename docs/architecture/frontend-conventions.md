@@ -21,13 +21,29 @@ The codebase has **two separate CSS custom property systems** defined in differe
 
 **Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
 
-See also: [[reference_token_pairing]], [[project_dark_global_theme]]
+See also: [[project_dark_global_theme]]
 
 ## CSS Layout Gotchas
 
 **flex-basis percentages require definite heights.** Chrome does not resolve `flex-basis: N%` on children of flex containers whose height is determined algorithmically (e.g. `flex: 1` with no explicit height ancestor). Use a `ResizeObserver` to measure the container in pixels and pass explicit pixel values (`flex: 0 0 ${px}px`) instead of percentages.
 
 **maxWidth percentage requires an explicit width sibling.** `maxWidth: "N%"` on a flex child resolves against `width`, not `maxWidth` — so if `width` is unset, `maxWidth` has no effect. Always pair `maxWidth` with `width: '100%'`.
+
+**`SplitReveal`/`useDragSplit` containers need `minHeight: 0`.** Any flex item that contains `SplitReveal` (or anything backed by `useDragSplit`) **must** set `minHeight: 0` explicitly. Flex items default to `minHeight: auto`, which prevents shrinking below content size; without `minHeight: 0` the board pane expands to its natural (unscrolled) height, `useDragSplit`'s `ResizeObserver` measures that inflated height, computes an oversized `topPx`, and the board fills the entire viewport — the draggable divider is there but scrolled out of sight. Add `minHeight: 0` to the wrapping `flex` div in any bounded-height column (`height: 100vh; overflow: hidden`). Second gotcha: siblings adjacent to the `SplitReveal` wrapper eat into the `100vh` budget and can be clipped by `overflow: hidden` — move any such sibling (glossary, footer) **inside** the scrollable bottom pane, never as a sibling of the flex item holding `SplitReveal`.
+
+**`#root` is capped at `max-width: 480px`** (`src/index.css`) — the mobile-app shell shared by the game UI. `width: 100%` on a page does nothing; the cap dominates. **Do NOT raise/remove it globally** (the game UI depends on the 480px shell). For a full-width desktop/admin page, override `#root` **locally and reversibly** in a mount/unmount effect, restoring the previous `maxWidth`/`width` on cleanup:
+```js
+useEffect(() => {
+  const root = document.getElementById('root');
+  const prev = { maxWidth: root.style.maxWidth, width: root.style.width };
+  root.style.maxWidth = 'none'; root.style.width = '100%';
+  return () => { root.style.maxWidth = prev.maxWidth; root.style.width = prev.width; };
+}, []);
+```
+
+**Tappable non-`<button>` elements need tap-highlight suppression.** Any clickable `<div>`/`<span>`/`<a>` must set `WebkitTapHighlightColor: 'transparent'` and `userSelect: 'none'` — otherwise mobile WebKit/Chrome shows a blue/gray tap flash and can trigger a text-selection gesture. Native `<button>` elements are exempt.
+
+**Verify CSS class/token names before use.** Before referencing a CSS class or custom property (`var(--token)`) from a mockup or spec, grep `src/styles/tokens.css`, `src/index.css`, `src/App.css` — many mockup names (`.modal-card`, `.btn-primary`) and spec-worded tokens (`--bg-challenges`, actual is `--bg-chal`) do not exist in the app. If absent, use the correct token or inline styles; never assume verbatim.
 
 ## State Management
 
@@ -105,7 +121,7 @@ Cell values: `'empty'`, `'red'` (player 1), `'yellow'` (player 2).
 > renders **`'red'` → GREEN disc** (`--disc-green`) and **`'yellow'` → GRAY disc**
 > (`--disc-gray`). Whenever you describe what the user *sees*, say green/gray;
 > `'red'`/`'yellow'` only ever appear as data tokens. A holistic rename is tracked
-> as Epic 12 — do not do it piecemeal. (See `reference_board_color_inversion.md`.)
+> as Epic 12 — do not do it piecemeal.
 Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wire, and in all frontend logic. The +1 conversion to 1-indexed happens only inside `c4solver-wrapper.js` on the server.
 
 ## Board Component API
@@ -454,6 +470,8 @@ The mistakes feature has three independent screen routes:
 | `go(screenKey, params)` | `pushState` — adds a history entry | Normal forward navigation |
 | `goReplace(screenKey, params)` | `replaceState` — no new history entry | Replacing current entry (e.g., after saving a game) |
 | `goBack()` | `window.history.back()` | Back button / back gesture |
+
+**Params are spread as direct props, not a `params` object.** The Navigator renders screens as `<ScreenComponent go={go} goBack={goBack} {...params} />`. Screens must destructure route params directly (`function MyScreen({ go, goBack, blunders, index })`) — destructuring `{ go, goBack, params }` leaves `params` undefined and silently loses every route param (caused a "No data" blank screen in `MistakeDetailScreen`).
 
 ### Event handling
 

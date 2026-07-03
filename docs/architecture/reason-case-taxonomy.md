@@ -26,9 +26,10 @@ elif len(movestring) < Y  # eg 30
 else
     board_state = 'closing'
 
-if bestScore > 0 and playedScore > 0
-    case = 'win_to_slower_win'
-    raise notABlunder()
+if bestScore > 0 and playedScore > 0    # ⚠️ implement as this two-sided sign test, NOT `bestScore*playedScore > 0`
+    case = 'win_to_slower_win'           #    the product is ALSO positive when BOTH scores are negative,
+    raise notABlunder()                  #    which would silently swallow every lose_to_faster_lose blunder
+                                         #    (verified: ltfl boards 3333325662555225 / 33343022442233255525004414106106605511)
 
     # this reason seems very dificult to compute, and we can perfectly focus on the other sub-optimal cases
     # reason = you would win faster if you have played correctly (show example). How that move made you win slower?

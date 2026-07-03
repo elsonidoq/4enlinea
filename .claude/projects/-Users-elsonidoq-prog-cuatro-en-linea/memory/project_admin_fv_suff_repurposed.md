@@ -8,7 +8,7 @@ metadata:
 ---
 
 **UPDATE 2026-06-30 (consolidation SHIPPED) — TWO modes (tab toggle in `AdminFvSuffPage.jsx`), and
-the eval pipeline collapsed to 2 scripts. See [[project_reason_engine_reorg]].**
+the eval pipeline collapsed to 2 scripts. See `blunder-reason-evidence.md` §11.**
 
 - **Evidence tab** — `reason_evidence_*.jsonl` via `GET /api/admin/reason`. Rows are now NESTED:
   `{ id, evidence:{…computeReason output incl raw scores…}, groundTruth:{case,gate,exhaustive,bucket,

@@ -1,6 +1,11 @@
 # Grounded-Render Prompt — presenting the reason vector to the LLM
 
-**Status:** proposal (design doc). Not yet implemented.
+**Status:** P1 (foundation) + P2 (grounding) IMPLEMENTED on `stagging` (modules in
+`connect-four/server/scripts/`: `reason_engine/causalLinks.mjs`, `fieldDisposition.mjs`,
+`renderReasonModel.mjs`, `reasonCellGrounding.mjs`, `reasonBoardTags.mjs`, `reasonBoardSelect.mjs`;
+wired as ablation condition D in `compute.mjs`). P3 (causal frames — one composer + one test per
+L1–L9, incl. the L2-vs-L3 branch-invariance computation and confidence-gated `covers` removal) and
+P4 (grader + sampler integration) remain proposals below.
 **Owner layer:** the *render* step (downstream of engine soundness — see `reason-INVARIANTS.md`,
 and the memory rule "engine soundness first, render later"). This doc does **not** change what
 `computeReason` *stores*; it changes how the stored evidence is *grounded and presented* to the

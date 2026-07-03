@@ -17,4 +17,4 @@ When the user asks to validate an LLM-facing artifact (a prompt, a context/featu
 
 **Why:** the user is iterating toward "a procedure that builds a prompt the weak production model can handle," and these constraints keep each iteration interpretable and comparable.
 
-**How to apply:** when asked to "test/validate" an LLM artifact, propose this shape before writing code. Worked example + full spec: `docs/architecture/feature-vector-sufficiency-experiment.md`. Related: [[reference_deep_reveal_eval_harness]], [[feedback_deep_reveal_product_mindset]].
+**How to apply:** when asked to "test/validate" an LLM artifact, propose this shape before writing code. Worked example + full spec: `docs/architecture/feature-vector-sufficiency-experiment.md`. Related: the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[feedback_deep_reveal_product_mindset]].

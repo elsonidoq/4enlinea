@@ -28,4 +28,4 @@ brainstorm topic, anchor case eval-6.
 
 **Scope:** the production coach prompt does NOT see any of these counts (it gets only the winner's cells via zone tags + the pattern name); `feature_vector` is for the eval/inspection/thinking-model consumer. So trimming here cannot break the live coach.
 
-**`prune` flag:** `toFeatureVector` defaults `prune:true` (recursive empty/all-zero elimination), but `buildExplainContext` overrides to `prune:false` so the wire carries the full fixed shape and the admin tool can toggle collapse both ways. See [[reference_deep_reveal_eval_harness]].
+**`prune` flag:** `toFeatureVector` defaults `prune:true` (recursive empty/all-zero elimination), but `buildExplainContext` overrides to `prune:false` so the wire carries the full fixed shape and the admin tool can toggle collapse both ways. See the retired old-explain eval (reason eval is now `compute.mjs`, D22).
