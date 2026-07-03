@@ -58,7 +58,16 @@ export const CAUSAL_LINKS = [
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',
     covers: CODES_SIGN,
-    guardrail: 'Neither move wins; the better move only kept a practical swindle. Do not claim a win.' },
+    guardrail: 'Neither move wins; the better move only kept a practical swindle. Do not claim a win.',
+    template: (fv) => {
+      const w = fv.gate?.witness;
+      const op = w?.oppPlies;
+      const dc = (w?.devCols ?? []).map((c) => col1(c));
+      const swindle = op != null
+        ? ` — a slip within ~${op} plies${dc.length ? ` (around column ${dc.join(', ')})` : ''} could let you back`
+        : '';
+      return `You were already losing. The better move kept a practical swindle${swindle}; the played move loses faster. Neither move wins.`;
+    } },
   { id: 'L8', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.case === 'draw_to_lose',
     covers: CODES_SIGN,

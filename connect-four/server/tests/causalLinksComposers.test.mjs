@@ -68,3 +68,12 @@ test('L6 (eval-6): gave up a win AND handed the opponent one', () => {
   assert.match(link.text, /forced win via c2r5/);
   assert.match(link.text, /opponent force their own win via c2r6/);
 });
+
+test('L7 (eval-8): practical swindle, neither move wins', () => {
+  const { link } = classifyById('eval-8');
+  assert.equal(link.id, 'L7');
+  assert.match(link.text, /already losing/i);
+  assert.match(link.text, /practical swindle/i);
+  assert.match(link.text, /neither move wins/i);
+  assert.doesNotMatch(link.text, /you (would )?win\b/i);   // must not claim a win
+});
