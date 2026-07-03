@@ -23,11 +23,29 @@ export function renderThreatList(tags) {
 const DEEP = new Set(['forced_sequence', 'parity']);
 const tagKey = (tags) => tags.map((t) => `${t.cell}|${t.kind}|${t.owner}`).sort().join(',');
 
+// Extract a vector-named fork pattern (figure_7 / double_threat) from whichever half realized it,
+// so tagBoard's named-pattern overlay (opts) becomes reachable. Owner: lostResource => your tactic
+// ('you'); opponentPunishment => the opponent's ('opp'). Non-fork tags stay to structural detection.
+const FORK_TAGS = new Set(['figure_7', 'double_threat']);
+function namedPatternOpts(fv) {
+  for (const [half, owner] of [[fv.lostResource, 'you'], [fv.opponentPunishment, 'opp']]) {
+    if (half && FORK_TAGS.has(half.tag) && half.completingCell) {
+      return { patternTag: half.tag, patternCompletingCell: half.completingCell,
+               patternWindow: half.window ?? undefined, patternOwner: owner };
+    }
+  }
+  return null;
+}
+
 export function selectBoards(fv) {
   const you = fv.player;
   const applyCol = (ms, col) => (col == null ? ms : ms + String(col));
-  const decisionTags = tagBoard(fv.movestring ?? '', you);
-  const decisionKey = tagKey(decisionTags);
+  const patternOpts = namedPatternOpts(fv);
+  const decisionStructuralTags = tagBoard(fv.movestring ?? '', you);   // selection baseline (structural)
+  const decisionKey = tagKey(decisionStructuralTags);
+  const decisionTags = patternOpts                                     // displayed tags (+ named pattern)
+    ? tagBoard(fv.movestring ?? '', you, patternOpts)
+    : decisionStructuralTags;
   const out = [{ id: 'decision', movestring: fv.movestring ?? '', tags: decisionTags,
                  ascii: renderBoardAscii(fv.movestring ?? '', you),
                  reason: 'the position under judgment' }];

@@ -35,3 +35,46 @@ test('selectBoards adds a projected-deep board when a half is deep', () => {
   const boards = selectBoards(fv);
   assert.ok(boards.find((b) => b.id === 'projectedDeep'), 'deep resource => projected board present');
 });
+
+test('surfaces the vector-named fork pattern on the decision board, owner from the half', () => {
+  const fv = { movestring: '', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    lostResource: { kind: 'denial', completingCell: 'c3r1', window: ['c2r1','c3r1','c4r1','c5r1'] },
+    opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c4r3',
+                          window: ['c6r1','c5r2','c4r3','c3r4'] } };
+  const decision = selectBoards(fv).find((b) => b.id === 'decision');
+  const fig = decision.tags.find((t) => t.kind === 'figure_7');
+  assert.ok(fig, 'figure_7 tag present on decision board');
+  assert.equal(fig.cell, 'c4r3');
+  assert.equal(fig.owner, 'opp');                 // pattern on opponentPunishment => opponent's
+  assert.deepEqual(fig.window, ['c6r1','c5r2','c4r3','c3r4']);
+});
+
+test('a named pattern on lostResource is owned by you (missed_own)', () => {
+  const fv = { movestring: '', bestCol: 1, playedCol: 4, player: 1, opponent: 2,
+    lostResource: { kind: 'realized_pattern', tag: 'double_threat', completingCell: 'c2r1',
+                    window: ['c2r1','c3r1','c4r1','c5r1'] },
+    opponentPunishment: { kind: 'denial', completingCell: 'c3r1' } };
+  const dbl = selectBoards(fv).find((b) => b.id === 'decision').tags.find((t) => t.kind === 'double_threat');
+  assert.ok(dbl);
+  assert.equal(dbl.owner, 'you');
+});
+
+test('the named pattern does not corrupt Option-A board selection (baseline is structural)', () => {
+  // Empty decision board: no structural tactics; best/played add none either. Even though the
+  // decision board DISPLAYS a figure_7 overlay, afterBest must still be omitted because its
+  // structural tag-set matches the decision's structural tag-set.
+  const fv = { movestring: '', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c4r3',
+                          window: ['c6r1','c5r2','c4r3','c3r4'] } };
+  const boards = selectBoards(fv);
+  assert.ok(boards.find((b) => b.id === 'decision').tags.some((t) => t.kind === 'figure_7'));
+  assert.ok(!boards.find((b) => b.id === 'afterBest'), 'afterBest still omitted (structural unchanged)');
+});
+
+test('immediate_threat/forced_block tags are NOT overlaid (only fork tags surface)', () => {
+  const fv = { movestring: '', bestCol: 3, playedCol: 4, player: 2, opponent: 1,
+    opponentPunishment: { kind: 'realized_pattern', tag: 'immediate_threat', completingCell: 'c4r1',
+                          window: ['c4r1','c4r2','c4r3','c4r4'] } };
+  const decision = selectBoards(fv).find((b) => b.id === 'decision');
+  assert.ok(!decision.tags.some((t) => t.kind === 'immediate_threat' && t.cell === 'c4r1'));
+});
