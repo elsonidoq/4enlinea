@@ -10,7 +10,7 @@
 //
 // Usage (from connect-four/):
 //   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
-//        [--llm [--condition A|all] [--n 3] [--model X]]
+//        [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
 //
 // --out names the EVIDENCE file (default: reason_evidence_<stem>.jsonl in server/scripts/).
 //   A bare name → server/scripts/<name>; a path with '/' → resolved from cwd.
@@ -23,6 +23,8 @@
 //   A — full:                        pruned full narrator vector (production-faithful headline).
 //   B — board-only:                  glossary + {movestring, perspective, playedCol, bestCol}.
 //   C — features-without-movestring: pruned full vector with movestring removed.
+//   D — grounded render prompt:      staged boards + causal frames + reading key (P4); condition-D
+//                                    answer lines also carry a `render_decision` record for the grader.
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -60,7 +62,7 @@ Two passes over the boards in --input:
 
 Usage (from connect-four/):
   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
-       [--llm [--condition A|B|C|all] [--n 3] [--model X]]
+       [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
 
 Options:
   --input <path>        REQUIRED. Boards JSONL to evaluate (absolute, or resolved from cwd).
@@ -68,10 +70,12 @@ Options:
                         resolved from cwd. Default: reason_evidence_<input-stem>.jsonl.
                         Should match reason_evidence_*.jsonl to appear in the /admin/fv-suff dropdown.
   --llm                 Run the LLM answerer pass after the evidence pass.
-  --condition A|B|C|all Ablation condition(s), comma-separated or "all". Default: A.
+  --condition A|B|C|D|all  Ablation condition(s), comma-separated or "all" (all = A,B,C,D). Default: A.
                           A — full pruned narrator vector (production-faithful headline).
                           B — board-only: glossary + {movestring, perspective, playedCol, bestCol}.
                           C — features without movestring.
+                          D — grounded render prompt (P4): staged boards + causal frames + reading key;
+                              condition-D answer lines also carry a render_decision record for the grader.
   --n <N>               Runs per record per condition (--llm only). Default: 3.
   --model <id>          OpenAI model (--llm only). Default: $EXPLAIN_MODEL.
   -h, --help            Show this help and exit.
