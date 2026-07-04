@@ -50,6 +50,38 @@ function renderedFields(prunedFv, firedCovers = []) {
   return prune(prunedFv, '');
 }
 
+// Fix A: the canonical, board-anchored, schema-shaped Decision block that leads the grounded prompt.
+// bestCol/playedCol are 0-indexed internally; here they become 1-indexed DISPLAY columns + landing
+// cells (from movestring + col), and best/played outcomes come from `case` — never from a solver score
+// (D21). This is the single authoritative statement of which move is best vs played and where each
+// lands; the raw 0-indexed leaves are withheld from the JSON residue (fieldDisposition: transformed).
+const CASE_OUTCOMES = {
+  win_to_draw: ['win', 'draw'],
+  win_to_lose: ['win', 'loss'],
+  draw_to_lose: ['draw', 'loss'],
+  lose_to_faster_lose: ['loss', 'loss'],   // both lose; played loses faster
+};
+
+// 1-indexed landing cell for dropping into `col` on `movestring`; null on a null/full column.
+function landingCell(movestring, col) {
+  if (col == null) return null;
+  const { colHeights } = parseBoardState(movestring ?? '');
+  const row = colHeights[col];
+  if (row == null || row >= 6) return null;
+  return `c${col + 1}r${row + 1}`;
+}
+
+function buildDecision(pruned) {
+  const [bestOutcome, playedOutcome] = CASE_OUTCOMES[pruned.case] ?? [null, null];
+  return {
+    you: pruned.player,
+    bestCol: pruned.bestCol, playedCol: pruned.playedCol,
+    bestCell: landingCell(pruned.movestring, pruned.bestCol),
+    playedCell: landingCell(pruned.movestring, pruned.playedCol),
+    bestOutcome, playedOutcome,
+  };
+}
+
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
@@ -58,6 +90,7 @@ export function buildReasonRenderModel(nv) {
   assertCoverage(pruned, link.covers);
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
+    decision: buildDecision(pruned),
     link,
     frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
@@ -138,13 +171,29 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - ownDiscs: how many of your discs already sit on the winning group.
 - replyHistogram.afterBest / afterPlayed: how many opponent replies still lose after each move.
 - "deep on a forced line" / "deep, via a parity battle": the completing square is many plies away and EMPTY now — not a current threat.
-- Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).`;
+- Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
+- Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.`;
+
+// The canonical Decision block (Fix A) — leads the prompt so the model never re-derives columns/roles.
+function renderDecision(d) {
+  const outcome = (o) => (o ? `. Outcome: ${o}` : '');
+  const move = (label, col, cell, o) =>
+    `- ${label} move: column ${col == null ? '?' : col + 1}${cell ? ` (lands at ${cell})` : ''}${outcome(o)}.`;
+  return [
+    '# Decision (canonical — use these columns/cells verbatim; do not re-derive)',
+    `- you = player ${d.you}`,
+    move('Better', d.bestCol, d.bestCell, d.bestOutcome),
+    move('Played', d.playedCol, d.playedCell, d.playedOutcome),
+  ].join('\n');
+}
 
 export function assembleGroundedPrompt(model) {
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
   return [
+    renderDecision(model.decision),
+    '',
     `# Boards (you = player ${model.perspective.you})`,
     '',
     boards,

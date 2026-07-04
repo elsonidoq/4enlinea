@@ -17,9 +17,6 @@ const CODES_SIGN = [
 
 const hasSharedCell = (fv) =>
   !!(fv.opponentPunishment?.tie?.sharedCells?.length) || !!(fv.opponentPunishment?.cell);
-// P3 supplies ctx.patternOnAfterBestBoard (branch-invariance). Until then, "already losing" is the proxy.
-const branchInvariant = (fv, ctx) =>
-  ctx.patternOnAfterBestBoard === true || fv.case === 'lose_to_faster_lose';
 
 // ── Composer helpers (P3) ──
 const col1 = (c) => (c == null ? '?' : c + 1);
@@ -44,13 +41,21 @@ export const CAUSAL_LINKS = [
     covers: CODES_REALIZED,
     guardrail: 'The better move blocks the opponent pattern; frame it as a missed defense.',
     template: (fv) => `The better move (col ${col1(fv.bestCol)}) occupies ${fv.lostResource?.completingCell}, blocking the opponent's threat on ${cells(fv.opponentPunishment?.window)}; the played move skipped that defense.` },
+  // L3/L2 discriminator: the SIGN `case` gates the OUTCOME sentence (D30, supersedes D28 sub-decision 3).
+  // L3 asserts "you were already losing, both moves lose" — an OUTCOME claim, valid ONLY when both moves
+  // lose (lose_to_faster_lose). patternOnAfterBestBoard is a GEOMETRIC fact (opponent threat cell present
+  // on the after-best board) and is NOT equivalent to "the best line loses"; using it to pick L3 flipped
+  // genuine win_to_lose/draw_to_lose cases into a false loss narration (eval-53 best WINS, eval-51 best
+  // DRAWS). It stays informational in render_decision but never drives this routing.
   { id: 'L3', family: 'realized_denied', confidence: 'high',
-    when: (fv, ctx) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent' && branchInvariant(fv, ctx),
+    when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
+                  && fv.case === 'lose_to_faster_lose',
     covers: CODES_REALIZED,
     guardrail: 'MUST NOT say the played move caused or enabled the pattern; both moves lose, played loses faster.',
     template: (fv) => `You were already losing. The opponent's ${fv.opponentPunishment?.tag ?? 'threat'} at ${fv.opponentPunishment?.completingCell} exists no matter what you play here — your move does not create it, it only loses faster. Do not say your move caused or enabled it.` },
   { id: 'L2', family: 'realized_denied', confidence: 'high',
-    when: (fv, ctx) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent' && !branchInvariant(fv, ctx),
+    when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
+                  && fv.case !== 'lose_to_faster_lose',
     covers: CODES_REALIZED,
     guardrail: 'The played move genuinely handed the opponent the pattern; name the conceded cell.',
     template: (fv) => `Your move let the opponent occupy ${fv.opponentPunishment?.completingCell}, completing their ${fv.opponentPunishment?.tag ?? 'threat'} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.` },

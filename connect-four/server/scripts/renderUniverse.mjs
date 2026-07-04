@@ -10,11 +10,15 @@ export function renderDecisionPredicates(rd) {
   p.add(`route_${rd.route}`);
   if (rd.case) p.add(`case_${rd.case}`);
   if (rd.direction) p.add(`dir_${rd.direction}`);
-  // Branch-invariance split keys off the FIRED link (L2 causal vs L3 branch-invariant), not the raw
-  // patternOnAfterBestBoard flag — L3 also fires via lose_to_faster_lose where the flag is false (D28).
+  // Branch-invariance split keys off the FIRED link (L2 causal vs L3 branch-invariant). Since D30 the
+  // fired link is gated purely on the sign `case` — L3 iff lose_to_faster_lose — so `enabled_causal`
+  // (L2) now covers every win_to_lose/draw_to_lose enabled_opponent board, including those with the
+  // opponent pattern present on the after-best board.
   if (rd.direction === 'enabled_opponent') p.add(rd.link.id === 'L3' ? 'enabled_branch_invariant' : 'enabled_causal');
-  // The I12 flip-case: enabled_opponent routed to L3 by a PRESENT after-best pattern (not by the
-  // already-losing sign). Absent from the frozen 29; the targeted rare-fill probes for it.
+  // The geometric configuration D28 called the "flip case": enabled_opponent + pattern PRESENT on the
+  // after-best board + NOT already-losing. Under D28 this misrouted to L3; D30 proved that a bug and
+  // routes it to L2 (best still wins/draws — see eval-51/eval-53). The predicate is retained as a
+  // REGRESSION marker (its boards must now emit link L2, never L3); it stays provisional (rare).
   if (rd.direction === 'enabled_opponent' && rd.patternOnAfterBestBoard === true && rd.case !== 'lose_to_faster_lose') {
     p.add('flip_case_l3');
   }
@@ -32,7 +36,7 @@ export function renderDecisionPredicates(rd) {
 // Known-rare / structurally-hard render predicates: reported by the coverage test, non-blocking.
 export const RENDER_PROVISIONAL = new Set([
   'link_L9', 'covers_exercised_L9',                 // diffuse-parity bucket, rare in self-play
-  'flip_case_l3',                                    // I12 gap (D28); may be structurally unreachable
+  'flip_case_l3',                                    // D30 regression marker (was D28 I12 gap); rare
   'board_afterbest_shown',                           // after-best rarely changes the tag-set
 ]);
 

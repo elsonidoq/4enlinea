@@ -90,6 +90,17 @@ has the board and the solver; it must resolve every cell and every semantic code
 plain tokens *before* the LLM sees them, and the prompt must be **staged by altitude** rather than
 dumped. Replace `glossary + JSON` with six ordered sections.
 
+> **⓪ Decision block (added by D30, Fix A) — leads the prompt.** Before the situation frame, the
+> shipped `assembleGroundedPrompt` emits a canonical, board-anchored **Decision block**: `you = player
+> {X}`, `Better move: column {display} (lands at {cNrM})`, `Played move: column {display} (lands at
+> {cNrM})`, each with a `win`/`draw`/`loss` **outcome derived from `case`**. It exists because the raw
+> `# Vector facts` JSON previously leaked 0-indexed `bestCol`/`playedCol` while every other layer was
+> 1-indexed, so the model emitted the raw value as the recommended column and scrambled
+> move→cell→role (9 condition-D fails). The raw 0-indexed leaves are now withheld from the JSON
+> residue (disposition `transformed`, like `movestring`); the Decision block is the single
+> authoritative statement of which move is best vs played and where each lands. See
+> [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30.
+
 ### ① Situation frame (engine-composed, plain language, per `case`)
 
 One short paragraph the engine writes from `case`/`route`/`direction`, replacing raw codes. The
@@ -234,14 +245,20 @@ narratively redundant even when the sentence doesn't quote each one word-for-wor
 | # | Link (trigger) | Composes (gist) | Confidence | Removes (covers) | Corpus n |
 |---|---|---|---|---|---|
 | L1 | **missed_own** — `direction=missed_own` (LR=`realized_pattern`, OP=`denial`; `win_to_lose`/`win_to_draw`) | "The correct move (col B) completes your {tag} at {cell}; the played move let the opponent take {denialCell}, denying it — {best}→{played}." | high | `route,tag,direction,*.kind,*.verdict,*.register,*.terminal,tie.kind` | 6 |
-| L2 | **enabled_opponent, genuinely causal** — `direction=enabled_opponent` ∧ `case∈{win_to_lose,draw_to_lose}` ∧ **pattern NOT on the after-best board** | "Your move let the opponent occupy {cell}, completing their {tag} on {window}; the better move denied it — {best}→{played}." | high | same as L1 | 2 |
-| L3 | **enabled_opponent, branch-invariant / already-losing** — `direction=enabled_opponent` ∧ (`case=lose_to_faster_lose` ∨ pattern present on the after-best board) ← **eval-23 fix** | "You were already losing. The opponent's {tag} at {cell} exists no matter what you play here — your move does NOT create it, it only loses faster ({afterPlayed} vs {afterBest} punishing replies). **Do not say your move caused/enabled it.**" | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
+| L2 | **enabled_opponent, genuinely causal** — `direction=enabled_opponent` ∧ `case≠lose_to_faster_lose` (i.e. `win_to_lose`/`win_to_draw`/`draw_to_lose`) | "Your move let the opponent occupy {cell}, completing their {tag} on {window}; the better move denied it — {best}→{played}." | high | same as L1 | 2 |
+| L3 | **enabled_opponent, already-losing** — `direction=enabled_opponent` ∧ `case=lose_to_faster_lose` | "You were already losing. The opponent's {tag} at {cell} exists no matter what you play here — your move does NOT create it, it only loses faster. **Do not say your move caused/enabled it.**" | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
 | L4 | **defensive_miss** — `direction=defensive_miss` (LR=`denial`, OP=`realized_pattern`) | "The better move (col B) occupies {cell}, blocking the opponent's {tag} on {window}; the played move skipped it — {best}→{played}." | high | same as L1 | 4 |
 
-> **The branch-invariance check (L2 vs L3) is the crux of the eval-23 fix and must be computed, not
-> read off `direction`.** The engine renders the opponent pattern on the after-best board; if it is
-> present there too, the link is L3 (no causation) regardless of what `direction` says. This is why
-> the fix is a *render-layer* computation, not trusting the terse code.
+> **⚠️ UPDATED by [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30 (supersedes D28 sub-decision 3).**
+> The L2/L3 split is now gated on the sign **`case`**, NOT on `patternOnAfterBestBoard`. **L3 fires iff
+> `case=lose_to_faster_lose`** (both moves genuinely lose — the only state in which L3's "you were
+> already losing" outcome sentence is true). `patternOnAfterBestBoard` is a *geometric* fact
+> ("opponent threat cell present on the after-best board") and is **NOT** equivalent to "the best line
+> loses" — D28 conflated the two, which flipped genuine `win_to_lose`/`draw_to_lose` cases into a false
+> loss narration (eval-53 best WINS, eval-51 best DRAWS). It stays informational in `render_decision`
+> and may soften L2's guardrail wording, but **never** drives the outcome sentence. The rows and the
+> §3d catalog snippet below are retained as historical design context; the sign-case `when` predicates
+> are authoritative. (The original eval-23 case is `lose_to_faster_lose`, so it still routes to L3.)
 
 > **L3's shipped `covers` is a subset of the design list above.** `lostResource.exhaustive`,
 > `gate.witness.node`, and `gate.witness.devVal` were dropped from L3's `covers` — they are already
@@ -308,8 +325,9 @@ derive its behavior from that one place. The module exports:
 ```js
 export const CAUSAL_LINKS = [
   { id:'L3', family:'realized_denied',
-    when: (fv, ctx) => fv.route==='realized_denied' && fv.direction==='enabled_opponent'
-                       && (fv.case==='lose_to_faster_lose' || ctx.patternOnAfterBestBoard),
+    // D30: gated on the sign case ONLY — NOT ctx.patternOnAfterBestBoard (supersedes D28 sub-decision 3).
+    when: (fv) => fv.route==='realized_denied' && fv.direction==='enabled_opponent'
+                       && fv.case==='lose_to_faster_lose',
     confidence:'high',
     covers:['route','tag','direction','lostResource.kind','lostResource.verdict', /* … */],
     guardrail:'must NOT claim the played move caused/enabled the pattern',
@@ -458,8 +476,9 @@ the grader consumes it as ground truth. It carries the complete decision set:
 
 - **`case`** (sign taxonomy → the outcome pair) and **`route`** (`realized_denied` via the D20 tag-first
   router, vs `sign`) and, for realized_denied, **`direction`** (`missed_own`/`enabled_opponent`/`defensive_miss`).
-- **`patternOnAfterBestBoard`** — the branch-invariance value (D28). *This is load-bearing: L2 vs L3
-  turns on it, not on `direction`.* The grader needs it to explain WHY the case is L2 or L3.
+- **`patternOnAfterBestBoard`** — the branch-invariance value (D28), now **informational only** (D30).
+  It NO LONGER drives L2 vs L3 — that turns on the sign `case` (`case=lose_to_faster_lose` → L3, else
+  L2). The grader keeps it as context, but must not treat it as the routing cause.
 - **The fired link:** `linkId` (L1–L9) + `confidence` + `covers[]` + `guardrail` + the composed `text`
   (verbatim, as the model saw it).
 - **Board selection:** which of decision / after-best / after-played / projected-deep were rendered,
@@ -470,11 +489,13 @@ the grader consumes it as ground truth. It carries the complete decision set:
   fired frame), and which were **statically excluded** — so the grader knows exactly what the model saw.
 - **`finalMovestring`** — the engine's own winning line, for cell grounding (G4).
 
-- **G6 — branch-invariance provenance (the L2-vs-L3 audit).** Given `patternOnAfterBestBoard` + the
-  fired `linkId`, the grader audits BOTH (a) that the answer honored the fired link's guardrail (L3 → no
-  causal claim), AND (b) that the routing itself was correct for the after-best board — a miscomputed
-  `patternOnAfterBestBoard` (wrong L2/L3 pick) is a **render bug, attributable to the pipeline**, never
-  a model failure. This closes the eval-23 loop mechanically.
+- **G6 — L2/L3 routing audit.** Given `case` + the fired `linkId`, the grader audits BOTH (a) that the
+  answer honored the fired link's guardrail (L3 → no causal claim, no "you were already losing" on a
+  win/draw case), AND (b) that the routing itself matches the sign case — **L3 iff
+  `case=lose_to_faster_lose`** (D30). A link whose outcome sentence contradicts `case` (e.g. L3 on a
+  `win_to_lose`/`draw_to_lose` board — the eval-51/eval-53 misroute) is a **render bug, attributable to
+  the pipeline**, never a model failure. (Pre-D30 this audit keyed on `patternOnAfterBestBoard`; that
+  geometric flag is now informational only.)
 
 **The grader must read the decision docs, because "what a case is" is DEFINED there, not in this file.**
 Before grading condition D, `grade-fv-sufficiency` must consult `reason-case-taxonomy.md` (the sign

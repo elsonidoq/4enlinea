@@ -14,7 +14,16 @@ metadata:
 - `community-` prefix — project-local heuristics
 - `derived-` prefix — logical derivations
 
-Schema defined in `docs/knowledge-base/README.md`. Template entry (only fully solver-verified entry): `allen-t4.md`.
+Schema defined in `docs/knowledge-base/README.md`. Template entry: `allen-t4.md`. Fully solver-verified entries: `allen-t4` plus the 6 **opening-theory** entries (added 2026-07-03).
+
+## Opening-theory cluster (added 2026-07-03)
+
+Entries: `allen-opening-principles`, `allen-opening-tables`, `allen-5-4-opening`, `allen-3-4-opening`, `allen-candlesticks-opening`, `allen-third-row-gambit`. From Allen Ch. 9/12/13. **All worked examples solver-verified** (no PENDING). `allen-opening-tables` deliberately does NOT transcribe the full Ch. 9 grid — OCR of the printed table is unreliable; it records verified anchor results + the Opening-Lottery sets only.
+
+### Verifying opening / worked-example movestrings — non-obvious tooling + traps
+
+- To confirm the **game-theoretic value** of any position (who wins under best play), run `node connect-four/server/scripts/reason_engine/TOOLS/optimal_line.mjs <movestring>` — it plays BOTH sides solver-optimally to terminal and prints winner + completing cell + winning window. Stronger than the single-position `scr` row from `./visualize_board.sh`. (This reason-engine TOOL is reusable for KB authoring, not just reason work.)
+- **Allen notation → movestring conversion is error-prone.** Allen uses columns A–G (translate A=0…G=6) and 1-based rows; uppercase = first player (Red/Green), lowercase = second player (Black/Gray) — the mover info is LOST once you write a 0-indexed digit movestring (recover it from ply parity). Source is OCR'd, so hand-transcription slips (e.g. `…5531…` mis-typed as `…5311…`, caught this session). ALWAYS verify each converted movestring with `optimal_line.mjs`/`visualize_board.sh`; never trust the OCR'd move list.
 
 ## Known limitation
 

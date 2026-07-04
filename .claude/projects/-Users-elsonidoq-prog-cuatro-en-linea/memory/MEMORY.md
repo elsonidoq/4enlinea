@@ -153,6 +153,6 @@
 - [MVP epic plan](project_mvp_epic_plan.md) — 10 epics in ship order; product-vs-code mismatches
 - [Custom commands](reference_custom_commands.md) — /mvp-manager, /coordinate-implementation, /past-games-manager
 - [Multi-agent orchestration patterns](reference_multiagent_orchestration_patterns.md) — handoff; AskUserQuestion gate
-- [Knowledge base status](project_kb_status.md) — 38 entries; 58 gaps; worked_examples PENDING
+- [Knowledge base status](project_kb_status.md) — naming/gaps/PENDING; opening-theory cluster (fully verified); verify movestrings w/ optimal_line.mjs + Allen-notation traps
 - [External PDFs](reference_external_pdfs.md) — Allis/Bagan/Allen PDFs; page ranges; corrections
 - [Open Chrome debug](reference_open_chrome.md) — binary launch required; open -a fails on macOS

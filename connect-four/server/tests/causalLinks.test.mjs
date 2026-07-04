@@ -20,6 +20,30 @@ test('L2 enabled_opponent when winning was available and pattern not branch-inva
   assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: false }).id, 'L2');
 });
 
+// Fix B (D30): the sign `case` — not the geometric patternOnAfterBestBoard — gates L2 vs L3.
+// A win_to_lose / draw_to_lose enabled_opponent case must NEVER route to L3, even when the opponent
+// pattern happens to sit on the after-best board (the eval-51/eval-53 misroute).
+test('L2 for win_to_lose enabled_opponent even when pattern IS on the after-best board (Fix B)', () => {
+  const fv = { case: 'win_to_lose', route: 'realized_denied', direction: 'enabled_opponent',
+               lostResource: { kind: 'denial' }, opponentPunishment: { kind: 'realized_pattern' } };
+  assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: true }).id, 'L2');
+});
+
+test('L2 for draw_to_lose enabled_opponent regardless of branch-invariance ctx (Fix B)', () => {
+  const fv = { case: 'draw_to_lose', route: 'realized_denied', direction: 'enabled_opponent',
+               lostResource: { kind: 'denial' }, opponentPunishment: { kind: 'realized_pattern' } };
+  assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: true }).id, 'L2');
+  assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: false }).id, 'L2');
+});
+
+test('L3 only fires on lose_to_faster_lose enabled_opponent (Fix B); its text asserts both-lose', () => {
+  const fv = { case: 'lose_to_faster_lose', route: 'realized_denied', direction: 'enabled_opponent',
+               opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c5r4' } };
+  const link = classifyCausalLink(fv, { patternOnAfterBestBoard: false });
+  assert.equal(link.id, 'L3');
+  assert.match(link.text, /already losing|loses faster/i);
+});
+
 test('L7 conditional swindle', () => {
   const fv = { case: 'lose_to_faster_lose', route: 'sign',
                lostResource: { kind: 'conditional_swindle', register: 'parity' },

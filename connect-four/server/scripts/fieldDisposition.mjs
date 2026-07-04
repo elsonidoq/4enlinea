@@ -33,8 +33,11 @@ const EXCLUDE_PATHS = new Set([
   'lostResource.witness.node',
 ]);
 
-// B. transformed → the rendered board carries the info (raw field withheld).
-const TRANSFORMED_LEAVES = new Set(['movestring', 'finalMovestring']);
+// B. transformed → the rendered board / canonical Decision block carries the info (raw field withheld).
+// bestCol/playedCol are 0-indexed internally; the top-of-prompt Decision block renders them as
+// 1-indexed display columns + landing cells, so the raw 0-indexed leaf must NOT leak into the JSON
+// residue (the Fix-A coordinate-leak fix). They count as SHOWN (via the Decision block), like movestring.
+const TRANSFORMED_LEAVES = new Set(['movestring', 'finalMovestring', 'bestCol', 'playedCol']);
 const isTransformed = (p) => TRANSFORMED_LEAVES.has(leaf(p)) || /(^|\.)line(\[\]|\.|$)/.test(p);
 
 // C. causal-code → conditionally hidden by a live frame's covers; otherwise renders.
@@ -49,7 +52,7 @@ const isCode = (p) => CODE_LEAVES.has(leaf(p)) || CODE_PATHS.has(p);
 
 // D. render (literal or grounded-cell). Closed allowlist of known leaves + a few full paths.
 const RENDER_LEAVES = new Set([
-  'case', 'bestCol', 'playedCol', 'player', 'opponent', 'boardState', 'owner',
+  'case', 'player', 'opponent', 'boardState', 'owner',   // bestCol/playedCol → transformed (Decision block)
   'completingCell', 'window', 'windows', 'cell', 'cells', 'entryCell', 'anchorCells',
   'forkCells', 'forkWindows', 'tacticCells', 'tacticTag', 'supportingDiscs',
   'pliesToEnd', 'controllingGroup', 'ownDiscs', 'zcount', 'parity', 'basis', 'lockInPly', 'rule',

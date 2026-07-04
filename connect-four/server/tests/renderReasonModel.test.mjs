@@ -55,6 +55,36 @@ test('assembled prompt renders composed frame text + guardrail + reading key', (
   assert.doesNotMatch(prompt, /"movestring"/);
 });
 
+test('assembled prompt leads with a canonical 1-indexed Decision block (Fix A)', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  // Decision block is at the TOP, before the boards.
+  assert.ok(prompt.indexOf('# Decision') >= 0 && prompt.indexOf('# Decision') < prompt.indexOf('# Boards'));
+  assert.match(prompt, /you = player 2/);
+  // bestCol 3 -> display column 4, lands c4r5; playedCol 4 -> column 5, lands c5r2.
+  assert.match(prompt, /Better move: column 4 \(lands at c4r5\)/);
+  assert.match(prompt, /Played move: column 5 \(lands at c5r2\)/);
+  // win_to_lose -> best win, played loss.
+  assert.match(prompt, /Better move: column 4[^\n]*Outcome: win/);
+  assert.match(prompt, /Played move: column 5[^\n]*Outcome: loss/);
+});
+
+test('assembled prompt never leaks 0-indexed bestCol/playedCol into the Vector facts JSON (Fix A)', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  assert.doesNotMatch(prompt, /"bestCol"/);
+  assert.doesNotMatch(prompt, /"playedCol"/);
+});
+
+test('rendered fields drop bestCol/playedCol (transformed via Decision block, Fix A)', () => {
+  const m = buildReasonRenderModel(NV);
+  assert.ok(!('bestCol' in m.rendered));
+  assert.ok(!('playedCol' in m.rendered));
+});
+
+test('READING_KEY states the 1-indexed display-column convention (Fix A)', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  assert.match(prompt, /1-indexed display column/);
+});
+
 test('an unregistered field makes the model throw', () => {
   assert.throws(() => buildReasonRenderModel({ ...NV, opponentPunishment: { ...NV.opponentPunishment, brandNewField: 1 } }));
 });

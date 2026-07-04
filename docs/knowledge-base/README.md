@@ -28,7 +28,7 @@ Markdown with YAML frontmatter. Frontmatter holds structured fields; the body ho
 - `docs/connect-four-strategy-reference.md` — long-form prose. Each section that has a corresponding KB entry should link to it via `→ KB: [allen-t4](knowledge-base/allen-t4.md)`.
 - `docs/knowledge-base/scripts/` — (future) validation script that parses frontmatter, re-runs solver checks, and flags entries whose `last_verified` date is older than the source PDF mtime.
 
-## Current entries (as of 2026-05-17)
+## Current entries (as of 2026-07-03)
 
 **Allen transformation rules (T1–T7):** allen-t1, allen-t2, allen-t3, allen-t4, allen-t5, allen-t6, allen-t7
 
@@ -36,11 +36,15 @@ Markdown with YAML frontmatter. Frontmatter holds structured fields; the body ho
 
 **Allen tactical patterns:** allen-j-configuration
 
+**Allen opening theory (Ch. 9, 12, 13):** allen-opening-principles, allen-opening-tables, allen-5-4-opening, allen-3-4-opening, allen-candlesticks-opening, allen-third-row-gambit
+
 **Allis nine strategic rules:** allis-claimeven, allis-baseinverse, allis-vertical, allis-aftereven, allis-lowinverse, allis-highinverse, allis-baseclaim, allis-before, allis-specialbefore
 
 **Project-local heuristics (community- / derived-):** community-z-threat, community-ghost-threat, community-parity-trap, community-figure-7, community-sextuple-threat, community-center-control, derived-parity-formula, derived-dead-space-parity, derived-lost-position, derived-parity-aligned-threat
 
 **Status:** T1–T7 and V1–V5 have verbatim quotes and formal predicates. All nine Allis rules have verbatim quotes and formal predicates. All 7 project-local entries created 2026-05-17 with formal predicates; figure-7 has solver-verified worked examples; remaining entries have PENDING worked examples. T4 is the only template-quality entry (all fields complete, fully solver verified). (community-claimodd was removed 2026-06-17 — the implementation was based on an incorrect reading of the WeakC4 source.)
+
+The six **Allen opening-theory** entries were added 2026-07-03 (from Allen 2010 Ch. 9/12/13). Each carries verbatim quotes and formal predicates. Worked examples verified against `c4solver` on 2026-07-03 via `visualize_board.sh` (single-position `scr` row) and `reason_engine/TOOLS/optimal_line.mjs` (plays both sides optimally to terminal and reports the winner). **All primary AND secondary examples are now solver-verified** — there are no remaining PENDING opening examples. Primary: allen-opening-principles (`333334444`, empty board), allen-opening-tables (empty board, `333334444`), allen-5-4-opening (`333334444`), allen-3-4-opening (`3332222`), allen-candlesticks-opening (`3333311115555`), allen-third-row-gambit (`3265533353553111` — solver confirms Allen's unique winning move E1/col 4 exactly). Secondary (variant/continuation) lines, verified via `optimal_line.mjs`: 5-1 opening (`333334140222212`), 3-4 Diagram 225 stem after 9.G2 (`333222266`), Candlesticks Diagram 237 (`33333111115`), Third-Row Gambit continuation after 17.E1 (`32655333535531114110`) — each solves to a First-Player win. allen-opening-tables intentionally does NOT transcribe the full Ch. 9 grid (OCR of the printed table is unreliable); it records solver-verified anchor results plus the cleanly-OCR'd Opening-Lottery sets and points to the book for the exhaustive grid. Not yet done: a per-ply *forced-line* checker (would confirm Allen's "N of M moves uniquely forced" prose by asserting move-uniqueness at each winner ply) — a ~40-line custom tool reusing the `optimal_line.mjs` scaffolding; the worked examples do not require it.
 
 ## Schema
 

@@ -61,7 +61,7 @@ Two passes over the boards in --input:
                            never reused).
 
 Usage (from connect-four/):
-  node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
+  node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>] [--ids <id,...>]
        [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
 
 Options:
@@ -69,6 +69,9 @@ Options:
   --out <name>          Evidence file. Bare name → server/scripts/<name>; a path with '/' →
                         resolved from cwd. Default: reason_evidence_<input-stem>.jsonl.
                         Should match reason_evidence_*.jsonl to appear in the /admin/fv-suff dropdown.
+  --ids <id,...>        Process ONLY the boards whose 'id' field is in this comma-separated list
+                        (e.g. eval-51,eval-53). Any board without a matching 'id' is skipped.
+                        Filters BOTH the evidence pass and the --llm answerer. Default: all boards.
   --llm                 Run the LLM answerer pass after the evidence pass.
   --condition A|B|C|D|all  Ablation condition(s), comma-separated or "all" (all = A,B,C,D). Default: A.
                           A — full pruned narrator vector (production-faithful headline).
@@ -87,7 +90,7 @@ Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server
 // process.exit or depends on --input being present. Everything below this point that the CLI
 // entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
 // module scope and populated only when this file is the entry point.
-let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS;
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(HELP);
@@ -117,6 +120,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   model = argVal('--model', process.env.EXPLAIN_MODEL);
   const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
   CONDITIONS = condArg === 'all' ? ['A', 'B', 'C', 'D'] : condArg.toUpperCase().split(',');
+
+  const idsArg = argVal('--ids', null);
+  idFilter = idsArg ? new Set(idsArg.split(',').map((s) => s.trim()).filter(Boolean)) : null;
 }
 
 // ── Evidence pass ─────────────────────────────────────────────────────────────
@@ -140,8 +146,15 @@ async function runEvidence() {
   const solver = createSolverProcess();
   const rows = [];
   writeFileSync(evidenceOut, ''); // fresh run; crash-safe appends below
+  if (idFilter) {
+    const present = new Set(fixture.map((f) => f.id).filter((id) => id != null));
+    const missing = [...idFilter].filter((id) => !present.has(id));
+    if (missing.length) console.warn(`⚠️  --ids: not found in input, skipped: ${missing.join(', ')}`);
+    console.log(`--ids filter active: processing ${[...idFilter].filter((id) => present.has(id)).length} of ${fixture.length} boards`);
+  }
   try {
     for (let i = 0; i < fixture.length; i++) {
+      if (idFilter && !idFilter.has(fixture[i].id)) continue; // skip boards not in --ids (by file `id`)
       const row = await buildEvidenceRow(fixture[i], i, solver);
       rows.push(row);
       appendFileSync(evidenceOut, JSON.stringify(row) + '\n'); // crash-safe incremental write

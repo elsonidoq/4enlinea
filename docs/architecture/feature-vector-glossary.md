@@ -67,6 +67,16 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 - **Column integers are 0-indexed.** `playedCol`, `bestCol`, and the per-move `col` inside a `line`
   are **0-indexed** (0 = leftmost = display column 1). **Add 1** to get the display column / the `cN`
   of a cell. (So `bestCol: 1` means "play column 2 in display.")
+  - **Grounded-render prompt (condition D) exception — you never touch a raw column integer there.**
+    The grounded prompt (`assembleGroundedPrompt`) leads with a canonical **Decision block** that has
+    already converted the moves for you: `you = player {X}`, `Better move: column {display} (lands at
+    {cNrM})`, `Played move: column {display} (lands at {cNrM})`, with each move's `win`/`draw`/`loss`
+    **outcome derived from `case`**. Every column shown anywhere in that prompt is a **1-indexed
+    display column**, and the raw 0-indexed `bestCol`/`playedCol` are withheld from the `# Vector
+    facts` JSON residue (they are "transformed" — carried by the Decision block, like `movestring` is
+    carried by the board). Use the Decision block's columns and landing cells verbatim; do not
+    re-derive move→cell→role. (See [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30 — the Fix-A
+    coordinate-leak fix.)
 - **Who is "you".** `player` is the side whose move is being explained — call them **"you"**;
   `opponent` is the other side. Both are `1` or `2`.
   - `player: 1` — the **first player** (moved first); wins by completing four on **odd** rows
@@ -291,6 +301,18 @@ The two halves are still `lostResource` (a) and `opponentPunishment` (b), but ea
 `opponentPunishment.tie` is set the same way as everywhere else (§4): `tied` with
 `sharedCells: [cell]` when the denial's occupied cell coincides with the pattern (the usual case for
 a conceded/missed immediate threat), else `independent`. `gate` is `null` on this route.
+
+> **`enabled_opponent` on a `lose_to_faster_lose` board is TIMING, not causation.** When `case ===
+> "lose_to_faster_lose"` (both moves lose — signs `(−, −)`), `direction: enabled_opponent` means *the
+> played move loses **faster***, **NOT** that your move created or handed over the opponent's pattern.
+> The opponent's tactic (`figure_7` / `double_threat`) **pre-exists on the after-best board** — it is
+> there regardless of what you play. Never narrate "your move enabled / handed the opponent the
+> pattern" on a `lose_to_faster_lose` vector; say the position was already lost and the played move
+> only loses sooner. (This is a raw-vector-reader rule; the grounded-render prompt enforces the same
+> thing structurally via causal frame L3 — see [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30.)
+> **On the non-both-losing `enabled_opponent` cases** — `win_to_lose` / `draw_to_lose` — the
+> concession **is** causal: the better move genuinely would have denied the pattern (the `denial`
+> half), so "your move let the opponent form the tactic the better move prevented" is correct there.
 
 ### `tag` — the full `tagBlunder` vocabulary
 
