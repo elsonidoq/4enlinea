@@ -16,9 +16,12 @@ source:
     Glossary: "Candlesticks Opening: A sequence of initial moves that leads to two or three
     separated columns played up ... like candlesticks."
 short_summary: |
-  The Candlesticks opening: instead of one central stack, three separated columns are each
-  built straight up so the board looks like candlesticks. Played "I play where you play", it
-  is an easy first-player win via a triple threat.
+  The Candlesticks opening: instead of one central stack, separated columns are each built
+  straight up so the board looks like candlesticks. Played "I play where you play", it is an
+  easy first-player win via a triple threat. It is a family, not a single line — a two-column
+  form (centre + one flank), a three-column form (centre + two flanks), and their mirrors all
+  win — but only when the imitative move order is kept: the same heights in the wrong fill order
+  can flip the result to the second player.
 statement: |
   The Candlesticks opening is a central-column-family opening in which two or three
   *separated* columns are each stacked straight up — the discs alternate in colour up each
@@ -30,6 +33,14 @@ statement: |
   stacking hands the first player a routine odd-row triple threat, and the second player's
   even-row major threat (e.g. at f2) is to no avail. Because imitation is sound here, the
   opening is a textbook case of "I play where you play".
+
+  Candlesticks is a FAMILY, not a single line. A two-column form (centre col 3 + a single flank,
+  e.g. "333331111") and the three-column form ("3333311115555", full "333331111555515") are both
+  first-player wins, as are the left/right mirrors of the flank (e.g. "3333355551"), at various
+  depths — all verified col-3-centred. What is load-bearing is the imitative colour-alternation
+  produced by the RIGHT move order, not merely the height silhouette: the same three stacks at
+  the same heights in the wrong fill order ("333331111155555", col 1 topped out before col 5 is
+  begun) flip col 5's bottom-disc parity and become a SECOND-player win.
 
 preconditions:
   - "Two or three separated columns are each built straight up, discs alternating in colour (imitative play)."
@@ -58,8 +69,18 @@ formal_predicate: |
   # Effect: with the stacks completed and imitative play maintained, the first player holds a
   # winning odd-row triple threat; the second player's even-row major threat does not save them.
   #
-  # Canonical instance (13-ply stem, second player to move & lost):
-  #   "3333311115555"  (D1 d2 D3 d4 D5 b1 B2 b3 B4 f1 F2 f3 F4)
+  # NECESSARY BUT NOT SUFFICIENT: this silhouette+alternation check passes positions that are
+  # NOT candlesticks wins. In particular it would wrongly pass "333331111155555" (right heights,
+  # each column internally colour-alternating) which is a SECOND-player win — the WINNER depends
+  # on the imitative fill ORDER, which this predicate does not capture. To decide the result,
+  # confirm the first player's triple odd-row threat with the solver / threat detectors; do not
+  # rely on the silhouette alone.
+  #
+  # Instances (all col-3-centred, verified first-player wins):
+  #   "333331111"        two-column form (centre + one flank)
+  #   "3333311115555"    three-column 13-ply stem (D1 d2 D3 d4 D5 b1 B2 b3 B4 f1 F2 f3 F4)
+  #   "333331111555515"  full Diagram 236 (adds b5 F5 in that order)
+  #   "3333355551"       mirror (flank on col 5)
 
 worked_examples:
   - movestring: "3333311115555"
@@ -71,8 +92,23 @@ worked_examples:
     solver_verified: 2026-07-03
     notes: |
       The board shows the literal candlestick silhouette: cols 1, 3, 5 filled, cols 0, 2, 4, 6
-      empty. Allen's full Diagram 236 line adds b5 F5 (ending in a first-player win); the
-      13-ply stem already shows the second player lost, so the win is verified at the stem.
+      empty. This 13-ply stem is a prefix of Allen's full Diagram 236 line; the completed line is
+      "333331111555515" (below). The stem already shows the second player lost, so the win is
+      verified at the stem.
+  - movestring: "333331111555515"
+    description: |
+      Allen's COMPLETE Diagram 236 line: D1 d2 D3 d4 D5 b1 B2 b3 B4 f1 F2 f3 F4 b5 F5 — centre
+      col 3 five high, flanking cols 1 (B) and 5 (F) each five high, three separated candlesticks.
+      Note the exact fill order: cols 1 and 5 are built to FOUR alternately, then topped off (b5,
+      then F5). Second player (Gray/Black) to move and lost.
+    expected_behavior: "15 plies, Gray to move; every column's solver score is <= 0 -> the side to move loses -> First-Player win, completing the D4-E3-F2-G1-family corner diagonal (window c4r3-c7r6). Matches Allen Diagram 236 exactly."
+    solver_verified: 2026-07-04
+    notes: |
+      CRITICAL — fill order is load-bearing. The move order "b5 F5" (col 1 then col 5) yields
+      this first-player win. The naive-looking "fully alternate each stack" order
+      "333331111155555" (col 1 filled all the way to five BEFORE col 5 is touched) flips col 5's
+      bottom-disc parity and becomes a SECOND-player win — see false_positives. Verified via
+      visualize_board.sh (Gray to move, scr all <= 0) and optimal_line.mjs (first-player win).
   - movestring: "33333111115"
     description: |
       Diagram 237 variant: the second player tries 10.b5 (0-indexed col 1, extending the B
@@ -85,6 +121,16 @@ worked_examples:
       itself, `3333311111` (after 10.b5, first player to move), also solves to a first-player win.
 
 false_positives:
+  - movestring: "333331111155555"
+    why_not: |
+      Same three columns (1, 3, 5) at the same final heights as Allen's Diagram 236, and the same
+      candlestick silhouette — but the WRONG fill order: col 1 is stacked all the way to five
+      before any disc is played in col 5. This flips col 5's bottom-disc parity relative to
+      Allen's alternating build, and the position becomes a SECOND-player win (Gray to move with
+      a positive solver score at 0-indexed col 4). Verified: optimal_line.mjs -> second(Gray)
+      win, completing a second-row horizontal. This is the concrete proof that "candlesticks" is
+      NOT a pure height silhouette — the coloring/parity from the imitative move order is
+      load-bearing. The correct complete line is "333331111555515" (see worked_examples).
   - movestring: "3333322222"
     why_not: |
       Two ADJACENT stacks (cols 2 and 3), not separated — this is the 5-4 / central-column
@@ -100,6 +146,8 @@ false_positives:
 known_limitations:
   - "First-player win under the assumption that imitative play stays sound; Allen shows variants (Diagrams 237-240) where the second player deviates and the first player must adjust (e.g. only one forcing first-row play remains)."
   - "The opening is a member of the central-column family; not every 'separated stacks' position is a candlesticks win — the imitative colour-alternation and the resulting triple threat are load-bearing."
+  - "The winning silhouette is necessary but NOT sufficient: the same columns at the same heights in a different fill order can be a SECOND-player win (e.g. '333331111155555'). The imitative move ORDER (Allen tops col 1 then col 5: b5 F5), not just the final heights, decides the result — the height-only formal_predicate must be backed by a solver/threat check."
+  - "Draw variants exist when either side deviates: Allen's Diagrams 240, 243, 245 and 247 are candlesticks-like positions that draw (some with a Red blunder). Membership in the family does not guarantee a first-player win."
   - "Related but distinct from the 5-4 opening (adjacent, not separated, stacks) and from first-row openings."
 
 related:

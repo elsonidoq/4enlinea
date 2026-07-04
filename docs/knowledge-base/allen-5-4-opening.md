@@ -72,12 +72,24 @@ worked_examples:
     notes: |
       By mirror symmetry the reflection "333332222" (adjacent column C) is the same opening
       with the same result.
+  - movestring: "3333341"
+    description: |
+      5-1 opening STEM: D1 d2 D3 d4 D5 e1 B1 — the centre column stacked five high, then after
+      Black's 6.e1 the first player answers 7.B1 (0-indexed col 1) instead of continuing up col 4.
+      Allen (p.177) calls this the 5-1 opening (also "DdDdDeB", listing columns in play order):
+      Red avoids the sharpest 5-4 variations while keeping the win. Second player (Gray) to move
+      and lost.
+    expected_behavior: "7 plies, Gray to move; solver scores <= 0 in every column -> the side to move loses -> First-Player win. optimal_line.mjs -> First-Player win (fifth-row window). Matches Allen: 'answering 6 e1 with 7 B1 ... the 5-1 opening'."
+    solver_verified: 2026-07-04
+    notes: |
+      The prose 'DdDdDeB' decodes exactly to this stem (D=col3, e=col4, B=col1 -> "3333341").
+      The 15-ply Diagram 218 line "333334140222212" (below) is a continuation of this stem.
   - movestring: "333334140222212"
     description: |
       5-1 opening, Allen Diagram 218 (full 15-ply line): D1 d2 D3 d4 D5 e1 B1 e2 A1 c1 C2 c3
       C4 b2 C5. After the centre stack and Black's 6.e1, Red answers 7.B1 (0-indexed col 1)
       instead of continuing up col 4. Allen: the 5-1 is still a Red win but with fewer
-      difficult variations than the pure 5-4.
+      difficult variations than the pure 5-4. This continues the "3333341" stem above.
     expected_behavior: "15 plies, second player (Gray/Black) to move; solver scr negative in every column. Playing out optimal moves for both sides (reason_engine/TOOLS/optimal_line.mjs) reaches a First-Player (Green) win at ply 41, completing the fifth-row window c3r5-c6r5 — an odd-row win, matching Allen's plan."
     solver_verified: 2026-07-03
     notes: |
