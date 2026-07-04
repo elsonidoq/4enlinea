@@ -30,7 +30,7 @@ Six (now **seven**) KB entries document Connect Four opening theory, each with a
 - **Never reveal the answer column** for any interactive task (Socratic or in‑lesson drill) before the learner attempts it.
 - **Never weaken the reason algorithm to save solver calls (Invariant I0).** Un‑skipping openings adds solver load; that is expected and acceptable. No budget heuristic may gate opening analysis.
 - **Reason soundness bar (I0/I1/I2/I12):** every clause in an opening reason must be solver‑ or canon‑grounded; the LLM narrates, it does not reason; validate any new classification/stop rule against its full case‑space with a counterexample per case, through the production detector.
-- **i18n:** lesson strings use `lesson.<id>.slide.<n>.*` (existing namespace); coach phrasing reuses the existing `coach.*` pools. English at launch; `es.json` untouched.
+- **i18n:** lesson **body** text (coach messages, `infoProse`) is authored **inline in the JSON** (matching lessons 1–10; `ConceptScreen` renders it directly). Only the lesson **title** is i18n‑keyed (`lesson.<id>.title`, with the JSON `title` as `defaultValue`). No `lesson.<id>.slide.<n>.*` wiring exists or is added. English at launch; `es.json` untouched.
 - **Analytics:** reuse existing events `lesson_started` / `lesson_completed` (fired by the lesson screens) and `puzzle_attempted` / `puzzle_solved_*` (in‑lesson drills reuse `ChallengeScreen`). No new events.
 - **Documentation is a first‑class deliverable** (§9), not an afterthought — the glossary, the grader skill, the decisions log, and the evidence doc are all updated in‑scope.
 - **Coordinates are 0‑indexed** everywhere except the two existing translation boundaries (frontend display, c4solver wrapper).
@@ -46,8 +46,8 @@ Six (now **seven**) KB entries document Connect Four opening theory, each with a
 | **D3** | **3–4 opening lessons**, including the named openings. | Matches the 1000–1500 Elo target; named lines taught as concept slides where they don't fit a single‑move interaction. |
 | **D4** | Reason engine v1 = **sound slice only**: (a) opening‑centrality evidence (reuse `centerDominance` logic), (b) narrow **exact‑match** named‑opening label. **General causal "you left the &lt;opening&gt;" reason is DEFERRED as unsound.** | A deviation from a named line often isn't a blunder; attributing a score drop to "leaving the opening" is a causal claim the solver doesn't verify → violates I0/I2/I12. |
 | **D5** | Opening reason is first‑class in the **feature‑vector engine** (`computeReason`), not only the coach path — so it is covered by `select_boards`, graded by `grade-fv-sufficiency`, and grounded in the production prompt. | The user's requirement: eval coverage + grader awareness + prompt grounding are part of "adding a reason case." |
-| **D6** | A new **`winning_move` goal predicate** (not a challenge category) powers in‑lesson recognition drills; it is reusable beyond openings. | No generic best/winning‑move predicate exists (`evaluatePredicate` falls through to `wrong`); Socratic alone caps at one checkpoint per lesson. |
-| **D7** | Structure as **two workstreams** (A: Lessons + Practice; B: Reason engine) in one design doc. Part A is content + one small predicate → **implement directly / one lean spec**; Part B is invariant‑heavy, multi‑surface → **its own speckit spec**. | Independent subsystems, very different risk profiles; the sizing rubric (`best_practices_spec_driven_development.md`) says split when risk/subsystems differ. |
+| **D6** | **No `winning_move` predicate / no server‑checked drills.** The interactive "find the move" moment is delivered by the **Socratic** board (client‑side `correctCol`), one per lesson. | Server‑checked `confirmationChallenges` are DB‑puzzle‑backed (`/api/puzzles/:id/check` loads a `puzzles` row by id and switches `evaluatePredicate` on the stored category); with no opening challenge category (D1) there are no such rows, so a predicate + drill path would need DB/curation plumbing for no real gain. Socratic needs zero backend. _(Revised 2026-07-04 after tracing the check path; supersedes the earlier "add a `winning_move` predicate" plan.)_ |
+| **D7** | Structure as **two workstreams** (A: Opening lessons; B: Reason engine) in one design doc. Part A is **content only** → **implement directly** (below the speckit bar); Part B is invariant‑heavy, multi‑surface → **its own speckit spec**. | Independent subsystems, very different risk profiles; the sizing rubric (`best_practices_spec_driven_development.md`) says split when risk/subsystems differ, and skip speckit for content‑only work. |
 | **D8** | `select_boards.mjs` currently **skips openings** (`discMin: 12`). Un‑skipping (an opening harvest band) + registering opening predicates in `REASON_UNIVERSE` is in scope. | Without it, opening blunders never enter the eval set and the new reason is ungraded. |
 | **D9** | **All prompt grounding is in scope** — `explainContext.js`, `llmCoachHelpers.js`, the grounded‑render / condition‑D `render_decision` path, and any `causalLinks.mjs` frame needed for the opening‑centrality case. | Requested explicitly; a feature‑vector field that never reaches a grounded prompt is inert. |
 
@@ -55,9 +55,11 @@ Six (now **seven**) KB entries document Connect Four opening theory, each with a
 
 ---
 
-## PART A — Lessons + In‑lesson Practice
+## PART A — Opening Lessons (content only)
 
-_Subsystems: lesson content (JSON + i18n) + one new server predicate. Frontend is entirely reused. Sizing: content + ~1 predicate → implement directly / lean spec._
+_Subsystem: lesson content only — JSON files on the existing model. Frontend and backend are **entirely reused; zero new server code, zero i18n wiring beyond the existing `lesson.<id>.title` key**. Sizing: content authoring, below the speckit bar → implement directly with a short task list. (In‑lesson server‑checked drills were dropped — see D6; the one interactive board per lesson is the client‑side Socratic.)_
+
+**i18n reality (correction to §2):** lessons render slide text **inline from the JSON** (`ConceptScreen` passes `slide.coachMessages` straight to `CoachDialog`; `infoProse` is rendered as‑is). Only the lesson **title** goes through i18n (`t('lesson.<id>.title', { defaultValue: lesson.title })`, `ConceptScreen.jsx:110`). So opening‑lesson prose is authored inline in the JSON (matching lessons 1–10); there is no `lesson.<id>.slide.<n>.*` wiring to add.
 
 ### Story A1 — Opening‑theory lessons
 
@@ -79,36 +81,16 @@ Lessons (final titles TBD in authoring):
 - Every `boardSpec` is **derived from a KB‑verified movestring** at authoring time (movestring → 7 column strings of `g`/`d`), not hand‑built. Deep boards (gambit 16 plies, D3‑D4 10 plies) are converted, not typed.
 - Every Socratic `correctCol` equals the **solver‑verified** winning column from the KB (`3` empty, `4` gambit, `1` D3‑D4). `SocraticScreen` evaluates client‑side (`col === socratic.correctCol`, `SocraticScreen.jsx:78`) — no server call, no answer revealed before attempt.
 - Reading‑only lessons set `socratic: null` **and** `confirmationCategory: null` (the Lesson‑4 "Odd Rows" pattern).
-- All user‑facing text is a `t('lesson.<id>.slide.<n>...')` key; no strategic claim appears that isn't traceable to a KB entry's `short_summary`/worked example.
+- Slide text (coach messages, `infoProse`) is authored **inline in the JSON** (only the `title` is i18n‑keyed); no strategic claim appears that isn't traceable to a KB entry's `short_summary`/worked example.
 - **IF** a lesson is Pro‑gated, **THEN** `free: false` and the saga map shows the existing lock → `UpgradeModal` (no new gating code).
 
-### Story A2 — In‑lesson opening recognition drills
+### Story A2 — In‑lesson interactive checkpoint (Socratic; drills DROPPED)
 
-**As a** learner who finished an opening lesson, **I want** to practice "find the best / only winning opening move" on several positions, **so that** I can confirm I recognize the idea, not just read it.
+**As a** learner reading an opening lesson, **I want** one interactive "find the move" checkpoint, **so that** I confirm I recognize the idea, not just read it.
 
-Delivered via the lesson **`confirmationChallenges[]`** array (curated positions), which `ChallengeScreen` (in `lessonMode`) evaluates **server‑side** through `evaluatePredicate`. Because that evaluator is category‑keyed and has **no** best/winning‑move case (it falls through to `{ result: 'wrong' }`), this story adds one predicate.
+**Delivered by the existing Socratic board, folded into each lesson in Story A1 — no new code.** `SocraticScreen` evaluates the answer client‑side (`col === socratic.correctCol`, `SocraticScreen.jsx:78`); the board comes from the lesson JSON `socratic.boardSpec`. Each lesson carries **one** Socratic with a KB‑verified `correctCol` (empty→`3`, imitation→X, gambit `3265533353553111`→`4`, D3‑D4 `3332223362`→`1`).
 
-**New goal predicate: `winning_move`** (in `connect-four/server/predicates.js`).
-
-- **Signature (reuses the existing contract):** `evaluatePredicate(puzzle, candidateCol, scores)` where `puzzle.category === 'winning_move'`, `puzzle.moveString` is the pre‑move board. Returns `{ result: 'correct'|'wrong'|'tied', correctCol?, tiedWith? }` — identical shape to the existing predicates.
-- **Semantics:** reuse `parseBoard` / `currentPlayer` (already in `predicates.js`). The `scores` array (solver scores per column, from the side to move) is already passed in. Correct columns = the legal columns whose score is **winning and maximal** (the argmax over `scores` when that max is `> 0`). **IF** exactly one winning column exists **THEN** it is `correctCol` and any other choice is `wrong` (with `correctCol` reported); **IF** several tie at the winning max **THEN** a tied choice returns `tied` with `tiedWith` (mirrors `evalImmediateThreat`). **IF** no column has a winning score **THEN** the puzzle is malformed for this predicate → `{ result: 'wrong' }` (curation‑time guard, never expected in a shipped drill).
-- **Wiring:** add the `case 'winning_move':` arm to the `evaluatePredicate` switch (`predicates.js:35`). **No** entry in `VALID_CATEGORIES` / `PAID_CATEGORIES` / `CATEGORY_ORDER` / `CATEGORY_NAMES` — this is a *goal‑predicate type*, used only via lesson `confirmationChallenges` (and reusable by future non‑opening lessons/puzzles). It is **not** a challenge category and does not touch the 8‑file category wiring.
-
-**Curated drills** (each a `confirmationChallenges[]` entry: `{ moveString, correctCol, userPlayer: 1, goalPredicateType: 'winning_move', interactionMode: 'single_move', goalPredicateParams: {}, cooperativeAiMoves: [], highlightMetadata: null }`), all solver‑verified:
-
-| Lesson | `moveString` | `correctCol` | Note |
-|---|---|---|---|
-| Own the Centre | `""` (empty) | `3` | Empty board allowed (`moveString` regex `^[0-6]*$`). |
-| Sharp Openings | `3265533353553111` | `4` | Third‑row gambit, unique winning move. |
-| Sharp Openings | `3332223362` | `1` | D3‑D4 Diagram 231, unique winning move. |
-
-**Acceptance criteria**
-
-- `evaluatePredicate({category:'winning_move', moveString}, col, scores)`: playing a winning‑max column → `correct` (or `tied`); any drawing/losing column → `wrong` with the true `correctCol`. Unit‑tested for the three curated boards + a ties board + the empty board.
-- The empty‑board drill (`moveString: ""`) loads and scores (centre `3` = unique winning max per KB `allen-opening-tables`).
-- Drills run through the **existing** `ChallengeScreen` `lessonMode` path and the existing `/api/puzzles/:id/check` (or the lesson confirmation route) — no new endpoint, no new frontend screen.
-- The correct column is never surfaced before the attempt; on a wrong attempt the feedback reveals it (reusing the existing Tier‑1 feedback strip).
-- Tests are `npm run test:fast`‑safe (no live‑solver fan‑out; the predicate takes `scores` as input, so tests pass canned score arrays — mirroring existing predicate tests).
+**Server‑checked multi‑position drills are cut (D6).** `confirmationChallenges` are DB‑puzzle‑backed (`/api/puzzles/:id/check` loads a `puzzles` row by id and switches `evaluatePredicate` on the stored category); openings have no such rows and no category. A `winning_move` predicate would only serve that DB‑backed path, so it adds no value here and is **not built**. Opening lessons set `confirmationCategory: null` and `confirmationChallenges` absent (the Lesson‑4 reading‑only shape), relying on the Socratic for interactivity.
 
 ---
 
@@ -196,21 +178,21 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 ## 4. Consolidated data / API contracts
 
-- **Goal predicate:** `evaluatePredicate({ category: 'winning_move', moveString }, candidateCol, scores) → { result:'correct'|'wrong'|'tied', correctCol?, tiedWith? }`. New `case` in the `predicates.js` switch. Not a challenge category.
-- **Lesson JSON:** unchanged schema (`lessonLoader.js`). New lesson files; `confirmationChallenges[]` entries use `goalPredicateType: 'winning_move'`, `interactionMode: 'single_move'`, `userPlayer: 1`.
+- **Lesson JSON:** unchanged schema (`lessonLoader.js`). New lesson files only; each carries one `socratic: { boardSpec, correctCol }` (client‑side eval); reading‑only lessons set `socratic: null`. No `confirmationChallenges`, no new predicate.
 - **Feature vector:** additive `openingContext: { centrality:{bestCol,playedCol,…,text}, namedOpening?:{id,line} }` (exact shape finalized in `/plan`), pruned on non‑opening/structured boards.
 - **Eval harness:** `REASON_UNIVERSE += ['reason_opening_centrality','reason_opening_named_line']` (names provisional), opening harvest band in `select_boards.mjs`; render predicates unioned into `renderUniverse.mjs` if a frame is added.
-- **i18n:** `lesson.<id>.slide.<n>.*` (new keys); reuse `coach.*` pools.
+- **i18n:** only `lesson.<id>.title` (existing); lesson body text is inline JSON. Reuse `coach.*` pools for the reason‑engine coach path.
 - **KB fields consumed:** `short_summary` (client, lessons), worked‑example `movestring` + `false_positives` (predicate/label lookup, reason engine), `formal_predicate` (author reference).
 
 ---
 
 ## 5. NOT included
 
-- **No opening Challenge category** — no change to `categories.js` / `src/lib/categories.js`, no `candidate-generator.js` / `classifier.js` detector, no `challengeSets.js` entry, no 8‑file wiring. (`winning_move` is a goal‑predicate type, not a category.)
+- **No opening Challenge category** — no change to `categories.js` / `src/lib/categories.js`, no `candidate-generator.js` / `classifier.js` detector, no `challengeSets.js` entry, no 8‑file wiring.
+- **No `winning_move` predicate / no server‑checked in‑lesson drills** — dropped (D6); interactivity is the client‑side Socratic.
 - **No general causal named‑opening reason** — deferred as unsound (D4).
 - **No taxonomy / two‑halves core change** — the 5‑case engine and its gate are untouched; opening work is additive evidence + coverage + grounding.
-- **No multi‑Socratic schema change** — multiple checkpoints use `confirmationChallenges[]`.
+- **No multi‑Socratic schema change** — one Socratic per lesson is sufficient for the interactive checkpoint.
 - **No Spanish content**, **no payments** (Pro‑gating uses the existing lock modal), **no new analytics events**.
 - **No `winSamples` re‑enable** (opening/mid‑game win distributions stay disabled, `REASON_CONFIG.enableWinSamples: false`).
 
@@ -240,7 +222,7 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 ## 8. Phasing & dependencies
 
-- **Part A** (Lessons + `winning_move` predicate) is independent of Part B and can ship first — it is content + one predicate on already‑built infra.
+- **Part A** (opening lessons, content only) is independent of Part B and can ship first — pure authoring on already‑built infra, no server code.
 - **Part B** (reason engine) depends on the corrected KB (done) and is gated on the reason‑engine invariant reads. Its stories are ordered **B1 → B2 → B3 → B4** (evidence field → coverage → grade/doc → prompt grounding); B4's grounding is only meaningful once B1's field exists and B2/B3 make it gradeable.
 
 ---
@@ -252,7 +234,7 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 | Lesson model, loading, validation | `lessonLoader.js`, `connect-four/lessons/*.json`, `GET /api/lessons(/:id)` |
 | Concept / Socratic / drill screens | `ConceptScreen.jsx`, `SocraticScreen.jsx` (client‑side `correctCol`), `ChallengeScreen.jsx` `lessonMode` |
 | Board display | `boardSpec` (7‑element display encoding), existing overlays |
-| Answer evaluation for drills | `evaluatePredicate` (`predicates.js`) + `parseBoard`/`currentPlayer`/`checkWin` — add one `case` |
+| Interactive checkpoint eval | `SocraticScreen` client‑side `col === socratic.correctCol` (no server call, no predicate) |
 | Centrality computation | `centerDominance.js` `detectCenterDominance` — shared by coach path AND feature vector |
 | Reason evidence engine | `reasonEngine.mjs` `computeReason`, 5‑case taxonomy, two‑halves — additive field only |
 | Detectors as evidence (I8) | `classifier.js` (`classifyPattern`, `detectDoubleThreat`, z‑threat, odd‑even, …) |
