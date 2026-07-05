@@ -542,9 +542,10 @@ export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, 
   // Grounded human label. A SPECIFIC opening name only when `id` is unique (I2 — guard 4 already set
   // `id: null` for a shared prefix); a shared prefix reports the family only. The specific label is
   // derived MECHANICALLY from the canonical KB id (strip `allen-` vendor prefix, hyphens → spaces) —
-  // no invented words.
+  // no invented words. Digit-aware hyphen split keeps "5-4" intact (matches the defense label above),
+  // so the SAME opening renders identically whichever side blundered ("the 5-4 opening", not "5 4").
   const label = id
-    ? `the ${id.replace(/^allen-/, '').replace(/-/g, ' ')}`
+    ? `the ${id.replace(/^allen-/, '').replace(/-(?!\d)/g, ' ')}`
     : `a ${family}`;
   // Provenance only: it states the book line + the deviation, and DEFERS the why-it-loses to the
   // other prompt sections (the two-halves evidence). It never asserts a tactic or a threat.
