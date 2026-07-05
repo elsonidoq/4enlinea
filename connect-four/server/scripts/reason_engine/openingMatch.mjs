@@ -145,12 +145,13 @@ export function loadOpeningLines() {
  *   - `ids`: every line id the movestring is consistent with (deduped).
  *   - `family`: the shared family name if every consistent line belongs to
  *     the same family, else `null`.
- *   - `bookNextCol`: the next 0-indexed column ALL consistent lines agree on
+ *   - `bookNextCol`: the next 0-indexed column the consistent lines agree on
  *     (mirrored back into the input's own orientation where the match was
- *     via reflection), or `null` if any consistent line has no further
- *     recorded ply (fully matched) or the lines disagree on the next move.
- *     NOTE: this module is pure — it reports what the KB says, not that the
- *     move is solver-best; Task B2 does that verification.
+ *     via reflection). A matched line the input EXACTLY consumes carries no
+ *     next-ply opinion and abstains; `bookNextCol` is `null` only when no
+ *     matched line has a further recorded ply, or the lines that do disagree
+ *     on the column. NOTE: this module is pure — it reports what the KB says,
+ *     not that the move is solver-best; Task B2 does that verification.
  *   - `matchedPrefixLen`: the number of plies matched (= movestring length).
  */
 export function matchOpeningPrefix(movestring) {
@@ -177,19 +178,23 @@ export function matchOpeningPrefix(movestring) {
   const families = new Set(matches.map((m) => m.line.family));
   const family = families.size === 1 ? [...families][0] : null;
 
+  // A matched line that the input exactly consumes (moves.length === L) carries
+  // no opinion about the NEXT ply, so it ABSTAINS from the consensus rather than
+  // forcing null. This is the normal KB shape: a short stem worked-example plus a
+  // deeper continuation of the SAME opening — the stem is consumed, the deeper
+  // line supplies the book's next move. bookNextCol is:
+  //   (a) null if NO matched line has a next ply (no known book continuation);
+  //   (b) null if the lines that DO have a next ply disagree on the column;
+  //   (c) that column if they all agree.
   let bookNextCol = null;
   const nextCols = new Set();
-  let everyMatchHasNextPly = true;
   for (const m of matches) {
-    if (m.line.moves.length === L) {
-      everyMatchHasNextPly = false;
-      break;
-    }
+    if (m.line.moves.length === L) continue; // consumed line abstains
     const rawNext = m.line.moves[L];
     const reported = m.orientation === 'mirror' ? 6 - rawNext : rawNext;
     nextCols.add(reported);
   }
-  if (everyMatchHasNextPly && nextCols.size === 1) {
+  if (nextCols.size === 1) {
     bookNextCol = [...nextCols][0];
   }
 
