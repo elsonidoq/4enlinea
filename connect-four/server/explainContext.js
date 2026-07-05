@@ -13,7 +13,7 @@ import {
 } from './classifier.js';
 import { runSparseLookahead, isAnchorlessPosition } from './sparseLookahead.js';
 import { detectCenterDominance } from './centerDominance.js';
-import { matchOpeningPrefix } from './scripts/reason_engine/openingMatch.mjs';
+import { computeOpeningContext } from './scripts/reason_engine/computeOpeningContext.mjs';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
@@ -493,62 +493,42 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
 /**
  * Opening-provenance reason for the deep-reveal prompt (opening-theory PART B).
  *
- * MIRRORS the reason-engine evidence contract `computeOpeningContext`
- * (scripts/reason_engine/reasonEngine.mjs): it returns a `namedOpening` (four solver-grounded
- * guards) XOR a `centrality` fallback, else null. It is kept as a pure, exported seam so the
- * prompt-section text is unit-testable and so the production prompt and the offline reason vector
- * agree on WHEN an opening reason exists and WHICH branch it takes.
+ * The four-guard derivation (namedOpening XOR centrality) comes from the SHARED, side-effect-free
+ * module `computeOpeningContext` (scripts/reason_engine/computeOpeningContext.mjs) — the SAME
+ * function the offline reason vector uses, so the production prompt and the offline vector can never
+ * silently diverge if the guards change. This wrapper ADDS the grounded prompt-section TEXT on the
+ * `namedOpening` branch and normalizes the "no reason" case to `null`.
  *
  * SOLVER-FREE: it reuses the pre-move `scores` the caller already has — no new solver query (I0).
- *
- *   Guard 1 — on-book prefix: `matchOpeningPrefix(movestring)` non-null (Task B1's pure KB matcher).
- *   Guard 2 — beneficiary is the mover: `player === 1` (every KB opening line is a first-player win).
- *   Guard 3 — book move is solver-verified best: its score equals the max AND the max is winning
- *             (`scores[bookNextCol] === bestScore && bestScore > 0`). Score-equality (not
- *             `bookNextCol === bestCol`) credits a book move that ties an equally-optimal argmax.
- *   Guard 4 — a SPECIFIC opening id only when the prefix is consistent with a single KB id; a shared
- *             prefix keeps `id: null` and reports the shared `family` (never invent a specific name).
  *
  * @returns {{ namedOpening: {id,family,matchedPrefixLen,bookNextCol}, section: string }
  *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text} }
  *          | null }
  */
 export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, scores, player }) {
-  const match = matchOpeningPrefix(movestring);
-  if (match && player === 1
-      && match.bookNextCol != null
-      && bestScore > 0
-      && scores[match.bookNextCol] === bestScore) {
-    const id = match.ids.length === 1 ? match.ids[0] : null;       // guard 4: specific vs shared
-    // Grounded human label. A SPECIFIC opening name only when `id` is unique (I2); a shared prefix
-    // reports the family only. The specific label is derived MECHANICALLY from the canonical KB id
-    // (strip the `allen-` vendor prefix, hyphens → spaces) — no invented words.
-    const label = id
-      ? `the ${id.replace(/^allen-/, '').replace(/-/g, ' ')}`
-      : `a ${match.family}`;
-    // Provenance only: it states the book line + the deviation, and DEFERS the why-it-loses to the
-    // other prompt sections (the two-halves evidence). It never asserts a tactic or a threat.
-    const section = [
-      '## Opening theory',
-      '',
-      `This position is on ${label}, a known first-player winning plan. The book continuation is `
-        + `column ${match.bookNextCol + 1}, which keeps the win. You left the book line by playing `
-        + `column ${playedCol + 1}. Explain the consequence of that deviation using ONLY the evidence `
-        + `in the other sections; do not invent a tactic or claim a threat the boards do not show.`,
-    ].join('\n');
-    return {
-      namedOpening: { id, family: match.family, matchedPrefixLen: match.matchedPrefixLen, bookNextCol: match.bookNextCol },
-      section,
-    };
-  }
-  // Off-book (or on-book-but-guards-failed) opening-phase fallback: the honest board-findable reason
-  // is centrality. Reuse the SHARED detectCenterDominance (single source, surfaces A and B) — it
-  // confines this to early boards where the better move is strictly more central, else returns null.
-  const cd = detectCenterDominance({ movestring, playedCol, bestCol });
-  if (cd) {
-    return { centrality: { bestCol: cd.bestCol, playedCol: cd.playedCol, betterHasMoreLines: true, text: cd.reason } };
-  }
-  return null;
+  const oc = computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player });
+  if (!oc) return null;
+  if (oc.centrality) return oc;   // centrality carries no bespoke section (centerDominance renders it)
+
+  const { id, family, bookNextCol } = oc.namedOpening;
+  // Grounded human label. A SPECIFIC opening name only when `id` is unique (I2 — guard 4 already set
+  // `id: null` for a shared prefix); a shared prefix reports the family only. The specific label is
+  // derived MECHANICALLY from the canonical KB id (strip `allen-` vendor prefix, hyphens → spaces) —
+  // no invented words.
+  const label = id
+    ? `the ${id.replace(/^allen-/, '').replace(/-/g, ' ')}`
+    : `a ${family}`;
+  // Provenance only: it states the book line + the deviation, and DEFERS the why-it-loses to the
+  // other prompt sections (the two-halves evidence). It never asserts a tactic or a threat.
+  const section = [
+    '## Opening theory',
+    '',
+    `This position is on ${label}, a known first-player winning plan. The book continuation is `
+      + `column ${bookNextCol + 1}, which keeps the win. You left the book line by playing `
+      + `column ${playedCol + 1}. Explain the consequence of that deviation using ONLY the evidence `
+      + `in the other sections; do not invent a tactic or claim a threat the boards do not show.`,
+  ].join('\n');
+  return { namedOpening: oc.namedOpening, section };
 }
 
 /**
