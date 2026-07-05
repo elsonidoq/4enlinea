@@ -34,6 +34,8 @@ import { swindleGate, REASON_CONFIG } from './reason_engine/reasonEngine.mjs';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { RENDER_UNIVERSE, RENDER_PROVISIONAL, RENDER_REQUIRED } from './renderUniverse.mjs';
 import { reasonPredicates } from './reasonEvalPredicates.mjs';
+import { loadOpeningLines } from './reason_engine/openingMatch.mjs';
+import { mulberry32, shuffle, evenAndOddPrefixLengths } from './openingSampling.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../.env'));
@@ -70,6 +72,7 @@ Options:
                                or boards_coverage_<timestamp>.jsonl (coverage).
   --target <N>                 coverage only: boards required per predicate before stopping. Default: 2.
   --max-games <N>              coverage only: max self-play games to harvest before giving up. Default: 4000.
+  --seed N                     coverage only: RNG seed for the Phase-1 deterministic opening step (default 1337).
   -h, --help                   Show this help and exit.`;
 
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -92,6 +95,22 @@ const outPath = argVal('--out', defaultOut);
 process.stderr.write(`Output will be written to: ${outPath}\n`);
 const TARGET_PER_PREDICATE = parseInt(argVal('--target', '2'), 10);
 const MAX_GAMES = parseInt(argVal('--max-games', '4000'), 10);
+
+// Lifted to module scope (Task 6) so both the `fixture` and `coverage` strategies share it —
+// classifies a played column against the solver's scores for the position.
+function classifyByScores(scores, playedCol) {
+  const legal = legalCols(scores);
+  let bestCol = legal[0], bestScore = scores[legal[0]];
+  for (const c of legal) if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; }
+  const playedScore = scores[playedCol];
+  let expectedCase = null;
+  if (bestScore > 0 && playedScore > 0) expectedCase = 'win_to_slower_win';
+  else if (bestScore > 0 && playedScore === 0) expectedCase = 'win_to_draw';
+  else if (bestScore > 0 && playedScore < 0) expectedCase = 'win_to_lose';
+  else if (bestScore === 0 && playedScore < 0) expectedCase = 'draw_to_lose';
+  else if (bestScore < 0 && playedScore < 0) expectedCase = 'lose_to_faster_lose';
+  return { bestCol, bestScore, playedScore, expectedCase };
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // STRATEGY: fixture
@@ -175,20 +194,6 @@ if (strategy === 'fixture') {
     { movestring: '3333325662555225', playedCol: 1 },                             // lose_to_faster_lose (Blunder)
     { movestring: '33343022442233255525004414106106605511', playedCol: 6 },       // lose_to_faster_lose (NotABlunder)
   ];
-
-  function classifyByScores(scores, playedCol) {
-    const legal = legalCols(scores);
-    let bestCol = legal[0], bestScore = scores[legal[0]];
-    for (const c of legal) if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; }
-    const playedScore = scores[playedCol];
-    let expectedCase = null;
-    if (bestScore > 0 && playedScore > 0) expectedCase = 'win_to_slower_win';
-    else if (bestScore > 0 && playedScore === 0) expectedCase = 'win_to_draw';
-    else if (bestScore > 0 && playedScore < 0) expectedCase = 'win_to_lose';
-    else if (bestScore === 0 && playedScore < 0) expectedCase = 'draw_to_lose';
-    else if (bestScore < 0 && playedScore < 0) expectedCase = 'lose_to_faster_lose';
-    return { bestCol, bestScore, playedScore, expectedCase };
-  }
 
   const solver = await createSolverProcess();
   try {
@@ -438,7 +443,49 @@ if (strategy === 'fixture') {
     );
   };
 
+  // ── Phase 1 — deterministic opening step (opening-theory Part 2). Runs FIRST so the opening
+  // predicates are already satisfied when the stochastic Phase-2 harvest starts. Stratifies
+  // (line.id × player × sign-case), 2 per bucket, best-effort. Seed-local RNG only. ──
+  const OPENING_SEED = Number(argVal('--seed', '1337'));
+  const orng = mulberry32(OPENING_SEED);
+  const OPENING_PER_BUCKET = 2;
+  const openingBucket = new Map();   // `${id}|${player}|${case}` -> count
+  const emitBoard = (movestring, playedCol, preds, source) => {
+    for (const p of preds) {
+      if (!FULL_UNIVERSE.has(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE/RENDER_UNIVERSE (I12 selector guard)`);
+      counts.set(p, (counts.get(p) || 0) + 1);
+    }
+    collected.push({ id: `eval-${collected.length + 1}`, movestring, playedCol,
+      strategy: 'coverage', selection: { predicates: [...preds].sort(), source } });
+    writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n');
+    boards++;
+  };
   try {
+    for (const line of loadOpeningLines()) {
+      for (const k of shuffle(evenAndOddPrefixLengths(line, REASON_CONFIG.openingMaxDiscs), orng)) {
+        const prefix = line.moves.slice(0, k).join('');
+        const scores = await solver.query(prefix);
+        const legal = legalCols(scores);
+        if (legal.length < 2) continue;
+        const player = (k % 2 === 0) ? 1 : 2;
+        for (const col of shuffle(legal.slice(), orng)) {
+          const { bestCol, expectedCase } = classifyByScores(scores, col);
+          if (col === bestCol || !expectedCase || expectedCase === 'win_to_slower_win') continue;
+          const bucketKey = `${line.id}|${player}|${expectedCase}`;
+          if ((openingBucket.get(bucketKey) || 0) >= OPENING_PER_BUCKET) continue;
+          const key = `${prefix}|${col}`;
+          if (seen.has(key)) continue;
+          let r;
+          try { r = await computeReason(prefix, col, { solver }); } catch { continue; }
+          if (r.notABlunder || !r.case || r.case === 'win_to_slower_win') continue;
+          seen.add(key);
+          emitBoard(prefix, col, reasonPredicates(r), 'opening-phase1');
+          openingBucket.set(bucketKey, (openingBucket.get(bucketKey) || 0) + 1);
+        }
+      }
+    }
+    process.stderr.write(`[phase1] opening step done: ${boards} boards, ${openingBucket.size} non-empty buckets\n`);
+
     for await (const ply of harvestBlunders(solver, { maxGames: MAX_GAMES })) {
       games = ply.gameIndex;
       const { boardState, movePlayed } = ply;
@@ -459,19 +506,7 @@ if (strategy === 'fixture') {
       const advancing = [...preds].filter((p) => (counts.get(p) || 0) < TARGET_PER_PREDICATE);
       if (advancing.length === 0) continue;
 
-      for (const p of preds) {
-        if (!FULL_UNIVERSE.has(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE/RENDER_UNIVERSE (I12 selector guard)`);
-        counts.set(p, (counts.get(p) || 0) + 1);
-      }
-      collected.push({
-        id: `eval-${collected.length + 1}`,
-        movestring: boardState,
-        playedCol: movePlayed,
-        strategy: 'coverage',
-        selection: { predicates: [...preds].sort() },
-      });
-      writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n'); // crash-safe
-      boards++;
+      emitBoard(boardState, movePlayed, preds, undefined);
       // Every predicate seen so far has reached the target → coverage complete, stop now.
       if (satisfied()) break;
     }
@@ -505,14 +540,7 @@ if (strategy === 'fixture') {
             const advancing = [...preds].filter((p) => (counts.get(p) || 0) < TARGET_PER_PREDICATE);
             if (advancing.length === 0) continue;                        // adds no coverage
             seen.add(key);
-            for (const p of preds) {
-              if (!FULL_UNIVERSE.has(p)) throw new Error(`unnamed predicate "${p}" — add it to REASON_UNIVERSE/RENDER_UNIVERSE (I12 selector guard)`);
-              counts.set(p, (counts.get(p) || 0) + 1);
-            }
-            collected.push({ id: `eval-${collected.length + 1}`, movestring: ms, playedCol: col,
-              strategy: 'coverage', selection: { predicates: [...preds].sort(), source: 'rare-fill' } });
-            writeFileSync(outPath, collected.map((x) => JSON.stringify(x)).join('\n') + '\n');
-            boards++;
+            emitBoard(ms, col, preds, 'rare-fill');
           }
           if (satisfied()) break;
         }
