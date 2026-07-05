@@ -836,6 +836,14 @@
     "confirmation": {
       "header": "{{title}} — Practice",
       "empty":  "No practice puzzles available yet."
+    },
+    "opening-centre": {
+      "title": "Own the Centre",
+      "socratic": {
+        "ask":     "You move first — where is the strongest opening move?",
+        "hint":    "Which column sits on the most possible four-in-a-row lines?",
+        "correct": "Exactly — the centre column. It keeps the most winning paths alive."
+      }
     }
   },
   "review": {

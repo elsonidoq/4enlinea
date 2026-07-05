@@ -1,0 +1,111 @@
+{
+  "id": "opening-centre",
+  "title": "Own the Centre",
+  "free": true,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "movestring": "",
+      "coachMessages": [
+        {
+          "text": "It's your very first move of the game. Seven columns to choose from — but they are not all equal. Which one gives you the most ways to connect four later?",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "Every four-in-a-row runs through some set of columns and rows. A disc in the middle column sits inside far more possible horizontal, vertical, and diagonal lines than a disc on the edge — so it keeps the most winning paths alive. That is why the centre column is the strongest opening square: it is the only first move that lets Green force a win with perfect play. The four columns further from the centre are markedly weaker."
+    },
+    {
+      "movestring": "333334444",
+      "coachMessages": [
+        {
+          "text": "Here both players raced up the centre column, then Green shifted one column over. This is the '5-4' central-column opening — a known Green win.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gdgdg",
+        "dgdg",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a third-row (odd-row) horizontal connection nearby, while Gray's best threats sit on the diagonals through the centre. Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour."
+    },
+    {
+      "movestring": "3333311115555",
+      "coachMessages": [
+        {
+          "text": "Green and Gray built three columns in parallel, each answering directly on top of the last disc. Simple moves, strong position.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "dgdg",
+        "",
+        "gdgdg",
+        "",
+        "dgdg",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "Notice the shape: three columns, each filled by simply answering above the opponent's last disc. This is Allen's 'I play where you play' idea — when nothing sharper is available, playing directly on top of your opponent is often good enough, and it keeps the game easy to navigate. It is a shortcut, not a rule; you still have to check it against real threats as the game develops."
+    },
+    {
+      "movestring": "333",
+      "coachMessages": [
+        {
+          "text": "Only three discs down, all in the centre column. Early on, staying central and simple keeps you ahead — you'll learn when to branch out.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gdg",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "Even a handful of moves into the game, sticking with the centre column keeps Green's position strong. This is the same idea from the first slide, just earlier: central squares are worth more, so when in doubt, the centre is rarely a wasted move."
+    }
+  ],
+  "socratic": {
+    "movestring": "",
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "overlays": [],
+    "correctCol": 3,
+    "goalPrompt": "You move first — where is the strongest opening move?",
+    "_boardInstructions": "Empty board, Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Correct answer is the centre column (0-indexed col 3)."
+  },
+  "confirmationCategory": null,
+  "confirmationCount": 0,
+  "order": 12
+}
