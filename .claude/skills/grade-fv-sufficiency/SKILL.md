@@ -144,7 +144,9 @@ context. Record which runs failed and how they differed (e.g. run 0 named the fo
 ## Grading opening-deviation cases (`openingContext`)
 
 Some cases carry `feature_vector.openingContext` (opening-phase decisions, either player to move —
-`namedOpening`/`centrality` are first-player branches, `defense` is the second-player branch).
+only `namedOpening` is first-player-exclusive; `defense` is second-player-exclusive; `centrality`
+applies to **either** player, which is exactly why a player-2 `centrality` board legitimately carries
+`resistAndWait: true`. Do not flag a player-2 `centrality` board as suspicious on that basis alone.)
 This is an **additional lookup/geometry field**, not a different pass rule — A1–A4 (and, for
 condition D, G1–G6) still apply exactly as above. **No `render_decision` exists for opening
 cases** — the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) has never been

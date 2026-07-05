@@ -633,8 +633,10 @@ parity`, `line: null`).
 ## 11. `openingContext` — book-line lookup / centrality (opening decisions only)
 
 An **optional, top-level, mutually-exclusive** field, present only on early decisions (`boardState:
-"opening"`, roughly `discs < 15`) where the player is the first player (`player: 1`) and either an
-on-book deviation or a plain geometric centrality argument applies:
+"opening"`, roughly `discs < 15`) where one of three mutually-exclusive branches applies: `namedOpening`
+(the **first player** threw away a known first-player-win line), `defense` (the **second player**
+abandoned the defensive hold on a known first-player-win line), or `centrality` (a plain geometric
+centrality argument, applying to **either player**):
 
 ```jsonc
 openingContext?: {
@@ -647,10 +649,10 @@ openingContext?: {
 ```
 
 **Absence contract.** `openingContext` is `undefined` (pruned away, like every other absent field)
-whenever neither branch applies — e.g. mid-game/closing decisions, decisions by the second player, or
-an opening decision that is fully off-book and not measurably more central. Absence here means "no
-opening-specific reason applies," not "unknown" — the ordinary sign-taxonomy or realized/denied halves
-still carry the full reason regardless.
+whenever neither branch applies — e.g. mid-game/closing decisions, or an opening decision that is
+fully off-book and not measurably more central. Absence here means "no opening-specific reason
+applies," not "unknown" — the ordinary sign-taxonomy or realized/denied halves still carry the full
+reason regardless.
 
 ### `namedOpening` — a KB-line **lookup**, not a causal claim
 
