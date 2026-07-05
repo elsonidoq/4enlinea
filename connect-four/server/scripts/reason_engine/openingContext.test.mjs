@@ -101,3 +101,24 @@ test('namedOpening and centrality are never both present', async () => {
     }
   }
 });
+
+// ── Narrator vector: openingContext must survive pruning; raw scores must never leak (D21) ──
+test('narrator vector keeps openingContext but not raw scores', async () => {
+  const { toNarratorVector } = await import('../reasonNarratorVector.mjs');
+  const v = await computeReason('3333', /*playedCol*/ 0, { solver }); // B2's shared-prefix namedOpening board
+  const nv = toNarratorVector(v);
+  assert.ok(nv.openingContext, 'expected openingContext to survive the narrator projection');
+  assert.equal(nv.scores, undefined, 'raw scores must never leak into the narrator vector (D21)');
+  assert.equal(nv.bestScore, undefined, 'raw bestScore must never leak (D21)');
+  assert.equal(nv.playedScore, undefined, 'raw playedScore must never leak (D21)');
+});
+
+// ── pruneVector: openingContext must survive the empty-container prune too ──
+test('pruneVector keeps openingContext after toNarratorVector', async () => {
+  const { toNarratorVector, pruneVector } = await import('../reasonNarratorVector.mjs');
+  const v = await computeReason('3333', 0, { solver });
+  const nv = toNarratorVector(v);
+  const pruned = pruneVector(nv);
+  assert.ok(pruned.openingContext, 'expected openingContext to survive pruneVector');
+  assert.equal(pruned.scores, undefined);
+});

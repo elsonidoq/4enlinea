@@ -29,6 +29,11 @@
 
 // A key is hidden from the narrator if it is in the solver-score family or is an evidence-only
 // samples diagnostic. `pliesToEnd` (a counted ply distance, not a score) does NOT match and is kept.
+// `openingContext` (namedOpening{id,family,matchedPrefixLen,bookNextCol} XOR
+// centrality{bestCol,playedCol,betterHasMoreLines,text}) also does NOT match — every field name is a
+// scalar/id/text, never a `*Score`/`scores` key — so it survives both toNarratorVector's recursive
+// scrub and pruneVector's empty-container prune with NO bespoke branch (I9): the general keep/drop
+// rule already covers it. See openingContext.test.mjs's narrator/pruneVector tests.
 const SCORE_KEY = /^scores?$|Score$/;
 export function isNarratorHidden(key) {
   return SCORE_KEY.test(key) || key === 'optimalWinSamples' || key === 'winSamples';
