@@ -76,6 +76,25 @@ test('book-move-not-best: no namedOpening when the book move is not solver-best'
   assert.ok(!v.openingContext?.namedOpening, 'book move not best -> no namedOpening');
 });
 
+// ── empty-board branch (I12 cell: shared prefix across BOTH families -> family must be null,
+// so guard 1b must reject it, not just guard 2/3) ──
+// VERIFIED (./visualize_board.sh ""): empty board, player 1 to move; scr row is
+// col0=0 col1=0 col2=1 col3=2 col4=1 col5=0 col6=0 -> col 3 is the UNIQUE best (score 2, winning).
+// matchOpeningPrefix('') matches every KB line across BOTH central-column and first-row families
+// (matchedPrefixLen 0), so match.family is null. Playing col 0 (score 0 < bestScore 2) is a genuine
+// win_to_draw blunder. Before the fix this produced namedOpening {id:null, family:null,
+// matchedPrefixLen:0} (rendering as literal "a null" downstream); after the fix guard 1b
+// (match.family != null) rejects the vacuous match and this must fall through to centrality.
+test('empty-board: no namedOpening with null family; falls through to centrality', async () => {
+  const v = await computeReason('', 0, { solver });
+  assert.equal(v.notABlunder, false, 'must be a genuine blunder');
+  assert.equal(v.bestCol, 3, 'col 3 is the unique best from the empty board');
+  assert.ok(!v.openingContext?.namedOpening, 'empty-board vacuous match must never produce namedOpening');
+  assert.ok(v.openingContext?.centrality, 'expected the honest centrality fallback');
+  assert.equal(v.openingContext.centrality.bestCol, 3);
+  assert.equal(v.openingContext.centrality.playedCol, 0);
+});
+
 // ── off-book centrality branch ──
 // VERIFIED: '30' player 1 is off-book (matchOpeningPrefix null). col 3 = +4 (best), col 1 = -2 (loss)
 // -> win_to_lose blunder. Opening phase (2 plies), better move strictly more central -> centrality.

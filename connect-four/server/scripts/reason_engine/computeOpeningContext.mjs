@@ -18,7 +18,14 @@
 //
 // The four namedOpening guards (ALL required):
 //   1. `matchOpeningPrefix(movestring)` is non-null (the moves so far are a mirror-normalized prefix
-//      of a KB book line).
+//      of a KB book line) AND `match.family` is non-null (equivalently `matchedPrefixLen > 0`) — a
+//      REAL match. On the empty board (movestring === ''), every KB line trivially matches across
+//      BOTH families, so `matchOpeningPrefix` returns `family: null` as its own "no real match yet"
+//      signal; without this guard a vacuous 0-ply match would render as the literal label "a null"
+//      downstream (explainContext.js buildOpeningReason) and falsely claim book provenance for a
+//      position where no move has been played (glossary invariant: family always present when
+//      namedOpening is present). A real opening prefix (matchedPrefixLen >= its first ply) always has
+//      family non-null, so this guard can never wrongly suppress a legitimate named opening.
 //   2. The blundering player is the line's BENEFICIARY. Every KB opening line is a first-player win
 //      (beneficiary 1; see openingMatch.loadOpeningLines), so this is `player === 1`.
 //   3. `bookNextCol` is SOLVER-VERIFIED best at this node: its score equals the max (bestScore) AND
@@ -48,11 +55,12 @@ import { detectCenterDominance } from '../../centerDominance.js';
 export function computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player }) {
   const match = matchOpeningPrefix(movestring);
   if (match) {
+    const realMatch = match.family != null;                                     // guard 1b
     const beneficiaryIsPlayer = player === 1;                                   // guard 2
     const bookBest = match.bookNextCol != null
       && bestScore > 0
       && scores[match.bookNextCol] === bestScore;                              // guard 3
-    if (beneficiaryIsPlayer && bookBest) {
+    if (realMatch && beneficiaryIsPlayer && bookBest) {
       const id = match.ids.length === 1 ? match.ids[0] : null;                 // guard 4
       return {
         namedOpening: {
