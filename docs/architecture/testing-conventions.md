@@ -183,3 +183,23 @@ Three tests cover: auth gate (null `user_id` skips insert), tag guard (invalid t
 - **`npm test`**: Full suite including `candidate-generator.test.js`. Only run when explicitly testing candidate generation.
 
 New test files are NOT auto-discovered — add them to the `test` and `test:fast` scripts in `connect-four/package.json` when ready.
+
+### Solver-backed suites: test over pre-computed evidence, not a live solver
+
+A test that needs reason-engine output for many boards must **not** call `computeReason`/the c4solver
+inside `test:fast` — that reinherits the solver-IPC hang and slows every run. Instead, materialize the
+evidence **once** and read it back:
+
+1. Generate: `node server/scripts/compute.mjs --input <boards>.jsonl` writes
+   `reason_evidence_<stem>.jsonl` (rows `{ id, evidence, groundTruth|null }`) via the solver, once.
+2. Commit that evidence file (jsonl is globally gitignored — commit with `git add -f`).
+3. The test reads the evidence rows and pushes each through the pure render pipeline
+   (`toNarratorVector(row.evidence)` → `buildReasonRenderModel`/`buildRenderDecision`) — **no solver call**.
+
+`renderCoverageCorpus.test.mjs` and `renderCoverageUniverse.test.mjs` follow this pattern. The boards
+file and its `reason_evidence_*` file are a **matched pair**: regenerate both together (re-running the
+sampler alone leaves the evidence — and the test's coverage claim — stale).
+
+**Never run `test:fast` concurrently with a solver harvest** (e.g. `select_boards --strategy coverage`)
+or a second solver job — the integration tests deadlock on solver IPC under CPU contention (they pass
+in isolation). Run solver-heavy jobs serially.

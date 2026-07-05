@@ -5,11 +5,12 @@
 // nested-shape JSONL rows { id, evidence, groundTruth|null }.
 //
 // LLM answerer (--llm): call an OpenAI model with the narrator vector; emit answers for grading.
-// If the evidence --out file already exists, the solver is skipped — the evidence file is reused.
+// The evidence pass always runs first, so the vectors handed to the LLM are freshly recomputed from
+// the current engine (the --out file is overwritten; a pre-existing one is never reused).
 //
 // Usage (from connect-four/):
 //   node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
-//        [--llm [--condition A|all] [--n 3] [--model X]]
+//        [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
 //
 // --out names the EVIDENCE file (default: reason_evidence_<stem>.jsonl in server/scripts/).
 //   A bare name → server/scripts/<name>; a path with '/' → resolved from cwd.
@@ -22,6 +23,8 @@
 //   A — full:                        pruned full narrator vector (production-faithful headline).
 //   B — board-only:                  glossary + {movestring, perspective, playedCol, bestCol}.
 //   C — features-without-movestring: pruned full vector with movestring removed.
+//   D — grounded render prompt:      staged boards + causal frames + reading key (P4); condition-D
+//                                    answer lines also carry a `render_decision` record for the grader.
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -29,6 +32,7 @@ import { dirname, join, isAbsolute, resolve, basename } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
+import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -52,23 +56,29 @@ Two passes over the boards in --input:
   Evidence pass (always) — compute reason-engine evidence per board and write nested-shape
                            JSONL rows { id, evidence, groundTruth|null } to the --out file.
   LLM answerer (--llm)   — call an OpenAI model with the narrator vector and emit answers for
-                           grading. If the --out evidence file already exists, the solver is
-                           skipped and that file is reused.
+                           grading. The evidence pass always runs first, so vectors are freshly
+                           recomputed just before the LLM call (the --out file is overwritten,
+                           never reused).
 
 Usage (from connect-four/):
-  node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>]
-       [--llm [--condition A|B|C|all] [--n 3] [--model X]]
+  node server/scripts/compute.mjs --input <boards.jsonl> [--out <name>] [--ids <id,...>]
+       [--llm [--condition A|B|C|D|all] [--n 3] [--model X]]
 
 Options:
   --input <path>        REQUIRED. Boards JSONL to evaluate (absolute, or resolved from cwd).
   --out <name>          Evidence file. Bare name → server/scripts/<name>; a path with '/' →
                         resolved from cwd. Default: reason_evidence_<input-stem>.jsonl.
                         Should match reason_evidence_*.jsonl to appear in the /admin/fv-suff dropdown.
+  --ids <id,...>        Process ONLY the boards whose 'id' field is in this comma-separated list
+                        (e.g. eval-51,eval-53). Any board without a matching 'id' is skipped.
+                        Filters BOTH the evidence pass and the --llm answerer. Default: all boards.
   --llm                 Run the LLM answerer pass after the evidence pass.
-  --condition A|B|C|all Ablation condition(s), comma-separated or "all". Default: A.
+  --condition A|B|C|D|all  Ablation condition(s), comma-separated or "all" (all = A,B,C,D). Default: A.
                           A — full pruned narrator vector (production-faithful headline).
                           B — board-only: glossary + {movestring, perspective, playedCol, bestCol}.
                           C — features without movestring.
+                          D — grounded render prompt (P4): staged boards + causal frames + reading key;
+                              condition-D answer lines also carry a render_decision record for the grader.
   --n <N>               Runs per record per condition (--llm only). Default: 3.
   --model <id>          OpenAI model (--llm only). Default: $EXPLAIN_MODEL.
   -h, --help            Show this help and exit.
@@ -80,7 +90,7 @@ Requires OPENAI_API_KEY (and a model) for --llm; loaded from connect-four/server
 // process.exit or depends on --input being present. Everything below this point that the CLI
 // entry needs (INPUT, evidenceOut, useLlm, ts, N, model, CONDITIONS) is declared with `let` at
 // module scope and populated only when this file is the entry point.
-let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS;
+let inputArg, INPUT, inputStem, evidenceOut, useLlm, ts, N, model, CONDITIONS, idFilter;
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(HELP);
@@ -109,7 +119,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   N = parseInt(argVal('--n', '3'), 10);
   model = argVal('--model', process.env.EXPLAIN_MODEL);
   const condArg = (argVal('--condition', 'A') || 'A').toLowerCase();
-  CONDITIONS = condArg === 'all' ? ['A', 'B', 'C'] : condArg.toUpperCase().split(',');
+  CONDITIONS = condArg === 'all' ? ['A', 'B', 'C', 'D'] : condArg.toUpperCase().split(',');
+
+  const idsArg = argVal('--ids', null);
+  idFilter = idsArg ? new Set(idsArg.split(',').map((s) => s.trim()).filter(Boolean)) : null;
 }
 
 // ── Evidence pass ─────────────────────────────────────────────────────────────
@@ -133,8 +146,15 @@ async function runEvidence() {
   const solver = createSolverProcess();
   const rows = [];
   writeFileSync(evidenceOut, ''); // fresh run; crash-safe appends below
+  if (idFilter) {
+    const present = new Set(fixture.map((f) => f.id).filter((id) => id != null));
+    const missing = [...idFilter].filter((id) => !present.has(id));
+    if (missing.length) console.warn(`⚠️  --ids: not found in input, skipped: ${missing.join(', ')}`);
+    console.log(`--ids filter active: processing ${[...idFilter].filter((id) => present.has(id)).length} of ${fixture.length} boards`);
+  }
   try {
     for (let i = 0; i < fixture.length; i++) {
+      if (idFilter && !idFilter.has(fixture[i].id)) continue; // skip boards not in --ids (by file `id`)
       const row = await buildEvidenceRow(fixture[i], i, solver);
       rows.push(row);
       appendFileSync(evidenceOut, JSON.stringify(row) + '\n'); // crash-safe incremental write
@@ -204,7 +224,14 @@ Notes:
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
   \`_with_best_play\` outcomes mean "with correct continuation".`;
 
-function buildPrompt(glossary, fv, condition) {
+export function buildPromptForCondition(glossary, fv, condition) {
+  if (condition === 'D') {
+    return `${assembleGroundedPrompt(buildReasonRenderModel(fv))}
+
+---
+
+${TASK}`;
+  }
   const projected = projectVector(fv, condition);
   return `${glossary}
 
@@ -217,6 +244,14 @@ ${TASK}
 \`\`\`json
 ${JSON.stringify(projected, null, 2)}
 \`\`\``;
+}
+
+// The per-record render-decision ground-truth record for the grader (spec §3f). Only condition D
+// carries it (A/B/C use the glossary+JSON path). Never throws: a build failure (novel vector) yields
+// null, matching how the per-row call_error path already tolerates render failures.
+export function renderDecisionForCondition(nv, condition) {
+  if (condition !== 'D') return null;
+  try { return buildRenderDecision(nv); } catch { return null; }
 }
 
 // ── OpenAI call (own fn; reads EXPLAIN_MODEL; larger budget than callLLM) ────────
@@ -285,7 +320,33 @@ async function runLlm(evidenceRows) {
     // grader and /admin/fv-suff can re-project under any condition without recomputing.
     const nv = toNarratorVector(row.evidence);
     for (const condition of CONDITIONS) {
-      const prompt = buildPrompt(glossaryText, nv, condition);
+      let prompt;
+      try {
+        prompt = buildPromptForCondition(glossaryText, nv, condition);
+      } catch (err) {
+        // Prompt-build failure (e.g. condition D's buildReasonRenderModel throwing
+        // UncoveredVectorFieldError / classifyCausalLink no-match on a novel record) must not
+        // abort the whole multi-record job — record it as a per-row call_error, same shape as
+        // an LLM call error below, and move on to the next record.
+        const line = {
+          id: row.id,
+          pattern_category: row.evidence.case,
+          condition,
+          run_index: 0,
+          model,
+          feature_vector: nv,
+          answer: null,
+          raw: null,
+          parse_error: null,
+          call_error: err.message,
+          render_decision: null,
+        };
+        appendFileSync(answersOut, JSON.stringify(line) + '\n');
+        failed++;
+        process.stdout.write(`  ${row.id} ${condition} run0: ERROR ${err.message}\n`);
+        continue;
+      }
+      const render_decision = renderDecisionForCondition(nv, condition);
       for (let run_index = 0; run_index < N; run_index++) {
         // Per-call error isolation: a single failure drops ONE line, not the run.
         let raw = null, answer = null, parse_error = null, call_error = null;
@@ -306,6 +367,7 @@ async function runLlm(evidenceRows) {
           raw,
           parse_error,
           call_error,
+          render_decision,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
@@ -325,14 +387,10 @@ async function runLlm(evidenceRows) {
 // Guarded: only runs when this file is executed directly (CLI entry), never on import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
-    let evidenceRows;
-    if (useLlm && existsSync(evidenceOut)) {
-      // Evidence file already exists — reuse it; skip solver entirely.
-      console.log(`Reusing existing evidence file: ${evidenceOut}`);
-      evidenceRows = readFileSync(evidenceOut, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
-    } else {
-      evidenceRows = await runEvidence();
-    }
+    // Vectors are ALWAYS recomputed from the solver here — immediately before the LLM pass — and the
+    // --out file is overwritten. We never reuse a stale on-disk evidence file: it would silently
+    // replay vectors from a prior engine version against the current LLM/glossary.
+    const evidenceRows = await runEvidence();
     if (useLlm) {
       await runLlm(evidenceRows);
     }

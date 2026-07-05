@@ -2,6 +2,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { realizedPattern, realizedDeniedReason, computeReason } from '../scripts/reason_engine/reasonEngine.mjs';
+import { toNarratorVector } from '../scripts/reasonNarratorVector.mjs';
+import { buildReasonRenderModel } from '../scripts/renderReasonModel.mjs';
 
 let solver;
 before(async () => { solver = await createSolverProcess(); });
@@ -78,6 +80,46 @@ test('D24: a non-losing routed board keeps gate: null (the swindle gate does not
   assert.equal(r.route, 'realized_denied');
   assert.ok(r.bestScore > 0, 'not a both-losing board');
   assert.equal(r.gate, null, 'gate is null on a non-both-losing routed board');
+});
+
+// ── Fix B (D30) I12: sign `case` gates the L2/L3 outcome sentence, not patternOnAfterBestBoard. ──
+// Each board is extracted verbatim from the frozen combined coverage answers (never hand-built) and
+// driven end-to-end (computeReason -> toNarratorVector -> buildReasonRenderModel). The full
+// enabled_opponent (tag, case) cell-space is covered: win_to_lose, draw_to_lose, lose_to_faster_lose.
+// (win_to_draw + enabled_opponent is not sourced in the frozen sets — PROVISIONAL per I12 step 4;
+// the L2 unit test in causalLinks.test.mjs asserts the routing predicate for it directly.)
+async function renderFor(movestring, playedCol) {
+  const raw = await computeReason(movestring, playedCol, { solver });
+  const m = buildReasonRenderModel(toNarratorVector(raw));
+  return { raw, m };
+}
+
+test('D30: win_to_lose enabled_opponent (eval-53) routes to L2 with best=win, NOT L3 (best truly wins)', async () => {
+  const { raw, m } = await renderFor('253153335311554111534440620', 2);
+  assert.equal(raw.case, 'win_to_lose');
+  assert.equal(raw.direction, 'enabled_opponent');
+  assert.notEqual(m.link.id, 'L3', 'must not route to the both-lose frame on a winning case');
+  assert.equal(m.decision.bestOutcome, 'win');
+  assert.doesNotMatch(m.link.text, /already losing|both moves? lose|loses faster/i);
+});
+
+test('D30: draw_to_lose enabled_opponent (eval-51) routes to L2 with best=draw, NOT L3 (best truly draws)', async () => {
+  const { raw, m } = await renderFor('333330422356611124544555464661162210050', 0);
+  assert.equal(raw.case, 'draw_to_lose');
+  assert.equal(raw.direction, 'enabled_opponent');
+  assert.notEqual(m.link.id, 'L3', 'must not route to the both-lose frame on a drawing case');
+  assert.equal(m.decision.bestOutcome, 'draw');
+  assert.doesNotMatch(m.link.text, /already losing|both moves? lose|loses faster/i);
+});
+
+test('D30: lose_to_faster_lose enabled_opponent (eval-23) STILL routes to L3 (both moves genuinely lose)', async () => {
+  const { raw, m } = await renderFor('32556442454451212', 5);
+  assert.equal(raw.case, 'lose_to_faster_lose');
+  assert.equal(raw.direction, 'enabled_opponent');
+  assert.equal(m.link.id, 'L3');
+  assert.equal(m.decision.bestOutcome, 'loss');
+  assert.equal(m.decision.playedOutcome, 'loss');
+  assert.match(m.link.text, /already losing|loses faster/i);
 });
 
 test('computeReason keeps deep-fork 214444115623 on the sign engine (D18 witness c3r3 preserved)', async () => {

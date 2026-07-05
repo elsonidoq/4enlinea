@@ -51,6 +51,18 @@ worked_examples:
       prevent V3). V3 fires: Red wins.
     expected_behavior: "solver confirms Red wins; single Red odd-row threat controls zugzwang"
     solver_verified: PENDING
+  - movestring: "333330211113120000012222"
+    description: |
+      0-indexed movestring; 24 discs, Red (Green, first player) to move. Columns 1–4
+      (display) are full; Red holds a single odd-row major threat in column 5 at row 5
+      (cell c5r5), a Z-Threat with a height-relative count of 5 (odd). Black has only an
+      even-row threat above it (col5 row6) which, per V3, does not prevent the win. The
+      solver scores Red's three legal moves (cols 5,6,7) all +1 — Red wins. This is the
+      lock-in node of the reason engine's `namedRule: allen-v3` on the empty-board
+      blunder (`""`, played col 4): the production `detectZThreat` confirms the capsule
+      at column 5 / row 5 (badgeCount 5), the basis for the V3 name.
+    expected_behavior: "solver: Red wins (cols 5/6/7 = +1); detectZThreat confirms one odd-count (5) Z-Threat at c5r5; single uncontested odd-row threat controls zugzwang"
+    solver_verified: 2026-07-02
 
 false_positives:
   - movestring: PENDING

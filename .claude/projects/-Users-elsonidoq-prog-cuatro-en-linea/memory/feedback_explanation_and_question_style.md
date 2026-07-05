@@ -15,4 +15,4 @@ Consistent guidance the user asserted repeatedly in the last sessions (`39d6b86e
 
 **Why:** terse, internals-laden explanations and ambiguous questions cost round-trips and stall the work.
 
-**How to apply:** before sending an explanation or a clarifying question, reread it as someone who has not seen the code. If it leans on internal symbol names or unstated assumptions, rewrite. See [[feedback_answer_before_editing]], [[feedback_ask_user_question_min_options]].
+**How to apply:** before sending an explanation or a clarifying question, reread it as someone who has not seen the code. If it leans on internal symbol names or unstated assumptions, rewrite. See [[feedback_prework_discipline]], [[feedback_agent_and_ui_workflow]].

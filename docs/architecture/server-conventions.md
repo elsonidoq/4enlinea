@@ -109,6 +109,8 @@ The set contains exactly 16 tags (as of 2026-06-25): `immediate_threat`, `forced
 
 A puzzle's `category` field is set by the classifier at generation time. The predicate evaluator reads `category` to dispatch to the right evaluator, but the classifier is never called during puzzle-check requests.
 
+**New endpoint modes gate on an explicit request flag, never absence-of-field.** When adding a new mode to an existing endpoint, branch on an explicit boolean (e.g. `aiMove: true`), not on some other field being missing — sibling callers may also omit that field. This is why `evaluate-move` dispatches on `aiMove`, not on a missing `category`.
+
 ## Predicate Evaluator
 
 `evaluatePredicate(puzzle, candidateCol, scores)` in `predicates.js` dispatches on `puzzle.category`.

@@ -16,7 +16,7 @@ rule per example.
 set. A "kind per situation" design usually hides one underlying mechanism; finding it makes the system
 smaller, more correct, and easier to reason about. (Established 2026-06-28 during the blunder
 `reason`-field audit: the five "kinds" turned out to be facets of one rule — see
-[[project_reason_field_unification]].)
+`reason-DECISIONS.md` D2 (abandoned predecessor).)
 
 **How to apply:**
 - When a design has N branches/kinds/payloads, ask: is there ONE principle that generates them? If so,

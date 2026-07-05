@@ -49,6 +49,10 @@ Rationale: jsonb for variable-shape structured data; typed columns for values us
 **MUST**: Declare `ON DELETE SET NULL` when the child row should be retained without the parent (e.g., `puzzle_attempts.user_id → users(id)`).
 **MUST NOT**: Leave FK behavior implicit.
 
+**Delete-order gotcha:** `false_positive_records.candidate_id` references `candidates.id`, so a bulk `DELETE FROM candidates` fails with an FK violation unless `false_positive_records` rows are deleted first. Delete children before parents.
+
+**Bulk-insert gotcha:** a single unique-constraint (`23505`) violation rolls back the **entire** `insert(rows)` batch (0 rows written), and the error is easily mistaken for a benign per-row dedup — a bulk import once mis-counted a full failed batch as "inserted," so games showed "no mistakes" despite having blunders. For bulk inserts where some rows may pre-exist, either drop the unique constraint or insert row-by-row and catch `error.code === '23505'` per row. (`insertGameBlunder` in `server-conventions.md` deliberately treats `23505` as success precisely because it inserts one row at a time.)
+
 ## RLS Policy Structure
 
 Two access tiers:
@@ -75,11 +79,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.<table> TO anon, authenticated;
 ```
 Rationale: Supabase enforces explicit grants for all projects (deadline Oct 30 2026); PostgREST returns `42501` without them.
 
+Per-table verbs actually granted to the frontend:
+
+| Table | Verbs | Note |
+|---|---|---|
+| `users` | `SELECT, UPDATE` | No frontend `INSERT` — rows are auto-created by `loadUser` (GoTrue trigger), never by the frontend. |
+| `session_stats` | `SELECT, INSERT, UPDATE` | |
+| `puzzle_attempts` | `SELECT, INSERT` | |
+
 ## Migration Naming
 
 **MUST**: Use sequential 3-digit numeric prefix: `NNN_slug.sql` (e.g., `015_new_puzzle_categories.sql`).
 **MUST**: Each migration file begins with a comment block: migration number, description, and `-- HUMAN REVIEW REQUIRED before applying to production.`
 **MUST NOT**: Skip numbers in the sequence.
+**MUST**: When a migration changes constrained values, order it **(1) DROP old constraints, (2) UPDATE data, (3) ADD new constraints**. Never run an `UPDATE` before the `DROP CONSTRAINT` when the new value isn't in the old allowed set — the `UPDATE` violates the still-active CHECK and leaves the DB in a partial state (migration 013 hit this writing `forced_win` into a column whose CHECK still only allowed `zugzwang`).
 
 ## Deep Reveal Failures (`deep_reveal_failures`)
 

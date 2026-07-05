@@ -13,6 +13,6 @@ Symptom (eval-26 `332123542241313` played 5): lostResource emitted `completingCe
 
 Fix (2026-07-02): `realizedRoot = STANDING_THREAT_TAGS.has(tag) ? movestring : correctRoot` for `missed_own`. Forks (`double_threat`/`figure_7`) are BUILT by the best move, so they keep `correctRoot`.
 
-**Why it hid so long:** reasonEngine.test.mjs `return`s early for `realized_denied` rows, BEFORE the "completingCell occupied on finalMovestring" invariant — so the phantom was never geometry-checked. The test now runs a root-geometry invariant on the realized half (owner must NOT already have won on the half's board; completingCell is the sole empty window cell). See [[project_reason_tag_realized_denied_router]].
+**Why it hid so long:** reasonEngine.test.mjs `return`s early for `realized_denied` rows, BEFORE the "completingCell occupied on finalMovestring" invariant — so the phantom was never geometry-checked. The test now runs a root-geometry invariant on the realized half (owner must NOT already have won on the half's board; completingCell is the sole empty window cell). See `reason-DECISIONS.md` D20/D23.
 
 Doc that encoded the WRONG assumption (now corrected): `reason-tag-fastpath-pseudocode.md` line ~45 claimed such completions "fall through" — they do not for vertical completions.

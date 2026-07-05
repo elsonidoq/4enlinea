@@ -19,7 +19,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   eliminate. Soundness is the acceptance bar; latency is not. This was conceded-then-retracted by the
   owner more than once when agents raised solver-call cost — now locked.
 - **Status:** LOCKED. Do not relitigate; do not raise solver cost as a design objection.
-- **Source:** owner directive (2026-06-29); memory `feedback_fv_grounding_correctness_over_speed`.
+- **Source:** owner directive (2026-06-29); memory `feedback_fv_grounding_correctness_over_speed` (memory removed; migrated here).
 
 ### D2 — Clean-slate restart; two prior epics quarantined
 - **Decision:** `reason-case-taxonomy.md` + `blunder-reason-evidence.md` are the sole source of truth. The
@@ -254,6 +254,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** owner directive (2026-07-01) — exposing `|score|` invites "you win in 7" grounding, exactly the fabrication surface I1/I2 forbid; the reason must rest on board structure, not a number. `case` already carries the outcome losslessly, so no information is lost. Audit before the fix confirmed 3 leaking surfaces (`bestScore`, `playedScore`, both halves' `line[].score`); after, a recursive-key sweep over the coverage fixture shows zero score-family keys surviving into the narrator vector.
 - **Status:** IMPLEMENTED on `stagging` (not merged). `reasonNarratorVector.mjs` (`isNarratorHidden` + recursive `toNarratorVector`); regression in `reasonNarratorVector.test.mjs` (asserts no `score`-family key survives at any depth, incl. nested `line[].score`); glossary de-scored + de-solvered.
 - **Source:** owner directive (2026-07-01); I1/I2; `feature-vector-glossary.md`.
+- **Forward-looking trap:** the deep-scrub regex only catches `/^scores?$|Score$/` — a NEW non-score evidence-only field (e.g. a future diagnostic you want in raw evidence + `/admin/fv-suff` but NOT the LLM) passes straight through to the narrator unless its exact key is added to `isNarratorHidden`'s allow-list AND the `reasonNarratorVector.test.mjs` hidden-set assertion is updated to cover it.
 
 ---
 
@@ -300,7 +301,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Decision:** The `lose_to_faster_lose` `swindleGate` width pruning — `gateBranch=3` (distinct-score opponent winning replies branched per node), `gatePlayerTiedCap=2` (tied-best player replies followed), and the unconditional **dedup-by-score** on opponent replies — **stays as-is.** The gate's `NotABlunder`/OMIT verdict is therefore incomplete on **both** depth (`gateMaxPlies=15`) **and** width. This is now an **accepted known-gap**, not a bug to fix.
 - **Context (2026-07-02 code review, finding F4):** the width caps were shown to drop real admissible swindles that exist *within* the depth bound, producing a false OMIT (`computeReason → notABlunder:true`) on a genuine blunder. Verified through the production path with `connect-four/server/scripts/reason_engine/TOOLS/gate_cap_ablation.mjs` (production `swindleGate` vs an uncapped/dedup-free reference at equal depth): user-visible counterexample `20312225101223110055056066165433` played 3, best 6 (sign route); rate ≈ 1 per ~470 ltfl boards. The I0-motivated fix would have been to drop the score-caps and keep only `gateMaxPlies` + `gateNodeBudget`.
 - **Rationale (owner directive, 2026-07-02):** the uncapped/dedup-free search is **too expensive** — the reference gate visits many times more nodes per board (≈1k+ vs ≈200 on a diff, and unbounded in the worst case) and the harvest/offline-compute cost is not worth eliminating a ~0.2%-of-ltfl-boards false OMIT. The owner **explicitly keeps the caps as the practical-chance policy**: `NotABlunder` means "no swindle found within the depth bound AND the width caps," which is accepted as the operative definition of "no *practical* chance." This SUPERSEDES the review's I0-based recommendation to remove the caps — the owner weighs cost over that particular completeness gain here. (I0's "never weaken to save calls" still governs everywhere else; this is a scoped, owner-accepted exception for the ltfl gate's `NotABlunder` side, whose soundness-for-Blunder — I7 — is unaffected: every emitted witness is still real.)
-- **Status:** ACCEPTED known-gap (owner decision 2026-07-02). No code change. The caps in `REASON_CONFIG` stand. `blunder-reason-evidence.md` §10 and memory `project_reason_gate_width_cap_bug` reflect this as accepted, not open.
+- **Status:** ACCEPTED known-gap (owner decision 2026-07-02). No code change. The caps in `REASON_CONFIG` stand. `blunder-reason-evidence.md` §10 reflects this as accepted, not open.
 - **Source:** owner directive 2026-07-02 (kept the decision on cost grounds); code-review F4; `gate_cap_ablation.mjs`; I0/I7/D4/D23.
 
 ---
@@ -314,3 +315,121 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Considered and rejected:** (a) restricting the witness to short (`immediate`/`forced_sequence`) non-fork wins and keeping `neutralization` for genuine parity — rejected once rendering moved downstream (the deep witness is still sound evidence; the register label already carries the depth signal); (b) retaining `savingCol`/`savingReplyCount` alongside the denial — dropped as redundant with `replyHistogram.afterPlayed`.
 - **Status:** IMPLEMENTED on `stagging` (2026-07-02). `reasonEngine.mjs` (non-fork branch of the `win_to_draw` case), `reasonEngine.test.mjs` (win_to_draw half (b) now asserted `denial`), `reason_fixture.jsonl` anchor `d26-nonfork-denial` (`""`, played 4). `npm run test:fast` 707/707. Docs updated: evidence §2/§4, taxonomy comment, pseudocode, glossary, `reason-opponentPunishment-spec.md`.
 - **Source:** owner directive (2026-07-02); supersedes the non-fork carve-out of D17/D18; I2/I3/I9; D14 tie.
+
+---
+
+### D27 — The deferred D7 parity-naming milestone lands as `namedRule`: a parity-register win is named by an Allen victory rule ONLY when the production z-threat / odd-even detector confirms the completing cell; otherwise abstain
+
+- **Decision:** `parityAttribution` now carries a **detector-confirmed** `namedRule` for parity-register wins, replacing the placeholder `parityNamingDeferred: true / namedRule: null` retracted in D24-F3. A new async `nameParityRule(solver, half, winnerMark)` (`reasonEngine.mjs`) runs after each `nameWalkedHalf` on a walked win-half that can be a parity win (the `win_to_draw`/`win_to_lose` `lostResource`, the `win_to_lose`/`draw_to_lose`/`lose_to_faster_lose` `opponentPunishment`, and the `lose_to_faster_lose` `conditional_swindle` `lostResource`). It is a no-op unless `half.parityAttribution?.nameable && half.register === 'parity' && half.terminal === 'win'`.
+  - **Step A (solver-free) — lock-in-node scan (`findLockInNode`):** replay prefixes of `half.finalMovestring` to find the FIRST board where the realized `controllingGroup` window is 3-of-4 for `winnerMark`, holds 0 loser discs, `completingCell` is still empty, **AND the winner is to move**. Records `lockInPly` and the completing cell's height-relative `zcount` there. **Winner-to-move is load-bearing (R1 collision):** the *literal* "first 3-of-4" node is always the node right after the winner places their 3rd window disc, so the LOSER is to move there — and the detector emits its nameable capsule only on the non-recursive branch (`perspective === currentPlayer`). Empirically the literal node names **0 of 193** harvested parity wins; the winner-to-move node (one ply later — `""` played 4 → allen-v3, `zcount 5`, `lockInPly 24`) names correctly. Requiring winner-to-move is the faithful realization of the D7 goal (the literal reading names nothing); precedent is D23 `advanceToEnabledFork`. *(This refines the settled Step A wording; owner was away when surfaced, resolved toward the stated goal — trivially revertible.)*
+  - **Step B (one solver query, I8) — production-detector confirmation:** at the lock-in node, run the PRODUCTION `detectZThreat` (fallback `detectOddEvenThreat`) from `classifier.js` with `perspective = winnerMark`. **Confirm only** when the detector returns its non-recursive **capsule** form (`highlightMetadata`) whose locus `cellStr(toRow, column)` equals `completingCell`. Not confirmed → **ABSTAIN** (`namedRule` stays `null`, `parityNamingDeferred` stays `true`). **Never name from `zcount` arithmetic alone** — that would re-create the retracted D24-F3 defect (an odd height-parity count is not a detector-backed z-threat).
+  - **Step C — mapping:** `winner=P1 (Red/Green) + odd zcount → 'allen-v3'`; `winner=P2 (Black/Gray) + even zcount → 'allen-v4'`; any mismatch (P1+even, P2+odd) → abstain. On confirm, emit `namedRule: { rule, basis: 'z_threat', lockInPly, completingCell, zcount, parity }` and set `parityNamingDeferred: false`.
+- **Abstention is the safety net (I2).** Every non-confirmed path — no lock-in node, solver error, detector recursion branch (winner not to move → no capsule locus), `matched:false`, locus ≠ completingCell, or a P1+even/P2+odd mismatch — abstains with `namedRule: null`. This is honest, not a gap. (On the motivating board `""`, played 4, the deep top-row win legitimately abstains: at its lock-in node the detector does not surface a single confirmable z-threat capsule.)
+- **R1 detector-contract reconciliation (I12).** The settled design said "require detected cells to include completingCell", but `detectZThreat`/`detectOddEvenThreat` **never populate `cells`** — the confirmable locus lives in `highlightMetadata = { column, fromRow, toRow, badgeCount }`, and only on the non-recursive (`perspective === currentPlayer`) branch; `scores[col] > 0` and a single odd-count candidate are also required. Confirmation reads that capsule locus, not `cells`. Reading the detector's full return contract (not the branch we had in mind) is the I12 discipline that keeps naming sound.
+- **R2 gate reconciliation.** `renderHalf` previously set `half.terminal` only for forks; it now also propagates `walk.terminal` (`'win'`/`'draw'`) for non-fork halves so the settled 3-clause gate reads literally (additive; every existing check is `=== 'fork'`, unaffected).
+- **Known gap — `allen-v4` currently never confirms (detector locus, PENDING).** `detectZThreat` matches only ODD height-relative counts, so the P2/even `allen-v4` case must confirm through the `detectOddEvenThreat` fallback — but that detector returns `highlightMetadata: null` (its evidence is a parity-*choice*: `categoryEvidence.goodRowCol`/`goodRow`, a promoted good-parity minor, not a completing-cell z-threat locus). So `detectorConfirmsCell` can never confirm through it, and P2/even parity wins **abstain** (honest `namedRule: null`, I2). A 60-game harvest confirmed **0** `allen-v4` names vs abundant `allen-v3`. The mapping code (`winner=P2 + even → 'allen-v4'`) is retained so a future locus-exposing even-parity detector activates v4 without re-plumbing. Sourcing a P2/even CONFIRM fixture is **PENDING that detector** — deliberately not fabricated (plan honesty rule).
+- **Explicitly DEFERRED (I9/Occam — not in this change):** NO V1/V2 multi-threat counting, NO T1–T7 simplifier, NO per-branch odd-threat ledger. One completing cell, one detector confirmation, one name. Broader Allen-rule inference is a separate, I12-gated milestone if ever pursued.
+- **Rationale:** D24-F3 retracted `leverCells`/`groupKind`/`forcedFirstRequired` as I2 fabrications and named the detector-backed replacement as the deferred D7 milestone. `parityAttribution` reaches the LLM unscrubbed, so a fabricated rule name is a live fabrication surface; a **detector-confirmed** name is sound (I2/I8), collapses onto one mechanism (I9), and is validated per I12 (a counterexample per `{winner}×{parity}×{confirm/abstain}×{lock-in locus}` cell, through the production detector — including the mandatory ghost/undercut ABSTAIN board). `namedRule.zcount` survives `toNarratorVector` (no `*Score` key; D21).
+- **Status:** IMPLEMENTED on `stagging` (2026-07-02). `reasonEngine.mjs` (`findLockInNode`, `detectorConfirmsCell`, `nameParityRule`, 6 wiring calls, R2 in `renderHalf`, detector imports); `reasonNarratorVector.test.mjs` (survival guardrail); `reasonEngine.enrichment.test.mjs` + `reason_fixture.jsonl` `d7-*` rows (I12 cells + abstain counterexample). Annotates D7/D24-F3. `npm run test:fast` green.
+- **Source:** owner directive (2026-07-02); lands D7; annotates D24-F3; I2/I8/I9/I12; D21.
+
+---
+
+### D28 — P3 causal frames: composers derive horizon from `register`; the covers audit is a static causal-code check (not per-record presence); L2-vs-L3 branch-invariance is computed at render time
+
+- **Decision:** Phase 3 adds a `template(fv, ctx)` composer per causal link (L1–L9) producing the coach
+  sentence; `classifyCausalLink` returns the composed `text`. Composed frames hide (cover) the semantic
+  CODES they subsume: a fired frame renders the family's routing/label codes (e.g. `register`/
+  `terminal`/`verdict`) redundant for narration, even where the sentence does not restate each one
+  word-for-word — the covers list names the whole family a frame makes narratively moot, not a literal
+  transcript of the sentence. Cells and counts stay grounded. Three sub-decisions:
+  1. **Horizon from `register`, not `pliesToEnd`.** `pliesToEnd` is absent on all 29 corpus records, so
+     deep-vs-near framing derives from `register` (`forced_sequence` → "deep on a forced line", `parity`
+     → "deep, via a parity battle"); the plies count is appended only when present. This is the eval-3
+     fix (the deep fork is framed as deep, never "immediate").
+  2. **The covers over-removal audit is a STATIC causal-code check.** Every `covers` entry across the
+     catalog must resolve to a `causal-code` disposition; a `render`/`exclude`/typo entry throws. The
+     spec's earlier "a covers entry naming an absent field throws" is infeasible — `covers` are
+     family-wide supersets (`CODES_SIGN`/`CODES_REALIZED`) and every link legitimately names absent
+     codes (verified across the corpus). L3's covers dropped `lostResource.exhaustive`/`gate.witness.node`/
+     `gate.witness.devVal` (statically excluded); L7's dropped `tie.playedPlies`/`tie.swindlePlies`
+     (`render` counts, kept grounded).
+  3. **L2-vs-L3 branch-invariance is computed at render time** (`patternOnAfterBestBoard`, reusing the P2
+     `tagBoard` on the after-best board), never read off `direction`. This is the eval-23 fix.
+- **I12 note:** no corpus board is a `win_to_lose`/`draw_to_lose` + `enabled_opponent` +
+  pattern-present-on-after-best (the case where the computation flips a would-be-L2 into L3); the
+  computation is validated against real boards through `tagBoard` and the routing at the classifier
+  layer with synthetic ctx. The missing flip-board is a documented PROVISIONAL gap for a Phase-4
+  targeted harvest.
+- **Status:** IMPLEMENTED on `stagging` (Phase 3). Render-layer only; `computeReason` untouched.
+  `npm run test:fast` green; corpus completeness gate 29/29 zero-uncovered.
+- **Source:** Phase-3 design `docs/superpowers/specs/2026-07-03-grounded-render-prompt-phase3-design.md`;
+  spec `reason-render-grounded-prompt.md` §3b/§3d/§6; I12.
+
+---
+
+### D29 — P4 lands: `render_decision` persisted as grader ground truth; coverage universe gains the render-layer joint predicates; flip-case (D28 I12) gap CLOSED
+
+- **Decision (three coupled P4 deliverables):**
+  1. **`buildRenderDecision(nv)` emits a per-record `render_decision` object, render-only, no engine
+     change.** Added to `renderReasonModel.mjs`, it captures `case`/`route`/`direction`,
+     `patternOnAfterBestBoard` (the D28 L2-vs-L3 branch-invariance value), the fired link
+     (`linkId`/`confidence`/`covers`/`guardrail`/composed `text`), `boards[{id, shown, reason}]`,
+     resource grounding (`completingCell`, `register → horizon`), the field partition
+     (`rendered`/`covered`/`excluded`), and `finalMovestring`. `compute.mjs` persists it on
+     **condition-D answers lines only** (`renderDecisionForCondition`) — condition A/B/C rows are
+     unaffected, and `computeReason` is untouched.
+  2. **The `grade-fv-sufficiency` grader now grades condition D via G1–G6, consuming `render_decision`
+     as ground truth — never re-deriving routing.** Per §3f, re-running `classifyCausalLink`,
+     recomputing branch-invariance, or re-selecting boards inside the grader was explicitly rejected as
+     the same class of drift that produced the eval-1/16/3 mis-grades. Two grounding fixes land with
+     it: **G4** — cells are verified against the engine's OWN `finalMovestring`, never an alternate
+     solver PV (the root cause of the eval-1/16 false convictions); and the **D28 covers semantics** —
+     a `covers`-hidden-but-absent field is normal (the covers list is a family-wide superset), not
+     `missing_info`.
+  3. **The coverage universe gains the render-layer joint predicates via a shared `renderUniverse.mjs`,**
+     consumed identically by `select_boards.mjs --strategy coverage` and the coverage test — spanning
+     `link_L1`–`link_L9`, the branch-invariance split (L2-vs-L3), `board_*` (decision/after-best/
+     after-played/projected-deep), covers-exercised, horizon, and the `case × route × direction` joint
+     space, plus a bounded directed rare-fill (`RARE_FILL_GAMES` cap + no-progress early-exit) added
+     after a tractability incident during harvesting (an earlier unbounded rare-fill run stalled/ran
+     away; the cap + early-exit make the sampler terminate deterministically on a bounded budget). A
+     **freshly regenerated 32-board set** (`boards_coverage_p4_2026-07-03T15-54-38Z.jsonl` +
+     precomputed `reason_evidence_boards_coverage_p4_2026-07-03T15-54-38Z.jsonl`) is committed and
+     graded by `renderCoverageUniverse.test.mjs`, which asserts all 35 `RENDER_REQUIRED` predicates
+     covered, solver-free (reads precomputed evidence only). **The frozen 29-board set
+     (`boards_coverage_2026-07-02T11-37-56Z.jsonl`) is retained** — not superseded — as the ablation
+     (A-vs-D) input and the P1–P3 regression anchor; it is a strict predecessor, not a duplicate, of
+     the P4 32-board coverage set.
+- **Flip-case (D28 I12 gap) disposition: CONFIRMED reachable-but-rare, gap CLOSED.** The Phase-4
+  directed all-suboptimal-column harvest surfaced two real boards carrying the `flip_case_l3`
+  predicate (`win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best,
+  routing correctly to L3 not L2) in the 32-board set — confirming Hypothesis H1 (reachable-but-rare)
+  over H2 (router bug); the routing/computation was verified correct on both harvested boards. Full
+  write-up: `docs/architecture/reason-flip-case-investigation.md`. `flip_case_l3` stays
+  PROVISIONAL-with-example in the coverage universe (rare, now sourced — not blocking, not fabricated).
+- **Rationale:** I2/I9 (the grader must consume one declared render-decision record rather than
+  re-implement the composer's rules — §3e's "one rule × three consumers" principle, generalized to a
+  fourth artifact: the persisted decision itself); I0 (the bounded rare-fill trades a small,
+  documented completeness gap for a tractable, terminating sampler after the tractability incident);
+  I12 (the flip-case gap is closed with real harvested counterexamples, not asserted away).
+- **Status:** IMPLEMENTED on `stagging` (Phase 4). Render-layer + tooling only — `computeReason` and
+  the engine are untouched. `renderReasonModel.mjs` (`buildRenderDecision`), `compute.mjs`
+  (`renderDecisionForCondition`), `grade-fv-sufficiency` SKILL (G1–G6 + G4 PV fix), `renderUniverse.mjs`
+  (shared universe) + `select_boards.mjs --strategy coverage`, `renderCoverageUniverse.test.mjs`.
+  `npm run test:fast` 795/795 green.
+- **Source:** Phase-4 design/task briefs (2026-07-03); spec `reason-render-grounded-prompt.md` §3e/§3f;
+  D28; `reason-flip-case-investigation.md`; I0/I2/I9/I12.
+
+---
+
+### D30 — The sign `case` gates the L2/L3 OUTCOME sentence; `patternOnAfterBestBoard` is retired as the L2↔L3 discriminator; supersedes D28 sub-decision 3, plus the Fix-A coordinate-leak render fix and the Fix-C timing-not-causation glossary rule
+
+- **Decision (three coupled fixes to defects surfaced by the 2026-07-03 combined-coverage FV-sufficiency grading run — 15/126 fails in three clusters):**
+  1. **Fix B (engine `when` change, `causalLinks.mjs`) — the L2/L3 split now keys on the SIGN `case`, not on `patternOnAfterBestBoard`.** New predicates: **L3** iff `route==='realized_denied' && direction==='enabled_opponent' && case==='lose_to_faster_lose'`; **L2** iff the same but `case!=='lose_to_faster_lose'`. **This supersedes D28 sub-decision 3** ("L2-vs-L3 branch-invariance is computed at render time"). The principle: **L3's text asserts an OUTCOME** ("you were already losing, both moves lose, played loses faster") — an outcome claim is valid ONLY when both moves actually lose. `patternOnAfterBestBoard` is a **GEOMETRIC** fact ("the opponent threat cell is present on the after-best board") and is **NOT equivalent to "the best line loses"** — D28 conflated the two. Using geometry to pick L3 flipped genuine win/draw cases into a false loss narration: solver-confirmed on **eval-53** (`win_to_lose`, best truly WINS) and **eval-51** (`draw_to_lose`, best truly DRAWS) — both got L3 and the model faithfully narrated `best_outcome=loss`. These are exactly the `win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best boards that D28's I12 note flagged as an unproven provisional gap and that D29's `flip_case_l3` rare-fill sourced — the coverage run filled the gap and **proved the branch-invariance outcome-flip wrong** (D29 had recorded the routing on those boards as "verified correct"; it was not). `patternOnAfterBestBoard` remains **informational** in `render_decision` (`buildRenderDecision` still computes it for enabled_opponent) and MAY soften L2's guardrail *wording*, but **never** drives the outcome sentence. Consequence: the D28/D29 "flip case" (non-ltfl enabled_opponent routing to L3 via geometry) is now **structurally impossible** — the `flip_case_l3` coverage predicate is retained as a **regression marker** (its boards must now emit L2, never L3) in `renderUniverse.mjs`, still provisional.
+  2. **Fix A (render-only, `renderReasonModel.mjs` + `fieldDisposition.mjs`) — kill the 0-indexed coordinate leak.** The grounded prompt now leads with a canonical, board-anchored **Decision block**: `you = player {X}`, `Better move: column {bestCol+1} (lands at {cell})`, `Played move: column {playedCol+1} (lands at {cell})`, with best/played **outcomes derived from `case`** (never a solver score — D21). Landing cells come from `movestring`+col via `parseBoardState`. `bestCol`/`playedCol` move from `RENDER_LEAVES` to the **transformed** disposition (the Decision block IS their transform, mirroring `movestring`→board), so the raw 0-indexed leaves no longer leak into the `# Vector facts` JSON residue. `READING_KEY` now states every column shown anywhere is a 1-indexed display column. Root cause (9 condition-D fails: eval-10/17/21/22/25/30/42/56/57): the JSON dump printed 0-indexed `bestCol`/`playedCol` while every other layer was 1-indexed, so the model emitted the raw value as `better_move` and scrambled move→cell→role (worst on the `444…`/c3r1 double_threat family). (`opponentPunishment.line[].col` was already transformed-dropped by the `isTransformed` `line` regex.)
+  3. **Fix C (glossary, doc-only) — the raw-vector path safety net.** `feature-vector-glossary.md` now states that on a `lose_to_faster_lose` board `direction: enabled_opponent` is a **TIMING** fact ("the played move loses faster"), **NOT causation** — the opponent's pattern pre-exists on the after-best board. This protects conditions A/C and any non-render caller (which have no L3 guardrail): root cause of the 4 condition-A fails (eval-18/23/34/57 A) reading `enabled_opponent` as causal creation. On non-ltfl `enabled_opponent` (`win_to_lose`/`draw_to_lose`) the concession IS causal (the better move would have denied it), matching Fix B's L2.
+- **I12 (validated through the PRODUCTION classifier, not the motivating example):** the full `(tag, case)` cell-space of the `enabled_opponent` branch driven end-to-end (`computeReason`→`toNarratorVector`→`buildReasonRenderModel`) in `reasonRealizedDenied.test.mjs`: **eval-53** `win_to_lose`→L2 best=win; **eval-51** `draw_to_lose`→L2 best=draw; **eval-23** (`32556442454451212`,played 5) `lose_to_faster_lose`→L3 both=loss. `win_to_draw` + `enabled_opponent` is not sourced in the frozen sets — PROVISIONAL per I12 step 4; the L2 routing predicate for it is asserted directly in `causalLinks.test.mjs`. Every board is extracted verbatim from the frozen combined-coverage answers, never hand-built.
+- **Rationale:** owner-directed (2026-07-03) from the FV-sufficiency grade report. I0/I2 (correctness; every counterexample solver-verified, no fabricated board); I12 (case-space + counterexample per cell through production); the geometry≠outcome distinction D28 conflated. Fix A is render-only and highest-value; Fix C is a doc safety net; Fix B is the engine change, done last with the fullest validation (ordering A→C→B).
+- **Status:** IMPLEMENTED on `stagging`. `causalLinks.mjs` (L2/L3 `when`; `branchInvariant` helper removed), `renderReasonModel.mjs` (Decision block + landing cells + READING_KEY), `fieldDisposition.mjs` (bestCol/playedCol → transformed), `renderUniverse.mjs` (flip_case_l3 comments → regression marker), `feature-vector-glossary.md` (Fix C + Decision-block contract). Tests: `causalLinks.test.mjs`, `branchInvariance.test.mjs` (routing test rewritten for D30), `renderReasonModel.test.mjs` (Decision block + no-leak), `reasonRealizedDenied.test.mjs` (I12 integration). `npm run test:fast` 803/803 green.
+- **Source:** owner directive + grade report `fv_suff_answers_combined_boards_coverage_2026-07-03T17-42-51Z_2026-07-03T17-44-57Z_grade_report.md` (2026-07-03); supersedes D28 sub-decision 3; annotates D29 (`flip_case_l3`), D20; I0/I2/I12/D21.

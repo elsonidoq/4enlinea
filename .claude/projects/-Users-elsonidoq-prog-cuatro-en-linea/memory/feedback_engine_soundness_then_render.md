@@ -26,7 +26,7 @@ the engine *stores*, you throw away sound evidence you can't get back.
 - When a value like `register` is derived from `fwd` on a non-walked half, treat it as descriptive
   metadata; the load-bearing evidence (line, finalMovestring, witness cell) is stored regardless.
 
-Related: [[feedback_fv_grounding_correctness_over_speed]] (correctness over solver cost — same spirit,
-different axis), [[project_reason_denial_always_occupation]] (D26 concrete change),
-[[project_narrator_vector_no_scores]] (toNarratorVector is the projection/prune layer that decides
+Related: `reason-DECISIONS.md` D1 (correctness over solver cost — same spirit,
+different axis), `reason-DECISIONS.md` D18/D26 (D26 concrete change),
+`reason-DECISIONS.md` D21 (toNarratorVector is the projection/prune layer that decides
 what actually reaches the LLM — the downstream step this principle defers to).

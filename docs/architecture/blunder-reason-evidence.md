@@ -60,7 +60,10 @@ the walk fields above:
 - `parityAttribution` — for parity-register wins: controlling group + per-cell height-parity
   (`empties`). The `leverCells` / `forcedFirstRequired` / `groupKind` fields were removed 2026-07-02
   (review F3) as an I2 fabrication — an odd height-parity count is not a detector-backed z-threat/lever.
-  The detector-backed naming is deferred (D7). See DECISIONS **D7**, **D24**.
+  The detector-backed naming **landed as `namedRule` (D7/D27, 2026-07-02)**: `nameParityRule` names a
+  parity win `allen-v3`/`allen-v4` **only** when the production z-threat / odd-even detector confirms
+  the completing cell at its lock-in node, else abstains (`namedRule: null`). See DECISIONS **D7**,
+  **D24**, **D27**.
 - `opponentPunishment.tie` — the verified relationship of half (b) to half (a):
   `tied` | `independent` | `temporal`. See DECISIONS **D14**, **D15**.
 
@@ -209,12 +212,13 @@ multiple fallbacks.
 **D18 update for `draw_to_lose`:** the `parity_group` fallback for `draw_to_lose` half (a) is
 superseded by the D18 occupation-witness PV walk. The zugzwang zugzwang hold is now described by
 the concrete cell the player occupies inside the opponent's conceded window (constructive
-window-aware tie), NOT by a parity-lever cell. Parity *prose* naming for `draw_to_lose` remains
-deferred per D7 — the occupation cell is the anchor, the parity language around it is not yet
-canonicalized.
+window-aware tie), NOT by a parity-lever cell. The `draw_to_lose` **half-(a) occupation cell** is a
+denial, not a walked win, so it carries no `namedRule` (D7/D27 names only walked parity-WIN halves —
+here that is the half-(b) `opponentPunishment` winning line). The occupation cell is the anchor; the
+parity language around half (a) is not canonicalized.
 
 See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`,
-`reference_allis_rule_examples`.
+`reference_verified_tactical_movestrings`.
 
 ## 8. Tooling map
 
@@ -280,8 +284,7 @@ optimal replies. See `reason-DECISIONS.md` D22 and `reason-tag-fastpath-pseudoco
   ≈1 per ~470 ltfl boards. The I0-motivated fix (drop the score-caps, keep only `gateMaxPlies` +
   `gateNodeBudget`) was **considered and declined on cost grounds** — the uncapped search is too
   expensive for the ~0.2% miss. The width caps are the accepted practical-chance policy. Soundness for
-  declaring **Blunder** (I7) is unaffected — every emitted witness is still real. See DECISIONS **D25**
-  and memory `project_reason_gate_width_cap_bug`.
+  declaring **Blunder** (I7) is unaffected — every emitted witness is still real. See DECISIONS **D25**.
 - **Multi-window board-fill** (no dominant parity group) remains genuinely unnameable; emit a
   low-specificity parity reason rather than invent geometry.
 - **Display cap is real information loss.** The show/don't-show ply threshold is a product knob, not a
@@ -326,8 +329,14 @@ position. **Evidence-only** — like `optimalWinSamples`, `winSamples` is stripp
 
 **Case classifier caveat:** `win_to_slower_win` is gated on `bestScore>0 && playedScore>0` (both
 strictly positive). A naive `bestScore*playedScore>0` is wrong — it also matches both-negative and would
-swallow `lose_to_faster_lose`. See memory `project_reason_engine_case_classifier_trap`.
+swallow `lose_to_faster_lose`. (The same caution is inlined on the first branch of `reason-case-taxonomy.md`.)
 
 **Viewer:** `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) browses `reason_evidence_*.jsonl` via
 `GET /api/admin/reason{,/files}` — see `api-conventions.md`. No solver in the web server; the file is
 fully precomputed by `compute.mjs`.
+
+**Production coach still runs the OLD feature vector, NOT this engine.** `toFeatureVector` /
+`buildExplainContext` in `server/explainContext.js` remain the live coach behind `/api/explain*`
+(index.js). The 2026-06-30 reorg replaced only the *eval's* use of `toFeatureVector` with the reason
+engine — production still calls the old path. Do **not** delete `explainContext.js`/`toFeatureVector`
+as "old FV"; migrating production onto the reason engine is a separate, deferred effort.

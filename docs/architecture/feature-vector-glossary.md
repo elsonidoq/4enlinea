@@ -67,6 +67,16 @@ A field that is **absent** was empty/null/zero-length and was pruned away (§ pr
 - **Column integers are 0-indexed.** `playedCol`, `bestCol`, and the per-move `col` inside a `line`
   are **0-indexed** (0 = leftmost = display column 1). **Add 1** to get the display column / the `cN`
   of a cell. (So `bestCol: 1` means "play column 2 in display.")
+  - **Grounded-render prompt (condition D) exception — you never touch a raw column integer there.**
+    The grounded prompt (`assembleGroundedPrompt`) leads with a canonical **Decision block** that has
+    already converted the moves for you: `you = player {X}`, `Better move: column {display} (lands at
+    {cNrM})`, `Played move: column {display} (lands at {cNrM})`, with each move's `win`/`draw`/`loss`
+    **outcome derived from `case`**. Every column shown anywhere in that prompt is a **1-indexed
+    display column**, and the raw 0-indexed `bestCol`/`playedCol` are withheld from the `# Vector
+    facts` JSON residue (they are "transformed" — carried by the Decision block, like `movestring` is
+    carried by the board). Use the Decision block's columns and landing cells verbatim; do not
+    re-derive move→cell→role. (See [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30 — the Fix-A
+    coordinate-leak fix.)
 - **Who is "you".** `player` is the side whose move is being explained — call them **"you"**;
   `opponent` is the other side. Both are `1` or `2`.
   - `player: 1` — the **first player** (moved first); wins by completing four on **odd** rows
@@ -292,6 +302,18 @@ The two halves are still `lostResource` (a) and `opponentPunishment` (b), but ea
 `sharedCells: [cell]` when the denial's occupied cell coincides with the pattern (the usual case for
 a conceded/missed immediate threat), else `independent`. `gate` is `null` on this route.
 
+> **`enabled_opponent` on a `lose_to_faster_lose` board is TIMING, not causation.** When `case ===
+> "lose_to_faster_lose"` (both moves lose — signs `(−, −)`), `direction: enabled_opponent` means *the
+> played move loses **faster***, **NOT** that your move created or handed over the opponent's pattern.
+> The opponent's tactic (`figure_7` / `double_threat`) **pre-exists on the after-best board** — it is
+> there regardless of what you play. Never narrate "your move enabled / handed the opponent the
+> pattern" on a `lose_to_faster_lose` vector; say the position was already lost and the played move
+> only loses sooner. (This is a raw-vector-reader rule; the grounded-render prompt enforces the same
+> thing structurally via causal frame L3 — see [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30.)
+> **On the non-both-losing `enabled_opponent` cases** — `win_to_lose` / `draw_to_lose` — the
+> concession **is** causal: the better move genuinely would have denied the pattern (the `denial`
+> half), so "your move let the opponent form the tactic the better move prevented" is correct there.
+
 ### `tag` — the full `tagBlunder` vocabulary
 
 `tag` (and the half-level `tacticTag`, §7) are drawn from this fixed set. Only the **four routed**
@@ -420,17 +442,54 @@ Describes the controlling structure of a deep win when the line is suppressed. S
 | `ownDiscs` | How many of your discs are already in the group (may be `0` — the group can be a pure parity claim not yet materialized as a threat). |
 | `empties` | Per empty cell `{ cell, zcount, parity }` — `zcount` = height-relative count; `parity` `odd`/`even`. This is the raw count only; it does **not** by itself identify a z-threat or a lever. |
 | `completingCell` | The cell that eventually completes the four. |
-| `parityNamingDeferred`, `namedRule: null` | The canonical Allis/V-rule **name is intentionally not given.** Describe the group structurally; do **not** invent a rule name, a "lever," or a "z-threat." |
+| `namedRule` | **object when a rule was CONFIRMED, otherwise absent/`null`.** When present, the win has a verified Allen victory-rule name (D7): `{ rule, basis, lockInPly, completingCell, zcount, parity }`. When absent/`null` (with `parityNamingDeferred: true`), **no rule was confirmed** — describe the win only by `controllingGroup` + `completingCell`, and do **not** name a rule, a lever, or a z-threat. Absence is an honest abstention, not "unknown, go derive it." |
+| `namedRule.rule` | `allen-v3` (first player / Green wins with one uncontested odd-row threat) or `allen-v4` (second player / Gray wins with an even-row threat). See the concept entries below. |
+| `namedRule.basis` | `z_threat` — the verified basis for the name (the completing cell is a confirmed z-threat: an odd/even zugzwang threat, not a raw parity count). |
+| `namedRule.completingCell` / `namedRule.zcount` / `namedRule.parity` | The confirmed completing cell, its **height-relative inclusive count** (`zcount`), and that count's `parity` (`odd`/`even`). |
+| `namedRule.lockInPly` | The number of discs on the board at the moment the threat **materializes** under best play. **The named threat is NOT on the root board** (`movestring`) — it locks in `lockInPly` discs into the game and the win resolves many plies later. `lockInPly` marks where the parity claim becomes a concrete 3-of-4 threat, not where anything is played now. |
+| `parityNamingDeferred` | `true` when `namedRule` is `null` (naming abstained); `false` when a `namedRule` was confirmed. |
 
 > **Retired fields (do not expect them):** `leverCells`, `groupKind`, and `forcedFirstRequired` were
 > removed (2026-07-02, review F3). They asserted a z-threat / "lever" / Aftereven claim from a raw
 > odd-height-parity count with no detector backing — an I2 fabrication that reached this narrator.
-> The detector-backed replacement (D7) is deferred. Until it lands, describe a parity win only by its
-> `controllingGroup` + `completingCell`; **do not** call any empty cell a lever or a z-threat.
+> Their **detector-backed replacement landed as `namedRule` (D7)**: a rule name is now emitted **only**
+> when the production z-threat / odd-even detector confirms the completing cell as a real z-threat at
+> the moment the threat locks in. When it does not confirm, `namedRule` is `null` and the payload
+> still describes the win only by `controllingGroup` + `completingCell` — **do not** call any empty
+> cell a lever or a z-threat when `namedRule` is absent.
 
-Narrative for parity wins: "the win is a long zugzwang — you control the parity of group
-`controllingGroup`, so the opponent eventually has to give you `completingCell`." Keep it structural;
-never fabricate a forced line, a lever cell, or a rule name.
+Narrative for parity wins **with `namedRule` present**: "this is Allen `<rule>` — the win is a long
+zugzwang controlled by group `controllingGroup`; you hold one uncontested `parity`-row threat at
+`completingCell` (which locks in around move `lockInPly`), so the opponent is eventually forced to
+give it to you." **Pair `namedRule` with the half-(b) occupation witness** to tell the whole lesson:
+the best move preserved this Allen-V3/V4 resource, and the played move let the opponent occupy a cell
+of `controllingGroup` (the `opponentPunishment` denial), collapsing the win to an **Allen-V5 draw**
+("V3 resource lost → V5 draw"). Name the shared cell from the witness's `tie`.
+
+Narrative for parity wins **with `namedRule` absent/`null`**: "the win is a long zugzwang — you
+control the parity of group `controllingGroup`, so the opponent eventually has to give you
+`completingCell`." Keep it structural; never fabricate a forced line, a lever cell, or a rule name.
+
+### Concepts behind `namedRule` (verbatim strategy terms)
+
+Use these only when `namedRule` is present; they are the canonical meanings of the rule names.
+
+- **`allen-v3`** — *"Red wins with an odd-row threat. Red's odd-row threat wins."* A single
+  uncontested odd-row threat gives the **first player** (Red = player 1 = displayed Green) zugzwang
+  control: the opponent is eventually forced to play into that column, handing the win. This is the
+  most common first-player endgame win.
+- **`allen-v4`** — *"Black wins with an even-row threat."* The mirror for the **second player**
+  (Black = player 2 = displayed Gray): with no winning odd-row configuration for either side, one
+  uncontested even-row threat wins by the same zugzwang argument.
+- **`allen-v5`** — *"Otherwise the game is drawn. Without a winning threat, no one wins."* This is the
+  outcome the lost resource collapses to: when the opponent occupies a cell of `controllingGroup`
+  (the half-(b) denial), the V3/V4 threat is cancelled and the position is a **V5 draw**.
+- **z-threat (count formulation)** — *"A Z-Threat is a major threat at cell (c, r) where the number
+  of empty cells in column c from the current column height up to and including row r is odd. … the
+  count formulation generalises across mid-game positions where the column is partially filled."* The
+  operative value is the **height-relative inclusive count** (`namedRule.zcount`), not the raw row
+  number: an odd count toggles zugzwang control for the owner. This is the verified basis
+  (`namedRule.basis: "z_threat"`) behind a V3/V4 name.
 
 ### `optimalWinSamples` — evidence-only; **not in the vector you read**
 

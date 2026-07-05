@@ -25,7 +25,8 @@ We are starting over from a conceptual algorithm. An earlier "unified blunder-re
 design branched off and is **abandoned**. The following are HISTORICAL ONLY — do NOT read, cite,
 or let them guide you, **even if they appear in injected memory or the docs index**:
 
-- memory: `project_reason_field_unification`
+- the "5 blunder-reason kinds collapse to ONE rule" field-unification design (superseded by
+  `reason-DECISIONS.md` D2 — clean-slate restart)
 - `docs/epics/unified-blunder-reason-epic.md`, `docs/epics/blunder-reason-field-epic.md`
 - `docs/architecture/feature-vector-reason-algorithm.md`
 - the quarantined `reason_audit/` cluster: any `*.md` carrying a `SUPERSEDED / ABANDONED 2026-06-28`

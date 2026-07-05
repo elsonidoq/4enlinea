@@ -55,5 +55,5 @@ absent one** — Condition B (fields stripped) abstains; Conditions A/C with mis
 at high confidence. Prune/verify aggressively; absence is safer than a plausible-but-wrong value.
 
 Related: [[feedback_feature_vector_design]], [[project_explain_prompt_grounding_traps]],
-[[reference_deep_reveal_eval_harness]], [[reference_c4solver_scores]],
+the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[reference_c4solver_scores]],
 [[reference_cat5_forced_block_detection]].
