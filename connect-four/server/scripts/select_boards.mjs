@@ -358,10 +358,10 @@ if (strategy === 'fixture') {
     'opp_parity_nameable', 'opp_parity_unnameable',
     'gate_ran',   // D23: the gate is one uniform depth-bounded search; the exhaustive/bounded split is retired.
     // Task B4 (opening theory, B2's openingContext evidence): mutually exclusive on the board —
-    // namedOpening XOR centrality XOR absent. Both PROVISIONAL: a self-play move landing exactly on
-    // a KB book-opening prefix is rare (coverage-sampler rare-fill trap — a REQUIRED-but-unreachable
-    // predicate burns the full harvest budget chasing it).
-    'reason_opening_named_line', 'reason_opening_centrality',
+    // namedOpening XOR defense XOR centrality XOR absent. All three PROVISIONAL: a self-play move
+    // landing exactly on a KB book-opening prefix is rare (coverage-sampler rare-fill trap — a
+    // REQUIRED-but-unreachable predicate burns the full harvest budget chasing it).
+    'reason_opening_named_line', 'reason_opening_defense', 'reason_opening_centrality',
   ];
   // Partition CALIBRATED empirically (Task 8, 2026-07-01: coverage harvest, target 2, ~497 games).
   // Provisional = known-rare / structurally-unreachable in ordinary self-play; reported but
@@ -376,7 +376,7 @@ if (strategy === 'fixture') {
     'lost_denial_no_occupation',           // D18: depth artifact, near-unreachable
     'lost_realized_figure_7', 'lost_fork_B', // figure_7/Case-B forks are rare
     'parity_unnameable', 'opp_parity_unnameable', // multi-window board-fill only
-    'reason_opening_named_line', 'reason_opening_centrality', // Task B4: rare KB book-prefix matches
+    'reason_opening_named_line', 'reason_opening_defense', 'reason_opening_centrality', // rare in stochastic self-play; Phase 1 sources them deterministically
   ]);
   const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
 

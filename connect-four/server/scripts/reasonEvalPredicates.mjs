@@ -58,6 +58,7 @@ export function reasonPredicates(r) {
   // cases are registered PROVISIONAL in REASON_UNIVERSE (coverage-sampler rare-fill trap — a REQUIRED
   // unreachable predicate burns the full harvest budget chasing it).
   if (r.openingContext?.namedOpening) preds.add('reason_opening_named_line');
+  if (r.openingContext?.defense) preds.add('reason_opening_defense');
   if (r.openingContext?.centrality) preds.add('reason_opening_centrality');
 
   // Render-layer predicates (spec §3e): derive the render_decision from this evidence and union in
