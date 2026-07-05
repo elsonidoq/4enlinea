@@ -852,6 +852,14 @@
         "hint":    "Which column sits directly above Gray's last disc?",
         "correct": "Exactly — play where they play. Answering directly above Gray's last disc keeps the imitation going."
       }
+    },
+    "opening-sharp": {
+      "title": "Sharp Openings",
+      "socratic": {
+        "ask":     "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
+        "hint":    "Look at Green's threats on the right flank. Which column completes them right now?",
+        "correct": "Exactly — that column completes Green's third-row threat right now. Every other column throws the win away; this is Allen's 'only one move to win' Third-Row Gambit."
+      }
     }
   },
   "review": {

@@ -20,3 +20,10 @@ test('opening-imitate lesson is valid', () => {
   assert.equal(validateLesson(l), null);
   assert.ok(Number.isInteger(l.socratic.correctCol));
 });
+
+test('opening-sharp lesson is valid, Pro, Socratic targets the only winning move', () => {
+  const l = load('lesson-14-opening-sharp.json');
+  assert.equal(validateLesson(l), null);
+  assert.equal(l.free, false);
+  assert.equal(l.socratic.correctCol, 4);   // gambit 3265533353553111 -> col 4
+});

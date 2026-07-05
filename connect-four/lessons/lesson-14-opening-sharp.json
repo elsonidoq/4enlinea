@@ -1,0 +1,90 @@
+{
+  "id": "opening-sharp",
+  "title": "Sharp Openings",
+  "free": false,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "movestring": "333334444",
+      "coachMessages": [
+        {
+          "text": "Five discs up the centre, then four up the next column over — the '5-4' opening. Gray, to move here, is already lost.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gdgdg",
+        "dgdg",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "This is Allen's flagship central-column win: Green stacks the centre column five discs high, then continues into the neighbouring column, always blocking Gray's horizontal ideas as it goes. Once the shape is complete, Green already holds a winning odd-row threat on the far side — Gray, to move, has no defence."
+    },
+    {
+      "movestring": "3332223362",
+      "coachMessages": [
+        {
+          "text": "Green grabbed both central key cells early — the centre column at rows 2 and 3 (0-indexed). This D3-D4 opening is usually an easy win, but here it has sharpened: Green to move, and only ONE column wins.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "dgdd",
+        "gdggd",
+        "",
+        "",
+        "g"
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "Owning both central key cells early — Allen's D3 and D4 — is usually powerful and comparatively easy to convert. But 'usually easy' does not mean 'always safe': in this exact position, only col 1 (0-indexed) keeps the win — every other column throws it away. Recognising the D3-D4 shape tells you the position is good; it does not tell you which move keeps it that way."
+    },
+    {
+      "movestring": "3332222",
+      "coachMessages": [
+        {
+          "text": "Same centre column, but Gray never let Green claim that second central cell. Gray, to move here, still loses — but the win is thinner than the D3-D4 lines.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "dgdg",
+        "gdg",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "This is the sibling '3-4' opening: Green's centre column stands only three high (no D4), so the easy D3-D4 plan is unavailable and Green's win depends on a delayed, more precise follow-up instead. It is still a Green win here, but a thin one — this is the kind of position where the sharpest sacrifice lines, like the Third-Row Gambit, come from."
+    }
+  ],
+  "socratic": {
+    "movestring": "3265533353553111",
+    "boardSpec": [
+      "",
+      "dgd",
+      "d",
+      "gdgddg",
+      "",
+      "dgggd",
+      "g"
+    ],
+    "overlays": [],
+    "correctCol": 4,
+    "goalPrompt": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
+    "_boardInstructions": "16 plies (3265533353553111): a Third-Row Gambit — Green (first player) has a major third-row threat on the right flank (cols 4-6), Gray has fifth-row compensation on the left flank (cols 1-2). Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified (Allen Diagram 301): col 4 (0-indexed) is the unique positive-scoring column (+2); every other playable column is negative for Green."
+  },
+  "confirmationCategory": null,
+  "confirmationCount": 0,
+  "order": 14
+}
