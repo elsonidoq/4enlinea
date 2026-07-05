@@ -20,9 +20,11 @@ per-column `scores` array stripped by `toNarratorVector`). Its fields are `case`
 `playedCol`, `bestScore`, `playedScore`, `player`/`opponent`, `lostResource`, `opponentPunishment`
 (each with `kind`/`register`/`window`/`tacticTag`/`parityAttribution`/…), `opponentPunishment.tie`,
 `replyHistogram`, `gate`, and — on opening-phase decisions only — the optional, mutually-exclusive
-`openingContext.namedOpening` (`{id, family, matchedPrefixLen, bookNextCol}`, a KB book-line lookup)
-or `openingContext.centrality` (`{bestCol, playedCol, betterHasMoreLines, text}`, a geometric
-fallback). See the glossary's §11 for both. The glossary defines every one. There is **no** separate
+`openingContext.namedOpening` (`{id, family, matchedPrefixLen, bookNextCol}`, a KB book-line lookup),
+or `openingContext.defense` (`{id, family, matchedPrefixLen, bestDefenseCol, centralityGrounded}`, a
+second-player on-book losing-hold lookup), or `openingContext.centrality` (`{bestCol, playedCol,
+betterHasMoreLines, text}`, a geometric fallback). See the glossary's §11 for all three. The glossary
+defines every one. There is **no** separate
 ground-truth file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside**
 each eval record's `feature_vector`.
 
@@ -141,7 +143,8 @@ context. Record which runs failed and how they differed (e.g. run 0 named the fo
 
 ## Grading opening-deviation cases (`openingContext`)
 
-Some cases carry `feature_vector.openingContext` (opening-phase decisions, first player to move).
+Some cases carry `feature_vector.openingContext` (opening-phase decisions, either player to move —
+`namedOpening`/`centrality` are first-player branches, `defense` is the second-player branch).
 This is an **additional lookup/geometry field**, not a different pass rule — A1–A4 (and, for
 condition D, G1–G6) still apply exactly as above. **No `render_decision` exists for opening
 cases** — the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) has never been
@@ -163,21 +166,47 @@ claim is graded TRUE by three board checks — never by narrative plausibility:*
 3. **The "why it loses" half** is grounded in `lostResource`/`opponentPunishment` as usual (same A3/A4
    board verification as any other case).
 
+**A `defense` "you're the second side of `<opening>`, already lost, most resilient hold is column
+`<bestDefenseCol+1>`" claim is graded TRUE by three board checks:**
+
+1. **Prefix match** — same as `namedOpening` check 1 (movestring or its mirror is the first
+   `matchedPrefixLen` plies of the named KB line). `family`-only with `id: null` is correct on a
+   shared prefix.
+2. **Player 2, losing, loses faster** — the board is player-2-to-move, `bestScore < 0`,
+   `bestDefenseCol === bestCol`, and `scores[playedCol] < bestScore`. The opening name and the
+   "theoretically lost" claim are **lookup/game-theoretic facts** (all legal scores < 0), NOT
+   fabrication — do **not** fail A4 for stating them.
+3. **The "why it loses faster" half** is grounded in `lostResource`/`opponentPunishment` (same A3/A4).
+
+If the answer asserts "more central" / "even rows", require `centralityGrounded: true` in the vector
+AND that `bestDefenseCol` runs through strictly more 4-cell windows than the played column; a "more
+central" claim with `centralityGrounded: false` is an A4 fabrication (`vector_error` only if the
+field itself is wrong; otherwise `prompt_confusion`). A `defense` claim that instead reads as
+"you are building a winning attack" is an A4 fail (the second player is lost — `prompt_confusion`).
+
+**Failure attribution for `defense`:** wrong `bestDefenseCol` (not the max-score legal move) or a
+prefix that doesn't match → `vector_error`; a missing `defense` on a board a manual check confirms is
+an on-book player-2 losing-faster position → `missing_info`; correct field but the model narrates a
+fabricated attack/tactic → `prompt_confusion`.
+
 **A `centrality` claim** is verified by counting winning lines (4-cell windows) through `bestCol` vs.
 `playedCol` on the decision board (not by tracing a `finalMovestring` — there is none to trace for
 this branch; it is a pure geometric count, confirm with `visualize_board.sh`'s threat annotations).
+If the vector carries `resistAndWait: true`, the answer may add a hold-and-wait framing (the mover is
+a losing second player) — this is a canon signal, not a geometric claim, and does not change the
+window-count verification.
 
 **Lookup-not-fabrication instruction (do not misfire A4 here):** naming the opening (or its family)
 when checks 1+2 hold is a **verified lookup fact**, not a fabricated mechanism — do **not** grade it
 as an A4 hedge/fabrication failure. A `family`-only label with `id: null` on a genuinely shared KB
 prefix is **correct**, not a hedge failure — only flag it if the prefix is in fact unique to one KB
-entry and the answer still reported `id: null`, or vice versa.
+entry and the answer still reported `id: null`, or vice versa. This applies identically to `defense`.
 
 **Failure-attribution wording for opening cases:**
-- A wrong `bookNextCol` (its score is not the max, or the claimed prefix doesn't actually match the
-  named KB line) → `vector_error`.
-- A missing `namedOpening`/`centrality` field on a board that a manual KB/geometry check confirms
-  *is* on a known line / *is* more central → `missing_info`.
+- A wrong `bookNextCol`/`bestDefenseCol` (its score is not the max/least-bad, or the claimed prefix
+  doesn't actually match the named KB line) → `vector_error`.
+- A missing `namedOpening`/`defense`/`centrality` field on a board that a manual KB/geometry check
+  confirms *is* on a known line / *is* more central → `missing_info`.
 - The model narrating the field correctly but still fabricating a mechanism beyond it, or misreading
   `bookNextCol` vs. `bestCol` as required to be identical → `prompt_confusion`.
 

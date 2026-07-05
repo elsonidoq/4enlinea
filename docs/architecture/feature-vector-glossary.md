@@ -640,7 +640,9 @@ on-book deviation or a plain geometric centrality argument applies:
 openingContext?: {
   namedOpening: { id: string|null, family: string|null, matchedPrefixLen: number, bookNextCol: number }
 } | {
-  centrality: { bestCol: number, playedCol: number, betterHasMoreLines: true, text: string }
+  defense: { id: string|null, family: string|null, matchedPrefixLen: number, bestDefenseCol: number, centralityGrounded: boolean }
+} | {
+  centrality: { bestCol: number, playedCol: number, betterHasMoreLines: true, text: string, resistAndWait: boolean }
 }
 ```
 
@@ -675,6 +677,36 @@ blunder). Treat `namedOpening` as an epigraph for the reason, never a substitute
 3. **The "why it loses" half** is grounded in `lostResource`/`opponentPunishment` exactly as usual —
    `namedOpening` supplies the opening's name/provenance, not the losing mechanism.
 
+### `defense` — the second player abandoned the defensive hold on a known line
+
+Present instead of `namedOpening` when the mover is the **second player** on an on-book prefix of a
+first-player-win line and the played move **loses faster** than the best legal move (`case:
+lose_to_faster_lose`). Like `namedOpening` this is **provenance + canon frame**, NOT a causal "why it
+loses" claim (that still lives in `lostResource`/`opponentPunishment`). It asserts only: the position
+matches a documented book line; because the line is a first-player win the second player is
+theoretically lost; the most resilient defense is the solver's least-bad move `bestDefenseCol`; and
+the strategic goal is to hold and wait for a first-player slip.
+
+| Field | Meaning |
+|---|---|
+| `id` | Specific KB entry when the prefix is on a **unique** book line; `null` (report `family` only) on a shared prefix. Same lookup semantics as `namedOpening.id` — `id: null` with `family` present is correct, not a gap. |
+| `family` | Opening family (`central-column opening`, `first-row opening`); always present. |
+| `matchedPrefixLen` | Plies of `movestring` (mirror-normalized) matching the named line. |
+| `bestDefenseCol` | 0-indexed least-bad legal move (= the vector's `bestCol`). This is the solver's most resilient hold — **NOT** a book `bookNextCol` (a lost position has no winning book move to cite). |
+| `centralityGrounded` | `true` iff `bestDefenseCol` is *strictly more central* than the played column on a ≤6-ply board (the same `detectCenterDominance` test that powers `centrality`). When `true`, the reason may add that the more central hold runs through more potential fours, including the even rows (2 & 4) that favour the second player (general parity canon, `allen-parity.md` — never a specific-cell claim). When `false`, no centrality/parity clause is asserted. |
+
+**How to verify a `defense` claim** (three board checks, never narrative plausibility):
+1. **Prefix match** — `movestring` (or its mirror `col → 6 − col`) equals the first `matchedPrefixLen`
+   plies of the named KB line's worked-example movestring (`docs/knowledge-base/<id>.md`); a
+   `family`-only label with `id: null` requires the prefix to be genuinely shared across ≥2 KB lines.
+2. **Losing hold** — the mover is player 2, `bestScore < 0`, and `bestDefenseCol === bestCol` with
+   `scores[playedCol] < bestScore` (the played move loses strictly faster). The opening name is a
+   **lookup fact**, not a fabricated mechanism — do NOT fail A4 for naming it.
+3. **The "why it loses faster" half** is grounded in `lostResource`/`opponentPunishment` as usual.
+
+If `centralityGrounded: true`, additionally confirm `bestDefenseCol` runs through strictly more 4-cell
+windows than the played column (same geometric check as `centrality`).
+
 ### `centrality` — a geometric fallback, not book provenance
 
 Present instead of `namedOpening` when the position is in the opening phase, the better move is
@@ -687,6 +719,7 @@ that powers the pre-existing "why the better move is stronger" prompt section.
 | `bestCol` / `playedCol` | The compared columns (0-indexed), same values as the vector's top-level `bestCol`/`playedCol`. |
 | `betterHasMoreLines` | Always `true` when present — the better move passes through strictly more potential winning windows (4-cell lines) than the played move. |
 | `text` | The rendered centrality sentence (shared with the legacy center-dominance section). |
+| `resistAndWait` | `true` when the mover is a **losing second player** (`player === 2 && bestScore < 0`) — a canon hold-and-wait signal (same strategic goal as `defense`'s framing), not a geometric claim. Does **not** change the window-count verification below. |
 
 **How to verify a `centrality` claim:** count the winning lines (4-cell windows) that pass through
 `bestCol` vs. `playedCol` on the decision board — the better move must run through strictly more.
@@ -694,12 +727,14 @@ This is a pure geometric count on the board, independent of any KB lookup.
 
 ### Mutual exclusivity and the on-book-but-unverifiable case
 
-`namedOpening` and `centrality` never both appear — `namedOpening` short-circuits when all four
-guards hold (on-book prefix; mover is the first player/beneficiary; Guard 3 score-equality above;
-unique-id-vs-shared-family). **A position that matches a book prefix but fails a later guard (e.g. the
-book's next move is not solver-verified best) falls through to `centrality`, not to absence** — this
-is intentional (a plain centrality argument is still honest and available), but it means `centrality`
-can legitimately appear on a technically on-book position. Do not read a `centrality` field as proof
-the position is off-book.
+`namedOpening`, `defense`, and `centrality` never appear together — at most one of the three is
+present. `namedOpening` short-circuits when all four guards hold (on-book prefix; mover is the first
+player/beneficiary; Guard 3 score-equality above; unique-id-vs-shared-family). `defense` short-circuits
+instead when the mover is the second player on an on-book prefix and `case: lose_to_faster_lose`
+(see the `defense` subsection above). **A position that matches a book prefix but fails its branch's
+later guard (e.g. the book's next move is not solver-verified best) falls through to `centrality`, not
+to absence** — this is intentional (a plain centrality argument is still honest and available), but it
+means `centrality` can legitimately appear on a technically on-book position. Do not read a
+`centrality` field as proof the position is off-book.
 
 
