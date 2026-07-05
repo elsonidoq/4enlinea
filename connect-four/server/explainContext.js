@@ -1048,8 +1048,9 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
           '## Opening theory',
           '',
           'You are the second player here and already on the back foot: your practical goal is to '
-            + 'resist and hold, waiting for the first player to slip. The "## Why the better move is '
-            + 'stronger" section explains why the more central column is the tougher hold.',
+            + 'resist and hold, waiting for the first player to slip. The more central column is the '
+            + 'tougher hold — it runs through more potential fours, including the even rows (2 and 4) '
+            + 'that favour the second player.',
         ].join('\n');
       }
     }
