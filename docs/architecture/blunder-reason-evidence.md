@@ -390,6 +390,38 @@ losing-side counterexample.
 A cross-branch mutual-exclusivity test additionally confirms `namedOpening` and `centrality` never
 both appear on the same evidence object.
 
+### Opening defense (`openingContext.defense`)
+
+D32 adds a third mutually-exclusive mode, `defense` — the second-player mirror of `namedOpening`,
+for a mover who is on a known KB opening line but is the theoretically **losing** side
+(`case === lose_to_faster_lose`). It answers "what is the least-bad move that resists longest," not
+"what wins" — there is no winning connection to recommend. Three required guards: on-book prefix match
+(`matchOpeningPrefix`, shared with `namedOpening`), player 2, and `case === lose_to_faster_lose`.
+`bestDefenseCol = bestCol` (the solver's own least-bad argmax) — unlike `namedOpening`'s Guard 3, there
+is **no `bookNextCol`-equality requirement**. Precedence is `namedOpening` → `defense` → `centrality`.
+
+**Owner correction (2026-07-05):** the originally planned "companion suppress-fix" — silencing
+`centrality`'s win-oriented framing on a provably losing board — is **dropped**. Instead, both `defense`
+and a losing-P2 `centrality` carry `resistAndWait: true` plus a conditional citation of KB
+[`allen-parity.md`](../knowledge-base/allen-parity.md)'s even-row canon ("Even-row threats (rows 2, 4,
+6): Favour the second player") — stated as **general strategic canon only**, never as a per-board claim
+that a specific cell is a confirmed even-row threat (that would re-fabricate the parity claims D24-F3
+retracted). `centralityGrounded = detectCenterDominance(...) != null` is conditional and honest per
+board — see the table below.
+
+### Validated boards (verified via `TOOLS/compute_feature_vector.mjs`, 2026-07-05)
+
+| board | played | player | demonstrates | `openingContext` |
+|---|---|---|---|---|
+| `3333344` | col 2 | 2 | unique id, no centrality clause (equidistant cols) | `defense{id:'allen-5-4-opening', family:'central-column opening', matchedPrefixLen:7, bestDefenseCol:4, centralityGrounded:false}` |
+| `333` | col 4 | 2 | shared prefix → family only; centrality clause fires | `defense{id:null, family:'central-column opening', matchedPrefixLen:3, bestDefenseCol:3, centralityGrounded:true}` |
+| `333331` | col 0 | 1 | `namedOpening` UNCHANGED (regression anchor — `defense` never displaces it on a P1 board) | `namedOpening{id:'allen-candlesticks-opening', family:'central-column opening', matchedPrefixLen:6, bookNextCol:1}` |
+| `305` | col 1 | 2 (off-book) | `centrality` NOT suppressed for a losing mover; carries `resistAndWait:true` | `centrality{bestCol:4, playedCol:1, betterHasMoreLines:true, text:'In the opening, the more central a column is, the more four-in-a-row lines run through it, so it can take part in more future threats and shapes. Column 5 sits in more of those lines than column 2, so playing there keeps more ways to build a winning connection open, while the less central choice gives some of them up.', resistAndWait:true}` |
+
+The `305` row is the same board Task 1 used to close `project_opening_defender_reason_gap`; its
+`route`/`tag`/`direction` (`realized_denied`/`double_threat`/`enabled_opponent`) also fire on this
+board, orthogonal to `openingContext`.
+
 **Known v1 boundary (not a bug):** transposition (reaching a documented line via a different move
 order) is not detected — the matcher is a literal, mirror-normalized prefix match against recorded KB
 worked-example movestrings, not a canonicalized board-state search. A board that is strategically on a

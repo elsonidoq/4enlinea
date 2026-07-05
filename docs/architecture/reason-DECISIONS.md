@@ -514,3 +514,86 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   `docs/knowledge-base/allen-*-opening.md` (the five source KB lines); memory
   `feedback_reason_case_requires_eval_and_grader`, `project_reason_render_layer`,
   `project_select_boards_skips_openings`; I0/I2/I8/I9/I12.
+
+---
+
+### D32 — `openingContext` gains a third mode `defense` (second-player on-book resist-and-wait); owner correction: `centrality` is NOT suppressed for a losing mover; precedence namedOpening → defense → centrality
+
+- **Decision:** `computeOpeningContext.mjs` gains a third, mutually-exclusive `openingContext` mode,
+  `defense`, alongside D31's `namedOpening`/`centrality`. It fires under three guards, all required:
+  1. **On-book real match** — `matchOpeningPrefix(movestring)` returns non-null (the same B1 KB
+     matcher D31 uses for `namedOpening`, mirror-normalized, no duplication — I9).
+  2. **Player is 2** — the mover is the second player, the losing side of every parsed KB line (the
+     mirror-image guard of D31's Guard 2, which requires `player === 1`).
+  3. **`case === lose_to_faster_lose`** — the position is a genuine theoretical loss for the mover (both
+     scores `< 0`); `defense` never fires on a position the second player could still draw or win.
+  When all three hold, `bestDefenseCol = bestCol` — the solver's own argmax, i.e. the objectively
+  least-bad reply — with **no `bookNextCol`-equality requirement**: unlike `namedOpening`'s Guard 3
+  (D31), `defense` does not need the KB's book move to coincide with the solver best; it simply reports
+  the solver's least-bad column as "the move that resists longest," independent of whether the KB text
+  happens to recommend that exact column. `id`/`family`/`matchedPrefixLen` are carried through
+  unchanged from the underlying `matchOpeningPrefix` result (`id` unique-else-null → `family` only, per
+  D31 Guard 4's honesty rule).
+- **Precedence:** `namedOpening` → `defense` → `centrality`. `namedOpening` (D31, player 1 only) is
+  checked first and is mutually exclusive with `defense` on guard 2 alone (player 1 vs player 2) — they
+  never compete on the same board. `defense` is checked before `centrality`: a second-player on-book
+  `lose_to_faster_lose` position that passes all three `defense` guards emits `defense`, never falls
+  through to `centrality`. `centrality` remains the fallback for everything neither mode claims (off-book
+  boards, on-book boards failing a guard, and — per the owner correction below — on-book-but-not-yet-a-
+  literal-KB-match `lose_to_faster_lose` boards for the second player, e.g. shared-prefix boards where
+  `defense`'s `id` is `null` still route through `defense`, not `centrality`, because guard 1 only needs
+  a prefix match, not a unique id).
+- **Owner correction (2026-07-05): `centrality` is NOT suppressed for a losing mover.** The originally
+  planned spec included a "companion suppress-fix" — silencing `centrality`'s existing "keeps more ways
+  to build a winning connection open" framing whenever the mover is provably losing (since a lost side
+  has no winning connection to build). That suppression is **dropped**. Instead, both `defense` and a
+  losing-P2 `centrality` (`lose_to_faster_lose`, off-book or guard-failed) now carry a **`resistAndWait:
+  true`** flag and the resist-and-hold goal framing, plus a **conditional** centrality/even-row canon
+  frame: KB `docs/knowledge-base/allen-parity.md` states "Even-row threats (rows 2, 4, 6): Favour the
+  second player (Yellow/Gray)" as **GENERAL canon only** — cited as a background strategic fact about
+  why holding central/even squares matters for the second player, **never** as a per-board claim that a
+  *specific* cell on *this* board is a confirmed even-row threat (that claim would require a detector,
+  per D24-F3's retraction of unbacked `leverCells`/`groupKind`). This upholds D24-F3: the fix adds an
+  honest general-canon sentence: it does not resurrect a fabricated per-cell parity claim.
+- **`centralityGrounded` is conditional and honest per board.** `centralityGrounded =
+  detectCenterDominance(...) != null` — true only when the production `detectCenterDominance` detector
+  actually confirms center dominance for the position, false otherwise. Verified per I12: **true** on
+  `333`/col 4 (`centralityGrounded:true` — the detector confirms), **false** on `3333344`/col 2
+  (`centralityGrounded:false` — the detector does not confirm center dominance at that depth/column).
+  This mirrors D31's discipline of never asserting a geometric claim the detector itself does not
+  confirm.
+- **Render-layer boundary unchanged (per D31).** Opening boards — `namedOpening`, `centrality`, and now
+  `defense` alike — still bypass the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`):
+  the frozen condition-D corpus has no opening boards, so there is no `render_decision`/`fieldDisposition`
+  for any of the three modes. Production `explainContext.js`/`llmCoachHelpers.js` grounds `defense`
+  directly into the `## Opening theory` prompt section, exactly as it does for `namedOpening`/`centrality`.
+- **I12 counterexamples (validated 2026-07-05, via `TOOLS/compute_feature_vector.mjs`):**
+  - `3333344` played 2, player 2 → `defense{id:'allen-5-4-opening', family:'central-column opening',
+    matchedPrefixLen:7, bestDefenseCol:4, centralityGrounded:false}` — unique id, no centrality claim
+    (equidistant columns).
+  - `333` played 4, player 2 → `defense{id:null, family:'central-column opening', matchedPrefixLen:3,
+    bestDefenseCol:3, centralityGrounded:true}` — shared prefix → family only; centrality clause fires.
+  - `333331` played 0, player 1 → `namedOpening{id:'allen-candlesticks-opening', family:'central-column
+    opening', matchedPrefixLen:6, bookNextCol:1}` — **unchanged**, confirming `defense` never displaces
+    `namedOpening` on a first-player board (regression anchor).
+  - `305` played 1, player 2, off-book → `centrality{bestCol:4, playedCol:1, betterHasMoreLines:true,
+    text:…, resistAndWait:true}` — centrality NOT suppressed for a losing mover; carries `resistAndWait`.
+  Full outputs recorded in `blunder-reason-evidence.md` §12's new "Opening defense" subsection.
+- **Rationale:** I0 (guard 3 reuses already-computed `case`/`scores`; zero new solver calls beyond what
+  D31 already pays for); I2 (never claims a book move is objectively best when only "least-bad" is true;
+  `centralityGrounded` never asserts geometric dominance the detector itself doesn't confirm; the
+  even-row citation stays general canon, never a per-cell fabrication — upholds D24-F3); I8 (reuses
+  `matchOpeningPrefix`/`detectCenterDominance`, no new detector); I9 (one shared
+  `computeOpeningContext.mjs` module, one mechanism, `defense` slots into the same guard-chain shape as
+  D31's `namedOpening`/`centrality` rather than a parallel code path); I12 (one counterexample per
+  branch — unique-id, shared-family, regression-anchor, off-book-centrality — each verified through the
+  production `compute_feature_vector.mjs`, not asserted).
+- **Status:** IMPLEMENTED on `opening-theory` branch (Tasks 1–3). This entry (Task 4) adds no code —
+  decision record + evidence doc only. Sampling predicate `reason_opening_defense` lands in Task 5
+  (`select_boards.mjs` coverage strategy), symmetric to D31's `reason_opening_named_line`/
+  `reason_opening_centrality`.
+- **Source:** `docs/superpowers/specs/2026-07-05-opening-defender-reason-and-sampling-design.md`; owner
+  correction (2026-07-05, dropping the spec's companion suppress-fix); D31 (guard-chain shape, render
+  boundary); D24-F3 (parity-fabrication retraction, upheld not reversed); `docs/knowledge-base/allen-
+  parity.md` (even-row canon quote); memory `project_opening_defender_reason_gap` (the gap this closes);
+  I0/I2/I8/I9/I12.
