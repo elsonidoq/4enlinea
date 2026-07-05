@@ -30,7 +30,7 @@ Six (now **seven**) KB entries document Connect Four opening theory, each with a
 - **Never reveal the answer column** for any interactive task (Socratic or in‑lesson drill) before the learner attempts it.
 - **Never weaken the reason algorithm to save solver calls (Invariant I0).** Un‑skipping openings adds solver load; that is expected and acceptable. No budget heuristic may gate opening analysis.
 - **Reason soundness bar (I0/I1/I2/I12):** every clause in an opening reason must be solver‑ or canon‑grounded; the LLM narrates, it does not reason; validate any new classification/stop rule against its full case‑space with a counterexample per case, through the production detector.
-- **i18n:** lesson **body** text (coach messages, `infoProse`) is authored **inline in the JSON** (matching lessons 1–10; `ConceptScreen` renders it directly). Only the lesson **title** is i18n‑keyed (`lesson.<id>.title`, with the JSON `title` as `defaultValue`). No `lesson.<id>.slide.<n>.*` wiring exists or is added. English at launch; `es.json` untouched.
+- **i18n:** lesson strings use `lesson.<id>.slide.<n>.*` (existing namespace); coach phrasing reuses the existing `coach.*` pools. English at launch; `es.json` untouched.
 - **Analytics:** reuse existing events `lesson_started` / `lesson_completed` (fired by the lesson screens) and `puzzle_attempted` / `puzzle_solved_*` (in‑lesson drills reuse `ChallengeScreen`). No new events.
 - **Documentation is a first‑class deliverable** (§9), not an afterthought — the glossary, the grader skill, the decisions log, and the evidence doc are all updated in‑scope.
 - **Coordinates are 0‑indexed** everywhere except the two existing translation boundaries (frontend display, c4solver wrapper).
@@ -44,22 +44,20 @@ Six (now **seven**) KB entries document Connect Four opening theory, each with a
 | **D1** | **No opening Challenge category.** Cut. | Won‑position boards have the losing side to move (no answer to recognize); no generatable one‑move signal for a classifier; the 8‑file category wiring would hold ~2 hand boards. A well‑argued "not worth building." |
 | **D2** | The two viable interactive boards live in **Lessons** (Socratic + in‑lesson drills), not a category. | The Socratic mechanism already provides a single‑position "pick the column, answer hidden" interaction with zero category infrastructure. |
 | **D3** | **3–4 opening lessons**, including the named openings. | Matches the 1000–1500 Elo target; named lines taught as concept slides where they don't fit a single‑move interaction. |
-| **D4** | Reason engine v1 = **sound slice only**: (a) opening‑centrality evidence (reuse `centerDominance` logic), (b) narrow **exact‑match** named‑opening label. **General causal "you left the &lt;opening&gt;" reason is DEFERRED as unsound.** | A deviation from a named line often isn't a blunder; attributing a score drop to "leaving the opening" is a causal claim the solver doesn't verify → violates I0/I2/I12. |
+| **D4** | Reason engine v1 has **two grounded modes**: (a) **centrality** — for opening blunders that match no book line; (b) **named‑opening deviation** — when the moves so far are a **prefix** of a known opening line and the blundering player is the opening's beneficiary, explain the blunder as *leaving the book*: the opening's next move is the known winning continuation (solver‑verified best), the played move loses/draws (two‑halves‑grounded). **This is the primary intended use** (openings are *good moves*; the book names the correct move). **Out:** inventing an opening attribution for a **non‑matching** position (that is the only unsound claim). | Every clause is a lookup fact or a solver check; it is NOT the abstract "leaving the opening caused the loss" claim. Sound under I0/I2, with the four case‑space guards (see B1). |
 | **D5** | Opening reason is first‑class in the **feature‑vector engine** (`computeReason`), not only the coach path — so it is covered by `select_boards`, graded by `grade-fv-sufficiency`, and grounded in the production prompt. | The user's requirement: eval coverage + grader awareness + prompt grounding are part of "adding a reason case." |
-| **D6** | **No `winning_move` predicate / no server‑checked drills.** The interactive "find the move" moment is delivered by the **Socratic** board (client‑side `correctCol`), one per lesson. | Server‑checked `confirmationChallenges` are DB‑puzzle‑backed (`/api/puzzles/:id/check` loads a `puzzles` row by id and switches `evaluatePredicate` on the stored category); with no opening challenge category (D1) there are no such rows, so a predicate + drill path would need DB/curation plumbing for no real gain. Socratic needs zero backend. _(Revised 2026-07-04 after tracing the check path; supersedes the earlier "add a `winning_move` predicate" plan.)_ |
-| **D7** | Structure as **two workstreams** (A: Opening lessons; B: Reason engine) in one design doc. Part A is **content only** → **implement directly** (below the speckit bar); Part B is invariant‑heavy, multi‑surface → **its own speckit spec**. | Independent subsystems, very different risk profiles; the sizing rubric (`best_practices_spec_driven_development.md`) says split when risk/subsystems differ, and skip speckit for content‑only work. |
+| **D6** | **In‑lesson recognition drills CUT** (revised 2026-07-04). No `winning_move` predicate, no `confirmationChallenges` for openings, no `/check` plumbing. Interactivity = one **client‑side Socratic** per lesson (empty→3, imitation, gambit→4 / D3‑D4→1). | `/api/puzzles/:id/check` requires a DB puzzle row (404s on self‑contained ids); drills would need a new inline‑eval path + frontend wiring for little value over Socratic. Keep Part A pure content. |
+| **D7** | Structure as **two workstreams** (A: Lessons + Practice; B: Reason engine) in one design doc. Part A is content + one small predicate → **implement directly / one lean spec**; Part B is invariant‑heavy, multi‑surface → **its own speckit spec**. | Independent subsystems, very different risk profiles; the sizing rubric (`best_practices_spec_driven_development.md`) says split when risk/subsystems differ. |
 | **D8** | `select_boards.mjs` currently **skips openings** (`discMin: 12`). Un‑skipping (an opening harvest band) + registering opening predicates in `REASON_UNIVERSE` is in scope. | Without it, opening blunders never enter the eval set and the new reason is ungraded. |
 | **D9** | **All prompt grounding is in scope** — `explainContext.js`, `llmCoachHelpers.js`, the grounded‑render / condition‑D `render_decision` path, and any `causalLinks.mjs` frame needed for the opening‑centrality case. | Requested explicitly; a feature‑vector field that never reaches a grounded prompt is inert. |
 
-**Deliberately left out (with reason):** general named‑opening causal reason (D4, unsound v1); multi‑Socratic schema extension (use `confirmationChallenges` for multiple checkpoints); any change to the 5‑case taxonomy or two‑halves core; Spanish content; payments (Pro‑gating uses the existing lock modal).
+**Deliberately left out (with reason):** opening attribution for **non‑matching** positions (D4 — the one genuinely unsound claim); **transposition** matching (matching by resulting position rather than move‑prefix) — a future enhancement; v1 uses mirror‑normalized prefix match; multi‑Socratic schema extension (use `confirmationChallenges` for multiple checkpoints); any change to the 5‑case taxonomy or two‑halves core; Spanish content; payments (Pro‑gating uses the existing lock modal).
 
 ---
 
-## PART A — Opening Lessons (content only)
+## PART A — Opening Lessons
 
-_Subsystem: lesson content only — JSON files on the existing model. Frontend and backend are **entirely reused; zero new server code, zero i18n wiring beyond the existing `lesson.<id>.title` key**. Sizing: content authoring, below the speckit bar → implement directly with a short task list. (In‑lesson server‑checked drills were dropped — see D6; the one interactive board per lesson is the client‑side Socratic.)_
-
-**i18n reality (correction to §2):** lessons render slide text **inline from the JSON** (`ConceptScreen` passes `slide.coachMessages` straight to `CoachDialog`; `infoProse` is rendered as‑is). Only the lesson **title** goes through i18n (`t('lesson.<id>.title', { defaultValue: lesson.title })`, `ConceptScreen.jsx:110`). So opening‑lesson prose is authored inline in the JSON (matching lessons 1–10); there is no `lesson.<id>.slide.<n>.*` wiring to add.
+_Subsystem: lesson content only (JSON + i18n). All frontend/server reused; **no new code**. Sizing: pure content authoring → implement directly (skip speckit)._
 
 ### Story A1 — Opening‑theory lessons
 
@@ -81,16 +79,10 @@ Lessons (final titles TBD in authoring):
 - Every `boardSpec` is **derived from a KB‑verified movestring** at authoring time (movestring → 7 column strings of `g`/`d`), not hand‑built. Deep boards (gambit 16 plies, D3‑D4 10 plies) are converted, not typed.
 - Every Socratic `correctCol` equals the **solver‑verified** winning column from the KB (`3` empty, `4` gambit, `1` D3‑D4). `SocraticScreen` evaluates client‑side (`col === socratic.correctCol`, `SocraticScreen.jsx:78`) — no server call, no answer revealed before attempt.
 - Reading‑only lessons set `socratic: null` **and** `confirmationCategory: null` (the Lesson‑4 "Odd Rows" pattern).
-- Slide text (coach messages, `infoProse`) is authored **inline in the JSON** (only the `title` is i18n‑keyed); no strategic claim appears that isn't traceable to a KB entry's `short_summary`/worked example.
+- All user‑facing text is a `t('lesson.<id>.slide.<n>...')` key; no strategic claim appears that isn't traceable to a KB entry's `short_summary`/worked example.
 - **IF** a lesson is Pro‑gated, **THEN** `free: false` and the saga map shows the existing lock → `UpgradeModal` (no new gating code).
 
-### Story A2 — In‑lesson interactive checkpoint (Socratic; drills DROPPED)
-
-**As a** learner reading an opening lesson, **I want** one interactive "find the move" checkpoint, **so that** I confirm I recognize the idea, not just read it.
-
-**Delivered by the existing Socratic board, folded into each lesson in Story A1 — no new code.** `SocraticScreen` evaluates the answer client‑side (`col === socratic.correctCol`, `SocraticScreen.jsx:78`); the board comes from the lesson JSON `socratic.boardSpec`. Each lesson carries **one** Socratic with a KB‑verified `correctCol` (empty→`3`, imitation→X, gambit `3265533353553111`→`4`, D3‑D4 `3332223362`→`1`).
-
-**Server‑checked multi‑position drills are cut (D6).** `confirmationChallenges` are DB‑puzzle‑backed (`/api/puzzles/:id/check` loads a `puzzles` row by id and switches `evaluatePredicate` on the stored category); openings have no such rows and no category. A `winning_move` predicate would only serve that DB‑backed path, so it adds no value here and is **not built**. Opening lessons set `confirmationCategory: null` and `confirmationChallenges` absent (the Lesson‑4 reading‑only shape), relying on the Socratic for interactivity.
+_**Story A2 (in‑lesson recognition drills) was CUT** (Decision D6, revised 2026-07-04). Rationale: `/api/puzzles/:id/check` requires a DB puzzle row and 404s on self‑contained `inline-<moveString>` ids, so drills would need either a new inline‑evaluation server path + frontend wiring or DB‑seeded `winning_move` puzzles — plumbing that buys little over the Socratic checkpoints A1 already delivers. The interactive "find the move" moment lives in each lesson's single client‑side Socratic (A1); the reason engine (Part B) carries the substantive opening work._
 
 ---
 
@@ -100,29 +92,35 @@ _Subsystems: feature‑vector engine (`reasonEngine.mjs`) + eval harness (`selec
 
 > **Read before implementing (per `CLAUDE.md`):** `reason-INVARIANTS.md` (I0, I2, I8, I9, I12), `reason-DECISIONS.md`, `reason-case-taxonomy.md`, `blunder-reason-evidence.md`. This part must not relitigate the 5‑case taxonomy or the two‑halves engine.
 
-### Story B1 — Opening‑centrality evidence in the feature vector
+### Story B1 — Opening evidence in the feature vector (named‑opening deviation + centrality)
 
-**As a** player reviewing a blunder I made in the opening, **I want** the structured reason to carry the honest, board‑findable "why the better move is stronger" for early positions, **so that** the coach explains it in opening terms instead of falling back to generic filler or fabricating a tactic.
+**As a** player who blundered in the opening, **I want** the reason to tell me I left a known opening and what the book move was (or, if I'm off‑book, why the better move is more central), **so that** I learn the opening principle I broke — not generic filler and not a fabricated tactic.
 
-The two‑halves engine already handles opening blunders by *case* (an edge first move is a `win_to_draw`; the two halves exhibit the winning line from centre vs. the drawn line). The gap is the **no‑tactical‑structure** opening board, where the honest reason is geometric (centrality / number of winning lines), which the current lost‑resource/opponent‑punishment fields don't express — exactly the case `centerDominance.js` was written for in the coach path.
+**The primary mode — named‑opening deviation (Decision D4).** Openings are *good moves*; the book names the correct move. When the moves so far are a **prefix** of a known opening line and the player is the opening's beneficiary, the opening's next move is the known winning continuation. The reason engine emits this provenance so the explanation is: *"You were following the &lt;5‑4 opening&gt;, a known winning plan. The book move is D5 (col 3), which keeps the win. You played col 0, which &lt;two‑halves: loses/draws&gt;."* Every clause is a lookup fact or solver check.
 
 **Scope**
 
-- Add a **first‑class opening‑centrality evidence field** to `computeReason`'s output (surface B), populated when `board_state === 'opening'` (`REASON_CONFIG.openingMaxDiscs`, currently 15) **and** the two‑halves engine finds no tactical resource to ground on. **Reuse `detectCenterDominance({ movestring, playedCol, bestCol })` verbatim** as the computation (Decision D4/D-new); do not re‑derive centrality. The field is geometric and board‑findable → satisfies I2 (no fabrication).
-- **Optional Tier‑2:** a narrow **named‑opening label** field, set **only** when the pre‑move `movestring` exactly matches a KB opening line (up to mirror) — a lookup against the KB worked‑example movestrings (`333334444`, `3332222`, `3332223362`/`3332223`, `3333311115555`/`333331111555515`, `3265533353553111`, `3333341`). The label is context only (`"5-4 opening"`); the causal "why it lost" still comes from the grounded two halves. A lookup match is a fact, not an inference → I2‑safe.
-- **DEFERRED (explicitly not built):** any general "you deviated from opening &lt;X&gt;, the plan was &lt;Y&gt;" causal reason for non‑matching positions. Recorded as unsound in v1 (I0/I2/I12); a `reason-DECISIONS.md` entry states the boundary.
+- **Named‑opening evidence field** on `computeReason` output. Match the pre‑move `movestring` (mirror‑normalized) against the KB opening lines — the worked‑example movestrings of `allen-5-4-opening` (`333334444`, 5‑1 `3333341`), `allen-3-4-opening` (`3332222`), `allen-d3-d4-opening` (`3332223`, `3332223362`), `allen-candlesticks-opening` (`3333311115555`, `333331111555515`), `allen-third-row-gambit` (`3265533353553111`), plus the empty‑board centre result from `allen-opening-tables`. Build the line index from the KB entries (KB = source of truth), not a hardcoded copy. When matched, the field carries `{ id, matchedPrefixLen, bookNextCol, family }`.
+- **Four case‑space guards (I12) — all required to fire the named reason:**
+  1. **Prefix match, mirror‑normalized.** The moves so far equal a KB line's first *k* plies (or its reflection about col 3). A partial‑then‑diverged history does **not** match.
+  2. **Beneficiary‑side only.** Fire only when the blundering player is the side the opening is a plan for (first player, for every Allen opening here). Never attribute a deviation to the side the opening leaves lost.
+  3. **Book‑move‑is‑best.** Solver‑verify `bookNextCol` is a best/winning move at this node before asserting it. If it is not the *unique* best, state it "keeps the win" without claiming uniqueness.
+  4. **Unique disambiguation.** Set `id` to a **specific** opening only when the prefix identifies it uniquely among the KB lines; while several lines share the prefix (`3333…` → 5‑4 / 5‑1 / 6‑1 / candlesticks), set `family` (`"central-column opening"`) and leave `id` null. When even the family is ambiguous, fall through to centrality.
+- **Fallback mode — centrality (unchanged from openings that match no book line).** Add a **first‑class opening‑centrality evidence field**, populated when `board_state === 'opening'` (`REASON_CONFIG.openingMaxDiscs`, currently 15), the named‑opening match does not fire, **and** the two‑halves engine finds no tactical resource. **Reuse `detectCenterDominance({ movestring, playedCol, bestCol })` verbatim** — do not re‑derive centrality. Geometric, board‑findable → I2‑safe.
 
 **Contracts**
 
-- New field named in the glossary (exact shape resolved in `/plan`; proposed) : `openingContext: { centrality: { bestCol, playedCol, betterHasMoreLines: true, text }, namedOpening?: { id: "allen-5-4-opening", line: "333334444" } }`. Present only on opening, no‑structure boards (pruned otherwise, per the glossary absence contract).
-- `toNarratorVector` / `pruneVector` keep the scalar/text (drop empty). The raw per‑column `scores` stays stripped (D21).
+- New field (exact shape resolved in `/plan`; proposed): `openingContext: { namedOpening?: { id, family, matchedPrefixLen, bookNextCol }, centrality?: { bestCol, playedCol, betterHasMoreLines: true, text } }`. `namedOpening` and `centrality` are mutually exclusive per the guards; both pruned when absent (glossary absence contract). Raw per‑column `scores` stay stripped (D21) — `bookNextCol`'s "is‑best" is verified at compute time, not leaked.
+- The named reason **composes with the two halves**: `namedOpening` supplies the *provenance of the correct move*; the `lostResource`/`opponentPunishment` halves supply *why the played move loses*. The named field never replaces the two‑halves loss grounding.
 
 **Acceptance criteria**
 
-- On an opening blunder with no tactical structure (e.g. an early off‑centre move that drops `win → draw`), the vector carries a non‑empty `openingContext.centrality` whose `bestCol`/`playedCol` match the decision board and whose claim ("the better column sits in more four‑in‑a‑row lines") is board‑verifiable.
-- `namedOpening` is present **iff** the movestring exactly matches a KB line (mirror‑normalized); absent otherwise. Tested with a matching board and a near‑miss.
-- **No** invariant weakened: no field asserts a line that doesn't complete under optimal defence; centrality is the only ungated geometric claim and it is board‑findable.
-- **I12 validation:** a deliberate counterexample per opening sub‑case (win_to_draw off‑centre; win_to_lose; a matched named line; an unmatched opening) run through the **production** `computeReason`, not a hand proxy.
+- On a blunder whose history is a unique‑prefix of a KB opening, played by the beneficiary, with the book move solver‑confirmed best: `openingContext.namedOpening` carries the right `id`, `bookNextCol` (= the KB line's next ply), and `matchedPrefixLen`; `bookNextCol` equals the engine's `bestCol`.
+- On a shared‑prefix history (`3333`): `id` is null, `family` = `"central-column opening"` (not a wrong specific name).
+- On the losing side, or when the book move is **not** best at this node, `namedOpening` does **not** fire (guard 2/3) — verified by counterexample.
+- Off‑book opening blunder: `centrality` fires instead, `bestCol`/`playedCol` board‑verifiable; the two are never both present.
+- **No** invariant weakened: no asserted line fails under optimal defence; `bookNextCol`‑is‑best is solver‑verified; centrality is the only ungated geometric claim.
+- **I12 validation:** a deliberate counterexample per branch — unique‑prefix beneficiary blunder; shared‑prefix (family); losing‑side (no fire); book‑move‑not‑best (no fire); off‑book centrality; mirror‑reflected line — each run through the **production** `computeReason`, not a hand proxy.
 
 ### Story B2 — Opening coverage in the eval harness
 
@@ -159,12 +157,12 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 ### Story B4 — Ground the opening reason in the production prompt
 
-**As a** player, **I want** the deep‑reveal explanation of an opening blunder to be grounded (centrality; and, when the board is a known line, the opening's name) and never fabricated, **so that** the coaching teaches real opening principles.
+**As a** player, **I want** the deep‑reveal explanation of an opening blunder to say I left a known opening and what the book move was (or, off‑book, why the better move is more central), grounded and never fabricated, **so that** the coaching teaches the real opening principle.
 
 **Scope (reuse the existing grounding wiring)**
 
-- **`explainContext.js`:** `detectCenterDominance` is already called at `explainContext.js:954` and its `## Why the better move is stronger` section is gated to no‑lookahead/no‑threat‑row openings (`explainContext.js:957`). Feed the **same** opening‑centrality evidence (the shared `centerDominance` computation) into `prompt_data` (it already sets `centerDominance` in `prompt_data`, line ~1051) and, when present, the `namedOpening` label. **Single source:** the coach path (surface A) and the feature vector (surface B) consume one `centerDominance` computation — do not duplicate (Decision D-reuse).
-- **`llmCoachHelpers.js`:** the `centerDominanceSection` is already pushed into the prompt and referenced by the instruction (`llmCoachHelpers.js:692, 835`). Extend that instruction minimally so a present `namedOpening` label may be stated as context, and reaffirm the anti‑fabrication rule (do not invent a tactic; the centrality reason is the grounded one). Respect existing grounding traps: no KB term injects without its pattern firing (`project_kb_major_minor_threat_not_always_include`), name the player explicitly (`feedback_llm_perspective_bug`).
+- **`explainContext.js`:** `detectCenterDominance` is already called at `explainContext.js:954` and its `## Why the better move is stronger` section is gated to no‑lookahead/no‑threat‑row openings (`explainContext.js:957`). Feed the **shared** `centerDominance` computation into `prompt_data` (it already sets `centerDominance`, line ~1051) **and** the new `openingContext` (both `namedOpening` and `centrality`). **Single source:** coach path (surface A) and feature vector (surface B) consume one `centerDominance` computation — do not duplicate (Decision D-reuse).
+- **`llmCoachHelpers.js`:** the `centerDominanceSection` is already pushed into the prompt and referenced by the instruction (`llmCoachHelpers.js:692, 835`). When `openingContext.namedOpening` fires, the section states the **deviation reason** — *you were following the &lt;opening&gt; (a known winning plan); the book move is &lt;bookNextCol&gt;, which keeps the win; you played &lt;playedCol&gt;, which loses* — with the *why it loses* clause taken from the two halves, not invented. When only `centrality` fires, state the centrality reason as today. Reaffirm anti‑fabrication (do not invent a tactic); respect existing grounding traps: no KB term injects without its pattern firing (`project_kb_major_minor_threat_not_always_include`), name the player explicitly (`feedback_llm_perspective_bug`), the opening name is asserted only when `namedOpening.id` is non‑null (family‑only → say "a central‑column opening", never a specific name).
 - **Grounded‑render / condition‑D path:** if the render layer needs a causal frame for the opening‑centrality case, add/adjust the minimal `causalLinks.mjs` (L1–L9) frame and its `covers`/`guardrail`, and ensure a `render_decision` is emitted for opening cases (so condition‑D grading G1–G6 has ground truth). If the existing "why the better move is stronger" frame already covers centrality, reuse it and add nothing.
 
 **Acceptance criteria**
@@ -178,10 +176,10 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 ## 4. Consolidated data / API contracts
 
-- **Lesson JSON:** unchanged schema (`lessonLoader.js`). New lesson files only; each carries one `socratic: { boardSpec, correctCol }` (client‑side eval); reading‑only lessons set `socratic: null`. No `confirmationChallenges`, no new predicate.
+- **Lesson JSON:** unchanged schema (`lessonLoader.js`). New lesson files; each with one client‑side `socratic` (`{ goalPrompt, boardSpec, correctCol }`), `confirmationCategory: null`, `confirmationCount: 0`. No `winning_move` predicate (drills cut, D6).
 - **Feature vector:** additive `openingContext: { centrality:{bestCol,playedCol,…,text}, namedOpening?:{id,line} }` (exact shape finalized in `/plan`), pruned on non‑opening/structured boards.
 - **Eval harness:** `REASON_UNIVERSE += ['reason_opening_centrality','reason_opening_named_line']` (names provisional), opening harvest band in `select_boards.mjs`; render predicates unioned into `renderUniverse.mjs` if a frame is added.
-- **i18n:** only `lesson.<id>.title` (existing); lesson body text is inline JSON. Reuse `coach.*` pools for the reason‑engine coach path.
+- **i18n:** `lesson.<id>.slide.<n>.*` (new keys); reuse `coach.*` pools.
 - **KB fields consumed:** `short_summary` (client, lessons), worked‑example `movestring` + `false_positives` (predicate/label lookup, reason engine), `formal_predicate` (author reference).
 
 ---
@@ -189,10 +187,10 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 ## 5. NOT included
 
 - **No opening Challenge category** — no change to `categories.js` / `src/lib/categories.js`, no `candidate-generator.js` / `classifier.js` detector, no `challengeSets.js` entry, no 8‑file wiring.
-- **No `winning_move` predicate / no server‑checked in‑lesson drills** — dropped (D6); interactivity is the client‑side Socratic.
+- **No in‑lesson recognition drills / no `winning_move` predicate / no `/check` changes** (D6, cut) — lesson interactivity is the single client‑side Socratic per lesson.
 - **No general causal named‑opening reason** — deferred as unsound (D4).
 - **No taxonomy / two‑halves core change** — the 5‑case engine and its gate are untouched; opening work is additive evidence + coverage + grounding.
-- **No multi‑Socratic schema change** — one Socratic per lesson is sufficient for the interactive checkpoint.
+- **No multi‑Socratic schema change** — multiple checkpoints use `confirmationChallenges[]`.
 - **No Spanish content**, **no payments** (Pro‑gating uses the existing lock modal), **no new analytics events**.
 - **No `winSamples` re‑enable** (opening/mid‑game win distributions stay disabled, `REASON_CONFIG.enableWinSamples: false`).
 
@@ -202,7 +200,7 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 1. `docs/architecture/feature-vector-glossary.md` — new "opening context" fields (B3).
 2. `.claude/skills/grade-fv-sufficiency/SKILL.md` — opening‑case grading guidance + field enumeration (B3).
-3. `docs/architecture/reason-DECISIONS.md` — a new **D‑entry** recording the opening‑reason sound slice (centrality + exact‑match label) and the **deferral** of the general causal reason, with rationale.
+3. `docs/architecture/reason-DECISIONS.md` — a new **D‑entry** recording the two‑mode opening reason (named‑opening deviation via mirror‑normalized prefix match + centrality fallback), the four case‑space guards, and the exact boundary of what stays out (non‑matching attribution; transposition), with rationale.
 4. `docs/architecture/blunder-reason-evidence.md` — an "opening evidence" subsection + the validated opening boards (the KB movestrings above).
 5. `docs/mvp/lesson-curriculum.md` — add the 3–4 opening lessons to the curriculum.
 6. `connect-four/server/scripts/select_boards.mjs` — `--help`/header documents the opening harvest band.
@@ -212,17 +210,19 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 
 ## 7. Open questions / risks (resolve in `/plan`)
 
-- **Feature‑vector `openingContext` field shape** — final field names/nesting; how it coexists with the realized/denied route and per‑case shapes (glossary §3a).
-- **Causal frame** — does opening‑centrality reuse an existing "why the better move is stronger" frame, or need a new `causalLinks.mjs` L‑frame? Prefer reuse (I9 Occam).
+- **Feature‑vector `openingContext` field shape** — final field names/nesting; how `namedOpening` (provenance) and the two halves (loss grounding) compose in the vector and in the render decision.
+- **KB line index** — how the named‑opening matcher builds its prefix index from the KB entries (parse worked‑example `movestring`s at load, mirror‑normalize). Book moves are the *beneficiary's* plies only — confirm the beneficiary side per opening from the KB (all first‑player here).
+- **Disambiguation threshold** — the exact rule for "prefix uniquely identifies a specific opening" vs "name the family". Likely: specific `id` only once the prefix diverges from all other KB lines; else `family`.
+- **Causal frame** — does the named‑opening‑deviation reason reuse an existing "why the better move is stronger" frame, or need a new `causalLinks.mjs` L‑frame carrying the book‑move provenance? Prefer reuse (I9 Occam).
 - **Un‑skipping openings may surface engine soundness gaps** on the very earliest boards (ply 0–2). Bound the opening band sensibly and validate per I12; a degenerate ply‑0 "blunder" may need a `NotABlunder`/guard.
+- **Transposition (future, out of v1)** — matching by resulting position rather than move‑prefix would catch openings reached by a different order (the KB notes candlesticks transpose). v1 uses mirror‑normalized prefix; position‑matching is a later enhancement.
 - **Pro‑gating** — recommend "Own the Centre" + "I Play Where You Play" free, "Sharp Openings" Pro (mirrors lessons 8–11). Product confirm.
-- **Named‑opening label value** — is Tier‑2 worth the matcher, given it fires only on exact KB lines? Cheap and sound; recommend include but it can be cut without affecting B1's centrality core.
 
 ---
 
 ## 8. Phasing & dependencies
 
-- **Part A** (opening lessons, content only) is independent of Part B and can ship first — pure authoring on already‑built infra, no server code.
+- **Part A** (opening lessons) is independent of Part B and can ship first — it is pure content on already‑built infra (no new code).
 - **Part B** (reason engine) depends on the corrected KB (done) and is gated on the reason‑engine invariant reads. Its stories are ordered **B1 → B2 → B3 → B4** (evidence field → coverage → grade/doc → prompt grounding); B4's grounding is only meaningful once B1's field exists and B2/B3 make it gradeable.
 
 ---
@@ -234,7 +234,7 @@ The two‑halves engine already handles opening blunders by *case* (an edge firs
 | Lesson model, loading, validation | `lessonLoader.js`, `connect-four/lessons/*.json`, `GET /api/lessons(/:id)` |
 | Concept / Socratic / drill screens | `ConceptScreen.jsx`, `SocraticScreen.jsx` (client‑side `correctCol`), `ChallengeScreen.jsx` `lessonMode` |
 | Board display | `boardSpec` (7‑element display encoding), existing overlays |
-| Interactive checkpoint eval | `SocraticScreen` client‑side `col === socratic.correctCol` (no server call, no predicate) |
+| movestring → boardSpec (authoring) | `boardToSpec(parseMovestring(movestring))` (`src/lib/movestring.js`) |
 | Centrality computation | `centerDominance.js` `detectCenterDominance` — shared by coach path AND feature vector |
 | Reason evidence engine | `reasonEngine.mjs` `computeReason`, 5‑case taxonomy, two‑halves — additive field only |
 | Detectors as evidence (I8) | `classifier.js` (`classifyPattern`, `detectDoubleThreat`, z‑threat, odd‑even, …) |
