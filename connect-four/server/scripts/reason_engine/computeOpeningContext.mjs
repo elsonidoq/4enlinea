@@ -12,9 +12,21 @@
 // be extracted so the production module can import it. No new solver query happens here: the caller
 // passes the scores/bestScore it already has (I0).
 //
-// Emits EITHER a `namedOpening` (all four guards hold) OR a `centrality` fallback (opening phase,
-// better move strictly more central) — NEVER both (mutually exclusive: namedOpening short-circuits).
-// Returns `undefined` when neither applies.
+// Emits EXACTLY ONE of three mutually-exclusive modes, or `undefined`:
+//   - `namedOpening` (all four guards hold; player 1 threw away a known win)
+//   - `defense` (D32, NEW): player 2 on an on-book prefix whose beneficiary is player 1, playing a
+//     move that loses FASTER than the solver's least-bad reply (`case === 'lose_to_faster_lose'`).
+//     The "best defense" is the solver's least-bad legal move (`bestCol`) — NOT a book continuation,
+//     because the book line is a first-player win and there is no book move for the losing side to
+//     follow. `centralityGrounded` is a conditional, honest note (via `detectCenterDominance`) on
+//     whether that best defense is also strictly more central than the played move.
+//   - `centrality` (fallback; off-book, or on-book-but-no-real-match/no-realized-mode). Reused
+//     verbatim for BOTH winning and losing movers — it is NOT suppressed for a losing mover (dropped
+//     "suppress centrality when losing" idea): central play is genuinely good regardless of who is
+//     ahead. `resistAndWait` (NEW) is carried for the prompt layer: true iff the mover is player 2 and
+//     already losing (`bestScore < 0`), signalling "hold the center and wait for the opponent to slip"
+//     rather than "this move wins."
+// Returns `undefined` when none applies.
 //
 // The four namedOpening guards (ALL required):
 //   1. `matchOpeningPrefix(movestring)` is non-null (the moves so far are a mirror-normalized prefix
@@ -49,32 +61,57 @@ import { detectCenterDominance } from '../../centerDominance.js';
  * @param {number[]} args.scores    per-column solver scores at this node
  * @param {number} args.player      1 or 2 — the player to move (the blundering player)
  * @returns {{ namedOpening: {id,family,matchedPrefixLen,bookNextCol} }
- *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text} }
+ *          | { defense: {id,family,matchedPrefixLen,bestDefenseCol,centralityGrounded} }
+ *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text,resistAndWait} }
  *          | undefined }
  */
 export function computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player }) {
   const match = matchOpeningPrefix(movestring);
-  if (match) {
-    const realMatch = match.family != null;                                     // guard 1b
-    const beneficiaryIsPlayer = player === 1;                                   // guard 2
+  const realMatch = match && match.family != null;                    // guard 1b (see header)
+
+  if (realMatch) {
+    // ── namedOpening: player 1 threw away a known win (UNCHANGED) ──
+    const beneficiaryIsPlayer = player === 1;                         // guard 2
     const bookBest = match.bookNextCol != null
       && bestScore > 0
-      && scores[match.bookNextCol] === bestScore;                              // guard 3
-    if (realMatch && beneficiaryIsPlayer && bookBest) {
-      const id = match.ids.length === 1 ? match.ids[0] : null;                 // guard 4
+      && scores[match.bookNextCol] === bestScore;                     // guard 3 (score-equality, D31)
+    if (beneficiaryIsPlayer && bookBest) {
+      const id = match.ids.length === 1 ? match.ids[0] : null;        // guard 4
       return {
         namedOpening: {
-          id,
-          family: match.family,
+          id, family: match.family,
           matchedPrefixLen: match.matchedPrefixLen,
           bookNextCol: match.bookNextCol,
         },
       };
     }
+
+    // ── defense: player 2 abandoned the defensive hold on a known first-player win (NEW, D32) ──
+    // Fires at ALL depths (gated on the on-book prefix, not a disc cap). The book line is a
+    // first-player win, so player 2 is theoretically lost; the "most resilient defense" is the
+    // solver's least-bad legal move (bestCol) — NOT the book's next column, so no bookNextCol here.
+    const playedScore = scores[playedCol];
+    const losesFaster = player === 2 && bestScore < 0 && playedScore < bestScore; // === lose_to_faster_lose
+    if (losesFaster) {
+      const id = match.ids.length === 1 ? match.ids[0] : null;        // guard 4 (same as namedOpening)
+      // Centrality is a CONDITIONAL, honest grounding for why bestCol is the more resilient hold:
+      // true only when the best defense is strictly more central than the played move (≤6 plies).
+      const centralityGrounded = detectCenterDominance({ movestring, playedCol, bestCol }) != null;
+      return {
+        defense: {
+          id, family: match.family,
+          matchedPrefixLen: match.matchedPrefixLen,
+          bestDefenseCol: bestCol,
+          centralityGrounded,
+        },
+      };
+    }
   }
-  // Off-book (or on-book-but-guards-failed) opening-phase fallback: the honest board-findable reason
-  // is centrality. detectCenterDominance (I8 reuse) confines this to early boards where the better
-  // move is strictly more central; it returns null otherwise -> openingContext absent.
+
+  // ── centrality fallback (off-book, or on-book-but-guards-failed) ──
+  // NOT suppressed for a losing mover (owner correction 2026-07-05): central play is genuinely
+  // good, and the even rows (2 & 4) favour the second player (KB allen-parity.md). What the losing
+  // second player needs is the RESIST-AND-WAIT goal, carried by `resistAndWait` for the prompt.
   const cd = detectCenterDominance({ movestring, playedCol, bestCol });
   if (cd) {
     return {
@@ -83,6 +120,7 @@ export function computeOpeningContext({ movestring, playedCol, bestCol, bestScor
         playedCol: cd.playedCol,
         betterHasMoreLines: true,
         text: cd.reason,
+        resistAndWait: player === 2 && bestScore < 0,
       },
     };
   }

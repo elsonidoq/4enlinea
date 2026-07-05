@@ -141,3 +141,56 @@ test('pruneVector keeps openingContext after toNarratorVector', async () => {
   assert.ok(pruned.openingContext, 'expected openingContext to survive pruneVector');
   assert.equal(pruned.scores, undefined);
 });
+
+// --- Opening DEFENSE mode (Task 1) --------------------------------------
+test('3333344 col2 → defense, unique allen-5-4-opening, no centrality clause (equidistant)', async () => {
+  const r = await computeReason('3333344', 2, { solver });
+  assert.ok(r.openingContext?.defense, 'defense present');
+  const d = r.openingContext.defense;
+  assert.equal(d.id, 'allen-5-4-opening');
+  assert.equal(d.family, 'central-column opening');
+  assert.equal(d.bestDefenseCol, r.bestCol);          // solver least-bad move
+  assert.equal(d.bestDefenseCol, 4);
+  assert.equal(d.centralityGrounded, false);          // col4 vs col2 equidistant from center
+  assert.ok(!r.openingContext.namedOpening && !r.openingContext.centrality, 'mutually exclusive');
+});
+
+test('333 col4 → defense, family-only (id null), centrality clause fires', async () => {
+  const r = await computeReason('333', 4, { solver });
+  const d = r.openingContext?.defense;
+  assert.ok(d, 'defense present');
+  assert.equal(d.id, null);                            // 4 shared ids → family only
+  assert.equal(d.family, 'central-column opening');
+  assert.equal(d.bestDefenseCol, 3);                   // dead-center hold
+  assert.equal(d.centralityGrounded, true);            // col3 strictly more central than col4
+});
+
+test('333331 col0 → namedOpening UNCHANGED (player 1 beneficiary)', async () => {
+  const r = await computeReason('333331', 0, { solver });
+  assert.ok(r.openingContext?.namedOpening, 'namedOpening present');
+  assert.equal(r.openingContext.namedOpening.id, 'allen-candlesticks-opening');
+  assert.ok(!r.openingContext.defense, 'not defense');
+});
+
+test('off-book losing player 2 → centrality with resistAndWait, NOT suppressed', async () => {
+  // 305 is off-book (matchOpeningPrefix('305') === null, verified via TOOLS/compute_feature_vector.mjs
+  // and a direct openingMatch.mjs check); 3 discs, player 2 to move; bestScore -3 < 0 (losing);
+  // bestCol 4 is strictly more central than played col 1 -> centrality branch with resistAndWait.
+  const r = await computeReason('305', 1, { solver });
+  const c = r.openingContext?.centrality;
+  assert.ok(c, 'centrality still fires for a losing mover (suppress-fix dropped)');
+  assert.equal(c.resistAndWait, true);
+});
+
+test('off-book WINNING player 1 → centrality without resistAndWait', async () => {
+  const r = await computeReason('30', 1, { solver });   // player 1, winning, off-book
+  const c = r.openingContext?.centrality;
+  assert.ok(c, 'centrality present');
+  assert.equal(c.resistAndWait, false);
+});
+
+test('non-opening board → openingContext absent', async () => {
+  // A mid-game board (≥15 discs); reuse any existing fixture movestring from the file.
+  const r = await computeReason('3333325662555225', 1, { solver });
+  assert.equal(r.openingContext, undefined);
+});
