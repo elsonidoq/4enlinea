@@ -30,6 +30,8 @@ import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
   tagBlunder, NotABlunderError, detectZThreat, detectOddEvenThreat,
 } from '../../classifier.js';
+import { matchOpeningPrefix } from './openingMatch.mjs';
+import { detectCenterDominance } from '../../centerDominance.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../../.env'));
@@ -843,6 +845,64 @@ export async function findOccupationWitness(solver, root, { denier, windows, dep
   return { verdict: 'no_occupation', line: [], finalMovestring: root, exhaustive: reachedTerminal && !errored };
 }
 
+// ── openingContext: opening-provenance EVIDENCE (opening-theory PART B, Decision D4) ──
+//
+// Attaches an optional `openingContext` to the reason vector. SOLVER-FREE: it reuses the engine's
+// already-computed `bestCol`/`scores` (I0 — no duplicate solver calls) and the KB prefix matcher
+// (Task B1, pure). Emits EITHER a `namedOpening` (when all four guards hold) OR a `centrality`
+// fallback (opening phase, better move strictly more central) — NEVER both (mutually exclusive:
+// namedOpening short-circuits). Absent when neither applies.
+//
+// The four namedOpening guards (ALL required):
+//   1. `matchOpeningPrefix(movestring)` is non-null (the moves so far are a mirror-normalized prefix
+//      of a KB book line).
+//   2. The blundering player is the line's BENEFICIARY. Every KB opening line is a first-player win
+//      (beneficiary 1; see openingMatch.loadOpeningLines), so this is `player === 1`.
+//   3. `bookNextCol` is SOLVER-VERIFIED best at this node: its score equals the max (bestScore) AND
+//      the position is winning (bestScore > 0). This reuses the engine's `scores`/`bestScore` — no
+//      new solver query (I0). A null `bookNextCol` (KB lines disagree / no continuation) or a
+//      book move whose score is below the max fails this guard -> no false "best" claim (I2), fall
+//      through to centrality. (Score-equality — not `bookNextCol === bestCol` — is used so a book
+//      move that ties the max is still correctly credited when the engine's argmax picked a
+//      different equally-optimal column.)
+//   4. `id` names a SPECIFIC opening only when the match is consistent with a single KB id; a shared
+//      prefix (multiple ids) keeps `id: null` and reports the shared `family`.
+export function computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player }) {
+  const match = matchOpeningPrefix(movestring);
+  if (match) {
+    const beneficiaryIsPlayer = player === 1;                                   // guard 2
+    const bookBest = match.bookNextCol != null
+      && bestScore > 0
+      && scores[match.bookNextCol] === bestScore;                              // guard 3
+    if (beneficiaryIsPlayer && bookBest) {
+      const id = match.ids.length === 1 ? match.ids[0] : null;                 // guard 4
+      return {
+        namedOpening: {
+          id,
+          family: match.family,
+          matchedPrefixLen: match.matchedPrefixLen,
+          bookNextCol: match.bookNextCol,
+        },
+      };
+    }
+  }
+  // Off-book (or on-book-but-guards-failed) opening-phase fallback: the honest board-findable reason
+  // is centrality. detectCenterDominance (I8 reuse) confines this to early boards where the better
+  // move is strictly more central; it returns null otherwise -> openingContext absent.
+  const cd = detectCenterDominance({ movestring, playedCol, bestCol });
+  if (cd) {
+    return {
+      centrality: {
+        bestCol: cd.bestCol,
+        playedCol: cd.playedCol,
+        betterHasMoreLines: true,
+        text: cd.reason,
+      },
+    };
+  }
+  return undefined;
+}
+
 /**
  * Compute the structured blunder-reason evidence vector.
  * @param {string} movestring  pre-move board (0-indexed columns)
@@ -873,6 +933,11 @@ export async function computeReason(movestring, playedCol, { solver }) {
     replyHistogram: null, gate: null,
     winSamples: null,
   };
+
+  // ── openingContext (opening-provenance evidence; solver-free, reuses bestCol/scores) ──
+  // Set once here so it flows to EVERY return path (the sign-taxonomy branches and the
+  // realized/denied fast path all return this same `out` object). `undefined` -> field absent.
+  out.openingContext = computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player });
 
   // ── winning-line distributions (opening & mid-game only) ──
   // Always compute (regardless of register/case) the distribution of optimal winning-line
