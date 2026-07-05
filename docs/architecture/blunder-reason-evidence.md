@@ -230,6 +230,7 @@ See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`
 | `decisive_check.mjs` | confirm a candidate cell is genuinely decisive under optimal defense |
 | `opp_punish_probe.mjs` | probe opponent replies (gate / refutation) |
 | `parity_cells.mjs` | parity / z-threat cells (zugzwang register) |
+| `compute_feature_vector.mjs` | dump the full `computeReason(movestring, playedCol)` vector for one board (+ `matchOpeningPrefix`, + `--narrator` pruned view). 0-indexed; meaningful `--help`. Use this instead of hand-rolling a scratch script. |
 
 **Gotcha:** `decisive_check.mjs` assumes the *side-to-move is the punisher*. Correct for `win_to_lose`
 / `draw_to_lose` / `lose_to_faster_lose`; **wrong for `win_to_draw`**, where the player is the winner —

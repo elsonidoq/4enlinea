@@ -23,6 +23,8 @@
 
 ## Puzzle categories, challenge & past-games flow
 
+- [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won-position boards have losing side to move); openings go to Lessons + reason "book-deviation"
+- [Lesson interactivity evaluation](project_lesson_interactivity_evaluation.md) — Socratic is client-side col===correctCol; inline confirmationChallenges 404 (check needs a DB puzzle row)
 - [8-file wiring checklist](project_new_category_wiring_checklist.md) — missing candidate-generator.js = silent failures
 - [Paid categories in two files](project_paid_categories_two_files.md) — server + src/lib must be updated atomically
 - [Category wiring reference](project_new_puzzle_categories.md) — locked design decisions for z_threat/claimeven/undercut/overcut/figure_7/j_shape
@@ -104,6 +106,8 @@
 
 ## Blunder-REASON evidence engine (reason_engine/) — read the 4 docs + D-log FIRST
 
+- [Reason case → also eval + grader](feedback_reason_case_requires_eval_and_grader.md) — adding an engine case/field is not done until select_boards derives a predicate (+REASON_UNIVERSE) AND grade-fv-sufficiency/glossary know it
+- [select_boards openings RESOLVED](project_select_boards_skips_openings.md) — B4 added an additive opening harvest band + reason_opening_named_line/centrality PROVISIONAL predicates (derivation extracted to reasonEvalPredicates.mjs); openings no longer skipped; opening reason engine = computeOpeningContext.mjs (D31)
 - [Reason-engine docs are canonical](project_admin_fv_suff_repurposed.md) — before reason_engine/ work read reason-INVARIANTS/DECISIONS(D1–D29)/case-taxonomy/blunder-reason-evidence + reason-AGENT-PREAMBLE; /admin/fv-suff = 2-mode browser (Evidence vectors + Eval-answers LLM/grade); stale-server restart trap (lsof kill 3001)
 - [immediate_threat phantom cell](project_reason_immediate_threat_phantom.md) — immediate_threat/missed_own detects on PRE-move movestring, NOT correctRoot (already-won → phantom win-in-1 one row up: eval-26 c2r5 vs c2r4); forks keep correctRoot
 - [Grounded-render prompt + tripwire](project_reason_render_layer.md) — compute.mjs condition D; P1+P2+P3+P4 DONE (D29); render_decision is condition-D-only ground truth for the grader (never re-derive routing); closed fieldDisposition tripwire; covers are family SUPERSETS + STATIC causal-code audit (covered-but-absent is normal, D28); selectBoards selection-safety; boards NOT in coverage walk; §3e one rule × 3 consumers; flip_case_l3 gap CLOSED
