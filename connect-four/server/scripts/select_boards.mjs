@@ -6,9 +6,19 @@
 //                        Committed fixture additionally carries route/expectedTag/expectedDirection
 //                        and d19-witness labels added by D19/D20 test commits; this strategy does
 //                        not re-emit those labels (output not byte-identical to committed).
+//                        Task B4: ADDITIVE opening band — discs 1..REASON_CONFIG.openingMaxDiscs
+//                        (15) are now also sampled, on top of the unchanged mid-game band
+//                        (discMin 12 / discMax 34). Opening-theory rows (`bucket: 'opening'`)
+//                        target Task B2's `openingContext` evidence (namedOpening/centrality);
+//                        both are rare (a self-play move must land on a KB book prefix), so this
+//                        band is best-effort, not gated by a `need()`-style completeness check.
 //   --strategy coverage  Harvests a diverse coverage set for the from-vector eval.
 //                        Ports the harvest loop from build_reason_eval_set.mjs; emits board-list
-//                        rows (no toNarratorVector call).
+//                        rows (no toNarratorVector call). Task B4: registers two opening-theory
+//                        predicates (`reason_opening_named_line`, `reason_opening_centrality`,
+//                        both PROVISIONAL) derived from Task B2's `openingContext` evidence field;
+//                        no separate opening band needed here — harvestBlunders already samples
+//                        every ply including the opening, so opening boards were already reachable.
 //
 // Usage (from connect-four/):
 //   node server/scripts/select_boards.mjs --strategy {fixture|coverage} [--out <path>]
@@ -20,11 +30,10 @@ import { dirname, join } from 'path';
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { playGame, harvestBlunders } from '../gameSampling.js';
 import { loadEnv, legalCols, emptyCellCount, INVALID_MOVE } from './reason_engine/lib/boardUtils.mjs';
-import { swindleGate } from './reason_engine/reasonEngine.mjs';
+import { swindleGate, REASON_CONFIG } from './reason_engine/reasonEngine.mjs';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
-import { toNarratorVector } from './reasonNarratorVector.mjs';
-import { buildRenderDecision } from './renderReasonModel.mjs';
-import { renderDecisionPredicates, RENDER_UNIVERSE, RENDER_PROVISIONAL, RENDER_REQUIRED } from './renderUniverse.mjs';
+import { RENDER_UNIVERSE, RENDER_PROVISIONAL, RENDER_REQUIRED } from './renderUniverse.mjs';
+import { reasonPredicates } from './reasonEvalPredicates.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../.env'));
@@ -42,9 +51,14 @@ Strategies:
             and stratified per-case buckets. NOTE: the committed fixture also carries
             route/expectedTag/expectedDirection and D19/D20 witness labels that this strategy does
             NOT re-emit, so its output is not byte-identical to the committed file.
+            Also harvests an ADDITIVE opening band (discs 1..15, best-effort — named-opening
+            matches are rare) on top of the unchanged mid-game band (discs 12..34).
   coverage  Harvests a diverse coverage set for the from-vector eval against a named, closed
             predicate universe (REQUIRED predicates gate termination; PROVISIONAL ones are
             reported but non-blocking). Emits board-list rows (no toNarratorVector call).
+            Includes two PROVISIONAL opening-theory predicates (reason_opening_named_line,
+            reason_opening_centrality) derived from the engine's openingContext evidence field;
+            opening boards were already reachable here (harvestBlunders samples every ply).
 
 Usage (from connect-four/):
   node server/scripts/select_boards.mjs --strategy {fixture|coverage} [--out <path>]
@@ -91,7 +105,7 @@ if (strategy === 'fixture') {
   const CFG = {
     seed: 0xC0FFEE,
     nGames: 1200,
-    discMin: 12,            // skip opening theory
+    discMin: 12,            // mid-game / early-closing band floor (unchanged — see openingDiscMin/Max below)
     discMax: 34,            // mid-game / early-closing band (target ~15–30)
     magFloor: 8,            // |score| floor for the "large-magnitude" (teachable) buckets
     lowMag: 3,              // |score| <= this => parity-register coverage bucket
@@ -99,6 +113,12 @@ if (strategy === 'fixture') {
     perCaseLow: 2,          // target parity-register rows per case
     ltflBlunder: 3,         // gate => Blunder rows
     ltflNotABlunder: 1,     // gate => NotABlunder rows (require <=10 empties for exact verdict)
+    // Task B4 — ADDITIVE opening band, on top of the mid-game band above (discMin/discMax untouched).
+    // discs 1..(openingMaxDiscs-1) = 1..14, mirroring the engine's own opening/mid-game boundary
+    // (reasonEngine.mjs REASON_CONFIG.openingMaxDiscs=15: boardState is 'opening' while discs<15).
+    openingDiscMin: 1,
+    openingDiscMax: REASON_CONFIG.openingMaxDiscs - 1,
+    perCaseOpening: 2,      // small target — opening-band rows per case, additive to the mid-game band
   };
 
   function mulberry32(a) {
@@ -117,6 +137,9 @@ if (strategy === 'fixture') {
     win_to_draw: { high: 0, low: 0 }, win_to_lose: { high: 0, low: 0 },
     draw_to_lose: { high: 0, low: 0 },
     lose_to_faster_lose: { blunder: 0, notABlunder: 0, low: 0 },
+    // Task B4 — additive opening-band (discs 1..14) counts, one per case, independent of the
+    // mid-game high/low buckets above.
+    opening: { win_to_draw: 0, win_to_lose: 0, draw_to_lose: 0, lose_to_faster_lose: 0 },
   };
 
   function push(row) {
@@ -132,7 +155,12 @@ if (strategy === 'fixture') {
       || counts.draw_to_lose.high < CFG.perCaseHigh || counts.draw_to_lose.low < CFG.perCaseLow
       || counts.lose_to_faster_lose.blunder < CFG.ltflBlunder
       || counts.lose_to_faster_lose.notABlunder < CFG.ltflNotABlunder
-      || counts.lose_to_faster_lose.low < CFG.perCaseLow;
+      || counts.lose_to_faster_lose.low < CFG.perCaseLow
+      // Task B4 — additive opening-band targets (does not touch any of the above).
+      || counts.opening.win_to_draw < CFG.perCaseOpening
+      || counts.opening.win_to_lose < CFG.perCaseOpening
+      || counts.opening.draw_to_lose < CFG.perCaseOpening
+      || counts.opening.lose_to_faster_lose < CFG.perCaseOpening;
   }
 
   // Curated ANCHOR boards from the companion doc's validated set (blunder-reason-evidence.md §6).
@@ -182,14 +210,18 @@ if (strategy === 'fixture') {
         if (!need()) break;
         const { ms, scores } = pos;
         const discs = ms.length;
-        if (discs < CFG.discMin || discs > CFG.discMax) continue;
+        const inMidBand = discs >= CFG.discMin && discs <= CFG.discMax;
+        const inOpeningBand = discs >= CFG.openingDiscMin && discs <= CFG.openingDiscMax;
+        if (!inMidBand && !inOpeningBand) continue;
         const legal = legalCols(scores);
         if (legal.length < 2) continue;
         let bestCol = legal[0], bestScore = scores[legal[0]];
         for (const c of legal) if (scores[c] > bestScore) { bestScore = scores[c]; bestCol = c; }
-
-        // ── win_to_draw: best>0, some legal col draws (=0) ──
         const drawCols = legal.filter((c) => scores[c] === 0);
+        const loseCols = legal.filter((c) => scores[c] < 0);
+
+        if (inMidBand) {
+        // ── win_to_draw: best>0, some legal col draws (=0) ──
         if (bestScore > 0 && drawCols.length) {
           const playedCol = drawCols[0];
           const big = bestScore >= CFG.magFloor;
@@ -200,7 +232,6 @@ if (strategy === 'fixture') {
         }
 
         // ── win_to_lose: best>0 (=> max>0, not losing_either_way), some legal col loses (<0) ──
-        const loseCols = legal.filter((c) => scores[c] < 0);
         if (bestScore > 0 && loseCols.length) {
           const playedCol = loseCols.reduce((a, b) => (scores[b] < scores[a] ? b : a)); // most negative
           const big = bestScore >= CFG.magFloor;
@@ -245,6 +276,34 @@ if (strategy === 'fixture') {
                 const bucket = wantLow ? 'low' : 'blunder';
                 if (push({ ...row, bucket })) counts.lose_to_faster_lose[bucket]++;
               }
+            }
+          }
+        }
+        } // inMidBand
+
+        // Task B4 — ADDITIVE opening band (discs 1..14): same four sign-cases, one small bucket per
+        // case, tagged bucket:'opening'. Independent of the mid-game bucket/counts above; does not
+        // alter mid-game sampling in any way.
+        if (inOpeningBand) {
+          if (bestScore > 0 && drawCols.length && counts.opening.win_to_draw < CFG.perCaseOpening) {
+            const playedCol = drawCols[0];
+            if (push({ movestring: ms, playedCol, bestCol, scores, discs, expectedCase: 'win_to_draw', bucket: 'opening' })) counts.opening.win_to_draw++;
+          }
+          if (bestScore > 0 && loseCols.length && counts.opening.win_to_lose < CFG.perCaseOpening) {
+            const playedCol = loseCols.reduce((a, b) => (scores[b] < scores[a] ? b : a));
+            if (push({ movestring: ms, playedCol, bestCol, scores, discs, expectedCase: 'win_to_lose', bucket: 'opening' })) counts.opening.win_to_lose++;
+          }
+          if (bestScore === 0 && loseCols.length && counts.opening.draw_to_lose < CFG.perCaseOpening) {
+            const playedCol = loseCols.reduce((a, b) => (scores[b] < scores[a] ? b : a));
+            if (push({ movestring: ms, playedCol, bestCol, scores, discs, expectedCase: 'draw_to_lose', bucket: 'opening' })) counts.opening.draw_to_lose++;
+          }
+          if (bestScore < 0 && counts.opening.lose_to_faster_lose < CFG.perCaseOpening) {
+            const worse = legal.filter((c) => scores[c] < bestScore);
+            if (worse.length) {
+              const playedCol = worse.reduce((a, b) => (scores[b] < scores[a] ? b : a));
+              const gate = await swindleGate(solver, ms + String(bestCol), {});
+              const verdict = gate.found ? 'Blunder' : 'NotABlunder';
+              if (push({ movestring: ms, playedCol, bestCol, scores, discs, expectedCase: 'lose_to_faster_lose', expectedGate: verdict, bucket: 'opening' })) counts.opening.lose_to_faster_lose++;
             }
           }
         }
@@ -298,6 +357,11 @@ if (strategy === 'fixture') {
     'parity_nameable', 'parity_unnameable',
     'opp_parity_nameable', 'opp_parity_unnameable',
     'gate_ran',   // D23: the gate is one uniform depth-bounded search; the exhaustive/bounded split is retired.
+    // Task B4 (opening theory, B2's openingContext evidence): mutually exclusive on the board —
+    // namedOpening XOR centrality XOR absent. Both PROVISIONAL: a self-play move landing exactly on
+    // a KB book-opening prefix is rare (coverage-sampler rare-fill trap — a REQUIRED-but-unreachable
+    // predicate burns the full harvest budget chasing it).
+    'reason_opening_named_line', 'reason_opening_centrality',
   ];
   // Partition CALIBRATED empirically (Task 8, 2026-07-01: coverage harvest, target 2, ~497 games).
   // Provisional = known-rare / structurally-unreachable in ordinary self-play; reported but
@@ -312,6 +376,7 @@ if (strategy === 'fixture') {
     'lost_denial_no_occupation',           // D18: depth artifact, near-unreachable
     'lost_realized_figure_7', 'lost_fork_B', // figure_7/Case-B forks are rare
     'parity_unnameable', 'opp_parity_unnameable', // multi-window board-fill only
+    'reason_opening_named_line', 'reason_opening_centrality', // Task B4: rare KB book-prefix matches
   ]);
   const REQUIRED = REASON_UNIVERSE.filter((p) => !PROVISIONAL.has(p));
 
@@ -330,57 +395,9 @@ if (strategy === 'fixture') {
 
   // ── Reason-vector predicates: the diversity axes the selector covers. ──
   // Each is a tag the board "exhibits"; we keep harvesting until every tag has appeared TARGET times.
-  function reasonPredicates(r) {
-    const preds = new Set();
-    const half = (h, side) => {
-      if (!h) return;
-      if (h.register) preds.add(`reg_${side}_${h.register}`);
-      if (h.tacticTag) preds.add(`tactic_${side}_present`); else preds.add(`tactic_${side}_null`);
-    };
-
-    preds.add(`case_${r.case}`);
-    preds.add(r.player === 1 ? 'player_1' : 'player_2');
-    preds.add(`phase_${r.boardState}`);                       // opening | mid-game | closing
-    // severity band from the score gap (bestScore - playedScore), the engine's own magnitudes.
-    const gap = (r.bestScore ?? 0) - (r.playedScore ?? 0);
-    preds.add(gap >= 12 ? 'sev_large' : (gap >= 4 ? 'sev_moderate' : 'sev_small'));
-    preds.add(`route_${r.route || 'sign'}`);
-    if (r.route === 'realized_denied' && r.tag && r.direction) preds.add(`rd_${r.tag}_${r.direction}`);
-
-    const lr = r.lostResource;
-    if (lr) {
-      if (lr.kind === 'winning_line' && lr.terminal === 'fork') preds.add(`lost_fork_${lr.forkCase}`);
-      else if (lr.kind === 'winning_line') preds.add('lost_parity_win');
-      else if (lr.kind === 'denial') preds.add(`lost_denial_${lr.verdict}`);
-      else if (lr.kind === 'conditional_swindle') preds.add('lost_conditional_swindle');
-      else if (lr.kind === 'realized_pattern') preds.add(`lost_realized_${lr.tag}`);
-      if (lr.parityAttribution) {
-        preds.add(lr.parityAttribution.nameable ? 'parity_nameable' : 'parity_unnameable');
-        // `parity_forcedFirst` retired (review F3): forcedFirstRequired was an unbacked
-        // Aftereven claim; attributeParityWin no longer emits it.
-      }
-    }
-    half(lr, 'lost');
-
-    const op = r.opponentPunishment;
-    if (op) {
-      if (op.kind) preds.add(`opp_${op.kind}`);                // winning_line | denial | neutralization
-      if (op.tie?.kind) preds.add(`tie_${op.tie.kind}`);       // tied | independent | temporal
-      if (op.parityAttribution) preds.add(op.parityAttribution.nameable ? 'opp_parity_nameable' : 'opp_parity_unnameable');
-    }
-    half(op, 'opp');
-
-    if (r.gate) preds.add('gate_ran');   // D23: uniform depth-bounded gate (no exhaustive/bounded split)
-
-    // Render-layer predicates (spec §3e): derive the render_decision from this evidence and union in
-    // its link/board/branch-invariance/horizon/covers predicates. Failure (unroutable) → engine preds only.
-    try {
-      const rd = buildRenderDecision(toNarratorVector(r));
-      for (const rp of renderDecisionPredicates(rd)) preds.add(rp);
-    } catch { /* render pipeline can't route this board — keep engine predicates */ }
-
-    return preds;
-  }
+  // Derivation itself now lives in `reasonEvalPredicates.mjs` (Task B4 extracted it so it is directly
+  // unit-testable — this file has top-level CLI arg-parsing/--help/process.exit side effects on
+  // import, so it cannot be imported by a test as-is).
 
   const solver = createSolverProcess();
   const counts = new Map();              // predicate -> #boards it has appeared in
