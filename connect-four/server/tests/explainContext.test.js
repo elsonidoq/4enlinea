@@ -272,4 +272,30 @@ describe('buildOpeningReason — opening-provenance prompt section', () => {
     });
     assert.equal(r, null);
   });
+
+  it('buildOpeningReason: defense section names the line, resist-and-wait, 1-indexed hold', () => {
+    const r = buildOpeningReason({
+      movestring: '3333344', playedCol: 2, bestCol: 4, bestScore: -1,
+      scores: [-4, -3, -3, -3, -1, -3, -4], player: 2,
+    });
+    assert.ok(r.defense, 'defense branch');
+    assert.match(r.section, /## Opening theory/);
+    assert.match(r.section, /second side of the 5-4 opening/i);
+    assert.match(r.section, /theoretically lost/i);
+    assert.match(r.section, /column 5/);                 // bestDefenseCol 4 → 1-indexed 5
+    assert.match(r.section, /resist|wait|slip|hold/i);
+    assert.doesNotMatch(r.section, /more central/i);     // equidistant → no centrality clause
+  });
+
+  it('buildOpeningReason: defense section adds centrality/even-row clause when grounded (333/col4)', () => {
+    const r = buildOpeningReason({
+      movestring: '333', playedCol: 4, bestCol: 3, bestScore: -1,
+      scores: [-4, -4, -3, -1, -3, -4, -4], player: 2,
+    });
+    assert.ok(r.defense, 'defense branch');
+    assert.match(r.section, /central-column opening/i); // family-only label (id null)
+    assert.match(r.section, /column 4/);                 // bestDefenseCol 3 → 1-indexed 4
+    assert.match(r.section, /more central/i);
+    assert.match(r.section, /even row/i);                // parity canon (rows 2 & 4)
+  });
 });

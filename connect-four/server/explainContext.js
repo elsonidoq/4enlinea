@@ -502,13 +502,41 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
  * SOLVER-FREE: it reuses the pre-move `scores` the caller already has — no new solver query (I0).
  *
  * @returns {{ namedOpening: {id,family,matchedPrefixLen,bookNextCol}, section: string }
- *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text} }
+ *          | { defense: {id,family,matchedPrefixLen,bestDefenseCol,centralityGrounded}, section: string }
+ *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text,resistAndWait} }
  *          | null }
  */
 export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, scores, player }) {
   const oc = computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player });
   if (!oc) return null;
   if (oc.centrality) return oc;   // centrality carries no bespoke section (centerDominance renders it)
+
+  if (oc.defense) {
+    const { id, family, bestDefenseCol, centralityGrounded } = oc.defense;
+    // Mechanical human label from the canonical KB id (strip `allen-`, hyphens → spaces — EXCEPT a
+    // hyphen between two digits, e.g. "5-4", which is a numeric column pair and must stay hyphenated);
+    // a shared prefix reports the family only (id null). "second side of …" makes the P2 perspective
+    // explicit.
+    const label = id
+      ? `the ${id.replace(/^allen-/, '').replace(/-(?!\d)/g, ' ')}`
+      : `a ${family}`;
+    const centralClause = centralityGrounded
+      ? ` The most resilient hold is column ${bestDefenseCol + 1}: it is more central, running through `
+        + `more potential fours — including your even rows (2 and 4), which favour the second player.`
+      : ` The most resilient hold is column ${bestDefenseCol + 1} — it loses more slowly than the move you played.`;
+    // Provenance + canon frame ONLY; DEFERS the concrete why-it-loses to the two-halves sections.
+    const section = [
+      '## Opening theory',
+      '',
+      `This position is the second side of ${label}, a known first-player winning plan — so it is `
+        + `already theoretically lost for you. Your only practical chance is to resist and hold the `
+        + `toughest line, waiting for the first player to slip.` + centralClause + ` You left the most `
+        + `resilient defense by playing column ${playedCol + 1}. `
+        + `Explain the consequence using ONLY the evidence in the other sections; do not invent a tactic `
+        + `or claim a threat the boards do not show.`,
+    ].join('\n');
+    return { defense: oc.defense, section };
+  }
 
   const { id, family, bookNextCol } = oc.namedOpening;
   // Grounded human label. A SPECIFIC opening name only when `id` is unique (I2 — guard 4 already set
@@ -1001,21 +1029,40 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     const openingReason = buildOpeningReason({
       movestring, playedCol: col, bestCol: contrastCol, bestScore, scores: preScores, player: perspective,
     });
+    // Tracks whether openingSection is a full "why the better move is stronger" framing (namedOpening
+    // / defense) that must not double up with center-dominance, vs. the resist-and-wait canon frame
+    // below, which carries NO geometric claim and explicitly defers to the center-dominance section.
+    let openingSectionCompetesWithCenterDominance = false;
     if (openingReason?.namedOpening) {
       openingContextData = { namedOpening: openingReason.namedOpening };
       openingSection = openingReason.section;
+      openingSectionCompetesWithCenterDominance = true;
+    } else if (openingReason?.defense) {
+      openingContextData = { defense: openingReason.defense };
+      openingSection = openingReason.section;
+      openingSectionCompetesWithCenterDominance = true;
     } else if (openingReason?.centrality) {
       openingContextData = { centrality: openingReason.centrality };
+      if (openingReason.centrality.resistAndWait) {
+        openingSection = [
+          '## Opening theory',
+          '',
+          'You are the second player here and already on the back foot: your practical goal is to '
+            + 'resist and hold, waiting for the first player to slip. The "## Why the better move is '
+            + 'stronger" section explains why the more central column is the tougher hold.',
+        ].join('\n');
+      }
     }
 
     // Center-dominance (the pre-existing opening reason): compute on the whole blunder path so
     // prompt_data always carries it when available; the prompt SECTION keeps its original gate
-    // (no threat row / look-ahead) AND yields to the named-opening section when that fired, so the
-    // two "why the better move is stronger" framings never double up (they are mutually exclusive).
+    // (no threat row / look-ahead) AND yields to the named-opening/defense section when that fired,
+    // so the two "why the better move is stronger" framings never double up (they are mutually
+    // exclusive). The resist-and-wait canon frame does NOT compete — it explicitly defers.
     const cd = detectCenterDominance({ movestring, playedCol: col, bestCol: contrastCol });
     if (cd) {
       centerDominanceData = { reason: cd.reason };
-      if (!lookaheadFired && !threatComparisonSection && !openingSection) {
+      if (!lookaheadFired && !threatComparisonSection && !openingSectionCompetesWithCenterDominance) {
         centerDominanceSection = `## Why the better move is stronger\n\n${cd.reason}`;
       }
     }
