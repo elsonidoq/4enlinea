@@ -627,3 +627,79 @@ played (column 1) **vacates `c2r2`**, and the opponent now wins on that window �
 (`c2r2`) sits **inside** the opponent's winning window (`tie: tied`).* `tacticTag` is `null` — do not
 name a tactic; explain it from the window + parity group. Do not spell out a forced line (`register:
 parity`, `line: null`).
+
+---
+
+## 11. `openingContext` — book-line lookup / centrality (opening decisions only)
+
+An **optional, top-level, mutually-exclusive** field, present only on early decisions (`boardState:
+"opening"`, roughly `discs < 15`) where the player is the first player (`player: 1`) and either an
+on-book deviation or a plain geometric centrality argument applies:
+
+```jsonc
+openingContext?: {
+  namedOpening: { id: string|null, family: string|null, matchedPrefixLen: number, bookNextCol: number }
+} | {
+  centrality: { bestCol: number, playedCol: number, betterHasMoreLines: true, text: string }
+}
+```
+
+**Absence contract.** `openingContext` is `undefined` (pruned away, like every other absent field)
+whenever neither branch applies — e.g. mid-game/closing decisions, decisions by the second player, or
+an opening decision that is fully off-book and not measurably more central. Absence here means "no
+opening-specific reason applies," not "unknown" — the ordinary sign-taxonomy or realized/denied halves
+still carry the full reason regardless.
+
+### `namedOpening` — a KB-line **lookup**, not a causal claim
+
+This is **provenance**, not mechanism: it says *the position matches a documented book line and the
+book's next move is verified best* — it does **not** by itself explain *why* leaving the line loses
+(that "why" still lives entirely in `lostResource`/`opponentPunishment`, exactly as for any other
+blunder). Treat `namedOpening` as an epigraph for the reason, never a substitute for it.
+
+| Field | Meaning |
+|---|---|
+| `id` | The specific KB entry (`allen-5-4-opening`, `allen-candlesticks-opening`, …) when the position's move sequence is on a **unique** matching book line. `null` when the prefix is shared by more than one KB opening (a genuinely ambiguous shared stem) — report only `family` in that case. **`id: null` with `family` present is correct, not a hedge/gap** — it means the prefix really is shared, not that the lookup failed. |
+| `family` | The opening family name (`central-column opening`, `first-row opening`) — always present when `namedOpening` is present, whether or not `id` is. |
+| `matchedPrefixLen` | How many plies of `movestring` (mirror-normalized: the engine matches either the line as-is or its column-reflection `col → 6 − col`) equal the start of the named KB line. |
+| `bookNextCol` | The 0-indexed column the book line recommends next. **Solver-verified**: this field is only ever populated when `scores[bookNextCol] === bestScore && bestScore > 0` (see Guard 3 below) — it is never a bare KB citation without a live score check. |
+
+**How to verify a `namedOpening` claim** (three checks, none of them narrative plausibility):
+1. **Prefix match** — `movestring` (or its mirror reflection, `col → 6 − col`) equals the first
+   `matchedPrefixLen` plies of the named KB line's worked-example movestring.
+2. **Guard 3 = score-equality, not column identity.** `scores[bookNextCol] === bestScore && bestScore
+   > 0` — `bookNextCol` is *a* solver-verified winning best move. **Do NOT require `bookNextCol ===
+   bestCol`.** Under a tie of two-or-more equally-winning columns, the book move and the engine's
+   own argmax `bestCol` can legitimately differ while both are correct — the field never claims
+   `bookNextCol` is *the* engine-chosen `bestCol`, only that it ties the max score.
+3. **The "why it loses" half** is grounded in `lostResource`/`opponentPunishment` exactly as usual —
+   `namedOpening` supplies the opening's name/provenance, not the losing mechanism.
+
+### `centrality` — a geometric fallback, not book provenance
+
+Present instead of `namedOpening` when the position is in the opening phase, the better move is
+strictly more central than the played move, but no on-book named line applies (either genuinely
+off-book, or on-book but the guards below failed). Reuses the same `detectCenterDominance` primitive
+that powers the pre-existing "why the better move is stronger" prompt section.
+
+| Field | Meaning |
+|---|---|
+| `bestCol` / `playedCol` | The compared columns (0-indexed), same values as the vector's top-level `bestCol`/`playedCol`. |
+| `betterHasMoreLines` | Always `true` when present — the better move passes through strictly more potential winning windows (4-cell lines) than the played move. |
+| `text` | The rendered centrality sentence (shared with the legacy center-dominance section). |
+
+**How to verify a `centrality` claim:** count the winning lines (4-cell windows) that pass through
+`bestCol` vs. `playedCol` on the decision board — the better move must run through strictly more.
+This is a pure geometric count on the board, independent of any KB lookup.
+
+### Mutual exclusivity and the on-book-but-unverifiable case
+
+`namedOpening` and `centrality` never both appear — `namedOpening` short-circuits when all four
+guards hold (on-book prefix; mover is the first player/beneficiary; Guard 3 score-equality above;
+unique-id-vs-shared-family). **A position that matches a book prefix but fails a later guard (e.g. the
+book's next move is not solver-verified best) falls through to `centrality`, not to absence** — this
+is intentional (a plain centrality argument is still honest and available), but it means `centrality`
+can legitimately appear on a technically on-book position. Do not read a `centrality` field as proof
+the position is off-book.
+
+

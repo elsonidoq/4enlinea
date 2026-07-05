@@ -19,9 +19,12 @@ axes + pass rule, §7 output).
 per-column `scores` array stripped by `toNarratorVector`). Its fields are `case`, `bestCol`,
 `playedCol`, `bestScore`, `playedScore`, `player`/`opponent`, `lostResource`, `opponentPunishment`
 (each with `kind`/`register`/`window`/`tacticTag`/`parityAttribution`/…), `opponentPunishment.tie`,
-`replyHistogram`, `gate`. The glossary defines every one. There is **no** separate ground-truth
-file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside** each eval
-record's `feature_vector`.
+`replyHistogram`, `gate`, and — on opening-phase decisions only — the optional, mutually-exclusive
+`openingContext.namedOpening` (`{id, family, matchedPrefixLen, bookNextCol}`, a KB book-line lookup)
+or `openingContext.centrality` (`{bestCol, playedCol, betterHasMoreLines, text}`, a geometric
+fallback). See the glossary's §11 for both. The glossary defines every one. There is **no** separate
+ground-truth file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside**
+each eval record's `feature_vector`.
 
 ## Core principle: the feature vector + glossary are the artifact under test, not the model
 
@@ -135,6 +138,48 @@ legal opponent score)` (>0 win, =0 draw, <0 loss). For `lose_to_faster_lose` bot
 **Per-run vs per-case.** Score each axis on **every run** in the group. The **case passes iff A1–A4
 hold on ALL N runs** (spec §5). Intermittent success = **fail** — it exposes latent ambiguity in the
 context. Record which runs failed and how they differed (e.g. run 0 named the fork, run 2 didn't).
+
+## Grading opening-deviation cases (`openingContext`)
+
+Some cases carry `feature_vector.openingContext` (opening-phase decisions, first player to move).
+This is an **additional lookup/geometry field**, not a different pass rule — A1–A4 (and, for
+condition D, G1–G6) still apply exactly as above. **No `render_decision` exists for opening
+cases** — the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) has never been
+wired for `openingContext` (the frozen condition-D corpus has no opening boards), so do **not**
+expect or re-derive a `render_decision` for an opening board; verify these claims via the three
+board checks below instead, whichever condition the case is.
+
+**A `namedOpening` "you were following `<opening>`, the book move was column `<bookNextCol+1>`"
+claim is graded TRUE by three board checks — never by narrative plausibility:**
+
+1. **Prefix match** — `feature_vector.movestring` (or its mirror reflection, `col → 6 − col`) equals
+   the first `matchedPrefixLen` plies of the named KB opening line's worked-example movestring
+   (`docs/knowledge-base/<id>.md`).
+2. **`scores[bookNextCol] === bestScore && bestScore > 0`** — `bookNextCol` is *a* solver-verified
+   winning best move. **This is a score-equality check, NOT `bookNextCol === bestCol`.** Under a tie
+   of equally-winning columns, the book move and the engine's own `bestCol` argmax can legitimately
+   differ while both are correct — do **not** fail a case for that difference; only fail it if the
+   book move's score is provably below the max (or the prefix doesn't actually match).
+3. **The "why it loses" half** is grounded in `lostResource`/`opponentPunishment` as usual (same A3/A4
+   board verification as any other case).
+
+**A `centrality` claim** is verified by counting winning lines (4-cell windows) through `bestCol` vs.
+`playedCol` on the decision board (not by tracing a `finalMovestring` — there is none to trace for
+this branch; it is a pure geometric count, confirm with `visualize_board.sh`'s threat annotations).
+
+**Lookup-not-fabrication instruction (do not misfire A4 here):** naming the opening (or its family)
+when checks 1+2 hold is a **verified lookup fact**, not a fabricated mechanism — do **not** grade it
+as an A4 hedge/fabrication failure. A `family`-only label with `id: null` on a genuinely shared KB
+prefix is **correct**, not a hedge failure — only flag it if the prefix is in fact unique to one KB
+entry and the answer still reported `id: null`, or vice versa.
+
+**Failure-attribution wording for opening cases:**
+- A wrong `bookNextCol` (its score is not the max, or the claimed prefix doesn't actually match the
+  named KB line) → `vector_error`.
+- A missing `namedOpening`/`centrality` field on a board that a manual KB/geometry check confirms
+  *is* on a known line / *is* more central → `missing_info`.
+- The model narrating the field correctly but still fabricating a mechanism beyond it, or misreading
+  `bookNextCol` vs. `bestCol` as required to be identical → `prompt_confusion`.
 
 ## Grading condition D — the `render_decision` rubric (G1–G6)
 

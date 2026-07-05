@@ -433,3 +433,84 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** owner-directed (2026-07-03) from the FV-sufficiency grade report. I0/I2 (correctness; every counterexample solver-verified, no fabricated board); I12 (case-space + counterexample per cell through production); the geometry≠outcome distinction D28 conflated. Fix A is render-only and highest-value; Fix C is a doc safety net; Fix B is the engine change, done last with the fullest validation (ordering A→C→B).
 - **Status:** IMPLEMENTED on `stagging`. `causalLinks.mjs` (L2/L3 `when`; `branchInvariant` helper removed), `renderReasonModel.mjs` (Decision block + landing cells + READING_KEY), `fieldDisposition.mjs` (bestCol/playedCol → transformed), `renderUniverse.mjs` (flip_case_l3 comments → regression marker), `feature-vector-glossary.md` (Fix C + Decision-block contract). Tests: `causalLinks.test.mjs`, `branchInvariance.test.mjs` (routing test rewritten for D30), `renderReasonModel.test.mjs` (Decision block + no-leak), `reasonRealizedDenied.test.mjs` (I12 integration). `npm run test:fast` 803/803 green.
 - **Source:** owner directive + grade report `fv_suff_answers_combined_boards_coverage_2026-07-03T17-42-51Z_2026-07-03T17-44-57Z_grade_report.md` (2026-07-03); supersedes D28 sub-decision 3; annotates D29 (`flip_case_l3`), D20; I0/I2/I12/D21.
+
+---
+
+### D31 — Opening-theory reason: `openingContext` two-mode evidence field, four guards, and the boundary vs. transposition/render layer
+
+- **Decision:** `computeReason` gained an optional, mutually-exclusive `openingContext` evidence
+  field (Part B, Tasks B1–B5), computed by a shared, side-effect-free helper
+  `computeOpeningContext.mjs` (imported by both `reasonEngine.mjs` and production `explainContext.js`
+  — one mechanism, I9). It emits EITHER `namedOpening: {id, family, matchedPrefixLen, bookNextCol}`
+  (a KB book-line **lookup + provenance** claim, not a causal "leaving cost you" claim) OR
+  `centrality: {bestCol, playedCol, betterHasMoreLines, text}` (a geometric fallback reusing
+  `detectCenterDominance`), or is absent entirely. The field rides the narrator vector's existing
+  general keep/drop rule (D3's `toNarratorVector`) with **no bespoke branch** — its field names are
+  score-free (`bookNextCol`/`bestCol`/`playedCol`/`matchedPrefixLen`/`family`/`id`/`text`/
+  `betterHasMoreLines`), so D21's score-scrub never touches it, and B4's `select_boards.mjs` coverage
+  strategy registers two PROVISIONAL predicates (`reason_opening_named_line`,
+  `reason_opening_centrality`) derived from its presence.
+- **The four guards (`computeOpeningContext.mjs`), in order:**
+  1. **Guard 1 — on-book prefix.** `matchOpeningPrefix(movestring)` (B1's pure KB matcher; five
+     `allen-*` strategic-rule KB entries contribute worked-example movestrings as lines, parsed once
+     and mirror-normalized `col → 6 − col`) returns non-null.
+  2. **Guard 2 — beneficiary is the mover.** `player === 1` — every parsed KB opening line is a
+     first-player win, so the beneficiary check is simply "is the mover player 1."
+  3. **Guard 3 — SCORE-EQUALITY, not column identity.** `match.bookNextCol != null && bestScore > 0
+     && scores[match.bookNextCol] === bestScore`. **This is the hard correctness point of the whole
+     feature and supersedes any competing `bookNextCol === bestCol` phrasing that appeared in earlier
+     planning text.** Under a tie of two-or-more equally-winning columns, the KB's recommended
+     `bookNextCol` and the engine's own argmax `bestCol` can legitimately differ while both are
+     correct — score-equality credits a book move that ties the max even when the engine's argmax
+     happened to pick a different equally-optimal column; it never falsely claims a below-max book
+     move is best (I2). No new solver call — reuses the engine's already-computed `scores`/`bestScore`
+     (I0).
+  4. **Guard 4 — specific id vs. shared family.** `id = match.ids.length === 1 ? match.ids[0] :
+     null`; a prefix shared by multiple KB lines reports `family` only, `id: null` — this is a
+     **correct, honest label**, not a hedge/gap.
+  - **Centrality fallback:** when Guard 1 fails (off-book) or a later guard fails (on-book but
+    unverifiable — e.g. Guard 3 fails because the book's next move is not solver-best), the position
+    falls through to the `centrality` branch (confined to early boards, ≤6 plies, where the better
+    move is strictly more central) rather than to absence. **A `centrality` field can therefore
+    legitimately appear on a technically on-book position** — it is not proof the board is off-book.
+- **Boundary — non-matching attribution and transposition, both explicitly OUT of v1:**
+  - A board that fails Guard 1 (no KB prefix match at all, direct or mirrored) gets no `namedOpening`
+    attribution of any kind — it either falls to `centrality` or is fully absent. There is no
+    "close-but-not-quite" fuzzy match.
+  - **Transposition (reaching a known line via a different move order) is NOT detected.** The matcher
+    is a literal (mirror-normalized) prefix match against recorded KB worked-example movestrings only;
+    it does not canonicalize board state or search for transposed move orders that reach the same
+    position. A transposed board that is strategically on a known line but whose move *sequence*
+    doesn't literally match will not get `namedOpening` — this is a known, accepted v1 gap, not a bug.
+  - **The condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) is NOT wired for
+    `openingContext`** — the frozen condition-D corpus has no opening boards, so no
+    `render_decision`/`fieldDisposition`/causal frame exists for this field (per
+    `project_reason_render_layer`). Production `explainContext.js`/`llmCoachHelpers.js` (a *separate*
+    consumer, B5) grounds `openingContext` directly into the `## Opening theory` prompt section
+    without going through the render layer at all. A later task would need to register
+    `openingContext`'s disposition + a causal frame + `render_decision` if/when opening boards are
+    added to the condition-D corpus — out of scope here.
+- **I12 validated boards (B2's report, `openingContext.test.mjs`):** `3333` (shared-prefix →
+  `family:'central-column opening', id:null`), `333331` (unique-id direct match →
+  `allen-candlesticks-opening`), `333335` (unique-id mirror-reflected match, same id), `3332223`
+  (Guard 2 fails — player 2 to move, negative counterexample → absent), `32` (Guard 3 fails — book
+  move not solver-best → falls through to `centrality`, NOT `namedOpening`), `30` (off-book, Guard 1
+  fails → `centrality`). Plus a cross-branch mutual-exclusivity test. See
+  `blunder-reason-evidence.md` for the full per-board write-up.
+- **Rationale:** I0 (guard 3 reuses already-computed `scores`; zero new solver calls); I2 (never
+  claims a book move is best without a live score check; `id`/`family` disambiguation is never
+  fabricated past what the matcher proves); I8/I9 (one shared `computeOpeningContext.mjs` module
+  consumed by both the offline engine and the production prompt-builder — no guard duplication after
+  the post-review fix); I12 (one deliberate counterexample per guard-branch, each through the
+  production `computeReason`, each board solver-verified).
+- **Status:** IMPLEMENTED on `opening-theory` branch (Tasks B1–B5). `openingMatch.mjs`,
+  `computeOpeningContext.mjs` (shared, side-effect-free), `reasonEngine.mjs` (wiring),
+  `reasonNarratorVector.mjs` (comment only — no logic change, general rule already covers it),
+  `select_boards.mjs` (opening fixture band + two PROVISIONAL coverage predicates), `explainContext.js`
+  / `llmCoachHelpers.js` (production `## Opening theory` prompt section). `npm run test:fast`
+  812/812 green (as of B5); 806/806 at B4. This task (B6) adds no code — glossary + grader + this
+  entry only.
+- **Source:** Task briefs B1–B6 (2026-07-04/05); task reports `task-B1-report.md`…`task-B5-report.md`;
+  `docs/knowledge-base/allen-*-opening.md` (the five source KB lines); memory
+  `feedback_reason_case_requires_eval_and_grader`, `project_reason_render_layer`,
+  `project_select_boards_skips_openings`; I0/I2/I8/I9/I12.
