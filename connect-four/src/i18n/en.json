@@ -844,6 +844,14 @@
         "hint":    "Which column sits on the most possible four-in-a-row lines?",
         "correct": "Exactly — the centre column. It keeps the most winning paths alive."
       }
+    },
+    "opening-imitate": {
+      "title": "I Play Where You Play",
+      "socratic": {
+        "ask":     "Gray just played column 2 again. What is Green's best reply?",
+        "hint":    "Which column sits directly above Gray's last disc?",
+        "correct": "Exactly — play where they play. Answering directly above Gray's last disc keeps the imitation going."
+      }
     }
   },
   "review": {

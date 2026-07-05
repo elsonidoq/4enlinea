@@ -14,3 +14,9 @@ test('opening-centre lesson is valid and Socratic targets centre', () => {
   assert.equal(l.socratic.correctCol, 3);
   assert.equal(l.confirmationCategory, null);
 });
+
+test('opening-imitate lesson is valid', () => {
+  const l = load('lesson-13-opening-imitate.json');
+  assert.equal(validateLesson(l), null);
+  assert.ok(Number.isInteger(l.socratic.correctCol));
+});

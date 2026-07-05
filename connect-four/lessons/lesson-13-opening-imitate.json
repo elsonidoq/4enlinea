@@ -1,0 +1,90 @@
+{
+  "id": "opening-imitate",
+  "title": "I Play Where You Play",
+  "free": true,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "movestring": "333",
+      "coachMessages": [
+        {
+          "text": "Green has played the centre column three times. Gray is about to move — the simplest good reply is often just to play directly above Green's last disc.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gdg",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "Allen calls this 'I play where you play': surprisingly often, the best move for a player is to play directly above the opponent's just-played disc. It sounds too simple to matter, but when you can recognise that imitation is good enough, it makes finding a strong move very easy — no deep calculation required."
+    },
+    {
+      "movestring": "333334444",
+      "coachMessages": [
+        {
+          "text": "After both sides raced up the centre column, Green shifted one column over and kept answering directly on top of Gray. That imitation built a winning position.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "gdgdg",
+        "dgdg",
+        "",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "This is the '5-4' central-column opening. Once Gray started column 4, Green simply kept playing where Gray played — answering on top move after move. That imitative reply blocks Gray's horizontal ideas nearby while Green's own odd-row threats keep building. Gray, to move here, is already lost."
+    },
+    {
+      "movestring": "3333311115555",
+      "coachMessages": [
+        {
+          "text": "Three separate columns, each filled by simply answering directly above the opponent's last disc. This is the Candlesticks opening — pure imitation, and a clean win.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "dgdg",
+        "",
+        "gdgdg",
+        "",
+        "dgdg",
+        ""
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "The Candlesticks opening is the flagship example of 'I play where you play': three separated columns, each built straight up by always answering directly above the opponent's last disc. Keeping that imitative order intact hands Green a triple threat and an easy win here. But imitation is a heuristic, not a rule — Allen warns it must be checked against real threats each time; the very same column heights played in the wrong order can flip the result to the other side."
+    }
+  ],
+  "socratic": {
+    "movestring": "33333111",
+    "boardSpec": [
+      "",
+      "dgd",
+      "",
+      "gdgdg",
+      "",
+      "",
+      ""
+    ],
+    "overlays": [],
+    "correctCol": 1,
+    "goalPrompt": "Gray just played column 2 again. What is Green's best reply?",
+    "_boardInstructions": "8 plies (33333111): centre column 3 stacked five high (g d g d g), column 1 stacked three high (d g d) with Gray's disc on top. Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified: col 1 (0-indexed) is the unique positive-scoring column — 'play where you play' directly above Gray's last disc — matching Allen Diagram 237's continuation."
+  },
+  "confirmationCategory": null,
+  "confirmationCount": 0,
+  "order": 13
+}
