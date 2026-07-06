@@ -274,11 +274,11 @@ deletion:
 Because `causalLinks.mjs` / the render model are one source of truth consumed by composer + grader +
 sampler, this change is **not "done"** until all three know about it:
 
-- [ ] Render layer emits `zoneAliasMap` + term vocabulary + `render_decision.zones`, and the prompt lists
-      "Highlightable regions" + "KB terms."
-- [ ] `compute.mjs` post-processing (normalize → validate-offered → expand → derive `key_cells`).
-- [ ] `grade-fv-sufficiency/SKILL.md` gains G7a/G7b, the `zones` ground-truth block, explicit
-      strip-before-A5, and the `G7` schema/axis entries.
-- [ ] `renderUniverse.mjs` gains the §8 predicates + the coverage test asserts them; `discovered ⊆
-      universe` guard intact.
-- [ ] Tests/fixtures updated in lockstep (the frozen corpus render + coverage test).
+- [x] Render layer emits `zoneAliasMap` + term vocabulary + `render_decision.zones`, and the prompt lists
+      "Highlightable regions" + "KB terms." (Tasks 1, 3)
+- [x] `compute.mjs` post-processing (normalize → validate-offered → expand → derive `key_cells`). (Tasks 2, 4)
+- [x] `grade-fv-sufficiency/SKILL.md` gains G7a/G7b, the `zones` ground-truth block, explicit
+      strip-before-A5, and the `G7` schema/axis entries. (Task 6)
+- [x] `renderUniverse.mjs` gains the §8 predicates + the coverage test asserts them; `discovered ⊆
+      universe` guard intact. (Task 5)
+- [x] Tests/fixtures updated in lockstep (the frozen corpus render + coverage test). (Tasks 3, 5; test:fast 844/844)
