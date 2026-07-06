@@ -4,3 +4,4 @@ deepseek_activate.sh
 supabase
 .env*
 *jsonl
+connect-four/server/scripts/win_distribution/data/

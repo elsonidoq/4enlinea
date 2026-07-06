@@ -87,12 +87,18 @@ worked_examples:
       win is intact after 9.G2).
 
 false_positives:
-  - movestring: "3332223"
+  - movestring: "333222266644203"
     why_not: |
-      This is the '3-4 opening followed by a first-player D4', which Allen warns is 'likely to
-      be a blunder' once D4 was delayed — it is precisely the move the 3-4 opening is designed
-      to punish. Recognising the shape must NOT recommend the delayed D4; the correct first-
-      player continuations avoid col 3 here. (Illustrative of the trap, not a verified refutation.)
+      The genuine "late D4 is a blunder" position — verified. This is Allen's Diagram 225 line
+      (D1 d2 D3 c1 C2 c3 C4 g1 G2 g3 E1 e2 C5 a1) after the first player throws away the win at
+      move 15 by playing D4 (0-indexed col 3) instead of the ONLY winning move G4 (0-indexed
+      col 6). Before move 15 (movestring "33322226664420", Green to move) the solver shows +1 at
+      col 6 (G4, the sole win) and 0 at cols 3 and 4 (D4/E4 both draw); after the D4 blunder the
+      second player draws (Allen: "Black will answer with 16 d5 or e5 for a draw"). Recognising
+      the 3-4 shape must NOT recommend this deep, mistimed D4. NOTE: playing D4 EARLY (as disk 5
+      or 7, e.g. "3332223") is the OPPOSITE — Allen's recommended easier win, the D3-D4 opening
+      ([[allen-d3-d4-opening]]), a first-player win, NOT a blunder. The blunder is only the
+      much-later D4 out of the difficult delayed structure.
   - movestring: "3334444"
     why_not: |
       Same-family MIRROR (adjacent column E instead of C) — it is the *same* opening, not a
@@ -103,10 +109,11 @@ known_limitations:
   - "First-player win only under precise play; Allen: 'Red's game becomes difficult'. Several first-player continuations lose, and some drawing lines exist if the first player mis-times D4/E4 (Allen: after 15.D4 or E4, Black answers d5 or e5 for a draw)."
   - "The delayed D4 by the first player is usually a blunder — the shape carries a built-in trap for the stronger side, unusual among 'winning' openings."
   - "The mirror (adjacent column E, '3334444') is the same opening."
-  - "Distinct from the D3-D4 opening (where the first player gets both central key cells early) — that is a separate, easier first-player plan."
+  - "Distinct from the D3-D4 opening (where the first player gets both central key cells early) — that is a separate, easier first-player plan. See [[allen-d3-d4-opening]]. Playing D4 EARLY (disk 5 or 7) is good; only a FAR-later D4 out of the delayed 3-4 structure is the blunder."
 
 related:
   - "[[allen-5-4-opening]] — the sibling central-column opening where the second player keeps following up the centre"
+  - "[[allen-d3-d4-opening]] — the easier first-player alternative Allen recommends: take D4 early (disk 5/7) instead of delaying it"
   - "[[allen-opening-principles]] — centrality and the early-D4 recommendation"
   - "[[allen-opening-tables]] — 3-4 is a First-Player win but a difficult one (perfect-play caveat)"
   - "[[allen-parity]] — the fifth-row-disc strength argument behind 'delayed D4 is a blunder' is a parity point"

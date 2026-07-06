@@ -211,6 +211,16 @@ deleted 2026-07-01 — see `docs/architecture/reason-DECISIONS.md` D22.) Use:
   non-optimal ply** with `{ boardState, movePlayed, correctCol, scores, score,
   bestScore, severity, perspective, quality, gameIndex, plyIndex, gameMs }` — exactly
   the inputs `tagBlunder` / blunder recording need.
+- **`playPolicyGame(solver, policies, rng = Math.random)`** — policy-driven variant of
+  `playGame` for strategy experiments (used by `server/scripts/win_distribution/`).
+  `policies` is `[player1Policy, player2Policy]`; each policy is
+  `async ({ ms, board, heights, player, legal, getScores, rng }) => 0-indexedCol`.
+  `getScores()` lazily queries the solver for the current position and memoizes it per
+  ply (returns a copy of `EMPTY_BOARD_SCORES` for the empty board), so solver-free
+  policies cost zero solver calls. Yields `{ ms, player, movePlayed, plyIndex, scores }`
+  before each move (`scores` is `null` unless a policy fetched it). Unlike `playGame`, it
+  imposes no mistake model — the policies decide. Additive-only: it does not touch the
+  frozen `playGame`/`sampleColMP` rng contract.
 
 Pass a seeded `rng` for deterministic runs (e.g. in tests). `harvestBlunders` skips
 optimal plies, so consumers only see mistakes.
