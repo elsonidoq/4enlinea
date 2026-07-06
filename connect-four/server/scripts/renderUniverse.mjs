@@ -30,6 +30,11 @@ export function renderDecisionPredicates(rd) {
   if (rd.fieldPartition.covered.length > 0) p.add(`covers_exercised_${rd.link.id}`);
   const h = rd.resource?.registerToHorizon?.horizon;
   if (h) p.add(`horizon_${h}`);
+  const aliases = rd.zones?.aliases ?? [];
+  const kindOf = (spec) => spec.startsWith('col') ? 'col' : spec.startsWith('windows:') || spec.startsWith('cells:') ? 'window' : 'cell';
+  for (const a of aliases) p.add(`zone_speckind_${kindOf(a.spec)}`);
+  if ((rd.zones?.terms ?? []).length > 0) p.add('term_emitted');
+  if (!aliases.some((a) => kindOf(a.spec) !== 'col')) p.add('zones_no_tactical'); // only columns => no tactical highlight
   return p;
 }
 
@@ -38,6 +43,8 @@ export const RENDER_PROVISIONAL = new Set([
   'link_L9', 'covers_exercised_L9',                 // diffuse-parity bucket, rare in self-play
   'flip_case_l3',                                    // D30 regression marker (was D28 I12 gap); rare
   'board_afterbest_shown',                           // after-best rarely changes the tag-set
+  'zone_speckind_window',                            // fork tags are rarer than single-cell threats
+  'zones_no_tactical',                               // a case with no tactical highlight at all is rare
 ]);
 
 // Every render-layer predicate the function can emit, named upfront (closed; the sampler's
@@ -54,6 +61,8 @@ export const RENDER_UNIVERSE = [
   'covers_exercised_L1', 'covers_exercised_L2', 'covers_exercised_L3', 'covers_exercised_L4',
   'covers_exercised_L5', 'covers_exercised_L6', 'covers_exercised_L7', 'covers_exercised_L8', 'covers_exercised_L9',
   'horizon_immediate', 'horizon_deep-forced-line', 'horizon_deep-parity',
+  'zone_speckind_cell', 'zone_speckind_window', 'zone_speckind_col',
+  'term_emitted', 'zones_no_tactical',
 ];
 
 export const RENDER_REQUIRED = RENDER_UNIVERSE.filter((p) => !RENDER_PROVISIONAL.has(p));
