@@ -145,6 +145,31 @@ function dropUnoffered(text, kind, allowed) {
   return text.replace(RE, (whole, id, inner) => (allowed.has(id) ? whole : inner));
 }
 
+// Delete a [kind:id] opener that has no matching [/kind:id] anywhere later in the text — the model
+// used the tag as a bare noun instead of wrapping a phrase (e.g. "the [term:immediate_threat] on
+// c2"). Bare-strip: remove just the token, leave the surrounding words as-is (no attempt to
+// substitute a canonical phrase — simplicity over prose smoothness on this rare repair path).
+// Returns the repaired text + one 'unclosed_tag:<kind>:<id>' entry per removal, consumed by
+// compute.mjs (-> annotationRepairs, for grade-fv-sufficiency G7) and, in production, by a future
+// deep_reveal_failures write (see reason-render-grounded-prompt.md §10 TODO).
+function stripUnclosedTags(text, kind) {
+  const OPEN = new RegExp(`\\[${kind}:([^\\]!]+)\\]`, 'g');
+  const repairs = [];
+  let result = '';
+  let last = 0;
+  let m;
+  while ((m = OPEN.exec(text)) !== null) {
+    const id = m[1];
+    const CLOSE = new RegExp(`\\[/${kind}:${id}\\]`);
+    if (CLOSE.test(text.slice(m.index + m[0].length))) continue; // properly paired — leave it
+    result += text.slice(last, m.index);
+    last = m.index + m[0].length;
+    repairs.push(`unclosed_tag:${kind}:${id}`);
+  }
+  result += text.slice(last);
+  return { text: result, repairs };
+}
+
 export function processAnnotations(mechanism, zones) {
   const handles = new Set((zones?.aliases ?? []).map((a) => a.handle));
   const slugs = new Set((zones?.terms ?? []).map((t) => t.slug));
@@ -153,6 +178,13 @@ export function processAnnotations(mechanism, zones) {
   let text = normalizeAnnotationTags(mechanism ?? '');
   text = dropUnoffered(text, 'zone', handles);
   text = dropUnoffered(text, 'term', slugs);
+
+  const repairs = [];
+  for (const kind of ['zone', 'term']) {
+    const stripped = stripUnclosedTags(text, kind);
+    text = stripped.text;
+    repairs.push(...stripped.repairs);
+  }
 
   // Expand offered zone handles -> real specs (open + close), and collect the specs for key_cells.
   const usedSpecs = new Set();
@@ -163,5 +195,5 @@ export function processAnnotations(mechanism, zones) {
 
   const cells = new Set();
   for (const spec of usedSpecs) for (const rc of expandSpec(spec)) cells.add(rcToCellStr(rc));
-  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0 };
+  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0, repairs };
 }

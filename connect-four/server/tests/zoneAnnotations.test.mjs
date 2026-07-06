@@ -104,3 +104,25 @@ test('processAnnotations drops an unoffered handle/slug but keeps the words', ()
   assert.doesNotMatch(mechanism, /term:made_up/);
   assert.match(mechanism, /take that square and a trick/);
 });
+
+test('processAnnotations bare-strips a genuinely unclosed tag and reports it in repairs', () => {
+  const raw = 'You needed to keep the [term:double_threat] on c2 alive because it is tough.';
+  const { mechanism, repairs } = processAnnotations(raw, ZONES);
+  assert.doesNotMatch(mechanism, /\[term:/);
+  assert.doesNotMatch(mechanism, /\[\/term:/);
+  assert.match(mechanism, /You needed to keep the  on c2 alive because it is tough\./);
+  assert.deepEqual(repairs, ['unclosed_tag:term:double_threat']);
+});
+
+test('processAnnotations bare-strips an unclosed zone tag used mid-sentence', () => {
+  const raw = 'Playing in [zone:better-col] keeps the fight alive; [zone:opp-double] hands them the finish.';
+  const { mechanism, repairs } = processAnnotations(raw, ZONES);
+  assert.doesNotMatch(mechanism, /\[zone:/);
+  assert.deepEqual(repairs, ['unclosed_tag:zone:better-col', 'unclosed_tag:zone:opp-double']);
+});
+
+test('processAnnotations reports empty repairs when all tags are properly paired', () => {
+  const raw = 'Column [zone:better-col]3[/zone:better-col] denies the double threat.';
+  const { repairs } = processAnnotations(raw, ZONES);
+  assert.deepEqual(repairs, []);
+});
