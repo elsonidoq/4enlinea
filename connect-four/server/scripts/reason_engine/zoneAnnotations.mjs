@@ -117,6 +117,7 @@ export function normalizeAnnotationTags(text) {
     const parts = [];
     let last = 0, m;
     while ((m = OPEN.exec(text)) !== null) {
+      if (m.index < last) continue; // already consumed as inner content of a previous pair on this kind
       parts.push(text.slice(last, m.index + m[0].length));
       CLOSE.lastIndex = m.index + m[0].length;
       const c = CLOSE.exec(text);
@@ -152,19 +153,36 @@ function dropUnoffered(text, kind, allowed) {
 // Returns the repaired text + one 'unclosed_tag:<kind>:<id>' entry per removal, consumed by
 // compute.mjs (-> annotationRepairs, for grade-fv-sufficiency G7) and, in production, by a future
 // deep_reveal_failures write (see reason-render-grounded-prompt.md §10 TODO).
+// LIFO stack-pair each closer with the NEAREST preceding still-open opener of the same id (a single
+// ordered token stream of opens+closes, not an "any closer exists later" scan) — a bare opener that
+// happens to precede an unrelated, properly-paired later tag of the same id must not hide behind that
+// pair's closer.
 function stripUnclosedTags(text, kind) {
-  const OPEN = new RegExp(`\\[${kind}:([^\\]!]+)\\]`, 'g');
+  const TOKEN = new RegExp(`\\[(/?)${kind}:([^\\]!]+)\\]`, 'g');
+  const pending = new Map(); // id -> stack of pending open-token matches
+  let m;
+  while ((m = TOKEN.exec(text)) !== null) {
+    const isClose = m[1] === '/';
+    const id = m[2];
+    if (isClose) {
+      const stack = pending.get(id);
+      if (stack && stack.length) stack.pop(); // pairs with the nearest still-open opener of this id
+    } else {
+      if (!pending.has(id)) pending.set(id, []);
+      pending.get(id).push(m);
+    }
+  }
+  const unclosed = [];
+  for (const stack of pending.values()) unclosed.push(...stack);
+  unclosed.sort((a, b) => a.index - b.index);
+
   const repairs = [];
   let result = '';
   let last = 0;
-  let m;
-  while ((m = OPEN.exec(text)) !== null) {
-    const id = m[1];
-    const CLOSE = new RegExp(`\\[/${kind}:${id}\\]`);
-    if (CLOSE.test(text.slice(m.index + m[0].length))) continue; // properly paired — leave it
+  for (const m of unclosed) {
     result += text.slice(last, m.index);
     last = m.index + m[0].length;
-    repairs.push(`unclosed_tag:${kind}:${id}`);
+    repairs.push(`unclosed_tag:${kind}:${m[2]}`);
   }
   result += text.slice(last);
   return { text: result, repairs };

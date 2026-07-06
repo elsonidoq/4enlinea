@@ -126,3 +126,11 @@ test('processAnnotations reports empty repairs when all tags are properly paired
   const { repairs } = processAnnotations(raw, ZONES);
   assert.deepEqual(repairs, []);
 });
+
+test('stripUnclosedTags does not let a bare opener hide behind a LATER, unrelated properly-paired tag of the same id', () => {
+  const raw = '[term:double_threat] intro. Later [term:double_threat]actual phrase[/term:double_threat].';
+  const { mechanism, repairs } = processAnnotations(raw, ZONES);
+  assert.doesNotMatch(mechanism, /\[term:double_threat\] intro/); // the bare opener is gone
+  assert.match(mechanism, /\[term:double_threat\]actual phrase\[\/term:double_threat\]/); // the real pair survives untouched
+  assert.deepEqual(repairs, ['unclosed_tag:term:double_threat']);
+});
