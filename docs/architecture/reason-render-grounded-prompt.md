@@ -735,3 +735,48 @@ opening is the teachable reason; the deep two halves demote to a horizon.
   centralityComparison:{player,betterCell,playedCell,qualitative}, parityFavor, deepResourceGrounded:false,
   horizon}` is the grader ground truth (previously there was NONE for opening boards). `grade-fv-sufficiency`
   was updated to consume it.
+
+## 10. Inline highlight/term annotation tags (shipped 2026-07-06)
+
+Condition-D coach output can carry inline `[zone:handle]…[/zone:handle]` board-highlight tags and
+`[term:slug]…[/term:slug]` KB-popup tags in `mechanism`. Single source of truth:
+`reason_engine/zoneAnnotations.mjs`. This is an **output-format axis on existing cases** — no new
+reason-case and no new harvested board; only `renderUniverse.mjs`'s predicate set grew.
+
+- **Offer (`buildAnnotationOffer(prunedFv, boardDecisions)` → `{aliases, zoneAliasMap, terms}`):**
+  derives the *offered* handle set from the near-term board tags + the two move columns. `alias =
+  {handle, spec, role, truthBoard, kbId}`; `spec` is a 1-indexed `zoneParser` spec (`colN` / `cNrM` /
+  `windows:…`). Both `buildReasonRenderModel` (prompt) and `buildRenderDecision` (ground truth) call it
+  with the SAME args, so the set the LLM sees == the set the grader trusts.
+- **Structural-only highlights:** only board-true `getMajorThreatCells` tag kinds
+  (`immediate`/`major`/`double`) become aliases; the vector-named *overlay* kinds
+  (`figure_7`/`double_threat`, injected onto the decision board by `reasonBoardSelect.mjs`) are EXCLUDED
+  (they often complete deep → highlighting the empty cell is the present-threat illusion). `truthBoard` =
+  first near-term board a tag is board-true on. The projected-deep board is ignored.
+- **Terms are independent of zones:** term vocab is restricted to the four KB-backed slugs
+  (`immediate_threat`/`double_threat`/`figure_7`/`claimeven`); `figure_7` CAN fire as a term (via the
+  two halves' `tag`) even though its overlay tag is not an alias. `conditional_swindle` is NOT a term
+  (no KB entry → empty popup). `canonicalPhrase` is imported from `causalLinks.mjs` `TAG_PHRASE` (no
+  local copy).
+- **Prompt:** `assembleGroundedPrompt` emits `# Highlightable regions` (handles + roles + truthBoard) +
+  `# KB terms you may name` (slugs + canonical phrase + gloss) + a no-overlap instruction, immediately
+  BEFORE `# Internal evidence fields`. Empty lists fall back to prose (never `null`/`undefined` in the
+  prose half). The LLM only ever writes offered handles/slugs, never a raw `cNrM`.
+- **Post-LLM (`compute.mjs` `postprocessAnswer(answer, render_decision)`, condition-D only):**
+  `processAnnotations` normalizes mismatched close tags, drops any unoffered handle/slug (keeping the
+  inner words), expands offered zone handles → real specs, and re-derives `key_cells` from the expanded
+  specs. **GOTCHA — condition-D `answer.key_cells` are now display-overlay cells, not per-cell threat
+  claims:** a `[zone:better-col]` expands to a whole 6-cell column; a fork window to its cells. The
+  grader's A3/A4 carry a condition-D carve-out so an empty highlighted-column/window cell is NOT graded
+  as fabrication (zone offered/board-truth fidelity is G7/G5). `key_cells` is overwritten ONLY when the
+  model actually emitted ≥1 zone (transition safety); A/B/C are untouched (null `render_decision`).
+- **`render_decision.zones`** `{aliases:[{handle,spec,role,truthBoard,kbId}], terms:[{slug,kbId,
+  canonicalPhrase,description}]}` (the `zoneAliasMap` is prompt-only, omitted from the record). Grader
+  axis **G7** (annotation fidelity): G7a zones delegate spec board-truth to **G5** checked on the
+  alias's `truthBoard`; G7b terms. A5 strips `[zone:]`/`[term:]` markup before coach-voice checks.
+- **Coverage:** `renderDecisionPredicates` emits `zone_speckind_{cell,window,col}` / `term_emitted` /
+  `zones_no_tactical` from `render_decision.zones`; `zone_speckind_window` + `zones_no_tactical` are
+  PROVISIONAL (rare in self-play). Closed-registry invariant intact.
+- **Not wired to production:** this makes the grounded path *capable*; `explainContext.js` /
+  `annotationGate.js` production zone code is untouched (a later deletion pass, once the grounded path
+  serves a live endpoint).

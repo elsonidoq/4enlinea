@@ -298,7 +298,7 @@ function ReasonViewer() {
           style={{ fontFamily: 'monospace', fontSize: 12, background: '#0f172a', color: '#e2e8f0', border: '1px solid #475569', borderRadius: 4, padding: '4px 8px', maxWidth: 360 }}
         >
           {!files.includes(file) && <option value={file}>{file}</option>}
-          {files.map(f => <option key={f} value={f}>{f}</option>)}
+          {[...files].sort((a, b) => b.localeCompare(a)).map(f => <option key={f} value={f}>{f}</option>)}
         </select>
         {rows.length > 0 && (
           <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>
@@ -539,7 +539,7 @@ function AnswerViewer() {
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>answers</span>
         <select value={answersFile} onChange={(e) => setAnswersFile(e.target.value)} style={{ ...sel, maxWidth: 320 }}>
           {!files.answers.length && <option value="">(no fv_suff_answers_*.jsonl found)</option>}
-          {files.answers.map((f) => <option key={f} value={f}>{f}</option>)}
+          {[...files.answers].sort((a, b) => b.localeCompare(a)).map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>cond</span>
         <select value={activeCondition} onChange={(e) => { setCondition(e.target.value); setRun(0); }} style={sel}>

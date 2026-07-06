@@ -105,7 +105,7 @@
 - [Lookahead shared seam](project_lookahead_shared_seam.md) — collectNovelOpportunities/compareOpportunities feed BOTH feature vector AND production annotation gate; characterize before editing
 - [Opening defender reason SHIPPED](project_opening_defender_reason_gap.md) — openingContext.defense (P2 hold-the-line) implemented (D32); NON-OBVIOUS: centrality NOT suppressed for losing mover (resistAndWait + conditional even-row canon instead)
 - [Coach-voice opening defeatist gap](project_coach_voice_opening_defeatist_gap.md) — RESOLVED (D34): L3/L7 now hold-the-line, not defeatist; editing causalLinks link.text ripples to 4 verbatim-asserting tests (reasonRenderFixes splits prompt on the section header) + a stale grader note
-- [Grounded-render zone/term tags (in-flight)](project_grounded_render_zone_tags.md) — designed+planned 2026-07-06 (not built): inline aliases-only zones + KB-backed term vocab in mechanism; G7 grader axis; GOTCHA: fork OVERLAY tag is decision-board-only + NOT board-true (deep) → highlight structural tags only
+- [Grounded-render zone/term tags (SHIPPED)](project_grounded_render_zone_tags.md) — 2026-07-06, doc=render-grounded-prompt §10; 2 GOTCHAs: (1) fork OVERLAY tag decision-board-only+NOT board-true→highlight structural only; (2) cond-D key_cells=overlay cells not threat claims (A3/A4 carve-out)
 
 ## Papergames integration
 
@@ -126,6 +126,7 @@
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; mark tasks done; rg/fd/sg; don't pkill shared server; bg subagents can't write
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; prepopulate reviewed data in one shot; ASCII diagrams; AskUserQuestion ≥2 options
+- [AskUserQuestion preview format](feedback_askuserquestion_preview_format.md) — never use `preview` for prose/code option descriptions, only genuine visual mockups
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md) — preserve existing component API unless the change strictly requires otherwise (CLAUDE.md-referenced)
 - [callLLM error handling in scripts](feedback_calllm_error_handling.md) — wrap each callLLM call individually; uncaught error silently drops the entry
 - [LLM output root-cause](feedback_llm_output_root_cause.md) — goal-first, then RCA across render/context/generator; a missing signal is a question, not a fact; observe with tools

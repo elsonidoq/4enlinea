@@ -412,76 +412,70 @@ move-1 board (`vector_error`)."*). This sentence is surfaced verbatim after grad
 ### Scoring via sub-agents
 
 For each `(id, condition)` group, spawn a fresh `general-purpose` sub-agent (it runs in the repo
-root with shell access, so it can use `./visualize_board.sh` and the solver directly). Process groups
-**sequentially** — there can be many. Give the sub-agent ONLY that group's data plus the record's
-oracle fields. Sub-agent prompt template:
+root with shell access, so it can use `./visualize_board.sh` and the solver directly, and can read the
+answers/vectors jsonl itself). Process groups **sequentially, one at a time** — there can be many, and
+this is required, not just a suggestion: sub-agents append their grade to a shared `_grades.jsonl`
+file (Step 3 below), and concurrent appends from parallel sub-agents can interleave and corrupt lines.
+
+Give the sub-agent ONLY a locator — the file paths, the `id`, and the `condition` — never the record
+contents. The sub-agent locates and reads its own data. This keeps your dispatch prompt small
+regardless of how verbose a condition-D `render_decision` block is. Sub-agent prompt template:
 
 ---
 ```
 You are grading Connect Four blunder-explanations for ONE case (one position, one ablation
-condition) across N independent runs. Output ONLY a valid JSON object — no prose, no fences.
+condition) across N independent runs. You are an AGENT with shell access, run from the repo root.
 
-You are an AGENT with shell access, run from the repo root. For any board-level claim (A3/A4) you
-MUST OBSERVE the board, not infer it from the feature vector (the vector is the artifact under
-test). Run `./visualize_board.sh <movestring>` and read its threat/par/score annotations:
+## Your case
+- answers file: <path to the answers jsonl>
+- vectors file: <path — same as answers file unless --vectors was passed>
+- id: <id>   condition: <condition>
+- grades output file: <answers-dir>/<answers-stem>_grades.jsonl
+
+## Step 0 — load your own record (do this first)
+Read the answers jsonl and collect every line matching this exact `id` and `condition` — these are
+your N runs. If any matching row has `call_error`/`parse_error` non-null or `answer` null, that run is
+a parse failure: count it, exclude it from axis scoring, and the case fails (a run with no gradeable
+answer cannot pass on all N runs).
+
+Read the vectors file and find the `feature_vector` embedded in one of those rows (identical across
+runs for the same id). From it derive:
+- movestring, playedCol/bestCol (0-indexed; display column = col + 1)
+- player, boardState (A5b bites iff player === 2 AND boardState === "opening")
+- case, bestScore/playedScore, and the expected outcomes the case implies (win_to_draw→win/draw,
+  win_to_lose→win/loss, draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
+- lostResource.kind / opponentPunishment.kind (winning_line | denial | neutralization | conditional_swindle)
+- the engine's own finalMovestring — use `lostResource.finalMovestring` when `lostResource.kind` is a
+  winning line, else `opponentPunishment.finalMovestring`. This is the ONLY line to trace when checking
+  whether a named cell/window is real — never substitute an alternate optimal solver line (that
+  mis-grounding is exactly the eval-1/16/3 mis-grade bug).
+
+Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the derived
+cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
+
+**Condition D only:** also extract `render_decision` from the row(s) — `{ case, route, direction,
+patternOnAfterBestBoard, link:{id,confidence,covers,guardrail,text}, boards:[{id,shown,reason}],
+resource:{completingCell,registerToHorizon}, fieldPartition:{rendered,covered,excluded},
+finalMovestring, zones:{aliases:[…],terms:[…]} }`. If it's present per-run, confirm it's identical
+across runs for this id (note any divergence in `notes` — that would itself be a bug). Consume every
+field as GROUND TRUTH — do NOT recompute `classifyCausalLink`, branch-invariance, board selection, or
+the offered zone/term set yourself. For G4, use `render_decision.finalMovestring` (not the raw
+feature_vector one) as the line to trace. Omit all condition-D steps below for condition A/B/C.
+
+## Step 1 — observe the board
+For any board-level claim (A3/A4) you MUST OBSERVE the board, not infer it from the feature vector
+(the vector is the artifact under test). Run `./visualize_board.sh <movestring>` and read its
+threat/par/score annotations:
 - after-best board:   <movestring><bestCol 0-indexed>
 - after-played board: <movestring><playedCol 0-indexed>
 For a move's true outcome, query the solver (createSolverProcess from
 connect-four/server/c4solver-wrapper.js; cd connect-four; await solver.query; destroy() in finally).
 When a claim names a cell/window/line that is NOT visible on the board, do NOT rule it false from
 absence — on deep/near-empty positions a real winning line completes on currently-empty squares.
-Trace the engine's OWN `finalMovestring` (given below) and check whether it passes through the named
-cell BEFORE calling the field wrong. Never ground on an alternate optimal solver line — multiple
-optimal lines exist and grounding on the wrong one is exactly the eval-1/16/3 mis-grade bug.
+Trace the engine's OWN finalMovestring (from Step 0) and check whether it passes through the named
+cell BEFORE calling the field wrong. Never ground on an alternate optimal solver line.
 
-## Case metadata (oracle — all from feature_vector; the model saw the vector but you VERIFY on the board)
-- id: <id>   condition: <condition>
-- movestring: <feature_vector.movestring> (pre-move board; append a 0-indexed column for a board)
-- playedCol (0-indexed): <feature_vector.playedCol>  → display column <playedCol + 1>
-- bestCol (0-indexed): <feature_vector.bestCol> → display column <bestCol + 1>   (this is the correct move)
-- player: <feature_vector.player>   boardState (phase): <feature_vector.boardState>   (A5b bites iff player === 2 AND boardState === "opening")
-- pattern_category / case: <feature_vector.case>
-- bestScore / playedScore (your-perspective, decision board): <…> / <…>
-- expected outcomes from case: best=<…> played=<…> (win_to_draw→win/draw, win_to_lose→win/loss,
-  draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
-- lostResource.kind / opponentPunishment.kind: <…> / <…>  (winning_line | denial | neutralization | conditional_swindle)
-- engine's own finalMovestring (the grounding line — use `lostResource.finalMovestring` when
-  `lostResource.kind` is a winning line, else `opponentPunishment.finalMovestring`): <…>. This is the
-  ONLY line to trace when checking whether a named cell/window is real — never substitute an alternate
-  optimal solver line.
-
-Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the oracle
-cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
-
-## Render decision — GROUND TRUTH (do NOT re-derive) — condition D only
-<omit this whole block for condition A/B/C. For condition D, fill every field from the record's
-`render_decision` object VERBATIM. These are the pipeline's SETTLED decisions — trust them; your job
-is to audit the ANSWER against them (checks G1–G7 below), never to recompute classifyCausalLink,
-branch-invariance, board selection, or the offered zone/term set yourself.>
-- linkId: <render_decision.link.id>   confidence: <render_decision.link.confidence>
-- covers: <render_decision.link.covers>  (a code listed here that is ABSENT from this record is
-  NORMAL per D28's static causal-code check — do NOT flag it as `missing_info`; only a code the answer
-  actually NEEDED and didn't have is an over-removal)
-- guardrail: <render_decision.link.guardrail>  (e.g. an L3 guardrail forbids "your move
-  caused/enabled it" phrasing — check the answer does not violate it)
-- text (verbatim composed frame): <render_decision.link.text>
-- boards: <render_decision.boards>  (each `{id, shown, reason}` — a `shown:false` board the answer
-  needed is a G3 over-omission)
-- patternOnAfterBestBoard: <render_decision.patternOnAfterBestBoard>  (the render-time L2-vs-L3
-  branch-invariance computation, D28 sub-decision 3 — trust it as the routing ground truth for G6; if
-  you independently observe on the board that this value looks wrong, that is a `render_bug`
-  finding to REPORT, not something to silently re-route around)
-- fieldPartition: rendered=<…> covered=<…> excluded=<…>
-- finalMovestring: <render_decision.finalMovestring>  (the ONLY line to trace for G4 — never an
-  alternate optimal solver PV, per the eval-1/16/3 mis-grade bug)
-- zones: <render_decision.zones>  (`{aliases:[{handle,spec,role,truthBoard,kbId}],terms:[{slug,kbId,
-  canonicalPhrase,description}]}` — the OFFERED `[zone:]`/`[term:]` set, consumed as GROUND TRUTH like every other
-  field above; never re-derive it. Used for G7.)
-
-## The N runs to grade
-<for each run: run_index, and the full `answer` JSON. Include any parse_error/call_error.>
-
-## Score each axis on EACH run, then apply the pass rule
+## Step 2 — score each axis on EACH run, then apply the pass rule
 - A1: better_move - 1 == feature_vector.bestCol?
 - A2: best_outcome / played_outcome match what feature_vector.case implies
       (win_to_draw→win/draw, win_to_lose→win/loss, draw_to_lose→draw/loss,
@@ -598,8 +592,10 @@ Pick the DECISIVE cause; mention secondaries in failure_summary. failure_summary
 field (or, for condition D render bugs, the `render_decision` element / `causalLinks.mjs` rule) and
 the board/solver finding.
 
-Output exactly (add the `G1`-`G7` keys inside each `per_run` entry ONLY for condition D; omit them for
-A/B/C):
+## Step 3 — write your grade line to the grades file, THEN return a one-liner
+
+Build the full grade object (add the `G1`-`G7` keys inside each `per_run` entry ONLY for condition D;
+omit them for A/B/C):
 {
   "id": "<id>", "condition": "<condition>", "n_runs": <int>,
   "per_run": [ { "run_index":0, "A1":"pass|fail", "A2":"pass|fail", "A3":"pass|fail",
@@ -618,21 +614,32 @@ A/B/C):
      missing/ambiguous feature field or glossary section, OR (A5 / condition D render bug) the
      render_decision element / causalLinks.mjs rule>", "evidence":"<board finding proving it>" } ]
 }
+
+Append this object as exactly one JSON line to `<grades output file>` (`JSON.stringify(obj) + "\n"`,
+appended — do not overwrite the file, other sub-agents' lines may already be in it). This write MUST
+complete before you return. Only after the write succeeds, return ONLY this one-line JSON to the
+caller — no prose, no fences, no full grade object:
+{ "id":"<id>", "condition":"<condition>", "case_pass":true|false, "intermittent":true|false,
+  "failure_triage":"vector_error|missing_info|prompt_confusion|render_bug|null",
+  "failure_summary":"<empty iff case_pass>" }
 ```
 ---
 
-Collect each sub-agent's JSON as it completes. A malformed/no response → record the case as
-`case_pass:false` with notes "sub-agent error".
+Collect each sub-agent's one-line summary as it completes — this is just a progress signal, the full
+grade already lives in the grades file. A malformed/no response, or a response whose `id`+`condition`
+line is missing from the grades file → append a `case_pass:false, notes:"sub-agent error"` line to the
+grades file yourself before moving to the next group.
 
 ## Output — the structured grades + the report
 
-**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Write every collected
-sub-agent JSON object — one per line — to `<answers-dir>/<answers-stem>_grades.jsonl`. Each line is
-exactly the sub-agent's output (`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,A5,unsure_about}],
-case_pass, intermittent, failure_triage, failure_summary, notes, counterexamples }`). The server (`GET /api/admin/fv-suff`) derives
-this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so the UI
-shows the axis chips + pass/fail next to each board+vector+answer. (If you skip this file, the UI
-just shows answers without grades — the markdown report below is still the human deliverable.)
+**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Each sub-agent already
+appended its own full grade JSON line to `<answers-dir>/<answers-stem>_grades.jsonl` in Step 3 above —
+you do not assemble this file yourself. Before writing the report, read it back in full to confirm one
+line per dispatched `(id, condition)` group (recover any gap per the paragraph above). Each line is
+`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,A5,unsure_about}], case_pass, intermittent,
+failure_triage, failure_summary, notes, counterexamples }`. The server (`GET /api/admin/fv-suff`)
+derives this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so
+the UI shows the axis chips + pass/fail next to each board+vector+answer.
 
 **2. The report.** Write to `<answers-dir>/<answers-stem>_grade_report.md`:
 

@@ -1,15 +1,17 @@
 ---
 name: project_grounded_render_zone_tags
-description: In-flight effort to add zone/term annotation tags to the grounded-render path (to delete the production explain engine) + the overlay-tag board-truth gotcha it uncovered
+description: SHIPPED zone/term annotation tags in the grounded-render path (condition D) + the overlay-tag board-truth gotcha + the condition-D key_cells-are-overlay-cells gotcha
 metadata: 
   node_type: memory
   type: project
   originSessionId: dfd6ea4d-ff4d-4289-b277-605e1e05ab87
 ---
 
-**In-flight (designed + planned 2026-07-06, NOT yet implemented).** Folding the production explain engine's highlightable `[zone:…]` tags + `[term:…]` KB popups into the reason-engine grounded-render path (condition D of `compute.mjs`), so the grounded path emits everything the frontend needs and the production explain engine (`explainContext.js`/`annotationGate.js`/`zoneParser.js`/`llmCoachHelpers.js` zone bits) can eventually be deleted. Design: `docs/superpowers/specs/2026-07-06-grounded-render-zone-tags-design.md`; plan: `docs/superpowers/plans/2026-07-06-grounded-render-zone-tags.md`. See [[project_reason_render_layer]], [[project_annotation_gate_and_zones]], [[project_zone_alias_must_match_prompt]].
+**SHIPPED 2026-07-06** (branch `opening-theory`). Folded the production explain engine's highlightable `[zone:…]` tags + `[term:…]` KB popups into the reason-engine grounded-render path (condition D of `compute.mjs`). Single source of truth = `reason_engine/zoneAnnotations.mjs` (`buildAnnotationOffer`/`processAnnotations`). **Authoritative doc: `docs/architecture/reason-render-grounded-prompt.md` §10** — read that, not this memory, for the full mechanism. This memory keeps only the two non-obvious gotchas. The grounded path is now *capable*; production `explainContext.js`/`annotationGate.js` zone code is NOT yet deleted (later pass once wired to a live endpoint). See [[project_reason_render_layer]], [[project_annotation_gate_and_zones]], [[project_zone_alias_must_match_prompt]].
 
-**Locked decisions (non-obvious, won't be visible in code until built):**
+**GOTCHA — condition-D `answer.key_cells` are display-overlay cells, NOT per-cell threat claims.** `postprocessAnswer` (compute.mjs) re-derives `key_cells` by EXPANDING each emitted zone spec: `[zone:better-col]` → the whole 6-cell column; a `windows:` fork → its cells. So most cells in a condition-D `key_cells` are legitimately empty. The grader's A3/A4 carry a **condition-D carve-out** (do NOT fail an empty highlighted-column/window cell as fabrication; zone board-truth is G7/G5). An agent reading the old "key_cells = squares the reason rests on" wording (still true for A/B/C) would wrongly fail every column/window-zone case. `key_cells` is overwritten ONLY when the model emitted ≥1 zone (transition safety).
+
+**Design decisions (non-obvious rationale behind the shipped code; full mechanism in the §10 doc):**
 - Tags live **inline in `mechanism`**; the A5/register grader must **strip `[zone:…]`/`[term:…]` before coach-voice checks** (same as production `checkP3`).
 - **Aliases-only**: the LLM writes only offered handles, never raw cells → hallucination surface collapses to *binding* (which handle wraps which phrase); this retires `annotationGate`'s `allowedSet`/`P5strong` (offered map = allowedSet).
 - **Terms symmetric to zones**: an offered *fired* term vocabulary, inline emission, NO free-text phrase-scan (paraphrase false-negatives). Vocabulary restricted to the **4 KB-backed slugs** `immediate_threat`/`double_threat`/`figure_7`/`claimeven` — **`conditional_swindle` is NOT a term** (no KB entry → empty popup).
