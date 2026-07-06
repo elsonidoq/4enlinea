@@ -209,7 +209,7 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
   "better_move":      <integer 1-7, the better column in 1-INDEXED DISPLAY (column 1 = leftmost)>,
   "played_outcome":   "win" | "draw" | "loss",   // result of the PLAYED move, with best play
   "best_outcome":     "win" | "draw" | "loss",   // result of the BETTER move, with best play
-  "mechanism":        "<1-3 sentences: the load-bearing reason the played move is worse>",
+  "mechanism":        "<1-3 sentences spoken directly to the player as their coach: the load-bearing reason the played move is worse. 2nd person, plain Connect Four language, NO internal/field/engine terms>",
   "key_cells":        ["c5r4", ...],   // squares the mechanism rests on, cNrM (1-indexed); [] if none
   "fields_relied_on": ["case", "lostResource.tacticTag", "opponentPunishment.tie.kind", ...],
   "unsure_about":     "<what the vector did NOT let you determine, or empty string>",
@@ -219,6 +219,13 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
 Notes:
 - \`better_move\` is 1-INDEXED display (1-7). The vector's \`bestCol\` is 0-indexed, so add 1.
 - \`key_cells\` use the glossary's \`cNrM\` convention (1-indexed column and row).
+- \`mechanism\` is the ONLY player-facing field: write it as a coach speaking to the player in the
+  2nd person ("you", "your opponent" — never third-person analyst voice, never by color). Use plain
+  Connect Four words (threat, fork, double threat, four-in-a-row line, block, central, claimeven).
+  NEVER name a data structure, field path, the solver, the score, a histogram, a "window", or a
+  "completing cell" in \`mechanism\`; if you relied on one, put it in \`fields_relied_on\` instead. On a
+  position that is lost with best play, do NOT tell the player they are lost — frame the better move
+  as the toughest defense that makes the opponent work hardest.
 - \`fields_relied_on\` must list the actual vector field paths your reasoning used — this reveals
   whether your claims trace to engineered fields or to re-deriving from \`movestring\`.
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the

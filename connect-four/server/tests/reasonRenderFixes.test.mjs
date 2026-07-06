@@ -26,8 +26,9 @@ test('eval-3: the deep fork is framed as deep, never as a near-term threat', () 
 test('eval-23: routes to L3 and forbids the causation claim', () => {
   const p = dPrompt('eval-23');
   assert.match(p, /causal link L3/);
-  assert.match(p, /does not create it/i);
-  assert.match(p, /do not say your move caused/i);
+  assert.match(p, /didn't create it/i);                       // player-facing, hold-the-line
+  assert.match(p, /caused or enabled the pattern/i);          // causation forbidden via the guardrail
+  assert.doesNotMatch(p.split('# Reading key')[0], /already losing|neither move wins/i);  // no defeatist framing
 });
 
 test('no composed frame text contains a literal "undefined"/"null" across the corpus', () => {
@@ -38,7 +39,7 @@ test('no composed frame text contains a literal "undefined"/"null" across the co
     // check only the prose half (before the JSON dump) — a template that referenced a missing
     // field would render the literal "undefined" (or "null", e.g. from a denialCell helper that
     // can return null) there.
-    if (/\b(undefined|null)\b/.test(p.split('# Vector facts')[0])) bad.push(row.id);
+    if (/\b(undefined|null)\b/.test(p.split('# Internal evidence fields')[0])) bad.push(row.id);
   }
   assert.deepEqual(bad, [], `records with "undefined"/"null" in composed prose: ${bad.join(', ')}`);
 });

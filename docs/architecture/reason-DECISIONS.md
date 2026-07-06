@@ -641,3 +641,49 @@ substitute" contract — NOT a new causal-link family:
 grader centrality scoping). Modules: `reason_engine/openingFrame.mjs`, `renderReasonModel.mjs`,
 `fieldDisposition.mjs`, `reason_engine/winningCellHeatmap.mjs`. I0/I12; D30 (Fix-A coordinate-leak,
 extended: opening columns `bookNextCol`/`bestDefenseCol` are `transformed`).
+
+### D34 — coach-voice pass: resistance-framed L3/L7, a C4-vocabulary layer, and a mechanism register contract
+
+**Context.** A `grade-fv-sufficiency` run over the 57-board opening batch failed **every** case on
+axis **A5 (coach voice)** while A1–A4 + G1–G6 passed 100% — i.e. the vector/glossary was sufficient and
+the defect was purely render/prompt. Two triage buckets: **render_bug (12)** — L7 (and L3 once) emit
+defeatist bookends the model faithfully echoed on player-2 opening boards; **prompt_confusion (45)** —
+the model leaked internal jargon (`the vector`/`the solver`/`the gate`/`reply histogram`/`completing
+cell`/`window`/raw tactic slugs) and 3rd-person analyst voice. Closes the OPEN gap in memory
+`project_coach_voice_opening_defeatist_gap`.
+
+**Decision — three composer-layer changes, NO vector/schema change** (consistent with 0 `vector_error` /
+0 `missing_info`):
+- **Resistance frame (was defeatist).** L3 and L7 no longer say "You were already losing" / "Neither
+  move wins" / "only loses faster." Keyed on the mover being lost (`case=lose_to_faster_lose`, a superset
+  of the player-2-opening case — so it also covers lost player-1 mid-games), they now lead with the
+  Connect Four practical-resistance principle: name the better column, "your most stubborn / toughest
+  defense," "makes your opponent work hardest," keep the practical swindle alive. Theory basis: C4 is a
+  first-player forced win (Allis 1988) — telling a losing side "you're lost" is redundant; the actionable
+  content is central control + narrowest opponent margin (`gate.witness`, `replyHistogram`,
+  `centrality`/`resistAndWait`, already in the vector). L3's no-causation rule moved from the player text
+  into its **guardrail**. Mirrors production `llmCoachHelpers.js` ("hold the toughest defense, wait for a
+  slip; do NOT claim to be building a win").
+- **C4-vocabulary layer.** `TAG_PHRASE`/`plainTag` in `causalLinks.mjs` maps every internal tactic slug
+  to its plain theory phrase (`immediate_threat`, `double_threat`, `figure_7`, `conditional_swindle`),
+  applied in L1/L2/L3 so no raw slug reaches player text. One map, all tags.
+- **Mechanism register contract.** `renderReasonModel.mjs` reframes the `READING_KEY` (concept-first,
+  and an explicit "never repeat a field name / histogram / window / completing cell / solver / score in
+  `mechanism`" line) and renames the raw JSON dump `# Vector facts` → `# Internal evidence fields (for
+  your reading only — do NOT name these in mechanism; cite paths in fields_relied_on)`. The `compute.mjs`
+  `TASK` schema now declares `mechanism` the ONLY player-facing field: 2nd-person, plain C4, machine
+  tokens go in `fields_relied_on`; on a lost board, do NOT tell the player they are lost.
+
+**Lockstep + verification.** `causalLinks.mjs` link text is a single source of truth asserted verbatim
+by 4 test files — `causalLinks.test.mjs`, `causalLinksComposers.test.mjs`, `reasonRealizedDenied.test.mjs`,
+and `reasonRenderFixes.test.mjs` (the last splits the assembled prompt on the literal header string, so
+the `# Vector facts`→`# Internal evidence fields` rename had to update it) — all updated in the same
+change; full `npm run test:fast` green (833/833) and a corpus scan of all rendered frames shows 0
+defeatist / 0 raw-slug. **Grader note stale:** the `grade-fv-sufficiency` SKILL's aside "A5b render_bug
+is the expected bucket for this vector today" no longer holds once the render is clean (residual
+defeatism would now correctly bucket `prompt_confusion`); update it when the grader is next touched.
+`select_boards.mjs` untouched (no new case).
+
+**Source:** session 2026-07-06, branch `opening-theory`. Modules: `reason_engine/causalLinks.mjs`,
+`renderReasonModel.mjs`, `compute.mjs`. Invariants: I0 (correctness over optimization — no vector change),
+the coach-voice A5 axis in `grade-fv-sufficiency`.

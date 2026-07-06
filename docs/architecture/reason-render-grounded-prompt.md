@@ -246,7 +246,7 @@ narratively redundant even when the sentence doesn't quote each one word-for-wor
 |---|---|---|---|---|---|
 | L1 | **missed_own** — `direction=missed_own` (LR=`realized_pattern`, OP=`denial`; `win_to_lose`/`win_to_draw`) | "The correct move (col B) completes your {tag} at {cell}; the played move let the opponent take {denialCell}, denying it — {best}→{played}." | high | `route,tag,direction,*.kind,*.verdict,*.register,*.terminal,tie.kind` | 6 |
 | L2 | **enabled_opponent, genuinely causal** — `direction=enabled_opponent` ∧ `case≠lose_to_faster_lose` (i.e. `win_to_lose`/`win_to_draw`/`draw_to_lose`) | "Your move let the opponent occupy {cell}, completing their {tag} on {window}; the better move denied it — {best}→{played}." | high | same as L1 | 2 |
-| L3 | **enabled_opponent, already-losing** — `direction=enabled_opponent` ∧ `case=lose_to_faster_lose` | "You were already losing. The opponent's {tag} at {cell} exists no matter what you play here — your move does NOT create it, it only loses faster. **Do not say your move caused/enabled it.**" | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
+| L3 | **enabled_opponent, already-losing** — `direction=enabled_opponent` ∧ `case=lose_to_faster_lose` | *(D34 hold-the-line rewrite)* "Your opponent's {plainTag} at {cell} is coming no matter what you play here — your move didn't create it. Column B makes your opponent work hardest for it; the move you played only speeds up the finish." (no-causation moved to the **guardrail**, not the player text) | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
 | L4 | **defensive_miss** — `direction=defensive_miss` (LR=`denial`, OP=`realized_pattern`) | "The better move (col B) occupies {cell}, blocking the opponent's {tag} on {window}; the played move skipped it — {best}→{played}." | high | same as L1 | 4 |
 
 > **⚠️ UPDATED by [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30 (supersedes D28 sub-decision 3).**
@@ -266,13 +266,28 @@ narratively redundant even when the sentence doesn't quote each one word-for-wor
 > redundant, not load-bearing. This is exactly what the static causal-code audit (§6) checks: every
 > `covers` entry must resolve to a `causal-code` disposition, and these three never did.
 
+> **⚠️ UPDATED by [`reason-DECISIONS.md`](./reason-DECISIONS.md) D34 (coach-voice pass, 2026-07-06).**
+> Three composer-layer changes, all in `causalLinks.mjs` + `renderReasonModel.mjs`, no vector/schema
+> change: **(1)** L3 and L7 no longer emit the defeatist bookends ("You were already losing" /
+> "Neither move wins" / "it only loses faster") — keyed on the mover being lost (`lose_to_faster_lose`),
+> they now lead with the practical-resistance / hold-the-line frame (name the better column, "toughest
+> defense", "makes your opponent work hardest", keep the swindle alive). The no-causation instruction
+> moved from L3's player text into its **guardrail**. **(2)** A canonical Connect Four vocabulary layer
+> (`TAG_PHRASE`/`plainTag`) maps every internal tactic slug to plain theory phrasing (`double_threat` →
+> "double threat (two winning squares at once)", `figure_7` → "7-shaped double threat", …) in L1/L2/L3
+> so no raw slug leaks into player text. **(3)** The answerer's `mechanism` is now contracted as the
+> ONLY player-facing field (2nd-person, plain C4, no field names/solver/score/"window"/"completing
+> cell" — those go in `fields_relied_on`); the `assembleGroundedPrompt` JSON block was renamed
+> `# Vector facts` → `# Internal evidence fields (for your reading only — do NOT name these in
+> mechanism)`. The catalog texts above are updated to the D34 wording.
+
 ### Family 2 — `route: sign` (deep `forced_sequence`/`parity` → confidence varies)
 
 | # | Link (trigger) | Composes (gist) | Confidence | Removes (covers) | Corpus n |
 |---|---|---|---|---|---|
 | L5 | **denied winning line** — `route=sign` ∧ LR=`winning_line` ∧ OP=`denial` | "You had a forced {win} — it resolves ~{pliesToEnd} plies out via a {fork/parity} completing at {completingCell} (discs {supportingDiscs} already on that line). The played move let the opponent take {denialCell} on it — {win}→{played}." | high (denial provable; horizon stated) | `route,*.kind,opponentPunishment.verdict,*.terminal,*.forkCase,tie.kind,tie.tied,register→horizon` | 4 |
 | L6 | **two winning lines** — `route=sign` ∧ LR=`winning_line` ∧ OP=`winning_line` (`win_to_lose`) | "You had a forced win via {A} (~N plies); the played move both gives it up and lets the opponent force their own win via {B}." | high if both lines have named completing cells; else **low** | `route,*.kind,*.terminal,*.forkCase,register→horizon` | 4 |
-| L7 | **swindle, both lose** — `route=sign` ∧ LR=`conditional_swindle` (`lose_to_faster_lose`) | "You were already losing. The better move kept a practical swindle — a slip in column {gate.witness.devCols} within {oppPlies} plies lets you back; the played move loses faster. **Neither move wins.**" | high | `route,lostResource.kind,opponentPunishment.kind,*.verdict,register→horizon,tie.kind,tie.playedPlies,tie.swindlePlies` (gate.witness.devCols/oppPlies **restated, not dropped**) | 4 |
+| L7 | **swindle, both lose** — `route=sign` ∧ LR=`conditional_swindle` (`lose_to_faster_lose`) | *(D34 hold-the-line rewrite)* "Column B is your most stubborn defense: it keeps a practical swindle alive — {if oppPlies>0: if your opponent slips within about {oppPlies} moves (watch columns {devCols}), you can climb back in / else: one slip by your opponent (watch columns {devCols}) could let you climb back in}. The move you played gives that up and lets your opponent finish faster." (no "already losing"/"neither move wins") | high | `route,lostResource.kind,opponentPunishment.kind,*.verdict,register→horizon,tie.kind,tie.playedPlies,tie.swindlePlies` (gate.witness.devCols/oppPlies **restated, not dropped**) | 4 |
 | L8 | **draw abandoned** — `route=sign` ∧ `case=draw_to_lose` (LR=`denial`, OP=`winning_line`) | "The position was a draw; the better move holds it by occupying {cell}. The played move abandons it and the opponent now has a forced win (~{pliesToEnd} plies, completing at {completingCell})." | high | `route,*.kind,*.verdict,*.terminal,*.forkCase,tie.kind,register→horizon` | 1 |
 | L9 | **diffuse parity win** — `route=sign` ∧ LR=`winning_line` ∧ `register=parity` ∧ no single denial/shared cell | "You had a parity/zugzwang win (resolves deep, ~{pliesToEnd} plies); the played move loses the parity battle — the exact culprit square isn't cleanly isolable. See the parity group {controllingGroup}." | **low** → thin frame | `route,*.terminal` only — keeps `register`, `parityAttribution.*`, both halves' cells | (subset of L5/L6 parity rows) |
 

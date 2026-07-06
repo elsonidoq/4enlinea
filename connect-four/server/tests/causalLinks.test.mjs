@@ -36,12 +36,15 @@ test('L2 for draw_to_lose enabled_opponent regardless of branch-invariance ctx (
   assert.equal(classifyCausalLink(fv, { patternOnAfterBestBoard: false }).id, 'L2');
 });
 
-test('L3 only fires on lose_to_faster_lose enabled_opponent (Fix B); its text asserts both-lose', () => {
+test('L3 only fires on lose_to_faster_lose enabled_opponent (Fix B); text is hold-the-line, not defeatist', () => {
   const fv = { case: 'lose_to_faster_lose', route: 'realized_denied', direction: 'enabled_opponent',
                opponentPunishment: { kind: 'realized_pattern', tag: 'figure_7', completingCell: 'c5r4' } };
   const link = classifyCausalLink(fv, { patternOnAfterBestBoard: false });
   assert.equal(link.id, 'L3');
-  assert.match(link.text, /already losing|loses faster/i);
+  assert.match(link.text, /didn't create it|work hardest|speeds up/i);
+  assert.match(link.text, /7-shaped double threat/);        // figure_7 slug -> plain C4 phrase
+  assert.doesNotMatch(link.text, /already losing|neither move wins/i);  // no defeatist framing
+  assert.match(link.guardrail, /caused or enabled/i);       // causation guardrail preserved
 });
 
 test('L7 conditional swindle', () => {

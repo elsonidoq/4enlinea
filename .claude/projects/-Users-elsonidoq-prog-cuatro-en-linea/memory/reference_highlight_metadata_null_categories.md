@@ -36,5 +36,11 @@ metadata:
 
 ## Related
 
-- [[project_classifier_current_state]] — classifier bug status
+- [[project_classifier_architecture]] — detection pipeline & detector traps
 - [[project_new_puzzle_categories]] — highlight_metadata schema design
+
+---
+
+## correct_col cannot be re-derived from highlight_metadata (claimeven/figure_7/j_shape)
+
+`correct_col` (integer, in both `puzzles` and `candidates` — see `docs/architecture/db-schema.md`) stores the single correct column at candidate/puzzle creation time because it **cannot be re-derived from `highlight_metadata`** for claimeven, figure_7, and j_shape. Added by migration `016_correct_col.sql` (must run after 012's grants). Any query SELECTing/INSERTing `correct_col` in a fresh environment must confirm 016 was applied.

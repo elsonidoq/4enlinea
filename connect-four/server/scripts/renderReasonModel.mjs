@@ -232,10 +232,11 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - pliesToEnd: plies until the line finishes, when known.
 - controllingGroup / parityAttribution: the group of four squares whose parity decides a deep win.
 - ownDiscs: how many of your discs already sit on the winning group.
-- replyHistogram.afterBest / afterPlayed: how many opponent replies still lose after each move.
-- "deep on a forced line" / "deep, via a parity battle": the completing square is many plies away and EMPTY now — not a current threat.
+- replyHistogram.afterBest / afterPlayed: how many ways your opponent still has to hold the result after each move — fewer means the tougher, more resilient defense.
+- "deep on a forced line" / "deep, via a parity battle": the winning square is many plies away and EMPTY now — not a current threat.
 - Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
-- Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.`;
+- Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.
+- These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).`;
 
 const OPENING_READING_KEY = `# Opening reading key
 - family / id: the named opening line this position is on (id absent = shared prefix, family only).
@@ -280,7 +281,7 @@ export function assembleGroundedPrompt(model) {
     READING_KEY,
     ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
     '',
-    '# Vector facts',
+    '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
     '```json',
     JSON.stringify(model.rendered, null, 2),
     '```',

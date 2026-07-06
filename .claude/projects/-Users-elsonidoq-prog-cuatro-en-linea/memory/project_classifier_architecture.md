@@ -59,3 +59,11 @@ Score from c4solver `-a` = from current player's perspective:
 - `detectFigure7` and `detectJShape` no longer return `correctCol` — the completing column is derived by `checkFigure7Predicate`/`checkJShapePredicate` via transition logic (simulate each legal column, check before/after pattern presence)
 - undercut/overcut derive from `highlight_metadata` at eval time, `correct_col = null`
 
+
+---
+
+## (merged from `project_classifier_current_state`) — detector semantics & _scores trap
+
+**`detectFigure7`/`detectJShape` evaluate the board AS-IS** — a pattern is fully present or not; they do NOT detect one-move-away states. The transition logic for puzzle generation (iterate legal columns, simulate, verify pattern was absent before) lives in `checkFigure7Predicate` / `checkJShapePredicate` in `candidate-generator.js`.
+
+**`_scores` caller-signature trap:** both `detectFigure7` and `detectJShape` accept `_scores` and ignore it, but `classifyPattern` still passes it — do NOT remove the parameter or the call site breaks.

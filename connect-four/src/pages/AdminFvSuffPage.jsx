@@ -494,6 +494,12 @@ function AnswerViewer() {
 
   // index maps
   const conditions = useMemo(() => [...new Set(data.answers.map((a) => a.condition))].sort(), [data.answers]);
+  // Reconcile the condition selector to what the loaded file actually contains. The state defaults to
+  // 'A'; on a file with only e.g. condition 'D' the <select> renders 'D' as its sole (first) option
+  // while state stays 'A', so clicking 'D' fires no onChange and the id|condition join silently misses
+  // ("No LLM answer for this case / condition / run"). Deriving the effective value (rather than
+  // setState-in-effect) keeps the join correct without a cascading re-render.
+  const activeCondition = conditions.includes(condition) ? condition : (conditions[0] ?? condition);
   const answersByKey = useMemo(() => {
     const m = new Map();
     for (const a of data.answers) { const k = `${a.id}|${a.condition}`; if (!m.has(k)) m.set(k, []); m.get(k).push(a); }
@@ -508,7 +514,7 @@ function AnswerViewer() {
 
   const caseRow = data.set[index];
   const fv = caseRow?.feature_vector;
-  const key = caseRow ? `${caseRow.id}|${condition}` : null;
+  const key = caseRow ? `${caseRow.id}|${activeCondition}` : null;
   const runs = key ? (answersByKey.get(key) || []) : [];
   const answer = runs.find((r) => (r.run_index ?? 0) === run) || runs[0] || null;
   const grade = key ? gradesByKey.get(key) : null;
@@ -536,7 +542,7 @@ function AnswerViewer() {
           {files.answers.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>cond</span>
-        <select value={condition} onChange={(e) => { setCondition(e.target.value); setRun(0); }} style={sel}>
+        <select value={activeCondition} onChange={(e) => { setCondition(e.target.value); setRun(0); }} style={sel}>
           {(conditions.length ? conditions : ['A']).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>run</span>
@@ -588,7 +594,7 @@ function AnswerViewer() {
               </div>
               <aside style={{ flex: 1, minWidth: 380, borderLeft: '1px solid #e2e8f0', background: '#fff', overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>LLM answer · {condition} · run {run}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 8 }}>LLM answer · {activeCondition} · run {run}</div>
                   <AnswerPanel answer={answer} grade={grade} runIdx={run} />
                 </div>
                 <div>

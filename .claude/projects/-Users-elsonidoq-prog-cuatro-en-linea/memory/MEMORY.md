@@ -25,51 +25,38 @@
 
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won-position boards have losing side to move); openings go to Lessons + reason "book-deviation"
 - [Lesson interactivity evaluation](project_lesson_interactivity_evaluation.md) — Socratic is client-side col===correctCol; inline confirmationChallenges 404 (check needs a DB puzzle row)
-- [8-file wiring checklist](project_new_category_wiring_checklist.md) — missing candidate-generator.js = silent failures
-- [Paid categories in two files](project_paid_categories_two_files.md) — server + src/lib must be updated atomically
+- [8-file wiring checklist](project_new_category_wiring_checklist.md) — missing candidate-generator.js = silent failures; paid categories = server + src/lib updated atomically
 - [Category wiring reference](project_new_puzzle_categories.md) — locked design decisions for z_threat/claimeven/undercut/overcut/figure_7/j_shape
 - [Claimodd removal](project_claimodd_removal.md) — removed 2026-06-17; how to correctly re-add
 - [Category cleanup](project_category_cleanup.md) — zugzwang≠forced_win; don't reuse the slug
 - [highlight_metadata null table](reference_highlight_metadata_null_categories.md) — which categories have null vs non-null
-- [correct_col migration gap](project_correct_col_migration.md) — migration 016 adds correct_col to puzzles + candidates
 - [Classifier architecture](project_classifier_architecture.md) — detection pipeline; highlight_metadata schemas per category
-- [Classifier current state](project_classifier_current_state.md) — convolution refactor; pre-existing test failures
-- [detectOddEvenThreat Yellow](project_detect_odd_even_threat_yellow.md) — Yellow support added; renamed fields
-- [odd_even_threat is puzzle-only](project_odd_even_threat_puzzle_only.md) — still a classifyPattern tag + category, de-listed from coach + blunder vocab (2026-06-25)
-- [Challenge evaluation shape](project_challenge_evaluation_shape.md) — summaryLine vs summaryLineKey polymorphism
-- [ChallengeScreen mode extensions](feedback_challenge_screen_mode_extensions.md) — audit bare `category` refs
+- [odd_even_threat](project_detect_odd_even_threat_yellow.md) — Yellow support; renamed fields; puzzle-only (classifyPattern tag + category, de-listed from coach + blunder vocab)
+- [Challenge evaluation shape + ChallengeScreen](project_challenge_evaluation_shape.md) — summaryLine vs summaryLineKey; audit bare category refs; handleSequenceClick has the sequence logic (SequenceHandler gone)
 - [Challenge sets server only](project_challenge_sets_server_only.md) — no frontend mirror
 - [/draw returns snake_case](project_draw_endpoint_snake_case.md) — /puzzles/:id returns camelCase
-- [recordPuzzleAttempt shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case; spec 030 change
-- [Puzzle advancement](project_puzzle_advancement.md) — must call recordPuzzleAttempt on correct answer
+- [recordPuzzleAttempt shape](project_record_puzzle_attempt_shape.md) — 6-field snake_case; spec 030; must call on correct answer to advance
 - [forced_win refactor](project_forced_win_refactor.md) — CompletionStrategy; bitboard-only AI response; sequence vs single_move interaction mode
-- [ReviewScreen nav contract](reference_review_screen_nav.md) — go('review', { id }) not moveString
-- [navigateToMistake API](reference_review_screen_navigate_to_mistake.md) — takes number; blunderDetail only since 2026-06-21
+- [ReviewScreen nav contract](reference_review_screen_nav.md) — go('review',{id}) not moveString; navigateToMistake takes number; blunderDetail since 2026-06-21
 - [Past games epics decisions](project_past_games_epics.md) — globalPlyIndex formula; locked nav decisions
 - [Spec 037 open QA bugs](project_spec037_review_blunder_sharing.md) — 4 open bugs; is_owner!=false gate
-- [SequenceHandler is gone](project_sequence_handler_ui.md) — ChallengeScreen.handleSequenceClick has the logic
 - [Spec 034 isSubmitting trap](project_spec034_board_interaction.md) — explicit per-branch, not finally
 
 ## Server endpoints, API, DB schema, auth & deploy
 
 - [trust proxy on Railway](bug_railway_trust_proxy.md) — required or rate-limit throws 500
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
-- [Supabase session contamination](bug_supabase_js_session_contamination.md) — two clients: supabase (DB) + authClient (auth)
-- [GoTrue trigger not firing](bug_supabase_trigger_not_firing.md) — loadUser auto-creates public.users row
+- [Supabase auth client traps](bug_supabase_js_session_contamination.md) — two clients: supabase (DB) + authClient (auth); GoTrue trigger not firing → loadUser auto-creates public.users row
 - [Error logging](feedback_server_testing_pattern.md) — extract helper + node --test (no endpoint harness)
-- [Supabase connection](reference_supabase_connection.md) — sb_secret format; session pooler; Node inline pattern
-- [Supabase storage API](reference_supabase_storage_api.md) — upload/createSignedUrl shapes; signedUrl not url
+- [Supabase connection & storage](reference_supabase_connection.md) — sb_secret; session pooler; Node inline pattern; storage upload/createSignedUrl shapes (signedUrl not url)
 - [Blunder severity measure](blunder_severity_graduated_measure.md) — bestScore<0 guard removed; atomic upsert
 - [Suboptimal/blunder unification](project_suboptimal_blunder_unification.md) — quality column; ExplorerScreen deleted
-- [Stats architecture](project_stats_architecture.md) — stats from puzzle_attempts; session_stats orphaned
+- [Stats architecture](project_stats_architecture.md) — stats from puzzle_attempts; session_stats orphaned; byPattern stored-shape mismatch (always empty)
 - [Spec 030 session-stats write asymmetry](project_spec030_server_mediated_data_access.md) — asymmetric write shapes; must not unify
-- [byPattern always empty](project_spec030_session_stats_bypattern_mismatch.md) — stored shape mismatch
-- [Magic link hash race](project_magic_link_auth_race.md) — replaceState must preserve window.location.hash
-- [Magic link redirect URL](bug_auth_magic_link_redirect.md) — URL must be allowlisted in Supabase
+- [Magic link auth traps](project_magic_link_auth_race.md) — replaceState must preserve window.location.hash; redirect URL must be Supabase-allowlisted or send silently fails
 - [Google OAuth state](project_spec036_google_oauth.md) — encodeURIComponent load-bearing; DeepRevealPane trap
 - [Auth/payments state](project_auth_payments_state.md) — client SDK removed; httpOnly cookies only (credentials:'include', NOT Authorization header); Stripe deferred
-- [Supabase config modifiable](feedback_supabase_config_modifiable.md) — production settings can be changed via dashboard
-- [Local Supabase setup](project_local_supabase_setup.md) — JWT format for service_role key; sb_secret_* doesn't work locally
+- [Local Supabase setup](project_local_supabase_setup.md) — JWT format for service_role key; sb_secret_* fails locally; prod config modifiable via dashboard
 - [Spec 039 deploy requirement](project_spec039_audio_interactive_coach.md) — TRUNCATE explanation_cache before deploy
 - [Railway clock skew](project_railway_solver_clock_skew.md) — -B flag + test -f guard in railpack.json
 - [Service worker cache](bug_service_worker_stale_cache.md) — network-first for HTML; cache-first for hashed assets
@@ -91,15 +78,13 @@
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations/occurrence-artifacts; keep instance counts
 - [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section
-- [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; data flow; threat comparison format; major/minor threat KB terms conditional
-- [always_include mechanism removed](project_kb_major_minor_threat_not_always_include.md) — NO KB term injects without its pattern firing; parity/gravity_top also removed 2026-06-25; do not revert
+- [Explain system](project_explain_system.md) — LLM prompt invariants; explanation_cache schema; threat comparison format; NO KB term injects without its pattern firing (always_include removed, do not revert)
 - [Zone alias must match prompt](project_zone_alias_must_match_prompt.md) — alias absent from map → P1:invalid_spec; major=always, minor=conditional
 - [Blunder tagging design](project_blunder_tagging_design.md) — tagBlunder throws NotABlunderError on terminal; missed_own = correctCol builds pattern
 - [Pattern tier definitions](project_pattern_tier_definitions.md) — Tier-1/2/3 live in explainContext.js not classifier.js; 3 unrelated "tier" meanings
 - [Pattern KB architecture](project_pattern_kb_architecture.md) — PATTERN_KB entry shapes; popup checklist; alias resolution
 - [Coach deep reveal docs](project_coach_deep_reveal_docs.md) — authoritative docs; Epic A/B contracts
 - [Annotation gate & zones](project_annotation_gate_and_zones.md) — allowedSet shapes (null vs []); P5strong:tg/P3 zone traps; deep_reveal_failures debug table; blunders-not-populated guide
-- [eval_set_large_3_sparse subset](reference_eval_set_large_3_sparse_subset.md) — strict subset of eval_set_large_3.json; don't combine
 - [Feature vector content traps](project_feature_vector_content_traps.md) — null outcomes on losing_either_way; patternsOpponent snapshot ambiguity; pliesToEnd inverted (=|score|); immediate_threat severity from tag; wrong field worse than absent
 - [Deep reveal TTS](project_deep_reveal_tts.md) — TTS streaming; audio keyed by text hash not position
 - [Deep reveal product mindset](feedback_deep_reveal_product_mindset.md) — score is a compass not the reason; sparse≠no-reason; "better"=breadth of punishable opponent mistakes; never fabricate
@@ -119,12 +104,13 @@
 - [drawing_move mislabels wins](project_drawing_move_mislabels_wins.md) — open bug: win-forfeiting move tagged drawing_move; Fix 4 patched rule text, Fix 6 (upstream tagging) still TODO
 - [Lookahead shared seam](project_lookahead_shared_seam.md) — collectNovelOpportunities/compareOpportunities feed BOTH feature vector AND production annotation gate; characterize before editing
 - [Opening defender reason SHIPPED](project_opening_defender_reason_gap.md) — openingContext.defense (P2 hold-the-line) implemented (D32); NON-OBVIOUS: centrality NOT suppressed for losing mover (resistAndWait + conditional even-row canon instead)
+- [Coach-voice opening defeatist gap](project_coach_voice_opening_defeatist_gap.md) — RESOLVED (D34): L3/L7 now hold-the-line, not defeatist; editing causalLinks link.text ripples to 4 verbatim-asserting tests (reasonRenderFixes splits prompt on the section header) + a stale grader note
+- [Grounded-render zone/term tags (in-flight)](project_grounded_render_zone_tags.md) — designed+planned 2026-07-06 (not built): inline aliases-only zones + KB-backed term vocab in mechanism; G7 grader axis; GOTCHA: fork OVERLAY tag is decision-board-only + NOT board-true (deep) → highlight structural tags only
 
 ## Papergames integration
 
 - [Papergames auth API](reference_papergames_auth.md) — reCAPTCHA blocks server login; refresh workaround
-- [Papergames integration](project_papergames_integration.md) — API path bug; bulk insert dedup bug
-- [Papergames live game](project_papergames_live_game_integration.md) — 4 known bugs (uncommitted on stagging)
+- [Papergames integration](project_papergames_integration.md) — API path bug; bulk insert dedup bug; live-game 4 known bugs (uncommitted on stagging)
 - [Spec 038 import](project_spec038_papergames_self_service_import.md) — loadUser 3-site trap for new columns
 
 ## Simulation, scripts, worktrees, epics & general workflow
@@ -136,7 +122,6 @@
 - [Scripts need meaningful --help](feedback_scripts_meaningful_help.md) — every relevant CLI script ships a real --help/-h (purpose+options+defaults); check before required-arg validation; inside import.meta entry guard if also imported
 - [Repo worktree setup traps](project_repo_worktree_setup.md) — worktree base defaults to origin/main (172 commits behind stagging, no gameSampling.js); reset to stagging HEAD; copy gitignored server/.env in or reason tests ENOENT
 - [Win-dist pending merge](project_win_distribution_pending_merge.md) — winning-cell distribution pipeline complete but UNMERGED on branch worktree-win-dist-grid; user deferred merge to stagging
-- [Epics-manager consolidation](project_epics_manager_consolidation.md) — 8 per-epic managers deleted; use generic `/epics-manager <epic-file> [epic-id]`; epics self-carry Settled decisions/Non-obvious facts/Authoritative sources
 - [Speckit/epic scoping](feedback_speckit_epic_scoping.md) — plan vs speckit vs epic+manager sizing bars; what belongs in an epic doc vs the pipeline; hard algos stay in spec; handoff = one command
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; mark tasks done; rg/fd/sg; don't pkill shared server; bg subagents can't write
@@ -157,7 +142,7 @@
 - [User profile](user_profile.md) — strong C++/React/algorithms background; empirical debugger style
 - [SpecKit workflow](project_speckit_workflow.md) — spec directories at specs/; CLAUDE.md pointer
 - [MVP epic plan](project_mvp_epic_plan.md) — 10 epics in ship order; product-vs-code mismatches
-- [Custom commands](reference_custom_commands.md) — /mvp-manager, /coordinate-implementation, /past-games-manager
+- [Custom commands](reference_custom_commands.md) — /mvp-manager, /coordinate-implementation, /past-games-manager; /epics-manager generic (per-epic managers deleted, epics self-carry decisions)
 - [Multi-agent orchestration patterns](reference_multiagent_orchestration_patterns.md) — handoff; AskUserQuestion gate
 - [Knowledge base status](project_kb_status.md) — naming/gaps/PENDING; opening-theory cluster (fully verified); verify movestrings w/ optimal_line.mjs + Allen-notation traps
 - [External PDFs](reference_external_pdfs.md) — Allis/Bagan/Allen PDFs; page ranges; corrections
