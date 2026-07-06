@@ -49,19 +49,54 @@ resource.
 
 ## Empirical winning-cell distribution
 
-Static asset copied from branch `worktree-win-dist-grid` (pipeline complete but unmerged; we copy only
-the result JSON, no merge): 27,976 self-play games, both sides 90% optimal / 10% random, meanPlies ~31.9.
+**This spec is the source of truth for the heatmap — the implementation has NO dependency on any
+branch.** The JSON below is hardcoded configuration: the implementation copies it verbatim into
+`reason_engine/data/winning-cell-heatmap.json` (with a provenance header) and reads it from there. Do
+**not** merge or reference `worktree-win-dist-grid`.
 
-`heatmap[player][row][col]` = P(that cell is part of the winner's line | that player wins). Verified
-orientation from the parity summary: array row 0 = internal r0 = **bottom** = display row 1. Player-1
-winning mass concentrates on display-odd rows (1,3,5): `oddRowMass 0.718`. Player-2 on display-even rows
-(2,4): `evenRowMass 0.674`. Column 4 (index 3) dominates both heatmaps (peaks 0.36 / 0.39). The data
-**measures** the parity canon and the centrality gradient rather than asserting them.
+Provenance: 27,976 self-play games, both sides 90% optimal / 10% random, meanPlies ~31.9.
 
-Stored at `reason_engine/data/winning-cell-heatmap.json` with a provenance header.
+Semantics (pinned here, self-contained — derived from the embedded `parity` sums, no external
+verification needed): `heatmap[player][row][col]` = P(that cell is part of the winner's line | that
+player wins). **Array row 0 = internal r0 = bottom = display row 1** (confirmed: summing
+`heatmaps['1']` rows `{0,2,4}` yields 71% of mass = `parity['1'].oddRowMass 0.718`; display-even rows
+`{1,3,5}` carry player-2's `evenRowMass 0.674`). Column index 3 (display col 4) dominates both heatmaps
+(peaks 0.36 / 0.39). `player` and `col` are 0-indexed in the lookup; `heatmap` keys `'1'`/`'2'` are
+strings.
 
-**Must-verify before baking in (spec task):** confirm numerator/denominator + row orientation directly
-from the branch's generator, not just inferred from the parity sums.
+```json
+{
+  "games": 27976,
+  "p1Wins": 15900,
+  "p2Wins": 10000,
+  "draws": 2076,
+  "meanPlies": 31.858235630540463,
+  "heatmaps": {
+    "1": [
+      [0.03352201257861635, 0.10169811320754717, 0.09540880503144654, 0.17125786163522014, 0.09779874213836479, 0.10427672955974843, 0.03691823899371069],
+      [0.03528301886792453, 0.029685534591194968, 0.1320125786163522, 0.028238993710691825, 0.1329559748427673, 0.031572327044025156, 0.03446540880503145],
+      [0.07125786163522013, 0.1171069182389937, 0.11566037735849057, 0.29037735849056606, 0.11874213836477987, 0.11886792452830189, 0.07415094339622641],
+      [0.05194968553459119, 0.06006289308176101, 0.14408805031446542, 0.06937106918238994, 0.14276729559748427, 0.05817610062893082, 0.05578616352201258],
+      [0.09169811320754717, 0.2021383647798742, 0.2683018867924528, 0.36257861635220123, 0.27050314465408803, 0.20836477987421384, 0.09767295597484277],
+      [0.02779874213836478, 0.017987421383647798, 0.02666666666666667, 0.08553459119496855, 0.02679245283018868, 0.016540880503144655, 0.02918238993710692]
+    ],
+    "2": [
+      [0.0822, 0.0357, 0.0729, 0.0118, 0.07, 0.0364, 0.0846],
+      [0.086, 0.1966, 0.1725, 0.3267, 0.1726, 0.1915, 0.0841],
+      [0.0354, 0.0587, 0.2138, 0.0841, 0.2181, 0.0573, 0.0389],
+      [0.0869, 0.1723, 0.2027, 0.3873, 0.1954, 0.1724, 0.0871],
+      [0.0321, 0.0273, 0.0745, 0.0564, 0.0768, 0.0235, 0.0337],
+      [0.0381, 0.067, 0.0715, 0.093, 0.0706, 0.0648, 0.0393]
+    ]
+  },
+  "parity": {
+    "1": { "oddRowMass": 0.7176360754898504, "evenRowMass": 0.2823639245101496 },
+    "2": { "oddRowMass": 0.32613571428571236, "evenRowMass": 0.6738642857142876 }
+  }
+}
+```
+
+The data **measures** the parity canon and the centrality gradient rather than asserting them.
 
 ## Components
 
@@ -200,8 +235,9 @@ buildRenderDecision → render_decision.openingContext{…, deepResourceGrounded
   decision only; `buildRenderDecision` emits the `openingContext` block with `deepResourceGrounded:false`.
 - `fieldDisposition`: `assertCoverage` passes on all three pruned opening variants.
 - Regression: the 25 crashed records replay without `UncoveredVectorFieldError`.
-- Data task: verify heatmap semantics + orientation from `worktree-win-dist-grid`, copy JSON with
-  provenance header.
+- Data task: copy the JSON embedded in this spec verbatim into
+  `reason_engine/data/winning-cell-heatmap.json` with a provenance header; a test asserts the loaded
+  shape (2 players × 6 rows × 7 cols, `parity` sums matching). No branch access.
 
 ## Worked examples (real records)
 
@@ -219,7 +255,7 @@ buildRenderDecision → render_decision.openingContext{…, deepResourceGrounded
 
 ## Non-goals
 
-- Not merging `worktree-win-dist-grid` — only its result JSON.
+- Not merging or referencing `worktree-win-dist-grid` — the heatmap JSON is hardcoded in this spec.
 - Not changing the engine's `openingContext` computation or the two evidence halves.
 - Not adding opening rules to `CAUSAL_LINKS` (L1–L9 stays the sign/realized taxonomy; the opening
   frame is a separate additive layer).
