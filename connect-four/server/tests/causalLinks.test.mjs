@@ -47,6 +47,21 @@ test('L3 only fires on lose_to_faster_lose enabled_opponent (Fix B); text is hol
   assert.match(link.guardrail, /caused or enabled/i);       // causation guardrail preserved
 });
 
+test('L3/L7 guardrail forbids defeatist closing phrases', () => {
+  const L3_FV = { case: 'lose_to_faster_lose', route: 'realized_denied', direction: 'enabled_opponent',
+    lostResource: {}, opponentPunishment: { tag: 'figure_7', completingCell: 'c4r3' } };
+  const L7_FV = { case: 'lose_to_faster_lose', route: 'sign',
+    lostResource: { kind: 'conditional_swindle' }, opponentPunishment: {} };
+  const l3 = classifyCausalLink(L3_FV);
+  const l7 = classifyCausalLink(L7_FV);
+  assert.equal(l3.id, 'L3');
+  assert.equal(l7.id, 'L7');
+  for (const link of [l3, l7]) {
+    assert.match(link.guardrail, /end poorly/i);
+    assert.match(link.guardrail, /goes against you/i);
+  }
+});
+
 test('L7 conditional swindle', () => {
   const fv = { case: 'lose_to_faster_lose', route: 'sign',
                lostResource: { kind: 'conditional_swindle', register: 'parity' },

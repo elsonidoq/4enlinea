@@ -63,7 +63,7 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
                   && fv.case === 'lose_to_faster_lose',
     covers: CODES_REALIZED,
-    guardrail: 'MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense.',
+    guardrail: 'MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense. Do not add a closing caveat like "but the position is still lost," "both lines end poorly," "the result still goes against you," or "you still lose either way" — the practical-resistance framing must stand on its own, with no defeatist final clause.',
     template: (fv) => `Your opponent's ${plainTag(fv.opponentPunishment?.tag)} at ${fv.opponentPunishment?.completingCell} is coming no matter what you play here — your move didn't create it. Column ${col1(fv.bestCol)} makes your opponent work hardest for it; the move you played only speeds up the finish.` },
   { id: 'L2', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
@@ -75,7 +75,7 @@ export const CAUSAL_LINKS = [
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',
     covers: CODES_SIGN,
-    guardrail: 'Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive.',
+    guardrail: 'Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive. Do not add a closing caveat like "but the position is still lost," "both lines end poorly," "the result still goes against you," or "you still lose either way" — the practical-resistance framing must stand on its own, with no defeatist final clause.',
     template: (fv) => {
       const w = fv.gate?.witness;
       const op = w?.oppPlies;
