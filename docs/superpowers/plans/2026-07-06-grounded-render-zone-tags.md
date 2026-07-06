@@ -54,52 +54,65 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAnnotationOffer } from '../scripts/reason_engine/zoneAnnotations.mjs';
+import { TAG_PHRASE } from '../scripts/reason_engine/causalLinks.mjs';
 
-// Minimal board-decision fixtures (shape of boardSelectionDecisions output).
+// Board-decision fixtures with the shape boardSelectionDecisions() actually produces:
+//  - structural tags (immediate/major/double) from getMajorThreatCells, board-true on their board
+//  - the vector-named OVERLAY tag (figure_7/double_threat) appears ONLY on the decision board
+//    (reasonBoardSelect.mjs patternOpts) and often completes deep -> must NOT become a highlight.
 const boards = [
-  { id: 'decision', tags: [{ cell: 'c1r4', kind: 'immediate', owner: 'you' }] },
+  { id: 'decision', tags: [
+      { cell: 'c1r4', kind: 'immediate', owner: 'you' },
+      { cell: 'c4r3', kind: 'figure_7', owner: 'opp', window: ['c6r1', 'c5r2', 'c4r3', 'c3r4'] } ] }, // overlay -> excluded
   { id: 'afterPlayed', tags: [
-      { cell: 'c4r3', kind: 'figure_7', owner: 'opp', window: ['c6r1', 'c5r2', 'c4r3', 'c3r4'] },
-      { cell: 'c1r4', kind: 'immediate', owner: 'you' } ] },  // duplicate of decision — dedup
-  { id: 'projectedDeep', tags: [{ cell: 'c7r1', kind: 'immediate', owner: 'opp' }] }, // ignored: deep board
+      { cell: 'c5r1', kind: 'double', owner: 'opp', window: ['c5r1', 'c7r1'] },  // structural fork, board-true here
+      { cell: 'c1r4', kind: 'immediate', owner: 'you' } ] },                     // duplicate of decision -> dedup
+  { id: 'projectedDeep', tags: [{ cell: 'c7r1', kind: 'immediate', owner: 'opp' }] }, // deep board -> ignored
 ];
 const pruned = { bestCol: 2, playedCol: 3, lostResource: {}, opponentPunishment: { tag: 'figure_7' } };
 
-test('one alias per near-term tag, deduped, deep board ignored, plus two column aliases', () => {
+test('aliases: structural tags only (overlay excluded), deduped, deep board ignored, + 2 column aliases', () => {
   const { aliases, zoneAliasMap } = buildAnnotationOffer(pruned, boards);
   const byHandle = Object.fromEntries(aliases.map((a) => [a.handle, a]));
   // move-column aliases always offered
   assert.equal(byHandle['better-col'].spec, 'col3');   // bestCol 2 -> display col3
   assert.equal(byHandle['played-col'].spec, 'col4');   // playedCol 3 -> display col4
-  // immediate tag -> cNrM spec, truthBoard = first board it appeared on (decision)
+  // structural immediate -> cNrM spec, truthBoard = first board it is board-true on (decision)
   const imm = aliases.find((a) => a.spec === 'c1r4');
   assert.equal(imm.truthBoard, 'decision');
   assert.equal(imm.kbId, 'immediate_threat');
-  // figure_7 tag with a window -> windows: spec, truthBoard afterPlayed
-  const fig = aliases.find((a) => a.spec.startsWith('windows:'));
-  assert.equal(fig.truthBoard, 'afterPlayed');
-  assert.equal(fig.spec, 'windows:c6r1,c5r2,c4r3,c3r4');
-  assert.equal(fig.kbId, 'figure_7');
-  // dedup: c1r4 immediate appears once
+  // structural double -> windows: spec, truthBoard afterPlayed (board-true there)
+  const dbl = aliases.find((a) => a.spec.startsWith('windows:'));
+  assert.equal(dbl.truthBoard, 'afterPlayed');
+  assert.equal(dbl.spec, 'windows:c5r1,c7r1');
+  assert.equal(dbl.kbId, 'double_threat');
+  // the figure_7 OVERLAY tag is NOT offered as an alias (deep -> horizon prose, decision #5)
+  assert.ok(!aliases.some((a) => a.kbId === 'figure_7'));
+  assert.ok(!aliases.some((a) => a.spec === 'windows:c6r1,c5r2,c4r3,c3r4'));
+  // dedup: c1r4 appears once; the deep board's c7r1 tag is NOT offered
   assert.equal(aliases.filter((a) => a.spec === 'c1r4').length, 1);
-  // the deep board's c7r1 tag is NOT offered
   assert.ok(!aliases.some((a) => a.spec === 'c7r1'));
   // zoneAliasMap mirrors every alias handle
   for (const a of aliases) assert.equal(zoneAliasMap[a.handle], a.spec);
 });
 
-test('terms = the fired named patterns, tag-key ids, with a canonical phrase', () => {
-  const { terms } = buildAnnotationOffer(pruned, boards);
+test('terms: KB-backed slugs only, canonicalPhrase from TAG_PHRASE, conditional_swindle never a term', () => {
+  const { terms } = buildAnnotationOffer(
+    { bestCol: 2, playedCol: 3, lostResource: { kind: 'conditional_swindle' }, opponentPunishment: { tag: 'figure_7' } },
+    boards);
   const bySlug = Object.fromEntries(terms.map((t) => [t.slug, t]));
-  assert.ok(bySlug['figure_7'], 'figure_7 fired (opponentPunishment.tag + board tag)');
+  assert.ok(bySlug['figure_7'], 'figure_7 fired via opponentPunishment.tag');
   assert.equal(bySlug['figure_7'].kbId, 'figure_7');
-  assert.equal(bySlug['figure_7'].canonicalPhrase, '7-shaped double threat');
-  assert.ok(bySlug['immediate_threat'], 'immediate threat fired (board tag)');
-  // major/plain-window without a KB entry never appears as a term
-  assert.ok(!bySlug['major']);
+  assert.equal(bySlug['figure_7'].canonicalPhrase, TAG_PHRASE.figure_7); // imported, no local copy
+  assert.ok(bySlug['immediate_threat'], 'immediate fired via a structural board tag');
+  assert.ok(bySlug['double_threat'], 'double fired via a structural board tag');
+  assert.ok(!bySlug['conditional_swindle'], 'conditional_swindle has no KB entry -> never a term');
+  // every offered term id is one of the four KB-backed slugs
+  const KB_BACKED = new Set(['immediate_threat', 'double_threat', 'figure_7', 'claimeven']);
+  for (const t of terms) assert.ok(KB_BACKED.has(t.kbId), `${t.kbId} must be KB-backed`);
 });
 
-test('no tactical aliases when boards carry no tags (columns still offered)', () => {
+test('no tactical aliases when boards carry no structural tags (columns still offered)', () => {
   const bare = buildAnnotationOffer({ bestCol: 0, playedCol: 6, lostResource: {}, opponentPunishment: {} },
     [{ id: 'decision', tags: [] }, { id: 'afterBest', tags: [] }, { id: 'afterPlayed', tags: [] }]);
   const tactical = bare.aliases.filter((a) => !a.spec.startsWith('col'));
@@ -114,7 +127,11 @@ test('no tactical aliases when boards carry no tags (columns still offered)', ()
 Run: `cd connect-four && node --test server/tests/zoneAnnotations.test.mjs`
 Expected: FAIL — `Cannot find module '.../zoneAnnotations.mjs'`.
 
-- [ ] **Step 3: Write the module**
+- [ ] **Step 3a: Export `TAG_PHRASE` from `causalLinks.mjs`**
+
+In `connect-four/server/scripts/reason_engine/causalLinks.mjs`, change the declaration `const TAG_PHRASE = {` (near line 35) to `export const TAG_PHRASE = {`. This is an additive export (no behavior change); `plainTag` and existing consumers are unaffected.
+
+- [ ] **Step 3b: Write the module**
 
 ```js
 // connect-four/server/scripts/reason_engine/zoneAnnotations.mjs
@@ -124,41 +141,43 @@ Expected: FAIL — `Cannot find module '.../zoneAnnotations.mjs'`.
 // validate-against-offered, expand handles -> real specs, and derive key_cells. Pure; no solver/engine.
 
 import { expandSpec } from '../../zoneParser.js';
+import { TAG_PHRASE } from './causalLinks.mjs';   // single source of truth for canonical phrases (M1)
 
 // Boards whose tags may become highlights: near-term only (spec decision #5 — the projected-deep board
 // stays horizon prose so an empty deep cell never reads as a present threat).
 const NEAR_TERM = new Set(['decision', 'afterBest', 'afterPlayed']);
 
-// Tag kinds that denote a KB-defined named pattern (term id = tag key, matching production).
-// canonicalPhrase mirrors causalLinks.mjs TAG_PHRASE; description is the one-line prompt gloss.
-const TERM_VOCAB = {
-  immediate_threat: { canonicalPhrase: 'threat to make four next move', description: 'a square where four-in-a-row completes on the very next move' },
-  double_threat:    { canonicalPhrase: 'double threat', description: 'two winning squares at once — the opponent cannot block both' },
-  figure_7:         { canonicalPhrase: '7-shaped double threat', description: 'a 7-shaped fork giving two winning squares at once' },
-  claimeven:        { canonicalPhrase: 'claimeven', description: 'controlling the even squares of a column to guarantee a threat' },
-  conditional_swindle: { canonicalPhrase: 'practical swindle', description: 'a trap that only works if the opponent slips' },
-};
+// Only STRUCTURAL, board-true tag kinds (from getMajorThreatCells) become highlights. The vector-named
+// OVERLAY kinds (figure_7 / double_threat, injected onto the DECISION board by reasonBoardSelect.mjs's
+// patternOpts) are deliberately EXCLUDED: they often name a resource that completes deep, and
+// highlighting a deep, currently-empty square is exactly the eval-3 present-threat trap decision #5
+// forbids. A genuinely near-term fork still surfaces as a structural 'double' on the board where it is
+// real; a deep fork gets no highlight and stays horizon prose. (C1 fix.)
+const STRUCTURAL = new Set(['immediate', 'major', 'double']);
 
-// Tag kind -> the term slug it maps to (only kinds with a KB entry). 'double' (structural double) maps
-// to double_threat; 'major'/'immediate' structural tags map to their term where one exists.
-const KIND_TO_SLUG = {
-  immediate: 'immediate_threat',
-  double: 'double_threat',
-  double_threat: 'double_threat',
-  figure_7: 'figure_7',
-  // 'major' has no distinct KB popup here — left unmapped (kbId null, not a term).
+// Structural kind -> KB term slug. Only kinds with a KB-backed entry ('major' has none).
+const KIND_TO_SLUG = { immediate: 'immediate_threat', double: 'double_threat' };
+
+// The ONLY slugs with a resolvable KB entry (through production's PATTERN_KB -> a KB file). kbId is the
+// tag key (production's [term:<key>] convention). canonicalPhrase is imported from TAG_PHRASE (no local
+// copy); only description (the one-line prompt gloss) + kbId are local. conditional_swindle is
+// intentionally ABSENT — it has no KB entry, so a [term:...] popup would render empty. (C2 fix.)
+const TERM_KB = {
+  immediate_threat: { kbId: 'immediate_threat', description: 'a square where four-in-a-row completes on the very next move' },
+  double_threat:    { kbId: 'double_threat', description: 'two winning squares at once — the opponent cannot block both' },
+  figure_7:         { kbId: 'figure_7', description: 'a 7-shaped fork giving two winning squares at once' },
+  claimeven:        { kbId: 'claimeven', description: 'controlling the even squares of a column to guarantee a threat' },
 };
 
 // Plain-language role text per (owner, kind) for the prompt's "Highlightable regions" list.
 function roleText(owner, kind) {
   const who = owner === 'you' ? 'you' : 'your opponent';
   if (kind === 'immediate') return `the square where ${who} can make four next move`;
-  if (kind === 'double' || kind === 'double_threat' || kind === 'figure_7')
-    return `the fork square where ${who} gets two winning squares at once`;
+  if (kind === 'double') return `the fork square where ${who} gets two winning squares at once`;
   return `a square completing ${who}'s four-in-a-row line`; // major
 }
 
-// A window-bearing tag becomes a windows: spec (the whole 4-line); a plain tag becomes its cNrM cell.
+// A window-bearing tag becomes a windows: spec (the whole line); a plain tag becomes its cNrM cell.
 function tagSpec(tag) {
   if (Array.isArray(tag.window) && tag.window.length) return 'windows:' + tag.window.join(',');
   return tag.cell; // already cNrM, a valid single-cell spec
@@ -167,7 +186,7 @@ function tagSpec(tag) {
 export function buildAnnotationOffer(pruned, boardDecisions) {
   const aliases = [];
   const zoneAliasMap = {};
-  const seen = new Set();           // dedup key: spec (first board wins => stable truthBoard)
+  const seen = new Set();           // dedup key: spec (first board wins => stable, board-true truthBoard)
   const handleCounts = new Map();   // for unique handle suffixes
 
   const mkHandle = (base) => {
@@ -187,33 +206,38 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
     zoneAliasMap[key] = spec;
   }
 
-  // Tag aliases from near-term boards, in board order so truthBoard = first appearance.
+  // Structural tag aliases from near-term boards, in board order so truthBoard = first appearance
+  // (which, for a structural tag, is a board where the tactic is genuinely board-true).
   for (const board of boardDecisions) {
     if (!NEAR_TERM.has(board.id)) continue;
     for (const tag of board.tags ?? []) {
+      if (!STRUCTURAL.has(tag.kind)) continue;         // skip overlay named-pattern tags (deep) — C1
       const spec = tagSpec(tag);
       if (seen.has(spec)) continue;
       seen.add(spec);
-      const base = `${tag.owner}-${tag.kind}`.replace(/[^a-z0-9-]/gi, '-');
-      const handle = mkHandle(base);
+      const handle = mkHandle(`${tag.owner}-${tag.kind}`);  // kinds are already [a-z-]-safe
       aliases.push({ handle, spec, role: roleText(tag.owner, tag.kind), truthBoard: board.id,
                      kbId: KIND_TO_SLUG[tag.kind] ?? null });
       zoneAliasMap[handle] = spec;
     }
   }
 
-  // Fired term vocabulary: named-pattern tags on near-term boards + the two halves' tags.
-  const firedSlugs = new Set();
+  // Fired term vocabulary: structural board tags that map to a KB slug + the two halves' tags,
+  // intersected with the KB-backed set (TERM_KB).
+  const fired = new Set();
   for (const board of boardDecisions) {
     if (!NEAR_TERM.has(board.id)) continue;
-    for (const tag of board.tags ?? []) if (KIND_TO_SLUG[tag.kind]) firedSlugs.add(KIND_TO_SLUG[tag.kind]);
+    for (const tag of board.tags ?? []) {
+      const slug = KIND_TO_SLUG[tag.kind];
+      if (slug && TERM_KB[slug]) fired.add(slug);
+    }
   }
   for (const half of [pruned.lostResource, pruned.opponentPunishment]) {
-    if (half?.tag && TERM_VOCAB[half.tag]) firedSlugs.add(half.tag);
-    if (half?.kind === 'conditional_swindle') firedSlugs.add('conditional_swindle');
+    if (half?.tag && TERM_KB[half.tag]) fired.add(half.tag);   // figure_7 fires here even though its
+    // overlay tag is not an alias — terms are independent of zones (design §3c).
   }
-  const terms = [...firedSlugs].sort().map((slug) => ({
-    slug, kbId: slug, canonicalPhrase: TERM_VOCAB[slug].canonicalPhrase, description: TERM_VOCAB[slug].description,
+  const terms = [...fired].sort().map((slug) => ({
+    slug, kbId: TERM_KB[slug].kbId, canonicalPhrase: TAG_PHRASE[slug], description: TERM_KB[slug].description,
   }));
 
   return { aliases, zoneAliasMap, terms };
@@ -231,8 +255,11 @@ In `connect-four/package.json`, append ` server/tests/zoneAnnotations.test.mjs` 
 
 ```bash
 cd /Users/elsonidoq/prog/cuatro_en_linea
-git add connect-four/server/scripts/reason_engine/zoneAnnotations.mjs connect-four/server/tests/zoneAnnotations.test.mjs connect-four/package.json
+git add connect-four/server/scripts/reason_engine/zoneAnnotations.mjs connect-four/server/scripts/reason_engine/causalLinks.mjs connect-four/server/tests/zoneAnnotations.test.mjs connect-four/package.json
 git commit -m "feat(reason): offered zone-alias + term-vocab builder for grounded render
+
+Structural board-true tags only (overlay figure_7/double_threat excluded); KB-backed
+term vocab (no conditional_swindle); canonicalPhrase imported from causalLinks TAG_PHRASE.
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -249,7 +276,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Consumes: the `zones` ground-truth object `{ aliases, terms }` (from Task 1 / `render_decision.zones`), and the raw `mechanism` string from the LLM.
 - Produces:
   - `normalizeAnnotationTags(text) -> string` — repairs mismatched close tags (`[zone:X]…[/zone:Y]` → `…[/zone:X]`) for both `zone` and `term`.
-  - `processAnnotations(mechanism, zones) -> { mechanism: string, keyCells: string[] }` — normalizes, drops any `[zone:handle]`/`[term:slug]` whose handle/slug is not offered (keeping the inner text), expands offered zone handles → real specs, and derives `keyCells` (1-indexed `cNrM`, de-duplicated) from the expanded specs.
+  - `processAnnotations(mechanism, zones) -> { mechanism: string, keyCells: string[], zonesEmitted: boolean }` — normalizes, drops any `[zone:handle]`/`[term:slug]` whose handle/slug is not offered (keeping the inner text), expands offered zone handles → real specs, and derives `keyCells` (1-indexed `cNrM`, de-duplicated) from the expanded specs. `zonesEmitted` is true iff the LLM wrapped ≥1 offered zone handle (used by Task 4's transition gate).
 
 - [ ] **Step 1: Write the failing test (append to the same test file)**
 
@@ -259,9 +286,9 @@ import { normalizeAnnotationTags, processAnnotations } from '../scripts/reason_e
 const ZONES = {
   aliases: [
     { handle: 'better-col', spec: 'col3', role: 'x', truthBoard: 'decision', kbId: null },
-    { handle: 'opp-figure_7', spec: 'windows:c6r1,c5r2,c4r3,c3r4', role: 'x', truthBoard: 'afterPlayed', kbId: 'figure_7' },
+    { handle: 'opp-double', spec: 'windows:c5r1,c7r1', role: 'x', truthBoard: 'afterPlayed', kbId: 'double_threat' },
   ],
-  terms: [{ slug: 'figure_7', kbId: 'figure_7', canonicalPhrase: '7-shaped double threat', description: 'x' }],
+  terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'double threat (two winning squares at once)', description: 'x' }],
 };
 
 test('normalizeAnnotationTags repairs a mismatched close handle', () => {
@@ -271,15 +298,16 @@ test('normalizeAnnotationTags repairs a mismatched close handle', () => {
 
 test('processAnnotations expands offered handles and derives key_cells', () => {
   const raw = 'Column [zone:better-col]3[/zone:better-col] denies the '
-    + '[zone:opp-figure_7][term:figure_7]7-shaped fork[/term:figure_7][/zone:opp-figure_7].';
-  const { mechanism, keyCells } = processAnnotations(raw, ZONES);
+    + '[zone:opp-double][term:double_threat]double threat[/term:double_threat][/zone:opp-double].';
+  const { mechanism, keyCells, zonesEmitted } = processAnnotations(raw, ZONES);
+  assert.equal(zonesEmitted, true);
   // handles expanded to real specs
   assert.match(mechanism, /\[zone:col3\]3\[\/zone:col3\]/);
-  assert.match(mechanism, /\[zone:windows:c6r1,c5r2,c4r3,c3r4\]/);
+  assert.match(mechanism, /\[zone:windows:c5r1,c7r1\]/);
   // offered term kept verbatim
-  assert.match(mechanism, /\[term:figure_7\]7-shaped fork\[\/term:figure_7\]/);
-  // key_cells = union of expanded specs (col3 = whole column + the 4 window cells), 1-indexed, deduped
-  assert.ok(keyCells.includes('c4r3'));
+  assert.match(mechanism, /\[term:double_threat\]double threat\[\/term:double_threat\]/);
+  // key_cells = union of expanded specs (col3 = whole column + the 2 window cells), 1-indexed, deduped
+  assert.ok(keyCells.includes('c5r1'));
   assert.ok(keyCells.includes('c3r1')); // col3 row1
   assert.equal(new Set(keyCells).size, keyCells.length);
 });
@@ -331,7 +359,10 @@ export function normalizeAnnotationTags(text) {
 
 const rcToCellStr = ({ col, row }) => `c${col + 1}r${row + 1}`;
 
-// Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text.
+// Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text. The
+// non-greedy backreference handles the common flat case; on malformed *overlapping* same-kind tags a
+// stray inner tag may survive — contained blast radius: the frontend degrades an unknown spec to plain
+// text (annotatedText.js isValidSpec) and the grader strips all markup before A5. (m3.)
 function dropUnoffered(text, kind, allowed) {
   const RE = new RegExp(`\\[${kind}:([^\\]!]+)\\](.*?)\\[/${kind}:\\1\\]`, 'gs');
   return text.replace(RE, (whole, id, inner) => (allowed.has(id) ? whole : inner));
@@ -355,7 +386,7 @@ export function processAnnotations(mechanism, zones) {
 
   const cells = new Set();
   for (const spec of usedSpecs) for (const rc of expandSpec(spec)) cells.add(rcToCellStr(rc));
-  return { mechanism: text, keyCells: [...cells].sort() };
+  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0 };
 }
 ```
 
@@ -410,7 +441,11 @@ test('render model + prompt expose offered zone handles and term slugs', () => {
   assert.match(prompt, /\[zone:better-col\]/);          // handle advertised
   assert.match(prompt, /# KB terms you may name/);
   assert.match(prompt, /do not overlap a highlight and a term/i);  // nesting instruction
-  assert.doesNotMatch(prompt, /\bnull\b|\bundefined\b/); // never leak null/undefined into the prompt
+  // Scope the null/undefined check to the PROSE half only — the JSON residue after
+  // "# Internal evidence fields" legitimately contains `null` (renderedFields keeps null-valued render
+  // fields), exactly as reasonRenderFixes.test.mjs scopes its own check. (M2.)
+  const prose = prompt.split('# Internal evidence fields')[0];
+  assert.doesNotMatch(prose, /\bnull\b|\bundefined\b/);
 });
 ```
 
@@ -527,14 +562,18 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```js
 import { postprocessAnswer } from '../scripts/compute.mjs';
 
-test('postprocessAnswer expands offered handles and rederives key_cells; no-op without render_decision', () => {
+test('postprocessAnswer expands handles + rederives key_cells only when a zone was emitted', () => {
   const rd = { zones: { aliases: [{ handle: 'better-col', spec: 'col3', role: 'x', truthBoard: 'decision', kbId: null }],
                         terms: [] } };
-  const answer = { mechanism: 'play [zone:better-col]column 3[/zone:better-col]', key_cells: ['c9r9'] };
-  const out = postprocessAnswer({ ...answer }, rd);
-  assert.match(out.mechanism, /\[zone:col3\]column 3\[\/zone:col3\]/);
-  assert.deepEqual(out.key_cells, ['c3r1', 'c3r2', 'c3r3', 'c3r4', 'c3r5', 'c3r6']); // col3 expanded
-  // no-op path
+  // a zone WAS emitted -> mechanism expanded, key_cells re-derived from the spec
+  const withZone = postprocessAnswer({ mechanism: 'play [zone:better-col]column 3[/zone:better-col]', key_cells: ['c9r9'] }, rd);
+  assert.match(withZone.mechanism, /\[zone:col3\]column 3\[\/zone:col3\]/);
+  assert.deepEqual(withZone.key_cells, ['c3r1', 'c3r2', 'c3r3', 'c3r4', 'c3r5', 'c3r6']); // col3 expanded
+  // NO zone emitted -> key_cells preserved (transition safety, M4): don't zero the model's cells
+  // before it is prompted to emit handles
+  const noZone = postprocessAnswer({ mechanism: 'just prose', key_cells: ['c1r1'] }, rd);
+  assert.deepEqual(noZone.key_cells, ['c1r1']);
+  // no-op paths
   const same = { mechanism: 'x', key_cells: ['c1r1'] };
   assert.deepEqual(postprocessAnswer(same, null), same);
   assert.equal(postprocessAnswer(null, rd), null);
@@ -559,11 +598,14 @@ Add the exported helper:
 ```js
 // Condition-D post-processing: expand offered zone handles -> real specs, drop unoffered tags, and
 // re-derive key_cells from the expanded specs. No-op for A/B/C (render_decision is null) or a null answer.
+// Transition safety (M4): only overwrite key_cells when the model actually emitted >=1 zone handle;
+// until it is prompted to emit handles, keep the model's own key_cells so the /admin/fv-suff overlay
+// doesn't silently empty out. (G5 grading is unaffected — it reads render_decision, not answer.key_cells.)
 export function postprocessAnswer(answer, render_decision) {
   if (!answer || !render_decision?.zones) return answer;
-  const { mechanism, keyCells } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
+  const { mechanism, keyCells, zonesEmitted } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
   answer.mechanism = mechanism;
-  answer.key_cells = keyCells;
+  if (zonesEmitted) answer.key_cells = keyCells;
   return answer;
 }
 ```
@@ -610,8 +652,8 @@ test('zone/term coverage predicates fire from render_decision.zones', () => {
   const rd = baseRd({ zones: { aliases: [
       { handle: 'better-col', spec: 'col3', truthBoard: 'decision', kbId: null },
       { handle: 'you-immediate', spec: 'c1r4', truthBoard: 'decision', kbId: 'immediate_threat' },
-      { handle: 'opp-figure_7', spec: 'windows:c6r1,c5r2,c4r3,c3r4', truthBoard: 'afterPlayed', kbId: 'figure_7' } ],
-    terms: [{ slug: 'figure_7', kbId: 'figure_7', canonicalPhrase: 'x', description: 'y' }] } });
+      { handle: 'opp-double', spec: 'windows:c5r1,c7r1', truthBoard: 'afterPlayed', kbId: 'double_threat' } ],
+    terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'x', description: 'y' }] } });
   const p = renderDecisionPredicates(rd);
   assert.ok(p.has('zone_speckind_col'));
   assert.ok(p.has('zone_speckind_cell'));
@@ -760,6 +802,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## Self-review notes
 
-- **Spec coverage:** §1 decisions → Tasks 1–6; §2 data model (inline, derived key_cells, abstention) → Tasks 2/4/5; §3 alias+term emission → Task 1; §3d `render_decision.zones` → Task 3; §4 prompt sections → Task 3; §5 post-process pipeline → Tasks 2/4; §6 nesting instruction → Task 3 Step 3; §7 grader G7 → Task 6; §8 coverage → Task 5; §10 checklist → Task 7. Frontend serving (§6/§9) is explicitly downstream/out of scope.
+- **Spec coverage:** §1 decisions → Tasks 1–6; §2 data model (inline, derived key_cells, abstention) → Tasks 2/4/5; §3 alias+term emission → Task 1 (structural-only highlights + KB-backed term vocab per the C1/C2/M1 design updates); §3d `render_decision.zones` → Task 3; §4 prompt sections → Task 3; §5 post-process pipeline → Tasks 2/4; §6 nesting instruction → Task 3 Step 3; §7 grader G7 → Task 6; §8 coverage → Task 5 (`zone_speckind_*` + `term_emitted` + `zones_no_tactical`, matching the reconciled §8). §10 checklist → Task 7. Frontend serving (§6/§9) is explicitly downstream/out of scope.
+- **Abstention (design §2/§8):** the *render-side* no-tactical-highlight case is covered by `zones_no_tactical` (Task 5); the *LLM-side* choice to wrap nothing is per-answer, not a board predicate, and is exercised by the answerer/grader (Task 4's `zonesEmitted` gate), not the sampler — as §8 now states.
 - **Not covered by design, intentionally deferred:** retiring `annotationGate.js`/`explainContext.js` production code (§9 item 3) — a later deletion pass once the grounded path is wired to the endpoint; this plan only makes the grounded path *capable*.
 - **Type consistency:** `zones = { aliases, zoneAliasMap, terms }` from `buildAnnotationOffer`; `render_decision.zones = { aliases, terms }` (map omitted); `processAnnotations(mechanism, zones)` reads `zones.aliases`/`zones.terms`; alias shape `{handle, spec, role, truthBoard, kbId}` is identical across Tasks 1/3/4/5/6.

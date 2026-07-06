@@ -94,8 +94,16 @@ tagger so "what's highlightable" == "what the model sees on the boards," and reu
 
 ### 3a. Zone aliases
 
-One alias per **near-term** threat-list tag + the causal frame's denial/completing cell + the two move
-columns. Each alias:
+One alias per **structural, board-true** near-term threat-list tag + the two move columns. **Only the
+structural tags from `getMajorThreatCells` (`immediate` / `major` / `double`) become highlights; the
+vector-named *overlay* tags (`figure_7` / `double_threat`, injected onto the decision board by
+`reasonBoardSelect.mjs`'s `patternOpts`) are NOT offered as zone aliases** — those name a resource that
+often completes deep, and highlighting a deep, currently-empty square is exactly the eval-3
+"present-threat illusion" decision #5 forbids. A genuinely near-term fork still gets highlighted because
+it appears as a structural `double` on the board where it is real; a *deep* fork gets no highlight and
+stays horizon prose. Consequently **`truthBoard` = the first near-term board the structural tag appears
+on, which is a board where the tactic is genuinely board-true** (structural tags come straight from
+`getMajorThreatCells` on that board) — no separate re-sourcing needed. Each alias:
 
 ```js
 {
@@ -117,13 +125,19 @@ columns. Each alias:
 The KB terms whose pattern **fired** for this case (from the fired tags / causal frame). Each:
 
 ```js
-{ slug: "double_threat", kbId: "double_threat", canonicalPhrase: "double threat",
+{ slug: "double_threat", kbId: "double_threat", canonicalPhrase: "double threat (two winning squares at once)",
   description: "two winning squares at once — the opponent can't block both" }
 ```
 
 Offered = fired ⇒ the LLM can never wrap an unfired term, which automatically preserves the production
-invariant *"no KB term inject without its pattern firing"* (memory `project_explain_system.md`). Source
-of the phrase/slug map: `causalLinks.mjs` `TAG_PHRASE` (already slug → plain phrase).
+invariant *"no KB term inject without its pattern firing"* (memory `project_explain_system.md`).
+**`canonicalPhrase` is imported verbatim from `causalLinks.mjs`'s `TAG_PHRASE`** (single source of truth,
+no local copy) — only the extra one-line `description` and `kbId` are local. **The vocabulary is
+restricted to the four slugs that have a resolvable KB entry** — `immediate_threat`, `double_threat`,
+`figure_7`, `claimeven` (they map through `PATTERN_KB` to KB files: `community-immediate-threat`,
+`community-double-threat`, `community-figure-7`, `allis-claimeven`). `conditional_swindle` is **NOT** a
+term (it has no KB entry — a `[term:conditional_swindle]` popup would render empty); it stays a prose
+phrase only.
 
 ### 3c. Term ↔ zone relationship
 
@@ -180,9 +194,8 @@ The offline experiment + grader need only §2–§5. To actually retire producti
   already returns `{cleanText, zones, terms}` and `zoneToOverlays` already maps specs → overlays — reused
   as-is.
 - **Nesting edge (must resolve before shipping to the UI).** If a `[term:…]` sits inside a `[zone:…]`
-  span, `parseAnnotatedText`'s non-greedy regex may not parse nested tags. Resolve by **either** a prompt
-  instruction "don't overlap a highlight and a term on the same words," **or** extending the parser to
-  handle one level of zone+term nesting. (Not a blocker for the offline experiment/grader.)
+  span, `parseAnnotatedText`'s non-greedy regex may not parse nested tags. Resolve by a prompt
+  instruction "don't overlap a highlight and a term on the same words,"
 
 ## 7. Grader — G7 "annotation fidelity" (condition D only)
 
@@ -222,11 +235,19 @@ grader-aware"), the offered-alias/term set is a new render-*selection* decision 
 **predicates** (this is the precise, bounded sense in which the change touches `select_boards`'s
 *universe*, not its harvest):
 
-- `zone_role_<role>` — each alias role exercised ≥1.
-- `zone_speckind_{cell,window,col}` — each produced spec-kind exercised ≥1.
+- `zone_speckind_{cell,window,col}` — each produced spec-kind exercised ≥1. (This replaces a freetext
+  `zone_role_<role>` predicate — roles are free-text sentences and make poor, unbounded predicate keys;
+  spec-kind is the bounded, meaningful axis.)
 - `term_emitted` — ≥1 case offers (and can exercise) a KB term.
-- `zones_absent` — ≥1 case where nothing is highlightable (L9 / deep parity), so the abstention path is
-  graded.
+- `zones_no_tactical` — ≥1 case where only the two move-column aliases are offered and **no** tactical
+  (cell/window) highlight exists (the render-side abstention: a deep/L9 case with no near-term threat to
+  highlight). This replaces the design's earlier `zones_absent` — that predicate can never fire because
+  the move-column aliases are **always** offered, so "zero aliases" is unreachable.
+
+**Note on the LLM-side abstention channel.** Whether the *model* chooses to wrap nothing (leaving
+`key_cells: []`) is a **per-answer** property, not a per-board one, so it is **not** a board-coverage
+predicate — it is exercised by the answerer/grader, not the sampler. The coverage universe only asserts
+the *render* offered the right shapes.
 
 Keep the `discovered ⊆ REASON_UNIVERSE` guard; rare predicates get the existing bounded directed
 rare-fill (never hand-built boards — `playGame` with a property filter; memories
