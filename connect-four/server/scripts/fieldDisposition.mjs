@@ -61,7 +61,22 @@ const RENDER_LEAVES = new Set([
 const RENDER_PATHS = new Set(['gate.verdict']);
 const isRender = (p) => RENDER_LEAVES.has(leaf(p)) || RENDER_PATHS.has(p);
 
+// E. openingContext (spec 2026-07-05): the opening frame renders these; columns/text are transformed
+// (frame shows 1-indexed / carries the sentence), names+flags render into the JSON residue.
+const OPENING_TRANSFORMED = new Set([
+  'openingContext.namedOpening.bookNextCol', 'openingContext.defense.bestDefenseCol',
+  'openingContext.centrality.bestCol', 'openingContext.centrality.playedCol', 'openingContext.centrality.text',
+]);
+const OPENING_RENDER = new Set([
+  'openingContext.namedOpening.id', 'openingContext.namedOpening.family', 'openingContext.namedOpening.matchedPrefixLen',
+  'openingContext.defense.id', 'openingContext.defense.family', 'openingContext.defense.matchedPrefixLen',
+  'openingContext.defense.centralityGrounded',
+  'openingContext.centrality.betterHasMoreLines', 'openingContext.centrality.resistAndWait',
+]);
+
 export function dispositionOf(path) {
+  if (OPENING_TRANSFORMED.has(path)) return 'transformed';
+  if (OPENING_RENDER.has(path)) return 'render';
   if (isTransformed(path)) return 'transformed';
   if (EXCLUDE_PATHS.has(path)) return 'exclude';
   if (RENDER_PATHS.has(path)) return 'render';
