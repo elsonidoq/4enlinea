@@ -148,11 +148,21 @@ only `namedOpening` is first-player-exclusive; `defense` is second-player-exclus
 applies to **either** player, which is exactly why a player-2 `centrality` board legitimately carries
 `resistAndWait: true`. Do not flag a player-2 `centrality` board as suspicious on that basis alone.)
 This is an **additional lookup/geometry field**, not a different pass rule — A1–A4 (and, for
-condition D, G1–G6) still apply exactly as above. **No `render_decision` exists for opening
-cases** — the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) has never been
-wired for `openingContext` (the frozen condition-D corpus has no opening boards), so do **not**
-expect or re-derive a `render_decision` for an opening board; verify these claims via the three
-board checks below instead, whichever condition the case is.
+condition D, G1–G6) still apply exactly as above. **Condition-D opening cases now carry a `render_decision.openingContext` block** (shipped
+2026-07-05). Shape: `{ kind, frameId (O1|O2|O3), lead:{id,family,matchedPrefixLen,bookCol,holdCol
+(1-indexed)}, centralityComparison:{player,betterCell,playedCell,qualitative (much_easier|easier|
+null)}, parityFavor:{betterCellRowParity,favorsMover}, deepResourceGrounded:false, horizon:
+{register,pliesToEnd} }`. Consume it as GROUND TRUTH like any other `render_decision` element. Two
+opening-specific checks, in addition to the three board checks (prefix / book-move score-equality /
+"why it loses" grounding):
+- **Deep-cell suppression (G4/G5):** `deepResourceGrounded:false` means the opening frame deliberately
+  does NOT ground a deep completing cell. An answer that names a specific deep winning/losing cell
+  (e.g. a 35-ply `cNrM` from `lostResource.completingCell`) as the mechanism is a **fail** — the render
+  told it not to. Naming the book/hold column and the near-term landing cells is correct.
+- **Centrality claim direction (A3):** if the answer asserts one move is "easier/more central" for
+  building a four, it must match `centralityComparison.qualitative` — and make **no** such claim when
+  `qualitative` is `null`. A centrality claim against a `null` comparison is an A4 fabrication
+  (`render_bug` if `qualitative` is wrong for the board; else `prompt_confusion`).
 
 **A `namedOpening` "you were following `<opening>`, the book move was column `<bookNextCol+1>`"
 claim is graded TRUE by three board checks — never by narrative plausibility:**
