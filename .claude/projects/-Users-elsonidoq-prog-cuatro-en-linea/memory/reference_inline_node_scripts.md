@@ -7,6 +7,15 @@ metadata:
   originSessionId: ca8663ad-69f8-477d-b5b5-bb00ae8d5a58
 ---
 
+## FIRST: to inspect a reason vector, don't hand-roll — use the TOOLS CLI
+Before writing any scratch script to see what `computeReason` produces for a board, use
+`connect-four/server/scripts/reason_engine/TOOLS/compute_feature_vector.mjs <movestring> <playedCol>`
+(0-indexed; `--narrator` for the pruned view; `--help`). It prints the full vector + `matchOpeningPrefix`.
+Path traps if you DO write inline (both bit repeatedly): `createSolverProcess` lives at
+`connect-four/server/c4solver-wrapper.js` (NOT `server/scripts/`); the narrator pruner is
+`server/scripts/reasonNarratorVector.mjs` (NOT `reason_engine/lib/`); `computeReason(ms, playedCol, { solver })`
+takes the solver as a 3rd-arg object. See [[project_reason_render_layer]].
+
 ## Running inline Node.js scripts against server modules
 
 **Problem 1 — `node --input-type=module <<'EOF'` with relative imports fails**

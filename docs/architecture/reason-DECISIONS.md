@@ -597,3 +597,47 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
   boundary); D24-F3 (parity-fabrication retraction, upheld not reversed); `docs/knowledge-base/allen-
   parity.md` (even-row canon quote); memory `project_opening_defender_reason_gap` (the gap this closes);
   I0/I2/I8/I9/I12.
+
+### D33 — `openingContext` renders in condition D: an additive **opening frame** is primary, the deep two halves demote to a horizon (no crisp deep cell)
+
+**Context.** D31/D32 made `computeReason` emit `openingContext`, but the condition-D grounded-render
+path was never wired for it (D31/D32 render-boundary note; memories
+`project_reason_render_layer`/`project_opening_defender_reason_gap`). The first run to feed opening
+boards through condition D (`fv_suff_answers_boards_coverage_opening_2026-07-05*`) therefore crashed
+all 25 opening records with `UncoveredVectorFieldError` — the closed `fieldDisposition` tripwire firing
+as designed on the unregistered `openingContext.*` subtree.
+
+**Decision.** Wire it as an **additive opening frame**, faithful to the glossary's "epigraph, not
+substitute" contract — NOT a new causal-link family:
+
+- **`reason_engine/openingFrame.mjs` → `composeOpeningFrame(prunedFv)`** returns one primary frame
+  (`O1` namedOpening / `O2` defense / `O3` centrality) = lead + landing-cell centrality/parity clause +
+  horizon tail. `classifyCausalLink` (L1–L9) STILL runs — it feeds `render_decision`'s outcome
+  scaffolding + horizon `register`/`pliesToEnd` — but its text is **not rendered**; the opening frame is
+  the sole `frames[0]`. Opening boards show the **decision board only** (no after-best/after-played/
+  projectedDeep).
+- **The deep two halves demote to a horizon, never a crisp deep cell.** At ply 1–6 `lostResource`/
+  `opponentPunishment` are sound but their completing cells sit 30–40 plies out. `pruneOpeningResidue`
+  reduces both halves in the "Vector facts" residue to `{register, pliesToEnd}` — WITHOUT it,
+  `renderedFields` leaks a 35-ply `completingCell` (e.g. `c6r2`) into the prompt, and the grader's
+  `deepResourceGrounded:false` then FALSE-FAILS any answer that grounds it (a render-invited
+  fabrication). Engine output is unchanged — this is render-only (I0 / `feedback_engine_soundness_then_render`).
+- **Two distinct "centralities."** The `O3` lead is the engine's geometry statement
+  (`openingContext.centrality.text`, backed by `betterHasMoreLines:true`) — an always-valid claim, NOT
+  gated. The landing-cell clause ("easier to build a four through `{cell}`") IS gated on
+  `centralityQualitative` (heatmap mass ratio; may be `null`). The grader's qualitative check applies
+  **only** to the landing-cell clause; it must exempt the geometry lead.
+- **Winning-cell heatmap** (`reason_engine/data/winning-cell-heatmap.json`, 27,976 self-play games,
+  90/10 policy) is hardcoded config (copied from the design spec, NOT from branch
+  `worktree-win-dist-grid`). Used **internally only** to pick qualitative words — never a probability in
+  prose. `heatmap[player][row][col]`, row 0 = bottom; measured parity: P1 winning mass 72% on
+  display-odd rows, P2 67% on display-even rows.
+- `render_decision` gains an `openingContext` block `{kind, frameId, lead, centralityComparison,
+  parityFavor, deepResourceGrounded:false, horizon}` (previously absent for opening boards — the grader
+  rubric in `grade-fv-sufficiency` was updated to consume it).
+
+**Source:** `docs/superpowers/specs/2026-07-05-opening-frame-render-design.md` +
+`docs/superpowers/plans/2026-07-05-opening-frame-render.md`; final-review fixes (residue leak +
+grader centrality scoping). Modules: `reason_engine/openingFrame.mjs`, `renderReasonModel.mjs`,
+`fieldDisposition.mjs`, `reason_engine/winningCellHeatmap.mjs`. I0/I12; D30 (Fix-A coordinate-leak,
+extended: opening columns `bookNextCol`/`bestDefenseCol` are `transformed`).

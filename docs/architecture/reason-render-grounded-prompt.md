@@ -686,3 +686,37 @@ field matching none of these halts the run.**
 4. **Two latent-error audit** — re-verify the *passing* parity/`finalMovestring` cases (eval-2, 8,
    9, 11, 13, 15) the same way, since the grader's PV-mismatch bug could have produced false passes
    too (lower risk, but unaudited).
+
+## 9. Opening-phase boards — the additive opening frame (D33, shipped 2026-07-05)
+
+Opening-phase decisions carry `openingContext` (`namedOpening` / `defense` / `centrality`; see D31/D32).
+The condition-D render layer handles them as an **additive** frame, not a new causal-link family — the
+opening is the teachable reason; the deep two halves demote to a horizon.
+
+- **Composer:** `reason_engine/openingFrame.mjs` → `composeOpeningFrame(prunedFv)` returns the primary
+  frame `O1` (namedOpening) / `O2` (defense, no "lost" doom framing) / `O3` (centrality) = lead +
+  landing-cell centrality/parity clause + horizon tail. `classifyCausalLink` (L1–L9) still runs to feed
+  `render_decision` outcome scaffolding + horizon `register`/`pliesToEnd`, but its text is **not
+  rendered**; the opening frame is `frames[0]` and the only rendered frame. `selectBoards` → decision
+  board only (no after-best/after-played/projectedDeep).
+- **Horizon demotion (no crisp deep cell):** the opening branch of `buildReasonRenderModel` wraps its
+  residue in `pruneOpeningResidue`, reducing `lostResource`/`opponentPunishment` to `{register,
+  pliesToEnd}`. This prevents a 30–40-ply `completingCell`/window from leaking into the "Vector facts"
+  block — which would both violate the "no deep cell in the opening prompt" contract and cause the
+  grader's `deepResourceGrounded:false` to false-fail an answer that grounds it. Non-opening residue is
+  unchanged (plain `renderedFields`). Engine output is unchanged (render-only; I0).
+- **Centrality has two independent notions:** `O3`'s lead is the engine geometry statement
+  (`openingContext.centrality.text` + `betterHasMoreLines:true`) — always valid, NOT gated. The
+  landing-cell clause is gated on `centralityQualitative` (heatmap mass ratio; `null` ⇒ no clause). The
+  grader's qualitative direction check applies to the landing-cell clause only.
+- **Winning-cell heatmap:** `reason_engine/data/winning-cell-heatmap.json` (27,976 self-play games,
+  90/10 policy) is hardcoded config, used internally by the composer to pick qualitative words
+  ("much easier" / "easier" / omit) — never a number in prose. `heatmap[player][row][col]`, row 0 =
+  bottom.
+- **`fieldDisposition`:** every `openingContext.*` leaf is registered — full-path checks run BEFORE the
+  leaf-name fallbacks (else `bestCol`/`playedCol`/`text` collide). Columns (`bookNextCol`,
+  `bestDefenseCol`) are `transformed` (1-indexed in the frame, raw withheld — Fix-A); names/flags render.
+- **`render_decision.openingContext`** `{kind, frameId, lead:{id,family,matchedPrefixLen,bookCol,holdCol},
+  centralityComparison:{player,betterCell,playedCell,qualitative}, parityFavor, deepResourceGrounded:false,
+  horizon}` is the grader ground truth (previously there was NONE for opening boards). `grade-fv-sufficiency`
+  was updated to consume it.

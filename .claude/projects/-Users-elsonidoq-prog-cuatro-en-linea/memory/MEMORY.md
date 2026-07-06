@@ -107,7 +107,7 @@
 ## Blunder-REASON evidence engine (reason_engine/) — read the 4 docs + D-log FIRST
 
 - [Reason case → also eval + grader](feedback_reason_case_requires_eval_and_grader.md) — adding an engine case/field is not done until select_boards derives a predicate (+REASON_UNIVERSE) AND grade-fv-sufficiency/glossary know it
-- [select_boards openings RESOLVED](project_select_boards_skips_openings.md) — B4 added an additive opening harvest band + reason_opening_named_line/centrality PROVISIONAL predicates (derivation extracted to reasonEvalPredicates.mjs); openings no longer skipped; opening reason engine = computeOpeningContext.mjs (D31)
+- [select_boards openings RESOLVED](project_select_boards_skips_openings.md) — fixture additive band + coverage deterministic Phase-1 opening step (seed-local RNG, --seed); 3 PROVISIONAL predicates (named_line/defense/centrality); engine = computeOpeningContext.mjs (D31/D32)
 - [Reason-engine docs are canonical](project_admin_fv_suff_repurposed.md) — before reason_engine/ work read reason-INVARIANTS/DECISIONS(D1–D29)/case-taxonomy/blunder-reason-evidence + reason-AGENT-PREAMBLE; /admin/fv-suff = 2-mode browser (Evidence vectors + Eval-answers LLM/grade); stale-server restart trap (lsof kill 3001)
 - [immediate_threat phantom cell](project_reason_immediate_threat_phantom.md) — immediate_threat/missed_own detects on PRE-move movestring, NOT correctRoot (already-won → phantom win-in-1 one row up: eval-26 c2r5 vs c2r4); forks keep correctRoot
 - [Grounded-render prompt + tripwire](project_reason_render_layer.md) — compute.mjs condition D; P1+P2+P3+P4 DONE (D29); render_decision is condition-D-only ground truth for the grader (never re-derive routing); closed fieldDisposition tripwire; covers are family SUPERSETS + STATIC causal-code audit (covered-but-absent is normal, D28); selectBoards selection-safety; boards NOT in coverage walk; §3e one rule × 3 consumers; flip_case_l3 gap CLOSED
@@ -118,6 +118,7 @@
 - [Sparse look-ahead unvalidated](project_sparse_lookahead_unvalidated.md) — judged 2026-06-25; case1&2 deepening + INITIAL depth tier added (NOT re-judged); pre-move-query + DFS-budget test traps
 - [drawing_move mislabels wins](project_drawing_move_mislabels_wins.md) — open bug: win-forfeiting move tagged drawing_move; Fix 4 patched rule text, Fix 6 (upstream tagging) still TODO
 - [Lookahead shared seam](project_lookahead_shared_seam.md) — collectNovelOpportunities/compareOpportunities feed BOTH feature vector AND production annotation gate; characterize before editing
+- [Opening defender reason SHIPPED](project_opening_defender_reason_gap.md) — openingContext.defense (P2 hold-the-line) implemented (D32); NON-OBVIOUS: centrality NOT suppressed for losing mover (resistAndWait + conditional even-row canon instead)
 
 ## Papergames integration
 
@@ -131,7 +132,7 @@
 - [Game simulation harness](reference_game_simulation_harness.md) — all self-play centralized in server/gameSampling.js (playGame/simulateGame/harvestBlunders/playPolicyGame); don't hand-roll
 - [Coverage sampler rare-fill trap](project_coverage_sampler_rarefill_trap.md) — select_boards coverage "stuck": a near-unreachable REQUIRED predicate makes satisfied() never flip → full-budget solver burn; bound any harvest-until-satisfied loop
 - [gameSampling rng determinism trap](project_gamesampling_rng_determinism_trap.md) — changing rng usage shifts candidate-generator output; FR-011 minMoves floor protects T017
-- [Inline Node scripts](reference_inline_node_scripts.md) — absolute imports; export `createSolverProcess`; solver hangs (try/finally+close); async await query; solver-backed CLI in a shell for-loop → EMPTY stdout (run separately)
+- [Inline Node scripts](reference_inline_node_scripts.md) — to inspect a reason vector use TOOLS/compute_feature_vector.mjs (don't hand-roll); wrapper=server/c4solver-wrapper.js; absolute imports; solver hangs (try/finally); await query; shell for-loop → EMPTY stdout
 - [Scripts need meaningful --help](feedback_scripts_meaningful_help.md) — every relevant CLI script ships a real --help/-h (purpose+options+defaults); check before required-arg validation; inside import.meta entry guard if also imported
 - [Repo worktree setup traps](project_repo_worktree_setup.md) — worktree base defaults to origin/main (172 commits behind stagging, no gameSampling.js); reset to stagging HEAD; copy gitignored server/.env in or reason tests ENOENT
 - [Win-dist pending merge](project_win_distribution_pending_merge.md) — winning-cell distribution pipeline complete but UNMERGED on branch worktree-win-dist-grid; user deferred merge to stagging
@@ -144,6 +145,7 @@
 - [callLLM error handling in scripts](feedback_calllm_error_handling.md) — wrap each callLLM call individually; uncaught error silently drops the entry
 - [LLM output root-cause](feedback_llm_output_root_cause.md) — goal-first, then RCA across render/context/generator; a missing signal is a question, not a fact; observe with tools
 - [Occam + principled extrapolation](feedback_occam_principled_extrapolation.md) — one unifying mechanism over many special-case kinds; generalize from examples, don't enumerate cases
+- [One-command pipeline, extend don't add](feedback_one_command_pipeline_extend_dont_add.md) — extend the existing command over a new script/strategy; one command feeds the next stage; keep cases solver-verified + both players
 - [Product doc authoring](feedback_product_doc_authoring.md)
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — design docs/plans under docs/superpowers/ are throwaway; migrate durable info to docs/architecture/
 - [Explanation/question style](feedback_explanation_and_question_style.md) — pitch to a non-internals reader; alternatives carry a recommendation; no vague clarifying questions
