@@ -105,3 +105,63 @@ export function buildAnnotationOffer(pruned, boardDecisions) {
 
   return { aliases, zoneAliasMap, terms };
 }
+
+// --- Post-LLM processing ---
+
+// Pair each opening [kind:X] with the NEXT closing [/kind:...] and rewrite the closer to match X.
+// Handles the common backreference-drift malformation for both zone and term tags.
+export function normalizeAnnotationTags(text) {
+  for (const kind of ['zone', 'term']) {
+    const OPEN = new RegExp(`\\[${kind}:([^\\]!]+)\\]`, 'g');
+    const CLOSE = new RegExp(`\\[/${kind}:[^\\]!]+\\]`, 'g');
+    const parts = [];
+    let last = 0, m;
+    while ((m = OPEN.exec(text)) !== null) {
+      parts.push(text.slice(last, m.index + m[0].length));
+      CLOSE.lastIndex = m.index + m[0].length;
+      const c = CLOSE.exec(text);
+      if (c) {
+        parts.push(text.slice(m.index + m[0].length, c.index));
+        parts.push(`[/${kind}:${m[1]}]`);
+        last = c.index + c[0].length;
+      } else {
+        last = m.index + m[0].length;
+      }
+    }
+    parts.push(text.slice(last));
+    text = parts.join('');
+  }
+  return text;
+}
+
+const rcToCellStr = ({ col, row }) => `c${col + 1}r${row + 1}`;
+
+// Strip a [kind:X]…[/kind:X] wrapper whose X is not in `allowed`, keeping the inner text. The
+// non-greedy backreference handles the common flat case; on malformed *overlapping* same-kind tags a
+// stray inner tag may survive — contained blast radius: the frontend degrades an unknown spec to plain
+// text (annotatedText.js isValidSpec) and the grader strips all markup before A5. (m3.)
+function dropUnoffered(text, kind, allowed) {
+  const RE = new RegExp(`\\[${kind}:([^\\]!]+)\\](.*?)\\[/${kind}:\\1\\]`, 'gs');
+  return text.replace(RE, (whole, id, inner) => (allowed.has(id) ? whole : inner));
+}
+
+export function processAnnotations(mechanism, zones) {
+  const handles = new Set((zones?.aliases ?? []).map((a) => a.handle));
+  const slugs = new Set((zones?.terms ?? []).map((t) => t.slug));
+  const aliasMap = Object.fromEntries((zones?.aliases ?? []).map((a) => [a.handle, a.spec]));
+
+  let text = normalizeAnnotationTags(mechanism ?? '');
+  text = dropUnoffered(text, 'zone', handles);
+  text = dropUnoffered(text, 'term', slugs);
+
+  // Expand offered zone handles -> real specs (open + close), and collect the specs for key_cells.
+  const usedSpecs = new Set();
+  for (const [handle, spec] of Object.entries(aliasMap)) {
+    if (text.includes(`[zone:${handle}]`)) usedSpecs.add(spec);
+    text = text.replaceAll(`[zone:${handle}]`, `[zone:${spec}]`).replaceAll(`[/zone:${handle}]`, `[/zone:${spec}]`);
+  }
+
+  const cells = new Set();
+  for (const spec of usedSpecs) for (const rc of expandSpec(spec)) cells.add(rcToCellStr(rc));
+  return { mechanism: text, keyCells: [...cells].sort(), zonesEmitted: usedSpecs.size > 0 };
+}

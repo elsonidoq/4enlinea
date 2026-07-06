@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAnnotationOffer } from '../scripts/reason_engine/zoneAnnotations.mjs';
+import { buildAnnotationOffer, normalizeAnnotationTags, processAnnotations } from '../scripts/reason_engine/zoneAnnotations.mjs';
 import { TAG_PHRASE } from '../scripts/reason_engine/causalLinks.mjs';
 
 // Board-decision fixtures with the shape boardSelectionDecisions() actually produces:
@@ -66,4 +66,41 @@ test('no tactical aliases when boards carry no structural tags (columns still of
   assert.equal(tactical.length, 0);
   assert.equal(bare.terms.length, 0);
   assert.equal(bare.aliases.length, 2); // better-col + played-col only
+});
+
+const ZONES = {
+  aliases: [
+    { handle: 'better-col', spec: 'col3', role: 'x', truthBoard: 'decision', kbId: null },
+    { handle: 'opp-double', spec: 'windows:c5r1,c7r1', role: 'x', truthBoard: 'afterPlayed', kbId: 'double_threat' },
+  ],
+  terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'double threat (two winning squares at once)', description: 'x' }],
+};
+
+test('normalizeAnnotationTags repairs a mismatched close handle', () => {
+  const out = normalizeAnnotationTags('a [zone:better-col]col 3[/zone:foo] b');
+  assert.match(out, /\[zone:better-col\]col 3\[\/zone:better-col\]/);
+});
+
+test('processAnnotations expands offered handles and derives key_cells', () => {
+  const raw = 'Column [zone:better-col]3[/zone:better-col] denies the '
+    + '[zone:opp-double][term:double_threat]double threat[/term:double_threat][/zone:opp-double].';
+  const { mechanism, keyCells, zonesEmitted } = processAnnotations(raw, ZONES);
+  assert.equal(zonesEmitted, true);
+  // handles expanded to real specs
+  assert.match(mechanism, /\[zone:col3\]3\[\/zone:col3\]/);
+  assert.match(mechanism, /\[zone:windows:c5r1,c7r1\]/);
+  // offered term kept verbatim
+  assert.match(mechanism, /\[term:double_threat\]double threat\[\/term:double_threat\]/);
+  // key_cells = union of expanded specs (col3 = whole column + the 2 window cells), 1-indexed, deduped
+  assert.ok(keyCells.includes('c5r1'));
+  assert.ok(keyCells.includes('c3r1')); // col3 row1
+  assert.equal(new Set(keyCells).size, keyCells.length);
+});
+
+test('processAnnotations drops an unoffered handle/slug but keeps the words', () => {
+  const raw = 'take [zone:ghost-handle]that square[/zone:ghost-handle] and a [term:made_up]trick[/term:made_up]';
+  const { mechanism } = processAnnotations(raw, ZONES);
+  assert.doesNotMatch(mechanism, /zone:ghost-handle/);
+  assert.doesNotMatch(mechanism, /term:made_up/);
+  assert.match(mechanism, /take that square and a trick/);
 });
