@@ -8,6 +8,8 @@ import { dispositionOf, assertCoverage, leafPaths } from './fieldDisposition.mjs
 import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelectionDecisions } from './reasonBoardSelect.mjs';
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
+import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
+import { buildAnnotationOffer } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -82,18 +84,52 @@ function buildDecision(pruned) {
   };
 }
 
+// Opening residue: the deep halves demote to a horizon; strip their cells so no deep cNrM leaks into the prompt.
+function pruneOpeningResidue(rendered) {
+  const horizonOnly = (h) => (h && typeof h === 'object')
+    ? Object.fromEntries(['register', 'pliesToEnd'].filter((k) => k in h).map((k) => [k, h[k]]))
+    : h;
+  const out = { ...rendered };
+  if (out.lostResource) out.lostResource = horizonOnly(out.lostResource);
+  if (out.opponentPunishment) out.opponentPunishment = horizonOnly(out.opponentPunishment);
+  return out;
+}
+
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
+
+  const openingFrame = composeOpeningFrame(pruned);
+  if (openingFrame) {
+    const allBoards = boardSelectionDecisions(pruned);
+    const zones = buildAnnotationOffer(pruned, allBoards);
+    const decisionBoard = allBoards.find((b) => b.id === 'decision');
+    return {
+      perspective: { you: pruned.player, opponent: pruned.opponent },
+      decision: buildDecision(pruned),
+      link,
+      frames: [{ id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
+                 covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
+      boards: [decisionBoard],
+      zones,
+      rendered: pruneOpeningResidue(renderedFields(pruned, link.covers)),
+      openingReadingKey: OPENING_READING_KEY,
+      coverage: { ok: true, unowned: [] },
+    };
+  }
+
+  const allBoards = boardSelectionDecisions(pruned);
+  const zones = buildAnnotationOffer(pruned, allBoards);
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
     decision: buildDecision(pruned),
     link,
     frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
+    zones,
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
   };
@@ -150,6 +186,40 @@ export function buildRenderDecision(nv) {
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
+  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned));
+
+  const openingFrame = composeOpeningFrame(pruned);
+  let openingContext = null;
+  if (openingFrame) {
+    const oc = pruned.openingContext;
+    const variant = oc.namedOpening ?? oc.defense ?? oc.centrality;
+    const bCell = landingCell(pruned.movestring, pruned.bestCol);
+    const pCell = landingCell(pruned.movestring, pruned.playedCol);
+    const bRow0 = bCell ? Number(bCell.match(/r(\d+)/)[1]) - 1 : null;
+    const half = horizonHalf(pruned);
+    openingContext = {
+      kind: openingFrame.kind,
+      frameId: openingFrame.id,
+      lead: {
+        id: variant.id ?? null,
+        family: variant.family ?? null,
+        matchedPrefixLen: variant.matchedPrefixLen ?? null,
+        bookCol: oc.namedOpening ? oc.namedOpening.bookNextCol + 1 : null,
+        holdCol: oc.defense ? oc.defense.bestDefenseCol + 1 : null,
+      },
+      centralityComparison: {
+        player: pruned.player, betterCell: bCell, playedCell: pCell,
+        qualitative: centralityQualitative(pruned),
+      },
+      parityFavor: bRow0 == null ? null : {
+        betterCellRowParity: bRow0 % 2 === 0 ? 'odd' : 'even',   // display parity of the better cell's row
+        favorsMover: pruned.player === 1 ? bRow0 % 2 === 0 : bRow0 % 2 === 1,
+      },
+      deepResourceGrounded: false,
+      horizon: { register: half?.register ?? null, pliesToEnd: half?.pliesToEnd ?? null },
+    };
+  }
+
   return {
     case: pruned.case ?? null,
     route: pruned.route === 'realized_denied' ? 'realized_denied' : 'sign',
@@ -161,6 +231,8 @@ export function buildRenderDecision(nv) {
     resource: groundResource(pruned),
     fieldPartition: fieldPartition(pruned, link.covers),
     finalMovestring: decisiveFinalMovestring(pruned),
+    openingContext,
+    zones: { aliases: zones.aliases, terms: zones.terms },
   };
 }
 
@@ -169,10 +241,22 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - pliesToEnd: plies until the line finishes, when known.
 - controllingGroup / parityAttribution: the group of four squares whose parity decides a deep win.
 - ownDiscs: how many of your discs already sit on the winning group.
-- replyHistogram.afterBest / afterPlayed: how many opponent replies still lose after each move.
-- "deep on a forced line" / "deep, via a parity battle": the completing square is many plies away and EMPTY now — not a current threat.
+- replyHistogram.afterBest / afterPlayed: how many ways your opponent still has to hold the result after each move — fewer means the tougher, more resilient defense.
+- "deep on a forced line" / "deep, via a parity battle": the winning square is many plies away and EMPTY now — not a current threat.
 - Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
-- Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.`;
+- Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.
+- These coded names are for YOUR reading only. Never repeat a field name, "histogram", "window", "completing cell", "solver", or "score" in your answer's \`mechanism\` — say it in plain Connect Four instead (threat, fork, double threat, four-in-a-row line, block, central).`;
+
+const OPENING_READING_KEY = `# Opening reading key
+- family / id: the named opening line this position is on (id absent = shared prefix, family only).
+- matchedPrefixLen: how many opening plies matched the book line.
+- The blunder is explained through the opening (book line, centrality, parity), NOT a deep tactical cell.
+- The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
+// The outcome-defining half for the horizon summary.
+function horizonHalf(pruned) {
+  return pruned.case && pruned.case.startsWith('win_') ? pruned.lostResource : pruned.opponentPunishment;
+}
 
 // The canonical Decision block (Fix A) — leads the prompt so the model never re-derives columns/roles.
 function renderDecision(d) {
@@ -187,10 +271,28 @@ function renderDecision(d) {
   ].join('\n');
 }
 
+// The frame (opening or L-link) may carry its own guardrail distinct from the L1-L9 classification
+// guardrail (always computed, even for opening records, to feed horizon scaffolding — see
+// reason-render-grounded-prompt.md §9). For non-opening records frames[0].guardrail IS
+// model.link.guardrail (same value) — combining would duplicate it, so only append when distinct.
+function combinedGuardrail(model) {
+  const frameGuardrail = model.frames[0]?.guardrail;
+  if (frameGuardrail && frameGuardrail !== model.link.guardrail) {
+    return `${model.link.guardrail} ${frameGuardrail}`;
+  }
+  return model.link.guardrail;
+}
+
 export function assembleGroundedPrompt(model) {
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
+  const regions = model.zones.aliases.length
+    ? model.zones.aliases.map((a) => `- [zone:${a.handle}] = ${a.role} (on the ${a.truthBoard} board)`).join('\n')
+    : '(no highlightable squares — describe the idea in words)';
+  const termLines = model.zones.terms.length
+    ? model.zones.terms.map((t) => `- [term:${t.slug}] = ${t.canonicalPhrase}: ${t.description}`).join('\n')
+    : '(no named terms apply here)';
   return [
     renderDecision(model.decision),
     '',
@@ -201,11 +303,29 @@ export function assembleGroundedPrompt(model) {
     `# Why this move was a blunder (causal link ${model.link.id}, confidence ${model.link.confidence})`,
     frames,
     '',
-    `Guardrail: ${model.link.guardrail}`,
+    `Guardrail: ${combinedGuardrail(model)}`,
     '',
     READING_KEY,
+    ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
     '',
-    '# Vector facts',
+    '# Highlightable regions',
+    'To highlight a phrase, wrap it in BOTH an opening and a closing tag: '
+      + '[zone:<handle>]phrase[/zone:<handle>], using a handle from this list verbatim. Every '
+      + 'opening tag MUST have a matching closing tag — never write a handle on its own as if it '
+      + 'were a word. Bad: "the [term:immediate_threat] on c2 is worth keeping" (no closing tag; '
+      + 'used as a noun). Good: "[term:immediate_threat]the threat you need to keep '
+      + 'alive[/term:immediate_threat] on c2". Never write a raw square. Do not overlap a '
+      + 'highlight and a term on the same words.',
+    regions,
+    '',
+    '# KB terms you may name',
+    'When you use one of these ideas, wrap the words in BOTH an opening and a closing tag: '
+      + '[term:<slug>]phrase[/term:<slug>], using a slug from this list verbatim. Every opening '
+      + 'tag MUST have a matching closing tag — never write a slug on its own as if it were a '
+      + 'word. Only these slugs, only when you actually use the idea.',
+    termLines,
+    '',
+    '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
     '```json',
     JSON.stringify(model.rendered, null, 2),
     '```',

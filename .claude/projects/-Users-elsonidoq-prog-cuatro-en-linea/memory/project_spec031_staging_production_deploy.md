@@ -18,6 +18,6 @@ metadata:
 - **VITE_\* vars** are build-time (must be in Railway before first build); `FRONTEND_URL` is runtime (set after domain assigned, triggers restart not rebuild).
 - **Staging env vars:** Stripe, OpenAI, Anthropic, Sentry keys are optional on staging (app degrades to 503); 7 core vars required on both environments.
 - **Puzzle data:** `pg_dump --data-only --table=puzzles` from production → import into staging as a one-time manual op. Requires Postgres 15 client locally (version must match Supabase server version).
-- **Auth redirect:** Each Supabase project needs its own magic-link redirect URL allowlisted in Auth → URL Configuration → Redirect URLs (see `bug_auth_magic_link_redirect.md`).
+- **Auth redirect:** Each Supabase project needs its own magic-link redirect URL allowlisted in Auth → URL Configuration → Redirect URLs (see `project_magic_link_auth_race.md`).
 
 **Pre-existing test failure (unrelated to this deploy work):** `classifier.test.js` — `forbidden_columns board-based: col5 gives opponent gravity-top win` — was failing before this spec; do not treat as a regression.

@@ -601,6 +601,7 @@ export function buildBlunderExplainPrompt({
   kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
   threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
   lookaheadSection,       // pre-formatted sparse-board forward look-ahead section
+  openingSection,         // pre-formatted opening-provenance reason (named book-line deviation)
   centerDominanceSection, // pre-formatted opening center-dominance reason (no-structure path)
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
@@ -677,6 +678,13 @@ Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows})
     contextLines.push(`- Key insight: ${positiveReason ?? 'This was the strongest move available.'}`);
   }
   sections.push(contextLines.join('\n'));
+
+  // ── Opening theory (named book-line deviation) ────────────────────────────
+  // Provenance frame: it states the book line + the deviation and DEFERS the why-it-loses to the
+  // tactical sections below. Placed early so it frames the position; it never asserts a tactic.
+  if (openingSection) {
+    sections.push(openingSection);
+  }
 
   // ── Threat comparison ─────────────────────────────────────────────────────
   if (threatComparisonSection) {
@@ -832,7 +840,7 @@ In 2–3 sentences: explain the mistake using the key insight above as your star
 ${patternInstruction} Say what the better move would have accomplished.
 When describing the better move, always frame it as what YOU could have played — never describe it as an easy reply or opportunity for your opponent.
 If the threat comparison section includes major or minor threat rows, include a comparison in your explanation using those counts — replace every threat count with its zone tag token from the threat comparison. The rows show three parallel states (pre-move, after the better move, after your move); read them in whichever direction the position calls for. The better move is not always the one with MORE threats — sometimes YOUR move is the one that created a threat, and the point is that it was still the weaker choice. Examples: "the best move would have cut your opponent's major threats from [zone:opponent-major-pre]3[/zone:opponent-major-pre] to [zone:opponent-major-best]1[/zone:opponent-major-best]; your move left them at [zone:opponent-major-played]2[/zone:opponent-major-played]"; or "even though your move created a minor threat ([zone:player-minor-played]1[/zone:player-minor-played]), the better move left you with no minor threats and was still stronger because …". A line that shows "none" carries no tag — say "no minor threats" in plain words, never wrap a zero. If no major or minor threat rows appear, do not write a threat comparison.
-If no threat comparison rows are shown and no tactical pattern is named above, give the concrete STRATEGIC reason the better move is preferable — for example it keeps more of the board open and creates more future possibilities, takes more central control, or loses more slowly under best play.${centerDominanceSection ? ' A "## Why the better move is stronger" section above gives the concrete reason for THIS position — build your explanation on it (centrality / number of winning lines), do not substitute a vaguer one.' : ''} Do NOT pad the explanation by merely restating where each disc landed ("would have put your disc on that cell"): naming a landing square is not a reason. Do not invent a tactical pattern or claim a threat the boards do not show.
+If no threat comparison rows are shown and no tactical pattern is named above, give the concrete STRATEGIC reason the better move is preferable — for example it keeps more of the board open and creates more future possibilities, takes more central control, or loses more slowly under best play.${openingSection ? ' An "## Opening theory" section above frames this position on a known book line — either you (the first player) left a winning plan and it names the column that keeps the win, OR you are the second player on a first-player-win line and your job is to hold the toughest defense and wait for a slip. Lead with whichever frame that section states; name the opening only as given, do not invent a name, and for the defender do NOT claim you are building a win.' : ''}${centerDominanceSection ? ' A "## Why the better move is stronger" section above gives the concrete reason for THIS position — build your explanation on it (centrality / number of winning lines), do not substitute a vaguer one.' : ''} Do NOT pad the explanation by merely restating where each disc landed ("would have put your disc on that cell"): naming a landing square is not a reason. Do not invent a tactical pattern or claim a threat the boards do not show.
 Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task

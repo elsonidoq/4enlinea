@@ -119,7 +119,8 @@ test('D30: lose_to_faster_lose enabled_opponent (eval-23) STILL routes to L3 (bo
   assert.equal(m.link.id, 'L3');
   assert.equal(m.decision.bestOutcome, 'loss');
   assert.equal(m.decision.playedOutcome, 'loss');
-  assert.match(m.link.text, /already losing|loses faster/i);
+  assert.match(m.link.text, /didn't create it|work hardest|speeds up the finish/i);
+  assert.doesNotMatch(m.link.text, /already losing|neither move wins/i);
 });
 
 test('computeReason keeps deep-fork 214444115623 on the sign engine (D18 witness c3r3 preserved)', async () => {

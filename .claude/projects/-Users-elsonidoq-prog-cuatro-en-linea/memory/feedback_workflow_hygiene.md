@@ -1,6 +1,6 @@
 ---
 name: feedback_workflow_hygiene
-description: "Tooling & workflow hygiene — no destructive git for curiosity, quarantine before delete, mark tasks done promptly, use rg/fd/sg, don't pkill the shared server, background subagents can't write"
+description: "Tooling & workflow hygiene — no destructive git for curiosity, quarantine before delete, mark tasks done promptly, use rg/fd/sg, don't pkill the shared server, background subagents can't write, commit pre-existing WIP before subagent-driven-development, fix dispatches must flag unrequested second-function bundling"
 metadata: 
   node_type: memory
   type: feedback
@@ -20,3 +20,7 @@ Small always-apply hygiene rules the user has set.
 - **Don't `pkill` the backend.** Vite dev server and the Node server share a process group in the user's terminal — `pkill -f "server/index.js"` kills both (blank-page Vite failure). Ask the user to restart manually; if you must, start the new process first, then kill the old, and verify Vite still runs.
 
 - **Background subagents get Edit/Write DENIED.** A spawned background `Agent` can't surface a permission prompt, so its writes are blocked outright — it returns "designed everything, wrote nothing." Implement writes in the main session, or have the subagent return a tight ready-to-apply design (file + exact change) that you apply. Reserve background subagents for read/research/analysis. See [[reference_multiagent_orchestration_patterns]].
+
+- **Before starting subagent-driven-development, `git status` for pre-existing uncommitted WIP unrelated to the new plan and commit it separately first.** On 2026-07-06 a prior session's finished-but-uncommitted work (a grading-skill refactor + a doc section) sat in the tree across a session boundary, touching the SAME files the new plan's tasks were about to edit. Left uncommitted, an implementer's `git add <file>` would have swept the unrelated WIP into the new task's commit, misattributing it. Scan and commit (or ask) before dispatching Task 1, not after.
+
+- **A fix subagent that finds and patches a SECOND, unrequested bug while fixing the dispatched one must flag it as a decision point, not silently bundle it into the same commit.** On 2026-07-06 a fix dispatch for a pairing bug in one function also silently patched a related bug in a different, already-shipped function because the new regression test couldn't pass without it. The fix was correct and minimal, and the re-review confirmed it — but bundling it without asking cost a review cycle's worth of extra scrutiny. Instruct fix dispatches: if the fix requires touching code outside the named function/file, stop and report it rather than proceeding silently.

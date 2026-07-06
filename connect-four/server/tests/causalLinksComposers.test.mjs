@@ -30,7 +30,8 @@ test('L1 (eval-22): completes YOUR tactic; opponent denial named', () => {
   const { link } = classifyById('eval-22');
   assert.equal(link.id, 'L1');
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
-  assert.match(link.text, /double_threat/);
+  assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
+  assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
   assert.match(link.text, /c2r1/);                        // your completing cell
   assert.match(link.text, /c3r1/);                        // opponent denial cell
 });
@@ -39,19 +40,20 @@ test('L2 (eval-21): played move handed the opponent the pattern', () => {
   const { link } = classifyById('eval-21');
   assert.equal(link.id, 'L2');
   assert.match(link.text, /let the opponent occupy c2r1/);
-  assert.match(link.text, /double_threat/);
+  assert.match(link.text, /double threat/i);              // double_threat slug -> plain C4 phrase
+  assert.doesNotMatch(link.text, /double_threat/);        // raw slug must not leak
   assert.match(link.text, /better move \(col 3\)/);       // bestCol 2 -> display 3
 });
 
-test('L3 (eval-23): no-causation wording; names the branch-invariant pattern', () => {
+test('L3 (eval-23): no-causation, hold-the-line wording; names the branch-invariant pattern', () => {
   const { link } = classifyById('eval-23');
   assert.equal(link.id, 'L3');
-  assert.match(link.text, /already losing/i);
-  assert.match(link.text, /figure_7/);
+  assert.match(link.text, /7-shaped double threat/);      // figure_7 slug -> plain C4 phrase
   assert.match(link.text, /c4r3/);
-  assert.match(link.text, /does not create it/i);
-  assert.match(link.text, /loses faster/i);
-  assert.match(link.text, /do not say your move caused/i);
+  assert.match(link.text, /didn't create it/i);           // no causation, player-facing
+  assert.match(link.text, /work hardest|speeds up the finish/i);
+  assert.doesNotMatch(link.text, /already losing|neither move wins/i);  // A5b: no defeatist framing
+  assert.match(link.guardrail, /caused or enabled/i);     // causation guardrail preserved (not in player text)
 });
 
 test('L4 (eval-4): missed defense; occupies the block, names the opponent window', () => {
@@ -69,12 +71,12 @@ test('L6 (eval-6): gave up a win AND handed the opponent one', () => {
   assert.match(link.text, /opponent force their own win via c2r6/);
 });
 
-test('L7 (eval-8): practical swindle, neither move wins', () => {
+test('L7 (eval-8): practical swindle framed as toughest defense, no defeatist wording', () => {
   const { link } = classifyById('eval-8');
   assert.equal(link.id, 'L7');
-  assert.match(link.text, /already losing/i);
   assert.match(link.text, /practical swindle/i);
-  assert.match(link.text, /neither move wins/i);
+  assert.match(link.text, /stubborn defense|most resilient|toughest/i);   // hold-the-line reframe
+  assert.doesNotMatch(link.text, /already losing|neither move wins/i);    // A5b: no defeatist framing
   assert.doesNotMatch(link.text, /you (would )?win\b/i);   // must not claim a win
 });
 

@@ -30,6 +30,7 @@ import {
   classifyPattern, Board, detectDoubleThreat, detectImmediateThreat, getWinningWindows,
   tagBlunder, NotABlunderError, detectZThreat, detectOddEvenThreat,
 } from '../../classifier.js';
+import { computeOpeningContext } from './computeOpeningContext.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv(join(__dirname, '../../.env'));
@@ -843,6 +844,16 @@ export async function findOccupationWitness(solver, root, { denier, windows, dep
   return { verdict: 'no_occupation', line: [], finalMovestring: root, exhaustive: reachedTerminal && !errored };
 }
 
+// ── openingContext: opening-provenance EVIDENCE (opening-theory PART B, Decision D4) ──
+//
+// The four-guard derivation now lives in the shared side-effect-free module
+// `computeOpeningContext.mjs` (SINGLE SOURCE — the production prompt path imports the SAME function,
+// so the offline reason vector and the deep-reveal prompt can never silently diverge). Re-exported
+// here so existing importers of `computeOpeningContext` from reasonEngine.mjs keep working. It is
+// SOLVER-FREE: `computeReason` passes the engine's already-computed `bestCol`/`scores`/`bestScore`
+// (I0 — no duplicate solver calls). See computeOpeningContext.mjs for the guard documentation.
+export { computeOpeningContext };
+
 /**
  * Compute the structured blunder-reason evidence vector.
  * @param {string} movestring  pre-move board (0-indexed columns)
@@ -873,6 +884,11 @@ export async function computeReason(movestring, playedCol, { solver }) {
     replyHistogram: null, gate: null,
     winSamples: null,
   };
+
+  // ── openingContext (opening-provenance evidence; solver-free, reuses bestCol/scores) ──
+  // Set once here so it flows to EVERY return path (the sign-taxonomy branches and the
+  // realized/denied fast path all return this same `out` object). `undefined` -> field absent.
+  out.openingContext = computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player });
 
   // ── winning-line distributions (opening & mid-game only) ──
   // Always compute (regardless of register/case) the distribution of optimal winning-line

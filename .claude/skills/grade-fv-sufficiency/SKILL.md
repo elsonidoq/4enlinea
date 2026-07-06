@@ -1,6 +1,6 @@
 ---
 name: grade-fv-sufficiency
-description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from compute.mjs --llm) — scores axes A1–A4 and emits a counterexample report attributing failures to feature-field / glossary gaps
+description: Use when grading a Feature-Vector Sufficiency Experiment answers jsonl (fv_suff_answers_*.jsonl from compute.mjs --llm) — scores axes A1–A5 (incl. A5 coach-voice) and emits a counterexample report attributing failures to feature-field / glossary / render gaps
 argument-hint: "<path-to-fv_suff_answers_*.jsonl> [--vectors <fv_suff_answers_*.jsonl>]"
 user-invocable: true
 ---
@@ -19,9 +19,14 @@ axes + pass rule, §7 output).
 per-column `scores` array stripped by `toNarratorVector`). Its fields are `case`, `bestCol`,
 `playedCol`, `bestScore`, `playedScore`, `player`/`opponent`, `lostResource`, `opponentPunishment`
 (each with `kind`/`register`/`window`/`tacticTag`/`parityAttribution`/…), `opponentPunishment.tie`,
-`replyHistogram`, `gate`. The glossary defines every one. There is **no** separate ground-truth
-file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside** each eval
-record's `feature_vector`.
+`replyHistogram`, `gate`, and — on opening-phase decisions only — the optional, mutually-exclusive
+`openingContext.namedOpening` (`{id, family, matchedPrefixLen, bookNextCol}`, a KB book-line lookup),
+or `openingContext.defense` (`{id, family, matchedPrefixLen, bestDefenseCol, centralityGrounded}`, a
+second-player on-book losing-hold lookup), or `openingContext.centrality` (`{bestCol, playedCol,
+betterHasMoreLines, text}`, a geometric fallback). See the glossary's §11 for all three. The glossary
+defines every one. There is **no** separate
+ground-truth file: the oracle columns (`bestCol`, `playedCol`, `movestring`, outcome) live **inside**
+each eval record's `feature_vector`.
 
 ## Core principle: the feature vector + glossary are the artifact under test, not the model
 
@@ -104,18 +109,19 @@ failure** — count it, exclude it from axis scoring, and treat the case as fail
 ## How to grade — per `(id, condition)`, across all N runs
 
 Group answer rows by `(id, condition)`. Each group has up to N runs (default 3). A **case** is one
-`(id, condition)` pair. Score the four axes (spec §5):
+`(id, condition)` pair. Score the five axes (spec §5 + the A5 coach-voice axis):
 
 | Axis | What | How | Weight |
 |---|---|---|---|
 | **A1 better move** | `better_move - 1 === feature_vector.bestCol` | code (record field) | sanity |
 | **A2 outcomes** | `played_outcome`/`best_outcome` match what `feature_vector.case` implies (table below); cross-check sign with the solver | code + solver | sanity |
-| **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one) | board (`visualize_board.sh`) + solver | **high** |
-| **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded** | board verification | **high (zero tolerance)** |
+| **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one). *Condition D:* zone-derived `key_cells` are display-overlay cells (the highlighted regions from an emitted `[zone:…]`, e.g. a whole column or window), not per-cell threat assertions — grade A3 on the tactic(s) the `mechanism` actually names and rests on, not on every cell the overlay spans; zone offered/board-truth fidelity is G7 (and G5 for spec board-truth on the truthBoard). | board (`visualize_board.sh`) + solver | **high** |
+| **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded**. *Condition D:* do NOT treat an empty cell inside an emitted `[zone:…]` (e.g. a non-landing cell of a highlighted column or window) as an A4 fabrication — it is a display-overlay cell, not a per-cell threat claim; the zones' own offered/board-truth fidelity is covered by G7/G5. | board verification | **high (zero tolerance)** |
+| **A5 coach voice** | the `mechanism` reads as a coach speaking directly to the player: 2nd-person address, **no internal/vector terminology**, and (player-2 opening only) **no defeatist "you're losing / both lose" framing — a hold-the-line reframe instead**. Full rules in **"A5 — coach voice"** below | read the `mechanism` prose (+ render text for triage) | **high** |
 
 A1/A2 are **sanity checks**: the vector already gives `bestCol` and the outcome labels, so a miss
 there is a **glossary-read** failure (the model couldn't even read the vector), which is itself a
-glossary counterexample. The substance is **A3/A4**.
+glossary counterexample. The substance is **A3/A4/A5**.
 
 **A2 outcome mapping** — `feature_vector.case` fixes both outcomes (it is the sign pair of
 `bestScore`,`playedScore` from your perspective):
@@ -132,18 +138,182 @@ playedCol`); each returns the opponent's scores after the move, so your outcome 
 legal opponent score)` (>0 win, =0 draw, <0 loss). For `lose_to_faster_lose` both outcomes are
 `loss`, so A2 only checks the model didn't claim a win/draw.
 
-**Per-run vs per-case.** Score each axis on **every run** in the group. The **case passes iff A1–A4
+**Per-run vs per-case.** Score each axis on **every run** in the group. The **case passes iff A1–A5
 hold on ALL N runs** (spec §5). Intermittent success = **fail** — it exposes latent ambiguity in the
 context. Record which runs failed and how they differed (e.g. run 0 named the fork, run 2 didn't).
 
-## Grading condition D — the `render_decision` rubric (G1–G6)
+## A5 — coach voice (the explanation is a coach speaking TO the player)
+
+The `mechanism` field is **not** an analyst's note — it is what a coach says **directly to the
+player** about the move they just made. A5 grades that voice. **A5 grades the `mechanism` prose only**
+(plus `better_move` phrasing if any). It **explicitly does NOT penalize** `fields_relied_on` (that
+field names internal vector fields *by design* — it is grader-facing introspection, never shown to a
+player) or `unsure_about` (meta abstention, also never shown to a player). Do not fail A5 for a field
+name appearing there.
+
+A5 has two parts. **A5a applies to every case (any player, any phase); A5b applies only to a
+player-2 opening board.** A run fails A5 if it violates either.
+
+**Strip markup before grading (condition D).** Before checking A5, STRIP all `[zone:…]…[/zone:…]` and
+`[term:…]…[/term:…]` markup from `mechanism` and grade the cleaned prose — the markup is machine
+tokens the frontend removes, exactly as production `checkP3` strips tags before its jargon scan. Do
+NOT fail A5 for the mere presence of a `[zone:…]`/`[term:…]` tag.
+
+**A5a — voice & terminology (all cases):**
+- **Direct 2nd-person address.** The coach addresses the player as "you" / "your" and the other side
+  as "your opponent." Third-person analyst voice ("the first player should…"), or **player names**
+  ("Gray", "Green"), is a fail.
+- **No internal / vector / render terminology.** The coach must speak plain English (Connect Four
+  jargon allowed — see below). It must NOT surface any name of the underlying data structure or engine
+  machinery. Banned wording (name the field OR its meta-phrase form) includes — **this list is scoped
+  to terms that actually occur in THIS vector / glossary / render, not the production explain-prompt's
+  list** (so it deliberately omits "simulation / pattern data / pattern comparison / leaf", which never
+  appear here):
+  - **Structure/field names & their prose echoes:** `case`, `route`, `direction`, `link`, `frame`,
+    `guardrail`, `covers`, "render" / "render decision", "vector" / "feature vector", `openingContext`
+    / "opening context" / "the opening-book context", `lostResource` / "lost resource",
+    `opponentPunishment` / "opponent punishment", `replyHistogram` / "reply histogram", `gate` /
+    "swindle gate" / "gate verdict", `parityAttribution` / "parity attribution",
+    `completingCell` / "completing cell" *(the plain "the square that finishes the four" is fine)*,
+    `window` *as the jargon for the 4-cell group (plain "four-in-a-row line" is fine)*,
+    `namedOpening` / `defense` / `centrality` **used as a field label** *(the word "central" / "more
+    central" in plain use is fine; "the centrality signal/field" is not)*, `matchedPrefixLen`,
+    `bookNextCol` / `bookCol` / `bestDefenseCol`, `betterHasMoreLines`, `resistAndWait`,
+    `deepResourceGrounded`, `patternOnAfterBestBoard`, `finalMovestring`, `boardState`, `register`,
+    `horizon`, `pliesToEnd` *(plain "about N moves later" is fine)*, `tacticTag` / `tag`, `kind`,
+    `tie`.
+  - **Engine/solver meta:** `forced_win` / `losing_position` **as slugs** *(the plain phrases "a
+    forced win" / "a losing position" are fine)*, "solver", "score" / "numerical evaluation", "the
+    data", "the evidence".
+- **Allowed:** plain English + Connect Four jargon — **major threat, minor threat, fork, double
+  threat, winning line / four-in-a-row, block, diagonal, row, column, more central, claimeven**, etc.
+  **Naming the actual opening as given is allowed** (e.g. "you were following the 3-4 opening" / "the
+  candlesticks opening") — a real opening name is coach vocabulary, not an internal-structure
+  reference. "Practical swindle" / "swindle" (a trap that invites an opponent slip) is allowed.
+
+**A5b — no defeatist framing for a player-2 opening board (`player === 2 && boardState ===
+"opening"`):**
+- The coach must **NOT** tell the player they are lost: phrasings like "you're losing," "you were
+  already losing," "both moves (still) lose," "neither move wins," "the position is lost" are a
+  **fail** on such a board. A player 2 is theoretically behind from move 1; saying so is demoralizing
+  and unhelpful, and this is exactly where the production coach reframes.
+- The coach **must positively reframe as hold-the-line**: play the toughest defense / make it as hard
+  as possible for the opponent / keep the most central lines and wait for a slip. A bare omission with
+  **no** constructive framing also fails A5b. (This mirrors production `llmCoachHelpers.js`: the
+  second player "holds the toughest defense and waits for a slip" and does NOT claim to be building a
+  win — so a player-2 board where the coach claims to be *building an attack/win* is also an A5b fail.)
+- A5b does **not** apply outside the player-2 opening case: for a first-player board, or a
+  mid-game/closing board, plainly stating the outcome is fine (A5a still applies).
+
+**A5 failure triage.** Locate the source of the bad wording before bucketing:
+- If the **render's own composed frame text supplies the wording** — e.g. the condition-D
+  `render_decision.link.text` (or the opening frame) literally says "you were already losing… neither
+  move wins" on a player-2 opening board, and the model faithfully echoed it — the fault is the
+  **render layer** → **`render_bug`**, `field_or_glossary` = the culprit `render_decision` element /
+  `causalLinks.mjs` rule (e.g. *"causalLinks.mjs L7 text emits defeatist 'neither move wins' for a
+  player-2 opening board — should route to a hold-the-line opening frame"*). This is the expected
+  bucket for A5b on this vector today.
+- If the render text was clean (or gave a usable hold-the-line frame) and the **model introduced** the
+  banned terminology or defeatist wording on its own → **`prompt_confusion`**.
+- A missing field that would have let the coach reframe (e.g. no opening hold-the-line frame exists for
+  this board at all) → **`missing_info`**.
+
+## Grading opening-deviation cases (`openingContext`)
+
+Some cases carry `feature_vector.openingContext` (opening-phase decisions, either player to move —
+only `namedOpening` is first-player-exclusive; `defense` is second-player-exclusive; `centrality`
+applies to **either** player, which is exactly why a player-2 `centrality` board legitimately carries
+`resistAndWait: true`. Do not flag a player-2 `centrality` board as suspicious on that basis alone.)
+This is an **additional lookup/geometry field**, not a different pass rule — A1–A5 (and, for
+condition D, G1–G7) still apply exactly as above. Note these opening boards are exactly where **A5b**
+(no defeatist framing for a player-2 opening board; hold-the-line reframe required) bites. **Condition-D opening cases now carry a `render_decision.openingContext` block** (shipped
+2026-07-05). Shape: `{ kind, frameId (O1|O2|O3), lead:{id,family,matchedPrefixLen,bookCol,holdCol
+(1-indexed)}, centralityComparison:{player,betterCell,playedCell,qualitative (much_easier|easier|
+null)}, parityFavor:{betterCellRowParity,favorsMover}, deepResourceGrounded:false, horizon:
+{register,pliesToEnd} }`. Consume it as GROUND TRUTH like any other `render_decision` element. Two
+opening-specific checks, in addition to the three board checks (prefix / book-move score-equality /
+"why it loses" grounding):
+- **Deep-cell suppression (G4/G5):** `deepResourceGrounded:false` means the opening frame deliberately
+  does NOT ground a deep completing cell. An answer that names a specific deep winning/losing cell
+  (e.g. a 35-ply `cNrM` from `lostResource.completingCell`) as the mechanism is a **fail** — the render
+  told it not to. Naming the book/hold column and the near-term landing cells is correct.
+- **Centrality claim direction (A3):** this check is scoped to the *landing-cell* clause only — "it'll
+  be much easier/easier to build a connected four through `{betterCell}` than through `{playedCell}`".
+  That clause must match `centralityComparison.qualitative`, and the answer must make **no** such
+  landing-cell claim when `qualitative` is `null`. A landing-cell claim against a `null` comparison is
+  an A4 fabrication (`render_bug` if `qualitative` is wrong for the board; else `prompt_confusion`).
+  This is **separate** from the O3 (`centrality`) frame's geometry *lead* — "the more central column
+  runs through more four-in-a-row lines," backed by `openingContext.centrality.betterHasMoreLines: true`
+  — which is an always-valid solver/geometry fact for opening boards and is **not** gated by
+  `qualitative`; do not flag that lead as fabrication when `qualitative` is `null`.
+
+**A `namedOpening` "you were following `<opening>`, the book move was column `<bookNextCol+1>`"
+claim is graded TRUE by three board checks — never by narrative plausibility:**
+
+1. **Prefix match** — `feature_vector.movestring` (or its mirror reflection, `col → 6 − col`) equals
+   the first `matchedPrefixLen` plies of the named KB opening line's worked-example movestring
+   (`docs/knowledge-base/<id>.md`).
+2. **`scores[bookNextCol] === bestScore && bestScore > 0`** — `bookNextCol` is *a* solver-verified
+   winning best move. **This is a score-equality check, NOT `bookNextCol === bestCol`.** Under a tie
+   of equally-winning columns, the book move and the engine's own `bestCol` argmax can legitimately
+   differ while both are correct — do **not** fail a case for that difference; only fail it if the
+   book move's score is provably below the max (or the prefix doesn't actually match).
+3. **The "why it loses" half** is grounded in `lostResource`/`opponentPunishment` as usual (same A3/A4
+   board verification as any other case).
+
+**A `defense` "you're the second side of `<opening>`, already lost, most resilient hold is column
+`<bestDefenseCol+1>`" claim is graded TRUE by three board checks:**
+
+1. **Prefix match** — same as `namedOpening` check 1 (movestring or its mirror is the first
+   `matchedPrefixLen` plies of the named KB line). `family`-only with `id: null` is correct on a
+   shared prefix.
+2. **Player 2, losing, loses faster** — the board is player-2-to-move, `bestScore < 0`,
+   `bestDefenseCol === bestCol`, and `scores[playedCol] < bestScore`. The opening name and the
+   "theoretically lost" claim are **lookup/game-theoretic facts** (all legal scores < 0), NOT
+   fabrication — do **not** fail A4 for stating them.
+3. **The "why it loses faster" half** is grounded in `lostResource`/`opponentPunishment` (same A3/A4).
+
+If the answer asserts "more central" / "even rows", require `centralityGrounded: true` in the vector
+AND that `bestDefenseCol` runs through strictly more 4-cell windows than the played column; a "more
+central" claim with `centralityGrounded: false` is an A4 fabrication (`vector_error` only if the
+field itself is wrong; otherwise `prompt_confusion`). A `defense` claim that instead reads as
+"you are building a winning attack" is an A4 fail (the second player is lost — `prompt_confusion`).
+
+**Failure attribution for `defense`:** wrong `bestDefenseCol` (not the max-score legal move) or a
+prefix that doesn't match → `vector_error`; a missing `defense` on a board a manual check confirms is
+an on-book player-2 losing-faster position → `missing_info`; correct field but the model narrates a
+fabricated attack/tactic → `prompt_confusion`.
+
+**A `centrality` claim** is verified by counting winning lines (4-cell windows) through `bestCol` vs.
+`playedCol` on the decision board (not by tracing a `finalMovestring` — there is none to trace for
+this branch; it is a pure geometric count, confirm with `visualize_board.sh`'s threat annotations).
+If the vector carries `resistAndWait: true`, the answer may add a hold-and-wait framing (the mover is
+a losing second player) — this is a canon signal, not a geometric claim, and does not change the
+window-count verification.
+
+**Lookup-not-fabrication instruction (do not misfire A4 here):** naming the opening (or its family)
+when checks 1+2 hold is a **verified lookup fact**, not a fabricated mechanism — do **not** grade it
+as an A4 hedge/fabrication failure. A `family`-only label with `id: null` on a genuinely shared KB
+prefix is **correct**, not a hedge failure — only flag it if the prefix is in fact unique to one KB
+entry and the answer still reported `id: null`, or vice versa. This applies identically to `defense`.
+
+**Failure-attribution wording for opening cases:**
+- A wrong `bookNextCol`/`bestDefenseCol` (its score is not the max/least-bad, or the claimed prefix
+  doesn't actually match the named KB line) → `vector_error`.
+- A missing `namedOpening`/`defense`/`centrality` field on a board that a manual KB/geometry check
+  confirms *is* on a known line / *is* more central → `missing_info`.
+- The model narrating the field correctly but still fabricating a mechanism beyond it, or misreading
+  `bookNextCol` vs. `bestCol` as required to be identical → `prompt_confusion`.
+
+## Grading condition D — the `render_decision` rubric (G1–G7)
 
 Condition D answers are graded against the **rendered, causally-composed artifact** (grounded-render
 prompt, Phase 3), not the raw glossary+JSON the condition-A model saw. The eval pipeline emits a
 per-record `render_decision` object on condition-D answers lines — this is the **routing ground
 truth**. Shape: `{ case, route, direction, patternOnAfterBestBoard, link:{id,confidence,covers,
 guardrail,text}, boards:[{id,shown,reason}], resource:{completingCell,registerToHorizon},
-fieldPartition:{rendered,covered,excluded}, finalMovestring }`.
+fieldPartition:{rendered,covered,excluded}, finalMovestring,
+zones:{aliases:[{handle,spec,role,truthBoard,kbId}],terms:[{slug,kbId,canonicalPhrase,description}]} }`.
 
 **Read the decision docs first (once per grading session), not per case:**
 `docs/architecture/reason-case-taxonomy.md` (the authoritative `(bestScore, playedScore)` case
@@ -161,9 +331,11 @@ taxonomy from memory.
 **Consume `render_decision` as GROUND TRUTH; never re-derive it.** Do NOT re-run
 `classifyCausalLink`, recompute branch-invariance, or re-select boards — that reintroduces exactly the
 drift the single catalog was built to prevent. Read `link.id`/`confidence`/`covers`/`guardrail`/`text`,
-the `boards` shown/omitted list + reasons, `patternOnAfterBestBoard`, `fieldPartition`, and
-`finalMovestring` straight off the record and treat them as the pipeline's settled decisions. Your job
-is to audit the ANSWER against these decisions (G1–G6), not to check whether the decisions themselves
+the `boards` shown/omitted list + reasons, `patternOnAfterBestBoard`, `fieldPartition`,
+`finalMovestring`, and `zones` (the offered `[zone:]`/`[term:]` alias/term set) straight off the record
+and treat them as the pipeline's settled decisions — `zones` is consumed as GROUND TRUTH exactly like
+every other `render_decision` element: never re-derive the offered set yourself. Your job
+is to audit the ANSWER against these decisions (G1–G7), not to check whether the decisions themselves
 are the ones you would have made.
 
 **Ground truth from RAW evidence, not the narrator vector.** Outcomes/columns still come from the RAW
@@ -172,7 +344,7 @@ against `render_decision.finalMovestring` (G4) — **never an alternate solver P
 lines can exist, and grounding on the wrong one is exactly the eval-1/16/3 mis-grade bug that Task 8
 fixed the cell-grounding source for.
 
-The six additive checks, scored per `(id, condition D)` case in addition to A1–A4:
+The seven additive checks, scored per `(id, condition D)` case in addition to A1–A5:
 
 | Check | What | How |
 |---|---|---|
@@ -182,13 +354,14 @@ The six additive checks, scored per `(id, condition D)` case in addition to A1�
 | **G4 engine-line grounding** | Verify each named cell/line against `render_decision.finalMovestring` — never an alternate PV. | `visualize_board.sh` on `finalMovestring` |
 | **G5 threat-list fidelity** | Each rendered threat-list entry must be board-true on its stated board; a wrong entry is a **render bug to REPORT**, not something to narrate around or silently forgive. | `visualize_board.sh` |
 | **G6 branch-invariance provenance** | Given `patternOnAfterBestBoard` + `link.id`: (a) guardrail honored; (b) the routing was correct for the after-best board. A wrong L2/L3 pick (a miscomputed `patternOnAfterBestBoard`) is a **render bug attributable to the pipeline** — never a model failure. Triage it `render_bug`, not `prompt_confusion`. | `render_decision.patternOnAfterBestBoard` |
+| **G7 annotation fidelity** | **G7a (zones):** every emitted `[zone:handle]` in `mechanism` used a handle listed in `render_decision.zones.aliases` (unoffered handles are dropped by the pipeline, so a surviving one is a pipeline bug); each handle wraps a phrase whose meaning matches its `role`; nothing is over-wrapped. Board-truth of the alias's `spec` is delegated to **G5**, checked on the alias's `truthBoard` (not the displayed decision board). **G7b (terms):** every `[term:slug]` used a slug in `render_decision.zones.terms`, and the wrapped phrase genuinely denotes that KB concept. **G7c (malformed-tag auto-fail):** if the record's `annotationRepairs` array (a top-level field sibling to `answer`/`render_decision`) is non-empty, G7 is an automatic FAIL for that run — the render pipeline already bare-stripped an unclosed `[zone:]`/`[term:]` tag the model emitted, so the model produced malformed markup even though the final text the pipeline shipped is clean; triage this `prompt_confusion` (the model's fault, not the render layer's). | `render_decision.zones` + `visualize_board.sh` on the alias's `truthBoard` |
 
-G1–G6 are **additive** for condition D — A1–A4 still apply and are scored exactly as in the "How to
-grade" section above; do not substitute G1–G6 for them.
+G1–G7 are **additive** for condition D — A1–A5 still apply and are scored exactly as in the "How to
+grade" section above; do not substitute G1–G7 for them.
 
 ## Failure triage — WHERE the fault lives (required for every failing case)
 
-A pass/fail is not enough. For every case that fails A3 or A4 (or, for condition D, any of G1–G6),
+A pass/fail is not enough. For every case that fails A3 or A4 (or, for condition D, any of G1–G7),
 classify the **root cause** into exactly one bucket: the three condition-A/B/C buckets below, plus
 `render_bug` for condition D. This is what tells the reader whether to fix the **vector**, the
 **glossary**, the **prompt**, or the **render layer** — and it maps onto the experiment's dials
@@ -224,6 +397,13 @@ Deciding between them is itself an **oracle** job — you cannot read the triage
   fact has **no field** in the vector → `missing_info`. If the fact **was** present in a field (correct
   and unambiguous per the glossary) and the model still got it wrong, mis-anchored it, or invented past
   it → `prompt_confusion`.
+- **G7 (zone/term annotation) triage:** a handle or slug not offered in `render_decision.zones`, or
+  bound to a semantically wrong phrase, or over-wrapped → `prompt_confusion`. An offered alias whose
+  `spec` is board-false on its `truthBoard` → `render_bug` (surfaced by G5). A cell/tactic the case
+  needed that the render layer never offered as a zone/term at all → `missing_info`.
+- **G7c (malformed-tag) triage:** always `prompt_confusion` — a non-empty `annotationRepairs`
+  means the model emitted an unclosed tag; the pipeline already repaired the player-facing text, so
+  there is nothing for the render layer to have done differently.
 - A case can have several defects; pick the **decisive** one (the reason the case fails). Note secondary
   ones in `failure_summary`.
 
@@ -235,72 +415,70 @@ move-1 board (`vector_error`)."*). This sentence is surfaced verbatim after grad
 ### Scoring via sub-agents
 
 For each `(id, condition)` group, spawn a fresh `general-purpose` sub-agent (it runs in the repo
-root with shell access, so it can use `./visualize_board.sh` and the solver directly). Process groups
-**sequentially** — there can be many. Give the sub-agent ONLY that group's data plus the record's
-oracle fields. Sub-agent prompt template:
+root with shell access, so it can use `./visualize_board.sh` and the solver directly, and can read the
+answers/vectors jsonl itself). Process groups **sequentially, one at a time** — there can be many, and
+this is required, not just a suggestion: sub-agents append their grade to a shared `_grades.jsonl`
+file (Step 3 below), and concurrent appends from parallel sub-agents can interleave and corrupt lines.
+
+Give the sub-agent ONLY a locator — the file paths, the `id`, and the `condition` — never the record
+contents. The sub-agent locates and reads its own data. This keeps your dispatch prompt small
+regardless of how verbose a condition-D `render_decision` block is. Sub-agent prompt template:
 
 ---
 ```
 You are grading Connect Four blunder-explanations for ONE case (one position, one ablation
-condition) across N independent runs. Output ONLY a valid JSON object — no prose, no fences.
+condition) across N independent runs. You are an AGENT with shell access, run from the repo root.
 
-You are an AGENT with shell access, run from the repo root. For any board-level claim (A3/A4) you
-MUST OBSERVE the board, not infer it from the feature vector (the vector is the artifact under
-test). Run `./visualize_board.sh <movestring>` and read its threat/par/score annotations:
+## Your case
+- answers file: <path to the answers jsonl>
+- vectors file: <path — same as answers file unless --vectors was passed>
+- id: <id>   condition: <condition>
+- grades output file: <answers-dir>/<answers-stem>_grades.jsonl
+
+## Step 0 — load your own record (do this first)
+Read the answers jsonl and collect every line matching this exact `id` and `condition` — these are
+your N runs. If any matching row has `call_error`/`parse_error` non-null or `answer` null, that run is
+a parse failure: count it, exclude it from axis scoring, and the case fails (a run with no gradeable
+answer cannot pass on all N runs).
+
+Read the vectors file and find the `feature_vector` embedded in one of those rows (identical across
+runs for the same id). From it derive:
+- movestring, playedCol/bestCol (0-indexed; display column = col + 1)
+- player, boardState (A5b bites iff player === 2 AND boardState === "opening")
+- case, bestScore/playedScore, and the expected outcomes the case implies (win_to_draw→win/draw,
+  win_to_lose→win/loss, draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
+- lostResource.kind / opponentPunishment.kind (winning_line | denial | neutralization | conditional_swindle)
+- the engine's own finalMovestring — use `lostResource.finalMovestring` when `lostResource.kind` is a
+  winning line, else `opponentPunishment.finalMovestring`. This is the ONLY line to trace when checking
+  whether a named cell/window is real — never substitute an alternate optimal solver line (that
+  mis-grounding is exactly the eval-1/16/3 mis-grade bug).
+
+Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the derived
+cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
+
+**Condition D only:** also extract `render_decision` from the row(s) — `{ case, route, direction,
+patternOnAfterBestBoard, link:{id,confidence,covers,guardrail,text}, boards:[{id,shown,reason}],
+resource:{completingCell,registerToHorizon}, fieldPartition:{rendered,covered,excluded},
+finalMovestring, zones:{aliases:[…],terms:[…]} }`. If it's present per-run, confirm it's identical
+across runs for this id (note any divergence in `notes` — that would itself be a bug). Consume every
+field as GROUND TRUTH — do NOT recompute `classifyCausalLink`, branch-invariance, board selection, or
+the offered zone/term set yourself. For G4, use `render_decision.finalMovestring` (not the raw
+feature_vector one) as the line to trace. Omit all condition-D steps below for condition A/B/C.
+
+## Step 1 — observe the board
+For any board-level claim (A3/A4) you MUST OBSERVE the board, not infer it from the feature vector
+(the vector is the artifact under test). Run `./visualize_board.sh <movestring>` and read its
+threat/par/score annotations:
 - after-best board:   <movestring><bestCol 0-indexed>
 - after-played board: <movestring><playedCol 0-indexed>
 For a move's true outcome, query the solver (createSolverProcess from
 connect-four/server/c4solver-wrapper.js; cd connect-four; await solver.query; destroy() in finally).
 When a claim names a cell/window/line that is NOT visible on the board, do NOT rule it false from
 absence — on deep/near-empty positions a real winning line completes on currently-empty squares.
-Trace the engine's OWN `finalMovestring` (given below) and check whether it passes through the named
-cell BEFORE calling the field wrong. Never ground on an alternate optimal solver line — multiple
-optimal lines exist and grounding on the wrong one is exactly the eval-1/16/3 mis-grade bug.
+Trace the engine's OWN finalMovestring (from Step 0) and check whether it passes through the named
+cell BEFORE calling the field wrong. Never ground on an alternate optimal solver line.
 
-## Case metadata (oracle — all from feature_vector; the model saw the vector but you VERIFY on the board)
-- id: <id>   condition: <condition>
-- movestring: <feature_vector.movestring> (pre-move board; append a 0-indexed column for a board)
-- playedCol (0-indexed): <feature_vector.playedCol>  → display column <playedCol + 1>
-- bestCol (0-indexed): <feature_vector.bestCol> → display column <bestCol + 1>   (this is the correct move)
-- pattern_category / case: <feature_vector.case>
-- bestScore / playedScore (your-perspective, decision board): <…> / <…>
-- expected outcomes from case: best=<…> played=<…> (win_to_draw→win/draw, win_to_lose→win/loss,
-  draw_to_lose→draw/loss, lose_to_faster_lose→loss/loss)
-- lostResource.kind / opponentPunishment.kind: <…> / <…>  (winning_line | denial | neutralization | conditional_swindle)
-- engine's own finalMovestring (the grounding line — use `lostResource.finalMovestring` when
-  `lostResource.kind` is a winning line, else `opponentPunishment.finalMovestring`): <…>. This is the
-  ONLY line to trace when checking whether a named cell/window is real — never substitute an alternate
-  optimal solver line.
-
-Coordinate rule: answer.better_move is 1-indexed display; key_cells are cNrM 1-indexed; the oracle
-cols above are 0-indexed. A1 holds iff better_move - 1 == feature_vector.bestCol.
-
-## Render decision — GROUND TRUTH (do NOT re-derive) — condition D only
-<omit this whole block for condition A/B/C. For condition D, fill every field from the record's
-`render_decision` object VERBATIM. These are the pipeline's SETTLED decisions — trust them; your job
-is to audit the ANSWER against them (checks G1–G6 below), never to recompute classifyCausalLink,
-branch-invariance, or board selection yourself.>
-- linkId: <render_decision.link.id>   confidence: <render_decision.link.confidence>
-- covers: <render_decision.link.covers>  (a code listed here that is ABSENT from this record is
-  NORMAL per D28's static causal-code check — do NOT flag it as `missing_info`; only a code the answer
-  actually NEEDED and didn't have is an over-removal)
-- guardrail: <render_decision.link.guardrail>  (e.g. an L3 guardrail forbids "your move
-  caused/enabled it" phrasing — check the answer does not violate it)
-- text (verbatim composed frame): <render_decision.link.text>
-- boards: <render_decision.boards>  (each `{id, shown, reason}` — a `shown:false` board the answer
-  needed is a G3 over-omission)
-- patternOnAfterBestBoard: <render_decision.patternOnAfterBestBoard>  (the render-time L2-vs-L3
-  branch-invariance computation, D28 sub-decision 3 — trust it as the routing ground truth for G6; if
-  you independently observe on the board that this value looks wrong, that is a `render_bug`
-  finding to REPORT, not something to silently re-route around)
-- fieldPartition: rendered=<…> covered=<…> excluded=<…>
-- finalMovestring: <render_decision.finalMovestring>  (the ONLY line to trace for G4 — never an
-  alternate optimal solver PV, per the eval-1/16/3 mis-grade bug)
-
-## The N runs to grade
-<for each run: run_index, and the full `answer` JSON. Include any parse_error/call_error.>
-
-## Score each axis on EACH run, then apply the pass rule
+## Step 2 — score each axis on EACH run, then apply the pass rule
 - A1: better_move - 1 == feature_vector.bestCol?
 - A2: best_outcome / played_outcome match what feature_vector.case implies
       (win_to_draw→win/draw, win_to_lose→win/loss, draw_to_lose→draw/loss,
@@ -308,17 +486,56 @@ branch-invariance, or board selection yourself.>
 - A3: Does the mechanism's named tactic/threat exist on the after-best / after-played board
       (verify with visualize_board.sh), and is it the DECISIVE reason the better move wins/holds
       (not a true-but-peripheral observation)? Use the solver to confirm the outcome difference is
-      real. key_cells must be the squares that reason rests on.
+      real. key_cells must be the squares that reason rests on. CONDITION D EXCEPTION: when
+      `key_cells` were derived by expanding an emitted `[zone:…]` (e.g. a whole highlighted column or
+      window), they are display-overlay cells, not per-cell threat assertions — grade A3 on the
+      tactic(s) the `mechanism` actually names and rests on, not on every cell the overlay spans;
+      offered/board-truth fidelity of the zones themselves is G7 (and G5 for spec board-truth on the
+      truthBoard).
 - A4: Is EVERY concrete claim (each key_cell's threat, each named line/fork) actually true on the
       board? A claim contradicted by the visualizer = A4 fail (zero tolerance). EXCLUDE anything the
-      model put in `unsure_about` — that is honest abstention, not fabrication.
+      model put in `unsure_about` — that is honest abstention, not fabrication. CONDITION D EXCEPTION:
+      do NOT treat an empty cell inside an emitted `[zone:…]` (e.g. a non-landing cell of a
+      highlighted column or window) as an A4 fabrication — it is a display-overlay cell, not a
+      per-cell threat claim; zone offered/board-truth fidelity is covered by G7/G5.
+- A5 (COACH VOICE — grade the `mechanism` prose only; do NOT penalize `fields_relied_on` or
+      `unsure_about`, which are grader-facing and never shown to a player):
+      Before checking A5, STRIP all `[zone:…]…[/zone:…]` and `[term:…]…[/term:…]` markup from
+      `mechanism` and grade the CLEANED prose — the markup is machine tokens the frontend removes,
+      exactly as production `checkP3` strips tags before its jargon scan. Do NOT fail A5 for the mere
+      presence of a `[zone:…]`/`[term:…]` tag.
+      A5a (ALL cases): the `mechanism` addresses the player in the 2nd person ("you"/"your opponent";
+        no player names "Gray"/"Green", no 3rd-person analyst voice) AND uses NO internal / vector /
+        render terminology — no field names or their prose echoes (case, route, direction, link,
+        frame, guardrail, "opening context"/"opening-book context", "lost resource", "opponent
+        punishment", "reply histogram", "swindle gate"/"gate verdict", "parity attribution",
+        "completing cell" [plain "the square that finishes the four" is fine], "window" [plain
+        "four-in-a-row line" is fine], matchedPrefixLen, bookCol/bestDefenseCol, betterHasMoreLines,
+        resistAndWait, deepResourceGrounded, patternOnAfterBestBoard, finalMovestring, boardState,
+        register, horizon, pliesToEnd [plain "about N moves later" is fine], tacticTag/tag, kind, tie),
+        no engine/solver meta (forced_win/losing_position AS SLUGS, "solver", "score"). ALLOWED: plain
+        English + Connect Four jargon (major/minor threat, fork, double threat, winning line, block,
+        diagonal, row, column, more central, claimeven) and naming the ACTUAL opening as given
+        (e.g. "the 3-4 opening"); "practical swindle" is allowed.
+      A5b (ONLY when player === 2 AND boardState === "opening"): the coach must NOT say the player is
+        lost — "you're losing"/"you were already losing"/"both moves (still) lose"/"neither move
+        wins"/"the position is lost" is a FAIL — and MUST positively reframe as HOLD-THE-LINE (play the
+        toughest defense / make it hardest for your opponent / keep central lines and wait for a slip).
+        A bare omission with no constructive frame also fails A5b; claiming to be building a win as the
+        2nd player also fails. A5b does NOT apply to first-player boards or mid-game/closing boards.
+      A5 triage: if the render's OWN composed text (`render_decision.link.text` / opening frame) SUPPLIED
+        the defeatist wording on a player-2 opening board and the model echoed it → `render_bug` (name the
+        `causalLinks.mjs` rule / frame). If the render was clean and the model introduced the banned
+        terminology or defeatist wording itself → `prompt_confusion`. If no hold-the-line frame exists for
+        the board at all → `missing_info`.
 
 Abstention: for each run, capture `unsure_about` verbatim. It is a FEATURE-GAP signal: note which
 vector field (or glossary section) would have resolved it.
 
-## Condition D only — score G1–G6 on EACH run, IN ADDITION to A1–A4
+## Condition D only — score G1–G7 on EACH run, IN ADDITION to A1–A5
 <omit this whole section for condition A/B/C.> Consume the "Render decision — GROUND TRUTH" block
-above AS GIVEN — do not recompute classifyCausalLink, branch-invariance, or board selection.
+above AS GIVEN — do not recompute classifyCausalLink, branch-invariance, board selection, or the
+offered zone/term set.
 - G1 format-aware: grade against the rendered artifact (boards/threat-list/composed `text`/reading
   key) the model actually saw — not the glossary+JSON.
 - G2 per-link: (a) guardrail honored (no forbidden phrasing per `guardrail`); (b) over-removal audit —
@@ -332,12 +549,22 @@ above AS GIVEN — do not recompute classifyCausalLink, branch-invariance, or bo
 - G6 branch-invariance provenance: given `patternOnAfterBestBoard` + `linkId`, was the routing correct
   for the after-best board? A wrong L2/L3 pick is a RENDER BUG attributable to the pipeline — never a
   model failure; triage it `render_bug`, not `prompt_confusion`.
+- G7 annotation fidelity (zones/terms; condition D only): **G7a (zones)** — every emitted
+  `[zone:handle]` in `mechanism` used a handle listed in `render_decision.zones.aliases` (a surviving
+  unoffered handle is a pipeline bug); each handle wraps a phrase matching its `role`; nothing is
+  over-wrapped. Board-truth of the alias's `spec` is delegated to G5, checked on the alias's
+  `truthBoard` (not the displayed decision board). **G7b (terms)** — every `[term:slug]` used a slug
+  listed in `render_decision.zones.terms`, and the wrapped phrase genuinely denotes that KB concept.
+ Additionally: if the record's `annotationRepairs` array is non-empty, G7 auto-fails
+  (`prompt_confusion`) regardless of the above — the model emitted at least one unclosed tag, even
+  though the pipeline already bare-stripped it before the player saw it.
 
-Pass rule: the CASE passes iff A1, A2, A3, A4 all hold on ALL runs (condition D: **and** G1–G6 all
+Pass rule: the CASE passes iff A1, A2, A3, A4, A5 all hold on ALL runs (condition D: **and** G1–G7 all
 hold on all runs). Any run failing any axis/check → case fails. Note intermittency explicitly.
 
 ## Counterexample attribution (the deliverable)
-If the case fails A3 or A4 (condition D: or any of G1–G6), OR any run has a non-empty `unsure_about`,
+If the case fails A3, A4 or A5 (condition D: or any of G1–G7), OR any run has a non-empty
+`unsure_about`,
 attribute it: name the specific feature-vector FIELD that was missing/ambiguous (e.g.
 "lostResource.forkWindows did not include the window the mechanism named", "opponentPunishment.tie
 said independent but the model claimed a shared cell", "parityAttribution.leverCells absent so the
@@ -346,59 +573,79 @@ Condition D: if the defect is a render-layer one, name the specific `render_deci
 `causalLinks.mjs` rule instead (e.g. "patternOnAfterBestBoard:false but tagBoard on the after-best
 board fires figure_7 — the L2-vs-L3 branch-invariance computation is wrong").
 
-## Failure triage (required whenever the case fails A3 or A4, or condition D: any of G1–G6)
-Classify the ROOT cause into exactly one bucket, and write a one-sentence plain-language summary:
+## Failure triage (required whenever the case fails A3, A4 or A5, or condition D: any of G1–G7)
+Classify the ROOT cause into exactly one bucket, and write a one-sentence plain-language summary
+(for an A5 coach-voice failure see the A5-triage rule above — a defeatist/terminology leak the render's
+own text supplied is `render_bug`; one the model introduced itself is `prompt_confusion`):
 - `vector_error` — a field carried a WRONG/junk value the model faithfully relied on. Before choosing
   this you MUST have shown the engine's own `finalMovestring` contradicts the field (trace that line;
   do not infer from board absence, and never ground on an alternate optimal solver line — that
   mis-grounding is exactly the eval-1/16/3 bug). Off-board-but-finalMovestring-real ≠ wrong.
 - `missing_info` — the vector was not wrong but LACKED a field the model needed; the model abstained
   (`unsure_about`) or had to guess (no field carried the fact). Condition D: a `covers` code absent
-  from the record is D28-normal, NOT `missing_info`.
+  from the record is D28-normal, NOT `missing_info`. A G7 cell/tactic the case needed that the render
+  layer never offered as a zone/term at all is also `missing_info`.
 - `prompt_confusion` — the correct, sufficient info WAS present in a field (unambiguous per glossary),
-  but the model misread / mis-anchored a cell / dropped the field / hallucinated past it.
+  but the model misread / mis-anchored a cell / dropped the field / hallucinated past it. A G7 handle
+  or slug not offered in `render_decision.zones`, or bound to a semantically wrong phrase, or
+  over-wrapped, is also `prompt_confusion`.
 - `render_bug` (condition D only) — a render-layer defect: a wrong guardrail/route, a mis-selected or
   omitted board, a false threat-list entry, or a miscomputed `patternOnAfterBestBoard`. The answer
   narrated faithfully off a broken render; this is NEVER `prompt_confusion` — the model is not at
-  fault. A wrong L2/L3 pick (G6) is always `render_bug`.
+  fault. A wrong L2/L3 pick (G6) is always `render_bug`. A G7 offered alias whose `spec` is board-false
+  on its `truthBoard` is also `render_bug` (surfaced by G5).
 Pick the DECISIVE cause; mention secondaries in failure_summary. failure_summary must name the culprit
 field (or, for condition D render bugs, the `render_decision` element / `causalLinks.mjs` rule) and
 the board/solver finding.
 
-Output exactly (add the `G1`-`G6` keys inside each `per_run` entry ONLY for condition D; omit them for
-A/B/C):
+## Step 3 — write your grade line to the grades file, THEN return a one-liner
+
+Build the full grade object (add the `G1`-`G7` keys inside each `per_run` entry ONLY for condition D;
+omit them for A/B/C):
 {
   "id": "<id>", "condition": "<condition>", "n_runs": <int>,
   "per_run": [ { "run_index":0, "A1":"pass|fail", "A2":"pass|fail", "A3":"pass|fail",
-                 "A4":"pass|fail",
+                 "A4":"pass|fail", "A5":"pass|fail",
                  "G1":"pass|fail (condition D only)", "G2":"pass|fail (condition D only)",
                  "G3":"pass|fail (condition D only)", "G4":"pass|fail (condition D only)",
                  "G5":"pass|fail (condition D only)", "G6":"pass|fail (condition D only)",
+                 "G7":"pass|fail (condition D only)",
                  "unsure_about":"<verbatim or empty>" }, … ],
   "case_pass": true|false,
   "intermittent": true|false,
   "failure_triage": "vector_error|missing_info|prompt_confusion|render_bug|null (render_bug condition D only; null iff case_pass)",
   "failure_summary": "<one sentence: what went wrong, naming the field (or, condition D render bugs, the render_decision element/causalLinks.mjs rule) + board/solver finding; empty iff case_pass>",
   "notes": "<one line per failing axis/check: what was wrong, with the board finding>",
-  "counterexamples": [ { "axis":"A3|A4|abstention|G1|G2|G3|G4|G5|G6", "field_or_glossary":"<the
-     missing/ambiguous feature field or glossary section, OR condition D: the render_decision element
-     / causalLinks.mjs rule>", "evidence":"<board finding proving it>" } ]
+  "counterexamples": [ { "axis":"A3|A4|A5|abstention|G1|G2|G3|G4|G5|G6|G7", "field_or_glossary":"<the
+     missing/ambiguous feature field or glossary section, OR (A5 / condition D render bug) the
+     render_decision element / causalLinks.mjs rule>", "evidence":"<board finding proving it>" } ]
 }
+
+Append this object as exactly one JSON line to `<grades output file>` (`JSON.stringify(obj) + "\n"`,
+appended — do not overwrite the file, other sub-agents' lines may already be in it). This write MUST
+complete before you return. Only after the write succeeds, return ONLY this one-line JSON to the
+caller — no prose, no fences, no full grade object:
+{ "id":"<id>", "condition":"<condition>", "case_pass":true|false, "intermittent":true|false,
+  "failure_triage":"vector_error|missing_info|prompt_confusion|render_bug|null",
+  "failure_summary":"<empty iff case_pass>" }
 ```
 ---
 
-Collect each sub-agent's JSON as it completes. A malformed/no response → record the case as
-`case_pass:false` with notes "sub-agent error".
+Collect each sub-agent's one-line summary as it completes — this is just a progress signal, the full
+grade already lives in the grades file. A malformed/no response, or a response whose `id`+`condition`
+line is missing from the grades file → append a `case_pass:false, notes:"sub-agent error"` line to the
+grades file yourself before moving to the next group.
 
 ## Output — the structured grades + the report
 
-**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Write every collected
-sub-agent JSON object — one per line — to `<answers-dir>/<answers-stem>_grades.jsonl`. Each line is
-exactly the sub-agent's output (`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,unsure_about}],
-case_pass, intermittent, failure_triage, failure_summary, notes, counterexamples }`). The server (`GET /api/admin/fv-suff`) derives
-this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so the UI
-shows the A1–A4 chips + pass/fail next to each board+vector+answer. (If you skip this file, the UI
-just shows answers without grades — the markdown report below is still the human deliverable.)
+**1. Structured grades (for the `/admin/fv-suff` "Eval answers" browser).** Each sub-agent already
+appended its own full grade JSON line to `<answers-dir>/<answers-stem>_grades.jsonl` in Step 3 above —
+you do not assemble this file yourself. Before writing the report, read it back in full to confirm one
+line per dispatched `(id, condition)` group (recover any gap per the paragraph above). Each line is
+`{ id, condition, n_runs, per_run:[{run_index,A1,A2,A3,A4,A5,unsure_about}], case_pass, intermittent,
+failure_triage, failure_summary, notes, counterexamples }`. The server (`GET /api/admin/fv-suff`)
+derives this filename from the answers file (`gradesFilenameFor`) and joins it by `id`+`condition`, so
+the UI shows the axis chips + pass/fail next to each board+vector+answer.
 
 **2. The report.** Write to `<answers-dir>/<answers-stem>_grade_report.md`:
 
@@ -407,17 +654,17 @@ just shows answers without grades — the markdown report below is still the hum
 
 ## Summary
 - Answer rows: N   parse failures: N
-- Cases (id × condition): N   passed (A1–A4 on all runs): N   failed: N
-- Per-axis pass rate (over all gradeable runs): A1 x/y · A2 x/y · A3 x/y · A4 x/y
+- Cases (id × condition): N   passed (A1–A5 on all runs): N   failed: N
+- Per-axis pass rate (over all gradeable runs): A1 x/y · A2 x/y · A3 x/y · A4 x/y · A5 x/y
 
 ## Pass/fail by condition  (A vs B vs C delta — §6 ablation)
-| condition | cases | passed | A3 pass-rate | A4 pass-rate |
+| condition | cases | passed | A3 pass-rate | A4 pass-rate | A5 pass-rate |
 If B ≈ A, the engineered fields add little for a capable model (the board carries it; won't transfer
 to the weak model). If C ≪ A, the distilled fields alone don't carry the reasoning.
 
 ## Per-case verdict
-| id | category | condition | A1 | A2 | A3 | A4 | pass | intermittent |
-(one row per case; A1–A4 = "all runs pass" / "k/N" when mixed)
+| id | category | condition | A1 | A2 | A3 | A4 | A5 | pass | intermittent |
+(one row per case; A1–A5 = "all runs pass" / "k/N" when mixed)
 
 For each failing or intermittent case, a notes block below its row:
 > dl-N (cond A): A3 fail on run 2 — claimed a double_threat fork the after-played board does not show;
@@ -425,14 +672,15 @@ For each failing or intermittent case, a notes block below its row:
 
 ## Failure triage (root cause per failing case)
 One row per failing case, its bucket, and its one-sentence summary. Then a count line
-(vector_error N · missing_info N · prompt_confusion N) — this split says whether the next iteration
-should fix the vector/glossary or the prompt-builder.
+(vector_error N · missing_info N · prompt_confusion N · render_bug N) — this split says whether the
+next iteration should fix the vector/glossary, the prompt-builder, or the render layer.
 | id | category | triage | one-sentence: what went wrong |
 
 ## Counterexample list (THE DELIVERABLE)
-Every A3/A4 failure and every non-empty `unsure_about`, attributed to a missing/ambiguous feature
-field or glossary ambiguity. Group by `field_or_glossary`; order by frequency.
-| field / glossary gap | axis | triage | cases affected | evidence (board finding) | model's unsure_about |
+Every A3/A4/A5 failure and every non-empty `unsure_about`, attributed to a missing/ambiguous feature
+field, glossary ambiguity, or (A5 / render bug) a `render_decision` element / `causalLinks.mjs` rule.
+Group by `field_or_glossary`; order by frequency.
+| field / glossary / render gap | axis | triage | cases affected | evidence (board finding) | model's unsure_about |
 
 ## fields_relied_on distribution
 Aggregate `fields_relied_on` across all answers. Which engineered fields are actually load-bearing
@@ -463,8 +711,12 @@ it is the at-a-glance answer to "what went wrong."
 ## Key rules recap
 
 - `better_move` is 1-indexed; oracle cols are 0-indexed (A1: `better_move - 1 == feature_vector.bestCol`).
-- A case = one `(id, condition)`; it passes only if A1–A4 hold on **all N runs**.
+- A case = one `(id, condition)`; it passes only if A1–A5 hold on **all N runs**.
 - `unsure_about` is excluded from A4 and logged as a field-gap counterexample.
+- **A5 = coach voice** (grade the `mechanism` prose, NOT `fields_relied_on`/`unsure_about`): 2nd-person,
+  no internal/vector terminology, and — player-2 opening boards only — no defeatist "you're losing/both
+  lose" framing but a hold-the-line reframe instead. A defeatist/terminology leak the render's own
+  `link.text` supplied → `render_bug`; one the model introduced itself → `prompt_confusion`.
 - Observe the board with `visualize_board.sh`/solver; never trust the vector to verify itself — and
   never rule a field wrong from board **absence**: trace the engine's own `finalMovestring` before
   calling `vector_error` (never an alternate solver PV — the eval-1/16/3 bug).
@@ -476,4 +728,4 @@ it is the at-a-glance answer to "what went wrong."
 
 This is NOT `judge-deep-reveals`. Do **not** apply the 9-item production rubric, zone aliases,
 `allowedSet`, or the annotation gate. Those grade the production annotation; here you grade a
-structured explanation against the board on A1–A4 only.
+structured explanation against the board on A1–A5 only (A5 = coach voice, defined above).

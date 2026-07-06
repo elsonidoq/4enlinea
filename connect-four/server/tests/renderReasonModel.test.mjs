@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'fs';
 import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from '../scripts/renderReasonModel.mjs';
+
+const OPENING = JSON.parse(readFileSync(new URL('./fixtures/opening_vectors.json', import.meta.url)));
 
 const NV = {
   movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
@@ -142,4 +145,69 @@ test('buildRenderDecision records branch-invariance + finalMovestring for enable
   assert.equal(typeof rd.patternOnAfterBestBoard, 'boolean'); // computed, not null
   assert.equal(rd.link.id, 'L3');                             // lose_to_faster_lose → branch-invariant
   assert.equal(rd.finalMovestring, '3413306133');            // opponent's line (no lostResource winning_line)
+});
+
+test('opening vectors no longer throw and lead with the opening frame', () => {
+  for (const kind of ['namedOpening', 'defense', 'centrality']) {
+    const model = buildReasonRenderModel(OPENING[kind]);   // was: throws UncoveredVectorFieldError
+    assert.equal(model.frames.length, 1);
+    assert.ok(/opening/i.test(model.frames[0].text));
+    assert.deepEqual(model.boards.map((b) => b.id), ['decision']);   // decision board only
+  }
+});
+
+test('opening prompt has the opening reading key and no deep board', () => {
+  const model = buildReasonRenderModel(OPENING.centrality);
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /book line|opening/i);
+  assert.doesNotMatch(prompt, /projectedDeep/);
+});
+
+test('opening prompt never leaks a deep completing cell or parityAttribution into Vector facts', () => {
+  for (const kind of ['namedOpening', 'defense', 'centrality']) {
+    const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING[kind]));
+    assert.doesNotMatch(prompt, /"completingCell"/);
+    assert.doesNotMatch(prompt, /"parityAttribution"/);
+  }
+});
+
+test('render model + prompt expose offered zone handles and term slugs', () => {
+  const nv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'win_to_lose', route: 'sign',
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5' },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c3r3',
+                          tie: { kind: 'tied', sharedCells: ['c4r5'] } },
+    replyHistogram: { afterBest: 0, afterPlayed: 1 },
+  };
+  const model = buildReasonRenderModel(nv);
+  assert.ok(model.zones.aliases.some((a) => a.handle === 'better-col'));
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /# Highlightable regions/);
+  assert.match(prompt, /\[zone:better-col\]/);          // handle advertised
+  assert.match(prompt, /# KB terms you may name/);
+  assert.match(prompt, /do not overlap a highlight and a term/i);  // nesting instruction
+  // Scope the null/undefined check to the PROSE half only — the JSON residue after
+  // "# Internal evidence fields" legitimately contains `null` (renderedFields keeps null-valued render
+  // fields), exactly as reasonRenderFixes.test.mjs scopes its own check. (M2.)
+  const prose = prompt.split('# Internal evidence fields')[0];
+  assert.doesNotMatch(prose, /\bnull\b|\bundefined\b/);
+});
+
+test('annotation instructions require a paired close tag with a bad/good example', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  assert.match(prompt, /MUST have a matching closing tag/i);
+  assert.match(prompt, /Bad:.*no closing tag/i);
+  assert.match(prompt, /Good:.*\[term:/i);
+});
+
+test('assembled prompt does not duplicate the guardrail on a non-opening record', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  const occurrences = prompt.split('You gave up a win AND handed the opponent their own').length - 1;
+  assert.equal(occurrences, 1); // L6's guardrail text must appear exactly once, not doubled
+});
+
+test('assembled prompt includes the opening frame\'s own guardrail alongside the link guardrail', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING.namedOpening));
+  assert.match(prompt, /do not ground a specific deep/i); // openingFrame.mjs's own GUARDRAIL text
 });

@@ -13,6 +13,7 @@ import {
 } from './classifier.js';
 import { runSparseLookahead, isAnchorlessPosition } from './sparseLookahead.js';
 import { detectCenterDominance } from './centerDominance.js';
+import { computeOpeningContext } from './scripts/reason_engine/computeOpeningContext.mjs';
 import { REASON_TEMPLATES, POSITIVE_TEMPLATES } from './blunderReasons.js';
 import {
   checkAllMovesEqual,
@@ -232,6 +233,7 @@ export function toFeatureVector(promptData, { prune = true } = {}) {
     direction: promptData.direction,
     // sparseness / opening signal
     isSparse: promptData.isSparse,
+    openingContext: promptData.openingContext,     // { namedOpening } XOR { centrality } on book/opening boards
     centerDominance: !!promptData.centerDominance, // sole signal on early/positional boards
     // static pattern detections (tag → {cells}) at the key board states. The three
     // parity-aware threat tags are stripped here: their cells are a strict, exact duplicate
@@ -486,6 +488,76 @@ function buildAllowedSetFromPatternMaps(patternMaps, boardForCapsule) {
   }
 
   return entries.length > 0 ? entries : null;
+}
+
+/**
+ * Opening-provenance reason for the deep-reveal prompt (opening-theory PART B).
+ *
+ * The four-guard derivation (namedOpening XOR centrality) comes from the SHARED, side-effect-free
+ * module `computeOpeningContext` (scripts/reason_engine/computeOpeningContext.mjs) — the SAME
+ * function the offline reason vector uses, so the production prompt and the offline vector can never
+ * silently diverge if the guards change. This wrapper ADDS the grounded prompt-section TEXT on the
+ * `namedOpening` branch and normalizes the "no reason" case to `null`.
+ *
+ * SOLVER-FREE: it reuses the pre-move `scores` the caller already has — no new solver query (I0).
+ *
+ * @returns {{ namedOpening: {id,family,matchedPrefixLen,bookNextCol}, section: string }
+ *          | { defense: {id,family,matchedPrefixLen,bestDefenseCol,centralityGrounded}, section: string }
+ *          | { centrality: {bestCol,playedCol,betterHasMoreLines,text,resistAndWait} }
+ *          | null }
+ */
+export function buildOpeningReason({ movestring, playedCol, bestCol, bestScore, scores, player }) {
+  const oc = computeOpeningContext({ movestring, playedCol, bestCol, bestScore, scores, player });
+  if (!oc) return null;
+  if (oc.centrality) return oc;   // centrality carries no bespoke section (centerDominance renders it)
+
+  if (oc.defense) {
+    const { id, family, bestDefenseCol, centralityGrounded } = oc.defense;
+    // Mechanical human label from the canonical KB id (strip `allen-`, hyphens → spaces — EXCEPT a
+    // hyphen between two digits, e.g. "5-4", which is a numeric column pair and must stay hyphenated);
+    // a shared prefix reports the family only (id null). "second side of …" makes the P2 perspective
+    // explicit.
+    const label = id
+      ? `the ${id.replace(/^allen-/, '').replace(/-(?!\d)/g, ' ')}`
+      : `a ${family}`;
+    const centralClause = centralityGrounded
+      ? ` The most resilient hold is column ${bestDefenseCol + 1}: it is more central, running through `
+        + `more potential fours — including your even rows (2 and 4), which favour the second player.`
+      : ` The most resilient hold is column ${bestDefenseCol + 1} — it loses more slowly than the move you played.`;
+    // Provenance + canon frame ONLY; DEFERS the concrete why-it-loses to the two-halves sections.
+    const section = [
+      '## Opening theory',
+      '',
+      `This position is the second side of ${label}, a known first-player winning plan — so it is `
+        + `already theoretically lost for you. Your only practical chance is to resist and hold the `
+        + `toughest line, waiting for the first player to slip.` + centralClause + ` You left the most `
+        + `resilient defense by playing column ${playedCol + 1}. `
+        + `Explain the consequence using ONLY the evidence in the other sections; do not invent a tactic `
+        + `or claim a threat the boards do not show.`,
+    ].join('\n');
+    return { defense: oc.defense, section };
+  }
+
+  const { id, family, bookNextCol } = oc.namedOpening;
+  // Grounded human label. A SPECIFIC opening name only when `id` is unique (I2 — guard 4 already set
+  // `id: null` for a shared prefix); a shared prefix reports the family only. The specific label is
+  // derived MECHANICALLY from the canonical KB id (strip `allen-` vendor prefix, hyphens → spaces) —
+  // no invented words. Digit-aware hyphen split keeps "5-4" intact (matches the defense label above),
+  // so the SAME opening renders identically whichever side blundered ("the 5-4 opening", not "5 4").
+  const label = id
+    ? `the ${id.replace(/^allen-/, '').replace(/-(?!\d)/g, ' ')}`
+    : `a ${family}`;
+  // Provenance only: it states the book line + the deviation, and DEFERS the why-it-loses to the
+  // other prompt sections (the two-halves evidence). It never asserts a tactic or a threat.
+  const section = [
+    '## Opening theory',
+    '',
+    `This position is on ${label}, a known first-player winning plan. The book continuation is `
+      + `column ${bookNextCol + 1}, which keeps the win. You left the book line by playing `
+      + `column ${playedCol + 1}. Explain the consequence of that deviation using ONLY the evidence `
+      + `in the other sections; do not invent a tactic or claim a threat the boards do not show.`,
+  ].join('\n');
+  return { namedOpening: oc.namedOpening, section };
 }
 
 /**
@@ -941,20 +1013,58 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     }
   }
 
-  // ── Step 8c: Center-dominance reason (opening, no tactical structure) ──────
-  // When the look-ahead found no structure and no threat row is shown, an early
-  // position still has an honest, board-findable reason: the more central move sits
-  // in more four-in-a-row lines. Surface it so the coach grounds on centrality
-  // instead of falling back to generic filler. No simulation — pure geometry.
+  // ── Step 8c: Opening-provenance reason, then center-dominance reason ───────
+  // On a blunder that leaves a KNOWN book winning line, the strongest honest, board-findable
+  // reason is provenance: "you left <named opening>, a winning plan; the book move keeps the win."
+  // It is orthogonal to the tactical sections (it defers the why-it-loses to the two-halves
+  // evidence), so it renders whenever the named-opening guards hold — it frames the position, it
+  // does not compete with a threat row or look-ahead. Off-book, the fallback is center-dominance.
+  let openingSection;
+  let openingContextData = null;
   let centerDominanceSection;
   let centerDominanceData = null;
   if (!isOptimal) {
-    // Compute on the whole blunder path so prompt_data always carries it when available;
-    // the prompt SECTION keeps its original gate (only when no threat row / look-ahead).
+    // contrastCol is a max-score legal column (selectContrastMove picks the centre-most argmax on
+    // the blunder path), so preScores[contrastCol] is the true max legal score used by guard 3.
+    const bestScore = preScores[contrastCol];
+    const openingReason = buildOpeningReason({
+      movestring, playedCol: col, bestCol: contrastCol, bestScore, scores: preScores, player: perspective,
+    });
+    // Tracks whether openingSection is a full "why the better move is stronger" framing (namedOpening
+    // / defense) that must not double up with center-dominance, vs. the resist-and-wait canon frame
+    // below, which carries NO geometric claim and explicitly defers to the center-dominance section.
+    let openingSectionCompetesWithCenterDominance = false;
+    if (openingReason?.namedOpening) {
+      openingContextData = { namedOpening: openingReason.namedOpening };
+      openingSection = openingReason.section;
+      openingSectionCompetesWithCenterDominance = true;
+    } else if (openingReason?.defense) {
+      openingContextData = { defense: openingReason.defense };
+      openingSection = openingReason.section;
+      openingSectionCompetesWithCenterDominance = true;
+    } else if (openingReason?.centrality) {
+      openingContextData = { centrality: openingReason.centrality };
+      if (openingReason.centrality.resistAndWait) {
+        openingSection = [
+          '## Opening theory',
+          '',
+          'You are the second player here and already on the back foot: your practical goal is to '
+            + 'resist and hold, waiting for the first player to slip. The more central column is the '
+            + 'tougher hold — it runs through more potential fours, including the even rows (2 and 4) '
+            + 'that favour the second player.',
+        ].join('\n');
+      }
+    }
+
+    // Center-dominance (the pre-existing opening reason): compute on the whole blunder path so
+    // prompt_data always carries it when available; the prompt SECTION keeps its original gate
+    // (no threat row / look-ahead) AND yields to the named-opening/defense section when that fired,
+    // so the two "why the better move is stronger" framings never double up (they are mutually
+    // exclusive). The resist-and-wait canon frame does NOT compete — it explicitly defers.
     const cd = detectCenterDominance({ movestring, playedCol: col, bestCol: contrastCol });
     if (cd) {
       centerDominanceData = { reason: cd.reason };
-      if (!lookaheadFired && !threatComparisonSection) {
+      if (!lookaheadFired && !threatComparisonSection && !openingSectionCompetesWithCenterDominance) {
         centerDominanceSection = `## Why the better move is stronger\n\n${cd.reason}`;
       }
     }
@@ -985,6 +1095,7 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     kbTermsSection: kbTermsSection || undefined,
     threatComparisonSection: effectiveThreatComparison,
     lookaheadSection,
+    openingSection,
     centerDominanceSection,
   });
 
@@ -1047,7 +1158,8 @@ export async function buildExplainContext(movestring, col, rounds = 1, solver, d
     lookahead: lookaheadData,                    // distilled view
     lookaheadRaw: rawLookahead,                  // full runSparseLookahead return
 
-    // ── opening center dominance ──
+    // ── opening provenance (engine-aligned) + center dominance (legacy prod field) ──
+    openingContext: openingContextData,          // { namedOpening } XOR { centrality }, else null
     centerDominance: centerDominanceData,
     // boardViz intentionally omitted — movestring + preScores + threatStats capture the
     // board state structurally; Step 1 tests whether the model needs the ASCII boards.

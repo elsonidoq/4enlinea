@@ -21,3 +21,17 @@ When adding a new puzzle category (e.g., `odd_even_threat`), the detector/slug m
 **Why:** Epic 6 plan review caught that only files 5 and 6 were in the plan — file 7 (`candidate-generator.js`) was completely omitted, which would have caused the factory to generate garbage `odd_even_threat` positions.
 
 **How to apply:** When writing a spec or plan for any new category, include an explicit checklist or task that touches every file in this list.
+
+
+---
+
+## (merged from `project_paid_categories_two_files` — PAID_CATEGORIES lives in two separate files — both must be updated when changing category tier)
+
+The paid/free tier gate for puzzle categories is defined in **two separate files**:
+
+- `connect-four/server/categories.js` — gates the `GET /api/puzzles/draw` endpoint (returns 403 if category is in `PAID_CATEGORIES` and user tier ≠ 'paid')
+- `connect-four/src/lib/categories.js` — gates the SetPicker lock icon and the Post-Set Summary Pro-lesson check on the frontend
+
+**Why:** Discovered in Epic 2b when the plan only updated the server file for `forced_win` and `forbidden_columns`, leaving the frontend lock icon active and the `/draw` 403 gate half-fixed.
+
+**How to apply:** Any epic that adds a new free category or moves a category from paid→free must update both files atomically in the same commit. If only the server file is fixed, the SetPicker still shows it locked. If only the frontend file is fixed, `/draw` still 403s.

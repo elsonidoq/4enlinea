@@ -433,3 +433,306 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Rationale:** owner-directed (2026-07-03) from the FV-sufficiency grade report. I0/I2 (correctness; every counterexample solver-verified, no fabricated board); I12 (case-space + counterexample per cell through production); the geometry≠outcome distinction D28 conflated. Fix A is render-only and highest-value; Fix C is a doc safety net; Fix B is the engine change, done last with the fullest validation (ordering A→C→B).
 - **Status:** IMPLEMENTED on `stagging`. `causalLinks.mjs` (L2/L3 `when`; `branchInvariant` helper removed), `renderReasonModel.mjs` (Decision block + landing cells + READING_KEY), `fieldDisposition.mjs` (bestCol/playedCol → transformed), `renderUniverse.mjs` (flip_case_l3 comments → regression marker), `feature-vector-glossary.md` (Fix C + Decision-block contract). Tests: `causalLinks.test.mjs`, `branchInvariance.test.mjs` (routing test rewritten for D30), `renderReasonModel.test.mjs` (Decision block + no-leak), `reasonRealizedDenied.test.mjs` (I12 integration). `npm run test:fast` 803/803 green.
 - **Source:** owner directive + grade report `fv_suff_answers_combined_boards_coverage_2026-07-03T17-42-51Z_2026-07-03T17-44-57Z_grade_report.md` (2026-07-03); supersedes D28 sub-decision 3; annotates D29 (`flip_case_l3`), D20; I0/I2/I12/D21.
+
+---
+
+### D31 — Opening-theory reason: `openingContext` two-mode evidence field, four guards, and the boundary vs. transposition/render layer
+
+- **Decision:** `computeReason` gained an optional, mutually-exclusive `openingContext` evidence
+  field (Part B, Tasks B1–B5), computed by a shared, side-effect-free helper
+  `computeOpeningContext.mjs` (imported by both `reasonEngine.mjs` and production `explainContext.js`
+  — one mechanism, I9). It emits EITHER `namedOpening: {id, family, matchedPrefixLen, bookNextCol}`
+  (a KB book-line **lookup + provenance** claim, not a causal "leaving cost you" claim) OR
+  `centrality: {bestCol, playedCol, betterHasMoreLines, text}` (a geometric fallback reusing
+  `detectCenterDominance`), or is absent entirely. The field rides the narrator vector's existing
+  general keep/drop rule (D3's `toNarratorVector`) with **no bespoke branch** — its field names are
+  score-free (`bookNextCol`/`bestCol`/`playedCol`/`matchedPrefixLen`/`family`/`id`/`text`/
+  `betterHasMoreLines`), so D21's score-scrub never touches it, and B4's `select_boards.mjs` coverage
+  strategy registers two PROVISIONAL predicates (`reason_opening_named_line`,
+  `reason_opening_centrality`) derived from its presence.
+- **The four guards (`computeOpeningContext.mjs`), in order:**
+  1. **Guard 1 — on-book prefix.** `matchOpeningPrefix(movestring)` (B1's pure KB matcher; five
+     `allen-*` strategic-rule KB entries contribute worked-example movestrings as lines, parsed once
+     and mirror-normalized `col → 6 − col`) returns non-null.
+  2. **Guard 2 — beneficiary is the mover.** `player === 1` — every parsed KB opening line is a
+     first-player win, so the beneficiary check is simply "is the mover player 1."
+  3. **Guard 3 — SCORE-EQUALITY, not column identity.** `match.bookNextCol != null && bestScore > 0
+     && scores[match.bookNextCol] === bestScore`. **This is the hard correctness point of the whole
+     feature and supersedes any competing `bookNextCol === bestCol` phrasing that appeared in earlier
+     planning text.** Under a tie of two-or-more equally-winning columns, the KB's recommended
+     `bookNextCol` and the engine's own argmax `bestCol` can legitimately differ while both are
+     correct — score-equality credits a book move that ties the max even when the engine's argmax
+     happened to pick a different equally-optimal column; it never falsely claims a below-max book
+     move is best (I2). No new solver call — reuses the engine's already-computed `scores`/`bestScore`
+     (I0).
+  4. **Guard 4 — specific id vs. shared family.** `id = match.ids.length === 1 ? match.ids[0] :
+     null`; a prefix shared by multiple KB lines reports `family` only, `id: null` — this is a
+     **correct, honest label**, not a hedge/gap.
+  - **Centrality fallback:** when Guard 1 fails (off-book) or a later guard fails (on-book but
+    unverifiable — e.g. Guard 3 fails because the book's next move is not solver-best), the position
+    falls through to the `centrality` branch (confined to early boards, ≤6 plies, where the better
+    move is strictly more central) rather than to absence. **A `centrality` field can therefore
+    legitimately appear on a technically on-book position** — it is not proof the board is off-book.
+- **Boundary — non-matching attribution and transposition, both explicitly OUT of v1:**
+  - A board that fails Guard 1 (no KB prefix match at all, direct or mirrored) gets no `namedOpening`
+    attribution of any kind — it either falls to `centrality` or is fully absent. There is no
+    "close-but-not-quite" fuzzy match.
+  - **Transposition (reaching a known line via a different move order) is NOT detected.** The matcher
+    is a literal (mirror-normalized) prefix match against recorded KB worked-example movestrings only;
+    it does not canonicalize board state or search for transposed move orders that reach the same
+    position. A transposed board that is strategically on a known line but whose move *sequence*
+    doesn't literally match will not get `namedOpening` — this is a known, accepted v1 gap, not a bug.
+  - **The condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) is NOT wired for
+    `openingContext`** — the frozen condition-D corpus has no opening boards, so no
+    `render_decision`/`fieldDisposition`/causal frame exists for this field (per
+    `project_reason_render_layer`). Production `explainContext.js`/`llmCoachHelpers.js` (a *separate*
+    consumer, B5) grounds `openingContext` directly into the `## Opening theory` prompt section
+    without going through the render layer at all. A later task would need to register
+    `openingContext`'s disposition + a causal frame + `render_decision` if/when opening boards are
+    added to the condition-D corpus — out of scope here.
+- **I12 validated boards (B2's report, `openingContext.test.mjs`):** `3333` (shared-prefix →
+  `family:'central-column opening', id:null`), `333331` (unique-id direct match →
+  `allen-candlesticks-opening`), `333335` (unique-id mirror-reflected match, same id), `3332223`
+  (Guard 2 fails — player 2 to move, negative counterexample → absent), `32` (Guard 3 fails — book
+  move not solver-best → falls through to `centrality`, NOT `namedOpening`), `30` (off-book, Guard 1
+  fails → `centrality`). Plus a cross-branch mutual-exclusivity test. See
+  `blunder-reason-evidence.md` for the full per-board write-up.
+- **Rationale:** I0 (guard 3 reuses already-computed `scores`; zero new solver calls); I2 (never
+  claims a book move is best without a live score check; `id`/`family` disambiguation is never
+  fabricated past what the matcher proves); I8/I9 (one shared `computeOpeningContext.mjs` module
+  consumed by both the offline engine and the production prompt-builder — no guard duplication after
+  the post-review fix); I12 (one deliberate counterexample per guard-branch, each through the
+  production `computeReason`, each board solver-verified).
+- **Status:** IMPLEMENTED on `opening-theory` branch (Tasks B1–B5). `openingMatch.mjs`,
+  `computeOpeningContext.mjs` (shared, side-effect-free), `reasonEngine.mjs` (wiring),
+  `reasonNarratorVector.mjs` (comment only — no logic change, general rule already covers it),
+  `select_boards.mjs` (opening fixture band + two PROVISIONAL coverage predicates), `explainContext.js`
+  / `llmCoachHelpers.js` (production `## Opening theory` prompt section). `npm run test:fast`
+  812/812 green (as of B5); 806/806 at B4. This task (B6) adds no code — glossary + grader + this
+  entry only.
+- **Source:** Task briefs B1–B6 (2026-07-04/05); task reports `task-B1-report.md`…`task-B5-report.md`;
+  `docs/knowledge-base/allen-*-opening.md` (the five source KB lines); memory
+  `feedback_reason_case_requires_eval_and_grader`, `project_reason_render_layer`,
+  `project_select_boards_skips_openings`; I0/I2/I8/I9/I12.
+
+---
+
+### D32 — `openingContext` gains a third mode `defense` (second-player on-book resist-and-wait); owner correction: `centrality` is NOT suppressed for a losing mover; precedence namedOpening → defense → centrality
+
+- **Decision:** `computeOpeningContext.mjs` gains a third, mutually-exclusive `openingContext` mode,
+  `defense`, alongside D31's `namedOpening`/`centrality`. It fires under three guards, all required:
+  1. **On-book real match** — `matchOpeningPrefix(movestring)` returns non-null (the same B1 KB
+     matcher D31 uses for `namedOpening`, mirror-normalized, no duplication — I9).
+  2. **Player is 2** — the mover is the second player, the losing side of every parsed KB line (the
+     mirror-image guard of D31's Guard 2, which requires `player === 1`).
+  3. **`case === lose_to_faster_lose`** — the position is a genuine theoretical loss for the mover (both
+     scores `< 0`); `defense` never fires on a position the second player could still draw or win.
+  When all three hold, `bestDefenseCol = bestCol` — the solver's own argmax, i.e. the objectively
+  least-bad reply — with **no `bookNextCol`-equality requirement**: unlike `namedOpening`'s Guard 3
+  (D31), `defense` does not need the KB's book move to coincide with the solver best; it simply reports
+  the solver's least-bad column as "the move that resists longest," independent of whether the KB text
+  happens to recommend that exact column. `id`/`family`/`matchedPrefixLen` are carried through
+  unchanged from the underlying `matchOpeningPrefix` result (`id` unique-else-null → `family` only, per
+  D31 Guard 4's honesty rule).
+- **Precedence:** `namedOpening` → `defense` → `centrality`. `namedOpening` (D31, player 1 only) is
+  checked first and is mutually exclusive with `defense` on guard 2 alone (player 1 vs player 2) — they
+  never compete on the same board. `defense` is checked before `centrality`: a second-player on-book
+  `lose_to_faster_lose` position that passes all three `defense` guards emits `defense`, never falls
+  through to `centrality`. `centrality` remains the fallback for everything neither mode claims (off-book
+  boards, on-book boards failing a guard, and — per the owner correction below — on-book-but-not-yet-a-
+  literal-KB-match `lose_to_faster_lose` boards for the second player, e.g. shared-prefix boards where
+  `defense`'s `id` is `null` still route through `defense`, not `centrality`, because guard 1 only needs
+  a prefix match, not a unique id).
+- **Owner correction (2026-07-05): `centrality` is NOT suppressed for a losing mover.** The originally
+  planned spec included a "companion suppress-fix" — silencing `centrality`'s existing "keeps more ways
+  to build a winning connection open" framing whenever the mover is provably losing (since a lost side
+  has no winning connection to build). That suppression is **dropped**. Instead, both `defense` and a
+  losing-P2 `centrality` (`lose_to_faster_lose`, off-book or guard-failed) now carry a **`resistAndWait:
+  true`** flag and the resist-and-hold goal framing, plus a **conditional** centrality/even-row canon
+  frame: KB `docs/knowledge-base/allen-parity.md` states "Even-row threats (rows 2, 4, 6): Favour the
+  second player (Yellow/Gray)" as **GENERAL canon only** — cited as a background strategic fact about
+  why holding central/even squares matters for the second player, **never** as a per-board claim that a
+  *specific* cell on *this* board is a confirmed even-row threat (that claim would require a detector,
+  per D24-F3's retraction of unbacked `leverCells`/`groupKind`). This upholds D24-F3: the fix adds an
+  honest general-canon sentence: it does not resurrect a fabricated per-cell parity claim.
+- **`centralityGrounded` is conditional and honest per board.** `centralityGrounded =
+  detectCenterDominance(...) != null` — true only when the production `detectCenterDominance` detector
+  actually confirms center dominance for the position, false otherwise. Verified per I12: **true** on
+  `333`/col 4 (`centralityGrounded:true` — the detector confirms), **false** on `3333344`/col 2
+  (`centralityGrounded:false` — the detector does not confirm center dominance at that depth/column).
+  This mirrors D31's discipline of never asserting a geometric claim the detector itself does not
+  confirm.
+- **Render-layer boundary unchanged (per D31).** Opening boards — `namedOpening`, `centrality`, and now
+  `defense` alike — still bypass the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`):
+  the frozen condition-D corpus has no opening boards, so there is no `render_decision`/`fieldDisposition`
+  for any of the three modes. Production `explainContext.js`/`llmCoachHelpers.js` grounds `defense`
+  directly into the `## Opening theory` prompt section, exactly as it does for `namedOpening`/`centrality`.
+- **I12 counterexamples (validated 2026-07-05, via `TOOLS/compute_feature_vector.mjs`):**
+  - `3333344` played 2, player 2 → `defense{id:'allen-5-4-opening', family:'central-column opening',
+    matchedPrefixLen:7, bestDefenseCol:4, centralityGrounded:false}` — unique id, no centrality claim
+    (equidistant columns).
+  - `333` played 4, player 2 → `defense{id:null, family:'central-column opening', matchedPrefixLen:3,
+    bestDefenseCol:3, centralityGrounded:true}` — shared prefix → family only; centrality clause fires.
+  - `333331` played 0, player 1 → `namedOpening{id:'allen-candlesticks-opening', family:'central-column
+    opening', matchedPrefixLen:6, bookNextCol:1}` — **unchanged**, confirming `defense` never displaces
+    `namedOpening` on a first-player board (regression anchor).
+  - `305` played 1, player 2, off-book → `centrality{bestCol:4, playedCol:1, betterHasMoreLines:true,
+    text:…, resistAndWait:true}` — centrality NOT suppressed for a losing mover; carries `resistAndWait`.
+  Full outputs recorded in `blunder-reason-evidence.md` §12's new "Opening defense" subsection.
+- **Rationale:** I0 (guard 3 reuses already-computed `case`/`scores`; zero new solver calls beyond what
+  D31 already pays for); I2 (never claims a book move is objectively best when only "least-bad" is true;
+  `centralityGrounded` never asserts geometric dominance the detector itself doesn't confirm; the
+  even-row citation stays general canon, never a per-cell fabrication — upholds D24-F3); I8 (reuses
+  `matchOpeningPrefix`/`detectCenterDominance`, no new detector); I9 (one shared
+  `computeOpeningContext.mjs` module, one mechanism, `defense` slots into the same guard-chain shape as
+  D31's `namedOpening`/`centrality` rather than a parallel code path); I12 (one counterexample per
+  branch — unique-id, shared-family, regression-anchor, off-book-centrality — each verified through the
+  production `compute_feature_vector.mjs`, not asserted).
+- **Status:** IMPLEMENTED on `opening-theory` branch (Tasks 1–3). This entry (Task 4) adds no code —
+  decision record + evidence doc only. Sampling predicate `reason_opening_defense` lands in Task 5
+  (`select_boards.mjs` coverage strategy), symmetric to D31's `reason_opening_named_line`/
+  `reason_opening_centrality`.
+- **Source:** `docs/superpowers/specs/2026-07-05-opening-defender-reason-and-sampling-design.md`; owner
+  correction (2026-07-05, dropping the spec's companion suppress-fix); D31 (guard-chain shape, render
+  boundary); D24-F3 (parity-fabrication retraction, upheld not reversed); `docs/knowledge-base/allen-
+  parity.md` (even-row canon quote); memory `project_opening_defender_reason_gap` (the gap this closes);
+  I0/I2/I8/I9/I12.
+
+### D33 — `openingContext` renders in condition D: an additive **opening frame** is primary, the deep two halves demote to a horizon (no crisp deep cell)
+
+**Context.** D31/D32 made `computeReason` emit `openingContext`, but the condition-D grounded-render
+path was never wired for it (D31/D32 render-boundary note; memories
+`project_reason_render_layer`/`project_opening_defender_reason_gap`). The first run to feed opening
+boards through condition D (`fv_suff_answers_boards_coverage_opening_2026-07-05*`) therefore crashed
+all 25 opening records with `UncoveredVectorFieldError` — the closed `fieldDisposition` tripwire firing
+as designed on the unregistered `openingContext.*` subtree.
+
+**Decision.** Wire it as an **additive opening frame**, faithful to the glossary's "epigraph, not
+substitute" contract — NOT a new causal-link family:
+
+- **`reason_engine/openingFrame.mjs` → `composeOpeningFrame(prunedFv)`** returns one primary frame
+  (`O1` namedOpening / `O2` defense / `O3` centrality) = lead + landing-cell centrality/parity clause +
+  horizon tail. `classifyCausalLink` (L1–L9) STILL runs — it feeds `render_decision`'s outcome
+  scaffolding + horizon `register`/`pliesToEnd` — but its text is **not rendered**; the opening frame is
+  the sole `frames[0]`. Opening boards show the **decision board only** (no after-best/after-played/
+  projectedDeep).
+- **The deep two halves demote to a horizon, never a crisp deep cell.** At ply 1–6 `lostResource`/
+  `opponentPunishment` are sound but their completing cells sit 30–40 plies out. `pruneOpeningResidue`
+  reduces both halves in the "Vector facts" residue to `{register, pliesToEnd}` — WITHOUT it,
+  `renderedFields` leaks a 35-ply `completingCell` (e.g. `c6r2`) into the prompt, and the grader's
+  `deepResourceGrounded:false` then FALSE-FAILS any answer that grounds it (a render-invited
+  fabrication). Engine output is unchanged — this is render-only (I0 / `feedback_engine_soundness_then_render`).
+- **Two distinct "centralities."** The `O3` lead is the engine's geometry statement
+  (`openingContext.centrality.text`, backed by `betterHasMoreLines:true`) — an always-valid claim, NOT
+  gated. The landing-cell clause ("easier to build a four through `{cell}`") IS gated on
+  `centralityQualitative` (heatmap mass ratio; may be `null`). The grader's qualitative check applies
+  **only** to the landing-cell clause; it must exempt the geometry lead.
+- **Winning-cell heatmap** (`reason_engine/data/winning-cell-heatmap.json`, 27,976 self-play games,
+  90/10 policy) is hardcoded config (copied from the design spec, NOT from branch
+  `worktree-win-dist-grid`). Used **internally only** to pick qualitative words — never a probability in
+  prose. `heatmap[player][row][col]`, row 0 = bottom; measured parity: P1 winning mass 72% on
+  display-odd rows, P2 67% on display-even rows.
+- `render_decision` gains an `openingContext` block `{kind, frameId, lead, centralityComparison,
+  parityFavor, deepResourceGrounded:false, horizon}` (previously absent for opening boards — the grader
+  rubric in `grade-fv-sufficiency` was updated to consume it).
+
+**Source:** `docs/superpowers/specs/2026-07-05-opening-frame-render-design.md` +
+`docs/superpowers/plans/2026-07-05-opening-frame-render.md`; final-review fixes (residue leak +
+grader centrality scoping). Modules: `reason_engine/openingFrame.mjs`, `renderReasonModel.mjs`,
+`fieldDisposition.mjs`, `reason_engine/winningCellHeatmap.mjs`. I0/I12; D30 (Fix-A coordinate-leak,
+extended: opening columns `bookNextCol`/`bestDefenseCol` are `transformed`).
+
+### D34 — coach-voice pass: resistance-framed L3/L7, a C4-vocabulary layer, and a mechanism register contract
+
+**Context.** A `grade-fv-sufficiency` run over the 57-board opening batch failed **every** case on
+axis **A5 (coach voice)** while A1–A4 + G1–G6 passed 100% — i.e. the vector/glossary was sufficient and
+the defect was purely render/prompt. Two triage buckets: **render_bug (12)** — L7 (and L3 once) emit
+defeatist bookends the model faithfully echoed on player-2 opening boards; **prompt_confusion (45)** —
+the model leaked internal jargon (`the vector`/`the solver`/`the gate`/`reply histogram`/`completing
+cell`/`window`/raw tactic slugs) and 3rd-person analyst voice. Closes the OPEN gap in memory
+`project_coach_voice_opening_defeatist_gap`.
+
+**Decision — three composer-layer changes, NO vector/schema change** (consistent with 0 `vector_error` /
+0 `missing_info`):
+- **Resistance frame (was defeatist).** L3 and L7 no longer say "You were already losing" / "Neither
+  move wins" / "only loses faster." Keyed on the mover being lost (`case=lose_to_faster_lose`, a superset
+  of the player-2-opening case — so it also covers lost player-1 mid-games), they now lead with the
+  Connect Four practical-resistance principle: name the better column, "your most stubborn / toughest
+  defense," "makes your opponent work hardest," keep the practical swindle alive. Theory basis: C4 is a
+  first-player forced win (Allis 1988) — telling a losing side "you're lost" is redundant; the actionable
+  content is central control + narrowest opponent margin (`gate.witness`, `replyHistogram`,
+  `centrality`/`resistAndWait`, already in the vector). L3's no-causation rule moved from the player text
+  into its **guardrail**. Mirrors production `llmCoachHelpers.js` ("hold the toughest defense, wait for a
+  slip; do NOT claim to be building a win").
+- **C4-vocabulary layer.** `TAG_PHRASE`/`plainTag` in `causalLinks.mjs` maps every internal tactic slug
+  to its plain theory phrase (`immediate_threat`, `double_threat`, `figure_7`, `conditional_swindle`),
+  applied in L1/L2/L3 so no raw slug reaches player text. One map, all tags.
+- **Mechanism register contract.** `renderReasonModel.mjs` reframes the `READING_KEY` (concept-first,
+  and an explicit "never repeat a field name / histogram / window / completing cell / solver / score in
+  `mechanism`" line) and renames the raw JSON dump `# Vector facts` → `# Internal evidence fields (for
+  your reading only — do NOT name these in mechanism; cite paths in fields_relied_on)`. The `compute.mjs`
+  `TASK` schema now declares `mechanism` the ONLY player-facing field: 2nd-person, plain C4, machine
+  tokens go in `fields_relied_on`; on a lost board, do NOT tell the player they are lost.
+
+**Lockstep + verification.** `causalLinks.mjs` link text is a single source of truth asserted verbatim
+by 4 test files — `causalLinks.test.mjs`, `causalLinksComposers.test.mjs`, `reasonRealizedDenied.test.mjs`,
+and `reasonRenderFixes.test.mjs` (the last splits the assembled prompt on the literal header string, so
+the `# Vector facts`→`# Internal evidence fields` rename had to update it) — all updated in the same
+change; full `npm run test:fast` green (833/833) and a corpus scan of all rendered frames shows 0
+defeatist / 0 raw-slug. **Grader note stale:** the `grade-fv-sufficiency` SKILL's aside "A5b render_bug
+is the expected bucket for this vector today" no longer holds once the render is clean (residual
+defeatism would now correctly bucket `prompt_confusion`); update it when the grader is next touched.
+`select_boards.mjs` untouched (no new case).
+
+**Source:** session 2026-07-06, branch `opening-theory`. Modules: `reason_engine/causalLinks.mjs`,
+`renderReasonModel.mjs`, `compute.mjs`. Invariants: I0 (correctness over optimization — no vector change),
+the coach-voice A5 axis in `grade-fv-sufficiency`.
+
+---
+
+### D35 — three condition-D render fixes from the 57-board grading run: tag bare-strip, dropped opening guardrail, defeatist-phrase ban
+
+**Context.** A `grade-fv-sufficiency` run over 57 condition-D answers (57 boards,
+`boards_coverage_opening_2026-07-05T18-58-35Z`, model `gpt-5.4`) scored 40 pass / 17 fail, all 17
+`prompt_confusion`. Three distinct root causes, none requiring a vector/schema change:
+
+1. **Unclosed annotation tags leak raw markup (13-14/17 fails).** The model sometimes emits a bare
+   `[zone:X]`/`[term:X]` opener used as a noun, with no closing tag anywhere. Both
+   `processAnnotations`'s `dropUnoffered` and the frontend `parseAnnotatedText` require a paired
+   open+close, so an unclosed opener matches neither and its raw markup renders verbatim in the
+   coach text the player reads. **Decision:** tighten the prompt instruction (paired-tag rule +
+   bad/good example) AND harden `processAnnotations` as a backstop — bare-strip (delete the token,
+   no canonical-phrase substitution) any tag still unclosed after normalization, returning a new
+   `repairs: string[]` field. `processAnnotations` stays pure (no DB call); `compute.mjs` threads
+   `repairs` onto the eval output line as `annotationRepairs`, and `grade-fv-sufficiency` treats a
+   non-empty `annotationRepairs` as an automatic G7 fail (`prompt_confusion`). Production logging
+   into `deep_reveal_failures` is documented as a TODO in `reason-render-grounded-prompt.md` §10 —
+   `processAnnotations` has exactly one caller today (`compute.mjs`, eval-only); there is no
+   production endpoint yet to wire the write into.
+2. **Invented centrality asymmetry against a null signal (eval-18) — a code bug, not a
+   prompt-wording gap.** `assembleGroundedPrompt` always rendered `model.link.guardrail` (the
+   unconditional L1-L9 classification's guardrail) and silently dropped `frames[0].guardrail` (the
+   opening frame's own guardrail) — so an opening record's model never saw any instruction against
+   inventing a centrality claim; the composed frame text itself was already correct (omits the
+   clause when `centralityQualitative` is null), but nothing told the model not to add one anyway.
+   **Decision:** `assembleGroundedPrompt` now combines both guardrails when they differ (a
+   non-opening record's `frames[0].guardrail` already equals `link.guardrail`, so no duplication);
+   `openingFrame.mjs`'s `GUARDRAIL` gains a conditional clause, appended when
+   `centralityQualitative(fv)` is null, explicitly forbidding an invented centrality/difficulty
+   claim.
+3. **Player-2 opening defeatism (eval-23, eval-24) — model non-compliance, not a missing
+   guardrail.** L7's guardrail (per D34) already said "do NOT tell the player they are lost," and
+   `grade-fv-sufficiency`'s A5b/G2 rubric (LLM-judged, not mechanical) already correctly caught
+   both cases. **Decision:** strengthen L3/L7's `guardrail` text (not `template` — the verbatim-
+   asserted player-facing text is unchanged) with an explicit banned-phrase list ("ends poorly,"
+   "goes against you," etc.). Given this is already correctly guarded and graded, and only 2/57
+   cases, **accept as a monitored residual** rather than building a mechanical detector or a second
+   LLM rewrite pass — revisit with a heavier approach only if it recurs at a meaningfully higher
+   rate in a future grading round.
+
+**Source:** session 2026-07-06, branch `opening-theory`. Design:
+`docs/superpowers/specs/2026-07-06-condition-d-render-failures-fix-design.md`. Modules:
+`renderReasonModel.mjs`, `reason_engine/zoneAnnotations.mjs`, `reason_engine/openingFrame.mjs`,
+`reason_engine/causalLinks.mjs`, `compute.mjs`. Docs updated: `reason-render-grounded-prompt.md`
+§10 (TODO), `.claude/skills/grade-fv-sufficiency/SKILL.md` (G7c). Invariants: I0 (render-only, no
+vector/schema change).

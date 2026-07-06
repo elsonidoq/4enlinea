@@ -44,3 +44,28 @@ test('every predicate any decision emits is in RENDER_UNIVERSE', () => {
   assert.ok(RENDER_PROVISIONAL.has('link_L9'));
   assert.ok(RENDER_PROVISIONAL.has('flip_case_l3'));
 });
+
+function baseRd(overrides = {}) {
+  return { ...base, ...overrides };
+}
+
+test('zone/term coverage predicates fire from render_decision.zones', () => {
+  const rd = baseRd({ zones: { aliases: [
+      { handle: 'better-col', spec: 'col3', truthBoard: 'decision', kbId: null },
+      { handle: 'you-immediate', spec: 'c1r4', truthBoard: 'decision', kbId: 'immediate_threat' },
+      { handle: 'opp-double', spec: 'windows:c5r1,c7r1', truthBoard: 'afterPlayed', kbId: 'double_threat' } ],
+    terms: [{ slug: 'double_threat', kbId: 'double_threat', canonicalPhrase: 'x', description: 'y' }] } });
+  const p = renderDecisionPredicates(rd);
+  assert.ok(p.has('zone_speckind_col'));
+  assert.ok(p.has('zone_speckind_cell'));
+  assert.ok(p.has('zone_speckind_window'));
+  assert.ok(p.has('term_emitted'));
+  assert.ok(!p.has('zones_no_tactical'));
+});
+
+test('zones_no_tactical fires when only column aliases are offered', () => {
+  const rd = baseRd({ zones: { aliases: [{ handle: 'better-col', spec: 'col3', truthBoard: 'decision', kbId: null }], terms: [] } });
+  const p = renderDecisionPredicates(rd);
+  assert.ok(p.has('zones_no_tactical'));
+  assert.ok(!p.has('term_emitted'));
+});

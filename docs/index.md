@@ -60,6 +60,8 @@
 
 [architecture/reason-render-grounded-prompt.md](architecture/reason-render-grounded-prompt.md) — proposal for restructuring how the reason vector is presented to the answerer LLM (esp. `gpt-5.4-mini`): move cell-grounding + board rendering from the LLM into the engine's render step, stage the prompt by altitude (situation frame / pre-rendered boards / status-tagged cells / headline+horizon / contrast / do-not guardrails). Grounded in the 2026-07-02 FV-sufficiency failures (altitude + false-causality) — read before redesigning the from-vector prompt
 
+[reason-render-opening-known-issues/README.md](reason-render-opening-known-issues/README.md) — **KNOWN-ISSUES BACKLOG** (unfixed) — frozen snapshot of the 2026-07-06 opening-cluster FV-sufficiency run (54/57 pass) with the 3 failing evals documented + root-caused: eval-50 (`causalLinks.mjs` L2 grounds an empty threat cell), eval-26 (`openingFrame.mjs:65` O1 guardrail mandates a parity lens with no `parityFavor.favorsMover===false` suppressor), eval-20 (model inverts "central file"). Includes the graded boards/compute-output/grades in `data/` — read before fixing opening-frame render or L2 realized_denied cell-grounding
+
 ### Blunder-`reason` engine (read all four before touching it)
 
 [architecture/reason-INVARIANTS.md](architecture/reason-INVARIANTS.md) — **CONSTITUTION** — 12 non-negotiable principles for the blunder-`reason` engine (I0 = correctness over optimization; vector-is-the-artifact; no-fabrication; two-halves; bounded-by-depth; reuse classifier detectors) — before any reason-engine change

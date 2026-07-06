@@ -230,6 +230,7 @@ See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`
 | `decisive_check.mjs` | confirm a candidate cell is genuinely decisive under optimal defense |
 | `opp_punish_probe.mjs` | probe opponent replies (gate / refutation) |
 | `parity_cells.mjs` | parity / z-threat cells (zugzwang register) |
+| `compute_feature_vector.mjs` | dump the full `computeReason(movestring, playedCol)` vector for one board (+ `matchOpeningPrefix`, + `--narrator` pruned view). 0-indexed; meaningful `--help`. Use this instead of hand-rolling a scratch script. |
 
 **Gotcha:** `decisive_check.mjs` assumes the *side-to-move is the punisher*. Correct for `win_to_lose`
 / `draw_to_lose` / `lose_to_faster_lose`; **wrong for `win_to_draw`**, where the player is the winner —
@@ -340,3 +341,95 @@ fully precomputed by `compute.mjs`.
 (index.js). The 2026-06-30 reorg replaced only the *eval's* use of `toFeatureVector` with the reason
 engine — production still calls the old path. Do **not** delete `explainContext.js`/`toFeatureVector`
 as "old FV"; migrating production onto the reason engine is a separate, deferred effort.
+
+**Exception (2026-07-05, Part B / opening theory):** production `explainContext.js` DOES already
+consume the new engine's opening evidence indirectly — `buildOpeningReason` (Task B5) calls the same
+shared `computeOpeningContext.mjs` helper described in §12 below, even though the rest of
+`explainContext.js`/`toFeatureVector` still runs the old feature vector. This is a narrow, deliberate
+carve-out (one shared opening-guard mechanism, I9), not a signal that the broader production migration
+has started.
+
+## 12. Opening evidence (`openingContext`) — book-line lookup / centrality, opening decisions only
+
+Part B (Tasks B1–B6) added a second, orthogonal evidence field alongside the case/half machinery
+above: `openingContext`, present only on early first-player decisions. It answers a different
+question than §§1–11 — not "why does the played move lose" (still answered by the ordinary
+`lostResource`/`opponentPunishment` halves), but "is this position on a documented book line, and if
+so what does the book recommend." See `reason-DECISIONS.md` **D31** for the full guard rationale and
+`feature-vector-glossary.md` §11 for the reader-facing field contract; this section records the
+validated boards and the implementation seam.
+
+**The four guards** (`computeOpeningContext.mjs`, shared by `reasonEngine.mjs` and production
+`explainContext.js` — one mechanism, no duplication after the post-B5-review extraction):
+1. on-book prefix (`matchOpeningPrefix`, mirror-normalized against 5 parsed `allen-*` KB lines);
+2. beneficiary is the mover (`player === 1` — every parsed KB line is a first-player win);
+3. **book move is solver-verified best via SCORE-EQUALITY**: `scores[bookNextCol] === bestScore &&
+   bestScore > 0` — **not** `bookNextCol === bestCol` (a tied book move can legitimately differ from
+   the engine's own argmax `bestCol` under equally-winning ties);
+4. specific `id` vs. shared `family` (`id: null` on a multi-line shared prefix is correct, not a gap).
+
+A `centrality` fallback (reusing `detectCenterDominance`) fires when Guard 1 fails (off-book) or a
+later guard fails on an otherwise on-book prefix (e.g. Guard 3 fails because the book move isn't
+solver-best) — so `centrality` can legitimately appear on a technically on-book position.
+
+### Validated boards (Task B2's I12 table, solver-verified via `optimal_line.mjs` + direct queries)
+
+All boards below are genuine first-player winning positions (`optimal_line` confirms P1 wins from
+each), so every P1-to-move board is a real blunder opportunity and the P2-to-move board is a genuine
+losing-side counterexample.
+
+| board | played | player | what it demonstrates | `openingContext` |
+|---|---|---|---|---|
+| `3333` | col 0 | 1 | shared KB prefix (matches both `allen-5-4-opening` and `allen-candlesticks-opening`'s stems) → honest `id: null` + `family` only, Guards 1–4 all pass | `namedOpening{id:null, family:'central-column opening', matchedPrefixLen:4, bookNextCol:3}` |
+| `333331` | col 0 | 1 | unique direct-orientation match, single KB id | `namedOpening{id:'allen-candlesticks-opening', matchedPrefixLen:6, bookNextCol:1}` |
+| `333335` | col 0 | 1 | unique **mirror-reflected** match (col 5 = 6−1) — the mirror-normalization path, same id as above | `namedOpening{id:'allen-candlesticks-opening', matchedPrefixLen:6, bookNextCol:5}` |
+| `3332223` | col 0 | **2** | Guard 2 negative counterexample — 7 plies means player 2 to move, so the beneficiary check fails even though the prefix matches; also the losing side, so no blunder scope at all | absent |
+| `32` | col 0 | 1 | Guard 3 negative counterexample — the book's next column (col 6, score +1) is on-book but is NOT the solver-verified best (unique best is col 5, score +2); falls through to the geometric fallback rather than a false "best" claim | `centrality{bestCol:5, playedCol:0, betterHasMoreLines:true, text:…}` — **not** `namedOpening` |
+| `30` | col 1 | 1 | genuinely off-book (Guard 1 fails, no KB prefix match at all) but the better move (col 3) is still more central than the played move (col 1) | `centrality{bestCol:3, playedCol:1, betterHasMoreLines:true, text:…}` |
+
+A cross-branch mutual-exclusivity test additionally confirms `namedOpening` and `centrality` never
+both appear on the same evidence object.
+
+### Opening defense (`openingContext.defense`)
+
+D32 adds a third mutually-exclusive mode, `defense` — the second-player mirror of `namedOpening`,
+for a mover who is on a known KB opening line but is the theoretically **losing** side
+(`case === lose_to_faster_lose`). It answers "what is the least-bad move that resists longest," not
+"what wins" — there is no winning connection to recommend. Three required guards: on-book prefix match
+(`matchOpeningPrefix`, shared with `namedOpening`), player 2, and `case === lose_to_faster_lose`.
+`bestDefenseCol = bestCol` (the solver's own least-bad argmax) — unlike `namedOpening`'s Guard 3, there
+is **no `bookNextCol`-equality requirement**. Precedence is `namedOpening` → `defense` → `centrality`.
+
+**Owner correction (2026-07-05):** the originally planned "companion suppress-fix" — silencing
+`centrality`'s win-oriented framing on a provably losing board — is **dropped**. Instead, both `defense`
+and a losing-P2 `centrality` carry `resistAndWait: true` plus a conditional citation of KB
+[`allen-parity.md`](../knowledge-base/allen-parity.md)'s even-row canon ("Even-row threats (rows 2, 4,
+6): Favour the second player") — stated as **general strategic canon only**, never as a per-board claim
+that a specific cell is a confirmed even-row threat (that would re-fabricate the parity claims D24-F3
+retracted). `centralityGrounded = detectCenterDominance(...) != null` is conditional and honest per
+board — see the table below.
+
+### Validated boards (verified via `TOOLS/compute_feature_vector.mjs`, 2026-07-05)
+
+| board | played | player | demonstrates | `openingContext` |
+|---|---|---|---|---|
+| `3333344` | col 2 | 2 | unique id, no centrality clause (equidistant cols) | `defense{id:'allen-5-4-opening', family:'central-column opening', matchedPrefixLen:7, bestDefenseCol:4, centralityGrounded:false}` |
+| `333` | col 4 | 2 | shared prefix → family only; centrality clause fires | `defense{id:null, family:'central-column opening', matchedPrefixLen:3, bestDefenseCol:3, centralityGrounded:true}` |
+| `333331` | col 0 | 1 | `namedOpening` UNCHANGED (regression anchor — `defense` never displaces it on a P1 board) | `namedOpening{id:'allen-candlesticks-opening', family:'central-column opening', matchedPrefixLen:6, bookNextCol:1}` |
+| `305` | col 1 | 2 (off-book) | `centrality` NOT suppressed for a losing mover; carries `resistAndWait:true` | `centrality{bestCol:4, playedCol:1, betterHasMoreLines:true, text:'In the opening, the more central a column is, the more four-in-a-row lines run through it, so it can take part in more future threats and shapes. Column 5 sits in more of those lines than column 2, so playing there keeps more ways to build a winning connection open, while the less central choice gives some of them up.', resistAndWait:true}` |
+
+The `305` row is the same board Task 1 used to close `project_opening_defender_reason_gap`; its
+`route`/`tag`/`direction` (`realized_denied`/`double_threat`/`enabled_opponent`) also fire on this
+board, orthogonal to `openingContext`.
+
+**Known v1 boundary (not a bug):** transposition (reaching a documented line via a different move
+order) is not detected — the matcher is a literal, mirror-normalized prefix match against recorded KB
+worked-example movestrings, not a canonicalized board-state search. A board that is strategically on a
+known line but arrived at by a different move order gets no `namedOpening` credit. See D31.
+
+**Render-layer boundary:** the condition-D render layer (`causalLinks.mjs`/`buildRenderDecision`) is
+NOT wired for `openingContext` — the frozen condition-D corpus contains no opening boards, so there is
+no `render_decision` for any opening board. Production `explainContext.js`/`llmCoachHelpers.js`
+grounds `openingContext` directly into a `## Opening theory` prompt section, independent of the
+render-layer pipeline. Grading an opening case (any condition) verifies claims via the three board
+checks in the glossary/grader, never by expecting a `render_decision`.

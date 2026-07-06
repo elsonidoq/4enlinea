@@ -21,7 +21,7 @@ Two classifier entry points with very different scopes:
 - Returns a `Map` of ALL matched tags (multiple can fire simultaneously)
 - Tag set including parity/shape patterns: `claimeven`, `z_threat`, `odd_even_threat`, `figure_7`, `j_shape`, `overcut`, `undercut` (plus the 4 from classify); `claimodd` was removed 2026-06-17
 - **Parity-aware threats (added 2026-06-25):** `major_threat_parity`, `major_threat_nonparity`, `minor_threat` — geometry-only detectors built on `categorizeThreats`, each emitting the union of completing cells for the to-move perspective. First-class in the look-ahead, blunder tagging, and coach KB.
-- **`odd_even_threat` still fires here but is PUZZLE-ONLY** — de-listed from the coach prompt and the blunder vocabulary 2026-06-25. See [[project_odd_even_threat_puzzle_only]].
+- **`odd_even_threat` still fires here but is PUZZLE-ONLY** — de-listed from the coach prompt and the blunder vocabulary 2026-06-25. See [[project_detect_odd_even_threat_yellow]].
 - Perspective-aware — `forced_win` correctly detects when the specified `perspective` player is winning
 - `detectClaimeven` makes ~20 additional solver calls (expensive)
 - Used by: blunder-analysis path (`tagBlunder`), and — after coach commentary epic ships — `POST /api/evaluate-move` when `req.body.aiMove === true`

@@ -63,3 +63,23 @@ test('assertCoverage passes when covers name only present-or-absent codes', () =
   // 'opponentPunishment.terminal' is a code that is absent here — allowed (superset covers).
   assert.doesNotThrow(() => assertCoverage(fv, ['route', 'lostResource.kind', 'opponentPunishment.terminal']));
 });
+
+test('openingContext leaves are all registered (no tripwire)', () => {
+  const centrality = { openingContext: { centrality: { bestCol: 3, playedCol: 1, betterHasMoreLines: true, text: 'x', resistAndWait: true } } };
+  const defense = { openingContext: { defense: { family: 'central-column opening', matchedPrefixLen: 5, bestDefenseCol: 2, centralityGrounded: true } } };
+  const named = { openingContext: { namedOpening: { id: 'allen-3-4-opening', family: 'central-column opening', matchedPrefixLen: 8, bookNextCol: 6 } } };
+  for (const fv of [centrality, defense, named]) assert.doesNotThrow(() => assertCoverage(fv, []));
+});
+
+test('openingContext dispositions are classified correctly', () => {
+  assert.equal(dispositionOf('openingContext.centrality.bestCol'), 'transformed');
+  assert.equal(dispositionOf('openingContext.centrality.text'), 'transformed');
+  assert.equal(dispositionOf('openingContext.namedOpening.bookNextCol'), 'transformed');
+  assert.equal(dispositionOf('openingContext.defense.bestDefenseCol'), 'transformed');
+  assert.equal(dispositionOf('openingContext.defense.centralityGrounded'), 'render');
+  assert.equal(dispositionOf('openingContext.namedOpening.id'), 'render');
+  assert.equal(dispositionOf('openingContext.namedOpening.family'), 'render');
+  assert.equal(dispositionOf('openingContext.namedOpening.matchedPrefixLen'), 'render');
+  assert.equal(dispositionOf('openingContext.centrality.betterHasMoreLines'), 'render');
+  assert.equal(dispositionOf('openingContext.centrality.resistAndWait'), 'render');
+});

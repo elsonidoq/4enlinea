@@ -30,3 +30,14 @@ No migration tracking needed locally since reset starts from zero every time.
 ## service_role grants
 
 Migration `040_service_role_grants.sql` adds `SELECT/INSERT/UPDATE/DELETE` for `service_role` on all server-accessed tables. Required because local Supabase does not auto-grant these — without it, `loadUser` profile queries and all write helpers return "permission denied".
+
+
+---
+
+## (merged from `feedback_supabase_config_modifiable` — User CAN modify production Supabase configuration via the dashboard; never assume it's off-limits)
+
+Both local and production Supabase configurations are modifiable. Do not assume production settings are locked.
+
+**Why:** Claude assumed production Supabase config was off-limits and fell back to workarounds. The user confirmed they can change production settings via the Supabase dashboard.
+
+**How to apply:** When a Supabase feature is disabled by default (e.g. aggregate functions, max_rows), propose enabling it in config rather than working around it in code.

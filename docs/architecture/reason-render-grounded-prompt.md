@@ -246,7 +246,7 @@ narratively redundant even when the sentence doesn't quote each one word-for-wor
 |---|---|---|---|---|---|
 | L1 | **missed_own** — `direction=missed_own` (LR=`realized_pattern`, OP=`denial`; `win_to_lose`/`win_to_draw`) | "The correct move (col B) completes your {tag} at {cell}; the played move let the opponent take {denialCell}, denying it — {best}→{played}." | high | `route,tag,direction,*.kind,*.verdict,*.register,*.terminal,tie.kind` | 6 |
 | L2 | **enabled_opponent, genuinely causal** — `direction=enabled_opponent` ∧ `case≠lose_to_faster_lose` (i.e. `win_to_lose`/`win_to_draw`/`draw_to_lose`) | "Your move let the opponent occupy {cell}, completing their {tag} on {window}; the better move denied it — {best}→{played}." | high | same as L1 | 2 |
-| L3 | **enabled_opponent, already-losing** — `direction=enabled_opponent` ∧ `case=lose_to_faster_lose` | "You were already losing. The opponent's {tag} at {cell} exists no matter what you play here — your move does NOT create it, it only loses faster. **Do not say your move caused/enabled it.**" | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
+| L3 | **enabled_opponent, already-losing** — `direction=enabled_opponent` ∧ `case=lose_to_faster_lose` | *(D34 hold-the-line rewrite)* "Your opponent's {plainTag} at {cell} is coming no matter what you play here — your move didn't create it. Column B makes your opponent work hardest for it; the move you played only speeds up the finish." (no-causation moved to the **guardrail**, not the player text) | high | `route,tag,direction,lostResource.kind,lostResource.verdict,lostResource.exhaustive,opponentPunishment.kind,opponentPunishment.verdict,tie.kind,gate.witness.node/devVal` | 4 |
 | L4 | **defensive_miss** — `direction=defensive_miss` (LR=`denial`, OP=`realized_pattern`) | "The better move (col B) occupies {cell}, blocking the opponent's {tag} on {window}; the played move skipped it — {best}→{played}." | high | same as L1 | 4 |
 
 > **⚠️ UPDATED by [`reason-DECISIONS.md`](./reason-DECISIONS.md) D30 (supersedes D28 sub-decision 3).**
@@ -266,13 +266,28 @@ narratively redundant even when the sentence doesn't quote each one word-for-wor
 > redundant, not load-bearing. This is exactly what the static causal-code audit (§6) checks: every
 > `covers` entry must resolve to a `causal-code` disposition, and these three never did.
 
+> **⚠️ UPDATED by [`reason-DECISIONS.md`](./reason-DECISIONS.md) D34 (coach-voice pass, 2026-07-06).**
+> Three composer-layer changes, all in `causalLinks.mjs` + `renderReasonModel.mjs`, no vector/schema
+> change: **(1)** L3 and L7 no longer emit the defeatist bookends ("You were already losing" /
+> "Neither move wins" / "it only loses faster") — keyed on the mover being lost (`lose_to_faster_lose`),
+> they now lead with the practical-resistance / hold-the-line frame (name the better column, "toughest
+> defense", "makes your opponent work hardest", keep the swindle alive). The no-causation instruction
+> moved from L3's player text into its **guardrail**. **(2)** A canonical Connect Four vocabulary layer
+> (`TAG_PHRASE`/`plainTag`) maps every internal tactic slug to plain theory phrasing (`double_threat` →
+> "double threat (two winning squares at once)", `figure_7` → "7-shaped double threat", …) in L1/L2/L3
+> so no raw slug leaks into player text. **(3)** The answerer's `mechanism` is now contracted as the
+> ONLY player-facing field (2nd-person, plain C4, no field names/solver/score/"window"/"completing
+> cell" — those go in `fields_relied_on`); the `assembleGroundedPrompt` JSON block was renamed
+> `# Vector facts` → `# Internal evidence fields (for your reading only — do NOT name these in
+> mechanism)`. The catalog texts above are updated to the D34 wording.
+
 ### Family 2 — `route: sign` (deep `forced_sequence`/`parity` → confidence varies)
 
 | # | Link (trigger) | Composes (gist) | Confidence | Removes (covers) | Corpus n |
 |---|---|---|---|---|---|
 | L5 | **denied winning line** — `route=sign` ∧ LR=`winning_line` ∧ OP=`denial` | "You had a forced {win} — it resolves ~{pliesToEnd} plies out via a {fork/parity} completing at {completingCell} (discs {supportingDiscs} already on that line). The played move let the opponent take {denialCell} on it — {win}→{played}." | high (denial provable; horizon stated) | `route,*.kind,opponentPunishment.verdict,*.terminal,*.forkCase,tie.kind,tie.tied,register→horizon` | 4 |
 | L6 | **two winning lines** — `route=sign` ∧ LR=`winning_line` ∧ OP=`winning_line` (`win_to_lose`) | "You had a forced win via {A} (~N plies); the played move both gives it up and lets the opponent force their own win via {B}." | high if both lines have named completing cells; else **low** | `route,*.kind,*.terminal,*.forkCase,register→horizon` | 4 |
-| L7 | **swindle, both lose** — `route=sign` ∧ LR=`conditional_swindle` (`lose_to_faster_lose`) | "You were already losing. The better move kept a practical swindle — a slip in column {gate.witness.devCols} within {oppPlies} plies lets you back; the played move loses faster. **Neither move wins.**" | high | `route,lostResource.kind,opponentPunishment.kind,*.verdict,register→horizon,tie.kind,tie.playedPlies,tie.swindlePlies` (gate.witness.devCols/oppPlies **restated, not dropped**) | 4 |
+| L7 | **swindle, both lose** — `route=sign` ∧ LR=`conditional_swindle` (`lose_to_faster_lose`) | *(D34 hold-the-line rewrite)* "Column B is your most stubborn defense: it keeps a practical swindle alive — {if oppPlies>0: if your opponent slips within about {oppPlies} moves (watch columns {devCols}), you can climb back in / else: one slip by your opponent (watch columns {devCols}) could let you climb back in}. The move you played gives that up and lets your opponent finish faster." (no "already losing"/"neither move wins") | high | `route,lostResource.kind,opponentPunishment.kind,*.verdict,register→horizon,tie.kind,tie.playedPlies,tie.swindlePlies` (gate.witness.devCols/oppPlies **restated, not dropped**) | 4 |
 | L8 | **draw abandoned** — `route=sign` ∧ `case=draw_to_lose` (LR=`denial`, OP=`winning_line`) | "The position was a draw; the better move holds it by occupying {cell}. The played move abandons it and the opponent now has a forced win (~{pliesToEnd} plies, completing at {completingCell})." | high | `route,*.kind,*.verdict,*.terminal,*.forkCase,tie.kind,register→horizon` | 1 |
 | L9 | **diffuse parity win** — `route=sign` ∧ LR=`winning_line` ∧ `register=parity` ∧ no single denial/shared cell | "You had a parity/zugzwang win (resolves deep, ~{pliesToEnd} plies); the played move loses the parity battle — the exact culprit square isn't cleanly isolable. See the parity group {controllingGroup}." | **low** → thin frame | `route,*.terminal` only — keeps `register`, `parityAttribution.*`, both halves' cells | (subset of L5/L6 parity rows) |
 
@@ -686,3 +701,114 @@ field matching none of these halts the run.**
 4. **Two latent-error audit** — re-verify the *passing* parity/`finalMovestring` cases (eval-2, 8,
    9, 11, 13, 15) the same way, since the grader's PV-mismatch bug could have produced false passes
    too (lower risk, but unaudited).
+
+## 9. Opening-phase boards — the additive opening frame (D33, shipped 2026-07-05)
+
+Opening-phase decisions carry `openingContext` (`namedOpening` / `defense` / `centrality`; see D31/D32).
+The condition-D render layer handles them as an **additive** frame, not a new causal-link family — the
+opening is the teachable reason; the deep two halves demote to a horizon.
+
+- **Composer:** `reason_engine/openingFrame.mjs` → `composeOpeningFrame(prunedFv)` returns the primary
+  frame `O1` (namedOpening) / `O2` (defense, no "lost" doom framing) / `O3` (centrality) = lead +
+  landing-cell centrality/parity clause + horizon tail. `classifyCausalLink` (L1–L9) still runs to feed
+  `render_decision` outcome scaffolding + horizon `register`/`pliesToEnd`, but its text is **not
+  rendered**; the opening frame is `frames[0]` and the only rendered frame. `selectBoards` → decision
+  board only (no after-best/after-played/projectedDeep).
+- **Horizon demotion (no crisp deep cell):** the opening branch of `buildReasonRenderModel` wraps its
+  residue in `pruneOpeningResidue`, reducing `lostResource`/`opponentPunishment` to `{register,
+  pliesToEnd}`. This prevents a 30–40-ply `completingCell`/window from leaking into the "Vector facts"
+  block — which would both violate the "no deep cell in the opening prompt" contract and cause the
+  grader's `deepResourceGrounded:false` to false-fail an answer that grounds it. Non-opening residue is
+  unchanged (plain `renderedFields`). Engine output is unchanged (render-only; I0).
+- **Centrality has two independent notions:** `O3`'s lead is the engine geometry statement
+  (`openingContext.centrality.text` + `betterHasMoreLines:true`) — always valid, NOT gated. The
+  landing-cell clause is gated on `centralityQualitative` (heatmap mass ratio; `null` ⇒ no clause). The
+  grader's qualitative direction check applies to the landing-cell clause only.
+- **Winning-cell heatmap:** `reason_engine/data/winning-cell-heatmap.json` (27,976 self-play games,
+  90/10 policy) is hardcoded config, used internally by the composer to pick qualitative words
+  ("much easier" / "easier" / omit) — never a number in prose. `heatmap[player][row][col]`, row 0 =
+  bottom.
+- **`fieldDisposition`:** every `openingContext.*` leaf is registered — full-path checks run BEFORE the
+  leaf-name fallbacks (else `bestCol`/`playedCol`/`text` collide). Columns (`bookNextCol`,
+  `bestDefenseCol`) are `transformed` (1-indexed in the frame, raw withheld — Fix-A); names/flags render.
+- **`render_decision.openingContext`** `{kind, frameId, lead:{id,family,matchedPrefixLen,bookCol,holdCol},
+  centralityComparison:{player,betterCell,playedCell,qualitative}, parityFavor, deepResourceGrounded:false,
+  horizon}` is the grader ground truth (previously there was NONE for opening boards). `grade-fv-sufficiency`
+  was updated to consume it.
+
+## 10. Inline highlight/term annotation tags (shipped 2026-07-06)
+
+Condition-D coach output can carry inline `[zone:handle]…[/zone:handle]` board-highlight tags and
+`[term:slug]…[/term:slug]` KB-popup tags in `mechanism`. Single source of truth:
+`reason_engine/zoneAnnotations.mjs`. This is an **output-format axis on existing cases** — no new
+reason-case and no new harvested board; only `renderUniverse.mjs`'s predicate set grew.
+
+- **Offer (`buildAnnotationOffer(prunedFv, boardDecisions)` → `{aliases, zoneAliasMap, terms}`):**
+  derives the *offered* handle set from the near-term board tags + the two move columns. `alias =
+  {handle, spec, role, truthBoard, kbId}`; `spec` is a 1-indexed `zoneParser` spec (`colN` / `cNrM` /
+  `windows:…`). Both `buildReasonRenderModel` (prompt) and `buildRenderDecision` (ground truth) call it
+  with the SAME args, so the set the LLM sees == the set the grader trusts.
+- **Structural-only highlights:** only board-true `getMajorThreatCells` tag kinds
+  (`immediate`/`major`/`double`) become aliases; the vector-named *overlay* kinds
+  (`figure_7`/`double_threat`, injected onto the decision board by `reasonBoardSelect.mjs`) are EXCLUDED
+  (they often complete deep → highlighting the empty cell is the present-threat illusion). `truthBoard` =
+  first near-term board a tag is board-true on. The projected-deep board is ignored.
+- **Terms are independent of zones:** term vocab is restricted to the four KB-backed slugs
+  (`immediate_threat`/`double_threat`/`figure_7`/`claimeven`); `figure_7` CAN fire as a term (via the
+  two halves' `tag`) even though its overlay tag is not an alias. `conditional_swindle` is NOT a term
+  (no KB entry → empty popup). `canonicalPhrase` is imported from `causalLinks.mjs` `TAG_PHRASE` (no
+  local copy).
+- **Prompt:** `assembleGroundedPrompt` emits `# Highlightable regions` (handles + roles + truthBoard) +
+  `# KB terms you may name` (slugs + canonical phrase + gloss) + a no-overlap instruction, immediately
+  BEFORE `# Internal evidence fields`. Empty lists fall back to prose (never `null`/`undefined` in the
+  prose half). The LLM only ever writes offered handles/slugs, never a raw `cNrM`. The instruction
+  requires a paired open+close for every tag (`[zone:<handle>]phrase[/zone:<handle>]`, never a bare
+  handle used as a noun), with an explicit bad/good example (D35, 2026-07-06) — added after a grading
+  run showed the model sometimes emitting an unclosed opener.
+- **Post-LLM (`compute.mjs` `postprocessAnswer(answer, render_decision)`, condition-D only):**
+  `processAnnotations` normalizes mismatched close tags, drops any unoffered handle/slug (keeping the
+  inner words), **bare-strips any tag still unclosed after normalization** (D35: `stripUnclosedTags`,
+  LIFO stack-paired — deletes just the token, no canonical-phrase substitution, reported via a
+  `repairs: string[]` field e.g. `["unclosed_tag:term:immediate_threat"]`), expands offered zone
+  handles → real specs, and re-derives `key_cells` from the expanded specs. `postprocessAnswer` returns
+  `{ answer, repairs }` (not a bare `answer`); `compute.mjs` surfaces `repairs` on the eval output line
+  as `annotationRepairs`, and `grade-fv-sufficiency` treats a non-empty `annotationRepairs` as an
+  automatic G7 fail (`prompt_confusion`) — see `.claude/skills/grade-fv-sufficiency/SKILL.md` G7c.
+  **GOTCHA — the bare-strip only handles unmatched OPENERS, not unmatched CLOSERS:** a stray
+  `[/term:x]` with no matching opener is not detected or reported (deferred as a low-incidence gap;
+  all observed failures were bare openers). **GOTCHA — condition-D `answer.key_cells` are now
+  display-overlay cells, not per-cell threat claims:** a `[zone:better-col]` expands to a whole 6-cell
+  column; a fork window to its cells. The grader's A3/A4 carry a condition-D carve-out so an empty
+  highlighted-column/window cell is NOT graded as fabrication (zone offered/board-truth fidelity is
+  G7/G5). `key_cells` is overwritten ONLY when the model actually emitted ≥1 zone (transition safety);
+  A/B/C are untouched (null `render_decision`).
+- **Guardrail assembly (D35, 2026-07-06):** `assembleGroundedPrompt`'s `Guardrail:` line is
+  `combinedGuardrail(model)`, NOT a bare `model.link.guardrail` — it appends `model.frames[0].guardrail`
+  too when that differs from `model.link.guardrail` (opening records only; for non-opening records the
+  two are already identical, so no duplication). This fixed a bug where the opening frame's own
+  guardrail (e.g. `openingFrame.mjs`'s `GUARDRAIL`) was silently dropped from the prompt. `GUARDRAIL`
+  gained a conditional clause (`GUARDRAIL_NO_CENTRALITY`, appended when `centralityQualitative(fv)` is
+  null) forbidding an invented centrality/difficulty claim; `causalLinks.mjs`'s L3/L7 `guardrail` fields
+  (not `template`) gained an explicit banned-defeatist-phrase clause ("ends poorly", "goes against
+  you", etc.).
+- **`render_decision.zones`** `{aliases:[{handle,spec,role,truthBoard,kbId}], terms:[{slug,kbId,
+  canonicalPhrase,description}]}` (the `zoneAliasMap` is prompt-only, omitted from the record). Grader
+  axis **G7** (annotation fidelity): G7a zones delegate spec board-truth to **G5** checked on the
+  alias's `truthBoard`; G7b terms. A5 strips `[zone:]`/`[term:]` markup before coach-voice checks.
+- **Coverage:** `renderDecisionPredicates` emits `zone_speckind_{cell,window,col}` / `term_emitted` /
+  `zones_no_tactical` from `render_decision.zones`; `zone_speckind_window` + `zones_no_tactical` are
+  PROVISIONAL (rare in self-play). Closed-registry invariant intact.
+- **Not wired to production:** this makes the grounded path *capable*; `explainContext.js` /
+  `annotationGate.js` production zone code is untouched (a later deletion pass, once the grounded path
+  serves a live endpoint).
+- **TODO(production-wiring) — `deep_reveal_failures` logging for repaired tags.** `processAnnotations`
+  returns a `repairs: string[]` array (e.g. `["unclosed_tag:term:immediate_threat"]`) whenever it had
+  to bare-strip a tag the model left unclosed — see `zoneAnnotations.mjs`. This is NOT a user-facing
+  error (the shipped text is already clean) but IS an internal defect worth logging. `processAnnotations`
+  stays pure (no DB call); whoever wires the production endpoint that eventually replaces
+  `/explain-move-llm` with condition-D must, when `repairs.length > 0`, insert a row into the existing
+  `deep_reveal_failures` table (no schema change) shaped like:
+  `{ position_hash, movestring, col, endpoint: '<the new endpoint name>', llm_prompt: <the assembled prompt>,
+  raw_llm_output: <answer.mechanism BEFORE processAnnotations ran>, failure_reason: JSON.stringify(repairs),
+  created_at: new Date().toISOString() }` — the same shape/convention `server/index.js` (~line 1085)
+  already uses for `P5strong:*` validation failures.

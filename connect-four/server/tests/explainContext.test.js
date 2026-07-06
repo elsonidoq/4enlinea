@@ -14,7 +14,8 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { toFeatureVector } from '../explainContext.js';
+import { toFeatureVector, buildOpeningReason } from '../explainContext.js';
+import { detectCenterDominance } from '../centerDominance.js';
 
 // Minimal promptData carrying only what toFeatureVector's lookahead block needs.
 function makePromptData(lookahead) {
@@ -199,5 +200,102 @@ describe('toFeatureVector — Story C threatStats totals + playedCol', () => {
     const snap = {};
     const fv = toFeatureVector(makePromptDataWithThreats(snap, 2), { prune: false });
     assert.equal(fv.playedCol, 2, 'playedCol must pass through to the feature vector');
+  });
+});
+
+// ── B5: buildOpeningReason — the pure opening-provenance section seam (opening-theory PART B) ──
+// Solver-free: it takes the scores the caller already has. All boards are real KB opening lines
+// verified with ./visualize_board.sh (see task-B5-report.md); scores are 0-indexed columns.
+describe('buildOpeningReason — opening-provenance prompt section', () => {
+  // `333331` (Green to move): unique winning best at col1 (+1); a single-id candlesticks prefix.
+  const CANDLESTICKS_SCORES = [-2, 1, -2, -3, 0, 0, -3];
+  // `3333` (Green to move): unique winning best at col3 (+1); a SHARED central-column prefix.
+  const CENTRAL_FAMILY_SCORES = [-2, -2, -2, 1, -2, -2, -2];
+
+  it('B5-T1: namedOpening with a unique id → names the specific opening + book/played columns', () => {
+    const r = buildOpeningReason({
+      movestring: '333331', playedCol: 0, bestCol: 1,
+      bestScore: 1, scores: CANDLESTICKS_SCORES, player: 1,
+    });
+    assert.ok(r?.namedOpening, 'expected a namedOpening');
+    assert.equal(r.namedOpening.id, 'allen-candlesticks-opening');
+    assert.equal(r.namedOpening.bookNextCol, 1);
+    assert.match(r.section, /candlesticks opening/);       // specific name, grounded in the id
+    assert.match(r.section, /column 2/);                    // bookNextCol + 1
+    assert.match(r.section, /column 1/);                    // playedCol + 1
+  });
+
+  it('B5-T2: namedOpening with id:null → family label only, NEVER a fabricated specific name', () => {
+    const r = buildOpeningReason({
+      movestring: '3333', playedCol: 0, bestCol: 3,
+      bestScore: 1, scores: CENTRAL_FAMILY_SCORES, player: 1,
+    });
+    assert.ok(r?.namedOpening, 'expected a namedOpening');
+    assert.equal(r.namedOpening.id, null, 'shared prefix keeps id null');
+    assert.match(r.section, /a central-column opening/);
+    assert.doesNotMatch(r.section, /candlesticks|5 4|third row/i, 'must not invent a specific opening name');
+    assert.match(r.section, /column 4/);                    // bookNextCol + 1
+  });
+
+  it('B5-T3: off-book but more-central better move → centrality (reuses detectCenterDominance text)', () => {
+    const args = { movestring: '30', playedCol: 1, bestCol: 3 };
+    const r = buildOpeningReason({ ...args, bestScore: 4, scores: [-2, -2, -2, 4, 0, 0, 0], player: 1 });
+    assert.ok(r?.centrality, 'expected a centrality reason');
+    assert.ok(!r.namedOpening, 'off-book must not be a namedOpening');
+    assert.ok(!r.section, 'centrality carries no bespoke section (the existing centerDominance one renders it)');
+    assert.equal(r.centrality.betterHasMoreLines, true);
+    assert.equal(r.centrality.text, detectCenterDominance(args).reason, 'must reuse the shared centerDominance text');
+  });
+
+  it('B5-T4: guard 2 (mover is not the beneficiary, player 2) → no namedOpening', () => {
+    const r = buildOpeningReason({
+      movestring: '333331', playedCol: 0, bestCol: 1,
+      bestScore: 1, scores: CANDLESTICKS_SCORES, player: 2,
+    });
+    assert.ok(!r?.namedOpening, 'player-2 mover on a P1 book line must not claim a named opening');
+  });
+
+  it('B5-T5: guard 3 (book move is not the solver-best) → no namedOpening', () => {
+    // bookNextCol is col1 (+1) but the true best is col3 (+4): the book move no longer keeps the win.
+    const r = buildOpeningReason({
+      movestring: '333331', playedCol: 0, bestCol: 3,
+      bestScore: 4, scores: [-2, 1, -2, 4, 0, 0, -3], player: 1,
+    });
+    assert.ok(!r?.namedOpening, 'book move below the max must not be claimed as best');
+  });
+
+  it('B5-T6: no opening match and not more-central → null (no opening section at all)', () => {
+    // Mid-board off-book position; better move is LESS central than the played move.
+    const r = buildOpeningReason({
+      movestring: '0123456', playedCol: 3, bestCol: 0,
+      bestScore: 2, scores: [2, 0, 0, 1, 0, 0, 0], player: 1,
+    });
+    assert.equal(r, null);
+  });
+
+  it('buildOpeningReason: defense section names the line, resist-and-wait, 1-indexed hold', () => {
+    const r = buildOpeningReason({
+      movestring: '3333344', playedCol: 2, bestCol: 4, bestScore: -1,
+      scores: [-4, -3, -3, -3, -1, -3, -4], player: 2,
+    });
+    assert.ok(r.defense, 'defense branch');
+    assert.match(r.section, /## Opening theory/);
+    assert.match(r.section, /second side of the 5-4 opening/i);
+    assert.match(r.section, /theoretically lost/i);
+    assert.match(r.section, /column 5/);                 // bestDefenseCol 4 → 1-indexed 5
+    assert.match(r.section, /resist|wait|slip|hold/i);
+    assert.doesNotMatch(r.section, /more central/i);     // equidistant → no centrality clause
+  });
+
+  it('buildOpeningReason: defense section adds centrality/even-row clause when grounded (333/col4)', () => {
+    const r = buildOpeningReason({
+      movestring: '333', playedCol: 4, bestCol: 3, bestScore: -1,
+      scores: [-4, -4, -3, -1, -3, -4, -4], player: 2,
+    });
+    assert.ok(r.defense, 'defense branch');
+    assert.match(r.section, /central-column opening/i); // family-only label (id null)
+    assert.match(r.section, /column 4/);                 // bestDefenseCol 3 → 1-indexed 4
+    assert.match(r.section, /more central/i);
+    assert.match(r.section, /even row/i);                // parity canon (rows 2 & 4)
   });
 });

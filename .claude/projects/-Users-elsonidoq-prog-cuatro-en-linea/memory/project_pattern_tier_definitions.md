@@ -31,7 +31,7 @@ expand the static `allowedSet`. They flow instead through the **sparse look-ahea
 own** `LOOKAHEAD_TAGS = TIER1 ∪ THREAT_TAGS` set in `sparseLookahead.js` (a separate
 tier list from explainContext's). Two distinct tag-tier registries; don't assume a
 cell-emitting tag is in `TIER1_TAGS`. See [[project_sparse_lookahead_unvalidated]] and
-[[project_odd_even_threat_puzzle_only]].
+[[project_detect_odd_even_threat_yellow]].
 
 **Beware a second, unrelated "tier":** `getPositionTier` (in `llmCoachHelpers.js`)
 returns the *position* tier `WINNING | NEUTRAL | LOSING` from solver scores. Totally

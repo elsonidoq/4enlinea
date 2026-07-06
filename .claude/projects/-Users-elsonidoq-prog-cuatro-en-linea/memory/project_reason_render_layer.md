@@ -81,3 +81,26 @@ LLM sees (causal-frame `covers`, board selection, …) must be a single declared
 consumers — the composer/render, the grader (`grade-fv-sufficiency`), AND the sampler
 (`select_boards.mjs`). Never a silent local choice; wire all three. See
 [[project_fv_suff_grader_pv_mismatch]], [[feedback_engine_soundness_then_render]].
+
+**Opening boards ARE now wired (D33, 2026-07-05 — supersedes the old "render layer NOT wired for
+openingContext" gap).** Opening-phase decisions render via an ADDITIVE `reason_engine/openingFrame.mjs`
+`composeOpeningFrame(prunedFv)` (frames `O1` named/`O2` defense/`O3` centrality), NOT a new causal link:
+`classifyCausalLink` (L1–L9) still fires to feed `render_decision` scaffolding + horizon, but its text is
+**not rendered** — the opening frame is the sole `frames[0]`, and only the decision board is shown. Three
+non-obvious traps here:
+- **Deep-cell residue leak (the trap that will bite you):** the opening branch of `buildReasonRenderModel`
+  wraps its residue in `pruneOpeningResidue`, reducing `lostResource`/`opponentPunishment` to
+  `{register, pliesToEnd}`. WITHOUT it, `renderedFields` dumps a 35-ply `completingCell` (`c6r2`) + window
+  into the "Vector facts" block, and the grader's `deepResourceGrounded:false` then FALSE-FAILS any answer
+  that grounds it. Do NOT "simplify" the opening branch back to plain `renderedFields`. The non-opening
+  path stays plain `renderedFields` — only the opening branch prunes.
+- **Two distinct "centralities":** `O3`'s lead is the engine geometry claim
+  (`openingContext.centrality.text` + `betterHasMoreLines:true`) — ALWAYS asserted, NOT gated. The
+  landing-cell clause ("easier to build a four through `{cell}`") IS gated on `centralityQualitative`
+  (heatmap ratio; may be `null`). The grader's qualitative check applies ONLY to the landing-cell clause —
+  exempt the geometry lead or you false-fail ~1/6 O3 boards.
+- **Heatmap is hardcoded config**, not a branch dep: `reason_engine/data/winning-cell-heatmap.json`
+  (copied from the design spec, NOT merged from `worktree-win-dist-grid`); used internally only to pick
+  qualitative words, never a number in prose. `fieldDisposition` opening full-path checks run BEFORE the
+  leaf fallbacks (else `bestCol`/`playedCol`/`text` leaf collisions win). See D33,
+  [[project_opening_defender_reason_gap]].

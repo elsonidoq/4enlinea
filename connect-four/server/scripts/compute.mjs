@@ -33,6 +33,7 @@ import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
 import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
+import { processAnnotations } from './reason_engine/zoneAnnotations.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -209,7 +210,7 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
   "better_move":      <integer 1-7, the better column in 1-INDEXED DISPLAY (column 1 = leftmost)>,
   "played_outcome":   "win" | "draw" | "loss",   // result of the PLAYED move, with best play
   "best_outcome":     "win" | "draw" | "loss",   // result of the BETTER move, with best play
-  "mechanism":        "<1-3 sentences: the load-bearing reason the played move is worse>",
+  "mechanism":        "<1-3 sentences spoken directly to the player as their coach: the load-bearing reason the played move is worse. 2nd person, plain Connect Four language, NO internal/field/engine terms>",
   "key_cells":        ["c5r4", ...],   // squares the mechanism rests on, cNrM (1-indexed); [] if none
   "fields_relied_on": ["case", "lostResource.tacticTag", "opponentPunishment.tie.kind", ...],
   "unsure_about":     "<what the vector did NOT let you determine, or empty string>",
@@ -219,6 +220,13 @@ Return ONLY a single JSON object (no prose, no markdown fences) with EXACTLY the
 Notes:
 - \`better_move\` is 1-INDEXED display (1-7). The vector's \`bestCol\` is 0-indexed, so add 1.
 - \`key_cells\` use the glossary's \`cNrM\` convention (1-indexed column and row).
+- \`mechanism\` is the ONLY player-facing field: write it as a coach speaking to the player in the
+  2nd person ("you", "your opponent" — never third-person analyst voice, never by color). Use plain
+  Connect Four words (threat, fork, double threat, four-in-a-row line, block, central, claimeven).
+  NEVER name a data structure, field path, the solver, the score, a histogram, a "window", or a
+  "completing cell" in \`mechanism\`; if you relied on one, put it in \`fields_relied_on\` instead. On a
+  position that is lost with best play, do NOT tell the player they are lost — frame the better move
+  as the toughest defense that makes the opponent work hardest.
 - \`fields_relied_on\` must list the actual vector field paths your reasoning used — this reveals
   whether your claims trace to engineered fields or to re-deriving from \`movestring\`.
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
@@ -298,6 +306,19 @@ function parseAnswer(raw) {
   return { answer: null, parse_error: 'no JSON object found in response' };
 }
 
+// Condition-D post-processing: expand offered zone handles -> real specs, drop unoffered tags, and
+// re-derive key_cells from the expanded specs. No-op for A/B/C (render_decision is null) or a null answer.
+// Transition safety (M4): only overwrite key_cells when the model actually emitted >=1 zone handle;
+// until it is prompted to emit handles, keep the model's own key_cells so the /admin/fv-suff overlay
+// doesn't silently empty out. (G5 grading is unaffected — it reads render_decision, not answer.key_cells.)
+export function postprocessAnswer(answer, render_decision) {
+  if (!answer || !render_decision?.zones) return { answer, repairs: [] };
+  const { mechanism, keyCells, zonesEmitted, repairs } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
+  answer.mechanism = mechanism;
+  if (zonesEmitted) answer.key_cells = keyCells;
+  return { answer, repairs };
+}
+
 async function runLlm(evidenceRows) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model) throw new Error('EXPLAIN_MODEL not set (and no --model given)');
@@ -340,6 +361,7 @@ async function runLlm(evidenceRows) {
           parse_error: null,
           call_error: err.message,
           render_decision: null,
+          annotationRepairs: null,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         failed++;
@@ -356,6 +378,8 @@ async function runLlm(evidenceRows) {
         } catch (err) {
           call_error = err.message;
         }
+        const { answer: postAnswer, repairs: annotationRepairs } = postprocessAnswer(answer, render_decision);
+        answer = postAnswer;
         const line = {
           id: row.id,
           pattern_category: row.evidence.case,
@@ -368,6 +392,7 @@ async function runLlm(evidenceRows) {
           parse_error,
           call_error,
           render_decision,
+          annotationRepairs,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
