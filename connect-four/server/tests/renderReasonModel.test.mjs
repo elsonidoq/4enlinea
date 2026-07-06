@@ -193,3 +193,10 @@ test('render model + prompt expose offered zone handles and term slugs', () => {
   const prose = prompt.split('# Internal evidence fields')[0];
   assert.doesNotMatch(prose, /\bnull\b|\bundefined\b/);
 });
+
+test('annotation instructions require a paired close tag with a bad/good example', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  assert.match(prompt, /MUST have a matching closing tag/i);
+  assert.match(prompt, /Bad:.*no closing tag/i);
+  assert.match(prompt, /Good:.*\[term:/i);
+});

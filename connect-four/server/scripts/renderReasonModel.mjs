@@ -297,11 +297,20 @@ export function assembleGroundedPrompt(model) {
     ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
     '',
     '# Highlightable regions',
-    'To highlight a phrase, wrap it [zone:<handle>]…[/zone:<handle>] using a handle from this list verbatim. Never write a raw square. Do not overlap a highlight and a term on the same words.',
+    'To highlight a phrase, wrap it in BOTH an opening and a closing tag: '
+      + '[zone:<handle>]phrase[/zone:<handle>], using a handle from this list verbatim. Every '
+      + 'opening tag MUST have a matching closing tag — never write a handle on its own as if it '
+      + 'were a word. Bad: "the [term:immediate_threat] on c2 is worth keeping" (no closing tag; '
+      + 'used as a noun). Good: "[term:immediate_threat]the threat you need to keep '
+      + 'alive[/term:immediate_threat] on c2". Never write a raw square. Do not overlap a '
+      + 'highlight and a term on the same words.',
     regions,
     '',
     '# KB terms you may name',
-    'When you use one of these ideas, wrap the words [term:<slug>]…[/term:<slug>] using a slug from this list verbatim. Only these slugs, only when you actually use the idea.',
+    'When you use one of these ideas, wrap the words in BOTH an opening and a closing tag: '
+      + '[term:<slug>]phrase[/term:<slug>], using a slug from this list verbatim. Every opening '
+      + 'tag MUST have a matching closing tag — never write a slug on its own as if it were a '
+      + 'word. Only these slugs, only when you actually use the idea.',
     termLines,
     '',
     '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
