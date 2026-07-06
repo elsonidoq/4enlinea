@@ -312,11 +312,11 @@ function parseAnswer(raw) {
 // until it is prompted to emit handles, keep the model's own key_cells so the /admin/fv-suff overlay
 // doesn't silently empty out. (G5 grading is unaffected — it reads render_decision, not answer.key_cells.)
 export function postprocessAnswer(answer, render_decision) {
-  if (!answer || !render_decision?.zones) return answer;
-  const { mechanism, keyCells, zonesEmitted } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
+  if (!answer || !render_decision?.zones) return { answer, repairs: [] };
+  const { mechanism, keyCells, zonesEmitted, repairs } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
   answer.mechanism = mechanism;
   if (zonesEmitted) answer.key_cells = keyCells;
-  return answer;
+  return { answer, repairs };
 }
 
 async function runLlm(evidenceRows) {
@@ -361,6 +361,7 @@ async function runLlm(evidenceRows) {
           parse_error: null,
           call_error: err.message,
           render_decision: null,
+          annotationRepairs: null,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         failed++;
@@ -377,7 +378,8 @@ async function runLlm(evidenceRows) {
         } catch (err) {
           call_error = err.message;
         }
-        answer = postprocessAnswer(answer, render_decision);
+        const { answer: postAnswer, repairs: annotationRepairs } = postprocessAnswer(answer, render_decision);
+        answer = postAnswer;
         const line = {
           id: row.id,
           pattern_category: row.evidence.case,
@@ -390,6 +392,7 @@ async function runLlm(evidenceRows) {
           parse_error,
           call_error,
           render_decision,
+          annotationRepairs,
         };
         appendFileSync(answersOut, JSON.stringify(line) + '\n');
         if (call_error || parse_error) {
