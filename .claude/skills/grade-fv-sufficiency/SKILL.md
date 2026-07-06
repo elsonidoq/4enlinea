@@ -354,7 +354,7 @@ The seven additive checks, scored per `(id, condition D)` case in addition to A1
 | **G4 engine-line grounding** | Verify each named cell/line against `render_decision.finalMovestring` — never an alternate PV. | `visualize_board.sh` on `finalMovestring` |
 | **G5 threat-list fidelity** | Each rendered threat-list entry must be board-true on its stated board; a wrong entry is a **render bug to REPORT**, not something to narrate around or silently forgive. | `visualize_board.sh` |
 | **G6 branch-invariance provenance** | Given `patternOnAfterBestBoard` + `link.id`: (a) guardrail honored; (b) the routing was correct for the after-best board. A wrong L2/L3 pick (a miscomputed `patternOnAfterBestBoard`) is a **render bug attributable to the pipeline** — never a model failure. Triage it `render_bug`, not `prompt_confusion`. | `render_decision.patternOnAfterBestBoard` |
-| **G7 annotation fidelity** | **G7a (zones):** every emitted `[zone:handle]` in `mechanism` used a handle listed in `render_decision.zones.aliases` (unoffered handles are dropped by the pipeline, so a surviving one is a pipeline bug); each handle wraps a phrase whose meaning matches its `role`; nothing is over-wrapped. Board-truth of the alias's `spec` is delegated to **G5**, checked on the alias's `truthBoard` (not the displayed decision board). **G7b (terms):** every `[term:slug]` used a slug in `render_decision.zones.terms`, and the wrapped phrase genuinely denotes that KB concept. | `render_decision.zones` + `visualize_board.sh` on the alias's `truthBoard` |
+| **G7 annotation fidelity** | **G7a (zones):** every emitted `[zone:handle]` in `mechanism` used a handle listed in `render_decision.zones.aliases` (unoffered handles are dropped by the pipeline, so a surviving one is a pipeline bug); each handle wraps a phrase whose meaning matches its `role`; nothing is over-wrapped. Board-truth of the alias's `spec` is delegated to **G5**, checked on the alias's `truthBoard` (not the displayed decision board). **G7b (terms):** every `[term:slug]` used a slug in `render_decision.zones.terms`, and the wrapped phrase genuinely denotes that KB concept. **G7c (malformed-tag auto-fail):** if the record's `annotationRepairs` array (a top-level field sibling to `answer`/`render_decision`) is non-empty, G7 is an automatic FAIL for that run — the render pipeline already bare-stripped an unclosed `[zone:]`/`[term:]` tag the model emitted, so the model produced malformed markup even though the final text the pipeline shipped is clean; triage this `prompt_confusion` (the model's fault, not the render layer's). | `render_decision.zones` + `visualize_board.sh` on the alias's `truthBoard` |
 
 G1–G7 are **additive** for condition D — A1–A5 still apply and are scored exactly as in the "How to
 grade" section above; do not substitute G1–G7 for them.
@@ -401,6 +401,9 @@ Deciding between them is itself an **oracle** job — you cannot read the triage
   bound to a semantically wrong phrase, or over-wrapped → `prompt_confusion`. An offered alias whose
   `spec` is board-false on its `truthBoard` → `render_bug` (surfaced by G5). A cell/tactic the case
   needed that the render layer never offered as a zone/term at all → `missing_info`.
+- **G7c (malformed-tag) triage:** always `prompt_confusion` — a non-empty `annotationRepairs`
+  means the model emitted an unclosed tag; the pipeline already repaired the player-facing text, so
+  there is nothing for the render layer to have done differently.
 - A case can have several defects; pick the **decisive** one (the reason the case fails). Note secondary
   ones in `failure_summary`.
 
@@ -552,6 +555,9 @@ offered zone/term set.
   over-wrapped. Board-truth of the alias's `spec` is delegated to G5, checked on the alias's
   `truthBoard` (not the displayed decision board). **G7b (terms)** — every `[term:slug]` used a slug
   listed in `render_decision.zones.terms`, and the wrapped phrase genuinely denotes that KB concept.
+ Additionally: if the record's `annotationRepairs` array is non-empty, G7 auto-fails
+  (`prompt_confusion`) regardless of the above — the model emitted at least one unclosed tag, even
+  though the pipeline already bare-stripped it before the player saw it.
 
 Pass rule: the CASE passes iff A1, A2, A3, A4, A5 all hold on ALL runs (condition D: **and** G1–G7 all
 hold on all runs). Any run failing any axis/check → case fails. Note intermittency explicitly.

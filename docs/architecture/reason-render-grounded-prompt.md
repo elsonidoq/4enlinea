@@ -780,3 +780,14 @@ reason-case and no new harvested board; only `renderUniverse.mjs`'s predicate se
 - **Not wired to production:** this makes the grounded path *capable*; `explainContext.js` /
   `annotationGate.js` production zone code is untouched (a later deletion pass, once the grounded path
   serves a live endpoint).
+- **TODO(production-wiring) — `deep_reveal_failures` logging for repaired tags.** `processAnnotations`
+  returns a `repairs: string[]` array (e.g. `["unclosed_tag:term:immediate_threat"]`) whenever it had
+  to bare-strip a tag the model left unclosed — see `zoneAnnotations.mjs`. This is NOT a user-facing
+  error (the shipped text is already clean) but IS an internal defect worth logging. `processAnnotations`
+  stays pure (no DB call); whoever wires the production endpoint that eventually replaces
+  `/explain-move-llm` with condition-D must, when `repairs.length > 0`, insert a row into the existing
+  `deep_reveal_failures` table (no schema change) shaped like:
+  `{ position_hash, movestring, col, endpoint: '<the new endpoint name>', llm_prompt: <the assembled prompt>,
+  raw_llm_output: <answer.mechanism BEFORE processAnnotations ran>, failure_reason: JSON.stringify(repairs),
+  created_at: new Date().toISOString() }` — the same shape/convention `server/index.js` (~line 1085)
+  already uses for `P5strong:*` validation failures.
