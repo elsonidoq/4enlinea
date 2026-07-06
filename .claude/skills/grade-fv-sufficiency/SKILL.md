@@ -159,10 +159,15 @@ opening-specific checks, in addition to the three board checks (prefix / book-mo
   does NOT ground a deep completing cell. An answer that names a specific deep winning/losing cell
   (e.g. a 35-ply `cNrM` from `lostResource.completingCell`) as the mechanism is a **fail** — the render
   told it not to. Naming the book/hold column and the near-term landing cells is correct.
-- **Centrality claim direction (A3):** if the answer asserts one move is "easier/more central" for
-  building a four, it must match `centralityComparison.qualitative` — and make **no** such claim when
-  `qualitative` is `null`. A centrality claim against a `null` comparison is an A4 fabrication
-  (`render_bug` if `qualitative` is wrong for the board; else `prompt_confusion`).
+- **Centrality claim direction (A3):** this check is scoped to the *landing-cell* clause only — "it'll
+  be much easier/easier to build a connected four through `{betterCell}` than through `{playedCell}`".
+  That clause must match `centralityComparison.qualitative`, and the answer must make **no** such
+  landing-cell claim when `qualitative` is `null`. A landing-cell claim against a `null` comparison is
+  an A4 fabrication (`render_bug` if `qualitative` is wrong for the board; else `prompt_confusion`).
+  This is **separate** from the O3 (`centrality`) frame's geometry *lead* — "the more central column
+  runs through more four-in-a-row lines," backed by `openingContext.centrality.betterHasMoreLines: true`
+  — which is an always-valid solver/geometry fact for opening boards and is **not** gated by
+  `qualitative`; do not flag that lead as fabrication when `qualitative` is `null`.
 
 **A `namedOpening` "you were following `<opening>`, the book move was column `<bookNextCol+1>`"
 claim is graded TRUE by three board checks — never by narrative plausibility:**

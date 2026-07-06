@@ -162,3 +162,11 @@ test('opening prompt has the opening reading key and no deep board', () => {
   assert.match(prompt, /book line|opening/i);
   assert.doesNotMatch(prompt, /projectedDeep/);
 });
+
+test('opening prompt never leaks a deep completing cell or parityAttribution into Vector facts', () => {
+  for (const kind of ['namedOpening', 'defense', 'centrality']) {
+    const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING[kind]));
+    assert.doesNotMatch(prompt, /"completingCell"/);
+    assert.doesNotMatch(prompt, /"parityAttribution"/);
+  }
+});

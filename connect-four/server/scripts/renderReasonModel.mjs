@@ -83,6 +83,17 @@ function buildDecision(pruned) {
   };
 }
 
+// Opening residue: the deep halves demote to a horizon; strip their cells so no deep cNrM leaks into the prompt.
+function pruneOpeningResidue(rendered) {
+  const horizonOnly = (h) => (h && typeof h === 'object')
+    ? Object.fromEntries(['register', 'pliesToEnd'].filter((k) => k in h).map((k) => [k, h[k]]))
+    : h;
+  const out = { ...rendered };
+  if (out.lostResource) out.lostResource = horizonOnly(out.lostResource);
+  if (out.opponentPunishment) out.opponentPunishment = horizonOnly(out.opponentPunishment);
+  return out;
+}
+
 export function buildReasonRenderModel(nv) {
   const pruned = pruneVector(nv);
   const ctx = pruned.direction === 'enabled_opponent'
@@ -100,7 +111,7 @@ export function buildReasonRenderModel(nv) {
       frames: [{ id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
                  covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
       boards: [decisionBoard],
-      rendered: renderedFields(pruned, link.covers),
+      rendered: pruneOpeningResidue(renderedFields(pruned, link.covers)),
       openingReadingKey: OPENING_READING_KEY,
       coverage: { ok: true, unowned: [] },
     };
