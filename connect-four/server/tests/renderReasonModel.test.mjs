@@ -170,3 +170,26 @@ test('opening prompt never leaks a deep completing cell or parityAttribution int
     assert.doesNotMatch(prompt, /"parityAttribution"/);
   }
 });
+
+test('render model + prompt expose offered zone handles and term slugs', () => {
+  const nv = {
+    movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
+    case: 'win_to_lose', route: 'sign',
+    lostResource: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c6r5' },
+    opponentPunishment: { kind: 'winning_line', register: 'forced_sequence', completingCell: 'c3r3',
+                          tie: { kind: 'tied', sharedCells: ['c4r5'] } },
+    replyHistogram: { afterBest: 0, afterPlayed: 1 },
+  };
+  const model = buildReasonRenderModel(nv);
+  assert.ok(model.zones.aliases.some((a) => a.handle === 'better-col'));
+  const prompt = assembleGroundedPrompt(model);
+  assert.match(prompt, /# Highlightable regions/);
+  assert.match(prompt, /\[zone:better-col\]/);          // handle advertised
+  assert.match(prompt, /# KB terms you may name/);
+  assert.match(prompt, /do not overlap a highlight and a term/i);  // nesting instruction
+  // Scope the null/undefined check to the PROSE half only — the JSON residue after
+  // "# Internal evidence fields" legitimately contains `null` (renderedFields keeps null-valued render
+  // fields), exactly as reasonRenderFixes.test.mjs scopes its own check. (M2.)
+  const prose = prompt.split('# Internal evidence fields')[0];
+  assert.doesNotMatch(prose, /\bnull\b|\bundefined\b/);
+});

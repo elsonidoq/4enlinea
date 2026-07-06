@@ -38,3 +38,12 @@ test('render_decision carries an openingContext block with deepResourceGrounded 
   assert.equal(rd.openingContext.lead.holdCol, 3);   // bestDefenseCol 2 -> display 3
   assert.ok(['much_easier', 'easier', null].includes(rd.openingContext.centralityComparison.qualitative));
 });
+
+test('render_decision carries a zones block (aliases + terms, no zoneAliasMap)', () => {
+  const rd = buildRenderDecision(NV);
+  assert.ok(rd.zones);
+  assert.ok(Array.isArray(rd.zones.aliases));
+  assert.ok(Array.isArray(rd.zones.terms));
+  assert.ok(rd.zones.aliases.some((a) => a.handle === 'better-col'));
+  assert.equal(rd.zones.zoneAliasMap, undefined); // ground truth omits the prompt-only map
+});

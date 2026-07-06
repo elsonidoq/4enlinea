@@ -9,6 +9,7 @@ import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelection
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
 import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
+import { buildAnnotationOffer } from './reason_engine/zoneAnnotations.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -103,7 +104,9 @@ export function buildReasonRenderModel(nv) {
 
   const openingFrame = composeOpeningFrame(pruned);
   if (openingFrame) {
-    const decisionBoard = boardSelectionDecisions(pruned).find((b) => b.id === 'decision');
+    const allBoards = boardSelectionDecisions(pruned);
+    const zones = buildAnnotationOffer(pruned, allBoards);
+    const decisionBoard = allBoards.find((b) => b.id === 'decision');
     return {
       perspective: { you: pruned.player, opponent: pruned.opponent },
       decision: buildDecision(pruned),
@@ -111,18 +114,22 @@ export function buildReasonRenderModel(nv) {
       frames: [{ id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
                  covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
       boards: [decisionBoard],
+      zones,
       rendered: pruneOpeningResidue(renderedFields(pruned, link.covers)),
       openingReadingKey: OPENING_READING_KEY,
       coverage: { ok: true, unowned: [] },
     };
   }
 
+  const allBoards = boardSelectionDecisions(pruned);
+  const zones = buildAnnotationOffer(pruned, allBoards);
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
     decision: buildDecision(pruned),
     link,
     frames: [{ id: link.id, confidence: link.confidence, text: link.text, covers: link.covers, guardrail: link.guardrail }],
     boards: selectBoards(pruned),
+    zones,
     rendered: renderedFields(pruned, link.covers),
     coverage: { ok: true, unowned: [] },
   };
@@ -179,6 +186,7 @@ export function buildRenderDecision(nv) {
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
+  const zones = buildAnnotationOffer(pruned, boardSelectionDecisions(pruned));
 
   const openingFrame = composeOpeningFrame(pruned);
   let openingContext = null;
@@ -224,6 +232,7 @@ export function buildRenderDecision(nv) {
     fieldPartition: fieldPartition(pruned, link.covers),
     finalMovestring: decisiveFinalMovestring(pruned),
     openingContext,
+    zones: { aliases: zones.aliases, terms: zones.terms },
   };
 }
 
@@ -266,6 +275,12 @@ export function assembleGroundedPrompt(model) {
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
   const frames = model.frames.map((f) => f.text).filter(Boolean).join('\n\n');
+  const regions = model.zones.aliases.length
+    ? model.zones.aliases.map((a) => `- [zone:${a.handle}] = ${a.role} (on the ${a.truthBoard} board)`).join('\n')
+    : '(no highlightable squares — describe the idea in words)';
+  const termLines = model.zones.terms.length
+    ? model.zones.terms.map((t) => `- [term:${t.slug}] = ${t.canonicalPhrase}: ${t.description}`).join('\n')
+    : '(no named terms apply here)';
   return [
     renderDecision(model.decision),
     '',
@@ -280,6 +295,14 @@ export function assembleGroundedPrompt(model) {
     '',
     READING_KEY,
     ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
+    '',
+    '# Highlightable regions',
+    'To highlight a phrase, wrap it [zone:<handle>]…[/zone:<handle>] using a handle from this list verbatim. Never write a raw square. Do not overlap a highlight and a term on the same words.',
+    regions,
+    '',
+    '# KB terms you may name',
+    'When you use one of these ideas, wrap the words [term:<slug>]…[/term:<slug>] using a slug from this list verbatim. Only these slugs, only when you actually use the idea.',
+    termLines,
     '',
     '# Internal evidence fields (for your reading only — do NOT name these in `mechanism`; cite paths in `fields_relied_on`)',
     '```json',
