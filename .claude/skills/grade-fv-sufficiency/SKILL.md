@@ -115,8 +115,8 @@ Group answer rows by `(id, condition)`. Each group has up to N runs (default 3).
 |---|---|---|---|
 | **A1 better move** | `better_move - 1 === feature_vector.bestCol` | code (record field) | sanity |
 | **A2 outcomes** | `played_outcome`/`best_outcome` match what `feature_vector.case` implies (table below); cross-check sign with the solver | code + solver | sanity |
-| **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one) | board (`visualize_board.sh`) + solver | **high** |
-| **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded** | board verification | **high (zero tolerance)** |
+| **A3 mechanism real & load-bearing** | the named tactic/threat and `key_cells` actually exist on the relevant board AND are the **decisive** reason (not a true-but-peripheral one). *Condition D:* zone-derived `key_cells` are display-overlay cells (the highlighted regions from an emitted `[zone:…]`, e.g. a whole column or window), not per-cell threat assertions — grade A3 on the tactic(s) the `mechanism` actually names and rests on, not on every cell the overlay spans; zone offered/board-truth fidelity is G7 (and G5 for spec board-truth on the truthBoard). | board (`visualize_board.sh`) + solver | **high** |
+| **A4 no fabrication** | every concrete claim (cells, threats, lines) is true on the board; `unsure_about` content is **excluded**. *Condition D:* do NOT treat an empty cell inside an emitted `[zone:…]` (e.g. a non-landing cell of a highlighted column or window) as an A4 fabrication — it is a display-overlay cell, not a per-cell threat claim; the zones' own offered/board-truth fidelity is covered by G7/G5. | board verification | **high (zero tolerance)** |
 | **A5 coach voice** | the `mechanism` reads as a coach speaking directly to the player: 2nd-person address, **no internal/vector terminology**, and (player-2 opening only) **no defeatist "you're losing / both lose" framing — a hold-the-line reframe instead**. Full rules in **"A5 — coach voice"** below | read the `mechanism` prose (+ render text for triage) | **high** |
 
 A1/A2 are **sanity checks**: the vector already gives `bestCol` and the outcome labels, so a miss
@@ -313,7 +313,7 @@ per-record `render_decision` object on condition-D answers lines — this is the
 truth**. Shape: `{ case, route, direction, patternOnAfterBestBoard, link:{id,confidence,covers,
 guardrail,text}, boards:[{id,shown,reason}], resource:{completingCell,registerToHorizon},
 fieldPartition:{rendered,covered,excluded}, finalMovestring,
-zones:{aliases:[{handle,spec,role,truthBoard,kbId}],terms:[{slug,kbId,canonicalPhrase}]} }`.
+zones:{aliases:[{handle,spec,role,truthBoard,kbId}],terms:[{slug,kbId,canonicalPhrase,description}]} }`.
 
 **Read the decision docs first (once per grading session), not per case:**
 `docs/architecture/reason-case-taxonomy.md` (the authoritative `(bestScore, playedScore)` case
@@ -475,7 +475,7 @@ branch-invariance, board selection, or the offered zone/term set yourself.>
 - finalMovestring: <render_decision.finalMovestring>  (the ONLY line to trace for G4 — never an
   alternate optimal solver PV, per the eval-1/16/3 mis-grade bug)
 - zones: <render_decision.zones>  (`{aliases:[{handle,spec,role,truthBoard,kbId}],terms:[{slug,kbId,
-  canonicalPhrase}]}` — the OFFERED `[zone:]`/`[term:]` set, consumed as GROUND TRUTH like every other
+  canonicalPhrase,description}]}` — the OFFERED `[zone:]`/`[term:]` set, consumed as GROUND TRUTH like every other
   field above; never re-derive it. Used for G7.)
 
 ## The N runs to grade
@@ -489,10 +489,18 @@ branch-invariance, board selection, or the offered zone/term set yourself.>
 - A3: Does the mechanism's named tactic/threat exist on the after-best / after-played board
       (verify with visualize_board.sh), and is it the DECISIVE reason the better move wins/holds
       (not a true-but-peripheral observation)? Use the solver to confirm the outcome difference is
-      real. key_cells must be the squares that reason rests on.
+      real. key_cells must be the squares that reason rests on. CONDITION D EXCEPTION: when
+      `key_cells` were derived by expanding an emitted `[zone:…]` (e.g. a whole highlighted column or
+      window), they are display-overlay cells, not per-cell threat assertions — grade A3 on the
+      tactic(s) the `mechanism` actually names and rests on, not on every cell the overlay spans;
+      offered/board-truth fidelity of the zones themselves is G7 (and G5 for spec board-truth on the
+      truthBoard).
 - A4: Is EVERY concrete claim (each key_cell's threat, each named line/fork) actually true on the
       board? A claim contradicted by the visualizer = A4 fail (zero tolerance). EXCLUDE anything the
-      model put in `unsure_about` — that is honest abstention, not fabrication.
+      model put in `unsure_about` — that is honest abstention, not fabrication. CONDITION D EXCEPTION:
+      do NOT treat an empty cell inside an emitted `[zone:…]` (e.g. a non-landing cell of a
+      highlighted column or window) as an A4 fabrication — it is a display-overlay cell, not a
+      per-cell threat claim; zone offered/board-truth fidelity is covered by G7/G5.
 - A5 (COACH VOICE — grade the `mechanism` prose only; do NOT penalize `fields_relied_on` or
       `unsure_about`, which are grader-facing and never shown to a player):
       Before checking A5, STRIP all `[zone:…]…[/zone:…]` and `[term:…]…[/term:…]` markup from
