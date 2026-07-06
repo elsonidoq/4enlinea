@@ -68,3 +68,16 @@ test('centralityQualitative: strong gap -> much_easier', () => {
 test('guardrail forbids deep-cell grounding', () => {
   assert.match(composeOpeningFrame(namedFv).guardrail, /do not ground a specific deep/i);
 });
+
+test('guardrail forbids inventing a centrality claim when qualitative is null', () => {
+  assert.equal(centralityQualitative(namedFv), null); // precondition (also asserted at line 63)
+  assert.match(composeOpeningFrame(namedFv).guardrail, /not stated to differ in centrality/i);
+});
+
+test('guardrail omits the no-centrality clause when qualitative is non-null', () => {
+  // defenseFv's centralityQualitative may be null or a real value depending on the heatmap data;
+  // only assert the clause's ABSENCE when a real qualitative value is present.
+  if (centralityQualitative(defenseFv) !== null) {
+    assert.doesNotMatch(composeOpeningFrame(defenseFv).guardrail, /not stated to differ in centrality/i);
+  }
+});

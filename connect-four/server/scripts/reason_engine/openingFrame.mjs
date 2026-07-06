@@ -65,10 +65,15 @@ const nameTag = (oc) => `the ${oc.family}${oc.id ? ` (${oc.id})` : ''}`;
 const GUARDRAIL = 'Explain the blunder through the opening — book line, centrality, parity. '
   + 'Do NOT ground a specific deep completing cell; the deep resolution is a horizon, not a teachable square.';
 
+const GUARDRAIL_NO_CENTRALITY = ' The two landing cells are NOT stated to differ in centrality or '
+  + 'difficulty here — do not say one column is "more central," "the stronger column," or "easier '
+  + 'to win through" than the other unless this vector gives you that comparison.';
+
 export function composeOpeningFrame(fv) {
   const oc = fv.openingContext;
   if (!oc) return null;
-  const base = { confidence: 'high', covers: [], guardrail: GUARDRAIL };
+  const guardrail = GUARDRAIL + (centralityQualitative(fv) === null ? GUARDRAIL_NO_CENTRALITY : '');
+  const base = { confidence: 'high', covers: [], guardrail };
 
   if (oc.namedOpening) {
     const o = oc.namedOpening;
