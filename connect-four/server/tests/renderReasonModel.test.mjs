@@ -200,3 +200,14 @@ test('annotation instructions require a paired close tag with a bad/good example
   assert.match(prompt, /Bad:.*no closing tag/i);
   assert.match(prompt, /Good:.*\[term:/i);
 });
+
+test('assembled prompt does not duplicate the guardrail on a non-opening record', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(NV));
+  const occurrences = prompt.split('You gave up a win AND handed the opponent their own').length - 1;
+  assert.equal(occurrences, 1); // L6's guardrail text must appear exactly once, not doubled
+});
+
+test('assembled prompt includes the opening frame\'s own guardrail alongside the link guardrail', () => {
+  const prompt = assembleGroundedPrompt(buildReasonRenderModel(OPENING.namedOpening));
+  assert.match(prompt, /do not ground a specific deep/i); // openingFrame.mjs's own GUARDRAIL text
+});

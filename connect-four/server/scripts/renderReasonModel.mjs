@@ -271,6 +271,18 @@ function renderDecision(d) {
   ].join('\n');
 }
 
+// The frame (opening or L-link) may carry its own guardrail distinct from the L1-L9 classification
+// guardrail (always computed, even for opening records, to feed horizon scaffolding — see
+// reason-render-grounded-prompt.md §9). For non-opening records frames[0].guardrail IS
+// model.link.guardrail (same value) — combining would duplicate it, so only append when distinct.
+function combinedGuardrail(model) {
+  const frameGuardrail = model.frames[0]?.guardrail;
+  if (frameGuardrail && frameGuardrail !== model.link.guardrail) {
+    return `${model.link.guardrail} ${frameGuardrail}`;
+  }
+  return model.link.guardrail;
+}
+
 export function assembleGroundedPrompt(model) {
   const boards = model.boards.map((b) =>
     `## Board: ${b.id} (${b.reason})\n${b.ascii}\nTactics:\n${renderThreatList(b.tags)}`).join('\n\n');
@@ -291,7 +303,7 @@ export function assembleGroundedPrompt(model) {
     `# Why this move was a blunder (causal link ${model.link.id}, confidence ${model.link.confidence})`,
     frames,
     '',
-    `Guardrail: ${model.link.guardrail}`,
+    `Guardrail: ${combinedGuardrail(model)}`,
     '',
     READING_KEY,
     ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
