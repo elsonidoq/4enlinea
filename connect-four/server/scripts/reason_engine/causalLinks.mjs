@@ -29,13 +29,25 @@ const forkOrParity = (h) => (h?.terminal === 'fork' ? 'fork' : h?.register === '
 const pliesTail = (fv) => (fv?.pliesToEnd != null ? ` (~${fv.pliesToEnd} plies)` : '');
 const cells = (w) => (Array.isArray(w) ? w.join('·') : '');
 
+// Canonical Connect Four vocabulary: the composed player-facing text must speak theory, not engine
+// slugs. Every internal tactic tag maps to its plain-language C4 phrase so a downstream coach never
+// echoes a raw slug (immediate_threat / double_threat / figure_7). One map, all tags.
+export const TAG_PHRASE = {
+  immediate_threat: 'threat to make four next move',
+  double_threat: 'double threat (two winning squares at once)',
+  figure_7: '7-shaped double threat',
+  claimeven: 'claimeven',
+  conditional_swindle: 'practical swindle',
+};
+const plainTag = (t) => TAG_PHRASE[t] ?? 'threat';
+
 export const CAUSAL_LINKS = [
   // ── Family 1: realized_denied (checked first; L3 before L2) ──
   { id: 'L1', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'missed_own',
     covers: CODES_REALIZED,
     guardrail: 'The correct move builds/completes YOUR pattern; do not attribute it to the opponent.',
-    template: (fv) => `The better move (col ${col1(fv.bestCol)}) completes your ${fv.lostResource?.tag ?? 'threat'} at ${fv.lostResource?.completingCell}; the played move let the opponent take ${denialCell(fv.opponentPunishment)}, denying it.` },
+    template: (fv) => `The better move (col ${col1(fv.bestCol)}) completes your ${plainTag(fv.lostResource?.tag)} at ${fv.lostResource?.completingCell}; the played move let the opponent take ${denialCell(fv.opponentPunishment)}, denying it.` },
   { id: 'L4', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'defensive_miss',
     covers: CODES_REALIZED,
@@ -51,27 +63,29 @@ export const CAUSAL_LINKS = [
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
                   && fv.case === 'lose_to_faster_lose',
     covers: CODES_REALIZED,
-    guardrail: 'MUST NOT say the played move caused or enabled the pattern; both moves lose, played loses faster.',
-    template: (fv) => `You were already losing. The opponent's ${fv.opponentPunishment?.tag ?? 'threat'} at ${fv.opponentPunishment?.completingCell} exists no matter what you play here — your move does not create it, it only loses faster. Do not say your move caused or enabled it.` },
+    guardrail: 'MUST NOT say the played move caused or enabled the pattern, and MUST NOT tell the player they are lost; both moves lose, but the better one makes the opponent work hardest — frame it as the toughest defense.',
+    template: (fv) => `Your opponent's ${plainTag(fv.opponentPunishment?.tag)} at ${fv.opponentPunishment?.completingCell} is coming no matter what you play here — your move didn't create it. Column ${col1(fv.bestCol)} makes your opponent work hardest for it; the move you played only speeds up the finish.` },
   { id: 'L2', family: 'realized_denied', confidence: 'high',
     when: (fv) => fv.route === 'realized_denied' && fv.direction === 'enabled_opponent'
                   && fv.case !== 'lose_to_faster_lose',
     covers: CODES_REALIZED,
     guardrail: 'The played move genuinely handed the opponent the pattern; name the conceded cell.',
-    template: (fv) => `Your move let the opponent occupy ${fv.opponentPunishment?.completingCell}, completing their ${fv.opponentPunishment?.tag ?? 'threat'} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.` },
+    template: (fv) => `Your move let the opponent occupy ${fv.opponentPunishment?.completingCell}, completing their ${plainTag(fv.opponentPunishment?.tag)} on ${cells(fv.opponentPunishment?.window)}; the better move (col ${col1(fv.bestCol)}) denied it${denialCell(fv.lostResource) ? ` at ${denialCell(fv.lostResource)}` : ''}.` },
   // ── Family 2: sign (L9 refinement before L5/L6) ──
   { id: 'L7', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.lostResource?.kind === 'conditional_swindle',
     covers: CODES_SIGN,
-    guardrail: 'Neither move wins; the better move only kept a practical swindle. Do not claim a win.',
+    guardrail: 'Do not claim the better move wins, and do NOT tell the player they are lost; frame the better move as the toughest, most resilient defense that keeps the practical swindle alive.',
     template: (fv) => {
       const w = fv.gate?.witness;
       const op = w?.oppPlies;
       const dc = (w?.devCols ?? []).map((c) => col1(c));
-      const swindle = op != null
-        ? ` — a slip within ~${op} plies${dc.length ? ` (around column ${dc.join(', ')})` : ''} could let you back`
-        : '';
-      return `You were already losing. The better move kept a practical swindle${swindle}; the played move loses faster. Neither move wins.`;
+      const watch = dc.length ? ` (watch columns ${dc.join(', ')})` : '';
+      const swindle = op == null ? ''
+        : op > 0
+          ? ` — if your opponent slips within about ${op} moves${watch}, you can climb back in`
+          : ` — one slip by your opponent${watch} could let you climb back in`;
+      return `Column ${col1(fv.bestCol)} is your most stubborn defense: it keeps a practical swindle alive${swindle}. The move you played gives that up and lets your opponent finish faster.`;
     } },
   { id: 'L8', family: 'sign', confidence: 'high',
     when: (fv) => fv.route !== 'realized_denied' && fv.case === 'draw_to_lose',
