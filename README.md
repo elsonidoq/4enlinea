@@ -95,6 +95,31 @@ node server/scripts/compute.mjs \
 # → server/scripts/reason_evidence_<name>.jsonl, now selectable in the /admin/fv-suff dropdown.
 ```
 
+## Pipeline C — Winning-cell distribution grid
+
+Computes, per pairing of two playing policies, the per-cell probability that a board cell is part of
+the winning four-in-a-row — separately for player-1 and player-2 wins — across a 4×4 policy grid (16
+pairings of {`optimal`, `mp10`, `mp25`, `blocker`}). Self-play → winning-window extraction →
+per-cell aggregation → HTML report. Lives in `server/scripts/win_distribution/` (full detail +
+output formats in its `README.md`).
+
+```bash
+# Quick check — one cell, ~2 min. Sanity-checks the whole pipeline; both players win often:
+node server/scripts/win_distribution/run_grid.mjs --combos mp25:mp25 --target-wins 100000 --max-games 1800 --seed 42
+node server/scripts/win_distribution/aggregate.mjs
+node server/scripts/win_distribution/visualize.mjs   # → data/report.html (open in a browser)
+#   Expected: oddMassP1 ≈ 0.64, oddMassP2 ≈ 0.41 — first-player wins tilt to odd rows, second-player
+#   to even rows (Allen parity), reproduced with no parity logic in the code.
+
+# Full 16-cell run — all combos, ~3–6 h (perfect-P1 combos run to the --max-games cap). Resumable:
+node server/scripts/win_distribution/run_grid.mjs --seed 42 --target-wins 10000 --max-games 30000
+node server/scripts/win_distribution/aggregate.mjs   # → data/summary.json (gitignored; 6×7 heatmaps + parity)
+node server/scripts/win_distribution/visualize.mjs   # → data/report.html (all 16 combos, shared color scale)
+```
+
+The runner is resumable and idempotent (per-game deterministic seeds): re-run the same command to
+continue after an interruption or solver hang; run subsets with `--combos` and extend later.
+
 ## Pipeline A — Deep-reveal coach eval (DEPRECATED)
 
 Evaluated the **live production coach** (`buildExplainContext` → `/api/explain*`) against a hand-built

@@ -190,3 +190,57 @@ export async function* harvestBlunders(solver, { maxGames = Infinity, rng = Math
     }
   }
 }
+
+const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0]; // persistent solver hangs on empty input
+
+/**
+ * Policy-driven variant of `playGame` for strategy experiments. Unlike `playGame`
+ * (whose mistake model and rng draw order are frozen — candidate-generator
+ * determinism depends on them), each player here is an arbitrary async policy:
+ *
+ *   policy({ ms, board, heights, player, legal, getScores, rng }) → 0-indexed col
+ *
+ * `getScores()` lazily queries the solver for the current position and memoizes
+ * it for the ply, so solver-free policies cost zero solver calls.
+ *
+ * Yields per ply (BEFORE the move is applied):
+ *   { ms, player, movePlayed, plyIndex, scores }  // scores null if never fetched
+ *
+ * @param {object} solver  c4solver wrapper
+ * @param {[Function, Function]} policies  [player1Policy, player2Policy]
+ * @param {() => number} rng  random source in [0, 1)
+ */
+export async function* playPolicyGame(solver, policies, rng = Math.random) {
+  let ms = '';
+  const heights = Array(COLS).fill(0);
+  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  let player = 1;
+  let plyIndex = 0;
+
+  while (ms.length < COLS * ROWS) {
+    const legal = [];
+    for (let c = 0; c < COLS; c++) { if (heights[c] < ROWS) legal.push(c); }
+    if (!legal.length) break;
+
+    let scores = null;
+    const msNow = ms;
+    const getScores = async () => {
+      if (scores === null) {
+        scores = msNow === '' ? EMPTY_BOARD_SCORES.slice() : await solver.query(msNow);
+      }
+      return scores;
+    };
+
+    const movePlayed = await policies[player - 1]({ ms, board, heights, player, legal, getScores, rng });
+
+    yield { ms, player, movePlayed, plyIndex, scores };
+
+    ms += String(movePlayed);
+    board[heights[movePlayed]][movePlayed] = player;
+    heights[movePlayed]++;
+    plyIndex++;
+
+    if (hasWon(board, player)) break;
+    player = 3 - player;
+  }
+}
