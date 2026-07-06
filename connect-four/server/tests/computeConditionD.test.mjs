@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPromptForCondition } from '../scripts/compute.mjs';
+import { buildPromptForCondition, postprocessAnswer } from '../scripts/compute.mjs';
 
 const NV = {
   movestring: '341330613', playedCol: 4, bestCol: 3, player: 2, opponent: 1,
@@ -28,4 +28,21 @@ test('condition A is unchanged (glossary + JSON)', () => {
   const prompt = buildPromptForCondition('GLOSSARY-TEXT', NV, 'A');
   assert.match(prompt, /GLOSSARY-TEXT/);
   assert.match(prompt, /# Feature vector/);
+});
+
+test('postprocessAnswer expands handles + rederives key_cells only when a zone was emitted', () => {
+  const rd = { zones: { aliases: [{ handle: 'better-col', spec: 'col3', role: 'x', truthBoard: 'decision', kbId: null }],
+                        terms: [] } };
+  // a zone WAS emitted -> mechanism expanded, key_cells re-derived from the spec
+  const withZone = postprocessAnswer({ mechanism: 'play [zone:better-col]column 3[/zone:better-col]', key_cells: ['c9r9'] }, rd);
+  assert.match(withZone.mechanism, /\[zone:col3\]column 3\[\/zone:col3\]/);
+  assert.deepEqual(withZone.key_cells, ['c3r1', 'c3r2', 'c3r3', 'c3r4', 'c3r5', 'c3r6']); // col3 expanded
+  // NO zone emitted -> key_cells preserved (transition safety, M4): don't zero the model's cells
+  // before it is prompted to emit handles
+  const noZone = postprocessAnswer({ mechanism: 'just prose', key_cells: ['c1r1'] }, rd);
+  assert.deepEqual(noZone.key_cells, ['c1r1']);
+  // no-op paths
+  const same = { mechanism: 'x', key_cells: ['c1r1'] };
+  assert.deepEqual(postprocessAnswer(same, null), same);
+  assert.equal(postprocessAnswer(null, rd), null);
 });

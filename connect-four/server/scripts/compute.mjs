@@ -33,6 +33,7 @@ import { createSolverProcess } from '../c4solver-wrapper.js';
 import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
 import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
+import { processAnnotations } from './reason_engine/zoneAnnotations.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -305,6 +306,19 @@ function parseAnswer(raw) {
   return { answer: null, parse_error: 'no JSON object found in response' };
 }
 
+// Condition-D post-processing: expand offered zone handles -> real specs, drop unoffered tags, and
+// re-derive key_cells from the expanded specs. No-op for A/B/C (render_decision is null) or a null answer.
+// Transition safety (M4): only overwrite key_cells when the model actually emitted >=1 zone handle;
+// until it is prompted to emit handles, keep the model's own key_cells so the /admin/fv-suff overlay
+// doesn't silently empty out. (G5 grading is unaffected — it reads render_decision, not answer.key_cells.)
+export function postprocessAnswer(answer, render_decision) {
+  if (!answer || !render_decision?.zones) return answer;
+  const { mechanism, keyCells, zonesEmitted } = processAnnotations(answer.mechanism ?? '', render_decision.zones);
+  answer.mechanism = mechanism;
+  if (zonesEmitted) answer.key_cells = keyCells;
+  return answer;
+}
+
 async function runLlm(evidenceRows) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model) throw new Error('EXPLAIN_MODEL not set (and no --model given)');
@@ -363,6 +377,7 @@ async function runLlm(evidenceRows) {
         } catch (err) {
           call_error = err.message;
         }
+        answer = postprocessAnswer(answer, render_decision);
         const line = {
           id: row.id,
           pattern_category: row.evidence.case,
