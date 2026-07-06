@@ -687,3 +687,52 @@ defeatism would now correctly bucket `prompt_confusion`); update it when the gra
 **Source:** session 2026-07-06, branch `opening-theory`. Modules: `reason_engine/causalLinks.mjs`,
 `renderReasonModel.mjs`, `compute.mjs`. Invariants: I0 (correctness over optimization — no vector change),
 the coach-voice A5 axis in `grade-fv-sufficiency`.
+
+---
+
+### D35 — three condition-D render fixes from the 57-board grading run: tag bare-strip, dropped opening guardrail, defeatist-phrase ban
+
+**Context.** A `grade-fv-sufficiency` run over 57 condition-D answers (57 boards,
+`boards_coverage_opening_2026-07-05T18-58-35Z`, model `gpt-5.4`) scored 40 pass / 17 fail, all 17
+`prompt_confusion`. Three distinct root causes, none requiring a vector/schema change:
+
+1. **Unclosed annotation tags leak raw markup (13-14/17 fails).** The model sometimes emits a bare
+   `[zone:X]`/`[term:X]` opener used as a noun, with no closing tag anywhere. Both
+   `processAnnotations`'s `dropUnoffered` and the frontend `parseAnnotatedText` require a paired
+   open+close, so an unclosed opener matches neither and its raw markup renders verbatim in the
+   coach text the player reads. **Decision:** tighten the prompt instruction (paired-tag rule +
+   bad/good example) AND harden `processAnnotations` as a backstop — bare-strip (delete the token,
+   no canonical-phrase substitution) any tag still unclosed after normalization, returning a new
+   `repairs: string[]` field. `processAnnotations` stays pure (no DB call); `compute.mjs` threads
+   `repairs` onto the eval output line as `annotationRepairs`, and `grade-fv-sufficiency` treats a
+   non-empty `annotationRepairs` as an automatic G7 fail (`prompt_confusion`). Production logging
+   into `deep_reveal_failures` is documented as a TODO in `reason-render-grounded-prompt.md` §10 —
+   `processAnnotations` has exactly one caller today (`compute.mjs`, eval-only); there is no
+   production endpoint yet to wire the write into.
+2. **Invented centrality asymmetry against a null signal (eval-18) — a code bug, not a
+   prompt-wording gap.** `assembleGroundedPrompt` always rendered `model.link.guardrail` (the
+   unconditional L1-L9 classification's guardrail) and silently dropped `frames[0].guardrail` (the
+   opening frame's own guardrail) — so an opening record's model never saw any instruction against
+   inventing a centrality claim; the composed frame text itself was already correct (omits the
+   clause when `centralityQualitative` is null), but nothing told the model not to add one anyway.
+   **Decision:** `assembleGroundedPrompt` now combines both guardrails when they differ (a
+   non-opening record's `frames[0].guardrail` already equals `link.guardrail`, so no duplication);
+   `openingFrame.mjs`'s `GUARDRAIL` gains a conditional clause, appended when
+   `centralityQualitative(fv)` is null, explicitly forbidding an invented centrality/difficulty
+   claim.
+3. **Player-2 opening defeatism (eval-23, eval-24) — model non-compliance, not a missing
+   guardrail.** L7's guardrail (per D34) already said "do NOT tell the player they are lost," and
+   `grade-fv-sufficiency`'s A5b/G2 rubric (LLM-judged, not mechanical) already correctly caught
+   both cases. **Decision:** strengthen L3/L7's `guardrail` text (not `template` — the verbatim-
+   asserted player-facing text is unchanged) with an explicit banned-phrase list ("ends poorly,"
+   "goes against you," etc.). Given this is already correctly guarded and graded, and only 2/57
+   cases, **accept as a monitored residual** rather than building a mechanical detector or a second
+   LLM rewrite pass — revisit with a heavier approach only if it recurs at a meaningfully higher
+   rate in a future grading round.
+
+**Source:** session 2026-07-06, branch `opening-theory`. Design:
+`docs/superpowers/specs/2026-07-06-condition-d-render-failures-fix-design.md`. Modules:
+`renderReasonModel.mjs`, `reason_engine/zoneAnnotations.mjs`, `reason_engine/openingFrame.mjs`,
+`reason_engine/causalLinks.mjs`, `compute.mjs`. Docs updated: `reason-render-grounded-prompt.md`
+§10 (TODO), `.claude/skills/grade-fv-sufficiency/SKILL.md` (G7c). Invariants: I0 (render-only, no
+vector/schema change).
