@@ -8,6 +8,7 @@ import { dispositionOf, assertCoverage, leafPaths } from './fieldDisposition.mjs
 import { selectBoards, renderThreatList, patternOnAfterBestBoard, boardSelectionDecisions } from './reasonBoardSelect.mjs';
 import { groundCell, horizonForRegister } from './reasonCellGrounding.mjs';
 import { parseBoardState } from '../classifier.js';
+import { composeOpeningFrame, centralityQualitative } from './reason_engine/openingFrame.mjs';
 
 // The pruned vector minus fields the board carries (transformed) or statically excluded.
 // Path-precise: recurse into plain-object containers; classify arrays/primitives by their own path;
@@ -88,6 +89,23 @@ export function buildReasonRenderModel(nv) {
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
+
+  const openingFrame = composeOpeningFrame(pruned);
+  if (openingFrame) {
+    const decisionBoard = boardSelectionDecisions(pruned).find((b) => b.id === 'decision');
+    return {
+      perspective: { you: pruned.player, opponent: pruned.opponent },
+      decision: buildDecision(pruned),
+      link,
+      frames: [{ id: openingFrame.id, confidence: openingFrame.confidence, text: openingFrame.text,
+                 covers: openingFrame.covers, guardrail: openingFrame.guardrail }],
+      boards: [decisionBoard],
+      rendered: renderedFields(pruned, link.covers),
+      openingReadingKey: OPENING_READING_KEY,
+      coverage: { ok: true, unowned: [] },
+    };
+  }
+
   return {
     perspective: { you: pruned.player, opponent: pruned.opponent },
     decision: buildDecision(pruned),
@@ -150,6 +168,39 @@ export function buildRenderDecision(nv) {
     ? { patternOnAfterBestBoard: patternOnAfterBestBoard(pruned) } : {};
   const link = classifyCausalLink(pruned, ctx);
   assertCoverage(pruned, link.covers);
+
+  const openingFrame = composeOpeningFrame(pruned);
+  let openingContext = null;
+  if (openingFrame) {
+    const oc = pruned.openingContext;
+    const variant = oc.namedOpening ?? oc.defense ?? oc.centrality;
+    const bCell = landingCell(pruned.movestring, pruned.bestCol);
+    const pCell = landingCell(pruned.movestring, pruned.playedCol);
+    const bRow0 = bCell ? Number(bCell.match(/r(\d+)/)[1]) - 1 : null;
+    const half = horizonHalf(pruned);
+    openingContext = {
+      kind: openingFrame.kind,
+      frameId: openingFrame.id,
+      lead: {
+        id: variant.id ?? null,
+        family: variant.family ?? null,
+        matchedPrefixLen: variant.matchedPrefixLen ?? null,
+        bookCol: oc.namedOpening ? oc.namedOpening.bookNextCol + 1 : null,
+        holdCol: oc.defense ? oc.defense.bestDefenseCol + 1 : null,
+      },
+      centralityComparison: {
+        player: pruned.player, betterCell: bCell, playedCell: pCell,
+        qualitative: centralityQualitative(pruned),
+      },
+      parityFavor: bRow0 == null ? null : {
+        betterCellRowParity: bRow0 % 2 === 0 ? 'odd' : 'even',   // display parity of the better cell's row
+        favorsMover: pruned.player === 1 ? bRow0 % 2 === 0 : bRow0 % 2 === 1,
+      },
+      deepResourceGrounded: false,
+      horizon: { register: half?.register ?? null, pliesToEnd: half?.pliesToEnd ?? null },
+    };
+  }
+
   return {
     case: pruned.case ?? null,
     route: pruned.route === 'realized_denied' ? 'realized_denied' : 'sign',
@@ -161,6 +212,7 @@ export function buildRenderDecision(nv) {
     resource: groundResource(pruned),
     fieldPartition: fieldPartition(pruned, link.covers),
     finalMovestring: decisiveFinalMovestring(pruned),
+    openingContext,
   };
 }
 
@@ -173,6 +225,17 @@ const READING_KEY = `# Reading key (the few coded fields shown below)
 - "deep on a forced line" / "deep, via a parity battle": the completing square is many plies away and EMPTY now — not a current threat.
 - Cells are cNrM: column then row, 1-indexed (c1r1 = bottom-left).
 - Every column number shown anywhere in this prompt is a 1-indexed display column (column 1 = leftmost). The move columns and their landing cells are given in the Decision block above — use them verbatim; do not re-derive move→cell→role.`;
+
+const OPENING_READING_KEY = `# Opening reading key
+- family / id: the named opening line this position is on (id absent = shared prefix, family only).
+- matchedPrefixLen: how many opening plies matched the book line.
+- The blunder is explained through the opening (book line, centrality, parity), NOT a deep tactical cell.
+- The winning resolution is deep (many plies away) and is stated only as a horizon — there is no near-term threat cell to read.`;
+
+// The outcome-defining half for the horizon summary.
+function horizonHalf(pruned) {
+  return pruned.case && pruned.case.startsWith('win_') ? pruned.lostResource : pruned.opponentPunishment;
+}
 
 // The canonical Decision block (Fix A) — leads the prompt so the model never re-derives columns/roles.
 function renderDecision(d) {
@@ -204,6 +267,7 @@ export function assembleGroundedPrompt(model) {
     `Guardrail: ${model.link.guardrail}`,
     '',
     READING_KEY,
+    ...(model.openingReadingKey ? ['', model.openingReadingKey] : []),
     '',
     '# Vector facts',
     '```json',

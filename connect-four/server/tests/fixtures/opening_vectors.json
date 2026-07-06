@@ -1,0 +1,454 @@
+{
+  "namedOpening": {
+    "movestring": "33322226",
+    "playedCol": 5,
+    "bestCol": 6,
+    "discs": 8,
+    "boardState": "opening",
+    "player": 1,
+    "opponent": 2,
+    "case": "win_to_draw",
+    "notABlunder": false,
+    "lostResource": {
+      "kind": "winning_line",
+      "register": "parity",
+      "completingCell": "c6r5",
+      "window": [
+        "c3r5",
+        "c4r5",
+        "c5r5",
+        "c6r5"
+      ],
+      "pliesToEnd": 32,
+      "line": null,
+      "finalMovestring": "33322226664420600000211111313344445556655",
+      "entryCell": "c7r3",
+      "terminal": "win",
+      "parityAttribution": {
+        "nameable": true,
+        "controllingGroup": [
+          "c3r5",
+          "c4r5",
+          "c5r5",
+          "c6r5"
+        ],
+        "ownDiscs": 0,
+        "empties": [
+          {
+            "cell": "c3r5",
+            "zcount": 1,
+            "parity": "odd"
+          },
+          {
+            "cell": "c4r5",
+            "zcount": 2,
+            "parity": "even"
+          },
+          {
+            "cell": "c5r5",
+            "zcount": 5,
+            "parity": "odd"
+          },
+          {
+            "cell": "c6r5",
+            "zcount": 5,
+            "parity": "odd"
+          }
+        ],
+        "completingCell": "c6r5",
+        "parityNamingDeferred": true,
+        "namedRule": null
+      },
+      "tacticTag": "minor_threat",
+      "tacticCells": [
+        "c1r4",
+        "c1r6",
+        "c2r1",
+        "c2r3",
+        "c2r5",
+        "c5r2",
+        "c5r4",
+        "c6r1",
+        "c6r5"
+      ],
+      "tacticFromDiff": false,
+      "anchorCells": [
+        "c7r2"
+      ]
+    },
+    "opponentPunishment": {
+      "kind": "denial",
+      "verdict": "occupation",
+      "register": "parity",
+      "line": [
+        {
+          "ply": 10,
+          "mover": 2,
+          "col": 2,
+          "cell": "c3r5"
+        }
+      ],
+      "finalMovestring": "3332222652",
+      "completingCell": "c3r5",
+      "window": [
+        "c3r5",
+        "c4r5",
+        "c5r5",
+        "c6r5"
+      ],
+      "cell": "c3r5",
+      "exhaustive": true,
+      "entryCell": "c3r5",
+      "tie": {
+        "kind": "tied",
+        "sharedCells": [
+          "c3r5"
+        ]
+      }
+    },
+    "replyHistogram": {
+      "afterBest": 0,
+      "afterPlayed": 3
+    },
+    "gate": null,
+    "openingContext": {
+      "namedOpening": {
+        "id": "allen-3-4-opening",
+        "family": "central-column opening",
+        "matchedPrefixLen": 8,
+        "bookNextCol": 6
+      }
+    }
+  },
+  "defense": {
+    "movestring": "33322",
+    "playedCol": 0,
+    "bestCol": 2,
+    "discs": 5,
+    "boardState": "opening",
+    "player": 2,
+    "opponent": 1,
+    "case": "lose_to_faster_lose",
+    "notABlunder": false,
+    "lostResource": {
+      "kind": "conditional_swindle",
+      "register": "parity",
+      "completingCell": "c6r4",
+      "window": [
+        "c3r1",
+        "c4r2",
+        "c5r3",
+        "c6r4"
+      ],
+      "pliesToEnd": 33,
+      "line": null,
+      "finalMovestring": "3332220323223544544100041100111466666655",
+      "entryCell": "c4r4",
+      "witness": {
+        "node": "333222",
+        "devCol": 0,
+        "devCols": [
+          0,
+          1,
+          4,
+          5,
+          6
+        ],
+        "oppPlies": 0
+      },
+      "terminal": "win",
+      "parityAttribution": {
+        "nameable": true,
+        "controllingGroup": [
+          "c3r1",
+          "c4r2",
+          "c5r3",
+          "c6r4"
+        ],
+        "ownDiscs": 2,
+        "empties": [
+          {
+            "cell": "c5r3",
+            "zcount": 3,
+            "parity": "odd"
+          },
+          {
+            "cell": "c6r4",
+            "zcount": 4,
+            "parity": "even"
+          }
+        ],
+        "completingCell": "c6r4",
+        "parityNamingDeferred": true,
+        "namedRule": null
+      },
+      "tacticTag": "minor_threat",
+      "tacticCells": [
+        "c1r5",
+        "c2r4",
+        "c5r1",
+        "c5r3",
+        "c6r4"
+      ],
+      "tacticFromDiff": false,
+      "anchorCells": [
+        "c1r1"
+      ]
+    },
+    "opponentPunishment": {
+      "kind": "winning_line",
+      "register": "parity",
+      "completingCell": "c2r3",
+      "window": [
+        "c4r1",
+        "c3r2",
+        "c2r3",
+        "c1r4"
+      ],
+      "pliesToEnd": 25,
+      "line": null,
+      "finalMovestring": "3332203133450000054444455556611",
+      "entryCell": "c4r4",
+      "terminal": "win",
+      "parityAttribution": {
+        "nameable": true,
+        "controllingGroup": [
+          "c4r1",
+          "c3r2",
+          "c2r3",
+          "c1r4"
+        ],
+        "ownDiscs": 2,
+        "empties": [
+          {
+            "cell": "c2r3",
+            "zcount": 3,
+            "parity": "odd"
+          },
+          {
+            "cell": "c1r4",
+            "zcount": 3,
+            "parity": "odd"
+          }
+        ],
+        "completingCell": "c2r3",
+        "parityNamingDeferred": true,
+        "namedRule": null
+      },
+      "tacticTag": "minor_threat",
+      "tacticCells": [
+        "c1r4",
+        "c2r1",
+        "c2r3",
+        "c5r4",
+        "c6r5"
+      ],
+      "tacticFromDiff": false,
+      "tie": {
+        "kind": "temporal",
+        "playedPlies": 25,
+        "swindlePlies": 33,
+        "tied": true
+      }
+    },
+    "replyHistogram": {
+      "afterBest": 2,
+      "afterPlayed": 7
+    },
+    "gate": {
+      "ran": true,
+      "verdict": "Blunder",
+      "witness": {
+        "node": "333222",
+        "devCols": [
+          0,
+          1,
+          4,
+          5,
+          6
+        ],
+        "devCol": 0,
+        "devVal": -2,
+        "oppPlies": 0
+      },
+      "nodesVisited": 1
+    },
+    "openingContext": {
+      "defense": {
+        "id": null,
+        "family": "central-column opening",
+        "matchedPrefixLen": 5,
+        "bestDefenseCol": 2,
+        "centralityGrounded": true
+      }
+    }
+  },
+  "centrality": {
+    "movestring": "3",
+    "playedCol": 1,
+    "bestCol": 3,
+    "discs": 1,
+    "boardState": "opening",
+    "player": 2,
+    "opponent": 1,
+    "case": "lose_to_faster_lose",
+    "notABlunder": false,
+    "lostResource": {
+      "kind": "conditional_swindle",
+      "register": "parity",
+      "completingCell": "c6r2",
+      "window": [
+        "c3r2",
+        "c4r2",
+        "c5r2",
+        "c6r2"
+      ],
+      "pliesToEnd": 35,
+      "line": null,
+      "finalMovestring": "33023202260000211111132633444444666655",
+      "entryCell": "c3r1",
+      "witness": {
+        "node": "33",
+        "devCol": 0,
+        "devCols": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6
+        ],
+        "oppPlies": 0
+      },
+      "terminal": "win",
+      "parityAttribution": {
+        "nameable": true,
+        "controllingGroup": [
+          "c3r2",
+          "c4r2",
+          "c5r2",
+          "c6r2"
+        ],
+        "ownDiscs": 1,
+        "empties": [
+          {
+            "cell": "c3r2",
+            "zcount": 2,
+            "parity": "even"
+          },
+          {
+            "cell": "c5r2",
+            "zcount": 2,
+            "parity": "even"
+          },
+          {
+            "cell": "c6r2",
+            "zcount": 2,
+            "parity": "even"
+          }
+        ],
+        "completingCell": "c6r2",
+        "parityNamingDeferred": true,
+        "namedRule": null
+      },
+      "tacticTag": null,
+      "tacticCells": [],
+      "tacticFromDiff": false,
+      "anchorCells": [
+        "c1r1"
+      ]
+    },
+    "opponentPunishment": {
+      "kind": "winning_line",
+      "register": "parity",
+      "completingCell": "c1r3",
+      "window": [
+        "c1r3",
+        "c2r4",
+        "c3r5",
+        "c4r6"
+      ],
+      "pliesToEnd": 37,
+      "line": null,
+      "finalMovestring": "311313113034444434152222226666555556600",
+      "entryCell": "c2r2",
+      "terminal": "win",
+      "parityAttribution": {
+        "nameable": true,
+        "controllingGroup": [
+          "c1r3",
+          "c2r4",
+          "c3r5",
+          "c4r6"
+        ],
+        "ownDiscs": 0,
+        "empties": [
+          {
+            "cell": "c1r3",
+            "zcount": 3,
+            "parity": "odd"
+          },
+          {
+            "cell": "c2r4",
+            "zcount": 3,
+            "parity": "odd"
+          },
+          {
+            "cell": "c3r5",
+            "zcount": 5,
+            "parity": "odd"
+          },
+          {
+            "cell": "c4r6",
+            "zcount": 5,
+            "parity": "odd"
+          }
+        ],
+        "completingCell": "c1r3",
+        "parityNamingDeferred": true,
+        "namedRule": null
+      },
+      "tacticTag": null,
+      "tacticCells": [],
+      "tacticFromDiff": false,
+      "tie": {
+        "kind": "temporal",
+        "playedPlies": 37,
+        "swindlePlies": 35,
+        "tied": false
+      }
+    },
+    "replyHistogram": {
+      "afterBest": 1,
+      "afterPlayed": 4
+    },
+    "gate": {
+      "ran": true,
+      "verdict": "Blunder",
+      "witness": {
+        "node": "33",
+        "devCols": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          6
+        ],
+        "devCol": 0,
+        "devVal": -3,
+        "oppPlies": 0
+      },
+      "nodesVisited": 1
+    },
+    "openingContext": {
+      "centrality": {
+        "bestCol": 3,
+        "playedCol": 1,
+        "betterHasMoreLines": true,
+        "text": "In the opening, the more central a column is, the more four-in-a-row lines run through it, so it can take part in more future threats and shapes. Column 4 sits in more of those lines than column 2, so playing there keeps more ways to build a winning connection open, while the less central choice gives some of them up.",
+        "resistAndWait": true
+      }
+    }
+  }
+}
