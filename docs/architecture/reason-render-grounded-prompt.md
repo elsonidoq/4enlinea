@@ -761,15 +761,36 @@ reason-case and no new harvested board; only `renderUniverse.mjs`'s predicate se
 - **Prompt:** `assembleGroundedPrompt` emits `# Highlightable regions` (handles + roles + truthBoard) +
   `# KB terms you may name` (slugs + canonical phrase + gloss) + a no-overlap instruction, immediately
   BEFORE `# Internal evidence fields`. Empty lists fall back to prose (never `null`/`undefined` in the
-  prose half). The LLM only ever writes offered handles/slugs, never a raw `cNrM`.
+  prose half). The LLM only ever writes offered handles/slugs, never a raw `cNrM`. The instruction
+  requires a paired open+close for every tag (`[zone:<handle>]phrase[/zone:<handle>]`, never a bare
+  handle used as a noun), with an explicit bad/good example (D35, 2026-07-06) — added after a grading
+  run showed the model sometimes emitting an unclosed opener.
 - **Post-LLM (`compute.mjs` `postprocessAnswer(answer, render_decision)`, condition-D only):**
   `processAnnotations` normalizes mismatched close tags, drops any unoffered handle/slug (keeping the
-  inner words), expands offered zone handles → real specs, and re-derives `key_cells` from the expanded
-  specs. **GOTCHA — condition-D `answer.key_cells` are now display-overlay cells, not per-cell threat
-  claims:** a `[zone:better-col]` expands to a whole 6-cell column; a fork window to its cells. The
-  grader's A3/A4 carry a condition-D carve-out so an empty highlighted-column/window cell is NOT graded
-  as fabrication (zone offered/board-truth fidelity is G7/G5). `key_cells` is overwritten ONLY when the
-  model actually emitted ≥1 zone (transition safety); A/B/C are untouched (null `render_decision`).
+  inner words), **bare-strips any tag still unclosed after normalization** (D35: `stripUnclosedTags`,
+  LIFO stack-paired — deletes just the token, no canonical-phrase substitution, reported via a
+  `repairs: string[]` field e.g. `["unclosed_tag:term:immediate_threat"]`), expands offered zone
+  handles → real specs, and re-derives `key_cells` from the expanded specs. `postprocessAnswer` returns
+  `{ answer, repairs }` (not a bare `answer`); `compute.mjs` surfaces `repairs` on the eval output line
+  as `annotationRepairs`, and `grade-fv-sufficiency` treats a non-empty `annotationRepairs` as an
+  automatic G7 fail (`prompt_confusion`) — see `.claude/skills/grade-fv-sufficiency/SKILL.md` G7c.
+  **GOTCHA — the bare-strip only handles unmatched OPENERS, not unmatched CLOSERS:** a stray
+  `[/term:x]` with no matching opener is not detected or reported (deferred as a low-incidence gap;
+  all observed failures were bare openers). **GOTCHA — condition-D `answer.key_cells` are now
+  display-overlay cells, not per-cell threat claims:** a `[zone:better-col]` expands to a whole 6-cell
+  column; a fork window to its cells. The grader's A3/A4 carry a condition-D carve-out so an empty
+  highlighted-column/window cell is NOT graded as fabrication (zone offered/board-truth fidelity is
+  G7/G5). `key_cells` is overwritten ONLY when the model actually emitted ≥1 zone (transition safety);
+  A/B/C are untouched (null `render_decision`).
+- **Guardrail assembly (D35, 2026-07-06):** `assembleGroundedPrompt`'s `Guardrail:` line is
+  `combinedGuardrail(model)`, NOT a bare `model.link.guardrail` — it appends `model.frames[0].guardrail`
+  too when that differs from `model.link.guardrail` (opening records only; for non-opening records the
+  two are already identical, so no duplication). This fixed a bug where the opening frame's own
+  guardrail (e.g. `openingFrame.mjs`'s `GUARDRAIL`) was silently dropped from the prompt. `GUARDRAIL`
+  gained a conditional clause (`GUARDRAIL_NO_CENTRALITY`, appended when `centralityQualitative(fv)` is
+  null) forbidding an invented centrality/difficulty claim; `causalLinks.mjs`'s L3/L7 `guardrail` fields
+  (not `template`) gained an explicit banned-defeatist-phrase clause ("ends poorly", "goes against
+  you", etc.).
 - **`render_decision.zones`** `{aliases:[{handle,spec,role,truthBoard,kbId}], terms:[{slug,kbId,
   canonicalPhrase,description}]}` (the `zoneAliasMap` is prompt-only, omitted from the record). Grader
   axis **G7** (annotation fidelity): G7a zones delegate spec board-truth to **G5** checked on the
