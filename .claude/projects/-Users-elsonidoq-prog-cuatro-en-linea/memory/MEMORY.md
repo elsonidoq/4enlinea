@@ -44,6 +44,8 @@
 
 ## Server endpoints, API, DB schema, auth & deploy
 
+- [Boot-path .env read crash](project_boot_path_env_read_crash.md) — reasonEngine/compute.mjs read .env at import; on server boot chain → ENOENT crash-loop in prod; use guarded boardUtils.loadEnv
+- [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (all prod endpoints incl explain-move-llm); EXPLAIN_MODEL=full (compute.mjs --llm eval only); names mislead
 - [trust proxy on Railway](bug_railway_trust_proxy.md) — required or rate-limit throws 500
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
 - [Supabase auth client traps](bug_supabase_js_session_contamination.md) — two clients: supabase (DB) + authClient (auth); GoTrue trigger not firing → loadUser auto-creates public.users row
@@ -112,6 +114,10 @@
 - [Papergames auth API](reference_papergames_auth.md) — reCAPTCHA blocks server login; refresh workaround
 - [Papergames integration](project_papergames_integration.md) — API path bug; bulk insert dedup bug; live-game 4 known bugs (uncommitted on stagging)
 - [Spec 038 import](project_spec038_papergames_self_service_import.md) — loadUser 3-site trap for new columns
+
+## QA / app-qa
+
+- [app-qa setup gotchas](project_app_qa_setup_gotchas.md) — dev-skip-auth strands data; resize_page broken (use emulate); session drops → /api/auth/refresh; blunder unique-index cross-user collision; empty puzzles table
 
 ## Simulation, scripts, worktrees, epics & general workflow
 

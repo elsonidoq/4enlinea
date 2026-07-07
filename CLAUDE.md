@@ -47,16 +47,18 @@ When working with Connect Four movestrings: before reasoning about a position, w
 
 The script prints two boards followed by analysis rows:
 
-1. **Raw board** — compact view showing `R` / `Y` / empty for each cell.
+1. **Raw board** — compact view showing `X` / `O` / empty for each cell.
 2. **Annotated board** — each cell is one of:
-   - `R 1` / `Y42` — disc with the move number that placed it (odd move# = player 1, even = player 2). `R`/`Y` are the historical internal token names: **`R` = player 1, rendered as a GREEN disc in-app; `Y` = player 2, rendered as a GRAY disc.** They are not red/yellow on screen.
-   - `[R]` / `[Y]` — major threat (3 discs of that player + 1 empty in a 4-window)
-   - `(r)` / `(y)` — minor threat (2 discs + 2 empty)
-   - `[*]` / `(*)` — both players have a major/minor threat on that cell
+   - `X  1` / `O 42` — disc with the move number that placed it (odd move# = player 1, even = player 2). **`X` = player 1, rendered as a GREEN disc in-app; `O` = player 2, rendered as a GRAY disc.**
+   - `<X>` / `<O>` — major threat (3 discs + 1 empty in a 4-window) that is **gravity-top / immediately playable** (the empty cell sits at the current column height).
+   - `[X]` / `[O]` — major threat that is **not** yet gravity-reachable this turn.
+   - `(x)` / `(o)` — minor threat (2 discs + 2 empty)
+   - `[*]` / `(*)` — both players have a major/minor threat on that cell (`<*>` if gravity-top)
    - Threats are shown for **all** empty cells, including ones not yet reachable in one move.
-3. **`par` row** — empty-cell count per column with parity: `O` = odd, `E` = even (key for zugzwang reasoning).
-4. **`scr` row** — c4solver score for each column (`--` = full column).
-5. **Major threats list** — explicit enumeration of every `[R]`/`[Y]`/`[*]` cell as `colC rowR (player)`, sorted by column then row.
+3. **`ht` row** — disc count per column.
+4. **`par` row** — empty-cell count per column with parity: `O` = odd, `E` = even (key for zugzwang reasoning). Note: this `O`/`E` is the parity marker, unrelated to the `O` player symbol.
+5. **`scr` row** — c4solver score for each column (`--` = full column).
+6. **Major threats list** — explicit enumeration of every `[X]`/`[O]`/`[*]` cell as `colC rowR (player)`, sorted by column then row; a `[GT]` suffix marks a gravity-top (immediately playable) threat.
 
 ## When you need a concrete movestring
   - Never construct a movestring from random column placements.
@@ -73,6 +75,17 @@ All internal coordinates are **0-indexed**: row 0 = bottom, row 5 = top; col 0 =
 - **c4solver calls** — `c4solver-wrapper.js` translates internally; all callers pass 0-indexed values.
 
 Never use 1-indexed coordinates in server code, tests, or specs.
+
+## Player color aliases (there are only TWO players)
+
+Different sources name the two players with different colors. They all reduce to **first player** vs **second player** — never let the color words fool you into thinking there are more than two players or into mixing them up:
+
+| Player | Aliases across the project | Role |
+|---|---|---|
+| **First player (P1)** | `X` (visualize_board), **GREEN** (in-app), `'red'` (frontend `board[row][col]` code string), **Red** (Allen 2010), **White** (Allis 1988) | moves first; plays odd rounds → lands on **odd rows**; the aggressor ("I play where you play") |
+| **Second player (P2)** | `O` (visualize_board), **GRAY** (in-app), `'yellow'` (frontend code string), **Black** (Allen 2010 *and* Allis 1988) | moves second; **even rows**; the Zugzwang controller |
+
+Key traps: **Black = second player** in both Allen and Allis (Allen: "Red plays first; Black always plays second"). **White = first player** (Allis only). The frontend code strings `'red'`/`'yellow'` are just P1/P2 semantic labels — they render as GREEN/GRAY on screen, not red/yellow. When writing user-facing or coach text, refer to discs as **green/gray**, not red/yellow. The KB (`docs/knowledge-base/`) still contains mixed Red/Yellow/Green/Gray/White/Black wording; map every color word to P1/P2 via this table.
 
 ## When Asked to Write a Prompt
 If the user asks you to 'write a prompt' or 'draft a prompt' for use in another context, produce the prompt text directly. Do NOT begin solving the underlying problem yourself unless explicitly asked.

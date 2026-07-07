@@ -386,6 +386,15 @@ call site for this flag (e.g. `explain_move.sh`). Scripts themselves read
 `process.env.OPENAI_API_KEY` and `process.env.OPENAI_MODEL` directly — no `dotenv`
 package needed.
 
+**Boot-path import discipline.** Some reason-engine CLI modules (`reasonEngine.mjs`,
+`scripts/compute.mjs`) also load `.env` at module-import time. Because the production
+server transitively imports them (`index.js` → `mechanismExplainer.mjs` → `compute.mjs`
+→ `reasonEngine.mjs`), any `.env` read that runs as an import side-effect executes during
+server boot — and in prod there is **no `.env` file** (env comes from the platform). Such
+reads MUST go through `boardUtils.loadEnv`, which treats a missing file as a no-op. Never
+add a bare top-level `readFileSync` of `.env` to a module reachable from `index.js`; it
+will crash-loop the server. See memory `project_boot_path_env_read_crash.md`.
+
 **LLM prompt structure contract** for move explanations (`/api/explain-move-llm`, Epic B):
 
 The prompt is built by one of four type-specific template builders (`buildType4Prompt`, `buildType12Prompt`, `buildType3Prompt`), dispatched by `classifyExplanationType`. All templates share a common skeleton via `buildCommonPromptSections`:
@@ -541,7 +550,8 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 | `STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID` | Stripe price IDs |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification |
 | `OPENAI_API_KEY` | OpenAI API key for LLM coaching endpoints (optional; affected endpoints return 503 if absent) |
-| `OPENAI_MODEL` | OpenAI model name (e.g., `gpt-4o-mini`); required alongside `OPENAI_API_KEY` |
+| `OPENAI_MODEL` | **Mini** production model (e.g. `gpt-5.4-mini`). Used by ALL production LLM endpoints, including `/api/explain-move-llm` (via `computeMechanism`) and `llmCoachHelpers.callLLM`. Required alongside `OPENAI_API_KEY`. |
+| `EXPLAIN_MODEL` | **Full** model (e.g. `gpt-5.4`). Eval-only — read solely by the offline eval CLI `scripts/compute.mjs --llm`. NOT used by any production endpoint despite the name. |
 | `SENTRY_DSN` | Error tracking (optional) |
 | `FRONTEND_URL` | Used in Stripe redirect URLs (default: `http://localhost:5173`) |
 | `PORT` | Server port (default: 3001) |

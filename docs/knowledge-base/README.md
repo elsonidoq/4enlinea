@@ -10,6 +10,8 @@ This KB documents **complete strategic patterns**: what a tactic looks like when
 
 Machine-checkable entries for Connect Four strategic concepts (transformation rules, victory rules, tactical patterns, strategic constructions, and project-local heuristics). The primary consumer is Claude Code during implementation work — when building a trap detector, a pattern recognizer, or any module that reasons about strategic concepts, this directory is the source of truth.
 
+> **Color terms:** entries mix Red/Yellow/Green/Gray/White/Black (faithful to Allen 2010 and Allis 1988). There are only **two** players — decode every color word via the canonical player-alias table in the project root `CLAUDE.md` ("Player color aliases"). Key traps: **Black = second player** (both authors); **White = first player** (Allis).
+
 Compared with `docs/connect-four-strategy-reference.md` (long-form prose reference), entries here are:
 
 - **Atomic.** One concept per file, identified by a stable slug.

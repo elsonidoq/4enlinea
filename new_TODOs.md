@@ -1,3 +1,5 @@
+- Board cells have no ARIA `role`/`aria-label` (accessibility gap surfaced during mobile QA 2026-07-07): screen readers can't identify columns, and automated tools must fall back to verbose a11y-tree walking to map column→cell. Add `role="button" aria-label="column N"` (or similar) to board cells.
+
 - The button "review past mistakes" does not look like a button
 
 - When clicking a disk in a lesson, and the coach speaks, the board flickrs
@@ -21,6 +23,8 @@
 - [post-MVP] Need to translate everything to spanish
 
 - Several Supabase queries fetch all rows and aggregate in JS instead of using DB-side count(); affected endpoints: GET /api/puzzles/counts, GET /api/stats, GET /api/games (blunder counting), GET /api/coach/weakness-map fallback. All are missing .limit() and will silently truncate at 1000 rows.
+
+- GET /api/coach/queue is hard-capped at .limit(50) with no pagination (server/index.js:2508). A user with >50 blunders can never review the rest, and because the /mistakes category cards are derived from that capped 50-item list, whole categories (e.g. undercut, forced_win) get no card at all even though the blunders exist and are reachable via ?category=. Needs pagination + DB-side per-category counts. (Surfaced in QA 2026-07-07 round 2 with 137 blunders.)
 
 
 - Current npm install reports this 15 vulnerabilities (1 low, 10 moderate, 2 high, 2 critical)
