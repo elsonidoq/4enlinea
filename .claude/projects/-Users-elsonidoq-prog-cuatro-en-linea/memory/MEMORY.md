@@ -45,6 +45,7 @@
 ## Server endpoints, API, DB schema, auth & deploy
 
 - [Boot-path .env read crash](project_boot_path_env_read_crash.md) — reasonEngine/compute.mjs read .env at import; on server boot chain → ENOENT crash-loop in prod; use guarded boardUtils.loadEnv
+- [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git history secret-shaped strings all placeholders (`:PASSWORD@`, `sb_secret_...`); NO rotation needed; security audit + prod checklist in docs/security_audit_fable.md
 - [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (all prod endpoints incl explain-move-llm); EXPLAIN_MODEL=full (compute.mjs --llm eval only); names mislead
 - [trust proxy on Railway](bug_railway_trust_proxy.md) — required or rate-limit throws 500
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
