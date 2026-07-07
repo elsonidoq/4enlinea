@@ -10,10 +10,10 @@ import rateLimit from 'express-rate-limit';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
 import { classifyAiMove } from './classifyAiMove.js';
-import { buildExplainContext, expandZoneAliases } from './explainContext.js';
+import { loadKBShortSummary } from './llmCoachHelpers.js';
+import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { callLLM, loadKBShortSummary } from './llmCoachHelpers.js';
 import { evaluatePredicate } from './predicates.js';
 import { registerUserRoutes } from './userRoutes.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
@@ -27,7 +27,6 @@ import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, valid
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
-import { validateAnnotation, normalizeZoneTags } from './annotationGate.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
@@ -960,12 +959,6 @@ app.post('/api/explain-move', async (req, res) => {
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
 
-// Delegates to the unified explainContext.js flow (Epic 3).
-// The module-level solver is injected here; tests pass their own solver via explainContext.js.
-async function buildExplainContextActive(movestring, col, rounds = 1) {
-  return buildExplainContext(movestring, col, rounds, solver);
-}
-
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, cached?: boolean }.
 // Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
@@ -982,7 +975,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
   const r = Number(rounds ?? 1);
   if (!Number.isInteger(r) || r < 1 || r > 5)
     return res.status(400).json({ error: 'rounds must be an integer between 1 and 5' });
-  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
+  if (!process.env.OPENAI_API_KEY || !process.env.EXPLAIN_MODEL)
     return res.status(503).json({ error: 'LLM service not configured' });
 
   let board;
@@ -1013,116 +1006,69 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
   }
 
-  // ── 2. LLM call + annotation gate + retry ────────────────────────────────
+  // ── 2. Reason-engine mechanism pipeline (computeMechanism owns the single LLM retry) ──────
   try {
-    const context = await buildExplainContextActive(movestring, col, r);
-    if (!context) {
-      // No quota consumed for the "all-moves-equal" early exit path
+    const result = await computeMechanism(movestring, col, {
+      solver,
+      model: process.env.EXPLAIN_MODEL,
+    });
+
+    if (result.notABlunder) {
+      // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
       return res.json({
-        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
+        explanation: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
         prompt: '',
         terms: {},
       });
     }
 
-    if (context.allMovesEqual) {
-      // All moves genuinely settled (all scores zero). FR-007 frozen string.
-      return res.json({
-        explanation: 'All moves are roughly equivalent here — no single best move stands out.',
-        prompt: '',
-        terms: {},
-      });
-    }
-
-    if (context.trivial) {
-      // optimal move + small gap: all alternatives are negligibly different.
-      // No LLM call — canned message prevents fabricated nuance.
-      return res.json({
-        explanation: context.trivialExplanation,
-        prompt: '',
-        terms: {},
-      });
-    }
-
-    const { prompt, allowedSet, zoneAliasMap } = context;
-
-    // First attempt
-    const rawExplanation = await callLLM(prompt);
-    let explanation = expandZoneAliases(normalizeZoneTags(rawExplanation), zoneAliasMap);
-    let result = validateAnnotation(explanation, board, allowedSet);
-
-    if (!result.valid) {
-      // ── Retry with failure feedback ─────────────────────────────────────
-      const failureSummary = result.failures.join(', ');
-      const retryPrompt = `Your previous response was rejected for these reasons: ${failureSummary}. Please rewrite to fix them.\n\n${prompt}`;
-      const retryRaw = await callLLM(retryPrompt);
-      const retryExplanation = expandZoneAliases(normalizeZoneTags(retryRaw), zoneAliasMap);
-      const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
-
-      if (retryResult.valid) {
-        explanation = retryExplanation;
-        result = retryResult;
-      } else {
-        // ── Fallback path: double failure ──────────────────────────────
-        // Read Tier-1 fallback from explanation_cache
-        let fallbackText = 'Detailed explanation unavailable.';
-        if (supabase) {
-          const { data: fallbackRow } = await supabase
-            .from('explanation_cache')
-            .select('deep_reveal_json')
-            .eq('position_hash', positionHash)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          if (fallbackRow?.deep_reveal_json?.fullText) {
-            fallbackText = fallbackRow.deep_reveal_json.fullText;
-          }
+    // No fallback (by design): after one LLM retry, a persisting LLM error or an empty mechanism
+    // is terminal. Log to deep_reveal_failures and surface a 500 — never fabricate a substitute.
+    if (result.callError || result.parseError || !result.mechanism) {
+      if (supabase) {
+        try {
+          await supabase.from('deep_reveal_failures').insert({
+            position_hash: positionHash,
+            movestring,
+            col,
+            endpoint: '/api/explain-move-llm',
+            llm_prompt: result.prompt,
+            raw_llm_output: result.raw,
+            failure_reason: result.callError ?? result.parseError ?? 'empty mechanism',
+            created_at: new Date().toISOString(),
+          });
+        } catch (insertErr) {
+          console.error('[deep_reveal_failures insert]', insertErr.message);
         }
-
-        // Log failure to deep_reveal_failures
-        if (supabase) {
-          try {
-            await supabase.from('deep_reveal_failures').insert({
-              position_hash: positionHash,
-              movestring,
-              col,
-              endpoint: '/api/explain-move-llm',
-              llm_prompt: prompt,
-              raw_llm_output: retryExplanation,
-              failure_reason: JSON.stringify(retryResult.failures),
-              created_at: new Date().toISOString(),
-            });
-          } catch (insertErr) {
-            console.error('[deep_reveal_failures insert]', insertErr.message);
-          }
-        }
-
-        // No quota consumed for fallback
-        return res.json({ explanation: fallbackText, prompt: null, terms: {}, cached: false });
       }
+      return res.status(500).json({ error: 'Internal server error' });
     }
 
-    // ── Valid path: decrement quota (if free-tier), cache, and respond ──
-    if (req.user.tier === 'free' && supabase) {
-      const quota = await checkAndDecrementQuota(req.user);
-      if (!quota.allowed) {
-        return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
-      }
-    }
+    // `mechanism` is coach-voice text carrying inline [zone:…] tags (→ board highlights via
+    // <AnnotatedExplanation>) and [term:kbId] tags (→ KB-term tap popups). It drops straight into
+    // the response as `explanation`.
+    const explanation = result.mechanism;
+    const prompt = result.prompt;
 
-    // Scan explanation for [term:kbId] tags and build a terms map
-    // with short summaries for each distinct kbId.
+    // Scan explanation for [term:kbId] tags and build a terms map with short KB summaries for the
+    // tap popups (same contract as the response `terms` field the frontend already consumes).
     const termTagRegex = /\[term:([^\]]+)\]/g;
     const termsMap = {};
-    let termMatch;
     const seenTermIds = new Set();
+    let termMatch;
     while ((termMatch = termTagRegex.exec(explanation)) !== null) {
       const kbId = termMatch[1];
       if (seenTermIds.has(kbId)) continue;
       seenTermIds.add(kbId);
       const shortSummary = loadKBShortSummary(kbId);
-      if (shortSummary) {
-        termsMap[kbId] = shortSummary;
+      if (shortSummary) termsMap[kbId] = shortSummary;
+    }
+
+    // ── Decrement quota (if free-tier), cache, and respond ──
+    if (req.user.tier === 'free' && supabase) {
+      const quota = await checkAndDecrementQuota(req.user);
+      if (!quota.allowed) {
+        return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
       }
     }
 
@@ -1131,7 +1077,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         position_hash: positionHash,
         one_liner: '',
         deep_reveal_json: { explanation, prompt, terms: termsMap },
-        template_version: 'v2',
+        template_version: 'v3',
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
@@ -1159,36 +1105,22 @@ app.post('/api/llm-feedback', async (req, res) => {
     }
   }
 
-  // Resolve prompt: use what the client sent; if empty and col is available, rebuild it.
+  // Resolve prompt: use what the client sent; if empty and col is available, recover the prompt
+  // that was actually stored alongside the flagged response. Feedback recording is deliberately
+  // decoupled from any explanation-generation algorithm — we only READ the stored prompt, never
+  // regenerate it. A missing prompt is fine (the response + note are the load-bearing feedback).
   let resolvedPrompt = typeof llm_prompt === 'string' ? llm_prompt : '';
   if (!resolvedPrompt && typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6) {
     try {
-      // Check cache first (fast path — entry must exist since the user just saw the explanation)
       const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
       const { data: cached } = await supabase
         .from('explanation_cache')
         .select('deep_reveal_json')
         .eq('position_hash', positionHash)
         .single();
-
-      if (cached?.deep_reveal_json?.prompt) {
-        resolvedPrompt = cached.deep_reveal_json.prompt;
-      } else {
-        // Cache entry predates prompt storage — rebuild from simulation pipeline
-        const context = await buildExplainContextActive(movestring, col);
-        if (context?.prompt) {
-          resolvedPrompt = context.prompt;
-          // Backfill cache entry with prompt so future flags don't need to rebuild
-          if (cached?.deep_reveal_json) {
-            supabase.from('explanation_cache')
-              .update({ deep_reveal_json: { ...cached.deep_reveal_json, prompt: resolvedPrompt } })
-              .eq('position_hash', positionHash)
-              .then(() => {}).catch(() => {});
-          }
-        }
-      }
+      if (cached?.deep_reveal_json?.prompt) resolvedPrompt = cached.deep_reveal_json.prompt;
     } catch {
-      // Non-fatal — proceed with whatever prompt we have
+      // Non-fatal — proceed with whatever prompt we have (possibly empty).
     }
   }
 

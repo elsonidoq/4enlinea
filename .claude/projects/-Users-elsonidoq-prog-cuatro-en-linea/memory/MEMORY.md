@@ -124,6 +124,7 @@
 - [Win-dist pending merge](project_win_distribution_pending_merge.md) — winning-cell distribution pipeline complete but UNMERGED on branch worktree-win-dist-grid; user deferred merge to stagging
 - [Speckit/epic scoping](feedback_speckit_epic_scoping.md) — plan vs speckit vs epic+manager sizing bars; what belongs in an epic doc vs the pipeline; hard algos stay in spec; handoff = one command
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
+- [Scope by diff, not enumeration](feedback_scope_by_diff.md) — TRIGGER on plan/scope/process-weight requests: measure the diff against the running system; name the assumption that makes it big and kill it with a concrete artifact; unchanged plumbing ≠ work
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; mark tasks done; rg/fd/sg; don't pkill shared server; bg subagents can't write; commit pre-existing WIP before SDD; fix dispatches must flag unrequested 2nd-function bundling
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; prepopulate reviewed data in one shot; ASCII diagrams; AskUserQuestion ≥2 options
 - [AskUserQuestion preview format](feedback_askuserquestion_preview_format.md) — never use `preview` for prose/code option descriptions, only genuine visual mockups
