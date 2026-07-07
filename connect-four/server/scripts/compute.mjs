@@ -34,16 +34,15 @@ import { computeReason } from './reason_engine/reasonEngine.mjs';
 import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
 import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
 import { processAnnotations } from './reason_engine/zoneAnnotations.mjs';
+import { loadEnv } from './reason_engine/lib/boardUtils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Load .env (manual parse — dotenv is not reliable here; matches run_eval.mjs) ──
-const envPath = join(__dirname, '../.env');
-const env = readFileSync(envPath, 'utf8');
-env.split('\n').forEach((line) => {
-  const [k, ...v] = line.split('=');
-  if (k?.trim() && !k.trim().startsWith('#')) process.env[k.trim()] = v.join('=').trim();
-});
+// This module is imported into the server boot path (index.js → mechanismExplainer.mjs →
+// compute.mjs), so it MUST NOT crash when server/.env is absent. In prod env vars come from
+// the platform; loadEnv treats a missing file as a no-op. See boardUtils.loadEnv.
+loadEnv(join(__dirname, '../.env'));
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 function argVal(name, def) {
