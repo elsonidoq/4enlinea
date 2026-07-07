@@ -975,7 +975,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
   const r = Number(rounds ?? 1);
   if (!Number.isInteger(r) || r < 1 || r > 5)
     return res.status(400).json({ error: 'rounds must be an integer between 1 and 5' });
-  if (!process.env.OPENAI_API_KEY || !process.env.EXPLAIN_MODEL)
+  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
     return res.status(503).json({ error: 'LLM service not configured' });
 
   let board;
@@ -1010,7 +1010,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
   try {
     const result = await computeMechanism(movestring, col, {
       solver,
-      model: process.env.EXPLAIN_MODEL,
+      model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
     });
 
     if (result.notABlunder) {
