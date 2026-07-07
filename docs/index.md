@@ -40,6 +40,8 @@
 
 ## architecture
 
+[architecture/index.md](architecture/index.md) — grouped index of all architecture docs (conventions, LLM coach, reason engine) — start here to browse the directory
+
 [architecture/api-conventions.md](architecture/api-conventions.md) — MUST rules for route naming, HTTP status codes, error shape, and auth threading — adding or modifying any server route
 
 [architecture/data-model.md](architecture/data-model.md) — MUST rules for primary keys, column naming, category slugs, soft delete, and jsonb usage — schema changes or new migrations
