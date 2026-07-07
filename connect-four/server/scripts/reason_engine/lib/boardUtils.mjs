@@ -11,9 +11,21 @@ export const ROWS = 6;
 export const COLS = 7;
 export const INVALID_MOVE = -1000;
 
-/** Load connect-four/server/.env into process.env (dotenv is not reliable under `node -e`). */
+/**
+ * Load connect-four/server/.env into process.env (dotenv is not reliable under `node -e`).
+ * Best-effort backfill: a missing file is a no-op, not a fatal error. In production the env
+ * vars are injected by the platform and no .env file exists — this must NOT crash the server
+ * when reasonEngine.mjs is imported into the request path.
+ */
 export function loadEnv(envPath) {
-  readFileSync(envPath, 'utf8').split('\n').forEach((line) => {
+  let text;
+  try {
+    text = readFileSync(envPath, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return;
+    throw e;
+  }
+  text.split('\n').forEach((line) => {
     const [k, ...v] = line.split('=');
     if (k?.trim() && !k.trim().startsWith('#')) process.env[k.trim()] = v.join('=').trim();
   });
