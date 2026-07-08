@@ -13,6 +13,10 @@ import { classifyAiMove } from './classifyAiMove.js';
 import { loadKBShortSummary } from './llmCoachHelpers.js';
 import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
+import { parseQueuePaginationParams } from './coachQueuePagination.js';
+import { computeStatsAggregate } from './statsAggregate.js';
+import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
+import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { evaluatePredicate } from './predicates.js';
 import { registerUserRoutes } from './userRoutes.js';
@@ -1239,44 +1243,18 @@ function userCanAccessCategory(user, categoryId) {
 }
 
 // GET /api/stats — per-user accuracy stats aggregated from puzzle_attempts
+// Scale-correct via computeStatsAggregate (spec 041 US3): DB-side grouped count() through the
+// puzzles!inner(category) join, not an unbounded per-row select — see server/statsAggregate.js.
 app.get('/api/stats', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { data, error } = await supabase
-    .from('puzzle_attempts')
-    .select('first_attempt_correct, puzzles!inner(category)')
-    .eq('user_id', req.user.id);
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  const byPattern = {};
-  let totalCorrect = 0;
-  for (const row of data) {
-    const category = row.puzzles?.category;
-    if (!category) continue;
-    if (!byPattern[category]) byPattern[category] = { correct: 0, attempted: 0 };
-    byPattern[category].attempted++;
-    if (row.first_attempt_correct) {
-      byPattern[category].correct++;
-      totalCorrect++;
-    }
+  try {
+    const result = await computeStatsAggregate(supabase, req.user.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-
-  const totalPuzzles = data.length;
-  for (const cat of Object.keys(byPattern)) {
-    const e = byPattern[cat];
-    byPattern[cat] = {
-      accuracy: e.attempted > 0 ? Math.round((e.correct / e.attempted) * 100) : 0,
-      attempted: e.attempted,
-    };
-  }
-
-  res.json({
-    accuracy: totalPuzzles > 0 ? Math.round((totalCorrect / totalPuzzles) * 100) : 0,
-    totalPuzzles,
-    byPattern,
-  });
 });
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
@@ -1868,30 +1846,22 @@ app.get('/api/games', async (req, res) => {
     if (aiError) return res.status(500).json({ error: aiError.message });
     if (pgError) return res.status(500).json({ error: pgError.message });
 
-    // Fetch blunder counts for both game sets in parallel
+    // Fetch blunder counts for both game sets in parallel, via DB-side grouped count() —
+    // scale-correct past 1000 blunder rows and never uses `.in()` (see
+    // server/blunderCountsForGames.js for why `.in(gameIds)` is NOT safe here: aiIds/pgIds can
+    // be the user's FULL game set, not just the current page, since sorting happens before
+    // pagination below).
     const aiIds = (aiGames || []).map(g => g.id);
     const pgIds = (pgGames || []).map(g => g.id);
 
-    // Use not-null filter instead of .in() to avoid URL-length limits (>~200 IDs causes 400 Bad Request)
-    const [aiBlundersRes, pgBlundersRes] = await Promise.all([
-      aiIds.length > 0
-        ? supabase.from('blunders').select('game_id').not('game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-      pgIds.length > 0
-        ? supabase.from('blunders').select('papergames_game_id').not('papergames_game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    if (aiBlundersRes.error) return res.status(500).json({ error: aiBlundersRes.error.message });
-    if (pgBlundersRes.error) return res.status(500).json({ error: pgBlundersRes.error.message });
-
-    const aiBlunderMap = {};
-    for (const b of (aiBlundersRes.data || [])) {
-      aiBlunderMap[b.game_id] = (aiBlunderMap[b.game_id] || 0) + 1;
-    }
-    const pgBlunderMap = {};
-    for (const b of (pgBlundersRes.data || [])) {
-      pgBlunderMap[b.papergames_game_id] = (pgBlunderMap[b.papergames_game_id] || 0) + 1;
+    let aiBlunderMap, pgBlunderMap;
+    try {
+      [aiBlunderMap, pgBlunderMap] = await Promise.all([
+        computeBlunderCountsForGames(supabase, userId, aiIds, 'game_id'),
+        computeBlunderCountsForGames(supabase, userId, pgIds, 'papergames_game_id'),
+      ]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
 
     // Normalise both sets to a unified shape
@@ -2444,33 +2414,57 @@ app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
 
   const { data, error } = await supabase.rpc('coach_weakness_map', { user_id_param: req.user.id });
   if (error) {
-    // Fallback: compute in JS
-    const { data: attempts } = await supabase
-      .from('puzzle_attempts')
-      .select('puzzle_id, first_attempt_correct, puzzles(category)')
-      .eq('user_id', req.user.id);
-
-    const map = {};
-    for (const attempt of (attempts || [])) {
-      const cat = attempt.puzzles?.category;
-      if (!cat) continue;
-      if (!map[cat]) map[cat] = { category: cat, attempted: 0, missed: 0 };
-      map[cat].attempted++;
-      if (!attempt.first_attempt_correct) map[cat].missed++;
+    // Dormant fallback (only reached on RPC error): computeWeaknessMapFallback uses DB-side
+    // grouped count() instead of an unbounded per-row select — scale-correct past 1000 rows.
+    // See server/weaknessMapFallback.js (spec 041 US3 / research.md Decision 4 — mechanical
+    // fix only, no RPC-reliability investigation).
+    try {
+      const result = await computeWeaknessMapFallback(supabase, req.user.id);
+      return res.json(result);
+    } catch (fallbackErr) {
+      return res.status(500).json({ error: fallbackErr.message });
     }
-
-    const weaknessMap = Object.values(map)
-      .map(({ category, attempted, missed }) => ({
-        category,
-        attempted,
-        missRate: attempted > 0 ? missed / attempted : 0,
-      }))
-      .sort((a, b) => b.missRate - a.missRate);
-
-    return res.json({ weaknessMap });
   }
 
   res.json({ weaknessMap: data ?? [] });
+});
+
+// GET /api/coach/category-counts
+// spec 041 (Past Games & Mistakes: Server Data Integrity), User Story 2 / FR-004-006 / FR-009.
+// True per-category blunder counts via a DB-side grouped count() — independent of any single
+// page of /api/coach/queue, and scale-correct beyond 1000 rows since it never materializes
+// individual rows into Node (see contracts/coach-category-counts.md). Same `.eq('user_id', ...)`
+// filter as /api/coach/queue; no `quality` filter added (FR-008) — blunder- and
+// suboptimal-quality rows are both counted.
+app.get('/api/coach/category-counts', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+
+  try {
+    const { data, error } = await supabase
+      .from('blunders')
+      .select('pattern_category, count()')
+      .eq('user_id', req.user.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const categories = (data || [])
+      .map(row => ({ category: row.pattern_category, count: Number(row.count) }))
+      .filter(row => row.count >= 1);
+
+    categories.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a.category);
+      const bi = CATEGORY_ORDER.indexOf(b.category);
+      if (ai === -1 && bi === -1) return a.category.localeCompare(b.category);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/coach/queue
@@ -2498,35 +2492,59 @@ app.get('/api/coach/queue', async (req, res) => {
     return res.status(400).json({ error: 'invalid papergames_game_id' });
   }
 
-  let query = supabase
-    .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
-    .eq('user_id', req.user.id)
+  const pagination = parseQueuePaginationParams(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+  const { limit, offset } = pagination;
+
+  // Shared filter chain — applied identically to the page query and the count query below
+  // (count query omits .order()/.range() per contracts/coach-queue-pagination.md).
+  const applyFilters = (q) => {
+    let filtered = q.eq('user_id', req.user.id);
+    if (status === 'unreviewed') {
+      filtered = filtered.is('resolved_at', null);
+    } else if (status === 'reviewed') {
+      filtered = filtered.not('resolved_at', 'is', null);
+    }
+    if (category) {
+      filtered = filtered.eq('pattern_category', category);
+    }
+    if (gameId) {
+      filtered = filtered.eq('game_id', gameId);
+    }
+    if (papergamesGameId) {
+      filtered = filtered.eq('papergames_game_id', papergamesGameId);
+    }
+    return filtered;
+  };
+
+  const pageQuery = applyFilters(
+    supabase
+      .from('blunders')
+      .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
+  )
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
+    // `id` is a final deterministic tiebreaker: without it, rows sharing the same
+    // (severity, created_at) — e.g. a batch import inserting many blunders in one
+    // statement, all stamped with the same created_at — can be ordered differently
+    // across separate paginated queries, causing OFFSET/LIMIT to skip some rows and
+    // duplicate others across pages (found via QA: 8/137 blunders unreachable).
     .order('severity', { ascending: false })
     .order('created_at', { ascending: true })
-    .limit(50);
+    .order('id', { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  if (status === 'unreviewed') {
-    query = query.is('resolved_at', null);
-  } else if (status === 'reviewed') {
-    query = query.not('resolved_at', 'is', null);
-  }
+  const countQuery = applyFilters(
+    supabase.from('blunders').select('id', { count: 'exact', head: true })
+  );
 
-  if (category) {
-    query = query.eq('pattern_category', category);
-  }
-
-  if (gameId) {
-    query = query.eq('game_id', gameId);
-  }
-
-  if (papergamesGameId) {
-    query = query.eq('papergames_game_id', papergamesGameId);
-  }
-
-  const { data: blunders, error } = await query;
+  const [{ data: blunders, error }, { count: total, error: countError }] = await Promise.all([
+    pageQuery,
+    countQuery,
+  ]);
   if (error) return res.status(500).json({ error: error.message });
+  if (countError) return res.status(500).json({ error: countError.message });
 
   const enriched = (blunders || []).map(b => ({
     id: b.id,
@@ -2545,7 +2563,7 @@ app.get('/api/coach/queue', async (req, res) => {
     moveIndex: (b.board_state || '').length,
   }));
 
-  res.json({ blunders: enriched, total: enriched.length });
+  res.json({ blunders: enriched, total: total ?? 0 });
 });
 
 // POST /api/coach/queue/:blunderId/resolve

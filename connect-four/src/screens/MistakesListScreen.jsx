@@ -9,8 +9,13 @@ import { MistakesGate } from '../components/MistakesGate.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { buildBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
+import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
+
+// Page size used while paging the coach queue to completion (FR-003a). Uses the endpoint's
+// max (200) to minimize round trips for users with many blunders in one category.
+const QUEUE_PAGE_LIMIT = 200;
 
 export function MistakesListScreen({ go, goBack, category }) {
   const { t } = useTranslation();
@@ -27,29 +32,47 @@ export function MistakesListScreen({ go, goBack, category }) {
     }
   }, [category]);
 
-  // Fetch blunders for the given category
-  const fetchBlunders = useCallback(() => {
+  // Fetch blunders for the given category, paging the coach queue to completion (FR-003a) —
+  // a single default-sized page must never be treated as the full category list.
+  const fetchBlunders = useCallback(async () => {
     if (!session || !category) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    fetch(`${API}/api/coach/queue?status=all&category=${encodeURIComponent(category)}`, {
-      credentials: 'include',
-    })
-      .then(r => {
+    try {
+      let offset = 0;
+      let accumulated = [];
+      let total = Infinity;
+      let keepGoing = true;
+
+      while (keepGoing) {
+        const r = await fetch(
+          `${API}/api/coach/queue?status=all&category=${encodeURIComponent(category)}&limit=${QUEUE_PAGE_LIMIT}&offset=${offset}`,
+          { credentials: 'include' }
+        );
         if (!r.ok) throw new Error('Failed to load');
-        return r.json();
-      })
-      .then(data => {
-        setBlunders(data.blunders || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
+        const data = await r.json();
+        const page = data.blunders || [];
+        accumulated = accumulated.concat(page);
+        total = data.total ?? accumulated.length;
+
+        keepGoing = shouldContinuePaging({
+          pageLength: page.length,
+          limit: QUEUE_PAGE_LIMIT,
+          accumulated: accumulated.length,
+          total,
+        });
+        offset += QUEUE_PAGE_LIMIT;
+      }
+
+      setBlunders(accumulated);
+      setLoading(false);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
   }, [session, category]);
 
   useEffect(() => {

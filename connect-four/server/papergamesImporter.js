@@ -163,7 +163,7 @@ async function extractBlunders(solver, moveString, side, userId) {
 async function upsertGame(supabase, gameRow) {
   const { data, error } = await supabase
     .from('papergames_games')
-    .upsert(gameRow, { onConflict: 'papergames_room_uid', ignoreDuplicates: false })
+    .upsert(gameRow, { onConflict: 'user_id,papergames_room_uid', ignoreDuplicates: false })
     .select('id')
     .single();
   if (error) throw new Error(`upsertGame ${gameRow.papergames_room_uid}: ${error.message}`);

@@ -152,9 +152,9 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 
 **Rate limit**: 30 req/min.
 
-## Coach Endpoints: weakness-map, queue, resolve
+## Coach Endpoints: weakness-map, queue, category-counts, resolve
 
-`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue and resolve endpoints now use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
+`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue, category-counts, and resolve endpoints all use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
 
 ### `GET /api/coach/weakness-map`
 
@@ -171,8 +171,14 @@ Returns the authenticated user's blunders with server-computed threat cell locat
 - `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
 - `category`: optional string, must be a valid blunder tag slug. Filters blunders to a single pattern category.
 - `game_id`: optional UUID string. Filters blunders to those linked to a specific **AI sparring game** via the `game_id` column. Does NOT match papergames blunders — those use `papergames_game_id` and are not filterable via this param.
+- `limit`: optional integer, default 50, max 200. 400 `{ "error": "invalid limit" }` if non-numeric, non-integer, `< 1`, or `> 200`.
+- `offset`: optional integer, default 0. 400 `{ "error": "invalid offset" }` if non-numeric, non-integer, or `< 0`.
 
 **Response**: `{ "blunders": [...], "total": number }`
+- `blunders`: up to `limit` rows for the current filter set, starting at `offset`, in the ordering below.
+- `total`: the **true count** of all rows matching the current filters (computed via a DB-side `count()` query with the same filter chain, minus `.order()`/`.range()`) — independent of `limit`/`offset`. This is a corrected behavior: prior to spec 041, `total` was `enriched.length` (silently `min(true_total, limit)`); it is now the actual total.
+
+**Pagination contract (spec 041, FR-001–FR-003a)**: The 50-row response is a **page**, not the full result set. Any caller (UI screen or internal consumer) that needs *all* of a user's matching blunders — not just one page — **MUST** page to completion: loop with `offset += limit` until either the page returned fewer than `limit` rows, or accumulated rows equal `total` (the dual guard; checking `accumulated === total` alone can spin forever if a row is deleted mid-session and `total` becomes unreachable). See `server/coachQueuePagination.js` (`parseQueuePaginationParams`) and `src/lib/coachQueuePagination.js` (`shouldContinuePaging`) for the extracted pure functions implementing this contract; `MistakesListScreen.jsx` and `ReviewScreen.jsx` are current examples of consumers paging to completion. A response with `blunders.length < limit` is not itself evidence that no more rows exist unless it also satisfies the dual guard above.
 
 Each blunder object:
 ```json
@@ -197,9 +203,36 @@ Each blunder object:
 
 - `threat_cells` is computed server-side via `Board.majorThreatCells()`, filtering for the opponent's major threats after the played move.
 - `severity` is `round((best_score − score) / 36 * 10)`, an integer in [0, 10]. Normalized by 36 (max possible spread on a 7×6 board) and scaled to 10. Stored at insert time; 0 for legacy rows. UI buckets: Minor=1, Moderate=2–3, Critical=4–10 (chosen from empirical simulation data — ~58% / 28% / 14% of non-zero blunders).
-- Capped at 50 rows, ordered by `severity DESC, created_at ASC` (worst mistakes first; ties broken by oldest-first).
+- One page is at most `limit` rows (default 50, max 200), ordered by `severity DESC, created_at ASC, id ASC` (worst mistakes first; ties broken by oldest-first, then by `id` as a final deterministic tiebreaker) and preserved identically across pages within one paging session (no re-sorting/re-windowing between pages). The `id` tiebreaker is load-bearing: without it, rows sharing an identical `(severity, created_at)` — e.g. a batch import inserting many blunders in one statement, all stamped with the same `created_at` — can be returned in different relative order across separate `OFFSET`/`LIMIT` queries, causing pagination to skip some rows and duplicate others (found via QA with 137 seeded blunders: 8 became unreachable).
 - Auth: inline `requireAuth` (401).
 - Errors: 400 `{ "error": "invalid category" }` when `?category=` is not a valid blunder tag; 400 `{ "error": "invalid game_id" }` when `?game_id=` is not a valid UUID.
+
+### `GET /api/coach/category-counts`
+
+Returns the true per-category blunder count for the authenticated user (spec 041, User Story 2 /
+FR-004–006, FR-009) — a DB-side grouped `count()` over `blunders.pattern_category`, independent of
+any single page of `/api/coach/queue`. Drives the mistakes-overview cards in
+`CategoryListScreen.jsx` so no category (e.g. `undercut`, `forced_win`) silently vanishes for
+users with more blunders than a queue page.
+
+**Request**: no query params. Always scoped to `user_id = req.user.id`.
+
+**Response**: `{ "categories": [{ "category": "undercut", "count": 8 }, ...] }`
+- One entry per `pattern_category` with `count ≥ 1` for this user. Categories with zero blunders
+  are omitted.
+- `count` is a true DB-side count (`supabase.from('blunders').select('pattern_category,
+  count()').eq('user_id', req.user.id)`), scale-correct beyond 1,000 rows since it never
+  materializes individual rows into Node.
+- Filter set is `eq('user_id', ...)` only — same as `/api/coach/queue` — no `quality` filter
+  (`blunder`- and `suboptimal`-quality rows both counted).
+- Sorted by `CATEGORY_ORDER` (`server/categories.js`) for a stable card layout; unrecognized
+  categories sort last, alphabetically.
+
+**Auth**: inline `requireAuth` (401 `{ "error": "unauthorized" }` if `req.user` is null) — same
+pattern as `/api/coach/queue`, not `requirePaid`.
+
+**Errors**: `401 { "error": "unauthorized" }`; `503 { "error": "database unavailable" }` (no
+`supabase` client); `500 { "error": "<message>" }` (DB error).
 
 ### `POST /api/coach/queue/:blunderId/resolve`
 
@@ -348,6 +381,11 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 - **Request body**: `{ moves: string }` (the movestring so far, 0-indexed).
 - **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/aiDifficulty.js`).
 - **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Callers: the deliberate-mistake mechanic (`secondBestColumn`) and the Hint overlay. Score semantics: see `reference_c4solver_scores` memory.
+- **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned in favor of softmax over full solver scores (`src/lib/aiDifficulty.js`). Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
+
+## Migrate Endpoint (POST /api/user/migrate)
+
+Three invariants: (1) the DB helpers return `{ error }` rather than throwing — the handler must check `results.find(r => r?.error)`; (2) `on_auth_user_created` gives new users `device_uuid = null` — the endpoint must generate one server-side **before** writing `puzzle_attempts`; (3) the bulk insert falls back to row-by-row on FK violations, skipping error codes `23503`/`23505`.
 
 ## Move Evaluation Endpoint
 
@@ -492,6 +530,8 @@ Saves a completed sparring game record.
 
 `GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
 Frontend uses `userPlayer` to determine which color disc to place on click and to display the "Playing as Red/Yellow" context chip.
+
+**Casing mismatch with `/draw`**: `GET /api/puzzles/draw` returns **raw DB rows in snake_case** (`move_string`, `correct_col`, `interaction_mode`, `highlight_metadata`, `user_player`, …) — it does NOT camelCase-transform, while `GET /api/puzzles/:id` returns camelCase (`moveString`, `goalPrompt`, …). Any component that passes a `/draw` row to a sub-component expecting camelCase needs a callsite adapter; read the consumer's field accesses first to catch every field.
 
 ## Sequence-Mode Puzzle Endpoint
 
@@ -737,11 +777,17 @@ Polls the status of an import job.
   "status": "pending | running | done | error",
   "imported": 0,
   "skipped": 0,
+  "blunderErrors": 0,
   "capReached": false
 }
 ```
+- `imported`: count of rooms that were successfully fetched, parsed, analyzed, and upserted into `papergames_games` (spec 041 US5/FR-014).
+- `skipped`: count of rooms **abandoned mid-processing** due to a transient failure -- `fetchReplay` HTTP error, move-parsing error, an empty move string, a solver (`extractBlunders`) error, or an `upsertGame` write error (`server/papergamesImporter.js` ~:305-350). **This is not a duplicate-detection counter**: `importForUser` has no "already imported this room" check -- a room already owned by the user is simply re-processed and re-upserted (idempotent update via the `(user_id, papergames_room_uid)` unique constraint) and counts toward `imported`, not `skipped`. In practice, a same-user re-import shortly after a prior import is more likely to import 0 new rooms than to report `skipped > 0`, because the endpoint's incremental `lastImportAt` stop (see `POST /api/user/papergames/import` processing order) skips re-fetching rooms older than the last import entirely, before `importForUser` ever sees them.
+- `blunderErrors`: count of individual blunder-row inserts that failed for a genuine (non-duplicate) reason -- `insertGameBlunder` returning `false`. A `23505` (unique-violation) on the per-user blunder index is treated as an idempotent no-op success and is **not** counted here (`server/insertGameBlunder.js`).
 - `capReached`: `true` when the import was short-circuited because the user had already reached the 15-game free-tier limit.
 - `error`: present only when `status === "error"` -- contains the error message string.
+
+> **Known contract/implementation gap (spec 041 US5, flagged 2026-07-07)**: `contracts/papergames-ownership-migration.md` § US1.5 describes `skipped` as meaning "already-imported room for this user (genuine same-user duplicate)". The current `importForUser` implementation does not match that description -- it has no duplicate-room detection at all; `skipped` is purely a processing-failure counter, as documented above. Frontend copy (`SettingsScreen.jsx`) was written to describe the field's *actual* behavior (processing failures) rather than the contract's aspirational "duplicate" framing, to avoid presenting users with a fabricated explanation. A follow-up epic is needed if true duplicate-vs-error reporting is required by product.
 
 **Errors**: 400 `{ "error": "invalid jobId" }` for missing or non-UUID `jobId`; 401 for unauthenticated.
 

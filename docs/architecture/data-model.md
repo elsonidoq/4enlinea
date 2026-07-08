@@ -22,7 +22,7 @@ Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_categor
 
 Migration 028 added `severity INTEGER NOT NULL DEFAULT 0` to the `blunders` table. Value is `round((best_score − score) / 36 * 10)`, normalized to [0, 10]: 36 is the maximum possible spread on a 7×6 board (from +18 to −18), and the result is scaled to 10. Computed at insert time from the solver scores that are already in scope. Legacy rows default to 0. Never recompute on read — the solver may be unavailable for positions past a winning move. An index on `(user_id, severity DESC) WHERE resolved_at IS NULL` supports the queue endpoint's `ORDER BY severity DESC` without a full table scan.
 
-Migration 029 added `blunder_severity real` — a graduated loss-of-control measure: the fraction of depth-3 post-blunder continuations where the opponent wins (0–1 range). Unlike `severity` (instant score spread), `blunder_severity` captures how much the move *actually* increases losing scenarios vs winning scenarios. This is the primary quality gate for blunders from already-losing positions (i.e., virtually all second-player moves), replacing the former `bestScore < 0` skip. See [[blunder_severity_graduated_measure]].
+Migration 029 added `blunder_severity real` — a graduated loss-of-control measure: the fraction of depth-3 post-blunder continuations where the opponent wins (0–1 range). Unlike `severity` (instant score spread), `blunder_severity` captures how much the move *actually* increases losing scenarios vs winning scenarios. This is the primary quality gate for blunders from already-losing positions (i.e., virtually all second-player moves), replacing the former `bestScore < 0` skip. **Do NOT re-add the `bestScore < 0` guard** (to `POST /api/blunders`, `POST /api/games/analyze`, or `reprocess_blunders.mjs`) — it made the blunder system blind to virtually all second-player games, since the first player has a theoretical forced win from the opening; the losing-branch scorer already grades blunders in lost positions (`played < bestScore - 4`). `blunder_severity` is computed for ALL blunders in the analyze endpoint, not just `bestScore >= 0`. For per-ply blunder diagnostics on any movestring, use `connect-four/server/scripts/diagnose_blunders.mjs`.
 
 Migration 030 added a partial unique index `idx_blunders_game_unique` on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`, enabling atomic upsert deduplication of game blunders at the DB level. The `POST /api/blunders` endpoint now uses `.upsert()` with `ignoreDuplicates: true` instead of a check-then-insert pattern.
 Rationale: Slug-keyed constraints are self-documenting; integer IDs required cross-referencing a lookup table.
@@ -142,7 +142,7 @@ Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. 
 |---|---|---|
 | `id` | `uuid` | PK, `DEFAULT gen_random_uuid()` |
 | `user_id` | `uuid` | nullable FK → `auth.users(id)`, `ON DELETE SET NULL` |
-| `papergames_room_uid` | `text` | NOT NULL, UNIQUE — deduplication key (e.g. `"BfsnYZBT5"`) |
+| `papergames_room_uid` | `text` | NOT NULL, part of composite `UNIQUE (user_id, papergames_room_uid)` since migration 053 — deduplication key (e.g. `"BfsnYZBT5"`), scoped per user (was a global `UNIQUE` before 053) |
 | `papergames_account_id` | `text` | NOT NULL — user's papergames account ID |
 | `moves` | `text` | NOT NULL, 0-indexed movestring |
 | `side` | `text` | NOT NULL, CHECK IN ('first','second') |
@@ -161,9 +161,16 @@ Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. 
 
 Index: `(user_id, played_at DESC)` for per-user game listing.
 RLS: Disabled (server accesses via service-role key).
-Migrations: `038_papergames_games.sql` (table + `blunders.papergames_game_id`), `039_papergames_accuracy.sql` (accuracy column).
+Migrations: `038_papergames_games.sql` (table + `blunders.papergames_game_id`), `039_papergames_accuracy.sql` (accuracy column), `053_papergames_ownership_and_blunder_index.sql` (per-user ownership — see below).
 
 The `blunders` table has `papergames_game_id uuid nullable FK → papergames_games(id) ON DELETE SET NULL` (added by migration 038). This is separate from `game_id` which links to AI sparring games.
+
+**Migration 053 — per-user ownership (spec 041, User Story 4)**: Before this migration, `papergames_room_uid` was globally `UNIQUE`, so when a second user imported a room a first user had already imported, `upsertGame()`'s upsert (`onConflict: 'papergames_room_uid'`) reassigned the existing row's `user_id` to the second user — silently transferring the game (and its future blunder linkage) away from the first user, with no error. This migration:
+1. Drops `papergames_games_papergames_room_uid_key` (the old global `UNIQUE(papergames_room_uid)`), with a post-drop `DO $$` guard that hard-fails the migration if any other global single-column `UNIQUE(papergames_room_uid)` constraint is still present under a different name.
+2. Adds `papergames_games_user_room_unique UNIQUE (user_id, papergames_room_uid)`.
+3. Drops and recreates `idx_blunders_papergames_unique` on `blunders` as `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (was `(papergames_game_id, move_index)`), so the per-move dedup guarantee is scoped per user as well — necessary because each user now has their own `papergames_game_id` row for the same external room, so `move_index` values legitimately repeat across users for the same board position.
+
+No historical-data repair was performed (Out of Scope for spec 041 — the production DB had no real users at the time). `upsertGame()` (`server/papergamesImporter.js`) was updated in the same change to upsert with `onConflict: 'user_id,papergames_room_uid'`; this single change point covers both `importForUser` (self-service batch import) and `saveLiveGame` (live-game save), which share the function. `insertGameBlunder()` (`server/insertGameBlunder.js`) required no code change — it already inserts `user_id` on every row and treats `23505` as success; only the underlying index's column scope changed.
 
 `import_papergames_blunders.mjs` computes accuracy in the same solver pass as blunder extraction (optimal/scored plies ratio), then upserts it into the game row. Re-import is required to populate accuracy for rows created before migration 039.
 

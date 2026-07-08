@@ -56,7 +56,7 @@ PK: `id`
 
 `puzzles` has no `approved`/`status` column — approval is `is_active` (boolean). `candidates` uses `status` (text) instead. Querying a nonexistent `approved` column returns Postgres `42703`.
 
-**`shape_key`** / **`position`** / **`highlight_cells`** were added in migration 044. `shape_key` is the canonical shape fingerprint computed by `shapeKeyForPuzzle` (`server/shapeDescriptor.js`); `position` is the draw-order index that interleaves shapes for variety; both are assigned in bulk by the localhost-only `POST /api/admin/puzzles/reindex` endpoint (`server/index.js`), which groups a category's active puzzles by `shape_key` and round-robins `position` across the groups. `GET /api/puzzles/draw` returns puzzles `ORDER BY position`, so consecutive puzzles tend to differ in shape. Migration 044 grants `SELECT` on these three columns to `anon`/`authenticated`. `highlight_cells` mirrors the same column on `candidates`.
+**`shape_key`** / **`position`** / **`highlight_cells`** were added in migration 044. `shape_key` is the canonical shape fingerprint computed by `shapeKeyForPuzzle` (`server/shapeDescriptor.js`); `position` is the draw-order index that interleaves shapes for variety; both are assigned in bulk by the localhost-only `POST /api/admin/puzzles/reindex` endpoint (`server/index.js`), which groups a category's active puzzles by `shape_key` and round-robins `position` across the groups. `GET /api/puzzles/draw` returns puzzles `ORDER BY position`, so consecutive puzzles tend to differ in shape. Migration 044 grants `SELECT` on these three columns to `anon`/`authenticated`. `highlight_cells` mirrors the same column on `candidates`. The `shapeDescriptor.js` serializer MUST stay deterministic (sorted keys, `key=value|` fields, `(...)` nesting) — two different serializations of the same shape split identical shapes into separate `shape_key` groups and silently break the round-robin.
 
 ---
 
@@ -141,12 +141,32 @@ FK: `puzzle_id` → `puzzles.id`, `user_id` → `users.id`
 
 ---
 
+## `games`
+
+AI sparring game records (migration 026; `accuracy real` added by 036; RLS by 037).
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| id | uuid | NO | `gen_random_uuid()` |
+| user_id | uuid FK auth.users ON DELETE SET NULL | YES | |
+| device_uuid | text | NO | |
+| moves | text | NO | |
+| difficulty | text CHECK in ('easy','medium','hard','perfect') | NO | |
+| side | text CHECK in ('first','second') | NO | |
+| result | text CHECK in ('win','loss','draw') | NO | |
+| accuracy | real | YES | |
+| created_at | timestamptz | NO | `now()` |
+
+Index: `idx_games_device_created (device_uuid, created_at DESC)`. Grants: `SELECT, INSERT TO anon, authenticated` (required — without them PostgREST returns 42501).
+
+`side` is stored as `'first'`/`'second'` — never color words. ALL completed games write a server row, anonymous users included (keyed by `device_uuid`): post-game analysis fetches movestrings server-side by `game_id`, so a localStorage-only record cannot serve it. The game `id` passed to `go('review', { id })` may be `null` if the insert failed — review flows must handle a missing game ID gracefully.
+
 ## `papergames_games`
 
 Games imported from papergames.io. Separate from `games` (AI sparring) because the data shape differs: no `difficulty`, opponent metadata is stored.
 
 PK: `id`
-Unique: `papergames_room_uid`
+Unique: `(user_id, papergames_room_uid)` — composite, per-user (migration 053; was a global `UNIQUE(papergames_room_uid)` before). See "Per-user ownership" note below.
 FK: `user_id` → `auth.users(id) ON DELETE SET NULL`
 
 | Column | Type | Nullable | Default |
@@ -172,8 +192,10 @@ FK: `user_id` → `auth.users(id) ON DELETE SET NULL`
 
 Index: `(user_id, played_at DESC)` for per-user game listing.
 RLS: Disabled (server accesses via service-role key).
-`papergames_room_uid` is the deduplication key (papergames.io room identifier).
+`papergames_room_uid` is the deduplication key (papergames.io room identifier), scoped **per user** since migration 053 — see below.
 `accuracy` is percentage of optimal user plies (0–100), computed during import; null for rows imported before migration 039.
+
+**Per-user ownership (migration `053_papergames_ownership_and_blunder_index.sql`)**: `papergames_room_uid` was previously globally `UNIQUE`, so two different users importing the same external room (e.g. a shared/community papergames.io account) collided — the second user's import upsert (`onConflict: 'papergames_room_uid'`) silently reassigned the first user's row to the second user, transferring the game and all future blunder linkage away from user A with no visible error. Migration 053 drops that global constraint and adds `papergames_games_user_room_unique UNIQUE (user_id, papergames_room_uid)` instead, so each user gets their own row for the same room. `upsertGame()` (`server/papergamesImporter.js`) now upserts with `onConflict: 'user_id,papergames_room_uid'`. Two users importing the same room now produce two independent rows; the same user re-importing their own room still upserts in place (idempotent).
 
 The `blunders` table links via `papergames_game_id uuid nullable FK → papergames_games(id) ON DELETE SET NULL`.
 
@@ -207,7 +229,7 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`, `papergames_game_id`
 Indexes:
 - `idx_blunders_user_unresolved` — `(user_id, created_at) WHERE resolved_at IS NULL`
 - `idx_blunders_severity` — `(user_id, severity DESC) WHERE resolved_at IS NULL`
-- `idx_blunders_papergames_unique` — UNIQUE `(papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (deduplication per papergames game + ply; idempotent re-import)
+- `idx_blunders_papergames_unique` — UNIQUE `(user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (deduplication per **user** + papergames game + ply; idempotent re-import). Re-scoped to include `user_id` by migration `053_papergames_ownership_and_blunder_index.sql` (was `(papergames_game_id, move_index)` before — a global index, ship alongside the `papergames_games` ownership fix above since each user now gets their own `papergames_game_id` for the same imported room, so `move_index` values legitimately repeat across users' rows for the same position).
 
 > `idx_blunders_game_unique` was **dropped** in migration 041. It was a UNIQUE partial index on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`. It caused bulk imports to silently discard entire batches when any single row was a duplicate — the whole transaction rolled back, the error was treated as benign, and 0 rows were written. Duplicate blunder rows are now acceptable.
 

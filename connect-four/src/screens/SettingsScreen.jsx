@@ -132,10 +132,27 @@ export function SettingsScreen({ go, goBack }) {
           stopPolling();
           if (job.capReached) {
             setImportResult("You've reached your 15-game limit.");
-          } else if (job.blunderErrors > 0) {
-            setImportError(`Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}, but analysis failed to save for ${job.blunderErrors} move${job.blunderErrors !== 1 ? 's' : ''}. Please try re-importing.`);
           } else {
-            setImportResult(`Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}.`);
+            // T032/T036 (spec 041 US5/US6): report imported/skipped/blunderErrors as
+            // distinct, honestly-worded counts rather than collapsing any non-zero
+            // count into a single generic error. NOTE: `skipped` counts rooms that
+            // could not be processed (transient fetch/parse/analysis failure) — the
+            // importer does not track "already-imported duplicate" as a separate
+            // count (see docs/architecture/api-conventions.md, GET
+            // /api/user/papergames/import/status). Copy below describes what the
+            // field actually measures instead of asserting "duplicate" causation
+            // the code cannot back up.
+            let result = `Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}.`;
+            if (job.skipped > 0) {
+              result += ` ${job.skipped} game${job.skipped !== 1 ? 's' : ''} couldn't be processed and ${job.skipped !== 1 ? 'were' : 'was'} skipped.`;
+            }
+            setImportResult(result);
+
+            if (job.blunderErrors > 0) {
+              setImportError(`Your games were imported, but analysis failed to save for ${job.blunderErrors} move${job.blunderErrors !== 1 ? 's' : ''}. Try re-importing to retry the analysis.`);
+            } else {
+              setImportError(null);
+            }
           }
         } else if (job.status === 'error') {
           stopPolling();
@@ -267,6 +284,19 @@ export function SettingsScreen({ go, goBack }) {
             <p style={{ fontSize: 13, color: 'var(--eval-bad)', margin: '10px 0 0' }}>
               {importError}
             </p>
+          )}
+          {/* T035/T036 (spec 041 US6): post-import CTA to Past Games — shown for any
+              completed job that produced a result message (full success, capReached,
+              or partial success with skipped/blunderErrors), never for a hard job
+              failure (job.status === 'error', which only sets importError). */}
+          {importResult && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => go('pastGames')}
+              style={{ fontSize: 14, padding: '8px 20px', marginTop: 10 }}
+            >
+              View imported games
+            </button>
           )}
         </section>
       </div>

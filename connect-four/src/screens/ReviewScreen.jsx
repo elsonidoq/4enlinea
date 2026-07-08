@@ -8,8 +8,41 @@ import { track } from '../lib/track.js';
 import { buildBoard } from '../lib/board.js';
 import { PAID_CATEGORIES } from '../lib/categories.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
+
+// Page size used while paging the coach queue to completion (FR-003a).
+const QUEUE_PAGE_LIMIT = 200;
+
+// Pages GET /api/coach/queue?<queueParam> to completion, per FR-003a — no consumer may rely on
+// a single default-sized page. Returns the accumulated blunders array (unsorted).
+async function fetchAllQueueBlunders(queueParam) {
+  let offset = 0;
+  let accumulated = [];
+  let total = Infinity;
+  let keepGoing = true;
+
+  while (keepGoing) {
+    const r = await fetch(`${API}/api/coach/queue?${queueParam}&limit=${QUEUE_PAGE_LIMIT}&offset=${offset}`, {
+      credentials: 'include',
+    });
+    const data = r.ok ? await r.json() : { blunders: [], total: 0 };
+    const page = data.blunders || [];
+    accumulated = accumulated.concat(page);
+    total = data.total ?? accumulated.length;
+
+    keepGoing = shouldContinuePaging({
+      pageLength: page.length,
+      limit: QUEUE_PAGE_LIMIT,
+      accumulated: accumulated.length,
+      total,
+    });
+    offset += QUEUE_PAGE_LIMIT;
+  }
+
+  return accumulated;
+}
 
 function getQualityColor(quality) {
   if (quality === 'optimal') return 'var(--eval-good)';
@@ -94,17 +127,14 @@ export function ReviewScreen({ go, goBack, id }) {
           : null;
         track('game_reviewed', { gameId: id, accuracy, blunderCount: data.blunderCount });
 
-        // Fire-and-forget: fetch game blunder list for ✕-node navigation
+        // Fire-and-forget: fetch game blunder list for ✕-node navigation, paged to completion
         if (session) {
           const queueParam = data.source === 'papergames'
             ? `papergames_game_id=${id}`
             : `game_id=${id}`;
-          fetch(`${API}/api/coach/queue?${queueParam}`, {
-            credentials: 'include',
-          })
-            .then(r => r.ok ? r.json() : { blunders: [] })
-            .then(d => {
-              const sorted = (d.blunders || []).slice().sort((a, b) => a.moveIndex - b.moveIndex);
+          fetchAllQueueBlunders(queueParam)
+            .then(blunders => {
+              const sorted = blunders.slice().sort((a, b) => a.moveIndex - b.moveIndex);
               setGameBlunderList(sorted);
             })
             .catch(() => setGameBlunderList([]));
