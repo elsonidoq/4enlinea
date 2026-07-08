@@ -67,3 +67,46 @@ Score from c4solver `-a` = from current player's perspective:
 **`detectFigure7`/`detectJShape` evaluate the board AS-IS** — a pattern is fully present or not; they do NOT detect one-move-away states. The transition logic for puzzle generation (iterate legal columns, simulate, verify pattern was absent before) lives in `checkFigure7Predicate` / `checkJShapePredicate` in `candidate-generator.js`.
 
 **`_scores` caller-signature trap:** both `detectFigure7` and `detectJShape` accept `_scores` and ignore it, but `classifyPattern` still passes it — do NOT remove the parameter or the call site breaks.
+
+
+---
+
+## (merged from `reference_highlight_metadata_null_categories` — Which puzzle categories have highlight_metadata = null vs non-null on the puzzles table, verified against classifier.js source)
+
+## Categories with stored `highlight_metadata` (non-null on puzzles table)
+
+| Category | Metadata type |
+|---|---|
+| `z_threat` | capsule |
+| `undercut` | cells |
+| `overcut` | cells |
+| `figure_7` | cells |
+| `j_shape` | cells |
+
+## Categories with `highlight_metadata` = null on puzzles table
+
+| Category | Why null |
+|---|---|
+| `immediate_threat` | No metadata path in evaluatePredicate (fallthrough) |
+| `forced_block` | No metadata path in evaluatePredicate (fallthrough) |
+| `double_threat` | No metadata path in evaluatePredicate (fallthrough) |
+| `forced_win` | Classifier returns `{matched, cells:[]}` with no highlightMetadata; `highlight_cells` exists on candidates table only and is silently discarded at approval (approval endpoint writes `highlight_metadata: candidate.highlight_metadata ?? null` but never reads `highlight_cells`) |
+| `claimeven` | Explicit null in candidate-generator |
+| `forbidden_columns` | Uses `highlight_cells` column (different from `highlight_metadata`), not copied to puzzles table |
+| `odd_even_threat` | Explicit null in candidate-generator |
+
+## Key traps
+
+- **forced_win is the trickiest**: `computeForcedWinHighlight` produces a 5-cell structure (`hint/loser/hint/loser/winner`) stored on `candidates.highlight_cells`. The approval endpoint copies `highlight_metadata` only — the 5-cell data is silently discarded. If you need forced_win highlights on puzzles, `highlight_cells` must be explicitly copied at approval time.
+- **claimodd was removed entirely** — see [[project_category_cleanup]].
+
+## Related
+
+- [[project_classifier_architecture]] — detection pipeline & detector traps
+- [[project_new_category_wiring_checklist]] — highlight_metadata schema design
+
+---
+
+## correct_col cannot be re-derived from highlight_metadata (claimeven/figure_7/j_shape)
+
+`correct_col` (integer, in both `puzzles` and `candidates` — see `docs/architecture/db-schema.md`) stores the single correct column at candidate/puzzle creation time because it **cannot be re-derived from `highlight_metadata`** for claimeven, figure_7, and j_shape. Added by migration `016_correct_col.sql` (must run after 012's grants). Any query SELECTing/INSERTing `correct_col` in a fresh environment must confirm 016 was applied.

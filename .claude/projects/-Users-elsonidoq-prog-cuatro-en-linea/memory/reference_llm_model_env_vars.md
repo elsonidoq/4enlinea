@@ -23,3 +23,5 @@ reference `EXPLAIN_MODEL`. Both are in local `server/.env` but NOT shipped — t
 set in the Railway/staging environment for the deployed endpoint to work.
 
 See [[project_boot_path_env_read_crash]]; arch table in `server-conventions.md`.
+
+**Gemini**: the correct model id for any `mcp__gemini__gemini-query` call is `gemini-3.1-pro-preview` — `gemini-3.1-pro` and `gemini-2.0-flash` are wrong fallbacks (user-confirmed).

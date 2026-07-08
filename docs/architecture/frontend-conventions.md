@@ -79,6 +79,16 @@ On first sign-in, `IndexedDBStore.migrateToSupabase(supabaseStore, supabaseClien
 
 `IndexedDBStore` additionally provides `getAllPuzzleAttempts()` (used only during migration) and `migrateToSupabase(supabaseStore, supabaseClient)`. `SupabaseStore.migrateToSupabase()` exists but throws — it is not part of the shared interface and must never be called on a `SupabaseStore` instance.
 
+**`recordPuzzleAttempt` canonical shape** — the store spreads its argument directly with no schema validation, so the 6-field snake_case shape is mandatory; any other shape silently writes an incompatible record that breaks Stats/accuracy aggregation:
+
+```js
+{ puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms }
+```
+
+Do not introduce a new shape without migrating all callers and the store simultaneously. (Since spec 030, the server derives `device_uuid` from the session for `POST /api/user/puzzle-attempts`; the store method signature keeps the field.)
+
+**`recordPuzzleAttempt` must be called on every correct answer** — puzzle advancement filters the pool by `solvedIds` from recorded attempts. A correct-answer branch that skips the call leaves the puzzle in the pool and "Next puzzle" reloads the same puzzle forever. Every correct-answer submit handler (normal column click, forbidden-columns submit, future categories) MUST record the attempt; wrong answers need recording only for blunder tracking, not advancement.
+
 ## IndexedDB Schema
 
 Database name: `decodec4`, version 2.
@@ -250,6 +260,21 @@ The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzl
 
 **Note:** Any reference in memory docs or older specs to a `SequenceHandler` component is stale. The component was removed; its logic lives entirely in `ChallengeScreen.handleSequenceClick`.
 
+**`threatCells` shape mismatch**: `POST /api/puzzles/:id/sequence/move` returns `threatCells` as `{ c, r }` objects — **not** `{ col, row }` as the `/check` endpoint uses.
+
+**`isSubmitting` is cleared per-branch, never in `finally`**: `handleSequenceClick` deliberately has no `finally` block. `setIsSubmitting(false)` is explicit in each branch — inside the `setTimeout` callback for `continue` (~300 ms, async), after `setPhase('post-move')` for `success`, after the coach message for `wrong`, and in `catch`. Any new branch MUST include its own `setIsSubmitting(false)`; a `finally` would clear it synchronously and break the animated `continue` path.
+
+### Evaluation state shape (polymorphic)
+
+`ChallengeScreen`'s `evaluation` state object differs by category:
+
+- **Standard single-move categories**: `{ quality, badge, summaryLineKey, patternTag?, coachMood? }` — `summaryLineKey` is an i18n key passed to `t()` at render time.
+- **forbidden_columns**: `{ quality, badge, summaryLine }` — `summaryLine` is a **pre-rendered string** (the suboptimal case needs `{{found}}/{{total}}` interpolation that can't be deferred); there is no `summaryLineKey` field.
+
+The Tier-1 strip renders `evaluation.summaryLine ?? t(evaluation.summaryLineKey)` — always use this fallback pattern; never assume one field is present. New categories needing interpolation in the summary line should use the pre-rendered `summaryLine` approach.
+
+**Mode extensions must audit bare `category` references**: when a new mode replaces the `category` prop (e.g. lesson mode with `confirmationCategory`), introduce `const effectiveCategory = newMode ? altCategory : category` and grep `ChallengeScreen.jsx` for bare `category` uses — a missed one silently produces raw i18n keys like `coach.undefined.prompt.0` at runtime.
+
 ### Deep Reveal bottom-sheet panel
 
 After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the LLM explanation inside the sheet.
@@ -257,6 +282,8 @@ After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more
 ### `challengeSets.js` i18n-key shape convention
 
 All entries in `connect-four/server/challengeSets.js` use `displayNameKey` and `descriptionKey` fields (i18n key strings, e.g. `'challengeSet.immediate_threat.displayName'`). No literal `displayName`/`description` strings are stored. `SetPickerScreen` resolves display names via `t(set.displayNameKey) ?? set.slug`.
+
+The registry is **server-side only** — there is no `src/lib/challengeSets.js` and none must be created. `SetPickerScreen` reads set data from the `GET /api/puzzles/counts` response, which returns the `challengeSets.js` entries verbatim. To add or modify a set, edit the server file only.
 
 ## Category Constants
 
@@ -446,6 +473,10 @@ The mistakes feature has three independent screen routes:
 - **Level 1**: `mistakes` -- `CategoryListScreen` -- entry point, groups blunders by tactical category sorted by severity. Requires auth (gated by `MistakesGate` with `renderSignedOut`).
 - **Level 2**: `mistakeDetail` -- `MistakesListScreen` with `category` prop -- filtered blunder list for one category. Shows Unreviewed/Reviewed tabs.
 - **Level 3**: `blunderDetail` -- `MistakeDetailScreen` with `blunderNavList`, `index`, `mistakeContext` (`'list'` | `'game'`), `mistakeSource` (`{ date, gameId, totalMoves }` | null), and `difficulty` (string | null, passed from `ReviewScreen` for "Start a new game from here") -- individual mistake detail with Prev/Next nav. Both suboptimal and blunder quality rows use this screen. Prev/Next navigates the full `blunderNavList` (all non-optimal moves for the game). Actions: **What should I have played** (deep reveal, updates overlay), **Start a new game from here** (calls `POST /api/games/from-position`; shows difficulty picker when difficulty is null), **Mark as reviewed**. Contextual Back: from a game review the Back button returns to `review`; from the list it calls `goBack()`.
+
+**`ReviewScreen` navigation contract**: registered at `/game/:id`; navigate with `go('review', { id: game.id })` (game UUID) — do NOT pass `moveString`; it is not a prop and the URL mapping only knows `id`. The screen fetches `POST /api/games/analyze` with that id.
+
+**Timeline-to-blunder matching (`ReviewScreen`)**: `navigateToMistake(moveIndex)` takes a **number** (the user-move ordinal, 1-indexed). It routes ALL non-optimal moves to `blunderDetail` via the `gameBlunderList` DB match (no Explorer fallback since the 2026-06-21 unification; the list includes both suboptimal and blunder rows since migration 051). When no row matches (queue still loading, or anonymous user) it is a no-op. The global ply index is `globalPlyIndex = 2*(moveIndex-1)` for `side === 'first'`, `2*(moveIndex-1)+1` for `side === 'second'`; the blunder row is matched where `board_state.length === globalPlyIndex`. `displayMoveNumber = board_state.length + 1` (1-indexed, display only); raw `board_state.length` is the internal join key. These two formulas are the most common source of off-by-one bugs in review navigation.
 
 **Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 14 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
 

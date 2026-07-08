@@ -57,6 +57,10 @@ Check whether any of the following changed during the session:
 
 For each affected file: read the current content, then add or update the relevant section. Do not rewrite sections that are still accurate — only touch what changed. The goal is that after this update, an agent reading only the architecture docs would have an accurate picture of the system.
 
+## Ordering rule for compaction
+
+If `MEMORY.md` needs compacting (size hook fires, or it exceeds 175 lines / 20 KB), run `/compact-memory` only AFTER Steps 1–2 are fully done — first save the session's memories and doc updates, then compact. Never compact with unsaved memories pending.
+
 ## Step 3 — Report
 
 List:

@@ -82,16 +82,32 @@ import blocker where a second user loses all blunders.
 - `[QA:minor B]` `[DUP new_TODOs #26]` No "view imported games" CTA after a successful import.
 
 **Non-obvious facts** (confirmed code locations + traps)
-- `server/index.js` — `/api/coach/queue` (`:2477`, `.limit(50)` `:2508`), `/api/puzzles/counts` (`:1333`),
-  `/api/stats` (`:1242`), `/api/games` (`:1808`), `/api/coach/weakness-map` fallback.
-- `src/screens/MistakesListScreen.jsx` — category cards derived from the (truncated) queue list.
+- `server/index.js` — `/api/coach/queue` (`:2477`, `.limit(50)` `:2508`), `/api/stats` (`:1242`),
+  `/api/games` (`:1808`), `/api/coach/weakness-map` fallback. `/api/puzzles/counts` (`:1333`) **already uses
+  DB-side `count()`** — no conversion needed; not part of US1.3.
+- `src/screens/CategoryListScreen.jsx:35` — category cards derived from `fetch /api/coach/queue?status=all`
+  (the truncated, `.limit(50)` page), not `MistakesListScreen.jsx`. `MistakesListScreen.jsx` is the
+  per-category detail list and already fetches server-filtered by `?category=` (also capped at 50).
 - `server/insertGameBlunder.js` treats `23505` as a benign dup; `server/papergamesImporter.js` counts the
-  collision as `ok` → `blunderErrors:0` (this is why the loss is silent).
+  collision as `ok` → `blunderErrors:0`. This is a symptom, not the root cause of the silent loss: the real
+  cause is `papergames_games` (see below) flipping game ownership before any blunder insert happens.
+- `papergames_games` has a **global** `UNIQUE (papergames_room_uid)` (`db-schema.md:149`).
+  `papergamesImporter.js:163` `upsertGame` upserts with `onConflict: 'papergames_room_uid',
+  ignoreDuplicates: false` — when user B imports a room user A already imported, this **updates the
+  existing row and flips its `user_id` to B**, returning the same `papergames_games.id`. Result: A's game
+  vanishes from A's Past Games (row now owned by B), and B's blunders point at the same shared
+  `papergames_game_id`. Fixing only `idx_blunders_papergames_unique` (adding `user_id`) does not fix this —
+  the game row itself must be per-user.
 - `src/screens/SettingsScreen.jsx` — import success state renders plain text, no CTA.
-- Current index: `UNIQUE (papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` — **no `user_id`**.
+- Current blunder index: `UNIQUE (papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` —
+  **no `user_id`**.
 - `VALID_BLUNDER_TAGS` (`server/blunderTags.js:12,14`) includes `undercut`+`forced_win` — their omission from
   the card list is a bug, not an intentional exclusion.
-- Trap: `/api/stats` `byPattern` has a stored-shape mismatch (always empty) — don't assume it's populated.
+- `/api/stats` computes `byPattern` correctly from `puzzle_attempts JOIN puzzles` — it **is** populated. The
+  "always empty `byPattern`" trap belongs to `GET /api/user/session-stats/all`, not `/api/stats`
+  (memory `project_stats_architecture`); do not conflate the two.
+- The migration-041-style batch-rollback trap does **not** apply here: `insertGameBlunder` inserts row-by-row
+  with per-row `23505` handling, not a batch insert that can partially roll back.
 
 **Authoritative sources of truth**
 - **Spec 030** (`030-server-mediated-data-access`) — the governing contract for these endpoints: **all data
@@ -104,8 +120,19 @@ import blocker where a second user loses all blunders.
 - `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- Change the index to `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL`
+- Change the blunder index to `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL`
   (a DB-level constraint, not app-level dedupe).
+- **Root-cause fix (expanded):** change `papergames_games` from a global `UNIQUE (papergames_room_uid)` to
+  `UNIQUE (user_id, papergames_room_uid)`, and update `upsertGame`'s (`papergamesImporter.js:163`)
+  `onConflict` key from `'papergames_room_uid'` to `'user_id,papergames_room_uid'`. Each user then gets
+  their own game row for a shared room; the blunder-index change alone is necessary but not sufficient.
+- **Count-semantics scope (D1):** US1.3's `count()` conversion is scale-only — it fixes the >1000-row
+  truncation bug but preserves the current blunder-only definition of "count" exactly as-is. Redefining
+  *what* is counted (e.g. mistakes vs. blunders) is out of scope here and belongs to Epic 2 (US2.2).
+- **Category-count delivery (D2):** add a dedicated `GET /api/coach/category-counts` (or
+  `/api/coach/queue/counts`) endpoint returning `{ category: count }` via DB-side `count()`. This lets the
+  `/api/coach/queue` list stay paginated while `CategoryListScreen` cards stay complete at any scale,
+  honoring Spec 030 (server-side aggregation).
 
 ### User stories & tasks
 
@@ -119,35 +146,48 @@ import blocker where a second user loses all blunders.
 
 **US1.2 — Category cards from DB-side counts.**
 *As a player, I want a card for every category that has blunders.*
-1. Replace client-derived-from-50-list cards with DB-side per-category `count()`.
+1. Replace `CategoryListScreen.jsx`'s cards (currently derived from the truncated `/api/coach/queue?status=all`
+   page) with the new `/api/coach/category-counts` (D2) DB-side per-category `count()`.
 2. Ensure every category with ≥1 blunder gets a card (verify undercut, forced_win appear).
 3. Confirm categories map to `VALID_BLUNDER_TAGS`; no valid tag omitted.
-4. Wire `?category=` drill-down to the full per-category list.
+4. Wire `?category=` drill-down to `MistakesListScreen.jsx`'s full per-category list.
 5. Test: cards present for all DB categories at 137-blunder scale.
 
 **US1.3 — Correct aggregates at scale (no 1000-row truncation).**
 *As a player, I want counts to stay correct beyond 1000 rows.*
-1. Convert `/api/puzzles/counts` to DB-side `count()`.
-2. Convert `/api/stats` aggregates to `count()`/pagination (note `byPattern` caveat).
-3. Fix `/api/games` blunder counting to `count()` not unbounded select.
-4. Fix `/api/coach/weakness-map` fallback aggregation.
-5. Test each endpoint with >1000 rows returns a correct count.
+1. Convert `/api/stats` aggregates to `count()`/pagination. (`/api/puzzles/counts` already uses DB-side
+   `count()` — no change needed there.)
+2. Fix `/api/games` blunder counting to `count()` not unbounded select.
+3. Fix `/api/coach/weakness-map` fallback aggregation.
+4. Add the new `/api/coach/category-counts` endpoint (D2), DB-side `count()` grouped by category.
+5. Preserve the current blunder-only definition of "count" in every endpoint touched here (D1); do not
+   redefine what is counted — that is Epic 2 (US2.2) scope.
+6. Test each endpoint with >1000 rows returns a correct count.
 
-**US1.4 — Second-user import persistence (unique index).**
-*As a second user importing a public account, I want my own blunders.*
-1. Migration: drop & recreate the partial unique index as `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL`; name it.
-2. Decide/execute backfill vs clean recreate (single-user DB).
-3. Verify `insertGameBlunder` collision semantics against the new index.
-4. Update `db-schema.md` / `data-model.md`.
-5. Test: user A imports id X, user B imports same X → B has own blunders; A intact.
+**US1.4 — Second-user import persistence (game ownership + unique index).**
+*As a second user importing a public account, I want my own game and my own blunders.*
+1. Migration: change `papergames_games` from global `UNIQUE (papergames_room_uid)` to
+   `UNIQUE (user_id, papergames_room_uid)`.
+2. Update `upsertGame` (`papergamesImporter.js:163`) `onConflict` from `'papergames_room_uid'` to
+   `'user_id,papergames_room_uid'` so each user gets their own game row.
+3. Migration: drop & recreate the blunder partial unique index as
+   `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL`; name it.
+4. Decide/execute backfill vs clean recreate (single-user DB).
+5. Verify `insertGameBlunder` collision semantics against the new blunder index.
+6. Update `db-schema.md` / `data-model.md` for both constraint changes.
+7. Test: user A imports id X, user B imports same X → B has its own game row and own blunders; A's game
+   row and blunders are untouched.
 
-**US1.5 — Honest importer error reporting.**
-*As a user importing, I want real success/error counts.*
-1. `insertGameBlunder` must not swallow genuine (non-duplicate) failures; only a true same-user dup returns ok.
-2. `papergamesImporter` reports real `blunderErrors` (collision "ok" only if genuine same-user re-import).
-3. Surface import warnings in the result payload.
-4. Log duplicate vs error distinctly.
-5. Test: re-import same id same user → no dup rows, no false errors.
+**US1.5 — Honest importer error reporting (surface existing counts; verify post-B1).**
+*As a user importing, I want to see real success/error counts.*
+1. Surface the already-computed `blunderErrors`/`skipped` counts (`papergamesImporter.js:355-356`,
+   `insertGameBlunder.js` already returns `false`/logs on genuine non-`23505` errors) in the import result
+   payload returned to the client.
+2. Reflect these counts in the `SettingsScreen` import copy (e.g. "N blunders skipped as duplicates").
+3. Regression test: post-US1.4, a cross-user import of the same room no longer hits `23505` at all (since
+   each user now gets their own game row); `23505` on the blunder index means exclusively a genuine
+   same-user re-import.
+4. Test: re-import same id same user → no dup rows, no false errors.
 
 **US1.6 — View-imported-games CTA.**
 *As a user who just imported, I want a button to my imported games.*
@@ -160,7 +200,8 @@ import blocker where a second user loses all blunders.
 **Acceptance criteria**
 - With 137 blunders, all are reachable and every category with ≥1 blunder (incl. undercut, forced_win) has a card.
 - Each aggregate endpoint returns a correct count with >1000 rows (no silent truncation).
-- User A imports id X, user B imports same X → B has its own blunders, A's intact.
+- User A imports id X, user B imports same X → B has its own game row and its own blunders; A's game
+  remains visible in A's Past Games and A's blunders are intact.
 - Re-import same id as the same user → no dup rows, no false `blunderErrors`.
 - Post-import, SettingsScreen shows an interactive element linking to Past Games.
 

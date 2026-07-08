@@ -18,4 +18,4 @@ metadata:
 **`GET /api/puzzles/:id` returns `interactionMode` (camelCase)** — routing logic keys off this field to decide which interaction flow to use.
 
 [[project-interaction-mode-architecture]]
-[[project-new-puzzle-categories]]
+[[project_new_category_wiring_checklist]]
