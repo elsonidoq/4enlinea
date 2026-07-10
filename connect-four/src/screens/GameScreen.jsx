@@ -143,6 +143,7 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         meta={`Move ${moveHistory.length}`}
         rightIcon="gear"
         onRight={() => {}}
+        onLogoClick={() => go('home')}
       />
 
       <CoachDialog fixed messages={coachMessages} />

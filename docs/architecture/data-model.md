@@ -31,6 +31,12 @@ Migration 036 added `game_id uuid` (nullable FK → `games(id)`, `ON DELETE SET 
 
 Migration 051 added `quality text NOT NULL DEFAULT 'blunder' CHECK (quality IN ('suboptimal', 'blunder'))`. Both suboptimal and blunder plies from post-game analysis are now persisted. Existing rows (all blunders) default to `'blunder'`.
 
+**Storage rule (2026-07, supersedes migration 051's "store every non-optimal ply")**: `server/mistakeStorageRule.js`'s `classifyStoredMistake(bestScore, playedScore, movestring)` is the single gate for all three game-mistake write paths (`POST /api/games/analyze`, `papergamesImporter.extractBlunders`, `POST /api/blunders`). A non-optimal ply is stored only when:
+- it drops the game-theoretic outcome class (win→draw, win→loss, draw→loss), **or**
+- both scores are negative (faster loss) **and** the mover is still *alive* — at least one 4-in-a-row window on the pre-move board contains no opponent disc (`playerHasPotentialWin`).
+
+Slower wins (both scores positive) are never stored: the reason engine's case taxonomy treats `win_to_slower_win` as `notABlunder`, so a stored row would serve a contradictory "no better alternative" deep-reveal explanation. Stored rows are graded by solver score drop: `bestScore − playedScore > 4` → `'blunder'`, else `'suboptimal'` (same threshold precedent as `scoreMove`'s losing branch). `scoreMove`'s per-move `quality` is unchanged and still drives the analyze response's badges/counters — a ply can read `suboptimal` in the review timeline yet have no `blunders` row (ReviewScreen's `selectStep` falls back to a board preview for those). The aliveness gate is deliberately **not** the old `bestScore < 0` skip warned about above: solver-lost-but-alive positions (the norm for the second player) keep their mistakes stored; only truly dead positions are exempt.
+
 ## Soft Delete
 
 **MUST**: Use `is_active boolean NOT NULL DEFAULT true` on `puzzles` for soft delete.

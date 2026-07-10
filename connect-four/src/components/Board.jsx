@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Icon } from './Icon.jsx';
+import { getColumnA11yProps } from './boardA11y.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -202,6 +203,19 @@ export function Board({
           }
         };
 
+        // Spec 043 US1 (FR-001..FR-006): a11y attributes for the per-column wrapper, derived
+        // purely from canPlay/colFull — see contracts/board-a11y-contract.md.
+        const a11y = getColumnA11yProps({ col, canPlay, colFull });
+
+        const handleKeyDown = (e) => {
+          if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+          // Prevent the page from scrolling on Space; call the exact same handleClick reference
+          // used by onClick so the multiSelectMode/onColToggle branch is never reimplemented
+          // (contract Invariant I2, FR-004).
+          e.preventDefault();
+          handleClick();
+        };
+
         const badgeColor =
           badge?.col === col
             ? (badge.type === 'good' ? 'var(--eval-good)' : badge.type === 'mid' ? 'var(--eval-mid)' : 'var(--eval-bad)')
@@ -210,6 +224,11 @@ export function Board({
         return (
           <div
             key={col}
+            className="board-col"
+            role={a11y.role}
+            aria-label={a11y.ariaLabel}
+            tabIndex={a11y.tabIndex}
+            aria-disabled={a11y.ariaDisabled}
             style={{
               flex: '1 1 0',
               display: 'flex',
@@ -227,6 +246,7 @@ export function Board({
               userSelect: 'none',
             }}
             onClick={handleClick}
+            onKeyDown={handleKeyDown}
             onMouseEnter={() => setHoverCol(col)}
           >
             {/* Hover arrow (chevD) above interactive column */}

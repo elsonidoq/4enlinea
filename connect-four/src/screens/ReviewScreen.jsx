@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -59,9 +59,25 @@ export function ReviewScreen({ go, goBack, id }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMistakeIdx, setSelectedMistakeIdx] = useState(0);
+  // Spec 042 US3 / T027 (FR-013, FR-014, contracts/review-stepper-contract.md): the board
+  // position shown for an *optimal* step, stepped in place (no navigation target exists
+  // for an optimal move). null/unset = full-game final position (today's default render,
+  // T030). Transient UI state only — never persisted across remount/reload.
+  const [previewMoveIndex, setPreviewMoveIndex] = useState(null);
   const [copied, setCopied] = useState(false);
   const [gameBlunderList, setGameBlunderList] = useState([]);
   const [gameDate, setGameDate] = useState('');
+  // Found via QA (2026-07-09): React StrictMode's dev-only double effect invocation fired
+  // this screen's POST /api/games/analyze twice for the same id, and the server's per-mistake
+  // INSERT (insertGameBlunder) has no uniqueness guard for AI-sparring (game_id-based) rows
+  // (only papergames_game_id rows are protected, migration 053) — so each double-mount
+  // created literal duplicate `blunders` rows, inflating Past Games' mistake count and
+  // corrupting GET /api/blunders/:id's siblingMistakes "X of Y" position. This ref blocks the
+  // second same-id invocation from re-firing the request at all (refs persist across
+  // StrictMode's simulated remount of the same component instance). A DB-level unique index
+  // (server/migrations/054_blunders_ai_game_unique.sql) is the durable fix; this is
+  // defense-in-depth against any other double-fire source (double-tab, retry, etc).
+  const analyzeStartedForId = useRef(null);
 
   const { speakCoachMessage } = useCoachSpeech();
 
@@ -88,6 +104,8 @@ export function ReviewScreen({ go, goBack, id }) {
       setError(t('sparring.reviewNoGame'));
       return;
     }
+    if (analyzeStartedForId.current === id) return;
+    analyzeStartedForId.current = id;
 
     setLoading(true);
     setError(null);
@@ -112,6 +130,7 @@ export function ReviewScreen({ go, goBack, id }) {
         const data = await res.json();
         setAnalysis(data);
         setSelectedMistakeIdx(0);
+        setPreviewMoveIndex(null); // T030: reset transient preview state on new game load
         setLoading(false);
 
         // Derive formatted game date
@@ -146,11 +165,14 @@ export function ReviewScreen({ go, goBack, id }) {
       });
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Compute mistake indices
-  const mistakeIndices = analysis
-    ? analysis.moves.filter(m => m.quality !== 'optimal').map(m => m.moveIndex)
-    : [];
+  // Spec 042 US3 / T026 (contract "Required behavior" 1): step universe is ALL of
+  // analysis.moves, not just non-optimal ones — Prev/Next/chips must work even on a
+  // zero-mistake game (Edge Case). `navigateToMistake`'s own resolution logic below is
+  // UNCHANGED (contract "Explicitly out of scope") — only its callers changed.
+  const stepIndices = analysis ? analysis.moves.map(m => m.moveIndex) : [];
 
+  // T007 (spec 042 US1): always routes to the unified 'blunderDetail' screen regardless of
+  // quality ('blunder' or 'suboptimal') — no residual legacy split-view fallback branch here.
   function navigateToMistake(moveIndex) {
     const globalPlyIndex = analysis.side === 'first'
       ? 2 * (moveIndex - 1)
@@ -169,26 +191,66 @@ export function ReviewScreen({ go, goBack, id }) {
     // No match yet (queue still loading or anonymous user) — no-op
   }
 
+  // Same per-player-move-number -> ply-count formula `navigateToMistake` uses to find the
+  // matching globalPlyIndex, but returning a *count* (globalPlyIndex + 1) suitable for
+  // `fullMovestring.slice(0, n)` — i.e. "the board after this move is played".
+  function moveIndexToPlyCount(moveIndex) {
+    const globalPlyIndex = analysis.side === 'first'
+      ? 2 * (moveIndex - 1)
+      : 2 * (moveIndex - 1) + 1;
+    return globalPlyIndex + 1;
+  }
+
+  // Spec 042 US3 / T027, T028 (FR-013, FR-014, contract "Required behavior" 2): the single
+  // per-step dispatch used by Prev, Next, and every chip click. Non-optimal steps navigate
+  // to the permalink exactly as before; optimal steps update the in-place board preview
+  // instead of being a no-op.
+  function selectStep(moveIndex) {
+    const move = analysis.moves.find(m => m.moveIndex === moveIndex);
+    if (!move) return;
+    // Navigate only when a stored mistake row exists for this ply. Non-optimal
+    // moves the storage rule excludes (slower wins, dead-position faster
+    // losses — see server/mistakeStorageRule.js) have no row, so they fall
+    // back to the in-place board preview like optimal steps (FR-013: every
+    // step control must change the board).
+    if (move.quality !== 'optimal') {
+      const globalPlyIndex = analysis.side === 'first'
+        ? 2 * (moveIndex - 1)
+        : 2 * (moveIndex - 1) + 1;
+      if (gameBlunderList.some(b => b.moveIndex === globalPlyIndex)) {
+        navigateToMistake(moveIndex);
+        return;
+      }
+    }
+    setPreviewMoveIndex(moveIndex);
+  }
+
   function handlePrev() {
-    if (selectedMistakeIdx === 0 || mistakeIndices.length === 0) return;
+    if (selectedMistakeIdx === 0 || stepIndices.length === 0) return;
     const newIdx = selectedMistakeIdx - 1;
     setSelectedMistakeIdx(newIdx);
-    navigateToMistake(mistakeIndices[newIdx]);
+    selectStep(stepIndices[newIdx]);
   }
 
   function handleNext() {
-    if (selectedMistakeIdx === mistakeIndices.length - 1 || mistakeIndices.length === 0) return;
+    if (selectedMistakeIdx === stepIndices.length - 1 || stepIndices.length === 0) return;
     const newIdx = selectedMistakeIdx + 1;
     setSelectedMistakeIdx(newIdx);
-    navigateToMistake(mistakeIndices[newIdx]);
+    selectStep(stepIndices[newIdx]);
   }
 
-  // Build frozen board when analysis is ready
+  // Build frozen board when analysis is ready.
   // T003: lastDrop computation removed — ReviewScreen passes lastDrop={null}
   // to prevent drop animations on every step-back through a reviewed game.
+  // T027/T030: when previewMoveIndex is set (an optimal step was selected), render the
+  // board as of that move instead of the full game's final position. Unset (default,
+  // never-stepped) behaves exactly as before — full-game final position.
   let frozenBoard = null;
   if (analysis?.fullMovestring) {
-    const { board } = buildBoard(analysis.fullMovestring);
+    const plyCount = previewMoveIndex != null
+      ? moveIndexToPlyCount(previewMoveIndex)
+      : analysis.fullMovestring.length;
+    const { board } = buildBoard(analysis.fullMovestring.slice(0, plyCount));
     frozenBoard = board;
   }
 
@@ -211,7 +273,7 @@ export function ReviewScreen({ go, goBack, id }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Review" onBack={goBack} />
+      <TopBar title="Review" onBack={goBack} onLogoClick={() => go('home')} />
 
       <CoachDialog fixed messages={coachMessages} />
 
@@ -337,7 +399,14 @@ export function ReviewScreen({ go, goBack, id }) {
                     <button
                       key={move.moveIndex}
                       type="button"
-                      onClick={isOptimal ? undefined : () => navigateToMistake(move.moveIndex)}
+                      // Spec 042 US3 / T028 (FR-014): every chip dispatches through the same
+                      // per-step logic as Prev/Next — optimal chips update the in-place
+                      // board preview instead of a no-op; non-optimal chips still navigate.
+                      onClick={() => {
+                        const idx = stepIndices.indexOf(move.moveIndex);
+                        if (idx !== -1) setSelectedMistakeIdx(idx);
+                        selectStep(move.moveIndex);
+                      }}
                       style={{
                         width: 36,
                         height: 36,
@@ -348,7 +417,7 @@ export function ReviewScreen({ go, goBack, id }) {
                         fontFamily: 'var(--font-display)',
                         fontWeight: 700,
                         fontSize: 13,
-                        cursor: isOptimal ? 'default' : 'pointer',
+                        cursor: 'pointer',
                         flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
@@ -371,7 +440,7 @@ export function ReviewScreen({ go, goBack, id }) {
             <button
               type="button"
               onClick={handlePrev}
-              disabled={selectedMistakeIdx === 0 || mistakeIndices.length === 0}
+              disabled={selectedMistakeIdx === 0 || stepIndices.length === 0}
               style={{
                 flex: 1,
                 padding: '12px 0',
@@ -382,8 +451,8 @@ export function ReviewScreen({ go, goBack, id }) {
                 fontWeight: 700,
                 fontSize: 15,
                 color: 'var(--ink)',
-                cursor: (selectedMistakeIdx === 0 || mistakeIndices.length === 0) ? 'default' : 'pointer',
-                opacity: (selectedMistakeIdx === 0 || mistakeIndices.length === 0) ? 0.4 : 1,
+                cursor: (selectedMistakeIdx === 0 || stepIndices.length === 0) ? 'default' : 'pointer',
+                opacity: (selectedMistakeIdx === 0 || stepIndices.length === 0) ? 0.4 : 1,
               }}
             >
               {t('sparring.prevMistake')}
@@ -391,7 +460,7 @@ export function ReviewScreen({ go, goBack, id }) {
             <button
               type="button"
               onClick={handleNext}
-              disabled={selectedMistakeIdx === mistakeIndices.length - 1 || mistakeIndices.length === 0}
+              disabled={selectedMistakeIdx === stepIndices.length - 1 || stepIndices.length === 0}
               style={{
                 flex: 1,
                 padding: '12px 0',
@@ -402,8 +471,8 @@ export function ReviewScreen({ go, goBack, id }) {
                 fontWeight: 700,
                 fontSize: 15,
                 color: '#fff',
-                cursor: (selectedMistakeIdx === mistakeIndices.length - 1 || mistakeIndices.length === 0) ? 'default' : 'pointer',
-                opacity: (selectedMistakeIdx === mistakeIndices.length - 1 || mistakeIndices.length === 0) ? 0.4 : 1,
+                cursor: (selectedMistakeIdx === stepIndices.length - 1 || stepIndices.length === 0) ? 'default' : 'pointer',
+                opacity: (selectedMistakeIdx === stepIndices.length - 1 || stepIndices.length === 0) ? 0.4 : 1,
               }}
             >
               {t('sparring.nextMistake')}

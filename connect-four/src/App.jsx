@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
-import { ProfileStoreProvider } from './store/ProfileStore.jsx';
+import { ProfileStoreProvider, useStore } from './store/ProfileStore.jsx';
 import { DebugProvider } from './context/DebugContext.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { SCREENS } from './lib/screenRegistry.jsx';
 import { SURFACE_BG } from './lib/surfaceGroups.js';
 import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
+import { consumeReturnTo } from './lib/postLoginReturn.js';
 import './i18n/index.js';
 
 const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
@@ -13,6 +14,7 @@ const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
 function Navigator() {
   const [screen, setScreen] = useState('home');
   const [params, setParams] = useState({});
+  const { session } = useStore();
 
   // Mount effect: parse the current URL and initialise screen state.
   // Replaces the old effect that just called setActiveScreen('home').
@@ -83,6 +85,15 @@ function Navigator() {
   const goBack = useCallback(() => {
     window.history.back();
   }, []);
+
+  // FR-013's single named consumption point: whenever `session` transitions to truthy (fresh
+  // OAuth completion, or an ordinary cookie-restored mount), consume any stashed post-login
+  // return destination. No-op unless a gated CTA actually stashed one — see research.md R3.
+  useEffect(() => {
+    if (!session) return;
+    const dest = consumeReturnTo();
+    if (dest) go(dest.screenKey, dest.params);
+  }, [session]);
 
   const bgToken = SURFACE_BG[screen] ?? '--bg-home';
   const ScreenComponent = SCREENS[screen];

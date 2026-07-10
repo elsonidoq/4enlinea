@@ -6,6 +6,7 @@ import { CoachDialog } from '../components/CoachDialog.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
+import { stashReturnTo } from '../lib/postLoginReturn.js';
 
 export function HomeScreen({ go }) {
   const { t } = useTranslation();
@@ -23,7 +24,7 @@ export function HomeScreen({ go }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
-        title={<>Decode<span style={{ color: 'var(--disc-green)' }}>C4</span></>}
+        onLogoClick={() => go('home')}
         right2="gear"
         onRight2={() => session ? go('settings') : setAuthOpen(true)}
         rightIcon="user"
@@ -77,7 +78,14 @@ export function HomeScreen({ go }) {
           title={t('home.past_games.title')}
           subtitle={t('home.past_games.subtitle')}
           wide
-          onClick={() => go('pastGames')}
+          onClick={() => {
+            if (session) {
+              go('pastGames');
+            } else {
+              stashReturnTo('pastGames');
+              setAuthOpen(true);
+            }
+          }}
         />
 
         <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />

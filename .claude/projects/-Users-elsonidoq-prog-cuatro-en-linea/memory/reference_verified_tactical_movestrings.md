@@ -39,6 +39,13 @@ Solver-verified example movestrings for the strategic rules. Coordinates in the 
 - **Outcome:** all scr negative (Yellow wins). The two same-column odd threats produce NO V1/V3 win — confirms T4 (no cumulative bonus for same-parity threats in one column); Yellow's win is external structure. Verified 2026-05-17. Use as the Case-A regression for any T4 detector / parity analyzer / threat-simplifier.
 - **Still PENDING movestrings:** T4 Case B (opposite-colour same-parity same column: R@(C,3)+Black@(C,5)); false positives for same-parity-different-column (V1), same-column-different-parity (T5), same-column-adjacent-rows (T1).
 
+## double_threat — detector-verified boards (verified 2026-07-08 via `detectDoubleThreat` in `classifier.js`)
+| Movestring | Player | Detector cells (1-indexed cXrY) |
+|---|---|---|
+| `41442625312235115445550126400` | P1 (Green) | `c1r4`, `c4r3` |
+| `3333364101252113121524` | P2 (Gray) | `c5r3`, `c7r2` |
+- **TRAP — an open three is NOT necessarily a double_threat.** `33243432244` has Gray's open three `_OOO_` on row 2, but both end cells float above empty columns (not gravity-top) → `detectDoubleThreat` returns `matched:false` for BOTH players. Both production detectors (`classify` Case A/B and `detectDoubleThreat`) require gravity-top threats: Case A = ≥2 distinct columns with immediately-playable threats; Case B = stacked consecutive-row threats whose lower cell is gravity-top. Never eyeball "two threat cells" as a double threat — run the detector. (This bogus example+cell `c2r1` circulated in polish_epic.md Epic 2 until fixed 2026-07-08; spec 042 SC-008 uses the two verified boards above.)
+
 Related: [[reference_external_pdfs]].
 
 

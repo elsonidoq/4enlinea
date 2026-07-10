@@ -1,6 +1,6 @@
 import { Icon } from './Icon.jsx';
 
-export function TopBar({ title, onBack, meta, rightIcon, onRight, right2, onRight2 }) {
+export function TopBar({ title, onBack, meta, rightIcon, onRight, right2, onRight2, onLogoClick }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 20px 10px', flexShrink: 0 }}>
       {onBack && (
@@ -11,6 +11,12 @@ export function TopBar({ title, onBack, meta, rightIcon, onRight, right2, onRigh
           <Icon name="back" size={20} />
         </button>
       )}
+      <button
+        onClick={onLogoClick || undefined}
+        style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, color: 'var(--ink)', background: 'none', border: 'none', padding: 0, margin: 0, cursor: onLogoClick ? 'pointer' : 'default', flexShrink: 0 }}
+      >
+        Decode<span style={{ color: 'var(--disc-green)' }}>C4</span>
+      </button>
       {title && (
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, color: 'var(--ink)' }}>
           {title}

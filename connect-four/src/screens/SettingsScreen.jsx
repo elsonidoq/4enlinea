@@ -172,14 +172,81 @@ export function SettingsScreen({ go, goBack }) {
     return () => clearInterval(interval);
   }, [importJobId]);
 
+  // ── Dev-only local reset ───────────────────────────────────────────────────
+  // Wipes local IndexedDB data (anonymous progress), signs out (drops the
+  // httpOnly session cookie), and clears web storage, then reloads — landing in
+  // a clean signed-out state. Needed to test signed-out UI locally, where the
+  // session cookie can't be cleared from DevTools. Gated to dev (localhost) like
+  // the AuthModal "Dev: skip auth" button; never shipped to prod/staging.
+  //
+  // We CLEAR the object stores in place rather than indexedDB.deleteDatabase():
+  // a delete is blocked as long as any connection (this tab's live app store, or
+  // another open tab) holds the DB open, leaving the next open() hanging — which
+  // strands the subsequent sign-in, because switchToSupabase awaits _db(). A
+  // clear-transaction needs no exclusive lock, so it never blocks or hangs.
+  function clearIndexedDBData() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => { if (!settled) { settled = true; resolve(); } };
+      let req;
+      try { req = indexedDB.open('decodec4'); } catch { return finish(); }
+      req.onerror = finish;
+      req.onblocked = finish;
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          const names = Array.from(db.objectStoreNames);
+          if (names.length === 0) { db.close(); return finish(); }
+          const tx = db.transaction(names, 'readwrite');
+          names.forEach((n) => tx.objectStore(n).clear());
+          tx.oncomplete = () => { db.close(); finish(); };
+          tx.onerror = () => { db.close(); finish(); };
+          tx.onabort = () => { db.close(); finish(); };
+        } catch { db.close(); finish(); }
+      };
+      setTimeout(finish, 1500); // safety net
+    });
+  }
+
+  async function handleDevReset() {
+    // 1. Drop the server session cookie so we come back signed out.
+    try {
+      await fetch(`${API}/api/auth/signout`, { method: 'POST', credentials: 'include' });
+    } catch { /* ignore */ }
+    // 2. Clear web storages (postLoginReturnTo, any cached prefs).
+    try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
+    // 3. Wipe local IndexedDB data, then reload into a clean signed-out state.
+    await clearIndexedDBData();
+    window.location.reload();
+  }
+
+  const devReset = import.meta.env.DEV && (
+    <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px dashed var(--ink-faint)' }}>
+      <button
+        type="button"
+        onClick={handleDevReset}
+        style={{
+          width: '100%', padding: '10px 0',
+          borderRadius: 12, border: '1.5px dashed #aaa',
+          background: 'transparent', cursor: 'pointer',
+          fontFamily: 'var(--font-body)', fontSize: 13,
+          color: 'var(--ink-soft)',
+        }}
+      >
+        🛠 Dev: clear IndexedDB &amp; sign out
+      </button>
+    </div>
+  );
+
   // ── Unauthenticated view ──────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} />
+        <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ fontSize: 16, margin: 0 }}>Sign in to connect your Papergames account.</p>
         </div>
+        {devReset && <div style={{ padding: '0 18px 26px' }}>{devReset}</div>}
       </div>
     );
   }
@@ -187,7 +254,7 @@ export function SettingsScreen({ go, goBack }) {
   // ── Authenticated view ────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} />
+      <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
 
       <div style={{ padding: '8px 18px 26px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
 
@@ -299,6 +366,8 @@ export function SettingsScreen({ go, goBack }) {
             </button>
           )}
         </section>
+
+        {devReset}
       </div>
     </div>
   );

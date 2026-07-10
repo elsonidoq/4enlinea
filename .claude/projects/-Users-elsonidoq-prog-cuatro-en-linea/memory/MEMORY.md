@@ -12,7 +12,7 @@
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — formal predicates for figure_7/j_shape/undercut/overcut (j_shape/undercut have NO KB entry)
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based algorithm; ~20 solver queries
 - [Z-threat detection](reference_z_threat_detection.md) — odd empty cell count; UI visualization spec
-- [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — Allen V1–V5 + Allis 9 rules + T4 Case-A regression; + T4-vs-forced_win trap (1-indexed movestring)
+- [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — Allen V1–V5 + Allis 9 rules + T4 Case-A; 2 verified double_threat boards + open-three≠DT gravity-top trap
 - [missed_own capitalize principle](project_missed_own_capitalize_principle.md) — double_threat/figure_7/immediate_threat survive wrong moves; missed_own = correctCol BUILDS pattern; only undercut (same col, row≤) kills a fork
 - [Never generate random boards](feedback_no_random_boards.md) — source from DB, git history, or KB
 - [Coordinate convention](reference_coordinate_convention.md) — 0-indexed; two translation boundaries only
@@ -35,9 +35,13 @@
 - [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git history secret-shaped strings all placeholders; NO rotation needed; audit in docs/security_audit_fable.md
 - [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (prod endpoints); EXPLAIN_MODEL=full (compute.mjs eval only); names mislead; Gemini id = gemini-3.1-pro-preview
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
-- [Auth flow traps](project_auth_flow_traps.md) — two supabase clients (DB vs auth) or session contamination; magic-link hash race + redirect allowlist; OAuth encodeURIComponent load-bearing
+- [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; magic-link hash race; OAuth lands on site root + NO route auth guard → gating a CTA never gates its screen
+- [IndexedDB sign-in hang](project_indexeddb_signin_hang.md) — deleteDatabase blocked by any open conn (incl. other tabs) → open() hangs → sign-in silently stalls (switchToSupabase awaits _db() before setSession); clear stores in place
 - [Supabase connection & storage](reference_supabase_connection.md) — sb_secret; session pooler; Node inline pattern; storage upload/createSignedUrl shapes (signedUrl not url)
 - [Suboptimal/blunder unification](project_suboptimal_blunder_unification.md) — quality column; ExplorerScreen deleted
+- [Mistake storage rule quality seam](project_mistake_storage_rule.md) — classifyStoredMistake gates all writes; badge quality ≠ stored quality; suboptimal chips may have no row (preview fallback)
+- [Blunder serving dual paths](project_blunder_serving_dual_paths.md) — TWO independent response builders (:id + ~2560 map); explanation_cache bypasses producer guards
+- [Blunder write integrity](project_blunder_write_integrity.md) — /api/games/analyze is a WRITE vector (user_id-scoped, no device_uuid compare); game_id dedup 3-layer; index-name-reuse silent no-op
 - [Stats architecture](project_stats_architecture.md) — stats from puzzle_attempts; session_stats orphaned; session-stats/all byPattern stored-shape mismatch (always empty; /api/stats byPattern is FINE)
 - [Spec 030 session-stats write asymmetry](project_spec030_server_mediated_data_access.md) — asymmetric write shapes; must not unify
 - [Auth/payments state](project_auth_payments_state.md) — client SDK removed; httpOnly cookies only (credentials:'include', NOT Authorization header); Stripe deferred
@@ -101,7 +105,7 @@
 - [Scripts need meaningful --help](feedback_scripts_meaningful_help.md) — every relevant CLI script ships a real --help/-h; check before required-arg validation
 - [Repo worktree setup traps](project_repo_worktree_setup.md) — worktree base defaults to origin/main (far behind stagging); reset to stagging HEAD; copy gitignored server/.env in
 - [Speckit/epic scoping + scope-by-diff](feedback_speckit_epic_scoping.md) — plan vs speckit vs epic+manager sizing bars; hard algos stay in spec; scope is a diff you MEASURE, not a whole you imagine
-- [Polish epics pipeline](project_polish_epics_pipeline.md) — 8-epic backlog in polish_epic.md; Epic 1 → spec 041 ready; epic "confirmed facts" stale-behavior trap — critiques must re-verify code
+- [Polish epics pipeline](project_polish_epics_pipeline.md) — Epic 1 done, 2→042, 3→043 ready; counts ALREADY include suboptimal; epic AND critique-agent premises both proved false
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; rg/fd/sg; don't pkill shared server; bg subagents can't write; commit pre-existing WIP before SDD
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; handoff + AskUserQuestion gate patterns; never use preview for prose/code options; ASCII diagrams

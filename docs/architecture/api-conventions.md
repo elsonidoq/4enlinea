@@ -580,9 +580,10 @@ Scores every user ply in a completed game and returns a quality summary.
 - `accuracy`: percentage of scored plies that were optimal.
 - `scored`: number of plies that were not forced (i.e., denominator for `accuracy`).
 - `summaryPhraseKey`: i18n key selected from the coach phrase pool based on blunder/suboptimal counts.
-- Auth: Optional (`loadUser` runs; `req.user` may be null). For authenticated users, **both suboptimal and blunder** plies are inserted into the `blunders` table with the appropriate `quality` value during analysis. Anonymous users get no persistence.
+- Auth: Optional (`loadUser` runs; `req.user` may be null). For authenticated users, non-optimal plies that pass the **storage rule** (`server/mistakeStorageRule.js` — see Data Model) are inserted into the `blunders` table with the rule's graded `quality`. Not every `suboptimal`/`blunder`-badged ply is persisted: slower wins and dead-position faster losses are skipped, so `moves[].quality` (from `scoreMove`, drives badges/counters) can differ from whether a `blunders` row exists. Anonymous users get no persistence.
+- **Ownership**: a game whose row has a non-null `user_id` is private to that user — a non-owner (including a different signed-in user) gets `404`, because this endpoint also *writes* blunder rows under the caller's `user_id` and a foreign `gameId` would corrupt the real owner's sibling data. Anonymous, device-scoped games (`user_id` null) stay open (no account to scope to, request body carries only `gameId`); do **not** authorize them by comparing `device_uuid` to `req.user.id` (different id namespaces — never matches). Papergames games always have a `user_id`, so ownership is always enforced for them.
 
-**Errors**: 400 (missing `gameId`), 404 (game not found), 500 (solver error), 503 (Supabase not configured).
+**Errors**: 400 (missing `gameId`), 404 (game not found **or not owned**), 500 (solver error), 503 (Supabase not configured).
 
 **Cache path (authenticated users with existing blunders)**: If the `blunders` table already contains rows for this user + game, the endpoint reconstructs the response from stored data instead of re-running the solver. One SELECT replaces all solver + tagBlunder + blunderSeverity calls. The cached `moves` array has `score`, `bestScore`, `bestCol` set to `null` (the ReviewScreen does not use these fields; MistakeDetailScreen reads them from the coach queue, not from here).
 
@@ -627,9 +628,12 @@ Records a blunder detected during post-game review. Fire-and-forget from the cli
 - `score`: c4solver score of the column actually played (current-player perspective, range ±18). Optional; defaults to 0.
 - `best_score`: c4solver score of the optimal column. Optional; defaults to 0.
 - The server computes `severity = best_score − score` and stores it. Do not send `severity` directly.
+- `quality` is derived server-side by the storage rule, not sent by the client.
 - Auth: **Required** (401 if `req.user` is null).
 
-**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key.
+**Storage rule**: the same `classifyStoredMistake` gate as `/api/games/analyze` (`server/mistakeStorageRule.js`) runs here. A move that is not a stored mistake (slower win, or a dead-position faster loss) is **not** inserted — the endpoint returns `200 { "stored": false, "reason": "not_a_stored_mistake" }` instead of `201`.
+
+**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key. **Or** (`200 OK`) `{ "stored": false, ... }` when the storage rule declined the move, or `{ "deduplicated": true }` on a unique-index conflict.
 
 **Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
 
@@ -654,10 +658,17 @@ Returns a single blunder by UUID. No auth required — this is the public permal
   "severity": 12,
   "blunder_severity": 7.50,
   "game_id": "<uuid>" | null,
+  "papergames_game_id": "<uuid>" | null,
   "moveIndex": 8,
   "threat_cells": [{ "col": 4, "row": 2 }],
+  "patternCells": [{ "col": 0, "row": 3 }],
   "quality": "blunder" | "suboptimal",
-  "is_owner": true
+  "is_owner": true,
+  "totalMoves": 41,
+  "siblingMistakes": [
+    { "id": "<uuid>", "moveIndex": 16, "quality": "suboptimal", "resolved_at": null },
+    { "id": "<uuid>", "moveIndex": 18, "quality": "blunder", "resolved_at": null }
+  ]
 }
 ```
 
@@ -666,6 +677,12 @@ Returns a single blunder by UUID. No auth required — this is the public permal
 - `user_id` is **never** exposed in the response.
 - Response shape is field-for-field identical to coach queue items, plus the `is_owner` boolean.
 - Threat cells are computed server-side via `computeThreatCells(board_state, move_played)`.
+- `papergames_game_id`: mutually exclusive with `game_id` — exactly one of the two is non-null for any real row. Always included in the `.select()` (spec 042 — previously omitted).
+- `totalMoves`: the parent game's total ply count (`moves.length` on the `games` or `papergames_games` row matching whichever of `game_id`/`papergames_game_id` is set). `null` only if neither FK is set on the blunder row.
+- `siblingMistakes`: every `blunders` row sharing the same parent game (matched on whichever of `game_id`/`papergames_game_id` is set on the requested row), ordered by `move_index` ascending, **including the row being requested**. Each entry carries only `id`, `moveIndex`, `quality`, `resolved_at` — no `board_state`/`move_played`/`correct_move`, so stepping to a sibling issues its own lazy `GET /api/blunders/:id`. No `user_id` filter is applied — consistent with the endpoint's public-permalink contract (a visitor sees the same sibling set the owner would). Rows are **de-duplicated by `move_index`** (keeping the currently-viewed `id` if it is itself a duplicate) so "X of Y" stays correct even against pre-existing duplicate AI-sparring rows — see `db-schema.md` `idx_blunders_game_unique` (migration 054).
+- `patternCells`: `[{ col, row }]`, 0-indexed, pattern-agnostic. Computed by looking up `pattern_category` in the tag→detector map (`PATTERN_TAG_TO_DETECTOR`, `server/blunderDetailResponse.js`; source map originates at `classifier.js:1536`) and, if mapped, running that pattern's detector against the board state/perspective that tag requires, converting the detector's 1-indexed `"cXrY"` cell strings to `{col, row}` via `parseCxRy`. Empty array when `pattern_category` has no detector mapping, the detector doesn't match, or the detector legitimately returns no cells (e.g. score-consuming/solver-based detectors). This is a *different* computation from `threat_cells` (which uses `move_played`, not `correct_move`) — see `specs/042-mistake-review-unification/contracts/api-blunders-id.md` for the full per-tag derivation table and the `double_threat`/`immediate_threat` traps. Feeds the same client highlight channel as `threat_cells`.
+- Shape composition (all four new fields) lives in `server/blunderDetailResponse.js` (`buildBlunderDetailResponse`, `fetchBlunderDetailContext`, `computePatternCells`, `parseCxRy`).
+- **List/enriched-map parity**: the list-variant endpoint (`GET /api/blunders`, builder in `server/index.js` around the `res.json({ blunders: enriched, ... })` call) independently constructs its own blunder shape and does **not** delegate to this handler — it carries the same `totalMoves`, `siblingMistakes`, and `patternCells` per row, computed the same way, so in-app navigation and cold-boot permalinks never diverge.
 
 **Errors**:
 - `400` — `{ "error": "invalid blunder id" }` when `id` is not a valid UUID.

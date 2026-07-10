@@ -81,7 +81,7 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
       background: 'var(--bg-chal)',
     }}>
-      <TopBar onBack={() => go('setpicker')} />
+      <TopBar onBack={() => go('setpicker')} onLogoClick={() => go('home')} />
 
       <div style={{ padding: '0 22px 24px', flex: 1, overflowY: 'auto' }}>
         {/* Hero — always shows green check + "Set complete!" */}

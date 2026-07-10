@@ -24,6 +24,16 @@ subsystem), verified against the QA "Suspected code location" fields and the cod
 `NOT included`. The only `##` headings that name an epic are `## Epic 1 …` through `## Epic 8 …` — the
 `## Overview` and `## Appendix` sections are not epics, so `/epics-manager <file> N` selects the Nth `Epic`.
 
+**Staging-checks convention (MANDATORY for every epic).** Any epic acceptance/QA item that cannot be
+fully confirmed in local dev — because it depends on a real external provider, a real cross-origin
+redirect round-trip, a genuinely clean signed-out session, deploy-time config/migrations, or
+production-like data — MUST be appended to **`staging_checks.md`** (repo root), under that epic's own
+`## Epic N — <title>` heading, rather than being marked silently done. Record each check with its
+**What / Why staging / Expected / Source** and a `- [ ]` sign-off checkbox, per the "How to add
+checks" instructions at the top of `staging_checks.md`. `staging_checks.md` is the single staging
+sign-off log across all epics; do not scatter staging TODOs into individual specs. Epic 3 (spec 043)
+seeded this file with the persistent-logo/logged-out-CTA OAuth checks as the worked example to follow.
+
 **User decisions already resolved** (asked this session; also recorded in each epic's `Settled decisions`):
 1. Blunder unique-index → **add `user_id` to the unique index** (Epic 1).
 2. Classifier-based correctness → **every category that has a classifier judges correctness by running that
@@ -234,16 +244,24 @@ deep-links/reload/back, actually replay moves, and stop leaking internal data in
 - `[new_TODOs #18]` `[QA:minor F]` Deep reveal must never emit `community-*` labels or raw `cXrY` tokens in prose.
 
 **Non-obvious facts** (confirmed code locations + traps — reflect verbatim, do not re-derive)
-- `src/screens/MistakeDetailScreen.jsx` renders debug fields at `:359` (movestring), `:362` (`sev:{severity}`),
-  `:364` (`tree:{blunder_severity}`); header/pagination/actions live here too.
+- `src/screens/MistakeDetailScreen.jsx` renders debug fields around `:359` (`blunder.board_state`, i.e. the raw
+  movestring content), `:362` (`sev:{severity}`), `:364` (`tree:{blunder_severity}`); header/pagination/actions
+  live here too.
 - `src/screens/ReviewScreen.jsx` — `navigateToMistake`, the chip row + Prev/Next stepper.
 - `src/screens/PastGamesListScreen.jsx` — `blunder_count` chip / `no_blunders` label at `:108–115`.
 - `src/components/DeepRevealPane.jsx`, `src/components/SplitReveal.jsx` — deep-reveal + split drag.
 - `src/lib/urlMapping.js` (URL_MAP) + `handleBack` — routing/back-stack.
-- `server/index.js` — `/api/games`, `/api/stats`, `/api/coach/queue` counts. Reason render:
+- `server/index.js` — `/api/games`, `/api/coach/queue`, `/api/coach/weakness-map` counts (NOT `/api/stats` —
+  that endpoint aggregates `puzzle_attempts` only and is out of scope for this epic). Reason render:
   `server/scripts/reason_engine/reasonEngine.mjs`, `server/explainContext.js`, `server/llmCoachHelpers.js`.
-- Trap (spec 037): **URL_MAP must *replace* `/blunder` with `/blunder/:id`, not add** (first-match ambiguity);
-  the `is_owner !== false` gate treats `undefined` as truthy — do NOT simplify to `blunder.is_owner`.
+- Already shipped, do not re-do: `src/lib/urlMapping.js:22` already has exactly `/blunder/:id` (no bare
+  `/blunder`) — the "URL_MAP must replace, not add" trap is already satisfied. `is_owner !== false` (treating
+  `undefined` as truthy) is already implemented at `MistakeDetailScreen.jsx:441` — do NOT simplify to
+  `blunder.is_owner`, but no fix is needed here either.
+- Already shipped, do not re-do: the per-game mistake count is already inclusive — `blunderCountsForGames.js`
+  applies no `quality` filter, and both `quality === 'blunder'` and `quality === 'suboptimal'` rows are
+  persisted at post-game analysis (`server/index.js:~2150`); the coach-queue count has an explicit comment at
+  `index.js:2437` confirming both qualities are counted. The residual gap is **labeling only** (see US2.2).
 - Trap: `GET /api/blunders/:id` is the only blunder endpoint without a `user_id` filter (intentional public
   permalink). Papergames blunders key on `papergames_game_id`, not `game_id`.
 - Trap: reason render is **render-only** — do not weaken the engine or alter stored evidence (reason-INVARIANTS I0).
@@ -259,8 +277,16 @@ deep-links/reload/back, actually replay moves, and stop leaking internal data in
 - `docs/architecture/api-conventions.md`, `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- Mistake count = **blunders + suboptimal, everywhere** (Past Games, stats, queue, weakness-map, any "N
-  mistakes" label). One shared server helper; no endpoint keeps a blunder-only count.
+- Mistake count = **blunders + suboptimal, everywhere** (Past Games, coach queue, weakness-map, any "N
+  mistakes" label). This is already true in code today (no server change required — see Non-obvious facts);
+  the remaining work is renaming the *surfaced concept* from "blunders" to "mistakes" in labels/i18n/copy, and
+  auditing that no endpoint silently filters to `quality='blunder'`.
+- Wire name: **keep `blunder_count` as the API field name.** Only user-facing labels/i18n change to
+  "mistakes." A field rename to `mistake_count` is a follow-up ticket, not in scope here (isolates risk, keeps
+  the diff reviewable).
+- Severity UI: **two severities, one layout.** Suboptimal and blunder plies share the same component/structure
+  in the unified detail screen; only a severity chip differs (distinct color + label "Blunder" vs
+  "Suboptimal"). This keeps the "same screen, all 3 buttons" acceptance criterion trivially satisfiable.
 
 ### User stories & tasks
 
@@ -272,13 +298,23 @@ deep-links/reload/back, actually replay moves, and stop leaking internal data in
 4. Update `ReviewScreen.navigateToMistake` to route both qualities to the unified screen; verify no explorer fallback path.
 5. Remove dead explorer props/i18n; add a test that a suboptimal ply and a blunder ply both mount the same component with all 3 buttons.
 
-**US2.2 — Consistent "mistakes = blunders + suboptimal" counts.**
+**US2.2 — Rename the surfaced concept from "blunders" to "mistakes" (terminology/labeling).**
 *As a player, I want "N mistakes" to include suboptimal moves so a lost game never reads "no mistakes."*
-1. Add one server helper computing count = blunders + suboptimal from `blunders.quality`.
-2. Update `GET /api/games` mistake count to use the helper (preserve field name or migrate consumers).
-3. Update `GET /api/stats` accuracy/mistake aggregates to include suboptimal (mind `byPattern` stored-shape caveat).
-4. Update coach queue / weakness-map counts to the unified definition.
-5. Update `PastGamesListScreen` chip + `no_blunders` copy/i18n (`en.json`) and add a test: a game with 0 blunders + ≥1 suboptimal shows non-zero mistakes.
+The count arithmetic already includes suboptimal moves everywhere that matters (`/api/games`, coach queue,
+weakness-map) — `blunderCountsForGames.js` applies no `quality` filter and both qualities are persisted at
+analysis time. This story is **not** about adding suboptimal to a sum; it is about relabeling what users see,
+and about proving (not assuming) no endpoint quietly filters to `quality='blunder'`.
+1. Audit `/api/games`, `/api/coach/queue`, and `/api/coach/weakness-map` to confirm none filters on
+   `quality='blunder'` (they should not — this is a regression check, not new server logic). `/api/stats` is
+   explicitly **out of scope**: it aggregates `puzzle_attempts` only and has no blunders/suboptimal concept to
+   fix.
+2. Update `PastGamesListScreen` chip + `no_blunders` copy/i18n (`en.json`) to say "mistakes" instead of
+   "blunders" (e.g. `no_blunders` → a "no mistakes" string), keeping the wire field name `blunder_count`
+   unchanged (see Settled decisions).
+3. Sweep other user-facing labels/i18n keys that say "blunder" where the underlying count already includes
+   suboptimal moves (chips, headers, coach copy) and rename to "mistake"/"mistakes".
+4. Add/keep a regression test: a game with 0 blunders + ≥1 suboptimal shows a non-zero mistake count in Past
+   Games (this should already pass — it guards against a future regression, it is not new behavior).
 
 **US2.3 — Permalink & reload survival.**
 *As a player opening a blunder link or reloading, I want correct move number, pagination, and all actions.*
@@ -310,17 +346,28 @@ deep-links/reload/back, actually replay moves, and stop leaking internal data in
 2. Reuse existing highlight-role assignment (`userIsYellow` / P1–P2 color table) so coloring stays correct.
 3. Fix `SplitReveal` so dragging the split too high does not un-zoom / re-enlarge the board.
 4. Clamp/persist board zoom independent of split position.
-5. Add an interaction test for the double_threat `c2r1` highlight and split-drag zoom stability.
+5. Add an interaction test for the double_threat highlight using the two detector-verified boards below, and
+   for split-drag zoom stability.
+
+*Verified double_threat boards* (movestring `33243432244` / cell `c2r1` was invalid — that cell is occupied on
+that board and `detectDoubleThreat` returns `matched:false` for it; replaced 2026-07-08 with the following,
+both verified via `detectDoubleThreat` in `server/classifier.js`):
+- `41442625312235115445550126400` — double threat for **P1 (Green)**; detector-reported cells `c1r4` and
+  `c4r3` (cols 0-indexed [0,3]).
+- `3333364101252113121524` — double threat for **P2 (Gray)**; detector-reported cells `c5r3` and `c7r2` (cols
+  0-indexed [4,6]).
 
 **Acceptance criteria**
 - A suboptimal ply and a blunder ply open the same screen component with all 3 action buttons.
-- A game with 0 blunders + ≥1 suboptimal shows a non-zero mistake count in Past Games and in stats.
+- A game with 0 blunders + ≥1 suboptimal shows a non-zero mistake count in Past Games.
 - Direct-load `/blunder/:id` shows correct "Move N / <total>", real "X of Y", and "Start new game from here".
 - `/mistakeDetail` reload stays on the category list (not Home).
 - Past games → game → blunder → game-link → Back ×3 → Home, no cycle (verified by pathname trail).
 - ReviewScreen Prev/Next + chips change `__bsig`; a red chip opens `/blunder/:id`.
 - No `sev:`/`tree:`/movestring, no `community-`, no `cXrY` in any blunder-detail text node.
-- double_threat `33243432244` fork square `c2r1` is highlighted; split-drag keeps board zoom stable.
+- The cells the detector reports are highlighted for both verified double_threat boards: `c1r4`/`c4r3` on
+  `41442625312235115445550126400` (P1) and `c5r3`/`c7r2` on `3333364101252113121524` (P2); split-drag keeps
+  board zoom stable.
 - `npm run test:fast` green.
 
 **NOT included:** coach-queue pagination / DB-side counts (Epic 1 owns scale/reachability); tagging/severity
@@ -330,8 +377,8 @@ assignment logic; changes to which patterns fire.
 two screens + panes + render layer); open decisions (URL-param vs state-recovery; nav-divergence root cause).
 **Depends on Epic 1.**
 
-**Open questions (`/clarify`):** suboptimal-vs-blunder visual treatment; `/mistakeDetail` route vs
-state-recovery; one render choke-point or three; i18n scope for the count copy.
+**Open questions (`/clarify`):** `/mistakeDetail` route vs state-recovery; one render choke-point or three;
+i18n scope for the count copy.
 
 ---
 
@@ -349,65 +396,139 @@ users, branding logo, and mobile spacing.
 - `[new_TODOs #25]` Add a "DecodeC4" logo at the top; clicking it goes home.
 
 **Non-obvious facts** (confirmed code locations + traps)
-- `src/components/Board.jsx` — cells at `:287` have `onClick` but no `role`/`aria-label`.
-- `src/components/TopBar.jsx` — add the logo → `go('home')`; verify the real TopBar shape first (mockup vs prod gap).
-- `src/screens/PastGamesListScreen.jsx` — mobile chip/separator spacing.
-- HomeScreen/StatsScreen — "review past mistakes" styling + the logged-out CTA routing (`AuthModal`).
+- **CORRECTED (spec 043 review):** `src/components/Board.jsx` **already has one interactive control per column.**
+  The per-column wrapper `<div>` at `:211-229` has `onClick={handleClick}` → `onColumnClick?.(col)` (7 of these,
+  one per column). The per-cell `onClick={onCellClick(col, r)}` at `:287` only fires when the optional
+  `onCellClick` prop is passed (the CurationWorkspace shim) — it is not the primary interaction and does not run
+  on ordinary playable boards. A11y work therefore does **not** need to "introduce" a per-column control; it adds
+  `role`/`aria-label`/`tabIndex`/`onKeyDown`/focus-outline to the wrapper that already exists at `:211`. Do not
+  label the 42 individual cells. Also: `handleClick` branches into `multiSelectMode` (`onColToggle`, curation) —
+  keyboard activation must call the same `handleClick` branch, not hardcode `onColumnClick`. (The previous version
+  of this note, claiming the click was attached per-cell at `:287` and that a per-column control had to be
+  introduced, was factually wrong and is superseded by this entry.)
+- `src/screens/HomeScreen.jsx:25` — already renders the DecodeC4 lockup
+  (`title={<>Decode<span style={{color:'var(--disc-green)'}}>C4</span></>}`) as the home screen's TopBar title.
+  The lockup is not new; the new work is making it clickable and persisting it across every screen. **Per spec 043
+  Decision 2, this per-screen title is now SUPPRESSED on Home once the persistent logo ships** (see Settled
+  decisions below — this overrides the earlier "Home's title is unaffected" resolution).
+- `src/components/TopBar.jsx` — renders `title` as a plain non-interactive `<div>` and accepts only
+  `title, onBack, meta, rightIcon/onRight, right2/onRight2` (Spec 010 FR-013/FR-014). There is no navigation/`go`
+  prop and no slot for a persistent logo alongside a per-screen title today.
+- `src/screens/StatsScreen.jsx:132` — "review past mistakes" is **already** a `<button>` element. US3.2 is
+  styling/affordance work only (bg/border/cursor/hover/active/focus states), not adding a button.
+- `src/components/AuthModal.jsx` — signature is `{ onClose, reason }` only; no `onSuccess`/`returnTo`. It performs
+  a full-page redirect to Express for auth (comment at `:38`), so there is no client-side return path today.
+- `src/screens/HomeScreen.jsx:80` — already calls `go('pastGames')` for every user (logged in or not).
+  `src/screens/PastGamesListScreen.jsx:206` is the actual dead end: it shows "Sign in to see your past games"
+  with **no sign-in control**, just icon + text.
 - Trap: Board role/color assignment goes through `userIsYellow` — keep P1/P2 semantics intact when adding a11y attrs.
 
 **Authoritative sources of truth**
-- Memory `project_highlight_cell_colors`, `feedback_mockup_production_gap`; **Spec 010** (design tokens);
-  `docs/best_practices_spec_driven_development.md`.
+- Memory `project_highlight_cell_colors`, `feedback_mockup_production_gap`; **Spec 010** (design tokens,
+  TopBar contract FR-013/FR-014); `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- None requiring an owner decision. Bundled deliberately because these small fixes share the frontend shell
-  surface and are cheaper to spec/verify together than five micro-tickets.
+- **Logo placement (amends Spec 010 FR-013/FR-014):** add a compact DecodeC4 logo element to the LEFT of the
+  title, with a handler that navigates home (`go('home')`). This is a new prop/handler on the TopBar contract, not
+  a replacement of the title slot. **SUPERSEDED (spec 043 review, Decision 2):** on Home specifically, the
+  per-screen title is now suppressed so the persistent logo is the single DecodeC4 mark shown there (previously
+  this decision said Home's title was "unaffected," producing a duplicate wordmark — that outcome was rejected).
+  All other screens keep their per-screen titles unchanged alongside the logo.
+- **Logged-out gating + return-to-target:** gate at the HomeScreen past-games card — a logged-out tap opens
+  `AuthModal` instead of calling `go('pastGames')`. Stash the intended destination in `sessionStorage` before the
+  full-page auth redirect and consume it after reload so the user lands where they meant to go. This fixes the
+  concrete dead end at `PastGamesListScreen.jsx:206`. Spec 043 additionally names the consumption point: a single
+  reader/clearer in the app's post-login bootstrap/routing path, not per-screen logic.
+- **Board a11y control granularity:** add ARIA attributes/keyboard handling to the per-column control that
+  **already exists** at `Board.jsx:211-229` (`aria-label="column N"`, 1-based label; internal coords stay
+  0-indexed) — not `role`/`aria-label` on all 42 individual cells, and not a newly-introduced wrapper (see the
+  corrected Non-obvious fact above). **Scoping added by spec 043 review:** this control is added only to
+  *playable* boards (an active `onColumnClick`/`canPlay`); read-only boards (review, mistake-detail, lesson,
+  past-game replay, admin/eval) must expose zero per-column interactive controls, not seven.
+- **Additional in-scope elements (spec 043 review, one-pass inventory):** beyond the Home past-games card and
+  Stats "review past mistakes" button, exactly one more element is in scope — the Stats screen's signed-out
+  "Sign up to track your progress over time" text (`StatsScreen.jsx:141-145`), which is currently a plain `<div>`
+  with no click handler. It gets both the button-affordance treatment (US3.2) and sign-in routing (US3.3). No
+  other Home/Stats elements were found to need either treatment; see the spec's Appendix for the full inventory.
+- Bundled deliberately because these small fixes share the frontend shell surface and are cheaper to spec/verify
+  together than five micro-tickets.
 
 ### User stories & tasks
 
 **US3.1 — Board accessibility.**
 *As a screen-reader/keyboard user, I want board columns announced and operable.*
-1. Add `role="button"` + `aria-label="column N"` (1-based label; internal coords stay 0-indexed) to interactive cells/columns (`Board.jsx:287`).
-2. Add keyboard operability (focus + activate a column).
-3. Add visible focus indicators.
+1. Add ARIA attributes to the per-column wrapper that **already exists** at `Board.jsx:211-229`
+   (`role="button" aria-label="column N"`, 1-based label; internal coords stay 0-indexed) — do not introduce a
+   new wrapper and do not touch the per-cell handler at `:287`. Apply only to playable boards (active
+   `onColumnClick`/`canPlay`); read-only boards get zero per-column controls.
+2. Add keyboard operability (focus + activate a column) on that per-column control, routing through the same
+   `handleClick` branch used for mouse clicks (including the `multiSelectMode`/curation branch), not a hardcoded
+   `onColumnClick` call.
+3. Add visible focus indicators on the per-column control.
 4. Preserve P1/P2 role/color semantics (`userIsYellow`).
-5. a11y-tree test; confirm it removes the QA verbose-tree-walk fallback.
+5. a11y-tree test asserting 7 column controls on a playable board (not 42 cell controls) AND zero column controls
+   on a read-only board; confirm it removes the QA verbose-tree-walk fallback.
 
 **US3.2 — Button affordances.**
 *As any user, I want buttons to look like buttons.*
-1. Restyle "review past mistakes" to read as a button (bg/border/cursor).
-2. Audit other pseudo-buttons for affordance gaps.
+1. Restyle "review past mistakes" (`StatsScreen.jsx:132`, already a `<button>`) to read as a button
+   (bg/border/cursor) — styling only, no new element.
+2. Restyle the Stats screen's signed-out "Sign up to track your progress over time" text (`StatsScreen.jsx:141-145`)
+   as a button — it is currently a plain `<div>` with no styling and no click handler (see US3.3 task 2 for the
+   click-handler half of this fix). This is the one and only additional element found by the spec 043 one-pass
+   inventory; no other audit is in scope.
 3. Add hover/active/focus states.
 4. Align with design tokens (spec 010).
 5. Visual/interaction test.
 
 **US3.3 — Clickable CTAs & logged-out routing.**
 *As a logged-out user, I want gated CTAs to route me to sign in, not do nothing.*
-1. Audit inert CTAs for logged-out users (HomeScreen/StatsScreen).
-2. Logged-out tap on a gated CTA (past games) → register/login (`AuthModal`).
-3. Ensure every CTA is genuinely tappable.
-4. Preserve the deep-link intent through auth.
-5. Test: logged-out past-games tap opens auth and returns to the target.
+1. ~~Audit inert CTAs for logged-out users~~ — superseded by the spec 043 one-pass inventory (see Settled
+   decisions); the bounded result is: the Home past-games card (task 2 below) and the Stats "Sign up..." text
+   (task 2a below). No further audit is in scope.
+2. Gate at the card: change `HomeScreen.jsx:80`'s past-games card so a logged-out tap opens `AuthModal`
+   (`{ onClose, reason }`) instead of calling `go('pastGames')`, eliminating the `PastGamesListScreen.jsx:206`
+   dead end.
+2a. Add an `onClick` to the Stats screen's signed-out "Sign up to track your progress over time" text
+   (`StatsScreen.jsx:141-145`) that opens the same `AuthModal` flow.
+3. Ensure both CTAs are genuinely tappable (superseded the open-ended "every CTA" framing — see task 1).
+4. Stash the intended destination in `sessionStorage` before AuthModal's full-page auth redirect; consume it via a
+   single named reader/clearer in the app's post-login bootstrap/routing path (not per-screen) to restore the
+   return-to-target.
+5. Test: logged-out past-games tap opens auth and returns to the intended target after sign-in; logged-out
+   "Sign up..." tap opens auth.
 
 **US3.4 — Branding logo + mobile spacing.**
 *As any user, I want a home logo and clean mobile spacing.*
-1. Add a "DecodeC4" logo to `TopBar`; click → `go('home')`.
-2. Finalize the logo asset/text treatment.
+1. Add a compact DecodeC4 logo element to the left of the title in `TopBar`, with a handler that navigates home
+   (`go('home')`); amend Spec 010 FR-013/FR-014 to add this prop/handler to the TopBar contract. Other screens'
+   per-screen titles are unchanged alongside the logo.
+2. Reuse the existing DecodeC4 text/color treatment (`HomeScreen.jsx:25`) for the TopBar logo — no new asset work.
+   **On Home specifically, suppress the existing per-screen title (`HomeScreen.jsx:25`'s lockup) so the persistent
+   logo is the single DecodeC4 mark** (spec 043 Decision 2 — supersedes the earlier "Home's title is unaffected"
+   resolution).
 3. Fix Past Games mobile spacing between chip filters and the separator line.
 4. Responsive check at 390×844.
-5. Test: logo → home; spacing corrected.
+5. Test: logo navigates home from every screen; Home shows exactly one DecodeC4 mark (no duplicate); spacing
+   corrected.
 
 **Acceptance criteria**
-- Board cells expose `role`/`aria-label` in the a11y tree and are keyboard-operable.
-- "Review past mistakes" reads as a button; a logged-out past-games tap opens auth and returns to the target.
-- The DecodeC4 logo navigates home; Past Games mobile chip/separator spacing is corrected at 390×844.
+- Each *playable* board column (not each cell) exposes `role`/`aria-label` in the a11y tree and is
+  keyboard-operable; read-only boards expose zero per-column controls.
+- "Review past mistakes" and the Stats "Sign up..." text both read as buttons; a logged-out past-games tap and a
+  logged-out "Sign up..." tap both open auth, and the past-games flow returns to the intended target after
+  sign-in via the named post-login consumption point.
+- The DecodeC4 logo navigates home from every screen; Home shows exactly one DecodeC4 mark (title suppressed);
+  Spec 010 FR-013/FR-014 is amended to document the new logo prop/handler and the Home title-suppression
+  exception; Past Games mobile chip/separator spacing is corrected at 390×844.
 
 **NOT included:** data/endpoint changes; onboarding (Epic 8); count semantics (Epic 2).
 
-**Sizing verdict — Full speckit (bundled).** 4 stories × ≥5 tasks; touches Board + TopBar + two screens +
-AuthModal; a11y + logged-out routing carry real design/QA work.
+**Sizing verdict — Full speckit (bundled).** 4 stories × ≥5 tasks; touches Board + TopBar (+ Spec 010 FR
+amendment) + two screens + AuthModal; a11y + logged-out routing carry real design/QA work.
 
-**Open questions (`/clarify`):** logo asset/text treatment; full inventory of inert logged-out CTAs.
+**Open questions (`/clarify`):** ~~full inventory of inert logged-out CTAs~~ — RESOLVED by the spec 043 one-pass
+inventory (spec Appendix); see Settled decisions above.
 
 ---
 

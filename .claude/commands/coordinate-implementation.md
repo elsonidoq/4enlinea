@@ -53,6 +53,12 @@ Then group the stories into sequential **implementation batches**. Each batch:
 - Why those stories are grouped together
 - What the batch depends on from prior batches
 
+**Then, you MUST end the partition proposal with a summary table** (this is required, not optional):
+
+| Batch | # Tasks | Why grouped together |
+|-------|---------|----------------------|
+[one row per batch: batch number, number of tasks.md tasks it covers, and a one-line rationale for grouping those stories/tasks into this batch]
+
 **Wait for the user to approve, modify, or reject the partition before proceeding.**
 
 ---

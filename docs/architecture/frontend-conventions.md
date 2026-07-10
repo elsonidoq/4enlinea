@@ -106,11 +106,28 @@ The frontend has no Supabase SDK dependency. Auth is entirely server-mediated vi
 3. **Session restore**: On page load, `checkSession` calls `GET /api/auth/session` to read the
    cookie and restore signed-in state.
 4. **Sign-out**: `POST /api/auth/signout` clears the cookies.
-5. **Store swap**: On successful sign-in, `ProfileStore` swaps `IndexedDBStore` for `SupabaseStore`
-   and calls `migrateToSupabase` to migrate locally-recorded puzzle attempts.
+5. **Store swap**: On successful sign-in, `ProfileStore.switchToSupabase` **`await`s
+   `migrateToSupabase` before calling `setSession`** — the React `session` state flips only after the
+   migration completes. `migrateToSupabase` begins with `await this._db()` (the IndexedDB open), so if
+   that open ever hangs, the whole sign-in silently stalls with a valid server cookie but a
+   still-signed-out UI (see memory `project_indexeddb_signin_hang`). The migration errors are caught,
+   but a *hang* is not — order any local-reset tooling accordingly (never `indexedDB.deleteDatabase`).
 
 The only frontend environment variable required for auth is `VITE_API_BASE_URL`.
 There is no `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, or client-side Supabase SDK.
+
+**The return leg always lands on the site root.** The server passes `redirect_to = FRONTEND_URL`
+(`server/index.js`), i.e. `/` — never the screen the user started from. Sign-in is a full-page
+redirect, so no in-memory callback survives it. Any "return the user to where they were headed"
+behavior must therefore stash the destination client-side before the redirect (sessionStorage
+survives it: same tab, same origin) and consume it after reload. Do not assume a user who signs
+in from screen X is still on screen X afterward — they are on Home.
+
+**There is no route-level auth guard.** Every screen key in `URL_MAP` is reachable while signed
+out; `SESSION_ONLY_SCREENS` is a cold-boot-state guard, not an auth guard. Gating a CTA gates the
+CTA, not the destination screen — a signed-out user can still reach that screen by bookmark, Back
+button, refresh, or a shared link, and will see whatever signed-out state the screen renders.
+When gating a feature, check what its screen shows to a signed-out visitor who arrives directly.
 
 ## Environment Variables
 
@@ -142,7 +159,7 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 |---|---|---|---|
 | `board` | `board[row][col]` 2D array | 6×7 `'empty'` | Cell values: `'red'` → green disc, `'yellow'` → gray disc |
 | `onColumnClick` | `(col: number) => void` | — | Tap handler (0-indexed). Not called when `canPlay=false`, column full, or `onColToggle` provided. |
-| `canPlay` | boolean | `false` | Global interactivity gate |
+| `canPlay` | boolean | `false` | Global interactivity gate. Defaults to `false`, so a caller that omits it renders a read-only board. |
 | `overlays` | `Array<{c, r, type: OverlayType}>` | `[]` | Cell overlays. Replaces retired `highlightedCells` + `highlightMetadata`. |
 | `badge` | `{col, type: BadgeType, label}` | — | Single column evaluation badge |
 | `lastDrop` | `{c, r}` | — | Triggers `drop` CSS animation on that disc |
@@ -152,6 +169,22 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
 | `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 | `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
+
+### Which boards are interactive (read this before touching Board interactivity)
+
+The primary click target is a **per-column wrapper `<div>`** — one per column, carrying
+`onClick={handleClick}`, which branches to `onColToggle` in multi-select mode and otherwise to
+`onColumnClick`. It is *not* the per-cell handler: `onCellClick` is the deprecated curation shim
+below, live only for `CurationWorkspace`. Anything that adds column-level behavior (keyboard
+activation, ARIA roles, focus) belongs on the wrapper, and must route through the same
+`handleClick` so the multi-select branch is preserved.
+
+A board is interactive iff it passes `canPlay={true}`. Every such caller also passes
+`onColumnClick`. **`CurationWorkspace` and `BoardEditor`'s disc-placement mode are interactive
+boards**, despite being admin surfaces — do not classify them as read-only alongside the review,
+lesson, replay, and admin *display* boards. Conversely, `BoardEditor`'s overlay-annotation mode
+and every review/replay board are read-only. Verify a call site rather than inferring from the
+screen's name.
 
 ### OverlayType enum (LOCKED — cross-epic contract)
 
@@ -178,6 +211,46 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 **Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
 
 `highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` used it (the old `SequenceHandler.jsx` no longer exists); all callers are now on `overlays`.
+
+### Per-column a11y attributes (spec 043 US1, `contracts/board-a11y-contract.md`)
+
+No new `Board` prop was added for this. `getColumnA11yProps({ col, canPlay, colFull })` (a pure
+function exported from `Board.jsx`) derives ARIA/keyboard attributes for the existing per-column
+wrapper `<div>` (`Board.jsx:211-229`) entirely from props that already exist (`canPlay`, `board`,
+`fullCols`) — it is not itself a `Board` prop.
+
+| Condition | `role` | `aria-label` | `tabIndex` | `aria-disabled` | Keyboard |
+|---|---|---|---|---|---|
+| `canPlay === false` (read-only board) | *(absent)* | *(absent)* | *(absent)* | *(absent)* | not focusable |
+| `canPlay === true`, column not full | `"button"` | `"column N"` (1-based) | `0` | *(absent)* | Enter/Space → same action as click |
+| `canPlay === true`, column full | `"button"` | `"column N"` | `-1` | `true` | not reachable by Tab; Enter/Space no-ops (same guard as click) |
+
+Invariants:
+
+- **I1 (FR-001/FR-002)**: A board renders either exactly 7 column controls (playable) or exactly
+  0 (read-only) — never a per-cell control count (42) and never a partial count.
+- **I2 (FR-004)**: Keyboard activation (Enter/Space) on a column control MUST call the exact same
+  `handleClick` function the mouse `onClick` calls — including its `multiSelectMode` branch
+  (`onColToggle` vs `onColumnClick`). No parallel/duplicated branch logic.
+- **I3 (FR-007)**: This addendum touches only the column wrapper's ARIA/tabIndex attributes. Disc
+  color rendering (`value === 'red'`/`'yellow'` → green/gray, `Board.jsx:303-317`) and all
+  `shimRole`/`overlays` highlight logic are untouched.
+- **I4 (FR-005)**: A focused column control (`:focus-visible`, `.board-col:focus-visible` in
+  `src/index.css`) MUST show a visible outline/ring distinct from the existing hover state
+  (`isHovered` background, `Board.jsx:223-224`) — focus and hover are visually distinguishable
+  states.
+
+**Verified: the gate is `canPlay`, not `onColumnClick` presence.** A plan-review critique raised
+the concern that admin boards with per-cell-only interaction (`canPlay={true}` but no
+`onColumnClick`) would incorrectly gain column controls with nothing behind them, and proposed
+gating on `onColumnClick` presence instead of `canPlay`. This was checked directly against the
+codebase: every call site that passes `canPlay={true}` (`GameScreen.jsx`, `SocraticScreen.jsx`,
+`PlayOnlineScreen.jsx`, `ChallengeScreen.jsx`, `CurationWorkspace.jsx:326-327`,
+`BoardEditor.jsx:109-111` when `mode==='disc'`) also passes `onColumnClick` in that same call.
+There is no site today where `canPlay` is `true` and `onColumnClick` is absent —
+`BoardEditor.jsx`'s per-cell overlay mode sets `canPlay={false}`, not `true`. The `canPlay` gate
+is therefore kept as-is; do not relitigate this — see `research.md` R1 in
+`specs/043-global-ui-ux-polish/` for the full verification trace.
 
 ## Shared Board Utility
 
@@ -490,7 +563,7 @@ The mistakes feature has three independent screen routes:
 
 `src/lib/urlMapping.js` exports:
 - `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
-- `SESSION_ONLY_SCREENS` — `Set` of 3 screen keys whose state cannot survive a cold page load: `summary`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.)
+- `SESSION_ONLY_SCREENS` — `Set` of 2 screen keys whose state cannot survive a cold page load: `summary`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.) `mistakeDetail` was removed from this set in spec 042: its route changed from a bare `/mistakeDetail` to `/mistakeDetail/:category` (`URL_MAP` entry `{ pattern: '/mistakeDetail/:category', screenKey: 'mistakeDetail', paramNames: ['category'] }`), so the `category` param now round-trips through the URL itself and the screen survives a cold reload by staying on the category list instead of redirecting to `home`.
 - `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
 - `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
 

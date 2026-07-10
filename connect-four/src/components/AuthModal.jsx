@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
+import { clearReturnTo } from '../lib/postLoginReturn.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -9,9 +10,14 @@ export function AuthModal({ onClose, reason }) {
   const { t } = useTranslation();
   const { refetchSession } = useStore();
 
+  function handleDismiss() {
+    clearReturnTo();
+    onClose();
+  }
+
   return (
     <>
-      <div className="sheet-backdrop" onClick={onClose}></div>
+      <div className="sheet-backdrop" onClick={handleDismiss}></div>
       <div className="modal-card">
         <div style={{
           width: 48, height: 48, borderRadius: '50%',
@@ -43,13 +49,14 @@ export function AuthModal({ onClose, reason }) {
         >
           {t('auth.continueWithGoogle')}
         </button>
-        <button className="btn btn-ghost" onClick={onClose} style={{ marginTop: 8, width: '100%' }}>
+        <button className="btn btn-ghost" onClick={handleDismiss} style={{ marginTop: 8, width: '100%' }}>
           {t('auth.dismiss')}
         </button>
         {import.meta.env.DEV && (
           <button
             type="button"
             onClick={async () => {
+              clearReturnTo();
               try {
                 await fetch(`${API}/api/auth/anonymous`, { method: 'POST', credentials: 'include' });
               } catch { /* ignore */ }

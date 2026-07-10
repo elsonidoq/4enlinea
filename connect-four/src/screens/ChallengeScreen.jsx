@@ -536,7 +536,7 @@ export function ChallengeScreen({
   if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
-        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} />
+        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
           <button onClick={handleBack} style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--line)', color: 'var(--ink)', cursor: 'pointer', fontSize: 14 }}>
@@ -556,6 +556,7 @@ export function ChallengeScreen({
         <TopBar
           onBack={handleBack}
           title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
+          onLogoClick={() => go('home')}
         />
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -581,6 +582,7 @@ export function ChallengeScreen({
         onBack={handleBack}
         title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
         meta={puzzles.length > 0 ? t('challenge.progress', { current: currentIdx + 1, total: puzzles.length }) : undefined}
+        onLogoClick={() => go('home')}
       />
 
       {/* Progress bar */}

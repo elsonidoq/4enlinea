@@ -203,6 +203,7 @@ export function SagaScreen({ go, goBack }) {
       <TopBar
         title={t('saga.title', 'Lessons')}
         onBack={() => go('home')}
+        onLogoClick={() => go('home')}
       />
 
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 24 }}>

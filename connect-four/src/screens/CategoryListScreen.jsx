@@ -60,6 +60,7 @@ export function CategoryListScreen({ go, goBack }) {
       <TopBar
         title={t('mistakes.title')}
         onBack={() => go('stats')}
+        onLogoClick={() => go('home')}
       />
 
       <MistakesGate

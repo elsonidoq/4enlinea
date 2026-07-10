@@ -25,6 +25,7 @@ import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candi
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
+import { classifyStoredMistake } from './mistakeStorageRule.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
@@ -34,6 +35,8 @@ import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
+import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
+import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,28 +107,9 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 // Shared UUID regex for blunder permalink endpoint + OG injection
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Compute opponent major threat cells after a move is played.
- * Hoisted from coach/queue so the blunder permalink endpoint can share it.
- * @param {string} board_state - move string before the move
- * @param {number} move_played - 0-indexed column played
- * @returns {{col: number, row: number}[]}
- */
-function computeThreatCells(board_state, move_played) {
-  try {
-    const postBoard = new Board(board_state + String(move_played));
-    const opponent = postBoard.currentPlayer;
-    const threatMap = postBoard.majorThreatCells();
-    return Object.entries(threatMap)
-      .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
-      .map(([key]) => {
-        const [row, col] = key.split(',').map(Number);
-        return { col, row };
-      });
-  } catch {
-    return [];
-  }
-}
+// computeThreatCells is imported from ./blunderDetailResponse.js (spec 042, T003) —
+// hoisted there so the blunder permalink endpoint's response shape is unit-testable
+// without booting the full app/solver.
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
@@ -958,7 +942,10 @@ app.post('/api/explain-move', async (req, res) => {
     deepReveal = deepRevealData;
   }
 
-  res.json({ oneLiner, patternTag, deepReveal });
+  // Response-boundary guard (spec 042 US5, FR-019): strip internal community-/allen- label
+  // prefixes and raw cXrY coordinate tokens from every player-facing text field, regardless of
+  // whether it came from the cache or was just generated (research.md §5).
+  res.json(guardExplainMovePayload({ oneLiner, patternTag, deepReveal }));
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
@@ -1001,12 +988,15 @@ app.post('/api/explain-move-llm', async (req, res) => {
       .eq('position_hash', positionHash)
       .single();
     if (cached?.deep_reveal_json) {
-      return res.json({
+      // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
+      // module (computeMechanism/explainContext/llmCoachHelpers), so this is the ONLY seam that
+      // can catch a leak in a previously-cached row (research.md §5).
+      return res.json(guardExplainMoveLlmPayload({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
-      });
+      }));
     }
   }
 
@@ -1019,11 +1009,11 @@ app.post('/api/explain-move-llm', async (req, res) => {
 
     if (result.notABlunder) {
       // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
-      return res.json({
+      return res.json(guardExplainMoveLlmPayload({
         explanation: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
         prompt: '',
         terms: {},
-      });
+      }));
     }
 
     // No fallback (by design): after one LLM retry, a persisting LLM error or an empty mechanism
@@ -1085,7 +1075,12 @@ app.post('/api/explain-move-llm', async (req, res) => {
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, prompt, terms: termsMap });
+    // Response-boundary guard (spec 042 US5, FR-019): applied here too (not just the cache-hit
+    // branch above) so a freshly-generated leak — e.g. an LLM non-compliance emitting
+    // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
+    // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
+    // future cache hit.
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -1192,10 +1187,15 @@ app.post('/api/blunders', async (req, res) => {
   // Auth required
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Blunders from losing positions are no longer skipped — the blunder_severity
-  // field provides the graduated measure of how much the move worsens the position.
-  // A move that drops from -2 to -15 is a meaningful blunder even if the position
-  // was already theoretically lost (as all second-player positions are).
+  // Storage rule (mistakeStorageRule.js, 2026-07): slower wins and faster losses
+  // from DEAD positions (no potential four-in-a-row left for the mover) are not
+  // stored; theoretically-lost-but-alive positions still are — this is NOT the
+  // old `bestScore < 0` skip (see data-model.md migration 029 note). Requires
+  // numeric score/best_score to classify; without them the move is not stored.
+  const storedMistake = classifyStoredMistake(best_score, score, board_state);
+  if (!storedMistake) {
+    return res.status(200).json({ stored: false, reason: 'not_a_stored_mistake' });
+  }
 
   try {
     // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
@@ -1219,6 +1219,7 @@ app.post('/api/blunders', async (req, res) => {
         move_played,
         correct_move,
         pattern_category: safeCategory,
+        quality: storedMistake.quality,
         severity: computeSeverity(best_score, score),
         blunder_severity: req.body.blunder_severity ?? null,
       })
@@ -1850,7 +1851,10 @@ app.get('/api/games', async (req, res) => {
     // scale-correct past 1000 blunder rows and never uses `.in()` (see
     // server/blunderCountsForGames.js for why `.in(gameIds)` is NOT safe here: aiIds/pgIds can
     // be the user's FULL game set, not just the current page, since sorting happens before
-    // pagination below).
+    // pagination below). computeBlunderCountsForGames applies no `quality` filter (spec 042
+    // T034/FR-005/FR-006) — the returned `blunder_count` (wire name unchanged, FR-007) already
+    // includes both blunder- and suboptimal-severity rows; a 0-blunder/≥1-suboptimal game is
+    // never miscounted as zero here.
     const aiIds = (aiGames || []).map(g => g.id);
     const pgIds = (pgGames || []).map(g => g.id);
 
@@ -1953,19 +1957,39 @@ app.post('/api/games/analyze', async (req, res) => {
   {
     const { data: aiGame } = await supabase
       .from('games')
-      .select('id, moves, side, difficulty, created_at')
+      .select('id, user_id, device_uuid, moves, side, difficulty, created_at')
       .eq('id', gameId)
       .single();
 
     if (aiGame) {
+      // Ownership check: a game with a user_id is private to that user. Without
+      // this, any signed-in user could pass another user's game id and both
+      // (a) read a full move-by-move analysis of a game they don't own, and
+      // (b) trigger the blunder INSERT below tied to their own user_id but
+      // referencing the foreign game_id — polluting that game's sibling-mistake
+      // data for its actual owner.
+      //
+      // Anonymous, device-scoped sparring games (user_id null) stay open per this
+      // endpoint's documented no-auth contract: the request body carries only
+      // gameId (no device_uuid to authorize against), and there is no account to
+      // pollute — a logged-out caller writes no blunders (the INSERT below is
+      // gated on req.user). Do NOT compare device_uuid to req.user.id — they are
+      // different id namespaces and never match, which 404'd every logged-out
+      // review of a just-played anonymous game.
+      if (aiGame.user_id && !(req.user && aiGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       ({ moves, side, difficulty, created_at } = aiGame);
     } else {
       const { data: pgGame } = await supabase
         .from('papergames_games')
-        .select('id, moves, side, played_at')
+        .select('id, user_id, moves, side, played_at')
         .eq('id', gameId)
         .single();
       if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      if (!(req.user && pgGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       moves = pgGame.moves;
       side = pgGame.side;
       difficulty = null;
@@ -2034,7 +2058,10 @@ app.post('/api/games/analyze', async (req, res) => {
       }
 
       const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
-      const phrasePool = cBlunder === 0
+      // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
+      // mistakes exist even if there are zero blunders — a game with 0 blunders and
+      // >=1 suboptimal move is still a game with mistakes.
+      const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
         ? 'coach.sparring.review.clean'
         : 'coach.sparring.review.mistakes';
       const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
@@ -2088,7 +2115,11 @@ app.post('/api/games/analyze', async (req, res) => {
       const score = scores[col];
       const bestScore = scores[bestCol];
 
-      const isMistake = quality === 'blunder' || quality === 'suboptimal';
+      // Storage rule (mistakeStorageRule.js): slower wins and dead-position
+      // faster losses are not stored; `quality` from scoreMove is kept as-is
+      // for the per-move badges/counters in the response.
+      const storedMistake = classifyStoredMistake(bestScore, score, movesBeforeThisPly);
+      const isMistake = storedMistake !== null;
 
       // Classify the position — tagBlunder may issue 60+ solver queries per ply;
       // acceptable here because this endpoint is called post-game, not during play.
@@ -2150,7 +2181,7 @@ app.post('/api/games/analyze', async (req, res) => {
           move_played: col,
           correct_move: bestCol,
           pattern_category: patternTag,
-          quality,
+          quality: storedMistake.quality,
           reason,
           direction,
           severity: computeSeverity(bestScore, score),
@@ -2176,7 +2207,9 @@ app.post('/api/games/analyze', async (req, res) => {
   const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
 
   // Pick summary phrase key
-  const phrasePool = blunderCount === 0
+  // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
+  // still a game with mistakes, never "clean"/"no mistakes to review."
+  const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
     ? 'coach.sparring.review.clean'
     : 'coach.sparring.review.mistakes';
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
@@ -2409,6 +2442,9 @@ function requirePaid(req, res, next) {
 }
 
 // GET /api/coach/weakness-map
+// spec 042 T034/FR-005/FR-007: neither the `coach_weakness_map` RPC call nor the
+// computeWeaknessMapFallback path below filters on `quality='blunder'` — both severities
+// contribute to the weakness map, and the RPC's underlying query is not modified here.
 app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
@@ -2500,6 +2536,9 @@ app.get('/api/coach/queue', async (req, res) => {
 
   // Shared filter chain — applied identically to the page query and the count query below
   // (count query omits .order()/.range() per contracts/coach-queue-pagination.md).
+  // spec 042 T034/FR-005/FR-007: no `.eq('quality', 'blunder')` filter here — both
+  // blunder- and suboptimal-severity rows are returned/counted (`total`, wire name
+  // unchanged) to the coach queue.
   const applyFilters = (q) => {
     let filtered = q.eq('user_id', req.user.id);
     if (status === 'unreviewed') {
@@ -2546,7 +2585,16 @@ app.get('/api/coach/queue', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (countError) return res.status(500).json({ error: countError.message });
 
-  const enriched = (blunders || []).map(b => ({
+  // FR-008/FR-009 (spec 042 US2): this endpoint independently constructs its own
+  // blunder shape (does not delegate to the GET /api/blunders/:id handler above),
+  // so totalMoves/siblingMistakes must be applied here too, unconditionally —
+  // otherwise a mistake reached in-app via this list loses the correct "Move N / M"
+  // / "X of Y" figures that the cold-boot permalink path already has.
+  const contexts = await Promise.all(
+    (blunders || []).map(b => fetchBlunderDetailContext(supabase, b))
+  );
+
+  const enriched = (blunders || []).map((b, i) => ({
     id: b.id,
     board_state: b.board_state,
     move_played: b.move_played,
@@ -2558,9 +2606,12 @@ app.get('/api/coach/queue', async (req, res) => {
     severity: b.severity,
     blunder_severity: b.blunder_severity ?? null,
     threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+    patternCells: computePatternCells(b),
     game_id: b.game_id ?? null,
     papergames_game_id: b.papergames_game_id ?? null,
     moveIndex: (b.board_state || '').length,
+    totalMoves: contexts[i].totalMoves,
+    siblingMistakes: contexts[i].siblingMistakes,
   }));
 
   res.json({ blunders: enriched, total: total ?? 0 });
@@ -2595,7 +2646,7 @@ app.get('/api/blunders/:id', async (req, res) => {
   // FR-017: no user_id filter — public endpoint
   const { data, error } = await supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
+    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id, user_id')
     .eq('id', id)
     .single();
 
@@ -2604,17 +2655,16 @@ app.get('/api/blunders/:id', async (req, res) => {
     return res.status(error ? 500 : 404).json({ error: error?.message || 'not found' });
   }
 
-  // FR-029: compute ownership boolean, then strip user_id from response
-  const is_owner = req.user?.id != null && req.user.id === data.user_id;
+  // FR-008/FR-009 (spec 042 US2): parent-game total move count + sibling mistakes,
+  // needed so a cold-opened permalink shows "Move N / M" and "X of Y" correctly
+  // instead of defaulting to a single-item array. Two bounded, indexed reads —
+  // see contracts/api-blunders-id.md steps 2-3.
+  const context = await fetchBlunderDetailContext(supabase, data);
 
-  // FR-020: derive moveIndex and threat_cells in JS (not DB columns)
-  const moveIndex = (data.board_state || '').length;
-  const threat_cells = computeThreatCells(data.board_state, data.move_played);
-
-  // Strip user_id — must never be exposed to clients
-  const { user_id: _omit, ...blunderPublic } = data;
-
-  res.json({ ...blunderPublic, moveIndex, threat_cells, is_owner });
+  // FR-020/FR-029/FR-003: shared pure builder (server/blunderDetailResponse.js) —
+  // computes moveIndex/threat_cells, ownership, and strips user_id. Both
+  // 'blunder' and 'suboptimal' quality rows go through this identical path.
+  res.json(buildBlunderDetailResponse(data, req.user?.id, context));
 });
 
 // ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────

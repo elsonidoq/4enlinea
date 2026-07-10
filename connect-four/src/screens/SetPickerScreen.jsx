@@ -64,6 +64,7 @@ export function SetPickerScreen({ go, goBack }) {
       <TopBar
         title={t('setpicker.title')}
         onBack={() => go('home')}
+        onLogoClick={() => go('home')}
       />
 
       <div style={{ padding: '2px 18px 26px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>

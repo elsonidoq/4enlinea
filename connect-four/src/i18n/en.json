@@ -539,59 +539,6 @@
       }
     }
   },
-  "mistakes": {
-    "title": "Past Mistakes",
-    "reviewed": "Reviewed",
-    "emptyFilter": "Nothing here — switch tabs to see your other moves.",
-    "gate": {
-      "heading": "Sign up to save your mistakes",
-      "body": "Create a free account and DecodeC4 will remember every blunder so you can review them with the Coach later.",
-      "cta": "Create free account",
-      "later": "Maybe later"
-    },
-    "empty": {
-      "heading": "No mistakes captured yet",
-      "body": "Play a game and review it afterwards — I'll collect the tricky moments here so we can study them together.",
-      "cta": "Play a game"
-    },
-    "filter": {
-      "all": "All",
-      "unreviewed": "Unreviewed",
-      "reviewed": "Reviewed"
-    },
-    "pattern": {
-      "immediate_threat": "Immediate threat",
-      "forced_block": "Forced block",
-      "double_threat": "Double threat",
-      "forced_win": "Forced win",
-      "forbidden_columns": "Forbidden columns",
-      "z_threat": "Z-threat",
-      "claimeven": "Claimeven",
-      "undercut": "Undercut",
-      "overcut": "Overcut",
-      "figure_7": "Figure 7",
-      "j_shape": "J-shape",
-      "odd_even_threat": "Odd & Even Threats",
-      "major_threat_parity": "Parity-aligned threat",
-      "major_threat_nonparity": "Off-parity threat",
-      "minor_threat": "Minor threat"
-    },
-    "detail": {
-      "topbarTitle": "Mistake",
-      "moveLabel": "Move {{n}}",
-      "coach": {
-        "line1": "You played column {{n}} here.",
-        "line2": "Let me show you what worked better."
-      },
-      "legend": {
-        "yourMove": "your move",
-        "opponentThreat": "opponent threat"
-      },
-      "whatShouldIHave": "What should I have played?",
-      "markReviewed": "Mark as reviewed",
-      "markedReviewed": "Marked as reviewed"
-    }
-  },
   "stats": {
     "title": "Progress & Stats",
     "avg_accuracy": "Avg accuracy",
@@ -802,6 +749,10 @@
     "detail": {
       "topbarTitle": "Mistake",
       "moveLabel": "Move {{n}}",
+      "severity": {
+        "blunder": "Blunder",
+        "suboptimal": "Suboptimal"
+      },
       "coach": {
         "line1": "You played column {{n}} here.",
         "line2": "Let me show you what worked better."
@@ -815,8 +766,8 @@
       "markedReviewed": "Marked as reviewed",
       "all_caught_up": "All caught up in this category!",
       "none_reviewed": "None reviewed yet — tap a blunder to study it.",
-      "meta_count": "{{count}} blunder",
-      "meta_count_pl": "{{count}} blunders",
+      "meta_count": "{{count}} mistake",
+      "meta_count_pl": "{{count}} mistakes",
       "source_game": "{{date}} game"
     },
     "to_review": "{{count}} to review",

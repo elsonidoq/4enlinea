@@ -79,7 +79,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   if (loadState === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar onBack={() => goBack()} />
+        <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
           {t('common.loading', 'Loading…')}
         </div>
@@ -90,7 +90,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   if (loadState === 'error' || !lesson) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar onBack={() => goBack()} />
+        <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
           <p style={{ color: 'var(--ink-soft)', fontSize: 15 }}>{t('common.error', 'Something went wrong.')}</p>
           <button className="btn btn-ghost" onClick={() => goBack()}>{t('common.back', 'Back')}</button>
@@ -110,6 +110,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
         title={t(`lesson.${lessonId}.title`, { defaultValue: lesson.title })}
         onBack={() => go('saga')}
         meta={`${slideIndex + 1} / ${lesson.slides.length}`}
+        onLogoClick={() => go('home')}
       />
 
       <CoachDialog messages={slide.coachMessages} />

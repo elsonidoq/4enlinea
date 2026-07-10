@@ -1,4 +1,5 @@
-import { useDragSplit } from '../lib/useDragSplit.js';
+import { useMemo } from 'react';
+import { useDragSplit, computeFrozenBoardWidth } from '../lib/useDragSplit.js';
 
 /**
  * Wraps board content and reveal content in a vertical split-pane layout.
@@ -36,19 +37,37 @@ export function SplitReveal({
   maxTopPct = 75,
   initialSplitPct = 40,
 }) {
-  const { splitPct, topPx, containerRef, dividerRef, dividerProps, isDragging } = useDragSplit({
+  const {
+    splitPct, topPx, containerH, initialSplitPct: hookInitialSplitPct,
+    containerRef, dividerRef, dividerProps, isDragging,
+  } = useDragSplit({
     minTopPct,
     maxTopPct,
     initialSplitPct,
   });
 
-  // Compute the max board width so the board fits the top pane height.
-  // Margin of 32px: 8px padding + 20px badge pad + 4px breathing room.
-  // Only constrain when boardW is sensible (>=200px, < container natural width).
-  const targetH = topPx ? topPx - 32 : 0;
-  const boardW = targetH > 57
-    ? (7 * (targetH - 57)) / 6 + 64
-    : 0;
+  // Spec 042 US6 (FR-022, SC-009, contracts/split-reveal-zoom-contract.md §2):
+  // boardW is FROZEN — computed only from the pane height implied by
+  // initialSplitPct/containerH, and re-derived only when containerH itself
+  // changes for a real reason (a genuine container resize/orientation change
+  // — useDragSplit's ResizeObserver is the only thing that ever updates
+  // containerH; dragging only ever changes splitPct/topPx, never containerH).
+  // Deliberately NOT in the dependency list: splitPct/topPx/isDragging — this
+  // is what decouples the board's rendered maxWidth from live drag position.
+  // "store it in a ref (or equivalent stable value)" per the contract — a
+  // memo keyed only on the genuinely-changing inputs is the equivalent
+  // stable value here (a ref alone wouldn't trigger the re-render needed to
+  // reflect a real resize). The pane itself (`flex: 0 0 ${topPx}px` below)
+  // keeps resizing live with the drag as before — only the board's rendered
+  // maxWidth decouples from it.
+  // isDragging deliberately NOT passed here (and not a dep) — the frozen
+  // computation must never key off live drag state; computeFrozenBoardWidth
+  // accepts an isDragging param for signature parity with the contract but
+  // ignores it (see useDragSplit.js docstring).
+  const boardW = useMemo(
+    () => computeFrozenBoardWidth(containerH, hookInitialSplitPct),
+    [containerH, hookInitialSplitPct]
+  );
   const constrain = boardW >= 200;
 
   if (!isOpen) {

@@ -97,6 +97,7 @@ export function MistakesListScreen({ go, goBack, category }) {
       <TopBar
         title={t('mistakes.pattern.' + category)}
         onBack={() => go('mistakes')}
+        onLogoClick={() => go('home')}
         meta={
           blunders.length === 1
             ? t('mistakes.detail.meta_count', { count: blunders.length })

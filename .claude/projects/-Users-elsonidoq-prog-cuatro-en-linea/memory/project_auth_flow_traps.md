@@ -1,11 +1,34 @@
 ---
 name: project-auth-flow-traps
-description: Auth flow traps — supabase-js session contamination (two clients), magic-link hash race + redirect allowlist, Google OAuth state encoding
-metadata:
+description: "Auth flow traps — supabase-js session contamination (two clients), magic-link hash race + redirect allowlist, Google OAuth state encoding, gating a CTA never gates its screen"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: f8ef0c49-540c-4eaf-ba3e-1bf42b296545
 ---
 
 Consolidated auth-flow gotchas (supabase-js client separation, magic link, Google OAuth).
+
+## Gating a CTA does NOT gate the destination screen (open limitation)
+
+There is **no route-level auth guard** anywhere in the app. Every screen key in `URL_MAP` is
+reachable while signed out (`SESSION_ONLY_SCREENS` is a cold-boot-state guard, not an auth guard).
+So making a card open `AuthModal` instead of navigating leaves the screen itself reachable by
+bookmark, browser Back, refresh, or a shared link.
+
+**Live instance:** `/pastGames` renders an inert "Sign in to see your past games" empty state with
+no sign-in control. Spec 043 gates the Home card but *accepts this as a known limitation* — its
+SC-004 is deliberately scoped to the gated-CTA paths. Do not "fix" the spec by asserting
+zero-dead-ends for direct navigation; the cheapest real fix is a sign-in affordance on that empty
+state.
+
+**Also:** the OAuth return leg always lands on `FRONTEND_URL` = site root `/`, never the origin
+screen. "Sign in from screen X → still on X" is false; the user is on Home. Returning them
+anywhere else requires stashing the destination before the redirect and consuming it after reload.
+
+**How to apply:** when gating any feature behind auth, check what its screen renders to a
+signed-out visitor who arrives directly — the gate on the entry point tells you nothing.
+See `docs/architecture/frontend-conventions.md` § Auth Integration.
 
 ## (merged from `bug_supabase_js_session_contamination` — supabase-js auth.getUser(userToken) on a shared client poisons subsequent DB inserts — fix: separate authClient for all auth.* calls)
 

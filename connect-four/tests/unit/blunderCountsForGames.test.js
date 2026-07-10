@@ -82,3 +82,32 @@ test('computeBlunderCountsForGames: returns {} when gameIds is empty (no query i
   assert.deepEqual(result, {});
   assert.equal(supabase.calls.length, 0, 'no query should be issued for an empty id list');
 });
+
+// Spec 042 (Mistake Review Unification), User Story 4, T033/FR-006/SC-006 regression.
+//
+// A game with 0 `quality: 'blunder'` rows and >=1 `quality: 'suboptimal'` row must still
+// produce a non-zero count here — this helper's `count()` query is issued against the
+// `blunders` table with no `.eq('quality', ...)` filter (see the query built above), so a
+// game whose rows are entirely suboptimal-severity contributes to its count() exactly like
+// any other row. This test locks that guarantee in as an explicit regression, and asserts
+// the query itself never filters on `quality`.
+test('computeBlunderCountsForGames: game with only suboptimal-severity rows still yields a non-zero count (FR-006)', async () => {
+  // The grouped count() the real query issues is quality-agnostic: a game where every
+  // underlying blunder row is quality:'suboptimal' (zero quality:'blunder' rows) still has
+  // its rows counted, so `count` here reflects that mixed-severity reality.
+  const groupedRows = [{ game_id: 'game-suboptimal-only', count: 2 }];
+  const supabase = makeStub(groupedRows);
+
+  const result = await computeBlunderCountsForGames(supabase, 'user-3', ['game-suboptimal-only'], 'game_id');
+
+  assert.deepEqual(result, { 'game-suboptimal-only': 2 });
+  assert.ok(
+    result['game-suboptimal-only'] > 0,
+    'FR-006: 0 blunder-severity + >=1 suboptimal-severity mistakes must not be reported as zero'
+  );
+  assert.equal(
+    supabase.calls[0].filters.quality,
+    undefined,
+    'the count() query must never filter on quality — both severities must be counted'
+  );
+});
