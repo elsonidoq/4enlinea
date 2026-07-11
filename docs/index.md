@@ -28,6 +28,8 @@
 
 ### Other
 
+[open_issues.md](open_issues.md) — triageable backlog of known-but-deferred bugs and quality gaps (latent issues we've consciously scoped out) — checking or updating what's known-broken before starting related work
+
 [best_practices_spec_driven_development.md](best_practices_spec_driven_development.md) — spec-driven development methodology using SpecKit + Claude Code for solo founders — understanding the workflow that drives this project's spec → plan → tasks pipeline
 
 [cloud_provider_research.md](cloud_provider_research.md) — VPS vs PaaS vs Serverless trade-offs for a solver-heavy app — choosing a cloud provider

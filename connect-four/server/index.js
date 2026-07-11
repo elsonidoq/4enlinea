@@ -23,6 +23,11 @@ import { registerUserRoutes } from './userRoutes.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+
+// Spec 044 US3 / FR-010–FR-012: the only three categories whose correctness model allows more
+// than one valid answer column. Used to gate the additive `accepted` field on
+// POST /api/evaluate-move (FR-015a) — see server-conventions.md.
+const MULTI_SOLUTION_CATEGORIES = new Set(['immediate_threat', 'forced_block', 'double_threat']);
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { classifyStoredMistake } from './mistakeStorageRule.js';
@@ -1591,7 +1596,20 @@ app.post('/api/evaluate-move', async (req, res) => {
     const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
     const coachMood = coachMoodMap[quality] ?? 'think';
 
-    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
+    // Spec 044 US3 / FR-015a: for the three multi-solution categories, add an additive
+    // `accepted` field computed via evaluatePredicate (which already treats a non-canonical
+    // but independently-satisfying column as 'tied' = accepted). This is recomputed at solve
+    // time — no persistence, no schema change — and gated strictly to these three categories so
+    // no other category's response shape changes. Does NOT touch quality/badge/coachPhraseKey/
+    // coachMood/summaryLineKey/patternTag, which have other callers (ChallengeScreen.jsx and
+    // others) — see server-conventions.md.
+    let accepted = null;
+    if (MULTI_SOLUTION_CATEGORIES.has(category)) {
+      const predicateResult = evaluatePredicate({ category, moveString: movestring }, colInt, scores);
+      accepted = predicateResult.result === 'correct' || predicateResult.result === 'tied';
+    }
+
+    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag, accepted });
   } catch (err) {
     logError('[evaluate-move]', err);
     res.status(500).json({ error: err.message });

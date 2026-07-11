@@ -1,6 +1,38 @@
 // Goal predicate evaluator for puzzle categories.
 // Each category defines what "correct" means for a puzzle.
 
+// ── Spec 044 / T013 — exhaustive `evaluatePredicate` caller sweep (multi-solution 'tied' fix) ──
+// Run: `rg -n 'evaluatePredicate' connect-four` (2026-07-10). Every hit, classified:
+//
+//   fix-needed (branches on result === 'correct' only, ignoring 'tied'):
+//     - server/candidate-generator.js:493 (inside checkPredicateRaw's correctCols filter) — this
+//       IS the T016 fix itself (changed in this same commit to accept 'correct' || 'tied').
+//
+//   no-fix-needed (already treats 'tied' as accepted, or is category-agnostic passthrough,
+//   or is a non-production caller — test/debug script):
+//     - server/index.js:1646  (POST /api/evaluate-move/inline) — never branches on
+//       `result === 'correct'` at all; `quality`/`badge` come from scoreMove (solver-score
+//       comparison), and evaluatePredicate's result is only used to additively expose
+//       `correctCol`/`threatCells`/`forbiddenCols`. Category-agnostic passthrough — no fix needed.
+//     - server/index.js:2317  (POST /api/puzzles/:id/check) — already computes
+//       `isSuccess = evaluation.result === 'correct' || evaluation.result === 'tied'`.
+//     - server/index.js:3101  (GET /api/admin/scores, curation tool) — already computes
+//       `predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied'`.
+//     - server/debug-immediate-threat.js:9 — standalone CLI debug script, prints raw
+//       `JSON.stringify(result)`; not a production caller, no accept/reject branch at all.
+//     - tests/predicates/predicates.test.js, tests/integration/claimeven.test.js,
+//       tests/integration/undercut_overcut.test.js, tests/integration/z_threat.test.js — test
+//       assertions read `evaluation.result` directly (asserting the exact expected string), they
+//       do not implement accept/reject business logic that could reintroduce the "false wrong" bug.
+//
+// Conclusion: exactly ONE production caller needed the fix (candidate-generator.js:493, the T016
+// change). The three server/index.js endpoints that gate on evaluatePredicate's result were
+// already written to accept 'tied' as correct — no T017 caller updates were required beyond T016.
+// `/api/evaluate-move` (server/index.js ~1543, the endpoint ChallengeScreen.jsx actually uses for
+// the puzzle-draw path) does NOT call evaluatePredicate at all today — see T015/T020 below, which
+// is a separate gap (client never got a category-aware verdict in the first place, not a 'tied'
+// mishandling) addressed by extending that endpoint in place.
+
 import { Board, detectDoubleThreat, detectForcedWin } from './classifier.js';
 
 const ROWS = 6;

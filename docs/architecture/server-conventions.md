@@ -121,6 +121,60 @@ New category evaluators MUST be added as a named function `eval<CategoryCamelCas
 Categories that store their answer in `highlightMetadata` (z_threat, undercut, overcut) read `puzzle.highlightMetadata`.
 Categories that store their answer as a scalar (claimeven, figure_7, j_shape) read `puzzle.correctCol`.
 
+### Generation-time candidate guards — color casting & stray forced-block (spec 044 US1/US2)
+
+`checkPredicate` in `candidate-generator.js` is an **exported wrapper** around `checkPredicateRaw`
+(the raw per-category dispatch). The wrapper applies two cross-cutting generation-time rejection
+rules on top of whatever `checkPredicateRaw` returns — a candidate that passes the raw predicate is
+still **rejected** (not silently re-cast) if it violates either:
+
+- **Color casting**: the learner-facing player at a puzzle position is
+  `new Board(moveString).currentPlayer` (equivalently `moveString.length % 2 === 0 ? 1 : 2`). For
+  `immediate_threat` the learner MUST be P1 (green — the side with the winning move); for
+  `forced_block` the learner MUST be P2 (gray — the side that must block). Miscast candidates are
+  rejected outright. This applies to puzzle generation ONLY — it is never applied to real-game
+  (sparring) blunder detection/tagging.
+- **No stray forced-block**: for any category OTHER than `forced_block`, if the board contains a
+  live (gravity-top / immediately playable) forced-block situation — detected via
+  `detectForcedBlock(new Board(moveString), scores)`, reading `.cols` for the blocking column set —
+  whose blocking column is NOT among the candidate's own computed answer column(s), the candidate is
+  rejected. If the forced-block's blocking column coincides with the answer, it is accepted. A
+  forced-block that is not gravity-top is not a live distraction and does not trigger rejection.
+
+All learner-facing puzzle text referencing disc color MUST say "green"/"gray", never "red"/"yellow"
+(the `'red'`/`'yellow'` code strings are P1/P2 labels that render green/gray — see CLAUDE.md's color
+table).
+
+### Multi-solution acceptance (spec 044 US3)
+
+`immediate_threat`, `forced_block`, and `double_threat` are the only three categories whose
+correctness model allows more than one valid answer column (a fork, or multiple independently
+winning/blocking columns). For these three categories only:
+
+- **Generation-time** (`checkPredicateRaw` in `candidate-generator.js`, the fallthrough branch for
+  these three categories): the acceptance threshold is `correctCols.length >= 1`, not `=== 1`. The
+  `correctCols` filter itself must accept `evaluatePredicate(...).result === 'correct' ||
+  result === 'tied'` — NOT `'correct'` alone. This is load-bearing: `evalImmediateThreat`/
+  `evalForcedBlock`/`evalDoubleThreat` return `'correct'` only when a column is the SOLE satisfying
+  column, and `'tied'` when 2+ columns satisfy it — so filtering on `'correct'` alone yields an
+  EMPTY `correctCols` for every multi-solution board (all its winning/forking columns individually
+  evaluate to `'tied'`, none to `'correct'`), not just a size-1 one.
+- **Solve-time**: every production caller of `evaluatePredicate` that gates learner correctness on
+  the result MUST treat `'tied'` as accepted, exactly like `'correct'` — e.g.
+  `result === 'correct' || result === 'tied'`. As of spec 044 Batch 2, all production callers
+  already did this except `checkPredicateRaw`'s own filter (fixed above) — see the caller-sweep
+  comment block atop `predicates.js` for the full audited list.
+- **`undercut`** (avoid-the-pattern: every legal column except the killing column is correct) and
+  **`z_threat`/`overcut`/`claimeven`** (exactly one correct column) are explicitly OUT of this rule
+  — their existing single-answer/avoid-the-pattern semantics are unchanged, and must never be
+  widened to "any generating column."
+- **Client**: `POST /api/evaluate-move` (`server/index.js`) exposes an additive `accepted: bool |
+  null` response field, gated to these three categories via the request's `category` field
+  (`accepted` is `null` for every other category). It is computed via `evaluatePredicate` at solve
+  time — no persistence, no schema change. `ChallengeScreen.jsx`'s `handleColumnClick` reads
+  `data.accepted` (not a bare `data.quality === 'optimal'` check) for these three categories only;
+  every other category's client-side scoring is unchanged.
+
 ## Classifier API — Perspective, classifyPattern, and tagBlunder
 
 `classifier.js` exposes two functions beyond the category-level `classify()`:
@@ -311,6 +365,15 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - **Minors** use `getMinorThreatWindows` + `emptyCellsFromWindows` (NOT the `rn`/`yn` flags), so a 2-disc window shadowed by a major window is excluded.
 
 `categorizeThreats`, `getMinorThreatWindows`, and `emptyCellsFromWindows` live in `classifier.js` (moved there from `explainContext.js` 2026-06-25) **specifically to avoid an import cycle**: `explainContext.js → sparseLookahead.js → classifier.js`, and the new `classifyPattern` threat detectors need the categorizer. `classifier.js` imports neither of the other two, so it is the only cycle-free home. `explainContext.js`'s `summarizeThreats` delegates to `categorizeThreats` (keeping its legacy output shape) and imports `getMinorThreatWindows` from `classifier.js`.
+
+## Allen T/V-rule content-pipeline utilities (`allenTransforms.js`, `allenVRules.js`)
+
+`connect-four/server/allenTransforms.js` and `connect-four/server/allenVRules.js` (spec 044 Epic 4, User Stories 4–5) are standalone, pure threat-set-in/threat-set-out utility modules — **not wired into any production request path** (`candidate-generator.js`, `classifier.js`, `predicates.js`, and `ChallengeScreen.jsx` are all untouched). They exist to give the content pipeline (puzzle authoring / regression tooling) a KB-sourced, unit-tested implementation of Allen (2010)'s threat-simplification and victory-rule framework, callable independently of the runtime classifier.
+
+- `allenTransforms.js` exports the T1–T7 transformation-rule detectors (each a literal port of its own `docs/knowledge-base/allen-t{1..7}.md` `formal_predicate`) plus `simplifyThreats(threats)`, a composition helper that runs the applicable detectors in KB-documented precedence order and returns `{ threats, decidedBy, t3Pairs, t4Cols, t5Cols, t7Cancellations }` for downstream V-rule consumption. It also exports `isAllenOddRow0(row0)`, the 0-indexed ⟷ Allen-1-indexed row-parity translator — required because every KB entry's prose/pseudocode is written in Allen's own 1-indexed row numbering while this project is 0-indexed everywhere (CLAUDE.md); reuse this helper for any absolute-row-parity check rather than porting a KB literal directly.
+- `allenVRules.js` exports the V1–V5 victory-rule evaluators and the T4 Case A / Case B evaluators (each a literal port of its own KB entry). The V1–V5 evaluators take the `simplifyThreats()` output shape (not a raw threat array), since V1/V2's odd-threat counting needs the T3 pair metadata.
+- Contract: a threat is `{ player: 1 | 2, col: 0-6, row: 0-5 }` (0-indexed), `RED = 1`, `BLACK = 2`. No board-mutation, no gravity/reachability check, no candidate-board generation, no new player-facing category — these are pure functions over an already-extracted threat set.
+- Tests: `tests/unit/allenTransforms.test.js` and `tests/unit/allenVRules.test.js`, each fixture sourced from its own KB entry's `worked_examples`/`false_positives` and cross-checked against `./visualize_board.sh`/the production c4solver, not trusted from KB prose alone.
 
 ## LLM Coach Helpers (`llmCoachHelpers.js`)
 

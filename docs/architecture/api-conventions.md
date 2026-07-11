@@ -422,12 +422,14 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
   "coachPhraseKey": "coach.immediate_threat.optimal.0" | null,
   "coachMood": "happy" | "think" | "oops",
   "summaryLineKey": "eval.immediate_threat.optimal.summary.0" | null,
-  "patternTag": "<category slug>" | null
+  "patternTag": "<category slug>" | null,
+  "accepted": true | false | null
 }
 ```
 - `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
 - `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
 - `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
+- `accepted` (spec 044 US3, FR-015a): additive field, computed via `evaluatePredicate`, present (non-null) only when the request's `category` is `immediate_threat`, `forced_block`, or `double_threat` — the three categories whose correctness model allows more than one valid answer column. `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category. Recomputed at solve time; not persisted. See server-conventions.md's "Multi-solution acceptance" note.
 - No auth required; anonymous calls are accepted.
 
 **Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.

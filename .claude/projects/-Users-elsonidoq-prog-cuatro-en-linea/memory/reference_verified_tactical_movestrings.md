@@ -10,6 +10,12 @@ metadata:
 Solver-verified example movestrings for the strategic rules. Coordinates in the notes are as printed by `./visualize_board.sh`. **Token legend (current format):** `X`=player1=GREEN, `O`=player2=GRAY; `[X]`/`[O]` major threat, `<X>`/`<O>` gravity-top major, `(x)`/`(o)` minor threat, `[*]`/`(*)` both players; major-threats list tags the owner as `(X)`/`(O)`. (These notes were migrated from the old `R`/`Y` token format.) Canonical source files noted per group.
 
 ## Allen V-rules — `specs/008-new-puzzle-categories/allen_v_rule_examples.yaml`
+> ⚠️ **This table is partly STALE — see the 2026-07-11 UPDATE block below.** V1 (`44452556366`) and
+> V5 (`42354643256425346355663`) FAILED independent solver re-verification and must NOT be reused;
+> V2/V4 here are 1-indexed. The **KB entries `docs/knowledge-base/allen-v{1..5}.md` are now the
+> source of truth** (backfilled + `solver_verified: 2026-07-11`). Pull movestrings from the KB, not
+> this table.
+
 | Rule | Movestring | Winner | Key structure |
 |---|---|---|---|
 | V5 | `42354643256425346355663` | Draw | col1r3(X)+col7r5(O) odd threats → T7 cancels both; all scr=0 |
@@ -34,10 +40,45 @@ Solver-verified example movestrings for the strategic rules. Coordinates in the 
 | specialbefore | `2365555` | "/" diag Before group; col3r2 directly playable; col4r3 Vertical; scr≤0 |
 - baseinverse/aftereven are structural demos (positions not Black-winning; some scr>0). lowinverse+highinverse share one movestring (both rules on one position).
 
+## Allen T1–T7 are DETECTORS, not board operators — and KB is the verification source of truth
+- **T1–T7 are threat-simplification rules**, signature `t*_winner(threats) -> (player, col) | None` (see
+  `docs/knowledge-base/allen-t1.md` `formal_predicate`, `type: transformation_rule`). Input is a **threat SET**,
+  output is a **winner** — they do NOT mutate a board into a new board. They simplify a threat set to feed the
+  V1–V5 win/loss/draw evaluation ("after T1–T7 simplification…"). Do NOT model them as board-transformation
+  operators that widen the candidate-board pool (that misreading drove a whole bad epic framing, corrected in the
+  spec-044 review 2026-07-10).
+- **Verification status: trust the KB entries, not this table.** In `docs/knowledge-base/`: **T1,T2,T3,T4(A+B),
+  T5,T6,T7 all have `solver_verified` worked examples**; **V1,V2,V4,V5 are `movestring: PENDING` / `solver_verified:
+  PENDING` in their KB entries** (the verified V-movestrings live ONLY in this memory's table above — never
+  backfilled into the KB); **V3 is verified in-entry**. So the epic-4 KB backfill (spec 044 US5) copies this
+  memory's V1/V2/V4/V5 movestrings INTO their KB `worked_examples`; T1–T7 need no backfill.
+- **UPDATE 2026-07-11 (spec 044 US5, T031-T037, Batch 3): backfill complete, and this table's V1/V5 movestrings
+  turned out to be WRONG on independent re-verification** — do not reuse them. `V1`'s `44452556366` and `V5`'s
+  `42354643256425346355663` were re-run through a direct solver query + `./visualize_board.sh`: neither
+  reproduced its claimed threat structure or outcome (V1's board showed an unrelated imminent Black win with only
+  2 major threats total, not 3 separate Red odd threats; V5's board scored -2/all-columns, a Red win, not a
+  Draw, and had no col1r3/col7r5 threat pair). Both were replaced in the KB with independently solver-verified
+  substitutes (`allen-v1.md`: `16213263616`; `allen-v5.md`: `31243532145314235244552`, reusing `allen-t7.md`'s
+  own already-verified second worked example). `V2`'s `727364` and `V4`'s `2134124321317273` in this table are
+  1-indexed (contain digit 7, invalid for this project's 0-indexed `SEQUENCE_POSITION_RE`) — their 0-indexed
+  forms (`616253`, `1023013210206162` respectively) WERE independently re-verified and DID match their KB
+  entries' descriptions; those backfills succeeded as-is (after the index-base conversion). `V3`'s KB entry
+  already had a real, correctly 0-indexed, re-confirmed movestring (`333330211113120000012222`) — this table's
+  `77273746` for V3 does not appear in the KB entry at all (it is 1-indexed digits equal to `66162635` 0-indexed,
+  which is a different position — `allen-t7.md`'s own second worked example, not V3's). All 5 KB entries
+  (`allen-v1.md`…`allen-v5.md`) now carry independently solver-verified `worked_examples`; see each file's
+  `solver_verified: 2026-07-11` stamp for the final movestring used.
+
 ## Allen T4 Case A — full entry `docs/knowledge-base/allen-t4.md` (Allen 2010 Ch.4 p.98)
 - **Movestring:** `1115222555577773663636617` — Red has two major threats at col4 row3 AND col4 row5 (both odd, SAME column). Col4 entirely empty (par=6E); no other Red odd-row majors; Yellow to move.
 - **Outcome:** all scr negative (Yellow wins). The two same-column odd threats produce NO V1/V3 win — confirms T4 (no cumulative bonus for same-parity threats in one column); Yellow's win is external structure. Verified 2026-05-17. Use as the Case-A regression for any T4 detector / parity analyzer / threat-simplifier.
-- **Still PENDING movestrings:** T4 Case B (opposite-colour same-parity same column: R@(C,3)+Black@(C,5)); false positives for same-parity-different-column (V1), same-column-different-parity (T5), same-column-adjacent-rows (T1).
+- **T4 Case B (opposite-colour same-parity same column: R@(C,3)+Black@(C,5)):** **RECONCILED 2026-07-11 (spec 044
+  US5, T036).** This memory previously called Case B PENDING — that was the stale claim. Independently re-ran a
+  direct solver query against `docs/knowledge-base/allen-t4.md`'s existing Case-B movestring
+  (`33104201250010221152`): scores `[-5,-10,-10,11,-5,-10,-10]`, mover=Red, matching the KB's own description
+  verbatim (col4 display / col3 0-indexed scores +11, Red claims the row-3 threat first). **The KB was correct;
+  this memory's "still PENDING" label was the error** — confirmed via direct re-verification, not assumed. False
+  positives to guard: same-parity-different-column (V1), same-column-different-parity (T5), same-column-adjacent-rows (T1).
 
 ## double_threat — detector-verified boards (verified 2026-07-08 via `detectDoubleThreat` in `classifier.js`)
 | Movestring | Player | Detector cells (1-indexed cXrY) |

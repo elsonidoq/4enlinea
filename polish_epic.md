@@ -534,37 +534,91 @@ inventory (spec Appendix); see Settled decisions above.
 
 ## Epic 4 — Puzzle Generation & Correctness
 
-**Intent:** Enforce player-color and pattern constraints in generated puzzles, judge correctness via the
-classifier (not `correctCol`), and expand generation with Allen transformations + missing V-rules.
+**STATUS: COMPLETE (2026-07-11).** US4.1–US4.5 all done; spec 044 tasks T001–T051 all pass. Implemented across
+four batches: US1 (candidate-generator color-cast guard), US2 (stray forced_block guard), US3 (multi-solution
+acceptance, server `evaluatePredicate` + client Challenge screen), US4 (Allen T1–T7 detectors in
+`server/allenTransforms.js`), US5 (Allen V1–V5 + T4 Case A/B operators in `server/allenVRules.js`, after the
+FR-020a KB backfill/reconciliation). Final validation: `npm run test:fast` = 1061 pass / 0 fail / 147 suites
+(up from the 1039/138 pre-epic baseline); full `npm test` (incl. `tests/integration/candidate-generator.test.js`,
+real solver) = 652 pass / 0 fail / 103 suites, no hang. SC-001–SC-006 re-verified end-to-end, including a fresh
+solver-generated sample batch (immediate_threat, forced_block, z_threat, double_threat) confirming color-cast
+and predicate-acceptance behavior on out-of-fixture boards.
+
+**Intent:** Enforce player-color and pattern constraints in generated puzzles, audit and correct the
+per-category correctness predicates at both the generation and solve seams, and add net-new Allen
+transformations + V-rules sourced from the knowledge base.
 
 **Issues covered**
 - `[new_TODOs #9]` immediate_threat: user = green (P1); forced_block: user = gray (P2). *(Generated-puzzle rule
   only — QA confirmed it does NOT apply to real-game blunders.)*
 - `[new_TODOs #13]` No non-forced_block puzzle may contain a forced_block unless it is the answer move.
-- `[new_TODOs #15]` double_threat correctness = position generates the fork, not `correctCol` equality.
-- `[new_TODOs #14]` Incorporate Allen T1–T7 transformations + the missing Allen-V rules
-  (prior session `cf6a4f19-…`).
+- `[new_TODOs #15]` double_threat correctness must accept any move that generates a fork, not just the stored
+  `correctCol`.
+- `[new_TODOs #14]` Incorporate Allen T1–T7 transformations + the Allen-V rules beyond the currently-verified
+  V1–V5, sourced from `docs/knowledge-base/`.
 
 **Non-obvious facts** (confirmed code locations + traps)
-- `server/candidate-generator.js`, `server/classifier.js`, `server/categories.js`, `server/blunderReasons.js`,
-  `server/blunderTags.js`; the completion/eval seam is `CompletionStrategy` (spec 007).
+- The per-category correctness predicates **already exist in two layers** — this epic audits/corrects them,
+  it does not build them from scratch:
+  - **Generation-time:** `server/candidate-generator.js` has per-category `check*Predicate` fns dispatched by
+    `checkPredicate` (~line 431). `checkUndercutPredicate` (line 331) already computes `correctCols` as every
+    legal column **except** the killing column (undercut's avoid-the-pattern semantics — already correct;
+    do not invert it). Unique-answer categories (`z_threat`, `overcut`, `claimeven`) already return a single
+    `correctCol` (accept-any-generating-column would be a no-op for these). Multi-solution categories
+    (`immediate_threat`/`forced_block`/`double_threat`) filter legal columns via `evaluatePredicate` but
+    generation currently **requires `correctCols.length === 1`** to pass — this is the real gap for #15.
+  - **Solve-time:** `server/predicates.js:evaluatePredicate` dispatches per category; `evalDoubleThreat`
+    already returns `'tied'` for multiple fork columns, but `'tied'` is **not currently counted as `'correct'`**
+    in the generator's `checkPredicate` acceptance logic — this mismatch is the concrete bug, not a missing
+    feature. Fixing this requires an **exhaustive audit of every `evaluatePredicate` caller** (not just the
+    known ones), since one missed caller that still branches on `result === 'correct'` only reintroduces a
+    "false wrong" verdict for a legitimately tied answer.
+  - `CompletionStrategy` (spec 007) is the **forced-win sequence validator** — relevant only to `forced_win`
+    sequence puzzles, not to the single-move correctness categories in this epic.
+  - `blunderReasons.js` / `blunderTags.js` are **sparring-game** blunder tagging, unrelated to puzzle-generation
+    correctness — not part of this epic's file list.
+  - The client **Challenge** screen compares `col === correctCol`-equivalent logic (in practice, a pure
+    solver-score comparison via `scoreMove` that never consults `evaluatePredicate`), bypassing the server's
+    category-aware evaluator entirely. This bypass is **in scope** for this epic (see US4.3 and NOT included).
+    `SocraticScreen.jsx` has an equivalent bare `col === correctCol` comparison but is **not applicable**:
+    `lesson.socratic` is hand-authored single-teaching-move content with no `category` field and no
+    accepted-answer *set* to source from, so there is nothing for it to consult even if rewired.
 - Trap: `classify` (sync, 8-tag) vs `classifyPattern` (async, 15-detector) are different — use the right one
   when judging a resulting position (memory `reference_classify_vs_classifyPattern`).
 - Trap: never hand-construct movestrings — source via `playGame`/DB/KB; validate through the **production**
   detector (invariant I12), not just the motivating example.
 - The color mapping (P1 green / P2 gray) is in the CLAUDE.md color table; user-facing text says green/gray.
+- All T1–T7 rules are **already solver_verified in the KB** — no backfill needed for them. Only V1/V2/V4/V5
+  have `movestring: PENDING` in their KB entries (real backfill from memory required); V3 needs only a
+  re-verify pass; T4 Case B is **already `solver_verified` in the KB** — the memory file
+  (`reference_verified_tactical_movestrings.md`) calling it "still PENDING" is the stale source, not the KB.
 
 **Authoritative sources of truth**
-- **Spec 007** (`CompletionStrategy`) + memory `project_forced_win_refactor`. **Spec 008** + memory
-  `project_new_puzzle_categories`, `project_new_category_wiring_checklist`.
-- Memory `reference_verified_tactical_movestrings` (Allen V1–V5 + Allis 9 rules + regression), `project_kb_status`,
-  `reference_external_pdfs`; `docs/knowledge-base/` entry per category (read before touching its predicate).
+- **Spec 008** + memory `project_new_category_wiring_checklist` (per-category wiring, incl. `check*Predicate`
+  dispatch). Spec 007 + memory `project_forced_win_refactor` for `CompletionStrategy` context only (sequence
+  puzzles, not this epic's correctness categories).
+- `docs/knowledge-base/` is the enumeration source for Allen T1–T7 transforms and V-rules — **not** the Allen
+  PDF. Memory `reference_verified_tactical_movestrings` (Allen V1–V5 + Allis 9 rules + T4 Case-A, all
+  solver-verified) and `project_kb_status` identify which rules already have verified fixtures.
 - `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- **Every category that has a classifier judges answer-correctness by running that classifier on the resulting
-  position** (position-generates-the-pattern), not by `correctCol` equality. This generalizes #15 beyond
-  double_threat to all classifier-backed categories.
+- The per-category correctness predicates already exist in `candidate-generator.js` (generation-time) and
+  `predicates.js` (solve-time). This epic **audits and corrects** those existing predicates per category — it
+  does **not** introduce a blanket "run the classifier on the result, accept if present" rule, and it does
+  **not** override `undercut`'s avoid-the-pattern semantics or `claimeven`/`overcut`'s unique-answer semantics.
+- The genuine gap is the **multi-solution accept path**: generation-side `checkPredicate` currently requires
+  `correctCols.length === 1`, and solve-time `'tied'` results are not treated as `'correct'`. Fixing this,
+  scoped to the categories that are actually multi-solution (`immediate_threat`, `forced_block`,
+  `double_threat`), is what resolves #15.
+- Allen T1–T7 and the Allen-V rules (V1–V5, T4 Case A and Case B) are **net-new implementation** — no existing
+  transform/V-rule engine exists to diff or extend. Scope is **all of T1–T7 + V1–V5 + T4 Case A and Case B**
+  (see US4.4/US4.5 below) — every one of these already has, or (via the FR-020a KB backfill) will have, a
+  solver-verified KB worked example, so none of the T/V-rule work needs to be deferred. (US4.2's
+  already-stored-puzzle remediation IS deferred — see the `### Deferred` subsection at the end of this epic.)
+- The client-side Challenge-screen bypass is **in scope** for this epic (US4.3): the fix is scoped to
+  `ChallengeScreen.jsx` only; `SocraticScreen.jsx` is confirmed non-applicable (no `category`/accepted-answer-
+  set concept on its hand-authored `lesson.socratic` data).
 
 ### User stories & tasks
 
@@ -584,46 +638,106 @@ classifier (not `correctCol`), and expand generation with Allen transformations 
 4. Define "answer move is the forced block" precisely in generator terms.
 5. Test: stray forced_block rejected; answer-move forced_block allowed.
 
-**US4.3 — Classifier-based answer correctness (generalized).**
-*As a learner solving a multi-solution puzzle, I want any move that produces the pattern accepted.*
-1. Enumerate categories currently keying correctness on `correctCol` vs the `classifyPattern` detectors.
-2. Change the correctness check to run the category's classifier on the post-move position, for every classifier-backed category.
-3. Integrate with `CompletionStrategy` (spec 007).
-4. Validate per category against the full case-space + a counterexample through the **production** detector (I12).
-5. Test: a double_threat board with two fork columns accepts both; a non-fork move is rejected.
+**US4.3 — Audit and correct the per-category correctness predicates (server AND client).**
+*As a learner solving a multi-solution puzzle, I want any move that produces the pattern accepted — without
+disturbing categories whose correctness is unique-answer or avoid-the-pattern — and I want this to hold
+wherever my move is judged, not only on the server.*
+1. Enumerate every category's correctness **semantics** (accept-any-generating-column / avoid-pattern /
+   unique-answer) against the predicates that already exist in `candidate-generator.js:check*Predicate` and
+   `predicates.js:evaluatePredicate` — do not invent new semantics.
+2. For the multi-solution categories only (`immediate_threat`, `forced_block`, `double_threat`): fix generation
+   to accept `correctCols.length >= 1`, and fix acceptance logic to treat solve-time `'tied'` as `'correct'`.
+3. **Gating sub-task**: run an exhaustive `rg 'evaluatePredicate'` sweep across the codebase and classify every
+   caller as "branches on `result === 'correct'` only" (needs the `'tied'`-as-correct fix) or not. This sweep
+   must close — every caller reconciled — before US4.3 is considered done; a single missed caller
+   reintroduces the "false wrong" bug for a legitimately tied answer.
+4. Fix the client-side bypass: `ChallengeScreen.jsx` currently trusts `/api/evaluate-move`'s `quality`, which
+   is computed purely via `scoreMove` (solver-score comparison) and never calls `evaluatePredicate` — so the
+   category-aware `'tied'`-as-correct fix from step 2 does not reach the learner today. Extend
+   `/api/evaluate-move` to also carry `category` + `movestring` in its request and add an
+   `evaluatePredicate`-gated accepted-answer check, gated to the three multi-solution categories only, exposed
+   as an additive response field (never repurposing `quality`/`badge`/`coachPhraseKey`, which other callers
+   depend on); update `ChallengeScreen.jsx` to read it. Recompute at solve time — no schema change, no
+   persistence of the full `correctCols` array needed. **`SocraticScreen.jsx` is confirmed non-applicable**:
+   its `lesson.socratic` data is hand-authored single-teaching-move content with no `category` field and no
+   accepted-answer set, so bare `col === correctCol` is correct there and is left untouched.
+5. Before relying on `scoreMove` as a stand-in anywhere, empirically verify with a concrete board that a
+   `double_threat` fork column need not be the single max-score column (score-tie != fork-tie) — do not assume
+   they coincide.
+6. Explicitly preserve `checkUndercutPredicate`'s avoid-the-pattern `correctCols` computation and the
+   unique-answer categories' single-`correctCol` behavior — add a regression test asserting these are
+   unchanged.
+7. Validate each corrected category against its full case-space + a counterexample, through the **production**
+   detector (I12), not the motivating example alone.
+8. Test: a double_threat board with two fork columns accepts both (server AND Challenge screen); a non-fork
+   move is rejected; an undercut board's killing column is still rejected; a claimeven/overcut board still
+   requires its unique `correctCol`.
 
-**US4.4 — Allen T1–T7 board transformations.**
-*As the puzzle pipeline, I want Allen's transformations for wider coverage.*
-1. Implement T1–T7 as reusable operators over valid boards.
-2. Ensure transformations preserve board legality (via `playGame`/solver).
-3. Integrate the operators with `candidate-generator` sampling.
-4. Solver-verify transformed boards for both players.
-5. Add a KB/test worked example per transformation.
+**US4.4 — Allen T1–T7 threat-simplification detectors (net-new).**
+*As the puzzle pipeline, I want programmatic detectors for Allen's T1–T7 rules — each a threat-set-in,
+`(player, col)`-winner-out function, not a board transformation — so the pipeline has a verified implementation
+of each rule to feed into the V1–V5 win/loss/draw evaluation (US4.5).*
+1. Implement `t{1..7}_winner(threats) -> (player, col) | None` (or the rule's own declared shape, e.g. T4's
+   `t4_applies(threats, col) -> bool` — confirm each entry's shape individually, do not assume uniformity) as
+   pure functions over an externally-supplied **threat set**, defined and sourced strictly from each relevant
+   `docs/knowledge-base/allen-t{1..7}.md` entry's `formal_predicate` (not the Allen PDF).
+2. No board-mutation or board-legality step applies — a threat set with no corresponding coherent board is a
+   valid input, not an error case.
+3. Compose T1–T7's output as an input-simplification step feeding V1–V5 (US4.5): extract a board's threat set,
+   run applicable T-rules, pass the simplified set into the V-rule evaluation.
+4. All seven rules are **already solver_verified in the KB** — no backfill needed; implement directly against
+   existing `worked_examples`.
+5. Add a test per detector sourced from its KB `worked_examples` (positive) and `false_positives` (negative,
+   where present).
 
-**US4.5 — Missing Allen-V rules.**
-*As the puzzle pipeline, I want the full Allen-V rule set.*
-1. Diff current V1–V5 against Allen's full V set; enumerate the missing rules.
-2. Implement each missing V-rule predicate.
-3. Solver-verify a worked example per rule; add to KB.
-4. Reconcile with the prior session `cf6a4f19-…` exploration.
-5. Regression test: existing verified movestrings still classify correctly.
+**US4.5 — Allen-V rule operators, all rules in scope (net-new).**
+*As the puzzle pipeline, I want reusable operators for all of the Allen-V rules (V1–V5) and both T4 variants
+(Case A and Case B), each backed by a solver-verified KB worked example.*
+1. **Prerequisite (FR-020a backfill/reconciliation, MUST complete first, per-rule gated)**: V1, V2, V4, and V5
+   currently have `movestring: PENDING` in their KB entries — backfill each from the verified movestring in
+   memory (`reference_verified_tactical_movestrings.md`), re-verified via `optimal_line.mjs`/`playGame` (not
+   copied uncritically). V3 already has a KB movestring — re-verify only, do not skip verification. T4 Case A
+   is already `solver_verified` in the KB. **T4 Case B is already `solver_verified` in the KB** — independently
+   re-run `optimal_line.mjs` against it to confirm (per I12, do not trust the existing stamp at face value),
+   then correct the memory file (which stale-labels it "still PENDING") — the KB is not the stale source here.
+2. Implement V1–V5, T4 Case A, and T4 Case B as reusable, KB-sourced operators, each defined strictly from its
+   own (now-verified) `docs/knowledge-base/` entry — no operator implemented before its own rule's
+   backfill/reconciliation step above completes.
+3. Verify each operator against its KB worked example using `optimal_line.mjs`.
+4. Regression test: existing verified movestrings still classify correctly.
 
 **Acceptance criteria**
 - 100% of sampled generated immediate_threat/forced_block puzzles cast the user green/gray respectively.
 - A stray forced_block is rejected; an answer-move forced_block is allowed.
-- A double_threat board with two fork columns accepts both; a non-fork move is rejected — verified through the
-  production detector (I12), not the motivating example alone.
-- Each Allen transform + each missing V-rule has a solver-verified worked example; existing verified
-  movestrings still classify correctly.
+- Each per-category correctness predicate matches its documented semantics: multi-solution categories
+  (`immediate_threat`, `forced_block`, `double_threat`) accept any generating column including `'tied'`
+  results; `undercut` still rejects its killing column; unique-answer categories (`z_threat`, `overcut`,
+  `claimeven`) still require their single `correctCol` — each verified through the production detector (I12),
+  not the motivating example alone — **on both the server and the Challenge screen**.
+- The exhaustive `evaluatePredicate` caller sweep (US4.3.3) is closed with every caller reconciled.
+- Every implemented Allen T-rule (T1–T7) and every implemented V-rule/T4 operator (V1–V5, T4 Case A, T4 Case B)
+  has a solver-verified worked example sourced from the KB; existing verified movestrings still classify
+  correctly; no operator is implemented outside this approved set.
 
-**NOT included:** real-game blunder color rules (explicitly excluded); reason-engine changes; new UI categories.
+**NOT included:** real-game blunder color rules (explicitly excluded); reason-engine changes; new UI
+categories; using Allen T1–T7 to generate net-new candidate boards for the sampler (they have no
+board-mutation model — that is a distinct, separately-considerable widening of the candidate pool, not part of
+this epic); de-duplication/canonicalization of equivalent boards via Allen transformations;
+`SocraticScreen.jsx`'s bypass (confirmed non-applicable, not a deferral — see US4.3.4).
 
-**Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; generation + classification + eval seam across
-categories + algorithmic transforms; the correctness generalization reshapes the check and needs per-category
-I12 validation. Hard algorithms stay in the spec.
+### Deferred
 
-**Open questions (`/clarify`):** which categories key on `correctCol` today; exact "answer move is the forced
-block" definition; exact list of missing V-rules; transforms for coverage vs canonicalization.
+- **US4.2 stray-forced_block remediation for already-stored puzzles is out of scope.** The generation-time
+  fix (US4.2) prevents new candidates from being accepted with a stray, unrelated forced-block. Sweeping or
+  re-auditing already-generated/already-stored puzzles in the database for this same defect is explicitly
+  **out of scope** for this epic — owner decision. If a backfill/remediation pass is wanted later, it should be
+  scoped as a separate, later piece of work.
+
+**Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; generation + solve-time-and-client evaluator audit
+across categories + net-new algorithmic detectors/operators; the multi-solution accept-path fix needs
+per-category I12 validation plus an exhaustive caller sweep. Hard algorithms stay in the spec.
+
+**Open questions (`/clarify`):** exact "answer move is the forced block" definition.
 
 ---
 

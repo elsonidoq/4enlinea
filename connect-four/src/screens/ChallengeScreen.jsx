@@ -18,6 +18,10 @@ import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
+// Spec 044 US3 / FR-010–FR-012: the only three categories whose correctness model allows more
+// than one valid answer column — must match server/index.js's MULTI_SOLUTION_CATEGORIES.
+const MULTI_SOLUTION_CATEGORIES = new Set(['immediate_threat', 'forced_block', 'double_threat']);
+
 const QUALITY_GLYPH = { optimal: '✓', suboptimal: '?', blunder: '✕' };
 
 function getWinLine(board, row, col, color) {
@@ -225,10 +229,31 @@ export function ChallengeScreen({
     })
       .then(r => r.json())
       .then(data => {
-        setEvaluation(data);
+        // Spec 044 US3 / FR-015a: for the three multi-solution categories (immediate_threat,
+        // forced_block, double_threat), do NOT judge correctness by a bare
+        // `data.quality === 'optimal'` check — that's a pure solver-score comparison and can
+        // disagree with the puzzle's actual accepted-answer set (e.g. a fork column that isn't
+        // the single max-score column, or a winning/blocking column that isn't the stored
+        // canonical one). Read the additive `data.accepted` field instead, which the server
+        // computes via evaluatePredicate (FR-012's 'tied'-as-correct rule) for these categories.
+        // Every other category keeps the original `data.quality === 'optimal'` check unchanged
+        // (FR-015b).
+        const isMultiSolutionCategory = MULTI_SOLUTION_CATEGORIES.has(effectiveCategory);
+        const isCorrect = isMultiSolutionCategory ? data.accepted === true : data.quality === 'optimal';
+
+        // The rendered badge/glyph/summary must agree with `isCorrect`, not the server's raw
+        // score-only `quality` — a valid tied answer (accepted:true) must visually read as
+        // correct, not "suboptimal". This only overrides the two display-driving fields
+        // (`quality`, `badge`) for the multi-solution categories when they'd otherwise
+        // contradict `accepted`; `coachPhraseKey`/`coachMood`/`summaryLineKey`/`patternTag` are
+        // left exactly as the server sent them (FR-015a: do not repurpose those fields).
+        const displayData = (isMultiSolutionCategory && isCorrect && data.quality !== 'optimal')
+          ? { ...data, quality: 'optimal', badge: 'good' }
+          : data;
+        setEvaluation(displayData);
 
         // SFX feedback
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           playSfx('correct_move');
         } else {
           playSfx('wrong_move');
@@ -247,7 +272,7 @@ export function ChallengeScreen({
         }]);
 
         // Win overlay if optimal win
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           const winLine = getWinLine(newBoard, row, col, color);
           if (winLine.length >= 4) {
             setOverlays(winLine.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
@@ -259,15 +284,15 @@ export function ChallengeScreen({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],
-          outcome: data.quality === 'optimal' ? 'correct_first' : 'abandoned',
-          first_attempt_correct: data.quality === 'optimal',
+          outcome: isCorrect ? 'correct_first' : 'abandoned',
+          first_attempt_correct: isCorrect,
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
         store?.recordActivityDay().catch(() => {});
 
         // Analytics
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           track('puzzle_solved_correct', { puzzleId: current.id, category });
         } else {
           track('puzzle_solved_wrong', { puzzleId: current.id, category });

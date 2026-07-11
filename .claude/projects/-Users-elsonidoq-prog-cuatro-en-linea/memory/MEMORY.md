@@ -12,7 +12,7 @@
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — formal predicates for figure_7/j_shape/undercut/overcut (j_shape/undercut have NO KB entry)
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based algorithm; ~20 solver queries
 - [Z-threat detection](reference_z_threat_detection.md) — odd empty cell count; UI visualization spec
-- [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — Allen V1–V5 + Allis 9 rules + T4 Case-A; 2 verified double_threat boards + open-three≠DT gravity-top trap
+- [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — Allen V1–V5 + Allis 9 rules + T4 A/B; KB is source-of-truth (V1–V5/T4-B backfilled+solver_verified 2026-07-11); memory table's V1/V5 were WRONG, V2/V4 1-indexed — pull from KB not table; T1–T7 DETECTORS; open-three≠DT trap
 - [missed_own capitalize principle](project_missed_own_capitalize_principle.md) — double_threat/figure_7/immediate_threat survive wrong moves; missed_own = correctCol BUILDS pattern; only undercut (same col, row≤) kills a fork
 - [Never generate random boards](feedback_no_random_boards.md) — source from DB, git history, or KB
 - [Coordinate convention](reference_coordinate_convention.md) — 0-indexed; two translation boundaries only
@@ -25,6 +25,7 @@
 - [New-category wiring + locked designs](project_new_category_wiring_checklist.md) — 8-file checklist (missing candidate-generator.js = silent failures); locked category designs
 - [Removed categories](project_category_cleanup.md) — zugzwang≠forced_win; claimodd removed 2026-06-17; don't reuse slugs; how to re-add
 - [Classifier architecture](project_classifier_architecture.md) — detection pipeline; highlight_metadata schemas + null-vs-non-null per category
+- [Puzzle correctness seams](project_puzzle_correctness_seams.md) — dual server seam (checkPredicate + evaluatePredicate); 'tied'-discard + length===1 multi-solution bug; ChallengeScreen bypasses via scoreMove; blunderTags/CompletionStrategy are decoys
 - [odd_even_threat](project_detect_odd_even_threat_yellow.md) — Yellow support; renamed fields; puzzle-only (classifyPattern tag + category, de-listed from coach + blunder vocab)
 - [forced_win refactor](project_forced_win_refactor.md) — CompletionStrategy; bitboard-only AI response; sequence vs single_move interaction mode
 - [Spec 037 open QA bugs](project_spec037_review_blunder_sharing.md) — 4 open bugs; is_owner!=false gate
@@ -117,6 +118,7 @@
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — docs/superpowers/ is throwaway; migrate durable info to docs/architecture/
 - [Explanation/question & doc style](feedback_explanation_and_question_style.md) — pitch to a non-internals reader; alternatives carry a recommendation; product docs = requirements not implementation; say "column-score overlay" not heatmap
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons
+- [Open-issues destination](feedback_open_issues_destination.md) — deferred/latent bugs → docs/open_issues.md backlog (OI-N format), NOT memory; coordinate-implementation auto-persists them
 
 ## Reference — project architecture
 

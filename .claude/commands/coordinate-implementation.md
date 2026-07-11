@@ -154,6 +154,30 @@ After all batches have run, output a summary with:
 3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually
 
+### Persist open issues to `docs/open_issues.md`
+
+After presenting the summary, record any **genuine deferred/latent issue** from the "Open items" list into `docs/open_issues.md` (create the file if it does not exist). This file is the human-triageable backlog of known-but-deferred bugs and quality gaps — distinct from auto-memory (trigger-first gotchas). 
+
+- **What qualifies**: a real latent bug, quality gap, or consciously scoped-out piece of work that someone might fix later. 
+- **What does NOT qualify**: ephemeral notes (test flakes, one-off environment quirks, "re-run X to seed data") — those belong in a memory or nowhere. A finished stub that the next batch already completed is not an open issue.
+- **Do not duplicate**: read the existing `docs/open_issues.md` first and skip anything already tracked.
+- **Entry format** (append, next sequential `OI-N`):
+
+```
+## OI-N — <one-line title>
+
+**Status**: deferred (reason / scoped out of <spec>)
+**Area**: <files or subsystem>
+**Discovered**: <spec id + date>
+
+<what's wrong, with a concrete repro if one exists>
+
+**Why deferred**: <why we're not fixing it now>
+**If picked up**: <concrete first step; cross-ref related memory/docs>
+```
+
+If you created or appended entries, add a one-line pointer to `docs/open_issues.md` in `docs/index.md` under "Other" if one is not already present.
+
 ---
 
 ## Step 5 — QA and Bug Fix
@@ -258,3 +282,11 @@ For each bug:
 ### Remaining issues
 [Any issues that could not be fixed, with a reason. "None." if everything is clean.]
 ```
+
+---
+
+## Step 6 — Persist QA-surfaced open issues
+
+After the QA sub-agent returns, take any entry from its `### Remaining issues` section that is a **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") and append it to `docs/open_issues.md` using the same `OI-N` entry format. Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
+
+Report to the user which `OI-N` entries were added (or "no new open issues" if none qualified).

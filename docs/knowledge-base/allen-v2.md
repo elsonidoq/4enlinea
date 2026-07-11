@@ -43,13 +43,18 @@ formal_predicate: |
   # ("four separate columns → Black wins"). In practice two is nearly universal.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "616253"
     description: |
-      After T1–T7, Black holds uncancelled odd-row threats in columns A (row 3) and
-      G (row 5). Red holds no odd-row threats. V2 fires: Black wins despite being
-      second player. Solver should confirm Black wins.
-    expected_behavior: "solver confirms Black wins; two Black odd-row threats remain uncancelled after T1–T7"
-    solver_verified: PENDING
+      0-indexed movestring (spec 044 / FR-020a backfill from the memory-only table's
+      `727364`, which was 1-indexed — independently re-verified via a direct solver
+      query and `./visualize_board.sh` after 0-indexing conversion, per I12, not
+      copied uncritically). Black holds two uncancelled major odd-row threats in
+      separate columns: col0 row0 and col4 row0 (from a Black horizontal triple at
+      row0 cols1-3). Red holds zero threats. Red to move; the solver scores every
+      column -18 (Red loses immediately regardless of move), consistent with V2:
+      Black wins with two odd-row threats in separate columns.
+    expected_behavior: "solver: all 7 columns score -18 for Red (mover); major threats list shows exactly col0 row0 (O) [GT] and col4 row0 (O) [GT]"
+    solver_verified: 2026-07-11
 
 false_positives:
   - movestring: PENDING
@@ -80,7 +85,7 @@ related:
   - "[[allen-v4]] — Black's alternative win with even-row threat (checked after V2)"
   - "[[allis-claimeven]] — Black's claimeven strategy guarantees the even rows that make odd-row threats effective"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-11
 ---
 
 ## Verbatim source
