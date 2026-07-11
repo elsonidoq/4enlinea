@@ -755,64 +755,151 @@ per-category I12 validation plus an exhaustive caller sweep. Hard algorithms sta
 - Trap: auth is httpOnly cookies only (`credentials:'include'`, **not** an Authorization header); client SDK removed.
 - Trap: tier is read from `store.getProfile()`, not `session.tier`; tier is written **only** by the Stripe webhook.
 - Trap: magic-link/OAuth flows must preserve `window.location.hash` on `replaceState`.
+- Trap: `GET /api/auth/session` (`:290`) currently returns 401 and **clears cookies** on access-token expiry — it
+  does **not** auto-refresh. US5.2 changes this behavior.
+
+**Already implemented (unvalidated scaffold) — reframe as refactor + wire, not greenfield**
+The following surfaces already exist in code and must be wrapped/wired, not rebuilt from scratch:
+- `POST /api/auth/refresh` (`:257`) — refresh-token exchange endpoint already exists.
+- `POST /api/stripe/create-checkout` (`:2697`, `mode: 'subscription'`) — Stripe Checkout session creation.
+- `POST /api/stripe/webhook` (`:2729`) — signature-verified, flips `users.tier` on successful payment.
+- `POST /api/stripe/portal` (`:2787`) — Stripe customer portal session creation.
+- `STRIPE_*` env vars already wired into config.
+- `UpgradeModal` (`src/components/UpgradeModal.jsx`) — already has an `onUpgrade` callback with
+  idle/loading/success states. **Preserve this API**; do not redesign it (per CLAUDE.md
+  `feedback_spec_existing_apis`) — the plan/annual toggle (Decision 2) is additive UI on top of it.
+- **CORRECTION — this scaffold is unvalidated, not battle-tested.** Stripe has never been exercised end-to-end.
+  A read-only Stripe MCP check of the connected sandbox account (DecodeC4 sandbox, `acct_1TrxCXET4Rc2BDFf`)
+  confirms the account exists but has **zero products and zero prices configured** — so
+  `STRIPE_MONTHLY_PRICE_ID`/`STRIPE_ANNUAL_PRICE_ID` currently resolve to nothing. Provisioning the sandbox and
+  validating the full checkout → webhook → tier-flip round-trip is **in-scope for this epic**, not assumed done.
+  (See US5.5.)
 
 **Authoritative sources of truth**
-- Memory `project_auth_payments_state`, `reference_tier_source`, `project_magic_link_auth_race`,
-  `project_spec036_google_oauth`.
+- Memory `project_auth_payments_state` (**stale framing** — it describes `UpgradeModal` as "waitlist email
+  capture only" and Stripe as "deferred"; both are false as of this epic — the routes and modal callback above
+  already exist and this epic is the payment-validation epic), `reference_tier_source`,
+  `project_auth_flow_traps` (merged home of the former `project_magic_link_auth_race` and
+  `project_spec036_google_oauth` — includes the `location.hash`-preservation trap for US5.2, `App.jsx:29`).
 - `docs/architecture/api-conventions.md`, `server-conventions.md`, `docs/best_practices_spec_driven_development.md`.
+- Stripe MCP tooling (available in this environment): ground Stripe specifics against
+  `stripe:stripe-best-practices` and `search_stripe_documentation` rather than memory; use `stripe:test-cards`
+  for test-mode checkout runs.
 
 **Settled decisions**
-- Session = **long-lived by default** — extend the refresh token (~30–90d), refresh silently on load, **no**
-  "remember me" UI toggle.
+- Session = **long-lived by default** — **60-day rolling refresh cookie, rotated on each successful refresh**
+  (resolves the prior "pick a value" open question), refresh silently on load, **no** "remember me" UI toggle.
+  Dependency: extending `REFRESH_TOKEN_MAX_AGE` only lengthens the *cookie*; Supabase's own dashboard
+  session/inactivity-timeout config must independently permit a 60-day window. This is an owner-run
+  verification, tracked as a `staging_checks.md` item under Epic 5 (analogous to Epic 7 §6) — see US5.1 task 5.
 - Payments = **thin `PaymentProcessor` adapter** (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`)
-  with a Stripe implementation behind it. Not a full processor-agnostic catalog layer.
+  with a Stripe implementation behind it. Not a full processor-agnostic catalog layer — the bar is "adding a
+  second impl needs no call-site change," satisfied by a 3-method interface over the existing Stripe calls.
+- Billing model = **recurring subscription** (monthly/annual), matching the existing `mode: 'subscription'`
+  checkout code — no rewrite needed.
+- Plan selection = **monthly + annual toggle added to `UpgradeModal`**, both prices exposed at launch. The
+  toggle is additive UI; `UpgradeModal`'s existing `onUpgrade` contract is preserved, with the chosen plan
+  passed through to `create-checkout`'s required `plan` param.
+- Subscription status persistence = **tier only, no schema change.** `getSubscriptionStatus` derives from the
+  existing `tier` + `stripe_customer_id` columns; no new `subscription_status` column, no migration. See
+  Deferred, below.
 
 ### User stories & tasks
 
 **US5.1 — Stay signed in (long-lived session).**
 *As a returning user, I want to stay signed in for weeks.*
-1. Extend `REFRESH_TOKEN_MAX_AGE` to a long window (30–90d; pick the value).
+1. Extend `REFRESH_TOKEN_MAX_AGE` to 60 days.
 2. Keep the httpOnly/Secure/SameSite cookie model (no Authorization header).
-3. Update all cookie-set sites (`:240/277/332`).
-4. Document the chosen window + rationale.
-5. Test: reopen the browser days later within the window → still authenticated.
+3. Update all cookie-set sites (`:240/277/332`); rotate the refresh cookie on every successful refresh.
+4. Document the chosen window + rotation rationale.
+5. Add a `staging_checks.md` item under Epic 5 (analogous to Epic 7 §6): owner verifies the Supabase dashboard
+   session/inactivity-timeout config permits a 60-day window (the cookie alone is not sufficient).
+6. Test: reopen the browser days later within the window → still authenticated.
 
-**US5.2 — Silent token refresh.**
+**US5.2 — Silent token refresh (fix `/api/auth/session` to auto-refresh).**
 *As a user, I don't want to be logged out mid-session.*
-1. On app load, detect an expired access token and refresh from the refresh cookie transparently.
-2. Ensure mid-session expiry triggers a refresh, not a logout.
-3. Handle refresh failure → clean re-auth.
-4. Avoid refresh races (preserve `location.hash` per the magic-link trap).
-5. Test: access-token expiry mid-session → transparent refresh.
+1. Change `GET /api/auth/session` (`:290`) so that on access-token expiry it attempts a refresh via
+   `POST /api/auth/refresh` (`:257`, already exists) **before** falling back to 401 + clearing cookies.
+2. On app load, detect an expired access token and refresh from the refresh cookie transparently.
+3. Handle refresh failure → clean re-auth (401 + cookie clear stays as the failure path).
+4. Avoid refresh races (preserve `window.location.hash` on `replaceState` per `project_auth_flow_traps`,
+   `App.jsx:29`).
+5. Test: access-token expiry mid-session → transparent refresh, no logout.
 
-**US5.3 — Stripe checkout.**
-*As a free user, I want to upgrade via checkout.*
-1. Checkout endpoint creates a Stripe (test-mode) session with success/cancel URLs.
-2. `UpgradeModal` triggers checkout.
+**US5.3 — Stripe checkout with plan selection + post-payment activation.**
+*As a free user, I want to upgrade via checkout and know immediately that it worked.*
+1. Wrap the existing `POST /api/stripe/create-checkout` (`:2697`) behind the `PaymentProcessor` interface
+   (see US5.4); confirm it accepts a `plan=monthly|annual` param and returns success/cancel URLs.
+2. Add a monthly/annual toggle to `UpgradeModal`; wire the selected plan into the existing `onUpgrade` callback
+   → checkout (preserve `onUpgrade`'s idle/loading/success contract).
 3. Env-only secrets (coordinate with Epic 7).
-4. Return-flow routing back into the app.
-5. Test: a free user completes a test-mode checkout.
+4. Return-flow: on `?checkout=success`, re-fetch session/profile and **poll with bounded retry/backoff** (a few
+   attempts over ~10s) until `tier === 'paid'`, showing an explicit "activating your subscription…"
+   acknowledgment state while the webhook is in flight — **never** silently render the free-tier UI to a user
+   who just paid. If polling times out before the webhook lands, show "payment received — activating, this can
+   take a moment" (still not the bare free-tier screen), with a clear next step (e.g. refresh / contact
+   support).
+5. Test: a free user completes a test-mode checkout on both monthly and annual plans and reaches the paid UI
+   (via immediate flip or the activating-state fallback), never a silent free-tier render.
 
 **US5.4 — Processor-agnostic interface + webhook tier flip.**
 *As the founder, I want to swap processors later without rewriting call sites.*
-1. Define `PaymentProcessor` interface (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`).
-2. Implement `StripeProcessor` behind it; call sites depend on the interface.
-3. Webhook endpoint verifies the Stripe signature and flips tier idempotently (the tier source used by `getProfile()`).
-4. Persist subscription status.
-5. Test: webhook flips the user to paid; features unlock without re-login; adding a processor needs no call-site change.
+1. Define `PaymentProcessor` interface (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`) as a thin
+   seam — not a processor-agnostic catalog layer.
+2. Implement `StripeProcessor` wrapping the existing `POST /api/stripe/create-checkout` (`:2697`),
+   `POST /api/stripe/webhook` (`:2729`), `POST /api/stripe/portal` (`:2787`); call sites depend on the
+   interface, not on Stripe directly.
+3. Confirm the webhook endpoint verifies the Stripe signature and flips `tier` idempotently (the tier source
+   used by `getProfile()`); add idempotency test coverage if missing.
+4. Scope "persist subscription status" to the existing `tier` column: implement `getSubscriptionStatus` as a
+   derivation from `tier` + `stripe_customer_id` — **no schema change, no migration** (`docs/architecture/
+   db-schema.md` and `data-model.md` need no change for this epic).
+5. Test: webhook flips the user to paid; features unlock without re-login (bounded by US5.3's polling); adding
+   a second `PaymentProcessor` impl requires no call-site change in `UpgradeModal` or tier-gate code.
+
+**US5.5 — Provision the Stripe sandbox & verify test-mode checkout end-to-end.**
+*As the founder, I need the Stripe sandbox actually configured before any of the above can be validated.*
+1. Using Stripe MCP, create a product in the sandbox account (`acct_1TrxCXET4Rc2BDFf`) with monthly and annual
+   recurring prices; populate `STRIPE_MONTHLY_PRICE_ID`/`STRIPE_ANNUAL_PRICE_ID` env vars.
+2. Register a webhook endpoint for the local/staging environment and populate `STRIPE_WEBHOOK_SECRET`.
+3. Ground all Stripe API usage against `stripe:stripe-best-practices` and `search_stripe_documentation` (MCP)
+   rather than memory, since this account was previously unconfigured.
+4. Run a test-mode checkout end-to-end locally using `stripe:test-cards`, confirming: checkout session creation
+   → test payment → webhook delivery → `users.tier` flips to `paid`.
+5. Document that the genuine **deployed**-webhook-delivery round-trip (a reachable public URL) is a separate
+   `staging_checks.md` item under Epic 5 — local/test-mode product+price setup and a test-mode checkout are
+   fully doable via MCP now, but deployed webhook delivery can only be verified post-deploy.
+6. Test: local test-mode checkout completes and `users.tier` is observed to flip to `paid` via the registered
+   webhook.
 
 **Acceptance criteria**
-- Reopen the browser days later within the window → still authenticated; mid-session expiry → transparent refresh.
-- A free user completes a test-mode Stripe checkout; the webhook flips them to paid; paid features unlock without re-login.
-- Adding a second processor is a new `PaymentProcessor` impl + config, with no change to UpgradeModal or tier-gate call sites.
+- Reopen the browser days later within the 60-day window → still authenticated; mid-session expiry →
+  transparent refresh via `/api/auth/session`, not a logout.
+- A free user completes a test-mode Stripe checkout on either plan; the webhook flips them to paid; paid
+  features unlock without re-login. A user who just paid **never** sees a silent free-tier fallback — they see
+  either the paid UI or an explicit "activating" acknowledgment state, per US5.3 task 4.
+- Adding a second processor is a new `PaymentProcessor` impl + config, with no change to `UpgradeModal` or
+  tier-gate call sites.
+- The Stripe sandbox is provisioned (product + monthly/annual prices + webhook registered) and a local
+  test-mode checkout has been run end-to-end (US5.5).
+- The Supabase dashboard session-timeout verification is recorded in `staging_checks.md` under Epic 5.
 
-**NOT included:** a second processor impl; billing/invoice UI; proration; dunning; a "remember me" checkbox.
+**NOT included:** a second processor impl; billing/invoice UI; proration; dunning; a "remember me" checkbox; a
+`subscription_status` DB column (see Deferred); verifying deployed (non-local) webhook delivery (that's a
+staging_checks.md item, not an epic deliverable).
 
-**Sizing verdict — Full speckit.** 4 stories × ≥5 tasks; server auth + payments + external + frontend + DB
-tier; interface shape + session window are real design points. Money + webhooks warrant the full pipeline.
+### Deferred
+- **`subscription_status` column** — every consumer it would serve (dunning, billing/invoice UI) is either
+  explicitly out of scope for this epic or already handled by Stripe's `cancel_at_period_end` plus the existing
+  webhook (access-until-period-end falls out of tier-only). Deferred as an additive, reversible migration to
+  add later if a concrete consumer emerges.
 
-**Open questions (`/clarify`):** exact refresh window + rotation policy; plan/pricing model; subscription vs
-one-time; cancellation/downgrade → tier.
+**Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; server auth + payments + external + frontend + DB
+tier + third-party sandbox provisioning; interface shape, session window, and the post-checkout activation UX
+are real design points. Money + webhooks + an unvalidated Stripe scaffold warrant the full pipeline.
+
+**Open questions (`/clarify`):** cancellation/downgrade → tier behavior (does downgrade happen immediately or
+at period end?); exact polling backoff schedule for US5.3 task 4.
 
 ---
 

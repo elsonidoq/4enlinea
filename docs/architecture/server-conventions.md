@@ -604,6 +604,57 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 
 **MUST NOT** add `auth.*` calls on the `supabase` DB client. Both clients are always initialized together — `!supabase` guards are sufficient for both.
 
+## Session Persistence & Silent Refresh (spec 045)
+
+**`REFRESH_TOKEN_MAX_AGE`** (`server/index.js`) is **60 days** (`60 * 24 * 3600_000`), up from 7 days pre-spec-045. `ACCESS_TOKEN_MAX_AGE` is unchanged at 1 hour. All 4 cookie-set sites (`POST /api/auth/callback`, `POST /api/auth/refresh`, `GET /api/auth/session`, `POST /api/auth/anonymous`) read the same module-level constant — never hardcode a duplicate literal.
+
+**`server/authRefresh.js`** exports `createAttemptRefresh({ authClient })`, a factory that binds a testable `attemptRefresh(refreshToken) → Promise<{accessToken, refreshToken} | null>`:
+- Calls `authClient.auth.refreshSession({ refresh_token })`; returns `null` on any failure (invalid/expired/revoked token, or thrown error) — the caller decides the HTTP response (typically 401 + clear both cookies).
+- `index.js` constructs one shared instance (`const attemptRefresh = createAttemptRefresh({ authClient })`) and both `POST /api/auth/refresh` and `GET /api/auth/session` import/call it.
+
+**`POST /api/auth/refresh` and `GET /api/auth/session` deliberately stay inline in `index.js`.** There is **no `authRoutes.js` module** — unlike the `registerUserRoutes`/`registerStripeRoutes` extraction pattern (see below), spec 045's plan.md reconciled this explicitly: only `attemptRefresh` (the exchange logic) was extracted to `authRefresh.js`; the two route handlers that call it were left in place in `index.js` alongside the other `/api/auth/*` routes (`callback`, `signout`, `anonymous`). Do not extract these two routes into a new module without re-reading that reconciliation note in `specs/045-account-session-checkout/plan.md`.
+
+**No de-dup Map — documented absence, not a gap.** `specs/045-account-session-checkout/research.md` (R1, 2026-07-11) empirically confirmed this project's Supabase/GoTrue instance does **not** enforce refresh-token rotation-with-reuse-detection: a refresh token that has already been exchanged for a newer one still works, and concurrent calls presenting the same refresh token both succeed independently rather than racing/conflicting. Because of this, `attemptRefresh` has **no** single-flight coordination (no Map keyed by refresh token, no in-flight promise cache) — the original contract draft (`contracts/api-auth-session.md`) called for one, but it was intentionally not built once the empirical finding came back. Coverage is 2 concurrency regression tests instead (`authRefresh.test.mjs`). **Caveat**: this was only tested against anonymous sessions — do not assume it generalizes to every auth provider config without re-verifying. If a future GoTrue upgrade or config change turns out to enforce rotation-with-reuse-detection, a de-dup Map would then become necessary — do not silently "re-add" one without first re-confirming the current behavior has actually changed.
+
+`GET /api/auth/session` falls through to `attemptRefresh` before returning 401 (silent refresh) — see api-conventions.md for the exact processing order. Response shape is unchanged: `{ user: { id, tier } }`.
+
+**FR-007 (in-flight sign-in guard)**: no client-side guard was needed. The OAuth hash-callback branch of `ProfileStore.checkSession` returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called — the two code paths are mutually exclusive by control flow, not by an added coordination check.
+
+## PaymentProcessor Seam (spec 045)
+
+`server/paymentProcessor.js`, `server/stripeProcessor.js`, and `server/stripeRoutes.js` extract the Stripe integration into a swappable interface, mirroring the `registerUserRoutes(app, supabase)` pattern below:
+
+- **`paymentProcessor.js`** — interface-only module: the `PaymentProcessor` JSDoc typedef (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`), the `PaymentConfigError` class (carries `.status` so route code needn't know Stripe specifics), the pure `getSubscriptionStatus({ tier, stripeCustomerId })` function, and a generic `createPaymentProcessor({ createCheckout, handleWebhook, getSubscriptionStatus })` assembly helper.
+- **`stripeProcessor.js`** — `createStripeProcessor({ stripeClient, supabase, monthlyPriceId, annualPriceId, webhookSecret, frontendUrl })` implements the interface against the real Stripe SDK. Also exposes `createPortalSession` (used by `/api/stripe/portal`, which is NOT part of the 3-method interface but lives on the same object for convenience).
+- **`stripeRoutes.js`** — `registerStripeRoutes(app, paymentProcessor)` registers `POST /api/stripe/create-checkout`, `POST /api/stripe/webhook`, and `POST /api/stripe/portal`, extracted verbatim out of `index.js`. `index.js` constructs `paymentProcessor` once at boot (`STRIPE_SECRET_KEY` present → `createStripeProcessor(...)`, else `null`) and calls `registerStripeRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`.
+
+**Why this seam matters (US4 substitutability)**: because `registerStripeRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope `stripe` singleton, a test can call it twice against two fresh Express apps — once with `StripeProcessor`, once with a `StubProcessor` — and assert identical route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md`.
+
+**`getSubscriptionStatus` is deliberately test-only in production wiring.** No production call site is wired through it — real paid-gates read `req.user.tier` directly (populated by `loadUser`). It exists solely to prove the `PaymentProcessor` interface's substitutability (the same three-method shape a `StubProcessor` implements). This is by design, not a gap — do not "fix" it by wiring a call site unless a new requirement actually needs a derived (non-`tier`) subscription status.
+
+### FR-025: status-based tier mirror
+
+`stripeProcessor.js`'s `handleWebhook` makes `users.tier` a **live derivation of Stripe subscription status**, not a value set once at purchase:
+- `checkout.session.completed` → `tier: 'paid'` + `stripe_customer_id` write + fire-and-forget `tracks` insert (`event: 'upgrade_completed'`).
+- `customer.subscription.updated` with status `active` or `trialing` → `tier: 'paid'`.
+- `customer.subscription.updated` with status `past_due` → **no write** (Stripe's automatic retry window; a single transient card decline must not downgrade a paying user).
+- `customer.subscription.updated` with status `canceled` or `unpaid` → `tier: 'free'`.
+- `customer.subscription.deleted` → `tier: 'free'` unconditionally (explicit terminal cancellation).
+
+**Webhook idempotency**: before any tier write, `handleWebhook` inserts into `stripe_events` (`stripe_event_id` UNIQUE) and checks the result — a `23505` unique-violation means the event was already processed, so the handler returns `{ handled: false, eventType: 'duplicate' }` and skips the tier write and `tracks` insert entirely. This mirrors `insertGameBlunder`'s `23505`-as-success dedup pattern (see Game Blunder Writes above). A non-dedup insert error is logged and processing continues (matches prior fire-and-forget behavior for genuine DB errors).
+
+### Webhook raw-body middleware ordering
+
+`app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }))` is mounted in `index.js` **before** the global `app.use(express.json())`. This is load-bearing: Stripe signature verification (`stripeClient.webhooks.constructEvent`) needs the exact raw request bytes. If the global JSON parser ran first, it would consume and re-serialize the body, and signature verification would fail. Never reorder these two `app.use()` calls, and never add a new global body-parsing middleware ahead of the webhook route's raw parser.
+
+### `loadUser` — `stripe_customer_id` fix (R3)
+
+`loadUser` now selects `stripe_customer_id` on all three of its code paths (existing row, freshly-inserted row, anonymous-fallback default), via a single shared source of truth in `server/userHelpers.js`:
+- `USER_PROFILE_SELECT_COLUMNS` — the `.select()` column list string: `'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id'`.
+- `defaultUserProfile()` — the default object `loadUser` attaches to `req.user` when no `users` row exists yet; field set mirrors `USER_PROFILE_SELECT_COLUMNS` (`stripe_customer_id: null`).
+
+Before this fix, `req.user.stripe_customer_id` was always `undefined`, which broke `POST /api/stripe/portal` (needs the Stripe customer id to open a billing portal session) and made `getSubscriptionStatus`'s `stripeCustomerId` argument meaningless. Any future addition to the `users` profile columns `loadUser` needs should extend `USER_PROFILE_SELECT_COLUMNS`/`defaultUserProfile()` together, not one in isolation.
+
 ## Environment Variables
 
 | Variable | Purpose |

@@ -20,6 +20,8 @@ import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { evaluatePredicate } from './predicates.js';
 import { registerUserRoutes } from './userRoutes.js';
+import { registerStripeRoutes } from './stripeRoutes.js';
+import { createStripeProcessor } from './stripeProcessor.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -32,6 +34,8 @@ import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { classifyStoredMistake } from './mistakeStorageRule.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
+import { createAttemptRefresh } from './authRefresh.js';
+import { USER_PROFILE_SELECT_COLUMNS, defaultUserProfile } from './userHelpers.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
@@ -55,6 +59,13 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
+// Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
+// bytes. It MUST be parsed before the global express.json() below consumes the
+// request stream — otherwise by the time the route's own express.raw() middleware
+// runs (registerStripeRoutes is called much later in this file), the body stream has
+// already been read and parsed into an object, leaving nothing for raw() to read.
+// Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, res, next) => {
@@ -194,6 +205,12 @@ try {
 
 // ── Auth proxy endpoints ──────────────────────────────────────────────────────
 
+// attemptRefresh(refreshToken) → { accessToken, refreshToken } | null — shared by
+// POST /api/auth/refresh and GET /api/auth/session (auto-refresh, see authRefresh.js).
+// authClient may be null if Supabase isn't configured; every call site below already
+// guards on `!supabase` (created alongside authClient) before reaching this.
+const attemptRefresh = createAttemptRefresh({ authClient });
+
 function cookieOpts() {
   return {
     httpOnly: true,
@@ -204,7 +221,7 @@ function cookieOpts() {
 }
 
 const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
-const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
+const REFRESH_TOKEN_MAX_AGE = 60 * 24 * 3600_000; // 60 days
 
 // GET /api/auth/oauth/google — redirect to Supabase Google OAuth
 app.get('/api/auth/oauth/google', (req, res) => {
@@ -260,16 +277,16 @@ app.post('/api/auth/refresh', async (req, res) => {
   if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
   try {
-    const { data, error } = await authClient.auth.refreshSession({ refresh_token: refreshToken });
-    if (error || !data?.session) {
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Refresh failed' });
     }
 
-    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
-    if (data.session.refresh_token) {
-      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
     }
 
     res.json({ ok: true });
@@ -286,29 +303,58 @@ app.post('/api/auth/signout', (_req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/auth/session — return current user from cookie token
+// GET /api/auth/session — return current user from cookie token, transparently
+// refreshing via the refresh-token cookie when the access token is missing/invalid
+// (spec 045 US2 / FR-004, FR-005: no surprise sign-out mid-session).
 app.get('/api/auth/session', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
-  const token = req.cookies?.sb_access_token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const accessToken = req.cookies?.sb_access_token;
+  const refreshToken = req.cookies?.sb_refresh_token;
+
+  if (!accessToken && !refreshToken) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
-    const { data, error } = await authClient.auth.getUser(token);
-    if (error || !data?.user) {
+    async function fetchProfileResponse(userId) {
+      let tier = 'free';
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', userId)
+        .single();
+      if (profile) tier = profile.tier;
+      return res.json({ user: { id: userId, tier } });
+    }
+
+    if (accessToken) {
+      const { data, error } = await authClient.auth.getUser(accessToken);
+      if (!error && data?.user) {
+        return await fetchProfileResponse(data.user.id);
+      }
+    }
+
+    // Access token absent/invalid/expired — fall through to a silent refresh.
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Token invalid' });
     }
 
-    let tier = 'free';
-    const { data: profile } = await supabase
-      .from('users')
-      .select('tier')
-      .eq('id', data.user.id)
-      .single();
-    if (profile) tier = profile.tier;
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
 
-    res.json({ user: { id: data.user.id, tier } });
+    const { data: refreshedUser, error: refreshedUserError } = await authClient.auth.getUser(result.accessToken);
+    if (refreshedUserError || !refreshedUser?.user) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Token invalid' });
+    }
+
+    return await fetchProfileResponse(refreshedUser.user.id);
   } catch (err) {
     logError('[auth/session]', err);
     res.status(500).json({ error: err.message });
@@ -351,17 +397,17 @@ async function loadUser(req, _res, next) {
 
     let { data: profile } = await supabase
       .from('users')
-      .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at')
+      .select(USER_PROFILE_SELECT_COLUMNS)
       .eq('id', data.user.id)
       .single();
 
     if (!profile) {
       // Trigger on auth.users may not have fired — create the row now.
-      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at').single()
+      await supabase.from('users').insert({ id: data.user.id }).select(USER_PROFILE_SELECT_COLUMNS).single()
         .then(({ data: created }) => { if (created) profile = created; });
     }
 
-    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString(), papergames_id: null, last_import_at: null };
+    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, ...defaultUserProfile() };
   } catch {
     // Non-fatal: treat as anonymous
   }
@@ -2685,121 +2731,21 @@ app.get('/api/blunders/:id', async (req, res) => {
   res.json(buildBlunderDetailResponse(data, req.user?.id, context));
 });
 
-// ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────
+// ── Stripe endpoints (T051-T053; extracted to stripeProcessor.js/stripeRoutes.js — spec 045 US3) ──
 
-let stripe = null;
+let paymentProcessor = null;
 if (process.env.STRIPE_SECRET_KEY) {
   const { default: Stripe } = await import('stripe');
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  paymentProcessor = createStripeProcessor({
+    stripeClient,
+    supabase,
+    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID,
+    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  });
 }
-
-// POST /api/stripe/create-checkout
-app.post('/api/stripe/create-checkout', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-
-  const { plan } = req.body;
-  if (!['monthly', 'annual'].includes(plan)) {
-    return res.status(400).json({ error: 'plan must be monthly or annual' });
-  }
-
-  const priceId = plan === 'monthly'
-    ? process.env.STRIPE_MONTHLY_PRICE_ID
-    : process.env.STRIPE_ANNUAL_PRICE_ID;
-
-  if (!priceId) return res.status(503).json({ error: 'Price not configured' });
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      customer_email: req.user.email,
-      metadata: { user_id: req.user.id },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=cancelled`,
-    });
-    res.json({ checkoutUrl: session.url });
-  } catch (err) {
-    logError('[stripe/create-checkout]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/stripe/webhook
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe) return res.status(503).end();
-
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    logError('[stripe/webhook]', err);
-    return res.status(400).json({ error: err.message });
-  }
-
-  // Store event record first
-  if (supabase) {
-    await supabase.from('stripe_events').insert({
-      stripe_event_id: event.id,
-      event_type: event.type,
-      payload: event,
-    }).catch(err => console.error('[stripe_event]', err.message));
-  }
-
-  if (supabase) {
-    const session = event.data.object;
-    if (event.type === 'checkout.session.completed') {
-      const userId = session.metadata?.user_id;
-      if (userId) {
-        const { error: tierErr } = await supabase.from('users').update({
-          tier: 'paid',
-          stripe_customer_id: session.customer,
-        }).eq('id', userId);
-        if (!tierErr) {
-          supabase.from('tracks').insert({
-            uid: userId,
-            user_id: userId,
-            path: '/stripe/webhook',
-            event: 'upgrade_completed',
-            event_data: { plan: session.metadata?.plan ?? 'unknown' },
-          }).then(() => {}).catch(err => console.error('[track upgrade]', err.message));
-        }
-      }
-    } else if (event.type === 'customer.subscription.deleted') {
-      const customerId = session.customer;
-      await supabase.from('users').update({ tier: 'free' })
-        .eq('stripe_customer_id', customerId);
-    } else if (event.type === 'customer.subscription.updated') {
-      const status = session.status;
-      const customerId = session.customer;
-      if (status === 'active') {
-        await supabase.from('users').update({ tier: 'paid' })
-          .eq('stripe_customer_id', customerId);
-      }
-    }
-  }
-
-  res.json({ received: true });
-});
-
-// POST /api/stripe/portal
-app.post('/api/stripe/portal', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-  if (!req.user.stripe_customer_id) return res.status(400).json({ error: 'No active subscription' });
-
-  try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: req.user.stripe_customer_id,
-      return_url: process.env.FRONTEND_URL || 'http://localhost:5173',
-    });
-    res.json({ portalUrl: session.url });
-  } catch (err) {
-    logError('[stripe/portal]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+registerStripeRoutes(app, paymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 

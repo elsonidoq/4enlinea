@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -140,6 +141,7 @@ function LessonNode({ lesson, state, onTap }) {
 export function SagaScreen({ go, goBack }) {
   const { t } = useTranslation();
   const { store } = useStore();
+  const handleUpgrade = useUpgradeCheckout();
   const [lessons, setLessons] = useState([]);
   const [progress, setProgress] = useState([]);
   const [tier, setTier] = useState('free');
@@ -223,7 +225,7 @@ export function SagaScreen({ go, goBack }) {
         )}
       </div>
 
-      {upgradeOpen && <UpgradeModal onDismiss={() => setUpgradeOpen(false)} />}
+      {upgradeOpen && <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />}
     </div>
   );
 }

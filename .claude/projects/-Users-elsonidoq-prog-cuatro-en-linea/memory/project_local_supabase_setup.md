@@ -1,8 +1,10 @@
 ---
 name: project_local_supabase_setup
-description: Local Supabase dev environment setup — key facts, gotchas, and workflow
-metadata:
+description: "Local Supabase dev environment setup — key facts, gotchas, and workflow"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: eb04b04c-5c28-44e5-99df-8eda3cff3c07
 ---
 
 Local Supabase runs at `http://127.0.0.1:54321`. Keys are new-format (`sb_publishable_` / `sb_secret_`).
@@ -57,3 +59,5 @@ GRANT SELECT ON public.papergames_games TO anon, authenticated;
 ```
 
 **How to apply:** Whenever `GET /api/games` returns permission denied for papergames_games in local dev, apply this migration. New tables must always include grants to `anon, authenticated` in their creation migration — don't rely on a separate `040`-style catch-all.
+
+Same trap recurred for the Stripe webhook (spec 045): `stripe_events` + `tracks` were missing `service_role` grants → 42501 on every webhook. Fixed by migration `055_stripe_events_tracks_grants.sql`. So the grants trail is now `040` (main batch) + `046`/`048` (papergames) + `055` (stripe_events/tracks) — `040` is NOT exhaustive. See [[project_stripe_webhook_live_testing]].

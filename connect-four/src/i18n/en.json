@@ -78,9 +78,14 @@
   "upgrade": {
     "heading": "Become Pro",
     "body": "Upgrade to Pro for unlimited deep reveals.",
-    "cta": "Become Pro — free for now",
+    "cta": "Continue to checkout",
     "success": "You're now a Pro member!",
-    "dismiss": "Maybe later"
+    "dismiss": "Maybe later",
+    "planMonthly": "Monthly",
+    "planAnnual": "Annual",
+    "activating": "Activating your subscription…",
+    "timeout": "Payment received — still activating.",
+    "refresh": "Refresh"
   },
   "common": {
     "dismiss": "Dismiss",

@@ -7,6 +7,7 @@ import { UpgradeModal } from './UpgradeModal.jsx';
 import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -51,6 +52,7 @@ export function DeepRevealPane({
   const { t } = useTranslation();
   const { session } = useStore();
   const { speechEnabled } = useCoachSpeech();
+  const handleUpgrade = useUpgradeCheckout();
 
   const [loading, setLoading] = useState(false);
   const [loadingTts, setLoadingTts] = useState(false);
@@ -325,7 +327,7 @@ export function DeepRevealPane({
       {upgradeOpen && (
         <UpgradeModal
           onDismiss={() => { setUpgradeOpen(false); onClose?.(); }}
-          onNotify={() => { setUpgradeOpen(false); onClose?.(); }}
+          onUpgrade={handleUpgrade}
         />
       )}
     </>

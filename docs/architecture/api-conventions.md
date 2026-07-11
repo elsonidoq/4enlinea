@@ -31,6 +31,49 @@
 
 **MUST NOT**: Any route skip `loadUser` — it is registered globally via `app.use(loadUser)`.
 
+## Auth Session Endpoints: `POST /api/auth/refresh`, `GET /api/auth/session` (spec 045)
+
+Both read `sb_access_token`/`sb_refresh_token` httpOnly cookies and both delegate the actual token exchange to `attemptRefresh` (`server/authRefresh.js`) — see server-conventions.md "Session Persistence & Silent Refresh" for the shared helper and the `REFRESH_TOKEN_MAX_AGE` (60-day) change.
+
+### `POST /api/auth/refresh`
+
+Unchanged request/response shape. Reads `sb_refresh_token`; 401 `{ error: 'No refresh token' }` if absent. On success, sets new `sb_access_token`/`sb_refresh_token` cookies and returns `200 { ok: true }`. On failure (`attemptRefresh` returns `null`), clears both cookies and returns `401 { error: 'Refresh failed' }`.
+
+**Concurrent-call behavior (FR-002a)**: there is **no** server-side de-duplication/coalescing of concurrent calls presenting the same refresh token — each call independently invokes `authClient.auth.refreshSession()`. This is safe in practice because `specs/045-account-session-checkout/research.md` (R1) empirically confirmed this project's Supabase/GoTrue instance does not enforce refresh-token rotation-with-reuse-detection: a refresh token remains valid even after being exchanged once, so two concurrent refreshes from the same token both succeed independently rather than the second failing against an already-rotated token. (Only verified against anonymous sessions — re-verify before relying on this for a different auth provider config.)
+
+### `GET /api/auth/session`
+
+**New processing order** (spec 045 US2, FR-004/FR-005 — never surprise-sign-out mid-session):
+1. If `sb_access_token` is absent AND `sb_refresh_token` is absent → `401 { error: 'Not authenticated' }` (no cookies to clear).
+2. If `sb_access_token` is present, validate via `authClient.auth.getUser(token)`. Valid → fetch profile, `200 { user: { id, tier } }` (unchanged from pre-045 behavior).
+3. If the access token is absent/invalid/expired (including the "access token missing but refresh token present" case from step 1) → **silently attempt a refresh**: call `attemptRefresh(sb_refresh_token)`.
+   - Success → set new cookies (same as `POST /api/auth/refresh`), re-fetch the profile with the refreshed user id, return `200 { user: { id, tier } }`. The caller cannot distinguish this from "was already signed in" — no new response fields.
+   - Failure (refresh token itself invalid/expired/revoked/absent) → clear both cookies, `401 { error: 'Token invalid' }`.
+
+Response shape is unchanged either way: `{ user: { id, tier } }` on success, `{ error }` on 401/503. No client changes were required to consume the improved behavior.
+
+**FR-007 (in-flight sign-in guard)**: no interaction with the OAuth hash-callback branch — that branch returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called. The two paths are mutually exclusive by control flow.
+
+## Stripe Webhook Endpoint: `POST /api/stripe/webhook` (spec 045, FR-025)
+
+Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Stripe signature verification — see server-conventions.md).
+
+**Request**: raw Stripe event body + `stripe-signature` header. No auth (Stripe-signed, not user-authenticated).
+
+**Response**: `200 { received: true, handled: boolean, eventType: string }` on any recognized/processed event, including duplicates (`eventType: 'duplicate'`, `handled: false`) and passthrough event types the processor doesn't act on (`handled: false`). `400 { error }` if signature verification fails.
+
+**Tier-mirror contract (FR-025)** — `users.tier` is written as a **live derivation of the Stripe subscription's current status**, not set once at purchase:
+
+| Event | Status | Write |
+|---|---|---|
+| `checkout.session.completed` | — | `tier: 'paid'`, `stripe_customer_id` set, `tracks` insert (`upgrade_completed`) |
+| `customer.subscription.updated` | `active` / `trialing` | `tier: 'paid'` |
+| `customer.subscription.updated` | `past_due` | no write (retry window; does not downgrade) |
+| `customer.subscription.updated` | `canceled` / `unpaid` | `tier: 'free'` |
+| `customer.subscription.deleted` | — | `tier: 'free'` (unconditional, terminal) |
+
+**Idempotency**: every event is first inserted into `stripe_events` (`stripe_event_id` UNIQUE); a `23505` conflict short-circuits before any tier write or `tracks` insert, returning `{ handled: false, eventType: 'duplicate' }`. Webhook redelivery of the same event is therefore safe to re-send with no double side effects.
+
 ## Access Guards
 
 - **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.

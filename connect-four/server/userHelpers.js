@@ -3,6 +3,34 @@
 // performs a single DB operation, and returns { error } on failure or undefined on success.
 
 /**
+ * Columns `loadUser` (server/index.js) selects from `users` for the profile object
+ * attached to `req.user`, and that it re-selects after inserting a just-created row.
+ * `stripe_customer_id` (spec 045 R3) is included so `getSubscriptionStatus` and
+ * POST /api/stripe/portal have a real value instead of always-`undefined`.
+ * Single source of truth shared with `defaultUserProfile` below so the two paths
+ * (row found / row just created) and the anonymous-fallback shape never drift apart.
+ */
+export const USER_PROFILE_SELECT_COLUMNS =
+  'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id';
+
+/**
+ * Default profile fields `loadUser` attaches to `req.user` when no `users` row
+ * exists yet (e.g. the auth.users insert trigger hasn't fired). Field set mirrors
+ * `USER_PROFILE_SELECT_COLUMNS`.
+ * @returns {object}
+ */
+export function defaultUserProfile() {
+  return {
+    tier: 'free',
+    deep_reveal_count: 0,
+    deep_reveal_reset_at: new Date().toISOString(),
+    papergames_id: null,
+    last_import_at: null,
+    stripe_customer_id: null,
+  };
+}
+
+/**
  * Upsert a session_stats row. Full-replace — no || merge.
  * @param {object} supabase - Supabase client (service-role key)
  * @param {string} userId

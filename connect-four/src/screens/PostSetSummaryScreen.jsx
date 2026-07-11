@@ -7,10 +7,12 @@ import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 export function PostSetSummaryScreen({ go, results = [], category }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
+  const handleUpgrade = useUpgradeCheckout();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [isFreeUser, setIsFreeUser] = useState(true);
 
@@ -195,7 +197,7 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       </div>
 
       {upgradeOpen && (
-        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onNotify={() => setUpgradeOpen(false)} />
+        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
       )}
     </div>
   );

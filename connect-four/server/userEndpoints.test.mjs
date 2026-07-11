@@ -6,6 +6,9 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { registerUserRoutes } from './userRoutes.js';
 
@@ -1019,4 +1022,84 @@ describe('POST /api/user/migrate', () => {
     assert.equal(status, 204);
     assert.equal(insertCalled, false); // empty array should not trigger insert
   });
+});
+
+// ── Spec 045 T005: 60-day rolling refresh-token cookie window ──────────────────
+//
+// The auth endpoints (POST /api/auth/callback, /refresh, /anonymous) live directly
+// in server/index.js, a monolithic Express app that calls app.listen() at module
+// load and initializes its supabase/authClient from env vars — it is not
+// structured as an importable router (unlike userRoutes.js above), so it cannot
+// be mounted into a lightweight test app the way the /api/user/* endpoints are.
+// Spinning up the real server in-process would require live Supabase credentials
+// and is out of scope for a fast unit test. Instead this is a source-level
+// regression test: it asserts the REFRESH_TOKEN_MAX_AGE constant's value and that
+// every sb_refresh_token cookie-set call site in the file references that
+// constant (not a hardcoded literal), which is exactly what the 60-day rollout
+// (spec 045 US1 / FR-001) depends on staying true.
+//
+// A later batch (US2) extracts POST /api/auth/refresh into server/authRefresh.js;
+// once that lands, prefer a real HTTP-level test importing that module directly.
+describe('Spec 045 US1 — 60-day rolling refresh-token cookie window', () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const indexSource = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+
+  it('REFRESH_TOKEN_MAX_AGE is defined as 60 days in milliseconds', () => {
+    const match = indexSource.match(/const REFRESH_TOKEN_MAX_AGE = ([^;]+);/);
+    assert.ok(match, 'REFRESH_TOKEN_MAX_AGE constant not found in server/index.js');
+    const value = Function(`return (${match[1]});`)();
+    assert.equal(value, 60 * 24 * 3600_000, `expected 60-day maxAge, got expression "${match[1]}" = ${value}`);
+  });
+
+  it('ACCESS_TOKEN_MAX_AGE remains 1 hour (unchanged by the 60-day rollout)', () => {
+    const match = indexSource.match(/const ACCESS_TOKEN_MAX_AGE = ([^;]+);/);
+    assert.ok(match, 'ACCESS_TOKEN_MAX_AGE constant not found in server/index.js');
+    const value = Function(`return (${match[1]});`)();
+    assert.equal(value, 3600_000);
+  });
+
+  it('POST /api/auth/callback sets sb_refresh_token with maxAge: REFRESH_TOKEN_MAX_AGE', () => {
+    const handler = extractHandlerBody(indexSource, `app.post('/api/auth/callback'`);
+    assertSetsRefreshCookieWithConstant(handler, '/api/auth/callback');
+  });
+
+  it('POST /api/auth/refresh sets sb_refresh_token with maxAge: REFRESH_TOKEN_MAX_AGE', () => {
+    const handler = extractHandlerBody(indexSource, `app.post('/api/auth/refresh'`);
+    assertSetsRefreshCookieWithConstant(handler, '/api/auth/refresh');
+  });
+
+  it('POST /api/auth/anonymous sets sb_refresh_token with maxAge: REFRESH_TOKEN_MAX_AGE', () => {
+    const handler = extractHandlerBody(indexSource, `app.post('/api/auth/anonymous'`);
+    assertSetsRefreshCookieWithConstant(handler, '/api/auth/anonymous');
+  });
+
+  it('no route in index.js hardcodes the old 7-day refresh maxAge literal', () => {
+    assert.ok(
+      !/7\s*\*\s*24\s*\*\s*3600_000/.test(indexSource),
+      'found a lingering 7-day maxAge literal (7 * 24 * 3600_000) in server/index.js'
+    );
+    // The constant definition line itself must be 60 days.
+    assert.ok(/const REFRESH_TOKEN_MAX_AGE = 60 \* 24 \* 3600_000/.test(indexSource));
+  });
+
+  /** Extract the source text of an Express handler starting at `marker`, up to its closing `});`. */
+  function extractHandlerBody(source, marker) {
+    const start = source.indexOf(marker);
+    assert.ok(start >= 0, `handler starting with "${marker}" not found`);
+    const end = source.indexOf('\n});', start);
+    assert.ok(end > start, `closing "});" not found for handler "${marker}"`);
+    return source.slice(start, end);
+  }
+
+  /** Assert a handler body sets sb_refresh_token using the REFRESH_TOKEN_MAX_AGE constant. */
+  function assertSetsRefreshCookieWithConstant(handlerSource, routeLabel) {
+    const cookieCallMatch = handlerSource.match(/res\.cookie\('sb_refresh_token',.*?maxAge: \w+ \}\);/s);
+    assert.ok(cookieCallMatch, `${routeLabel}: no sb_refresh_token cookie-set call found`);
+    assert.match(
+      cookieCallMatch[0],
+      /maxAge:\s*REFRESH_TOKEN_MAX_AGE/,
+      `${routeLabel}: sb_refresh_token cookie-set call must use maxAge: REFRESH_TOKEN_MAX_AGE, got: ${cookieCallMatch[0]}`
+    );
+  }
 });

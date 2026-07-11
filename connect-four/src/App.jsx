@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import { ProfileStoreProvider, useStore } from './store/ProfileStore.jsx';
+import { CheckoutReturnBanner } from './store/CheckoutReturnBanner.jsx';
 import { DebugProvider } from './context/DebugContext.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { SCREENS } from './lib/screenRegistry.jsx';
@@ -28,7 +29,11 @@ function Navigator() {
     setActiveScreen(resolved);
     setScreen(resolved);
     setParams(resolvedParams);
-    window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '', resolvedUrl + window.location.hash);
+    // Preserve the hash (magic-link OAuth callback tokens, App.jsx's long-standing
+    // trap) AND the query string (spec 045: ?checkout=success|cancelled must survive
+    // this replaceState so CheckoutReturnBanner.jsx can still read/strip it,
+    // regardless of whether its own mount effect runs before or after this one).
+    window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '', resolvedUrl + window.location.search + window.location.hash);
     track('session_start', { screen: resolved });
   }, []);
 
@@ -100,6 +105,7 @@ function Navigator() {
 
   return (
     <div style={{ minHeight: '100vh', background: `var(${bgToken})`, transition: 'background 0.2s' }}>
+      <CheckoutReturnBanner />
       {ScreenComponent && <ScreenComponent go={go} goBack={goBack} goReplace={goReplace} {...params} />}
     </div>
   );

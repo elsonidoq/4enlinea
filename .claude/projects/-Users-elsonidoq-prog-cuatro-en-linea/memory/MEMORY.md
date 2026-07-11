@@ -45,8 +45,9 @@
 - [Blunder write integrity](project_blunder_write_integrity.md) — /api/games/analyze is a WRITE vector (user_id-scoped, no device_uuid compare); game_id dedup 3-layer; index-name-reuse silent no-op
 - [Stats architecture](project_stats_architecture.md) — stats from puzzle_attempts; session_stats orphaned; session-stats/all byPattern stored-shape mismatch (always empty; /api/stats byPattern is FINE)
 - [Spec 030 session-stats write asymmetry](project_spec030_server_mediated_data_access.md) — asymmetric write shapes; must not unify
-- [Auth/payments state](project_auth_payments_state.md) — client SDK removed; httpOnly cookies only (credentials:'include', NOT Authorization header); Stripe deferred
-- [Local Supabase setup](project_local_supabase_setup.md) — JWT format for service_role key; sb_secret_* fails locally; missing grants → 403/42501
+- [Auth/payments state](project_auth_payments_state.md) — httpOnly cookies only (credentials:'include', NOT Authorization header); spec 045 SHIPPED: PaymentProcessor seam, silent refresh, tier=live Stripe webhook mirror, UpgradeModal wired
+- [Stripe webhook live testing](project_stripe_webhook_live_testing.md) — mocked tests miss column/grant bugs; `stripe trigger` smoke-test live before trusting green (event_type→type, tracks/stripe_events grants)
+- [Local Supabase setup](project_local_supabase_setup.md) — JWT format for service_role key; sb_secret_* fails locally; missing grants → 403/42501 (040 not exhaustive: +046/048/055)
 - [Spec 039 deploy requirement](project_spec039_audio_interactive_coach.md) — TRUNCATE explanation_cache before deploy
 - [Railway deploy + migration traps](project_spec031_staging_production_deploy.md) — migrate.js baseline mode; c4solver compile; trust proxy or rate-limit 500s; clock skew -B flag in railpack.json
 - [Offset pagination tiebreaker](project_offset_pagination_tiebreaker.md) — non-unique ORDER BY + range() skips/dupes rows across pages; always append id ASC
