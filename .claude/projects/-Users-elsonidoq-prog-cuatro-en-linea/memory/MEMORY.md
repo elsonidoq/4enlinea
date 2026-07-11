@@ -22,6 +22,7 @@
 
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won-position boards have losing side to move); openings go to Lessons + reason "book-deviation"
 - [Lesson interactivity evaluation](project_lesson_interactivity_evaluation.md) — Socratic is client-side col===correctCol; inline confirmationChallenges 404 (check needs a DB puzzle row)
+- [Lesson progression + audio traps](project_lesson_progression_audio_traps.md) — lesson order = filename prefix (JSON order ignored; reorder = git mv); lesson audio uses ttsProvider.synthesize NOT speakCoachMessage(key) (manifest-gated no-op)
 - [New-category wiring + locked designs](project_new_category_wiring_checklist.md) — 8-file checklist (missing candidate-generator.js = silent failures); locked category designs
 - [Removed categories](project_category_cleanup.md) — zugzwang≠forced_win; claimodd removed 2026-06-17; don't reuse slugs; how to re-add
 - [Classifier architecture](project_classifier_architecture.md) — detection pipeline; highlight_metadata schemas + null-vs-non-null per category
@@ -36,6 +37,7 @@
 - [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git history secret-shaped strings all placeholders; NO rotation needed; audit in docs/security_audit_fable.md
 - [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (prod endpoints); EXPLAIN_MODEL=full (compute.mjs eval only); names mislead; Gemini id = gemini-3.1-pro-preview
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
+- [Admin localhost directive](project_admin_localhost_directive.md) — owner: ALL /admin (API+frontend) localhost-only, one-liner/route; requireAdmin is a NO-OP outside NODE_ENV=production
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; magic-link hash race; OAuth lands on site root + NO route auth guard → gating a CTA never gates its screen
 - [IndexedDB sign-in hang](project_indexeddb_signin_hang.md) — deleteDatabase blocked by any open conn (incl. other tabs) → open() hangs → sign-in silently stalls (switchToSupabase awaits _db() before setSession); clear stores in place
 - [Supabase connection & storage](reference_supabase_connection.md) — sb_secret; session pooler; Node inline pattern; storage upload/createSignedUrl shapes (signedUrl not url)

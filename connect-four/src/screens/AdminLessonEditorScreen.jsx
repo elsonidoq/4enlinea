@@ -42,6 +42,31 @@ function emptySlide() {
   return { movestring: '', overlays: [], coachMessages: [{ text: '', mood: 'happy' }], legendItems: [], infoProse: '' };
 }
 
+// Shared hydration shape: converts a raw lesson JSON (from GET /api/admin/lessons/:id
+// or the generate-audio response's `lesson` field) into editor state, filling in
+// defaults for optional array/string fields. Used by the initial-load effect AND
+// by the "Generate audios" handler so both rehydrate identically.
+function hydrateLesson(data) {
+  return {
+    ...data,
+    slides: data.slides.map(s => ({
+      ...s,
+      movestring: s.movestring ?? '',
+      overlays: s.overlays ?? [],
+      legendItems: s.legendItems ?? [],
+      coachMessages: s.coachMessages ?? [],
+      infoProse: s.infoProse ?? '',
+    })),
+    socratic: data.socratic ? {
+      ...data.socratic,
+      movestring: data.socratic.movestring ?? '',
+      overlays: data.socratic.overlays ?? [],
+      _boardInstructions: data.socratic._boardInstructions ?? '',
+    } : null,
+    confirmationChallenges: data.confirmationChallenges ?? [],
+  };
+}
+
 // Convert editor state to the lesson JSON payload.
 // boardSpec is derived from movestring (used by the app to render).
 // movestring is stored alongside boardSpec so the editor can round-trip cleanly.
@@ -82,6 +107,9 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
   const [saveError, setSaveError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [audioState, setAudioState] = useState('idle'); // idle | saving | generating | error
+  const [audioError, setAudioError] = useState('');
+  const [audioResult, setAudioResult] = useState(null); // { generated, failed } from last run
   const isNew = !lessonId;
 
   useEffect(() => {
@@ -91,27 +119,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
     }
     fetch(`/api/admin/lessons/${lessonId}`, { headers: authHeaders() })
       .then(r => r.json())
-      .then(data => {
-        const hydrated = {
-          ...data,
-          slides: data.slides.map(s => ({
-            ...s,
-            movestring: s.movestring ?? '',
-            overlays: s.overlays ?? [],
-            legendItems: s.legendItems ?? [],
-            coachMessages: s.coachMessages ?? [],
-            infoProse: s.infoProse ?? '',
-          })),
-          socratic: data.socratic ? {
-            ...data.socratic,
-            movestring: data.socratic.movestring ?? '',
-            overlays: data.socratic.overlays ?? [],
-            _boardInstructions: data.socratic._boardInstructions ?? '',
-          } : null,
-          confirmationChallenges: data.confirmationChallenges ?? [],
-        };
-        setLesson(hydrated);
-      });
+      .then(data => setLesson(hydrateLesson(data)));
   }, [lessonId]);
 
   const handleSave = useCallback(async () => {
@@ -130,11 +138,49 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       if (!res.ok) throw new Error(data.error || 'Save failed');
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 2000);
+      return true;
     } catch (e) {
       setSaveState('error');
       setSaveError(e.message);
+      return false;
     }
   }, [lesson, isNew, lessonId]);
+
+  // Mandatory save -> generate -> rehydrate coordination contract (plan.md):
+  // save must complete and succeed BEFORE we ask the server to generate audio,
+  // otherwise an in-flight edit could be silently lost when the generate-audio
+  // response's `lesson` (read from disk) overwrites local state.
+  const handleGenerateAudio = useCallback(async () => {
+    if (isNew) {
+      setAudioState('error');
+      setAudioError('Save the lesson before generating audio.');
+      return;
+    }
+    setAudioResult(null);
+    setAudioState('saving');
+    setAudioError('');
+    const saved = await handleSave();
+    if (!saved) {
+      setAudioState('error');
+      setAudioError('Save failed — audio generation aborted.');
+      return;
+    }
+    setAudioState('generating');
+    try {
+      const res = await fetch(`/api/admin/lessons/${lessonId}/generate-audio`, {
+        method: 'POST',
+        headers: { ...authHeaders() },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Audio generation failed');
+      setLesson(hydrateLesson(data.lesson));
+      setAudioResult({ generated: data.generated ?? [], failed: data.failed ?? [] });
+      setAudioState('idle');
+    } catch (e) {
+      setAudioState('error');
+      setAudioError(e.message);
+    }
+  }, [handleSave, isNew, lessonId]);
 
   const handleDelete = useCallback(async () => {
     await fetch(`/api/admin/lessons/${lessonId}`, { method: 'DELETE', headers: authHeaders() });
@@ -332,6 +378,13 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
         >
           Preview ↗
         </button>
+        <button
+          onClick={handleGenerateAudio}
+          disabled={isNew || audioState === 'saving' || audioState === 'generating'}
+          style={{ padding: '8px 24px', borderRadius: 8, cursor: 'pointer', background: '#0f766e', color: '#fff', fontWeight: 700 }}
+        >
+          {audioState === 'saving' ? 'Saving…' : audioState === 'generating' ? 'Generating audio…' : 'Generate audios'}
+        </button>
         {!isNew && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -342,6 +395,25 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
         )}
         {saveState === 'error' && <span style={{ color: '#f87171', fontSize: 13 }}>{saveError}</span>}
       </div>
+
+      {audioState === 'error' && audioError && (
+        <div style={{ color: '#f87171', fontSize: 13 }}>Audio generation error: {audioError}</div>
+      )}
+      {audioResult && (
+        <div style={{ fontSize: 13, color: '#ccc', background: '#1e1e1e', border: '1px solid #333', borderRadius: 8, padding: 12 }}>
+          <div>Generated {audioResult.generated.length} audio file(s).</div>
+          {audioResult.failed.length > 0 && (
+            <div style={{ color: '#f59e0b', marginTop: 6 }}>
+              {audioResult.failed.length} message(s) failed:
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {audioResult.failed.map((f, i) => (
+                  <li key={i}>{f.locator}: {f.error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delete confirm */}
       {showDeleteConfirm && (

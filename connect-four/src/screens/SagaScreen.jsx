@@ -5,6 +5,7 @@ import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { deriveLockReason, dispatchLockAction } from './sagaLock.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -146,6 +147,7 @@ export function SagaScreen({ go, goBack }) {
   const [progress, setProgress] = useState([]);
   const [tier, setTier] = useState('free');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [orderLockOpen, setOrderLockOpen] = useState(false);
 
   useEffect(() => {
     injectPulseStyle();
@@ -167,12 +169,18 @@ export function SagaScreen({ go, goBack }) {
     }
   }, [store]);
 
+  useEffect(() => {
+    if (!orderLockOpen) return;
+    const timer = setTimeout(() => setOrderLockOpen(false), 3200);
+    return () => clearTimeout(timer);
+  }, [orderLockOpen]);
+
   function deriveNodeState(lesson) {
     const isDone = progress.some(p => p.lessonId === lesson.id && p.status === 'complete');
     if (isDone) return 'done';
 
-    const isLocked = lesson.free === false && tier !== 'paid';
-    if (isLocked) return 'locked';
+    const reason = deriveLockReason(lesson, lessons, progress, tier);
+    if (reason !== 'none') return 'locked';
 
     // 'current' = first lesson (by order) that is not done and accessible
     const firstAccessible = lessons
@@ -180,7 +188,7 @@ export function SagaScreen({ go, goBack }) {
       .sort((a, b) => a.order - b.order)
       .find(l => {
         const done = progress.some(p => p.lessonId === l.id && p.status === 'complete');
-        const locked = l.free === false && tier !== 'paid';
+        const locked = deriveLockReason(l, lessons, progress, tier) !== 'none';
         return !done && !locked;
       });
 
@@ -190,9 +198,18 @@ export function SagaScreen({ go, goBack }) {
   }
 
   function handleNodeTap(lesson) {
-    const state = deriveNodeState(lesson);
-    if (state === 'locked') {
+    const isDone = progress.some(p => p.lessonId === lesson.id && p.status === 'complete');
+    if (isDone) {
+      go('concept', { lessonId: lesson.id });
+      return;
+    }
+
+    const reason = deriveLockReason(lesson, lessons, progress, tier);
+    const action = dispatchLockAction(reason);
+    if (action === 'upgrade') {
       setUpgradeOpen(true);
+    } else if (action === 'orderLock') {
+      setOrderLockOpen(true);
     } else {
       go('concept', { lessonId: lesson.id });
     }
@@ -224,6 +241,34 @@ export function SagaScreen({ go, goBack }) {
           ))
         )}
       </div>
+
+      {orderLockOpen && (
+        <div
+          onClick={() => setOrderLockOpen(false)}
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 24,
+            transform: 'translateX(-50%)',
+            maxWidth: 420,
+            width: 'calc(100% - 36px)',
+            background: 'var(--ink)',
+            color: '#fff',
+            borderRadius: 12,
+            padding: '12px 16px',
+            fontSize: 14,
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
+            zIndex: 50,
+            textAlign: 'center',
+          }}
+        >
+          {t('saga.orderLock.message', 'Finish the previous lesson to unlock this one')}
+        </div>
+      )}
 
       {upgradeOpen && <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />}
     </div>

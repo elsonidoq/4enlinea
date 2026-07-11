@@ -1,9 +1,12 @@
 import { useRef, useEffect } from 'react';
 import { CoachAvatar } from './CoachAvatar.jsx';
 
-export function CoachDialog({ messages, size = 58, fixed = false }) {
+export function CoachDialog({ messages, size = 58, fixed = false, onReplay }) {
   const mood = messages[messages.length - 1]?.mood ?? 'happy';
   const bubblesRef = useRef(null);
+  const hasNarration = messages.some(
+    (m) => typeof m?.audio === 'string' && m.audio.trim().length > 0,
+  );
 
   useEffect(() => {
     if (bubblesRef.current) {
@@ -79,6 +82,32 @@ export function CoachDialog({ messages, size = 58, fixed = false }) {
           </div>
         ))}
       </div>
+      {onReplay && hasNarration && (
+        <button
+          type="button"
+          onClick={onReplay}
+          aria-label="Replay narration"
+          title="Replay narration"
+          style={{
+            flexShrink: 0,
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            border: 'none',
+            background: '#fff',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 15,
+            color: 'var(--ink-soft)',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          🔁
+        </button>
+      )}
     </div>
   );
 }

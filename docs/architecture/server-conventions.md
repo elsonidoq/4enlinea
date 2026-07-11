@@ -537,6 +537,39 @@ The `row` shape:
 - Never throws or rejects — all errors are logged via `console.error`.
 - Deduplication is handled by DB unique indexes; `23505` constraint violations return `true` (treated as success).
 
+## Admin Batch-Generation Modules — Pure-Function Pattern (`lessonAudio.js`)
+
+`server/lessonAudio.js` (spec 046 US3/US4) is the canonical shape for a future admin-triggered
+batch-generation module — it mirrors `insertGameBlunder.js`'s extraction pattern (see "Game Blunder
+Writes" above): pure, dependency-injected functions with no route-handler logic inline, so they're
+directly `node --test`-able without an Express app or a real TTS provider.
+
+- **`hashMessageText(text)`** — deterministic 16-hex-char `sha256(text)` prefix. Identity key for
+  generated audio: identical text ⇒ same filename (no redundant re-synth); changed text ⇒ a new,
+  distinct file. There is no separate manifest/registry/approval file — the lesson JSON's own `audio`
+  field is the sole source of truth (contrast with spec 039's i18n-key-driven, manifest-gated coach TTS
+  pipeline, which this module deliberately does NOT reuse or extend).
+- **`generateLessonAudio(lesson, { synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR } = {})`** —
+  dependency-injected `synthesize` and `dir` params are the test seam (a test passes a stub synthesize
+  function and a temp dir; production code omits both and gets the real `server/ttsProvider.js`
+  `synthesize` + the real `public/audio/lessons/` dir). Iterates only `lesson.slides[].coachMessages[]`
+  (concept slides) — never `lesson.socratic`, which carries no `coachMessages`. Skips a message whose
+  current `audio` already matches `hashMessageText(text) + '.mp3'` (no wasted TTS call). Each message's
+  synthesis is isolated in its own try/catch — one failure doesn't abort the batch; that message's
+  `audio` is left unset/unchanged and recorded in the `failed` array. Returns `{ lesson, generated,
+  failed }`, mutating (and returning) the same lesson object passed in.
+- **`pruneOrphanedLessonAudio(allLessons, dir = LESSON_AUDIO_DIR)`** — synchronous; computes the set of
+  every `audio` basename referenced across all lessons, deletes any `.mp3` under `dir` not in that set,
+  returns the list of deleted filenames.
+- **`LESSON_AUDIO_DIR`** — exported constant (`public/audio/lessons/`), overridable per-call via the
+  `dir` param for tests.
+
+**Pattern to reuse for the next admin batch-generation feature**: export pure functions taking their
+side-effecting dependencies (an API client, a filesystem root, etc.) as an optional `deps` object with
+production defaults, keep all Express/route-handler concerns (auth middleware, request parsing,
+response shaping) in `index.js`, and give the module its own `node --test` unit test file completely
+independent of the HTTP layer.
+
 ## Annotation Gate (`POST /api/explain-move-llm`)
 
 All LLM outputs from `/api/explain-move-llm` pass through `validateAnnotation` (in `server/annotationGate.js`) before being cached or delivered to the client.

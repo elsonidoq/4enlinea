@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer } from 'react';
+import { useState, useEffect, useReducer, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -89,6 +89,29 @@ export function SocraticScreen({ go, goBack, lessonId }) {
     dispatch({ type: correct ? 'CORRECT' : 'WRONG' });
   }
 
+  const socratic = lesson?.socratic ?? null;
+  const correctCol = socratic?.correctCol ?? null;
+
+  // Derive overlays — win overlay on correct or wrong2.
+  // Memoized (spec 046 US5, FR-022) so the array reference is stable across
+  // re-renders where these dependencies haven't changed — an IIFE recomputed
+  // on every render would hand Board a brand-new (but value-identical) array
+  // every time, defeating Board's boardPropsAreEqual memo comparator, which
+  // falls back to Object.is for non-`board` props.
+  // Hoisted above the loading/error/no-board early returns below (rules of
+  // hooks: a hook cannot be called conditionally) — guards internally against
+  // `socratic` not being loaded yet.
+  const overlays = useMemo(() => {
+    if (!socratic) return [];
+    if (phase === 'correct' && lastDrop) {
+      return [{ c: lastDrop.c, r: lastDrop.r, type: 'win' }];
+    }
+    if (phase === 'wrong2') {
+      return [{ c: correctCol, r: socratic.boardSpec[correctCol]?.length ?? 0, type: 'win' }];
+    }
+    return [];
+  }, [phase, lastDrop, correctCol, socratic]);
+
   if (loadState === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -122,20 +145,6 @@ export function SocraticScreen({ go, goBack, lessonId }) {
       </div>
     );
   }
-
-  const { socratic } = lesson;
-  const correctCol = socratic.correctCol;
-
-  // Derive overlays — win overlay on correct or wrong2
-  const overlays = (() => {
-    if (phase === 'correct' && lastDrop) {
-      return [{ c: lastDrop.c, r: lastDrop.r, type: 'win' }];
-    }
-    if (phase === 'wrong2') {
-      return [{ c: correctCol, r: socratic.boardSpec[correctCol]?.length ?? 0, type: 'win' }];
-    }
-    return [];
-  })();
 
   // CoachDialog messages
   const coachMessages = showHint

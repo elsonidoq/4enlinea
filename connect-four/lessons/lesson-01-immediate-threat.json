@@ -10,7 +10,8 @@
       "coachMessages": [
         {
           "text": "Look at the board. Can you find a four-cell window that already has three Gray discs and one empty space?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/a7bce21fb8387231.mp3"
         }
       ],
       "boardSpec": [
@@ -61,7 +62,8 @@
       "coachMessages": [
         {
           "text": "Threats look the same in every direction — horizontal, vertical, diagonal. Train your eye to scan all four.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/41dcfb2a0d945146.mp3"
         }
       ],
       "boardSpec": [
@@ -112,7 +114,8 @@
       "coachMessages": [
         {
           "text": "The empty square does not have to be at the end of the line — it can sit anywhere inside the four-cell window.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/4d377642248f22e2.mp3"
         }
       ],
       "boardSpec": [
@@ -163,7 +166,8 @@
       "coachMessages": [
         {
           "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/e378834b9957dba3.mp3"
         }
       ],
       "boardSpec": [

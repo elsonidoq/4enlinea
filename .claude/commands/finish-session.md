@@ -1,4 +1,4 @@
-You are closing out a working session. Your job is to capture anything worth remembering and keep the architecture docs current.
+You are closing out a working session. Your job is to capture anything worth remembering, keep the architecture docs current, and log deferred issues and staging sign-off items to their backlogs.
 
 ## The two-destination rule
 
@@ -57,13 +57,25 @@ Check whether any of the following changed during the session:
 
 For each affected file: read the current content, then add or update the relevant section. Do not rewrite sections that are still accurate — only touch what changed. The goal is that after this update, an agent reading only the architecture docs would have an accurate picture of the system.
 
+## Step 3 — Scan for backlog and staging sign-off items
+
+Two more destinations exist for facts that are neither a durable gotcha (memory) nor current-state documentation (architecture docs). Check both:
+
+**`docs/open_issues.md`** = the deferred/latent-bug backlog. Anything the session surfaced but chose NOT to fix now — a known bug, a latent risk, a "should have but didn't", a shortcut with a cost, a missing capability an agent noticed — belongs here, not in memory. Scan the conversation for: bugs deferred, edge cases knowingly left unhandled, tech-debt or missing-infrastructure notes, "we should X someday" observations, and risks flagged by review/critique but not addressed. For each, add an entry in the existing `OI-N` format (read the file first to match its numbering and structure). Do not duplicate an issue already listed.
+
+**`staging_checks.md`** = the single append-only staging sign-off log across all epics. Any acceptance/QA item the session could NOT fully confirm in local dev — because it depends on a real external provider, a real cross-origin redirect round-trip, a genuinely clean signed-out session, deploy-time config/migrations, or production-like data — belongs here rather than being treated as done. Scan for such items produced this session. For each, append it under that epic's `## Epic N — <title>` heading (create the heading if absent), recording **What / Why staging / Expected / Source** and a `- [ ]` sign-off checkbox, per the "How to add checks" instructions at the top of `staging_checks.md`. Do not duplicate a check already logged.
+
+The routing test: is it a trap that would surprise an agent reading the docs? → memory. Does it change what the docs say is true now? → architecture doc. Is it deferred work / a known-but-unfixed issue? → `docs/open_issues.md`. Is it an acceptance item only verifiable in a staging/prod-like environment? → `staging_checks.md`.
+
 ## Ordering rule for compaction
 
-If `MEMORY.md` needs compacting (size hook fires, or it exceeds 175 lines / 20 KB), run `/compact-memory` only AFTER Steps 1–2 are fully done — first save the session's memories and doc updates, then compact. Never compact with unsaved memories pending.
+If `MEMORY.md` needs compacting (size hook fires, or it exceeds 175 lines / 20 KB), run `/compact-memory` only AFTER Steps 1–3 are fully done — first save the session's memories, doc updates, and backlog/staging entries, then compact. Never compact with unsaved memories pending.
 
-## Step 3 — Report
+## Step 4 — Report
 
 List:
 - Memories written or updated (slug + one-line summary of what was captured)
 - Architecture doc sections updated (file + what changed and why)
-- Anything skipped and why (e.g. "already in memory/arch doc", "ephemeral", "in git history")
+- `docs/open_issues.md` entries added (OI-N + one-line summary)
+- `staging_checks.md` checks added (epic heading + what needs staging verification)
+- Anything skipped and why (e.g. "already in memory/arch doc/backlog", "ephemeral", "in git history")

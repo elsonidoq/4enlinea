@@ -7,6 +7,9 @@ import { Toolbar } from '../components/Toolbar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
+import { useAudio } from '../lib/useAudio.js';
+import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
+import { getNarrationQueue } from '../lib/lessonNarration.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -24,6 +27,7 @@ function swatchColor(type) {
 export function ConceptScreen({ go, goBack, lessonId }) {
   const { t } = useTranslation();
   const { store } = useStore();
+  const { speechEnabled } = useAudio();
   const [lesson, setLesson] = useState(null);
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [slideIndex, setSlideIndex] = useState(0);
@@ -52,6 +56,29 @@ export function ConceptScreen({ go, goBack, lessonId }) {
       track('lesson_started', { lessonId });
     }
   }, [lesson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Narrate the current concept slide's coachMessages (spec 046 US3, FR-016/FR-019/FR-021).
+  // Keyed on slideIndex (and lesson, for the initial load) so narration re-fires on every
+  // slide change and on first mount. Cleanup unconditionally calls stopSpeech() so
+  // navigating away or changing slides mid-narration never leaves orphaned audio (FR-021).
+  useEffect(() => {
+    if (!lesson) return undefined;
+    const currentSlide = lesson.slides[slideIndex];
+    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+
+    return () => {
+      stopSpeech();
+    };
+  }, [lesson, slideIndex, speechEnabled]);
+
+  function handleReplayNarration() {
+    if (!lesson) return;
+    stopSpeech();
+    const currentSlide = lesson.slides[slideIndex];
+    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+  }
 
   function handleContinue() {
     if (slideIndex < lesson.slides.length - 1) {
@@ -113,7 +140,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
         onLogoClick={() => go('home')}
       />
 
-      <CoachDialog messages={slide.coachMessages} />
+      <CoachDialog messages={slide.coachMessages} onReplay={handleReplayNarration} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
         <Board

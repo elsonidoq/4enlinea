@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Icon } from './Icon.jsx';
 import { getColumnA11yProps } from './boardA11y.js';
+import { boardPropsAreEqual } from '../lib/board.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -79,7 +80,7 @@ function groupCellsByCapsules(cells) {
   return { runs, dots };
 }
 
-export function Board({
+function BoardImpl({
   board = EMPTY_BOARD,
   onColumnClick,
   onCellClick,
@@ -397,3 +398,9 @@ export function Board({
     </div>
   );
 }
+
+// Memoized with a value-based comparator (boardPropsAreEqual, above) so a
+// parent re-render triggered by unrelated state (e.g. coach-narration state)
+// does not force Board to rebuild every already-placed-disc cell when the
+// board/overlays/etc. are value-unchanged. See spec 046 US5 (FR-022).
+export const Board = memo(BoardImpl, boardPropsAreEqual);

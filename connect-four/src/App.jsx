@@ -8,6 +8,8 @@ import { SURFACE_BG } from './lib/surfaceGroups.js';
 import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
+import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
+import AdminBlockedPage from './pages/AdminBlockedPage.jsx';
 import './i18n/index.js';
 
 const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
@@ -112,23 +114,29 @@ function Navigator() {
 }
 
 function App() {
-  if (window.location.pathname.startsWith('/admin/audio')) {
-    const AdminAudioPage = lazy(() => import('./pages/AdminAudioPage.jsx'));
-    return <Suspense fallback={null}><AdminAudioPage /></Suspense>;
-  }
-  if (window.location.pathname.startsWith('/admin/lessons')) {
-    const AdminLessonsPage = lazy(() => import('./pages/AdminLessonsPage.jsx'));
-    return <Suspense fallback={null}><AdminLessonsPage /></Suspense>;
-  }
-  if (window.location.pathname.startsWith('/admin/deep-reveal-eval')) {
-    const AdminDeepRevealEvalPage = lazy(() => import('./pages/AdminDeepRevealEvalPage.jsx'));
-    return <Suspense fallback={null}><AdminDeepRevealEvalPage /></Suspense>;
-  }
-  if (window.location.pathname.startsWith('/admin/fv-suff')) {
-    const AdminFvSuffPage = lazy(() => import('./pages/AdminFvSuffPage.jsx'));
-    return <Suspense fallback={null}><AdminFvSuffPage /></Suspense>;
-  }
   if (window.location.pathname.startsWith('/admin')) {
+    // FR-028: the entire /admin surface (all sub-pages) is localhost-only.
+    // Checked BEFORE any lazy() admin-page import so a non-localhost origin
+    // never even fetches an admin bundle chunk (defense-in-depth).
+    if (!isLocalhostOrigin()) {
+      return <AdminBlockedPage />;
+    }
+    if (window.location.pathname.startsWith('/admin/audio')) {
+      const AdminAudioPage = lazy(() => import('./pages/AdminAudioPage.jsx'));
+      return <Suspense fallback={null}><AdminAudioPage /></Suspense>;
+    }
+    if (window.location.pathname.startsWith('/admin/lessons')) {
+      const AdminLessonsPage = lazy(() => import('./pages/AdminLessonsPage.jsx'));
+      return <Suspense fallback={null}><AdminLessonsPage /></Suspense>;
+    }
+    if (window.location.pathname.startsWith('/admin/deep-reveal-eval')) {
+      const AdminDeepRevealEvalPage = lazy(() => import('./pages/AdminDeepRevealEvalPage.jsx'));
+      return <Suspense fallback={null}><AdminDeepRevealEvalPage /></Suspense>;
+    }
+    if (window.location.pathname.startsWith('/admin/fv-suff')) {
+      const AdminFvSuffPage = lazy(() => import('./pages/AdminFvSuffPage.jsx'));
+      return <Suspense fallback={null}><AdminFvSuffPage /></Suspense>;
+    }
     return <Suspense fallback={null}><AdminCuratePage /></Suspense>;
   }
 

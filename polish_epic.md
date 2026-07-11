@@ -916,57 +916,93 @@ during narration.
 
 **Non-obvious facts** (confirmed code locations + traps)
 - `src/screens/SagaScreen.jsx` locks by **tier only** today: `isLocked = lesson.free === false && tier !== 'paid'`
-  (`:172`); there is **no order gate** yet — this epic adds it.
+  (`:172`); there is **no order gate** yet — this epic adds it, and the order gate deliberately **overrides**
+  spec 018 FR-003 rule 4 (locked = `free===false && tier!==paid`) with an additional order-based condition.
 - Lesson editor lives at `src/screens/admin/` (+ `AdminLessonEditorScreen.jsx`/`AdminLessonListScreen.jsx`);
   content is lesson JSON.
 - Slide runtime: `src/screens/ConceptScreen.jsx`/`SocraticScreen.jsx` + `src/components/Board.jsx` +
   `CoachDialog.jsx` — the flicker is a Board re-render on coach state change.
-- Trap (spec 039): TTS audio is keyed by **text hash, not position**; TRUNCATE `explanation_cache` before deploy.
+- **Corrected trap:** spec 039's TTS pipeline is keyed **end-to-end by i18n keys**, not text hash —
+  `generate-tts.js` scans the `coach.*` namespace in `en.json`, the registry/manifest is keyed by i18n key, and
+  runtime playback is `speakCoachMessage(key)`. Lesson slide coach messages are **inline raw text** inside
+  lesson JSON (`Slide.coachMessages[].text`), not i18n keys, so none of that registry/manifest/`en.json`-scan
+  machinery or `speakCoachMessage(key)` applies here. The only reusable seam is `server/ttsProvider.js`
+  `synthesize(text)`; this epic defines a **new** text-hash-keyed generation path and a **new** playback path
+  parallel to `speakDeepReveal(audio)` (play a stored path directly), not `speakCoachMessage(key)`.
+  TRUNCATE `explanation_cache` before deploy remains a spec-039-specific step, unrelated to lesson audio.
 - Trap: Socratic correctness is client-side `col === correctCol`.
+- **Already landed via Epic 5 (do not re-build):** per-lesson completion tracking —
+  `saveLessonProgress`/`getLessonProgress` exist in `SupabaseStore.js` and `IndexedDBStore.js` (spec 018 marks
+  this "already implemented"), with completion written from `ConceptScreen.jsx:73`, `SocraticScreen.jsx:65`, and
+  `ChallengeScreen.jsx:355`. The tier-locked upgrade CTA is also already wired: `SagaScreen.jsx` calls
+  `setUpgradeOpen(true)` on a locked tap and imports `useUpgradeCheckout`. The only genuinely new work in
+  US6.1/US6.2 is the **order-gate lock rule** in `SagaScreen.deriveNodeState` (still tier-only today) and
+  tier-lock-vs-order-lock messaging.
 
 **Authoritative sources of truth**
-- **Spec 018/019** (lesson infra + content), **Spec 039** + memory `project_spec039_audio_interactive_coach`,
-  `project_deep_reveal_tts` (reuse this TTS pipeline for generation; store the path).
+- **Spec 018/019** (lesson infra + content), **Spec 039** + memory `project_spec039_audio_interactive_coach`
+  (reference for the i18n-keyed pattern, NOT directly reusable machinery for lessons).
+- `server/ttsProvider.js` (`synthesize(text)` — the actual reusable seam).
 - Memory `project_lesson_interactivity_evaluation`. `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- None requiring an owner decision were resolved this session. Reuse the spec-039 TTS pipeline for generation
-  (store path in JSON, don't stream live). The tier-lock upgrade CTA wires into Epic 5's checkout. Key open
-  choices are in **Open questions**.
+- **TTS reuse scope:** reuse only `server/ttsProvider.js` `synthesize(text)`. Define a *new* generation path
+  that hashes each slide message's text, writes an MP3, and stores the path in the lesson JSON; and a *new*
+  playback path that plays the stored path directly (parallel to `speakDeepReveal(audio)`), not
+  `speakCoachMessage(key)`.
+- **Audio granularity:** one MP3 per `coachMessage` (not per slide). Add an explicit `audio` field to the
+  lesson JSON schema: `coachMessages[].audio`. Regeneration = re-hashing that message's text.
+- **Audio storage:** new `public/audio/lessons/` directory, committed static files, named by a hash of the
+  message text, regenerated when text changes, no manifest. Mirrors spec-039's static-asset serving without
+  forcing lesson text into `en.json`.
+- **Order-unlock completion criterion:** reuse the existing `'complete'` progress record already written by
+  `saveLessonProgress` at each lesson's terminal step (via `ConceptScreen.jsx`/`SocraticScreen.jsx`/
+  `ChallengeScreen.jsx`). No second progress concept, no new store work.
+- **Order-gate scope:** the order gate is an *additional* condition layered on top of the existing tier gate,
+  and deliberately overrides spec 018 FR-003 rule 4 (tier-only lock) to also require the previous lesson's
+  `'complete'` record.
+- The tier-lock upgrade CTA wires into Epic 5's checkout (`useUpgradeCheckout`) and is already largely landed;
+  this epic's work is to audit/finish it, not build it from scratch.
 
 ### User stories & tasks
 
 **US6.1 — Order-based lesson unlocking.**
 *As a learner, I want lessons unlocked in order so I follow the intended progression.*
-1. Add per-lesson completion tracking (store + persistence).
-2. Compute lock state as order-based (N locked until N−1 complete) in addition to the tier gate.
-3. Define the completion criterion (last slide viewed / Socratic answered) — see open questions.
-4. Update `SagaScreen` node states (locked/unlocked/current/done) to reflect order.
-5. Test: fresh learner sees only lesson 1 unlocked; completing it unlocks the next.
+1. Add order-based lock computation to `SagaScreen.deriveNodeState`: lesson N is locked until lesson N−1 has a
+   `'complete'` progress record (via existing `getLessonProgress`), layered on top of (not replacing) the
+   existing tier gate. Document that this overrides spec 018 FR-003 rule 4.
+2. Update `SagaScreen` node states (locked/unlocked/current/done) to reflect the combined tier + order gate.
+3. Test: fresh learner sees only lesson 1 unlocked; completing it (existing `'complete'` write) unlocks the
+   next; a tier-locked-but-order-unlocked lesson still shows as tier-locked.
 
 **US6.2 — Upgrade CTA on tier-locked lessons.**
 *As a free user clicking a paid lesson, I want an upgrade prompt, not a dead tap.*
-1. Clicking a tier-locked lesson opens `UpgradeModal` (not a no-op).
-2. Distinguish tier-lock vs order-lock messaging.
-3. Wire the upgrade entry point (ties to Epic 5 checkout).
-4. i18n the CTA copy.
-5. Test: free user clicking a paid lesson → upgrade CTA.
+1. Audit the already-wired CTA: `SagaScreen.jsx` already calls `setUpgradeOpen(true)` on a locked tap and
+   imports `useUpgradeCheckout` (Epic 5). Verify it fires correctly for tier-locked nodes and fix any gaps.
+2. Distinguish tier-lock vs order-lock messaging/UI (order-lock should NOT open `UpgradeModal` — it's not a
+   paywall).
+3. i18n the CTA copy if not already covered.
+4. Test: free user clicking a tier-locked lesson → upgrade CTA; free user clicking an order-locked lesson →
+   order-lock messaging (no upgrade CTA).
 
 **US6.3 — Admin: generate lesson audio.**
-*As an admin, I want to pre-generate per-slide narration.*
+*As an admin, I want to pre-generate per-message narration.*
 1. Add a "generate audios" action in `/admin/lessons`.
-2. Reuse the spec-039 TTS pipeline to synthesize per-slide audio.
-3. Store each audio path in the lesson JSON.
-4. Handle regeneration when slide text changes (spec-039 keys by text hash).
-5. Verify generated paths are saved and resolvable.
+2. For each `coachMessage` in each slide, hash the message text and call `server/ttsProvider.js`
+   `synthesize(text)` to produce an MP3 written to `public/audio/lessons/<hash>.mp3`.
+3. Store the path in the lesson JSON at `coachMessages[].audio`.
+4. Regeneration: when a message's text changes, its hash changes, so a new file is generated (no stale-cache
+   invalidation needed); prune orphaned files as a cleanup step.
+5. Verify generated paths are saved and resolvable from `public/audio/lessons/`.
 
-**US6.4 — Per-slide audio playback.**
-*As a learner, I want the coach to speak each slide.*
-1. Load and play the stored audio per slide in the lesson runtime.
+**US6.4 — Per-message audio playback.**
+*As a learner, I want the coach to speak each message.*
+1. Load and play the stored `coachMessages[].audio` path in the lesson runtime, parallel to
+   `speakDeepReveal(audio)` (play the stored path directly), not `speakCoachMessage(key)`.
 2. Add playback controls (play/replay/mute).
-3. Serve audio from the chosen storage location.
-4. Graceful fallback when audio is missing.
-5. Test: opening a lesson plays audio per slide.
+3. Serve audio as a static asset from `public/audio/lessons/`.
+4. Graceful fallback when `audio` is missing (e.g., not yet generated).
+5. Test: opening a lesson plays audio per coach message.
 
 **US6.5 — Fix board flicker during narration.**
 *As a learner, I don't want the board to flicker when the coach speaks.*
@@ -977,19 +1013,21 @@ during narration.
 5. Regression test for board stability on coach state change.
 
 **Acceptance criteria**
-- Fresh learner: only lesson 1 unlocked; completing it unlocks the next.
-- Free user clicking a tier-locked lesson → UpgradeModal.
-- Admin "generate audios" writes audio paths into the lesson JSON; opening a lesson plays audio per slide.
+- Fresh learner: only lesson 1 unlocked; completing it (existing `'complete'` record) unlocks the next.
+- Free user clicking a tier-locked lesson → UpgradeModal; clicking an order-locked lesson → order-lock
+  messaging (no UpgradeModal).
+- Admin "generate audios" writes `coachMessages[].audio` paths into the lesson JSON as files under
+  `public/audio/lessons/`; opening a lesson plays audio per coach message.
 - Clicking a disc during narration: board disc signature stays stable (no flicker).
 
 **NOT included:** new lesson content (spec 019); live/streaming TTS in lessons (uses stored audio); deep-reveal
-TTS (Epic 2/7 territory).
+TTS (Epic 2/7 territory); a manifest/registry for lesson audio (spec-039-style — explicitly not reused here).
 
-**Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; frontend saga + admin + lesson JSON + TTS backend +
-render-perf; open decisions (completion criterion; audio storage).
+**Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; frontend saga + admin + lesson JSON schema change +
+TTS backend + render-perf.
 
-**Open questions (`/clarify`):** completion criterion for order-unlock; audio storage/format/versioning;
-flicker root cause.
+**Open questions (`/clarify`):** flicker root cause (remaining empirical open item — reproduction and fix
+approach still need investigation).
 
 ---
 

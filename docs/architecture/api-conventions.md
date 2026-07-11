@@ -781,6 +781,54 @@ Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, loca
 - `GET /api/admin/fv-suff/files` → `{ answers }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars).
 - `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
 
+## Lesson Audio Generation & Pruning Endpoints (spec 046 US3/US4)
+
+Additive routes under the existing `/api/admin/lessons/*` family. Both guarded by `requireLocalhost,
+requireAdmin` (same double-gate pattern as spec 039's `/api/admin/audio/generate*`). Full contract:
+`specs/046-lessons-progression-audio-polish/contracts/lesson-audio-generation.md`.
+
+### `POST /api/admin/lessons/:id/generate-audio`
+
+**Path param**: `id` — lesson id; `404 { error: 'not_found' }` if it doesn't exist.
+
+**Request body**: none — the server loads the lesson from disk (`getLesson(id)`), not from the client,
+so a stale client-held copy can't overwrite a concurrent edit.
+
+**Behavior**: for every concept-slide `coachMessages[]` entry with non-empty `text` whose current
+`audio` doesn't already match `hashMessageText(text) + '.mp3'`, calls `synthesize(text)`
+(`server/ttsProvider.js`), writes `public/audio/lessons/<hash>.mp3`, and sets
+`coachMessages[i].audio = '/audio/lessons/<hash>.mp3'`. Per-message failures are caught individually
+(that message's `audio` is left unchanged) — one bad synth does not abort the batch. Persists via
+`saveLessonFile` + `reloadLessons()`.
+
+**Response** (`200 OK`): `{ lesson, generated: [<locator>, ...], failed: [{ locator, error }, ...] }` —
+`generated` lists messages that got a *new* file this run (already-current messages are skipped
+silently); `failed` lists messages whose synthesis failed this run.
+
+**Errors**: `403` (non-localhost or non-admin), `404` (lesson not found), `500` (unexpected write error
+— per-message TTS errors are non-fatal, see above).
+
+### `POST /api/admin/lessons/prune-audio`
+
+**Request body**: none.
+
+**Behavior**: scans `public/audio/lessons/*.mp3`, computes the set of `audio` paths referenced across
+all lessons (`getLessonsAll()`), deletes any file not referenced.
+
+**Response** (`200 OK`): `{ deleted: [<filename>, ...] }` — empty array if nothing was orphaned.
+
+**Errors**: `403` (guard), `500` (filesystem error).
+
+## `requireLocalhost` Closure Across `/api/admin/*` (FR-028)
+
+**MUST**: every `/api/admin/*` route — all 39, as of spec 046 — carries `requireLocalhost` in addition
+to any existing `requireAdmin`, registered in that exact order: `app.<verb>('/api/admin/...',
+requireLocalhost, requireAdmin, handler)`. Grep-verifiable: `grep -n "app\.\(get\|post\|put\|delete\)('/api/admin" server/index.js` must show `requireLocalhost` in every match's handler-argument list.
+Previously some admin routes (lessons, puzzles) relied on `requireAdmin` alone, which is a no-op outside
+`NODE_ENV=production` (memory `project_admin_localhost_directive`) — this closure makes the localhost
+restriction unconditional and independent of `NODE_ENV`. New `/api/admin/*` routes MUST follow the same
+two-middleware order.
+
 ## Papergames Import Endpoints (spec 038)
 
 ### `PUT /api/user/profile`

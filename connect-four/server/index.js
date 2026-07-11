@@ -41,6 +41,7 @@ import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, valid
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
+import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
@@ -746,18 +747,18 @@ app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
 
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
-app.get('/api/admin/lessons', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   res.json(getLessonsAll());
 });
 
-app.get('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const all = getLessonsAll();
   const lesson = all.find(l => l.id === req.params.id);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
 
-app.post('/api/admin/lessons', requireAdmin, (req, res) => {
+app.post('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -771,7 +772,7 @@ app.post('/api/admin/lessons', requireAdmin, (req, res) => {
   }
 });
 
-app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.put('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -786,7 +787,7 @@ app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
   }
 });
 
-app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   try {
     deleteLessonFile(LESSONS_DIR, req.params.id);
     reloadLessons();
@@ -797,9 +798,35 @@ app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
   }
 });
 
+// Requires requireLocalhost — the function declaration below (~:2795 in this file)
+// is hoisted, so it is safe to reference here at module init time.
+app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
+  const lesson = getLesson(req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  try {
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson);
+    saveLessonFile(LESSONS_DIR, updatedLesson);
+    reloadLessons();
+    res.json({ lesson: updatedLesson, generated, failed });
+  } catch (e) {
+    logError('[admin/lessons/generate-audio]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/lessons/prune-audio', requireLocalhost, requireAdmin, (req, res) => {
+  try {
+    const deleted = pruneOrphanedLessonAudio(getLessonsAll());
+    res.json({ deleted });
+  } catch (e) {
+    logError('[admin/lessons/prune-audio]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Admin puzzle picker ──────────────────────────────────────────────────────────
 
-app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
+app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) => {
   const { category } = req.query;
   if (!category || typeof category !== 'string') {
     return res.status(400).json({ error: 'category query parameter is required' });

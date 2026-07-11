@@ -171,3 +171,40 @@ For each check record:
   - **Expected**: One real subscription created and tier flipped, then refunded/cancelled with no
     lingering charge.
   - **Source**: Epic 5 / spec 045 — production readiness (beyond FR-024's test-mode bar).
+
+## Epic 6 — Lessons: Progression, Audio & Polish (spec 046)
+
+- [ ] **Lesson audio requires a commit + redeploy to serve in production (FR-027 caveat).**
+  - **What**: Confirm this operational fact before relying on lesson narration in production: "lesson
+    audio only serves in production after the generated MP3s are committed to git and the app is
+    redeployed" (generation itself never runs in production — FR-012/FR-012a). The admin "Generate
+    audios" action is a `requireLocalhost` dev-machine-only tool; there is no production generation
+    path.
+  - **Why staging**: This is a deploy-process fact, not something a local test can verify — it must be
+    confirmed by actually committing generated MP3s under `public/audio/lessons/` and redeploying, then
+    checking narration plays on the deployed app.
+  - **Expected**: Narration audio is silent/absent on any deploy that didn't include a commit of the
+    relevant `public/audio/lessons/*.mp3` files; it plays correctly on a deploy that did.
+  - **Source**: Epic 6 / spec 046 FR-027, FR-012/FR-012a.
+
+- [ ] **Real `OPENAI_API_KEY` TTS generation smoke.**
+  - **What**: With a real staging `OPENAI_API_KEY` configured, confirm `server/ttsProvider.js`'s
+    `synthesize()` succeeds against the live OpenAI TTS API (e.g. by running the admin "Generate
+    audios" action for one lesson and confirming an MP3 is written and playable).
+  - **Why staging**: No `OPENAI_API_KEY` was available in the dev environment during implementation
+    (T030) — the generation path was exercised only with a stubbed `synthesize` function in unit tests.
+  - **Expected**: `synthesize(text)` returns a valid MP3 buffer from the real API; the admin flow writes
+    a working file and updates `coachMessages[].audio`.
+  - **Source**: Epic 6 / spec 046 US3/US4, T030.
+
+- [ ] **Clean signed-out-session order-gate check (SC-001).**
+  - **What**: On staging, in a genuinely clean signed-out/anonymous session (no prior lesson progress),
+    open the Saga screen and confirm exactly lesson 1 is unlocked — all others show as order-locked (or
+    tier-locked, whichever applies first).
+  - **Why staging**: Local dev's IndexedDB/session state tends to carry prior progress from testing; a
+    genuinely fresh, never-touched anonymous session is only reliably available in staging (or via the
+    same dev-only "clear IndexedDB & sign out" tooling used for spec 043's equivalent check, but this
+    item asks for confirmation against a real staging deploy).
+  - **Expected**: Only lesson 1 (lowest `order`) is unlocked; all lessons with a higher `order` show as
+    locked (order or tier).
+  - **Source**: Epic 6 / spec 046 SC-001, US6.1.

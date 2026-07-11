@@ -111,3 +111,64 @@ The auth-session contract still describes a server-side de-dup Map coalescing co
 
 **Why deferred**: cosmetic — the contract is a frozen planning artifact; the architecture docs are the live source of truth.
 **If picked up**: add a one-line "SUPERSEDED — see OI-5 / server-conventions.md" note at the top of the relevant section in `contracts/api-auth-session.md`.
+
+---
+
+## OI-7 — No DOM/browser test harness exists in this repo
+
+**Status**: deferred (standing gap, not a blocker for any single feature)
+**Area**: project-wide test infrastructure — `connect-four/tests/`, `testing-conventions.md`
+**Discovered**: spec `046` plan review (2026-07-11), while resolving the FR-024/SC-007 board-flicker
+regression-check design
+
+This project has `node:test`-based unit tests for pure server/frontend logic (per
+`testing-conventions.md`'s Pure Function Extraction Pattern) but no React Testing Library, jsdom, Playwright,
+or equivalent component/DOM-level test harness. Any regression check that would naturally want to assert on
+rendered DOM/component behavior (e.g. "does this component re-render/remount under state X") instead has to
+be satisfied by extracting the relevant logic into a pure, non-DOM function and unit-testing that — which
+works, but is a workaround, not a substitute for real component testing when the defect is genuinely about
+render/remount behavior rather than pure computation.
+
+**Why deferred**: no single feature has needed DOM testing badly enough to justify introducing new test
+infra (a real cost: new dependency, CI wiring, maintenance surface) — spec 046's board-flicker check (FR-024/
+SC-007) was resolvable via the pure-function-extraction workaround, so it did not force the issue. The owner
+acknowledges a DOM/browser harness would be valuable but this is a standing gap, not a blocker.
+
+**If picked up**: evaluate React Testing Library (jsdom-based, no browser needed, lightest-weight fit for
+this stack) vs. leaning further on the existing `chrome-devtools-mcp`/`app-qa` skill for real-browser manual/
+agentic QA; either way, document the choice in `testing-conventions.md` once adopted.
+
+## OI-8 — RESOLVED: board "flicker" was a layout reflow on ChallengeScreen (US5 root cause corrected)
+
+**Status**: resolved 2026-07-11 (real root cause found + fixed; Batch-4 memoization retained as harmless perf hardening)
+**Area**: `connect-four/src/screens/ChallengeScreen.jsx` (fix site), `src/components/CoachDialog.jsx` (`fixed` reserved-height mode)
+
+**Discovered**: spec `046` US5 implementation (2026-07-11); **corrected same day** via
+`/scientific-method-debugging` with an owner-supplied live repro.
+
+The originally-shipped US5 work (Batch 4) misdiagnosed the defect: it memoized `Board`
+(`memo(BoardImpl, boardPropsAreEqual)` + `deriveBoardSignature`, backed by
+`tests/unit/boardMemoStability.test.js`) on the theory that already-placed discs were re-rendering. That
+was **not** the bug. The owner clarified the real symptom — "in practice 1 of immediate threat, after the
+disc is placed a new coach message bubble appears and the board **moves down**" — and it reproduces on the
+**ChallengeScreen** (`/clchallenge/…`, "Immediate Threats — Practice"), not Concept/Socratic.
+
+**Confirmed root cause (browser-measured):** ChallengeScreen's outer container is a `flex column` rendering
+`<CoachDialog messages={coachMessages} …>` directly above the board. `coachMessages` **accumulates** (the
+post-move feedback bubble is appended below the prompt bubble), so the coach region grows in height and the
+board — the next flow sibling — reflows downward. Measured: placing the winning disc appended a 2nd bubble,
+the coach region grew ~99px→136px, and the board top moved 195→232 (**down 37px**). Nothing about disc
+rendering was involved. Concept/Socratic stayed put only because they *replace* their single coach message
+rather than accumulate.
+
+**Fix:** pass the existing `fixed` prop — `<CoachDialog fixed messages={coachMessages} size={58} />` — which
+reserves a stable `height:140` (inner `maxHeight:120, overflowY:auto`), so appended bubbles scroll within the
+region instead of growing it. This matches the pre-existing `GameScreen.jsx`/`ReviewScreen.jsx` pattern for
+accumulating coach messages over an interactive board. Verified in-browser: board top now **236 before and
+236 after** the move (0px shift); coach region held 140px; both bubbles + win highlight render correctly.
+
+**Regression check (FR-024 — documented manual procedure, per OI-7 no-DOM-harness):** on
+`/clchallenge/immediate-threat`, measure the board container's `getBoundingClientRect().top` before and after
+placing the winning disc (which appends a feedback bubble); the two values must be equal. The Batch-4
+`boardMemoStability.test.js` remains green and is kept (referential stability is still a valid, if unrelated,
+property). Cross-ref: spec 046 US5, [[OI-7]] (no DOM harness).

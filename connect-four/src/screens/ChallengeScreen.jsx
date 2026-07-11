@@ -617,8 +617,12 @@ export function ChallengeScreen({
         </div>
       )}
 
-      {/* Coach dialog — always visible */}
-      <CoachDialog messages={coachMessages} size={58} />
+      {/* Coach dialog — always visible.
+          `fixed` reserves a stable height (140px) so appending the post-move
+          feedback bubble scrolls within the coach region instead of growing it
+          and pushing the board down (FR-022 board-stability fix — matches the
+          GameScreen/ReviewScreen accumulating-messages pattern). */}
+      <CoachDialog fixed messages={coachMessages} size={58} />
 
       {deepRevealOpen ? (
         <DeepRevealPane

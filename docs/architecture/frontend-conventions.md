@@ -481,6 +481,107 @@ import { speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 - **`speakDeepReveal(audio: HTMLAudioElement)`** — pushes a pre-built Audio element (with `src` already set and `canplay` already fired) into the unified speech queue. Does NOT check the manifest — dynamic TTS bypasses pre-approval. Used by `DeepRevealPane.jsx` for on-demand TTS playback.
 - **`stopSpeech()`** — pauses `currentSpeechAudio`, clears `src` (releases resources, prevents stale `ended`/`error` events), nulls `currentSpeechAudio`, and empties the queue. Call this when the user dismisses the panel that triggered the speech (e.g., deep-reveal close, navigation away).
 
+## Lesson Audio Narration (spec 046 US3)
+
+Lesson **concept slides** (never Socratic slides — see below) can carry pre-generated per-message
+narration via an additive nullable `audio` field on each `coachMessages[]` entry:
+
+```
+Lesson.slides[].coachMessages[] = { text: string, audio?: string | null, ... }
+```
+
+`audio` is a static path under `public/audio/lessons/` (e.g. `/audio/lessons/<hash>.mp3`), written by
+the admin "Generate audios" flow (see api-conventions.md `POST /api/admin/lessons/:id/generate-audio`).
+`null`/absent means no narration has been generated yet for that message — playback simply skips it.
+
+**`getNarrationQueue(coachMessages, speechEnabled)`** (`src/lib/lessonNarration.js`) — pure helper.
+Returns `[]` if `speechEnabled` is false or `coachMessages` isn't an array; otherwise returns the
+ordered list of non-empty `audio` paths (messages with no `audio` are silently skipped, not treated as
+an error).
+
+**`speakLessonAudio(path)`** (`src/lib/useCoachSpeech.js`) — thin wrapper: `speakDeepReveal(new
+Audio(path))`. Reuses the same shared module-level speech queue as deep-reveal TTS (see "Coach Audio
+Manifest" below) — it does NOT go through `speakCoachMessage(key)`/the manifest, since lesson audio is
+identified by a stored path, not an i18n key.
+
+`ConceptScreen.jsx` drives narration in an effect keyed `[lesson, slideIndex, speechEnabled]`, calling
+`stopSpeech()` on cleanup (slide change, unmount, or narration/speech toggle) so playback never bleeds
+across slides. **`SocraticScreen.jsx` is intentionally NOT wired to this** — Socratic-phase messages
+(`ask`/`wrong1`/`wrong2`/`correct`/`hint`) are i18n-key-driven per spec 018/039 and stay on the
+`speakCoachMessage(key)` path; no lesson JSON has `coachMessages[]` on a Socratic slide.
+
+`CoachDialog.jsx` gained an optional `onReplay` prop rendering a replay button, for re-triggering the
+current message's narration on demand.
+
+## Admin Localhost Guard (FR-028)
+
+All `/admin/*` frontend routes are localhost-only, enforced by a single guard in `App.jsx` **outside**
+any `lazy()` import (so the block renders even if the lazy admin bundle would fail to load):
+
+```js
+if (window.location.pathname.startsWith('/admin')) {
+  if (!isLocalhostOrigin()) return <AdminBlockedPage />;
+  // ...per-sub-route lazy-imported branches follow
+}
+```
+
+- **`isLocalhostOrigin(hostname = window.location.hostname)`** (`src/lib/isLocalhostOrigin.js`) — pure
+  function; `true` iff hostname is `localhost`, `127.0.0.1`, or `::1`. Mirrors the server-side
+  `requireLocalhost` middleware (api-conventions.md) so the frontend and backend gates agree.
+- **`AdminBlockedPage.jsx`** (`src/pages/AdminBlockedPage.jsx`) — minimal, dependency-free component
+  (no data fetch, no further lazy import) rendered for any `/admin/*` path reached from a non-localhost
+  origin.
+
+This is a frontend-only convenience gate (a non-localhost visitor never even requests the admin bundle);
+the server-side `requireLocalhost` on every `/api/admin/*` route (server-conventions.md /
+api-conventions.md) is the actual security boundary and must not be treated as redundant with this one.
+
+## Saga Lock Reasons (`sagaLock.js`, spec 046 US1/US2)
+
+`src/screens/sagaLock.js` is a plain `.js` module (not `.jsx`, so `node --test` can import it directly)
+holding `SagaScreen`'s lock-derivation logic:
+
+- **`deriveLockReason(lesson, lessons, progress, tier)` → `'none' | 'tier' | 'order' | 'both'`** —
+  computes WHY a lesson is locked. `tierLocked` is the pre-existing spec-018 FR-003 rule
+  (`lesson.free === false && tier !== 'paid'`). `orderLocked` is new: true when the lesson's
+  predecessor (next-lower `order` in the full sorted lesson list; `null`/never-locked for the
+  lowest-order lesson) has no `'complete'` entry in `progress` (from `getLessonProgress()`). The order
+  gate is layered **on top of**, not a replacement for, the tier gate — deliberately overriding spec
+  018 FR-003 rule 4's tier-only lock semantics.
+- **`dispatchLockAction(reason)` → `'upgrade' | 'orderLock' | 'navigate'`** — `'tier'`/`'both'` →
+  `'upgrade'` (tier always wins when both apply); `'order'` → `'orderLock'`; `'none'` → `'navigate'`.
+
+`SagaScreen.jsx`'s `deriveNodeState` returns `'locked'` whenever `deriveLockReason(...) !== 'none'`.
+`handleNodeTap` short-circuits already-`done` lessons, then dispatches on `dispatchLockAction`'s result:
+`'upgrade'` opens `UpgradeModal` (via `useUpgradeCheckout`, Epic 5); `'orderLock'` shows a new
+auto-dismiss inline banner (i18n key `saga.orderLock.message`) — never the `UpgradeModal`, since an
+order-lock is not a paywall; `'navigate'` proceeds normally.
+
+## Board Memoization (`boardPropsAreEqual`, spec 046 US5)
+
+`Board` is exported as `export const Board = memo(BoardImpl, boardPropsAreEqual)` — a custom
+`React.memo` comparator, not the default shallow-prop-equality check.
+
+- **`deriveBoardSignature(board)`** (`src/lib/board.js`) — pure function; walks the 6×7 `board[row][col]`
+  array and builds a compact string of only non-`'empty'` cells (`"r,c,value|..."`). Two different
+  array *references* holding the same disc layout hash to the same signature.
+- **`boardPropsAreEqual(prevProps, nextProps)`** (`src/lib/board.js`) — for the `board` prop, compares
+  `deriveBoardSignature(prev) !== deriveBoardSignature(next)` instead of `Object.is` reference equality;
+  every other prop falls back to `Object.is` (React.memo's default semantics unchanged for
+  `overlays`/`lastDrop`/etc.).
+
+**Why**: a parent re-render that constructs a fresh `board` array with identical cell contents (e.g.
+triggered by an unrelated state change during coach narration) no longer forces `Board` to re-render —
+this was the fix for a board-flicker class of bug when narration state changes while the board is on
+screen. Any new caller that constructs `board` inline on every render should rely on this memoization
+rather than hand-rolling its own `useMemo` for the board array. Callers that need to stabilize other
+reference-typed props (e.g. `overlays`) still need their own `useMemo` — this comparator only special-
+cases `board`. See `tests/unit/boardMemoStability.test.js` for the reference-vs-content-equality
+regression coverage. Note: no currently-firing live flicker was pinned down during spec 046 (the
+concept-slide board renders `canPlay={false}`, and Socratic has no narration wiring) — this is a
+structural/preventive fix; re-confirm visually on any future screen combining narration + an
+interactive board (e.g. `ChallengeScreen.jsx`).
+
 ## Debug Panel (`ClassifyAllPanel`)
 
 A developer-only panel that shows the output of `classifyAll` for any board position: 11 detector rows (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns, z_threat, undercut, overcut, figure_7, j_shape, claimeven) + board state (scores, threats, parity).

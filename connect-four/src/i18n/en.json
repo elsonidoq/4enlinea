@@ -823,5 +823,10 @@
       "button": "Share",
       "copied": "Link copied!"
     }
+  },
+  "saga": {
+    "orderLock": {
+      "message": "Finish the previous lesson to unlock this one"
+    }
   }
 }

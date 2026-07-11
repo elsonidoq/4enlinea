@@ -55,6 +55,21 @@ export function speakDeepReveal(audio) {
 }
 
 /**
+ * Play a lesson-slide coach-message narration clip (spec 046 US3).
+ *
+ * Thin wrapper over `speakDeepReveal` — reuses the same singleton speech
+ * queue, giving "one at a time" playback for free. Does NOT check
+ * `speechEnabled` and does NOT stop on navigation: the caller (ConceptScreen)
+ * is responsible for checking the global speech toggle before calling this,
+ * and for calling `stopSpeech()` on unmount/navigation (FR-019/FR-021).
+ *
+ * @param {string} path - audio URL, e.g. "/audio/lessons/<hash>.mp3"
+ */
+export function speakLessonAudio(path) {
+  speakDeepReveal(new Audio(path));
+}
+
+/**
  * Stop all speech immediately and clear the queue.
  * Call this when the user dismisses the panel that triggered the speech.
  */

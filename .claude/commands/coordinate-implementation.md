@@ -180,9 +180,26 @@ If you created or appended entries, add a one-line pointer to `docs/open_issues.
 
 ---
 
-## Step 5 — QA and Bug Fix
+## Step 5 — Code review
 
-After the summary, spawn a QA sub-agent to perform a browser-driven review and fix any bugs found.
+After the summary, run a static code review over the **full accumulated branch diff** (all batches together). This catches a class of defects the browser-driven QA in Step 6 is structurally blind to: correctness bugs on paths QA never exercises, duplicated/reinvented logic across batches (each sub-agent only saw a handoff summary, not the prior diffs), violated `docs/architecture/` conventions, and dead code.
+
+1. **Invoke the `code-review` skill** using the Skill tool (`skill: "code-review"`). Let it review the current working-tree/branch diff. Do **not** pass `--fix` — findings are reported for triage, not auto-applied.
+   - If the diff is large, use a higher effort level (e.g. `code-review high`); otherwise the default is fine.
+
+2. **Present the findings to the user**, grouped most-severe first. For each finding include: the file:line, a one-sentence summary of the defect, and the concrete failure scenario.
+
+3. **Wait for the user to triage.** The user decides which findings to fix, which to defer, and which to dismiss. Do not fix anything before they respond.
+
+4. **Apply only the fixes the user approves.** For each approved fix, apply it to the source and note what changed. Genuine findings the user chooses to defer become open-issue candidates in Step 7 — carry them forward.
+
+Report a short outcome: which findings were fixed, which were deferred, which were dismissed. If the review surfaced nothing, say so and proceed.
+
+---
+
+## Step 6 — QA and Bug Fix
+
+After code review, spawn a QA sub-agent to perform a browser-driven review and fix any bugs found.
 
 **Wait for the user to confirm they want to proceed with QA before spawning this agent.**
 
@@ -285,7 +302,7 @@ For each bug:
 
 ---
 
-## Step 6 — Persist QA-surfaced open issues
+## Step 7 — Persist QA-surfaced open issues
 
 After the QA sub-agent returns, take any entry from its `### Remaining issues` section that is a **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") and append it to `docs/open_issues.md` using the same `OI-N` entry format. Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
 
