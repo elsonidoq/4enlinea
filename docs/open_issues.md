@@ -172,3 +172,23 @@ accumulating coach messages over an interactive board. Verified in-browser: boar
 placing the winning disc (which appends a feedback bubble); the two values must be equal. The Batch-4
 `boardMemoStability.test.js` remains green and is kept (referential stability is still a valid, if unrelated,
 property). Cross-ref: spec 046 US5, [[OI-7]] (no DOM harness).
+
+## OI-9 — Only `immediate-threat` has generated narration audio; 12 lessons still silent
+
+**Status**: deferred (content-population step, not a bug — scoped out of spec 046 verification)
+**Area**: `connect-four/lessons/*.json` (`coachMessages[].audio`), `connect-four/public/audio/lessons/`
+
+**Discovered**: spec `046` T030 verification (2026-07-11)
+
+Spec 046 shipped the lesson-narration generation/playback machinery and verified it end-to-end by
+generating audio for **one** lesson (`immediate-threat`: 4 clips, committed). The other 12 lessons have no
+`coachMessages[].audio` populated, so their concept slides display silently (graceful per FR-017, but no
+narration). This is a content step, not a defect.
+
+**Why deferred**: generation is a per-lesson admin action with real OpenAI TTS cost; the owner decides which
+lessons get audio and when. Verifying the mechanism on one lesson was sufficient for the epic.
+
+**If picked up**: for each remaining lesson, run the localhost admin "Generate audios" action (editor button,
+or `POST /api/admin/lessons/:id/generate-audio`), then `git add` the new `public/audio/lessons/*.mp3` + the
+updated lesson JSON and redeploy (per FR-012a, generation never runs in prod). Real key is in
+`connect-four/server/.env` ([[feedback_openai_key_present]]). Cross-ref: spec 046 US3/US4.

@@ -36,6 +36,7 @@
 - [Boot-path .env read crash](project_boot_path_env_read_crash.md) — reasonEngine/compute.mjs read .env at import; on server boot chain → ENOENT crash-loop in prod; use guarded boardUtils.loadEnv
 - [Secret-scan = placeholders](project_secret_scan_placeholders.md) — git history secret-shaped strings all placeholders; NO rotation needed; audit in docs/security_audit_fable.md
 - [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (prod endpoints); EXPLAIN_MODEL=full (compute.mjs eval only); names mislead; Gemini id = gemini-3.1-pro-preview
+- [OPENAI_API_KEY is present](feedback_openai_key_present.md) — real working key in connect-four/server/.env; DON'T defer real-TTS/LLM checks as "no key"; verify on localhost
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
 - [Admin localhost directive](project_admin_localhost_directive.md) — owner: ALL /admin (API+frontend) localhost-only, one-liner/route; requireAdmin is a NO-OP outside NODE_ENV=production
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; magic-link hash race; OAuth lands on site root + NO route auth guard → gating a CTA never gates its screen
@@ -63,6 +64,7 @@
 - [Tier source](reference_tier_source.md) — tier from store.getProfile() not session.tier
 - [Mockup vs production gap](feedback_mockup_production_gap.md) — NAV_GROUPS/mkCols/cols don't exist in production
 - [Parity bug AI-first](project_parity_bug_ai_first.md) — heatmap inversion on AI-first games (unfixed)
+- [Coach board reflow "flicker"](project_coach_board_reflow_flicker.md) — board-moves-when-coach-speaks = layout reflow from accumulating CoachDialog msgs; fix = `fixed` prop, NOT Board memo
 
 ## Production LLM coach / deep reveal (toFeatureVector / explainContext)
 

@@ -577,10 +577,24 @@ screen. Any new caller that constructs `board` inline on every render should rel
 rather than hand-rolling its own `useMemo` for the board array. Callers that need to stabilize other
 reference-typed props (e.g. `overlays`) still need their own `useMemo` — this comparator only special-
 cases `board`. See `tests/unit/boardMemoStability.test.js` for the reference-vs-content-equality
-regression coverage. Note: no currently-firing live flicker was pinned down during spec 046 (the
-concept-slide board renders `canPlay={false}`, and Socratic has no narration wiring) — this is a
-structural/preventive fix; re-confirm visually on any future screen combining narration + an
-interactive board (e.g. `ChallengeScreen.jsx`).
+regression coverage. This memoization is retained as harmless referential-stability hardening, but it
+was **not** the cause of the reported spec-046 "board flicker" — see the next section.
+
+## Coach-message accumulation must not reflow the board (`CoachDialog fixed`)
+
+The spec-046 "board moves down / flickers when the coach speaks" defect was **not** a disc re-render — it
+was a **layout reflow**. `ChallengeScreen` (and other screens) render `<CoachDialog>` directly above the
+board in a `flex column`. `CoachDialog` renders **all** `messages` stacked, and screens that **accumulate**
+messages (append a post-move feedback bubble below the prompt, rather than replacing the single message)
+grow the coach region's height — pushing the board, the next flow sibling, downward.
+
+**Convention**: any screen that accumulates coach messages over a board MUST pass the `fixed` prop —
+`<CoachDialog fixed …>`. `fixed` reserves a stable outer `height:140` (inner `maxHeight:120,
+overflowY:auto`), so appended bubbles scroll within the region instead of growing it. `GameScreen`,
+`ReviewScreen`, and (as of the flicker fix) `ChallengeScreen` use `fixed`. Screens that only ever show a
+single, *replaced* message (`ConceptScreen`, `SocraticScreen`, `HomeScreen`) do not accumulate and so do
+not need it. If you add a board+coach screen and the board visibly shifts when feedback appears, the fix is
+`fixed`, not board memoization.
 
 ## Debug Panel (`ClassifyAllPanel`)
 
