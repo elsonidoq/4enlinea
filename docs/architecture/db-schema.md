@@ -24,8 +24,15 @@ Unique: `device_uuid`, `stripe_customer_id`
 | streak_count | integer | NO | `0` |
 | last_active_date | date | YES | |
 | sparring_record | jsonb | NO | `'{"W":0,"L":0,"D":0}'` |
+| onboarding_status | text | NO | `'not_encountered'` |
 | created_at | timestamptz | NO | `now()` |
 | updated_at | timestamptz | NO | `now()` |
+
+**`onboarding_status`** (migration `057_users_onboarding_status.sql`, Epic 8 — Onboarding
+Experience): `CHECK (onboarding_status IN ('not_encountered', 'seen', 'skipped'))`. `NOT NULL
+DEFAULT 'not_encountered'` means no backfill step was required. No new grants needed — `012` and
+`040` are table-level and already cover `users`. See `data-model.md`'s `onboarding_status` section
+for the full three-state model and the local-profile mirror.
 
 ---
 

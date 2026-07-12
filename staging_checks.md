@@ -345,3 +345,35 @@ For each check record:
     effect of deploy tooling.
   - **Expected**: row count after ≥ row count before (zero loss).
   - **Source**: FR-021/SC-007, spec US5 AC5.
+
+## Epic 8 — Onboarding Experience (spec 048)
+
+- [ ] **SC-005's 7-day unprompted-return correlation.**
+  - **What**: Once `onboarding_started`/`onboarding_finished`/`onboarding_skipped` events have
+    accumulated real production traffic, compute the correlation between onboarding lifecycle
+    completion (finished vs. skipped vs. never-started) and unprompted return within 7 days, using
+    each event's `uid` (device_uuid, per FR-015) as the join key against later session activity.
+  - **Why staging**: This requires real production analytics history accumulated over at least a
+    week of live traffic — no local session or synthetic test run can produce a 7-day return-behavior
+    correlation. `track()`'s `uid` population (T011/T012) and the three lifecycle events
+    (T018/T038/T041) are unit-verified locally; only the downstream correlation itself is a staging/
+    production-only check.
+  - **Expected**: The lifecycle events + `uid` are sufficient, on their own, to compute the
+    start/finish/skip completion rate and its correlation with 7-day return — no additional ad-hoc
+    instrumentation is needed (SC-005).
+  - **Source**: Epic 8 / spec 048 SC-005, FR-015.
+
+- [ ] **Genuine end-to-end magic-link email round-trip (FR-014 / User Story 1 Scenario 3).**
+  - **What**: From a genuinely clean/anonymous staging session, request a real magic-link sign-in
+    email, click the real link from the actual inbox, and confirm sign-in completes correctly AND
+    the first-run onboarding auto-route does not fire (no flash of the sparring game before landing
+    on the real post-login destination).
+  - **Why staging**: The local T025/quickstart.md "OAuth-hash race" check only manually constructs a
+    `/#access_token=...&refresh_token=...` hash fragment as if arriving from an email link — it
+    exercises the identical `Navigator` `sessionChecked`/session-effect race-guard code path (R3), but
+    never a genuine email-provider round-trip (real token issuance, real email delivery, real link
+    click). This is the same category of gap as spec 043's OAuth-return-to-destination staging check
+    above.
+  - **Expected**: Sign-in completes; onboarding is never shown to a user who was mid-sign-in; no
+    duplicated or broken intermediate state.
+  - **Source**: Epic 8 / spec 048 FR-014, User Story 1 Scenario 3, research.md R3.

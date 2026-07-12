@@ -11,6 +11,7 @@
 | 007-interaction-mode | Interaction Mode & forced_win Refactor | Active | Introduces `interaction_mode` column (single_move vs sequence); replaces pre-stored move sequences with stateless per-move solver validation via `CompletionStrategy` interface |
 | 008-new-puzzle-categories | New Puzzle Categories | Planned | Adds six single-move categories: z_threat, claimeven, undercut, overcut, figure_7, j_shape; each with server predicates, DB slug constraints, highlights, and explanations |
 | 044-puzzle-generation-correctness | Puzzle Generation & Correctness | Draft | Audits existing dual-layer correctness predicates (generation `check*Predicate` + solve-time `evaluatePredicate`); fixes color-casting for immediate_threat/forced_block, rejects stray forced_block, accepts any generating column (incl. 'tied') for multi-solution categories without weakening undercut/unique-answer categories; adds net-new Allen T1–T7 transforms + verified V1–V5/T4-Case-A operators |
+| 048-onboarding-experience | Onboarding Experience | Draft | Uniform sparring-first first-run flow for every first-time user — no routing-question gate, no sign-in wall before value; onboarding completes at the first live coach reaction to the user's own move (not game-end); post-aha optional "import your real games" offer leads into the existing authenticated spec-038 Papergames flow; onboarding flag lives on the existing anonymous profile and is carried to the account via the existing migration seam |
 
 ## What each spec folder contains
 

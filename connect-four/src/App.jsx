@@ -8,6 +8,7 @@ import { SURFACE_BG } from './lib/surfaceGroups.js';
 import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
+import { shouldAutoRouteToOnboarding, ONBOARDING_GAME_PARAMS } from './lib/onboardingRouting.js';
 import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
 import AdminBlockedPage from './pages/AdminBlockedPage.jsx';
 import './i18n/index.js';
@@ -17,7 +18,7 @@ const AdminCuratePage = lazy(() => import('./pages/AdminCuratePage.jsx'));
 function Navigator() {
   const [screen, setScreen] = useState('home');
   const [params, setParams] = useState({});
-  const { session } = useStore();
+  const { store, session, sessionChecked } = useStore();
 
   // Mount effect: parse the current URL and initialise screen state.
   // Replaces the old effect that just called setActiveScreen('home').
@@ -102,8 +103,40 @@ function Navigator() {
     if (dest) go(dest.screenKey, dest.params);
   }, [session]);
 
+  // Epic 8 — Onboarding Experience, US1 (T018, FR-001/FR-002/FR-014, research.md R3).
+  // Anonymous first-run auto-route: only fires once checkSession() has fully resolved
+  // (sessionChecked) AND resolved to "no session" — never races OAuth-hash/session
+  // restoration, and never auto-routes a signed-in user (settled decision B3/D1).
+  useEffect(() => {
+    if (!sessionChecked || session) return;
+    let cancelled = false;
+    (async () => {
+      const profile = await store.getProfile();
+      if (cancelled) return;
+      if (shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus: profile.onboarding_status })) {
+        go('game', ONBOARDING_GAME_PARAMS);
+        track('onboarding_started', {});
+      }
+    })();
+    return () => { cancelled = true; };
+    // store/go are intentionally omitted: store only changes alongside session
+    // (switchToSupabase sets both), and the effect early-returns whenever session
+    // is truthy — so a stale store closure is never used. Matches HomeScreen's
+    // fallback-effect pattern.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionChecked, session]);
+
   const bgToken = SURFACE_BG[screen] ?? '--bg-home';
   const ScreenComponent = SCREENS[screen];
+
+  // Epic 8 — Onboarding Experience, US1 (T017, research.md R3 "cold-boot Home flash"
+  // correction). Render a neutral, near-instant "booting" frame until checkSession()
+  // has resolved — otherwise Navigator's initial `useState('home')` value would flash
+  // the real Home screen before the first-run redirect decision (or consumeReturnTo())
+  // can run, violating FR-002/SC-001's "zero intermediate screens".
+  if (!sessionChecked) {
+    return <div style={{ minHeight: '100vh', background: `var(${SURFACE_BG.home ?? '--bg-home'})` }} />;
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: `var(${bgToken})`, transition: 'background 0.2s' }}>

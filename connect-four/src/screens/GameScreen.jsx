@@ -8,18 +8,44 @@ import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useGameBoard } from '../lib/useGameBoard.js';
+import { createOnboardingSeenGate } from '../lib/onboardingFirstMove.js';
+import { pickGameEndScreen } from '../lib/onboardingGameEnd.js';
+import { createOnboardingSkipHandler } from '../lib/onboardingSkip.js';
 import { useAudio } from '../lib/useAudio.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMoves = '' }) {
+export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMoves = '', onboarding = false }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
   const { playSfx, playMusic, pauseMusic, sfxEnabled, musicEnabled, speechEnabled, toggleSfx, toggleMusic, toggleSpeech } = useAudio();
   const { speakCoachMessage } = useCoachSpeech();
 
   const landingSoundTimerRef = useRef(null);
+  // FR-005 (research.md R5): one-shot 'seen' engagement signal, created once
+  // per mount so its internal "moved" flag survives re-renders without
+  // triggering any of its own.
+  const onboardingSeenGateRef = useRef(null);
+  if (onboardingSeenGateRef.current === null) {
+    onboardingSeenGateRef.current = createOnboardingSeenGate({
+      onboarding,
+      updateProfile: (patch) => store.updateProfile(patch),
+    });
+  }
+
+  // Epic 8 — Onboarding Experience, US4 (T041, FR-009): skip control, only
+  // rendered when onboarding === true. Fire-and-forget 'skipped' write +
+  // analytics + immediate route to Home (createOnboardingSkipHandler owns
+  // the exact semantics, unit-tested in onboardingSkip.test.js).
+  const onboardingSkipHandlerRef = useRef(null);
+  if (onboardingSkipHandlerRef.current === null) {
+    onboardingSkipHandlerRef.current = createOnboardingSkipHandler({
+      updateProfile: (patch) => store.updateProfile(patch),
+      track,
+      go,
+    });
+  }
 
   const DISC_LAND_DELAY_MS = 450;
   const POST_GAME_SOUND_MS = 1500;
@@ -70,10 +96,14 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     // 4. Analytics
     track('game_ended', { result, moveCount: movesStr.length, difficulty });
 
-    // 5. Wait for sound to finish, then navigate to review screen
+    // 5. Wait for sound to finish, then navigate onward. Epic 8 — Onboarding Experience, US3
+    // (T034, research.md R5): every end-of-game outcome (win/loss/draw via the normal flow,
+    // resign via handleResign()'s onGameEnd?.(...) call into this same saveGame() seam) funnels
+    // through this one branch point. An onboarding session routes to the import offer instead
+    // of the normal post-game review screen; a non-onboarding session is unaffected.
     const elapsed = Date.now() - soundStartedAt;
     await new Promise(resolve => setTimeout(resolve, Math.max(0, POST_GAME_SOUND_MS - elapsed)));
-    goReplace('review', { id: gameId });
+    goReplace(pickGameEndScreen(onboarding), { id: gameId });
   }
 
   // ── Game board hook ─────────────────────────────────────────────
@@ -95,11 +125,21 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     userTurn,
   } = useGameBoard({ initialMoves: initialMoves || '', side, difficulty, onGameEnd: saveGame });
 
+  // ── Onboarding: thin wrapper around the human-move handler ───────
+  // Fires the 'seen' engagement signal on the first move only (FR-005), via
+  // the pure gate above. This is a simple engagement signal, NOT
+  // aha/coach-reaction detection (research.md R5) — useGameBoard.js itself
+  // stays unchanged.
+  function handleColumnClickWithOnboarding(col) {
+    onboardingSeenGateRef.current();
+    handleColumnClick(col);
+  }
+
   // ── Audio: wrapped column click ──────────────────────────────────
   function onColumnClick(col) {
     if (!userTurn || gameOver || aiThinking) return;
     if (heights[col] >= 6) return;
-    handleColumnClick(col);
+    handleColumnClickWithOnboarding(col);
   }
 
   // ── Audio: landing sound (both players) ─────────────────────────────
@@ -206,6 +246,23 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         >
           Resign
         </button>
+
+        {/* Epic 8 — Onboarding Experience, US4 (T041/FR-009): skip control, onboarding sessions only */}
+        {onboarding && (
+          <button
+            type="button"
+            onClick={() => onboardingSkipHandlerRef.current()}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 14, border: 'none',
+              background: 'rgba(0,0,0,0.04)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15,
+              color: 'var(--ink-soft)',
+            }}
+          >
+            {t('onboarding.skip')}
+          </button>
+        )}
 
         {/* Audio toggle buttons */}
         <button

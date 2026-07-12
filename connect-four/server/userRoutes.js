@@ -15,6 +15,7 @@ import {
   writePuzzleAttempts,
   writeSparringRecord,
   writeStreak,
+  isValidOnboardingStatus,
 } from './userHelpers.js';
 
 // ── Import job tracking (in-memory, not persisted; restarts clear all) ──────
@@ -99,26 +100,45 @@ export function registerUserRoutes(app, supabase) {
       deep_reveal_reset_at: req.user.deep_reveal_reset_at,
       papergames_id: req.user.papergames_id ?? null,
       last_import_at: req.user.last_import_at ?? null,
+      onboarding_status: req.user.onboarding_status,
     });
   });
 
-  // T010b: Update profile — papergames_id only for now
+  // T010b/Epic 8 T009: Update profile — papergames_id and/or onboarding_status,
+  // at least one field required. Enum validated via the single shared
+  // isValidOnboardingStatus (userHelpers.js) — do not duplicate the check here.
   app.put('/api/user/profile', async (req, res) => {
     if (!requireUser(req, res)) return;
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
 
-    const { papergames_id } = req.body;
-    if (!papergames_id || typeof papergames_id !== 'string' || papergames_id.length > 64) {
-      return res.status(400).json({ error: 'papergames_id must be a non-empty string (max 64 chars)' });
+    const { papergames_id, onboarding_status } = req.body;
+    const update = {};
+
+    if (papergames_id !== undefined) {
+      if (typeof papergames_id !== 'string' || !papergames_id || papergames_id.length > 64) {
+        return res.status(400).json({ error: 'papergames_id must be a non-empty string (max 64 chars)' });
+      }
+      update.papergames_id = papergames_id;
+    }
+
+    if (onboarding_status !== undefined) {
+      if (!isValidOnboardingStatus(onboarding_status)) {
+        return res.status(400).json({ error: 'invalid onboarding_status' });
+      }
+      update.onboarding_status = onboarding_status;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ error: 'no valid fields provided' });
     }
 
     const { error } = await supabase
       .from('users')
-      .update({ papergames_id })
+      .update(update)
       .eq('id', req.user.id);
 
     if (error) {
-      return res.status(500).json({ error: 'Failed to save papergames_id' });
+      return res.status(500).json({ error: 'Failed to update profile' });
     }
 
     res.status(204).send();
@@ -501,6 +521,21 @@ export function registerUserRoutes(app, supabase) {
       if (body.streak) {
         operations.push(
           writeStreak(supabase, req.user.id, body.streak),
+        );
+      }
+
+      // onboarding_status (T021, FR-012): conditional write — only backfills an
+      // account still at 'not_encountered', never clobbers a real prior seen/skipped
+      // status recorded by a different device's earlier migration. Absent or invalid
+      // values are a silent no-op and must NOT fail the rest of the migration.
+      if (body.onboarding_status !== undefined && isValidOnboardingStatus(body.onboarding_status)) {
+        operations.push(
+          supabase
+            .from('users')
+            .update({ onboarding_status: body.onboarding_status })
+            .eq('id', req.user.id)
+            .eq('onboarding_status', 'not_encountered')
+            .then(({ error }) => (error ? { error: error.message } : undefined)),
         );
       }
 

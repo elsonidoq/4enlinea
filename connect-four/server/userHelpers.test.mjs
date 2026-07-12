@@ -8,6 +8,7 @@ import {
   writeStreak,
   USER_PROFILE_SELECT_COLUMNS,
   defaultUserProfile,
+  isValidOnboardingStatus,
 } from './userHelpers.js';
 
 // --- Stub factory helpers ---
@@ -324,6 +325,7 @@ describe('USER_PROFILE_SELECT_COLUMNS (loadUser initial-fetch and just-created-r
     assert.ok(columns.includes('device_uuid'));
     assert.ok(columns.includes('papergames_id'));
     assert.ok(columns.includes('last_import_at'));
+    assert.ok(columns.includes('onboarding_status'), 'onboarding_status must be selected');
   });
 });
 
@@ -336,5 +338,24 @@ describe('defaultUserProfile (loadUser no-row-found fallback path)', () => {
     assert.equal(profile.papergames_id, null);
     assert.equal(profile.last_import_at, null);
     assert.equal(typeof profile.deep_reveal_reset_at, 'string');
+    assert.equal(profile.onboarding_status, 'not_encountered');
+  });
+});
+
+// --- isValidOnboardingStatus (Epic 8 — Onboarding Experience) ---
+
+describe('isValidOnboardingStatus', () => {
+  it('accepts the three valid enum values', () => {
+    assert.equal(isValidOnboardingStatus('not_encountered'), true);
+    assert.equal(isValidOnboardingStatus('seen'), true);
+    assert.equal(isValidOnboardingStatus('skipped'), true);
+  });
+
+  it('rejects invalid values', () => {
+    assert.equal(isValidOnboardingStatus('bogus'), false);
+    assert.equal(isValidOnboardingStatus(''), false);
+    assert.equal(isValidOnboardingStatus(null), false);
+    assert.equal(isValidOnboardingStatus(undefined), false);
+    assert.equal(isValidOnboardingStatus(1), false);
   });
 });

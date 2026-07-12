@@ -266,3 +266,72 @@ an unrelated component. Only reliably reproduces on a cold/uncached reasoning-mo
 are legitimately slow on first load), or show a "still thinking…" state instead of a failure message when the
 timeout elapses while the request is still in flight. Verify against a cold call in staging (cache TRUNCATEd
 on deploy per `project_spec039_audio_interactive_coach`, so the first post-deploy call is always uncached).
+
+## OI-13 — Onboarding "import offer shown once" marker is per-browser (localStorage), not per-account
+
+**Status**: accepted design limitation (spec 048 — SHIPPED 2026-07-12; trade-off confirmed accepted, kept per-browser)
+**Area**: `connect-four/src/lib/onboardingOfferMarker.js` + `OnboardingImportOfferScreen.jsx` mount (the `onboarding_offer_shown_v1` localStorage marker)
+**Discovered**: spec 048 (Epic 8, onboarding) planning/review (2026-07-12)
+
+Onboarding's post-aha "import your real games" offer must appear **exactly once** per user. The three-state
+`onboarding_status` enum (`not_encountered | seen | skipped`) has no terminal "offer done" state by design
+(FR-013 forbids growing server-side bookkeeping for anonymous users), so idempotency is delegated to a
+device-local `localStorage` marker (`onboarding_offer_shown_v1`), written on the offer screen's mount. Because
+the marker is per-browser and never synced to the account, a user who saw and dismissed the offer in one
+browser, then signs in (or just opens the app) in a **different browser/device**, will see the one-time offer
+again. Judged acceptable during planning (import is a benign, always-dismissible offer; syncing it would
+reintroduce the server-row-for-anonymous problem the design deliberately avoids), but explicitly flagged to
+re-confirm with the owner during implementation.
+
+**Why deferred**: it's an accepted trade-off of the anonymous-first, no-anon-server-bookkeeping design, not a
+bug to fix now; the feature is not yet built.
+
+**If picked up**: decide whether "offer already shown" should become per-account (e.g. fold into the migrated
+profile / a `users` column) for signed-in users, accepting the extra column + migration cost — or leave
+per-browser. Cross-ref: `specs/048-onboarding-experience/{plan,research,data-model}.md`,
+[[project-user-column-propagation]].
+
+## OI-14 — Account carryover of `onboarding_status` unverified end-to-end; silently no-ops if migration 057 isn't applied
+
+**Status**: deferred verification + deploy prerequisite (spec 048 — client side fully verified, server persistence not)
+**Area**: `connect-four/server/migrations/057_users_onboarding_status.sql` (unapplied), `POST /api/user/migrate`, `GET`/`PUT /api/user/profile`
+**Discovered**: spec 048 (Epic 8) QA (2026-07-12)
+
+US1 Scenario 4 (an anonymous user's `onboarding_status` carrying over to their account on sign-up)
+could not be verified end-to-end in local dev: (a) migration `057_users_onboarding_status.sql` is
+file-only and was never applied, so `public.users` has no `onboarding_status` column locally, and
+(b) the running dev server process predates the Epic 8 server code (no server hot-reload). The
+compounding trap surfaced during QA: **PostgREST silently drops an unknown column from an UPDATE
+rather than erroring**, so `POST /api/user/migrate` returns `204` with the correct
+`onboarding_status` in the request body while the value is **never persisted** — a silent no-op, not
+a 500. The client side (migrate-payload construction, sign-in flow, routing to the import entry
+point) is fully verified; only the final DB-column persistence is unproven.
+
+**Why deferred**: verifying it requires applying migration 057 to a DB and restarting the server —
+a deploy/ops step, not a code change. The behavior is correct by construction once the column exists.
+
+**If picked up**: apply migration 057 (see `reference_supabase_connection.md`), restart `npm run dev`,
+then run `specs/048-onboarding-experience/quickstart.md`'s "account carryover" section and confirm the
+account row's `onboarding_status` reflects the migrated anonymous value. This is already noted in
+`staging_checks.md` under Epic 8. Cross-ref: [[project_user_column_propagation]], [[OI-13]].
+
+## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
+
+**Status**: deferred (pre-existing, app-wide; not a spec-048 regression)
+**Area**: `connect-four/src/i18n/index.js` (`lng: 'en'`, only `en` resource registered), `connect-four/src/i18n/es.json`
+**Discovered**: spec 048 (Epic 8) QA (2026-07-12)
+
+`src/i18n/index.js` hardcodes `lng: 'en'` and registers only the `en` resource bundle; `es.json`
+exists on disk (and spec 048 dutifully added `onboarding.*` keys to it) but is never wired into i18next
+and there is no in-app language switcher. So every Spanish translation in the repo — including the new
+onboarding copy — is dead. US4 Scenario 4 ("onboarding copy shown in the selected language") is
+therefore only satisfiable in principle (all copy correctly routes through `t('onboarding.*')` keys);
+it can't be exercised because language selection doesn't exist. This predates Epic 8 and affects the
+whole app, not just onboarding.
+
+**Why deferred**: wiring a language switcher + `es` resource is an app-wide i18n feature, out of scope
+for the onboarding epic; nothing in spec 048 regressed it.
+
+**If picked up**: register the `es` bundle in `src/i18n/index.js`, add a language selector (Settings is
+the natural home), and verify onboarding + the rest of the app render under `es`. Keep `es.json` keys
+in lockstep with `en.json` if the switcher goes live.

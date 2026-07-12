@@ -2,6 +2,18 @@
   "setcard": {
     "progress": "Progreso del puzzle",
     "cleared": "Completado"
+  },
+  "onboarding": {
+    "skip": "Saltar",
+    "replayIntro": "Repetir introducción",
+    "importOffer": {
+      "title": "Trae tus partidas reales",
+      "subtitle": "Importa tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente juegas.",
+      "accept": "Importar mis partidas",
+      "decline": "Ahora no",
+      "coach": "¡Buena partida! ¿Quieres un análisis más profundo de las partidas que juegas en línea también?",
+      "signInReason": "Inicia sesión para importar tu historial de Papergames."
+    }
   }
 }
 

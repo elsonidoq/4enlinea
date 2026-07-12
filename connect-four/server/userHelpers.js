@@ -11,7 +11,7 @@
  * (row found / row just created) and the anonymous-fallback shape never drift apart.
  */
 export const USER_PROFILE_SELECT_COLUMNS =
-  'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id';
+  'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id, onboarding_status';
 
 /**
  * Default profile fields `loadUser` attaches to `req.user` when no `users` row
@@ -27,7 +27,20 @@ export function defaultUserProfile() {
     papergames_id: null,
     last_import_at: null,
     stripe_customer_id: null,
+    onboarding_status: 'not_encountered',
   };
+}
+
+/**
+ * The single shared enum validator for onboarding_status (Epic 8 — Onboarding
+ * Experience). This is the ONE place the 3-value enum is validated — both
+ * `PUT /api/user/profile` and `POST /api/user/migrate` import and reuse this
+ * rather than duplicating the check inline.
+ * @param {*} value
+ * @returns {boolean}
+ */
+export function isValidOnboardingStatus(value) {
+  return value === 'not_encountered' || value === 'seen' || value === 'skipped';
 }
 
 /**

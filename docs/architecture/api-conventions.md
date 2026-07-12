@@ -430,6 +430,14 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 
 Three invariants: (1) the DB helpers return `{ error }` rather than throwing — the handler must check `results.find(r => r?.error)`; (2) `on_auth_user_created` gives new users `device_uuid = null` — the endpoint must generate one server-side **before** writing `puzzle_attempts`; (3) the bulk insert falls back to row-by-row on FK violations, skipping error codes `23503`/`23505`.
 
+**`onboarding_status` carry-over (Epic 8 — Onboarding Experience, spec 048, T021, FR-012)**: the request body accepts an optional sixth key, `onboarding_status`, alongside `puzzle_attempts`/`session_stats`/`lesson_progress`/`sparring_record`/`streak`. Handling:
+- Validated via the single shared `isValidOnboardingStatus()` (`server/userHelpers.js`) — no inline enum re-check.
+- Applied with a **conditional** update, never a blind overwrite:
+  `supabase.from('users').update({ onboarding_status }).eq('id', req.user.id).eq('onboarding_status', 'not_encountered')`
+  — this is a `WHERE id = $1 AND onboarding_status = 'not_encountered'` write, so an account that already has a real prior `seen`/`skipped` status (e.g. from a different device's earlier migration) is never clobbered by a fresh device's migrating value.
+- Absent or invalid `onboarding_status` is a **silent no-op** — it does not add an entry to `operations` and MUST NOT fail the rest of the migration (the other five data categories migrate independently of this one optional field, matching the endpoint's existing per-category tolerance).
+- Client side: `IndexedDBStore.migrateToSupabase` (`connect-four/src/store/IndexedDBStore.js`) reads a fresh `getProfile()` and includes `profile?.onboarding_status` in the POST body as one more key — the `profile` object store is not cleared by this method (only the other 5 stores are).
+
 ## Move Evaluation Endpoint
 
 `POST /api/evaluate-move` — scores a move and returns i18n keys for the Coach dialog and Tier-1 strip. Supports two paths: **user-move** (default, for puzzle attempts and sparring user clicks) and **AI-move** (for sparring AI move commentary).
@@ -831,18 +839,46 @@ two-middleware order.
 
 ## Papergames Import Endpoints (spec 038)
 
+### `GET /api/user/profile`
+
+Returns an explicit, projected view of the authenticated user's profile — never `req.user` verbatim.
+
+**Response** (`200 OK`):
+```json
+{
+  "device_uuid": "<string>" | null,
+  "tier": "free" | "paid",
+  "deep_reveal_count": 3,
+  "deep_reveal_reset_at": "2026-06-16T00:00:00.000Z",
+  "papergames_id": "<string>" | null,
+  "last_import_at": "2026-05-01T12:00:00Z" | null,
+  "onboarding_status": "not_encountered" | "seen" | "skipped"
+}
+```
+- `onboarding_status` (Epic 8 — Onboarding Experience, spec 048): sourced from `req.user.onboarding_status`, itself populated by `USER_PROFILE_SELECT_COLUMNS` (`server/userHelpers.js`) — see that file's doc comment and `data-model.md`'s `onboarding_status` section for the three-state model.
+
+**Auth**: Required (inline `requireUser` -> 401). No DB call — `200` even when Supabase is not configured (all fields come from `req.user`, already populated by `loadUser`).
+
 ### `PUT /api/user/profile`
 
-Saves the user's Papergames account ID for self-service import.
+Saves the user's Papergames account ID and/or onboarding status. Both fields are optional but **at
+least one must be present**; either or both may be sent in a single call.
 
-**Request body**: `{ papergames_id: "<string>" }`
-- `papergames_id`: non-empty string, max 64 characters.
+**Request body**: `{ papergames_id?: "<string>", onboarding_status?: "not_encountered" | "seen" | "skipped" }`
+- `papergames_id`: non-empty string, max 64 characters, when present.
+- `onboarding_status` (Epic 8 — Onboarding Experience, spec 048): one of the fixed 3-value enum, when present. Validated via the single shared `isValidOnboardingStatus()` (`server/userHelpers.js`) — the ONE place this enum is checked; no other call site (including `POST /api/user/migrate`) may duplicate the check inline.
 
 **Response**: `204 No Content` on success.
 
-**Errors**: 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` for missing/invalid input; 401 for unauthenticated; 503 if Supabase not configured.
+**Errors**:
+- 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` when `papergames_id` is present but invalid.
+- 400 `{ "error": "invalid onboarding_status" }` when `onboarding_status` is present but not one of the three enum values.
+- 400 `{ "error": "no valid fields provided" }` when neither field is present in the request body.
+- 401 for unauthenticated; 503 if Supabase not configured; 500 `{ "error": "Failed to update profile" }` on DB error.
 
 **Auth**: Required (inline `requireUser` -> 401).
+
+**Client store interface**: both `IndexedDBStore` and `SupabaseStore` (`connect-four/src/store/`) expose `async updateProfile(patch)` as the storage-agnostic entry point to this endpoint (`SupabaseStore`'s implementation `PUT`s `patch` straight through) — see `data-model.md`'s `onboarding_status` section. Callers never special-case which backend is active: `await store.updateProfile({ onboarding_status: 'seen' })`.
 
 ---
 

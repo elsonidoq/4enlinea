@@ -1,12 +1,28 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
+import { track } from '../lib/track.js';
+import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SettingsScreen({ go, goBack }) {
+  const { t } = useTranslation();
   const { store, session } = useStore();
   const isAuthenticated = !!session;
+
+  // Epic 8 — Onboarding Experience, US4 (T043/FR-010, research.md R6): "Replay intro" —
+  // visible for ANY onboarding state, reaches Settings from Home in <=2 nav actions (SC-004).
+  // Calls go('game', {...onboarding:true}) DIRECTLY, bypassing the Navigator auto-detect effect
+  // (T018) entirely — this is an explicit user action, not the anonymous-only auto-route.
+  // Fires onboarding_started here because the auto-route effect (App.jsx) early-returns on the
+  // replay path, so this is the ONLY start signal for a manual replay (contracts/onboarding-api.md
+  // event table: "first-run redirect fires (or manual Settings replay starts)").
+  function handleReplayIntro() {
+    track('onboarding_started', { source: 'settings_replay' });
+    go('game', ONBOARDING_GAME_PARAMS);
+  }
 
   const [papergamesId, setPapergamesId] = useState('');
   const [savedValue, setSavedValue] = useState('');
@@ -246,6 +262,16 @@ export function SettingsScreen({ go, goBack }) {
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ fontSize: 16, margin: 0 }}>Sign in to connect your Papergames account.</p>
         </div>
+        <div style={{ padding: '0 18px 26px' }}>
+          <button
+            type="button"
+            onClick={handleReplayIntro}
+            className="btn btn-ghost"
+            style={{ width: '100%', fontSize: 14, padding: '10px 0' }}
+          >
+            {t('onboarding.replayIntro')}
+          </button>
+        </div>
         {devReset && <div style={{ padding: '0 18px 26px' }}>{devReset}</div>}
       </div>
     );
@@ -365,6 +391,18 @@ export function SettingsScreen({ go, goBack }) {
               View imported games
             </button>
           )}
+        </section>
+
+        {/* Epic 8 — Onboarding Experience, US4 (T043/FR-010): re-launchable for any state */}
+        <section>
+          <button
+            type="button"
+            onClick={handleReplayIntro}
+            className="btn btn-ghost"
+            style={{ width: '100%', fontSize: 14, padding: '10px 0' }}
+          >
+            {t('onboarding.replayIntro')}
+          </button>
         </section>
 
         {devReset}

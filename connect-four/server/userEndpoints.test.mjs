@@ -124,6 +124,113 @@ describe('GET /api/user/* endpoints', () => {
       assert.equal(status, 200);
       assert.equal(body.device_uuid, null);
     });
+
+    it('includes onboarding_status from req.user (Epic 8)', async () => {
+      const app = createApp({}, (req) => {
+        req.user = { ...TEST_USER, onboarding_status: 'seen' };
+      });
+      const { status, body } = await request(app, 'GET', '/api/user/profile');
+      assert.equal(status, 200);
+      assert.equal(body.onboarding_status, 'seen');
+    });
+  });
+
+  describe('PUT /api/user/profile (Epic 8 — extended shape)', () => {
+    function makeUsersUpdateSupabase(capturedRef) {
+      return {
+        from: (table) => {
+          if (table === 'users') {
+            return {
+              update: (data) => {
+                capturedRef.data = data;
+                return { eq: async (col, val) => {
+                  capturedRef.col = col;
+                  capturedRef.val = val;
+                  return { error: null };
+                } };
+              },
+            };
+          }
+          return {};
+        },
+      };
+    }
+
+    it('papergames_id-only request is unaffected (existing 204 contract)', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware);
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: 'pg-123' },
+      });
+      assert.equal(status, 204);
+      assert.deepEqual(captured.data, { papergames_id: 'pg-123' });
+      assert.equal(captured.col, 'id');
+      assert.equal(captured.val, TEST_USER.id);
+    });
+
+    it('papergames_id-only invalid value still returns 400 (existing contract)', async () => {
+      const app = createApp(makeUsersUpdateSupabase({}), authMiddleware);
+      const { status, body } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: '' },
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error.includes('papergames_id'));
+    });
+
+    it('onboarding_status-only request is accepted', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware);
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { onboarding_status: 'seen' },
+      });
+      assert.equal(status, 204);
+      assert.deepEqual(captured.data, { onboarding_status: 'seen' });
+    });
+
+    it('invalid onboarding_status enum value is rejected with 400', async () => {
+      const app = createApp(makeUsersUpdateSupabase({}), authMiddleware);
+      const { status, body } = await request(app, 'PUT', '/api/user/profile', {
+        body: { onboarding_status: 'bogus' },
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error.includes('onboarding_status'));
+    });
+
+    it('both fields together are accepted in one call', async () => {
+      const captured = {};
+      const app = createApp(makeUsersUpdateSupabase(captured), authMiddleware);
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { papergames_id: 'pg-123', onboarding_status: 'skipped' },
+      });
+      assert.equal(status, 204);
+      assert.deepEqual(captured.data, { papergames_id: 'pg-123', onboarding_status: 'skipped' });
+    });
+
+    it('no fields at all is 400', async () => {
+      const app = createApp(makeUsersUpdateSupabase({}), authMiddleware);
+      const { status, body } = await request(app, 'PUT', '/api/user/profile', {
+        body: {},
+      });
+      assert.equal(status, 400);
+      assert.ok(body.error.includes('no valid fields'));
+    });
+
+    it('returns 401 without auth', async () => {
+      const app = createApp(makeUsersUpdateSupabase({}), anonMiddleware);
+      const { status, body } = await request(app, 'PUT', '/api/user/profile', {
+        body: { onboarding_status: 'seen' },
+      });
+      assert.equal(status, 401);
+      assert.deepEqual(body, { error: 'Unauthorized' });
+    });
+
+    it('returns 503 when supabase is not configured', async () => {
+      const app = createApp(null, authMiddleware);
+      const { status } = await request(app, 'PUT', '/api/user/profile', {
+        body: { onboarding_status: 'seen' },
+      });
+      assert.equal(status, 503);
+    });
   });
 
   describe('GET /api/user/session-stats/all', () => {
@@ -1021,6 +1128,106 @@ describe('POST /api/user/migrate', () => {
     });
     assert.equal(status, 204);
     assert.equal(insertCalled, false); // empty array should not trigger insert
+  });
+
+  // ── T022 (Epic 8 — Onboarding Experience, US1) ──────────────────────────────
+  // onboarding_status carry-over: conditional write, WHERE onboarding_status =
+  // 'not_encountered', silent no-op when absent/invalid.
+
+  /** Builds a users-table stub whose update().eq('id',...).eq('onboarding_status', currentValue-gated)
+   *  records the update payload and simulates Postgres's WHERE-clause semantics: the update is
+   *  only "applied" (and echoed back with no error) when the account's current onboarding_status
+   *  (as tracked by the stub) equals 'not_encountered', mirroring the real conditional UPDATE. */
+  function buildOnboardingMigrateSupabase({ currentOnboardingStatus = 'not_encountered' } = {}) {
+    const calls = { onboardingUpdatePayload: null, otherTablesCalled: new Set() };
+    const supabase = {
+      from: (table) => {
+        if (table === 'users') {
+          return {
+            update: (payload) => ({
+              eq: (col1, val1) => ({
+                eq: (col2, val2) => {
+                  // Only the onboarding conditional-write path chains a 2nd .eq(); the
+                  // sparring_record/streak/device_uuid writers used elsewhere in this
+                  // file call update().eq() once. Assert the exact WHERE shape.
+                  assert.equal(col1, 'id');
+                  assert.equal(col2, 'onboarding_status');
+                  assert.equal(val2, 'not_encountered');
+                  calls.onboardingUpdatePayload = payload;
+                  const applied = currentOnboardingStatus === 'not_encountered';
+                  return Promise.resolve({ error: null, applied });
+                },
+              }),
+            }),
+          };
+        }
+        calls.otherTablesCalled.add(table);
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+      },
+    };
+    return { supabase, calls };
+  }
+
+  it('(a) a fresh account (not_encountered) migrating a local seen value accepts it', async () => {
+    const { supabase, calls } = buildOnboardingMigrateSupabase({ currentOnboardingStatus: 'not_encountered' });
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        onboarding_status: 'seen',
+      },
+    });
+    assert.equal(status, 204);
+    assert.deepEqual(calls.onboardingUpdatePayload, { onboarding_status: 'seen' });
+  });
+
+  it('(b) an account already seen/skipped migrating any value is NOT clobbered (conditional WHERE)', async () => {
+    // The stub's conditional-write simulation reports the WHERE clause never matched
+    // (currentOnboardingStatus !== 'not_encountered'); the endpoint must still succeed
+    // (204) — it does not need to inspect `applied`, only that no DB error occurred,
+    // matching Postgres's own "0 rows affected, no error" semantics for a WHERE miss.
+    const { supabase, calls } = buildOnboardingMigrateSupabase({ currentOnboardingStatus: 'seen' });
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        onboarding_status: 'not_encountered',
+      },
+    });
+    assert.equal(status, 204);
+    // The conditional UPDATE was still issued (correct WHERE shape) — whether it
+    // actually changed a row is the DB's concern, not this endpoint's.
+    assert.deepEqual(calls.onboardingUpdatePayload, { onboarding_status: 'not_encountered' });
+  });
+
+  it('(c) an absent onboarding_status is a silent no-op (users table never touched for it)', async () => {
+    const { supabase, calls } = buildOnboardingMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        // onboarding_status omitted entirely
+      },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.onboardingUpdatePayload, null);
+  });
+
+  it('(c) an invalid onboarding_status is a silent no-op and does not fail the migration', async () => {
+    const { supabase, calls } = buildOnboardingMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        onboarding_status: 'bogus_value',
+      },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.onboardingUpdatePayload, null);
   });
 });
 

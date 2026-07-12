@@ -57,6 +57,43 @@ export class IndexedDBStore {
     });
   }
 
+  // Read the profile row WITHOUT creating one if absent (unlike getProfile,
+  // which initializes an anonymous row on read). Used by analytics (track.js)
+  // so firing an event never side-effect-creates a spurious profile — e.g. for
+  // a signed-in user on a fresh device whose local profile store is empty.
+  // Returns null when no row exists.
+  async peekProfile() {
+    const db = await this._db();
+    return new Promise((resolve) => {
+      const tx = db.transaction('profile', 'readonly');
+      const req = tx.objectStore('profile').getAll();
+      req.onsuccess = () => resolve(req.result[0] ?? null);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  // Epic 8 — Onboarding Experience: merges patch into the single existing
+  // `profile` row and persists it. No return value (fire-and-forget, same
+  // posture as saveSessionStats et al). If no profile row exists yet (patch
+  // arrives before any getProfile() this session), a well-formed row is
+  // created — a bare merge would produce `device_uuid: undefined`, which the
+  // `device_uuid` keyPath rejects with DataError, silently dropping the write.
+  async updateProfile(patch) {
+    const db = await this._db();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('profile', 'readwrite');
+      const store = tx.objectStore('profile');
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const existing = req.result[0] ?? { device_uuid: generateUUID(), tier: 'free' };
+        const updated = { ...existing, ...patch };
+        store.put(updated);
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
   async saveSessionStats(stats) {
     const db = await this._db();
     return new Promise((resolve, reject) => {
@@ -207,7 +244,7 @@ export class IndexedDBStore {
   async migrateToSupabase(_supabaseStore) {
     // Step 1: Read ALL data from IndexedDB in parallel
     const db = await this._db();
-    const [attempts, lessonRows, sparringRecord, sessionRows, streak] = await Promise.all([
+    const [attempts, lessonRows, sparringRecord, sessionRows, streak, profile] = await Promise.all([
       this.getAllPuzzleAttempts(),
       this.getLessonProgress(),
       this.getSparringRecord(),
@@ -217,6 +254,10 @@ export class IndexedDBStore {
         req.onsuccess = () => resolve(req.result);
       }),
       this.getStreak(),
+      // Epic 8 — Onboarding Experience (T020, FR-012): fresh getProfile() read so the
+      // local onboarding_status carries over to the account on sign-up. The `profile`
+      // object store is NOT cleared below (only the other 5 stores are) — unaffected.
+      this.getProfile(),
     ]);
 
     // Step 2: POST all data to /api/user/migrate — single atomic request
@@ -231,6 +272,7 @@ export class IndexedDBStore {
         lesson_progress: lessonRows,
         sparring_record: sparringRecord,
         streak,
+        onboarding_status: profile?.onboarding_status,
       }),
       credentials: 'include',
     });

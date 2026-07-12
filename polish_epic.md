@@ -1229,72 +1229,156 @@ admin-session to localhost endpoints or leave localhost-only; keep `.claude/` tr
 
 ## Epic 8 — Onboarding Experience
 
-**Intent:** Design and implement a first-run onboarding flow. *(Content undefined in source — heavily
-`/clarify`-driven; the canonical "unresolved design decision" epic.)*
+> **SUPERSEDED** by `specs/048-onboarding-experience` — that spec reconciles this section to a **three-state**
+> `{not_encountered, seen, skipped}` engagement model with **NO** aha/coach-reaction detection and **NO**
+> reward/success moment; treat the wording below as historical context only, not current requirements.
+
+**Intent:** Design and implement a first-run onboarding flow whose single job is to show the coach reacting
+to the user's own play, as fast as possible — not a passive value-prop carousel/walkthrough, and not a bare
+drop-into-a-generic-puzzle.
 
 **Issues covered**
 - `[new_TODOs #4]` "We need to design and implement the onboarding experience."
 
 **Non-obvious facts** (confirmed code locations + traps)
-- New onboarding screens/flow; first-run routing via `src/lib/urlMapping.js`; HomeScreen entry; a store
-  "onboarded" flag (persisted).
-- Trap: onboarding must not collide with the auth/OAuth entry flows (Epic 5) — decide pre- vs post-signup.
+- New onboarding screens/flow; first-run redirect logic belongs in `App.jsx`'s Navigator mount effect (NOT
+  `src/lib/urlMapping.js`, which is a pure URL↔screen table); HomeScreen entry; an "onboarded" flag on the
+  existing anonymous profile (see Settled decisions).
+- Trap: the first-run redirect must not race `ProfileStore.checkSession()`'s async OAuth-hash consumption —
+  both live in/around app-mount timing, and a naive redirect can fire before (or fight with) OAuth-hash
+  handling. This is a real design concern for the plan phase, not just an implementation detail (memory:
+  `project_auth_flow_traps.md`).
+- The live coach-on-your-own-move seam already exists: `src/hooks/useGameBoard.js` posts every human move to
+  `/api/evaluate-move` and surfaces a coach phrase. Onboarding's "aha" is reached by driving a game through
+  this existing seam, not by building a new coach-reaction mechanism.
+- An Easy AI difficulty tier already exists at `src/lib/aiDifficulty.js`; it is beatable but does not
+  guarantee a first-attempt win.
+- Anonymous-first persistence already exists via `ProfileStore` / `IndexedDBStore`, with an existing
+  `migrateToSupabase` seam that carries profile fields to the backend on first sign-in/account creation.
 
 **Authoritative sources of truth**
-- No spec covers onboarding. Product framing: `docs/mvp/mvp_product_spec.md`, `docs/launch_tactic.md`
-  (retention gate: 7-day unprompted return), `docs/product/*`. Papergames import (spec 038) is a candidate
-  first-run action. `docs/best_practices_spec_driven_development.md`.
+- `docs/mvp/mvp_product_spec.md` does **not exist**; do not cite it. The authoritative product-framing doc for
+  onboarding is `docs/launch_tactic.md` (no-splash/no-tutorial spirit; 7-day unprompted-return retention gate;
+  §9 = puzzle-only drop-in). `docs/mvp/product_vision.md` and `docs/mvp/product_decisions.md` are the
+  governing product docs (note the path: `docs/mvp/`, not `docs/product/` — `docs/product/` contains only
+  `competing_apps.md`, `end_game_product_specifications.md`, `product_killer_features.md`, `market_size.md`,
+  which are unrelated framing candidates, not the vision/decisions docs). `product_vision.md` describes the
+  shipped app with no onboarding screen, no routing question, no Papergames surface at first run. Papergames
+  import (spec 038, `specs/038-papergames-self-service-import`) is documented there and in
+  `launch_tactic.md` §9 as an **authenticated-only, post-value, paid-conversion** mechanism (15-game lifetime
+  cap on free tier) for **returning** users — not a cold-start/first-run mechanism.
+  `docs/best_practices_spec_driven_development.md`.
 
 **Settled decisions**
-- None. The onboarding **content** is intentionally unresolved — this epic's `/clarify` + brainstorming phases
-  must define it before planning. See **Open questions**.
+- **Unifying principle:** onboarding's job is to demonstrate the coach reacting to the user's own play, as
+  fast as possible. No splash, no tutorial modal, no multi-screen walkthrough, and no up-front routing
+  question gating value. This matches `launch_tactic.md`'s no-splash/no-tutorial/drop-in-fast guidance and
+  `product_vision.md`'s value-before-account sequencing: every first-run user, regardless of whether they
+  play online elsewhere, gets the identical fast path to a coach-driven demonstration of value.
+- **Uniform sparring-first workflow (no branch, no gate):** every first-time user — anonymous, no sign-in
+  wall — is routed directly into a short sparring game vs. the AI on the existing **Easy** difficulty tier
+  (`src/lib/aiDifficulty.js`), with live coach feedback on the user's own moves via the existing
+  `/api/evaluate-move` seam (`src/hooks/useGameBoard.js`). There is no up-front "do you play online?" question
+  and no sign-in step before this first aha. A curated first puzzle and a "first lesson" were both considered
+  and rejected as the default, for the same reason: they don't demonstrate the coach reacting to the user's
+  *own* play as directly as sparring does.
+- **Post-aha import offer (online players only):** AFTER the first aha, users are shown an "import your real
+  games" offer/CTA. Accepting it leads into the existing authenticated Papergames import flow (spec 038),
+  consistent with that spec's designed role (authenticated-only, returning-user, paid-conversion trigger).
+  Import is never a precondition to the first aha, and sign-in is never required before it. If a routing
+  question is kept at all, it is only a post-aha preference/filter for who sees the import offer — never a
+  first-screen gate.
+- **Aha threshold:** the onboarded flag flips at the FIRST coach insight on the user's own move, surfaced by
+  `/api/evaluate-move` during the sparring game. The user need not finish or win the game — a slow, unlucky,
+  or losing first game still completes onboarding as soon as one coach insight has been shown.
+- **Persistence/trigger model:** anonymous-first, using the existing `ProfileStore` / `IndexedDBStore`
+  profile — the "onboarded" flag is a field on that existing anonymous profile, not a new parallel
+  localStorage path (this also avoids the known IndexedDB sign-in-hang trap of introducing a second store).
+  The existing `migrateToSupabase` seam carries the flag to the backend automatically on first sign-in/account
+  creation (e.g., if the user later accepts the import offer or upgrades). No backend row is assumed for
+  anonymous free-tier users. A backend-mirror-always design was considered and rejected as out of scope for
+  now (a later mirror is a possible follow-up, not required here).
 
 ### User stories & tasks
 
 **US8.1 — First-run detection & routing.**
-*As a first-time user, I want to be guided in once.*
-1. Persist an "onboarded" flag (store + backend).
-2. Route a new user into onboarding once on first load.
-3. Prevent re-show after completion/skip.
-4. Handle anonymous vs signed-in entry.
-5. Test: a brand-new user is routed exactly once.
+*As a first-time user, I want to be guided in once, straight into the game.*
+1. Add an "onboarded" flag as a field on the existing `ProfileStore` / `IndexedDBStore` anonymous profile (no
+   new parallel localStorage path, no backend row required for anonymous users).
+2. Rely on the existing `migrateToSupabase` seam to carry the flag to a backend row automatically if/when the
+   user creates an account — do not build a separate reconciliation mechanism.
+3. Implement the first-run redirect in `App.jsx`'s Navigator mount effect (not `src/lib/urlMapping.js`, which
+   stays a pure URL↔screen table) so a new user lands directly in the sparring game once, on first load.
+4. Prevent re-show after completion/skip.
+5. Sequence the redirect so it does not race `ProfileStore.checkSession()`'s async OAuth-hash consumption —
+   treat this as a design concern to resolve explicitly in the plan phase, not an incidental ordering detail.
+6. Test: a brand-new user (anonymous, no backend row) is routed exactly once directly into the sparring game;
+   the flag persists on the profile and is reconciled correctly via `migrateToSupabase` if the user later
+   signs up.
 
-**US8.2 — Value-proposition introduction.**
-*As a first-time user, I want to quickly understand the app's value.*
-1. Decide intro format (clarify: carousel vs interactive walkthrough).
-2. Implement the intro screen(s).
-3. Communicate the core value + the one focused workflow.
+**US8.2 — Sparring-first demonstrated value.**
+*As a first-time user, I want to quickly see the app's differentiated value by watching the coach react to my
+own play — not by reading about it, and not by answering a question first.*
+1. Route every first-time user directly into a short sparring game vs. the AI on the existing Easy difficulty
+   tier (`src/lib/aiDifficulty.js`) — no splash, no tutorial modal, no multi-screen carousel/walkthrough, and
+   no up-front routing question or sign-in wall before this point.
+2. Surface live coach feedback on the user's own moves via the existing `/api/evaluate-move` seam
+   (`src/hooks/useGameBoard.js`).
+3. Communicate value by demonstration (the coach's first reaction), not by explanatory copy.
 4. Responsive/mobile layout (390×844).
 5. Instrument completion analytics (ties to the 7-day-return gate).
 
-**US8.3 — Guided first workflow.**
-*As a first-time user, I want to reach a first "aha" fast.*
-1. Route the user into one end-to-end workflow (first puzzle or lesson, or Papergames import).
-2. Add lightweight in-flow guidance/coach.
-3. Provide a success/reward moment.
-4. Hand off to Home afterward.
-5. Test: the guided workflow completes end-to-end.
+**US8.3 — Guided first workflow + post-aha import offer.**
+*As a first-time user, I want to reach a first "aha" fast; if I already play online, I want to be offered a
+way to bring my real games in afterward, not before.*
+1. Route every first-time user (uniformly, no branch) into a short sparring game vs. the AI on the existing
+   Easy difficulty tier, with live coach feedback on the user's own moves via `/api/evaluate-move`.
+2. Flip the onboarded flag at the aha threshold: the first coach insight on the user's own move — not on
+   finishing/winning the game.
+3. Provide a success/reward moment after the aha.
+4. After the aha, surface a post-aha "import your real games" offer/CTA for online players; accepting it
+   routes into the existing authenticated Papergames import flow (spec 038). This offer is optional and comes
+   strictly after the aha — never before it, and never gating it.
+5. Hand off to Home afterward (directly, or after the import offer is accepted/dismissed).
+6. Test: the sparring game reaches the aha and flips the onboarded flag at the first coach insight (not only
+   at game-end); the post-aha import offer only appears after the aha and leads into the existing spec-038
+   authenticated flow without re-gating the aha itself.
 
 **US8.4 — Skip & re-access.**
 *As a user, I want to skip onboarding and revisit it later.*
-1. Make onboarding skippable at any step.
+1. Make onboarding skippable at any step (the sparring game or the post-aha import offer).
 2. Make it re-accessible from Settings.
 3. Preserve progress if interrupted.
 4. i18n all copy.
 5. Test: skip works; re-access works.
 
 **Acceptance criteria**
-- A brand-new user is routed into onboarding exactly once; not re-shown after completion/skip.
-- The guided first workflow completes end-to-end.
+- A brand-new user is routed once, directly into the Easy-difficulty sparring game — no up-front routing
+  question, no sign-in wall, no splash/tutorial/carousel before this point.
+- The onboarded flag flips at the first coach insight on the user's own move (via `/api/evaluate-move`) — not
+  merely at game-end/completion, and regardless of whether the game is won, lost, or unfinished.
+- After the aha, online players are shown an optional "import your real games" offer leading into the
+  existing authenticated Papergames import flow (spec 038); this offer never precedes or gates the aha.
+- The onboarded flag is a field on the existing anonymous `ProfileStore`/`IndexedDBStore` profile and is
+  reconciled to a backend row via the existing `migrateToSupabase` seam only upon account creation.
 - Onboarding is skippable at any step and re-accessible from Settings.
 
-**NOT included** *(pending clarify):* auth/account-creation flow changes (auth epics own that).
+**NOT included:** an up-front "do you play online?" routing-question gate, or any sign-in-before-value step
+(both explicitly rejected); auth/account-creation flow implementation itself (auth epics/spec 045 own that;
+onboarding only triggers/composes with sign-in on the post-aha import offer); a value-prop carousel or
+multi-screen walkthrough (explicitly rejected); a curated first-puzzle or first-lesson default path (rejected
+in favor of sparring-first); a new/tuned "guaranteed first-win" AI difficulty (rejected — reuse the existing
+Easy tier as-is).
 
-**Sizing verdict — Full speckit.** 4 stories × ≥5 tasks; routing + new screens + store flag + copy; **entirely
-unresolved design** — exactly what `/clarify` + brainstorming exist for.
+**Sizing verdict — Full speckit.** 4 stories × ≥5 tasks; first-run routing (composed with OAuth-hash timing) +
+uniform sparring-first flow + profile-flag persistence/migration + post-aha Papergames import composition +
+copy; design is now resolved but the surface (new screens, redirect/OAuth sequencing, sign-in composition on
+the import offer) still warrants full speckit treatment.
 
-**Open questions (`/clarify` — this epic is mostly open):** onboarding content (tutorial / value-prop /
-first guided puzzle / import prompt); trigger (pre- vs post-signup; anonymous?); the success metric it drives.
+**Open questions:** the major design questions (content, trigger, success metric, branch placement, Easy
+config, persistence seam) are resolved — see Settled decisions. Remaining bounded clarifications: exact copy
+for the post-aha import offer and coach messaging; analytics event names/schema for the completion/aha
+instrumentation; exact placement/timing of the post-aha import CTA within the post-game UI.
 
 ---
 

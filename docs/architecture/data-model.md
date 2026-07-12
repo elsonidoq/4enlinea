@@ -132,6 +132,58 @@ Helpers" section for the caller contract. Errors inside `recordUsage` are caught
 `logError('[llm-usage-ledger]', err, { endpoint, purpose })` internally; they never propagate to the
 LLM caller, so a ledger-write failure cannot fail or delay the user-facing LLM response.
 
+## `onboarding_status` (migration 057, Epic 8 — Onboarding Experience)
+
+A single `text` field present on **both** the anonymous local profile record and the server-side
+`users` row. Not a new entity/table — a field added to two existing records. **Three-state model**
+(aha/coach-reaction detection was dropped by owner decision; there is no fourth "engaged but no
+move" bucket):
+
+| Value | Set by | Meaning |
+|---|---|---|
+| `not_encountered` | default (new profile / new `users` row) | Auto-show onboarding routing is active. |
+| `seen` | first user move played in the onboarding sparring game | Suppresses auto-show; the engagement signal this feature measures. |
+| `skipped` | explicit skip (mid-game or on the import offer) | Suppresses auto-show. |
+
+There is no transition FROM `seen`/`skipped` back to `not_encountered` — the only writers are the
+`seen`/`skipped` transitions above, neither of which ever writes `not_encountered`.
+
+**Storage location 1 — anonymous local profile (`IndexedDBStore`, object store `profile`, keyPath
+`device_uuid`)**: `{ device_uuid: string, tier: 'free' | 'paid', onboarding_status?: 'not_encountered' | 'seen' | 'skipped' }`.
+`onboarding_status` is `undefined` on any profile created before this feature shipped — all read
+sites MUST treat `undefined`/`null` the same as `'not_encountered'`. No IndexedDB version bump was
+needed (plain field addition to an existing keyPath row, no new object store/index).
+
+**Storage location 2 — server `users` row** (migration `057_users_onboarding_status.sql`):
+```sql
+onboarding_status text NOT NULL DEFAULT 'not_encountered'
+  CHECK (onboarding_status IN ('not_encountered', 'seen', 'skipped'))
+```
+`NOT NULL DEFAULT` means every existing and future `users` row is well-formed with no backfill step
+required. No new grants needed — `012_explicit_grants.sql` and `040_service_role_grants.sql` are
+table-level and already cover `users`.
+
+**Server population seam**: `onboarding_status` is included in both `USER_PROFILE_SELECT_COLUMNS`
+and `defaultUserProfile()` (`server/userHelpers.js`) — see that file's doc comment for why both
+must stay in sync (`req.user.onboarding_status` is `undefined` if either is missed, regardless of
+whether the DB column exists). `server/userHelpers.js` also exports the single shared enum
+validator `isValidOnboardingStatus(value)`, imported by `PUT /api/user/profile` and
+`POST /api/user/migrate` — this is the ONE place the 3-value enum is validated; no other call site
+may duplicate the check inline.
+
+**Client store interface**: both `IndexedDBStore` and `SupabaseStore` (`connect-four/src/store/`)
+expose `async updateProfile(patch)`, matching the existing `getProfile()` pairing. `IndexedDBStore`
+merges `patch` into the existing single `profile` row and persists it; `SupabaseStore` `PUT`s
+`patch` to `/api/user/profile` with `credentials: 'include'`, swallowing errors client-side
+(fire-and-forget — must never block a user-facing render). Callers use the identical shape on
+either backend: `await store.updateProfile({ onboarding_status: 'seen' })`.
+
+**The one-time "show the import offer once" marker is NOT part of this field.** It is a plain
+device-scoped `localStorage` boolean (`onboarding_offer_shown_v1`), independent of
+`onboarding_status` and never synced to the server — see
+`specs/048-onboarding-experience/data-model.md` for the full rationale (a fourth persisted value
+would blur the three-state model above).
+
 ## Migration Naming
 
 **MUST**: Use sequential 3-digit numeric prefix: `NNN_slug.sql` (e.g., `015_new_puzzle_categories.sql`).

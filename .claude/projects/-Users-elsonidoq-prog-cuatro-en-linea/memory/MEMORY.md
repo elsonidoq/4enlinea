@@ -43,6 +43,7 @@
 - [CSP/helmet traps](project_csp_helmet_traps.md) — CSP invisible under Vite dev (test Express-served dist); app has browser papergames.io wss+img deps; SW reg moved to main.jsx
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; magic-link hash race; OAuth lands on site root + NO route auth guard → gating a CTA never gates its screen
 - [IndexedDB sign-in hang](project_indexeddb_signin_hang.md) — deleteDatabase blocked by any open conn (incl. other tabs) → open() hangs → sign-in silently stalls (switchToSupabase awaits _db() before setSession); clear stores in place
+- [User column propagation trap](project_user_column_propagation.md) — adding a users column reaches nothing automatically: edit USER_PROFILE_SELECT_COLUMNS+defaultUserProfile (req.user) AND migrateToSupabase allowlist (anon→account sync); no select('*')
 - [Supabase connection & storage](reference_supabase_connection.md) — sb_secret; session pooler; Node inline pattern; storage upload/createSignedUrl shapes (signedUrl not url)
 - [Suboptimal/blunder unification](project_suboptimal_blunder_unification.md) — quality column; ExplorerScreen deleted
 - [Mistake storage rule quality seam](project_mistake_storage_rule.md) — classifyStoredMistake gates all writes; badge quality ≠ stored quality; suboptimal chips may have no row (preview fallback)

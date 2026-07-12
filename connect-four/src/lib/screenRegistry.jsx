@@ -16,6 +16,7 @@ import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 import { PastGamesListScreen } from '../screens/PastGamesListScreen.jsx';
 import { PlayOnlineScreen } from '../screens/PlayOnlineScreen.jsx';
 import { SettingsScreen } from '../screens/SettingsScreen.jsx';
+import { OnboardingImportOfferScreen } from '../screens/OnboardingImportOfferScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -36,4 +37,8 @@ export const SCREENS = {
   pastGames: PastGamesListScreen,
   playOnline: PlayOnlineScreen,
   settings: SettingsScreen,
+  // Epic 8 — Onboarding Experience, US3 (T033, research.md R4). Session-only: reached only via
+  // go()/goReplace() from GameScreen (game-end) or HomeScreen (early-exit fallback) — NOT in
+  // urlMapping.js/SESSION_ONLY_SCREENS, matching the existing game/summary pattern.
+  onboardingImportOffer: OnboardingImportOfferScreen,
 };
