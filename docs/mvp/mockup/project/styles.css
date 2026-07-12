@@ -237,6 +237,7 @@ html, body {
   padding: 2px 8px; border-radius: 8px;
 }
 @keyframes bubbleIn { from { transform: translateY(8px); } to { transform: none; } }
+@keyframes obBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
 
 .coach-feed.fixed-feed {
   background: rgba(255,255,255,0.45); margin: 0 12px; border-radius: 18px;

@@ -9,10 +9,11 @@ const LESSONS = [
   { n: 4, t: "Odd Rows Belong to Red", s: "done" },
   { n: 5, t: "Claimeven", s: "current" },
   { n: 6, t: "Z-Threats", s: "unlocked" },
-  { n: 7, t: "The Undercut", s: "locked", pro: true },
-  { n: 8, t: "The Overcut", s: "locked", pro: true },
-  { n: 9, t: "The Figure-7 Trap", s: "locked", pro: true },
-  { n: 10, t: "The J-Shape", s: "locked", pro: true },
+  { n: 7, t: "Claimodd", s: "locked" },
+  { n: 8, t: "The Undercut", s: "locked", pro: true },
+  { n: 9, t: "The Overcut", s: "locked", pro: true },
+  { n: 10, t: "The Figure-7 Trap", s: "locked", pro: true },
+  { n: 11, t: "The J-Shape", s: "locked", pro: true },
 ];
 
 function NodeFace({ s, n }) {
