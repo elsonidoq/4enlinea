@@ -377,3 +377,18 @@ For each check record:
   - **Expected**: Sign-in completes; onboarding is never shown to a user who was mid-sign-in; no
     duplicated or broken intermediate state.
   - **Source**: Epic 8 / spec 048 FR-014, User Story 1 Scenario 3, research.md R3.
+
+- [ ] **Account carryover of `onboarding_status` persists server-side (FR-012 / User Story 1 Scenario 4).**
+  - **What**: After migration `057_users_onboarding_status.sql` is applied to the target DB, from a
+    fresh anonymous session flip `onboarding_status` to `seen`/`skipped`, sign up, and confirm the
+    account's `public.users.onboarding_status` reflects the migrated value (and that a second device
+    signing into the same account does not clobber it back to `not_encountered`).
+  - **Why staging**: could not be verified in local dev — migration 057 is file-only (never applied),
+    and PostgREST **silently drops the unknown column** from the `POST /api/user/migrate` UPDATE, so
+    the endpoint returns `204` with no persistence and no error (a silent no-op, not a 500). The
+    client-side plumbing (payload construction, sign-in flow, routing) is fully unit- + browser-verified;
+    only the final DB-column persistence step is unproven. Requires applying the migration + a real
+    account sign-up.
+  - **Expected**: The migrated `onboarding_status` lands on the account row via the conditional write
+    (`... WHERE onboarding_status = 'not_encountered'`), never overwriting a real prior state.
+  - **Source**: Epic 8 / spec 048 FR-012, User Story 1 Scenario 4; `docs/open_issues.md` OI-14.
