@@ -192,3 +192,77 @@ lessons get audio and when. Verifying the mechanism on one lesson was sufficient
 or `POST /api/admin/lessons/:id/generate-audio`), then `git add` the new `public/audio/lessons/*.mp3` + the
 updated lesson JSON and redeploy (per FR-012a, generation never runs in prod). Real key is in
 `connect-four/server/.env` ([[feedback_openai_key_present]]). Cross-ref: spec 046 US3/US4.
+
+## OI-10 — Frontend Sentry is imported but never initialized (error reporting is a silent no-op)
+
+**Status**: latent gap (frontend error reporting non-functional; not fixed — spec 047 tracks the remediation)
+**Area**: `connect-four/src/components/ErrorBoundary.jsx`; `connect-four/server/.env(.example)` (`SENTRY_DSN`)
+
+**Discovered**: spec `047` (Epic 7) plan verification (2026-07-12)
+
+`ErrorBoundary.jsx` imports `@sentry/react` and calls `Sentry.captureException(error, { extra: info })`, but
+there is **no `Sentry.init()` anywhere in `src/`** and no frontend DSN env var — so the SDK is uninitialized
+and `captureException` is a no-op. Frontend errors are silently dropped. Server-side Sentry is separately gated
+on `SENTRY_DSN` (`index.js`, `logger.js`), which is **commented out in `.env.example`** and unconfirmed in prod
+— so server error reporting may also be inert. An agent reading `ErrorBoundary.jsx` would reasonably assume
+error reporting works; it does not.
+
+**Consequence for spec 047**: this is why FR-005's CSP smoke test **dropped** the "error events still reach the
+reporting service" leg (marked N/A — nothing to break), and why the CSP has **no** Sentry `connect-src` entry
+(no browser-side Sentry traffic exists to allow). Spec 047 US2 task T012 files the formal backlog note for the
+frontend gap.
+
+**If picked up**: decide whether error reporting is wanted; if so, add `Sentry.init({ dsn })` in the frontend
+entrypoint with a frontend DSN, confirm `SENTRY_DSN` is set in the deploy env for the server, and re-add the
+error-reporting leg to any CSP smoke test (browser Sentry needs a `connect-src` allowance for the ingest host).
+
+## OI-11 — Admin gate has no second factor beyond `requireLocalhost` (FR-009 deferred scope)
+
+**Status**: deferred (accepted risk for this feature — not a bug; scope explicitly excluded by spec 047 US3)
+**Area**: `connect-four/server/index.js` — all `/api/admin/*` and `/api/debug/*` routes gated by `requireLocalhost`
+
+**Discovered**: spec `047` (Epic 7) US3 implementation (2026-07-12)
+
+Spec 047 US3 (T015) consolidated the debug endpoint's duplicated inline localhost check onto the shared
+`requireLocalhost` middleware. **Correction (spec-047 QA, 2026-07-12):** the original planning assumption —
+that `trust proxy = 1` made `req.ip` unspoofable — was WRONG. With `trust proxy = 1` (needed for
+`express-rate-limit`), Express derives `req.ip` FROM the client-supplied `X-Forwarded-For` header for one
+hop, so a direct (non-proxied) caller sending `X-Forwarded-For: 127.0.0.1` from a non-loopback address
+passed the gate (reproduced live). This was fixed by changing `requireLocalhost` to check
+`req.socket.remoteAddress` (the raw TCP peer, header-immune) instead of `req.ip`. That now genuinely
+hardens the gate against header-spoofing (FR-009 delivered), but the gate itself remains **localhost-only,
+with no authenticated admin session as a second factor**. Anyone who can reach the app process on
+`127.0.0.1` (e.g. via SSH port-forward or a compromised sibling process on the same host/container) has
+full admin access with no login check.
+
+**Why deferred**: FR-009 only required the gate be unspoofable by a forged header, which T015 delivers. Adding
+a mandatory authenticated admin session on top of `requireLocalhost` is a separate, larger change (session
+plumbing, an admin-role check, likely reusing `requireAdmin`'s `ADMIN_EMAILS` allowlist alongside the localhost
+gate rather than instead of it) and was explicitly out of scope for this feature.
+
+**If picked up**: require both `requireLocalhost` AND an authenticated session whose user is in `ADMIN_EMAILS`
+(see `server/adminAuth.js`'s `requireAdmin`, already used as a second gate on the `/api/admin/*` routes at
+`docs/architecture` review time — audit whether every admin/debug route already stacks `requireAdmin` alongside
+`requireLocalhost`, since `/api/debug/classify-all` and some `/api/admin/candidates*` routes currently do not).
+
+## OI-12 — Deep-reveal first (uncached) load can time out client-side before the LLM returns
+
+**Status**: deferred (pre-existing; surfaced during spec-047 QA, unrelated to this feature's changes)
+**Area**: `connect-four/src/components/DeepRevealPane.jsx` — client-side fetch timeout
+**Discovered**: spec `047` (Epic 7) QA (2026-07-12)
+
+`DeepRevealPane.jsx` uses a fixed ~6-second client-side timeout on the deep-reveal explanation fetch. A
+genuine *uncached* `POST /api/explain-move-llm` call to the OpenAI reasoning model can take longer than 6s
+to return, so the UI shows "Detailed explanation unavailable." even though the call actually succeeds
+server-side (confirmed during QA: the underlying response was valid and the `llm_usage` telemetry row was
+written correctly). A second (now-cached) request for the same position rendered in <1s. This predates spec
+047 (the file is untouched by this feature — confirmed via `git diff`) and is not caused by the telemetry
+wrapper (the ledger write is fire-and-forget and does not add latency).
+
+**Why deferred**: out of scope for spec 047 (a hardening/observability feature); it's a UX-latency issue in
+an unrelated component. Only reliably reproduces on a cold/uncached reasoning-model call.
+
+**If picked up**: raise or remove the fixed 6s client timeout in `DeepRevealPane.jsx` (reasoning-model calls
+are legitimately slow on first load), or show a "still thinking…" state instead of a failure message when the
+timeout elapses while the request is still in flight. Verify against a cold call in staging (cache TRUNCATEd
+on deploy per `project_spec039_audio_interactive_coach`, so the first post-deploy call is always uncached).

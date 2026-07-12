@@ -7,6 +7,7 @@ import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
 import { classifyAiMove } from './classifyAiMove.js';
@@ -50,6 +51,29 @@ import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRen
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// ── Boot-time fail-safe (spec 047 FR-006) ──────────────────────────────────────
+// If we're pointed at a real (non-local) Supabase project but NODE_ENV isn't
+// 'production', cookies would silently ship without the `secure` flag (see
+// cookieOpts() below). Refuse to boot rather than risk a silent downgrade.
+// Inspects process.env only — never reads a file (avoids the boot-path .env
+// read crash trap; env-file loading via `node --env-file` has already resolved
+// by the time this module starts executing).
+{
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const isLocalSupabase = supabaseUrl && (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost'));
+  if (process.env.NODE_ENV !== 'production' && supabaseUrl && !isLocalSupabase) {
+    console.error('\n' + '!'.repeat(78));
+    console.error('FATAL: SUPABASE_URL points at a non-local project but NODE_ENV != "production".');
+    console.error(`  SUPABASE_URL=${supabaseUrl}`);
+    console.error(`  NODE_ENV=${process.env.NODE_ENV}`);
+    console.error('Refusing to boot: this would silently ship session cookies without the');
+    console.error('`secure` flag against a real backend. Set NODE_ENV=production, or point');
+    console.error('SUPABASE_URL at a local instance (127.0.0.1/localhost) for dev.');
+    console.error('!'.repeat(78) + '\n');
+    process.exit(1);
+  }
+}
+
 // ── Sentry (T004) ─────────────────────────────────────────────────────────────
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -60,6 +84,45 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
+
+// ── Security headers (spec 047 FR-003/FR-004) ──────────────────────────────────
+// `<supabase-host>` for media-src is derived from SUPABASE_URL at startup — works
+// for both the production Supabase host and local 127.0.0.1:54321 with no env
+// branch. Falls back to omitting the extra media-src origin if SUPABASE_URL is
+// unset (e.g. Supabase not configured at all in this environment).
+//
+// FR-004: the CSP MUST permit the app's REAL external dependencies. Beyond the
+// Supabase media host, the Play-Online / Past-Games features talk to papergames.io
+// directly from the browser (spec 047 code-review, not caught in research.md §2):
+//   • PlayOnlineScreen.jsx opens `wss://papergames.io/socket.io/...` → needs
+//     connect-src (governs WebSocket) to allow papergames.io.
+//   • PastGamesListScreen.jsx renders avatar <img> from https://papergames.io →
+//     needs img-src to allow papergames.io.
+// A bare `connect-src/img-src 'self'` would silently break online play and avatars
+// in production (Express serves dist/ with this header; Vite dev does not, which is
+// why the local smoke test can't surface it). The inline service-worker <script>
+// that used to live in index.html was moved into src/main.jsx so `script-src 'self'`
+// can stay strict (no 'unsafe-inline'/nonce needed).
+const SUPABASE_HOST = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).host : null;
+const PAPERGAMES_ORIGIN = 'https://papergames.io';
+const PAPERGAMES_WS = 'wss://papergames.io';
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
+      mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+}));
+
 // Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
 // bytes. It MUST be parsed before the global express.json() below consumes the
 // request stream — otherwise by the time the route's own express.raw() middleware
@@ -267,7 +330,7 @@ app.post('/api/auth/callback', async (req, res) => {
     res.json({ user: { id: data.user.id, tier } });
   } catch (err) {
     logError('[auth/callback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -293,7 +356,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     logError('[auth/refresh]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -358,7 +421,7 @@ app.get('/api/auth/session', async (req, res) => {
     return await fetchProfileResponse(refreshedUser.user.id);
   } catch (err) {
     logError('[auth/session]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -377,7 +440,7 @@ app.post('/api/auth/anonymous', async (req, res) => {
     res.json({ user: { id: data.user.id, tier: 'free' } });
   } catch (err) {
     logError('[auth/anonymous]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -589,7 +652,8 @@ app.get('/api/admin/eval-set/:name', requireLocalhost, requireAdmin, (req, res) 
     res.json(JSON.parse(readFileSync(filePath, 'utf-8')));
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval set not found' });
-    res.status(500).json({ error: err.message });
+    logError('[admin/eval-set]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -632,7 +696,7 @@ app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (re
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'file not found' });
     logError('[admin/eval-results/:filename]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -665,7 +729,7 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
     res.status(201).json({ ok: true, feedback_file: feedbackName });
   } catch (err) {
     logError('[admin/eval-feedback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -705,7 +769,7 @@ app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'answers file not found' });
     logError('[admin/fv-suff]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -741,7 +805,7 @@ app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'reason evidence file not found' });
     logError('[admin/reason]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -768,7 +832,7 @@ app.post('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
     res.status(201).json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/create]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -783,7 +847,7 @@ app.put('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => 
     res.json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/update]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -794,7 +858,7 @@ app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) 
     res.json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/delete]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -810,7 +874,7 @@ app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin
     res.json({ lesson: updatedLesson, generated, failed });
   } catch (e) {
     logError('[admin/lessons/generate-audio]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -820,7 +884,7 @@ app.post('/api/admin/lessons/prune-audio', requireLocalhost, requireAdmin, (req,
     res.json({ deleted });
   } catch (e) {
     logError('[admin/lessons/prune-audio]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -841,11 +905,11 @@ app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) =
       .eq('is_active', true)
       .eq('category', category)
       .order('created_at', { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[admin/puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
     res.json({ puzzles: puzzles || [] });
   } catch (e) {
     logError('[admin/puzzles]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -867,7 +931,7 @@ app.post('/api/scores', async (req, res) => {
     res.json({ scores });
   } catch (err) {
     logError('[scores]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -917,8 +981,8 @@ app.post('/api/explain', async (req, res) => {
     const { human, ai } = assignHeatmaps(current, opponent, moves.length, humanFirst);
     res.json({ human, ai });
   } catch (err) {
-    console.error('[explain]', err.message);
-    res.status(500).json({ error: err.message });
+    logError('[explain]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1083,6 +1147,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     const result = await computeMechanism(movestring, col, {
       solver,
       model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
+      userId: req.user.id,
     });
 
     if (result.notABlunder) {
@@ -1208,11 +1273,11 @@ app.post('/api/llm-feedback', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[llm-feedback]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
     logError('[llm-feedback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1305,12 +1370,13 @@ app.post('/api/blunders', async (req, res) => {
 
     if (error) {
       if (error.code === '23505') return res.status(200).json({ deduplicated: true });
-      return res.status(500).json({ error: error.message });
+      logError('[blunders]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     res.status(201).json({ id: data[0].id });
   } catch (err) {
     logError('[blunders]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1332,7 +1398,8 @@ app.get('/api/stats', async (req, res) => {
     const result = await computeStatsAggregate(supabase, req.user.id);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[stats]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1359,7 +1426,7 @@ app.get('/api/puzzles', async (req, res) => {
     if (categoryId) query = query.eq('category', categoryId);
 
     const { data: puzzles, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
 
     // Group by category
     const byCategory = {};
@@ -1378,7 +1445,7 @@ app.get('/api/puzzles', async (req, res) => {
     res.json({ categories });
   } catch (err) {
     logError('[puzzles/admin]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1396,7 +1463,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
       .select('category, count()')
       .eq('is_active', true);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles/counts]', error); return res.status(500).json({ error: 'internal error' }); }
 
     const counts = {};
     for (const slug of CATEGORY_ORDER) {
@@ -1411,7 +1478,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
     res.json({ counts, sets: CHALLENGE_SETS });
   } catch (err) {
     logError('[puzzles/counts]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1474,7 +1541,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         .eq('is_active', true)
         .not('position', 'is', null);
 
-      if (countErr) return res.status(500).json({ error: countErr.message });
+      if (countErr) { logError('[puzzles/draw]', countErr); return res.status(500).json({ error: 'internal error' }); }
 
       if (totalIndexed === 0) {
         puzzles = [];
@@ -1489,7 +1556,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
           .order('position', { ascending: true })
           .range(offset, offset + n - 1);
 
-        if (resultErr) return res.status(500).json({ error: resultErr.message });
+        if (resultErr) { logError('[puzzles/draw]', resultErr); return res.status(500).json({ error: 'internal error' }); }
 
         puzzles = result || [];
 
@@ -1549,7 +1616,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
     res.json({ puzzles });
   } catch (err) {
     logError('[puzzles/draw]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1576,7 +1643,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
     res.status(204).send();
   } catch (err) {
     logError('[challenge-sessions/advance]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1685,7 +1752,7 @@ app.post('/api/evaluate-move', async (req, res) => {
     res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag, accepted });
   } catch (err) {
     logError('[evaluate-move]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1758,7 +1825,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     });
   } catch (err) {
     logError('[evaluate-move/inline]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1817,11 +1884,11 @@ app.post('/api/games', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[games/create]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
     logError('[games/create]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1868,7 +1935,7 @@ app.post('/api/games/from-position', async (req, res) => {
     res.json({ moves: truncated, side, difficulty });
   } catch (err) {
     logError('[games/from-position]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1935,8 +2002,8 @@ app.get('/api/games', async (req, res) => {
       pgQuery,
     ]);
 
-    if (aiError) return res.status(500).json({ error: aiError.message });
-    if (pgError) return res.status(500).json({ error: pgError.message });
+    if (aiError) { logError('[games]', aiError); return res.status(500).json({ error: 'internal error' }); }
+    if (pgError) { logError('[games]', pgError); return res.status(500).json({ error: 'internal error' }); }
 
     // Fetch blunder counts for both game sets in parallel, via DB-side grouped count() —
     // scale-correct past 1000 blunder rows and never uses `.in()` (see
@@ -1956,7 +2023,8 @@ app.get('/api/games', async (req, res) => {
         computeBlunderCountsForGames(supabase, userId, pgIds, 'papergames_game_id'),
       ]);
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      logError('[games]', err);
+      return res.status(500).json({ error: 'internal error' });
     }
 
     // Normalise both sets to a unified shape
@@ -2027,7 +2095,7 @@ app.get('/api/games', async (req, res) => {
     res.json({ games: page, total });
   } catch (err) {
     logError('[games]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -2292,7 +2360,7 @@ app.post('/api/games/analyze', async (req, res) => {
     }
   } catch (err) {
     logError('[games/analyze]', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'internal error' });
   }
 
   const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
@@ -2549,7 +2617,8 @@ app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
       const result = await computeWeaknessMapFallback(supabase, req.user.id);
       return res.json(result);
     } catch (fallbackErr) {
-      return res.status(500).json({ error: fallbackErr.message });
+      logError('[coach/weakness-map]', fallbackErr);
+      return res.status(500).json({ error: 'internal error' });
     }
   }
 
@@ -2573,7 +2642,7 @@ app.get('/api/coach/category-counts', async (req, res) => {
       .select('pattern_category, count()')
       .eq('user_id', req.user.id);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[coach/category-counts]', error); return res.status(500).json({ error: 'internal error' }); }
 
     const categories = (data || [])
       .map(row => ({ category: row.pattern_category, count: Number(row.count) }))
@@ -2590,7 +2659,8 @@ app.get('/api/coach/category-counts', async (req, res) => {
 
     res.json({ categories });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[coach/category-counts]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -2673,8 +2743,8 @@ app.get('/api/coach/queue', async (req, res) => {
     pageQuery,
     countQuery,
   ]);
-  if (error) return res.status(500).json({ error: error.message });
-  if (countError) return res.status(500).json({ error: countError.message });
+  if (error) { logError('[coach/queue]', error); return res.status(500).json({ error: 'internal error' }); }
+  if (countError) { logError('[coach/queue]', countError); return res.status(500).json({ error: 'internal error' }); }
 
   // FR-008/FR-009 (spec 042 US2): this endpoint independently constructs its own
   // blunder shape (does not delegate to the GET /api/blunders/:id handler above),
@@ -2721,7 +2791,7 @@ app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
     .eq('id', blunderId)
     .eq('user_id', req.user.id); // ownership check
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[coach/queue/resolve]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
@@ -2743,7 +2813,11 @@ app.get('/api/blunders/:id', async (req, res) => {
 
   if (error || !data) {
     if (error && error.code === 'PGRST116') return res.status(404).json({ error: 'not found' });
-    return res.status(error ? 500 : 404).json({ error: error?.message || 'not found' });
+    if (error) {
+      logError('[blunders/:id]', error);
+      return res.status(500).json({ error: 'internal error' });
+    }
+    return res.status(404).json({ error: 'not found' });
   }
 
   // FR-008/FR-009 (spec 042 US2): parent-game total move count + sibling mistakes,
@@ -2776,12 +2850,11 @@ registerStripeRoutes(app, paymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 
-app.post('/api/debug/classify-all', async (req, res) => {
-  const ip = req.ip || req.socket?.remoteAddress || '';
-  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
-    return res.status(403).json({ error: 'Debug endpoints are localhost-only' });
-  }
+app.post('/api/debug/classify-all', requireLocalhost, async (req, res) => {
   const { moves: ms = '' } = req.body;
+  if (!MOVES_RE.test(ms)) {
+    return res.status(400).json({ error: 'moves must be 0–42 characters of digits 0–6' });
+  }
   try {
     const scores = ms.length > 0 ? await solver.query(ms) : EMPTY_BOARD_SCORES;
     const redResult = await classifyPattern(ms, 1, solver);
@@ -2812,15 +2885,23 @@ app.post('/api/debug/classify-all', async (req, res) => {
 
     res.json({ red, yellow, boardState, scores });
   } catch (err) {
-    console.error('[debug/classify-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[debug/classify-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin endpoints (localhost-only) ──────────────────────────────────────────
 
+// FR-009 (spec 047 US3/AC1): MUST NOT use `req.ip` here. With `trust proxy: 1` set (needed for
+// express-rate-limit to see real client IPs behind Railway's proxy), Express's `req.ip` resolves
+// from the client-controlled `X-Forwarded-For` header for exactly one hop — so any direct,
+// non-proxied caller can spoof it with `X-Forwarded-For: 127.0.0.1` and pass the check. Verified
+// locally: a request from a real non-loopback interface with a forged header reached this gate's
+// `next()` when checked against `req.ip`. `req.socket.remoteAddress` is the raw TCP peer address —
+// it is not influenced by any header, so it cannot be spoofed by a caller that isn't genuinely
+// connecting from loopback (e.g. an operator shell on the same host/container).
 function requireLocalhost(req, res, next) {
-  const ip = req.ip || req.socket?.remoteAddress || '';
+  const ip = req.socket?.remoteAddress || '';
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
   console.warn('[requireLocalhost] blocked request from', ip, 'for', req.method, req.originalUrl);
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
@@ -2863,7 +2944,7 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       correct_col: c.correct_col ?? null,
     }));
     const { error } = await supabase.from('candidates').insert(rows);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[admin/generate]', error); return res.status(500).json({ error: 'internal error' }); }
   }
 
   res.json({
@@ -2879,7 +2960,7 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { data, error } = await supabase.from('candidates').select('category, status, count()');
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/stats]', error); return res.status(500).json({ error: 'internal error' }); }
 
   const stats = {};
   for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0, unindexed_count: 0 };
@@ -2921,7 +3002,7 @@ app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
     .eq('category', category)
     .eq('is_active', true);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/reindex]', error); return res.status(500).json({ error: 'internal error' }); }
 
   if (!puzzles || puzzles.length === 0) {
     return res.json({ category, indexed: 0, shapeGroups: 0 });
@@ -2998,7 +3079,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates]', error); return res.status(500).json({ error: 'internal error' }); }
 
   res.set('Cache-Control', 'no-store');
   let candidates = data || [];
@@ -3043,7 +3124,7 @@ app.post('/api/admin/candidates/reject-batch', requireLocalhost, async (req, res
     .eq('status', 'pending')
     .select('id');
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/reject-batch]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ rejected: data?.length ?? 0 });
 });
 
@@ -3154,14 +3235,14 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
     .select('id')
     .single();
 
-  if (insertErr) return res.status(500).json({ error: insertErr.message });
+  if (insertErr) { logError('[admin/candidates/approve]', insertErr); return res.status(500).json({ error: 'internal error' }); }
 
   const { error: updateErr } = await supabase
     .from('candidates')
     .update({ status: 'approved', reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/approve]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   res.status(201).json({ puzzle_id: puzzle.id, candidate_id: id });
 });
@@ -3181,7 +3262,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
     .eq('category', category)
     .eq('status', 'pending');
 
-  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+  if (fetchErr) { logError('[admin/candidates/approve-batch]', fetchErr); return res.status(500).json({ error: 'internal error' }); }
   if (!candidates || candidates.length === 0) return res.json({ approved: 0, skipped: 0, errors: [] });
 
   let approved = 0;
@@ -3260,7 +3341,7 @@ app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) 
     .update({ status: 'rejected', rejection_reason: reason, reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/reject]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   let falsePositiveId = undefined;
   if (reason === 'false_positive') {
@@ -3303,7 +3384,7 @@ app.delete('/api/admin/candidates/:id', requireLocalhost, async (req, res) => {
   }
 
   const { error: deleteErr } = await supabase.from('candidates').delete().eq('id', id);
-  if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+  if (deleteErr) { logError('[admin/candidates/delete]', deleteErr); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
@@ -3320,7 +3401,7 @@ app.get('/api/admin/false-positives', requireLocalhost, async (req, res) => {
   if (category && VALID_CATEGORIES.has(category)) query = query.eq('category', category);
 
   const { data, error, count } = await query;
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/false-positives]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ false_positives: data || [], total: count ?? 0 });
 });
 
@@ -3335,7 +3416,7 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
     puzzles = JSON.parse(await readFile(dataPath, 'utf8'));
   } catch (err) {
     logError('[admin/seed-puzzles]', err);
-    return res.status(500).json({ error: `Could not read placeholder_puzzles.json: ${err.message}` });
+    return res.status(500).json({ error: 'internal error' });
   }
 
   let inserted = 0, skipped = 0;
@@ -3350,7 +3431,8 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
     if (existing) { skipped++; continue; }
     const { error } = await supabase.from('puzzles').insert(p);
     if (error) {
-      return res.status(500).json({ error: `Insert failed for category ${p.category}: ${error.message}` });
+      logError('[admin/seed-puzzles/insert]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     inserted++;
   }
@@ -3394,7 +3476,7 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
     .select('id')
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/create]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(201).json({ id: data.id, verified: false });
 });
 
@@ -3525,8 +3607,8 @@ app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
 
     res.json({ approved, awaiting_approval: awaiting, needs_audio: needs, ineligible, counts: { approved: approved.length, awaiting_approval: awaiting.length, needs_audio: needs.length, ineligible: ineligible.length, total: registry.length } });
   } catch (err) {
-    console.error('[admin/audio/status]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/status]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3565,8 +3647,8 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
 
     res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
   } catch (err) {
-    console.error('[admin/audio/generate]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/generate]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3615,8 +3697,8 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     writeTtsRegistry(registry);
     res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
   } catch (err) {
-    console.error('[admin/audio/generate-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/generate-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3641,8 +3723,8 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
     res.json({ key, slug: entry.slug, status: 'approved' });
   } catch (err) {
-    console.error('[admin/audio/approve]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/approve]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3666,8 +3748,8 @@ app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
 
     res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
   } catch (err) {
-    console.error('[admin/audio/approve-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/approve-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 

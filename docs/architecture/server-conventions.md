@@ -394,7 +394,7 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 - `isMajorThreatForPlayer(board, col, row, player)` — checks whether a cell is a 3+empty major threat; not exported from `classifier.js`, this is the canonical server location
 - `getBoardVisualization(movestring)` — shells out to `scripts/visualize_board.mjs` via `spawnSync`, strips the `scr` row
 - `buildKBSection(patternNames)` / `loadKBStatement(id)` — loads KB article `statement` field for active patterns; `inline` branch removed 2026-06-20
-- `callLLM(prompt)` — calls OpenAI chat completions API; reads `OPENAI_API_KEY` / `OPENAI_MODEL` from env
+- `callLLM(prompt)` — thin wrapper around `server/llmChat.js`'s `callOpenAIChat` (see "Unified OpenAI-Chat Call Helper" below); reads `OPENAI_API_KEY` / `OPENAI_MODEL` from env, passes `endpoint: 'run-eval'`, `purpose: 'offline-eval'`, `userId: null`, `maxCompletionTokens: 400`, `useJsonFormat: false`. Callers destructure `{ content }` from the return value — it is no longer a bare string (spec 047 US5; `tests/scripts/run_eval.mjs` was updated accordingly).
 - `selectContrastMove(scores, userCol, board)` — pure; returns `{ contrastCol, isOptimal }` or `null` when all legal scores are equal. `isOptimal=true`: user played best, contrast = second-best; `isOptimal=false`: user played suboptimally, contrast = best. Tie-break: closest to col 3.
 - `getOpponentResponseMs(postMovestring, postBoard, opponentWinCols, perspective, solver)` — returns the movestring after opponent's best response, or null if the game is over.
 - `findMajorThreatWindows(board, perspective)` — scans all 4-windows and returns windows with exactly 3 discs of one color + 1 empty cell. Returns `{ cells: string[], owner: 'player'|'opponent' }[]`. Replaces `getMajorThreatCells` for all group-level operations.
@@ -430,6 +430,100 @@ The following functions were removed to simplify the explain-move path:
 **Critical invariant**: solver scores are NEVER passed to the LLM. `getScoreTier` translates scores to tier labels (WINS/DRAWS/LOSES), and `getBoardVisualization` strips the `scr` row from board output. This invariant MUST be preserved by all callers.
 
 The CLI scripts (`scripts/recommend_next_move.mjs`, `scripts/explain_move.mjs`) import from this module. Server endpoints (`/api/recommend-move`, `/api/explain-move-llm`) also import from it and reuse the server-managed solver singleton rather than spawning their own.
+
+## Unified OpenAI-Chat Call Helper (`llmChat.js`, spec 047 US5)
+
+`connect-four/server/llmChat.js` exports one async function, `callOpenAIChat(prompt, ctx)`, that
+**every** in-scope OpenAI chat-completion call site is routed through, so token usage and USD cost are
+recorded uniformly with zero bespoke per-site logging. Full contract:
+`specs/047-platform-hardening-cost-observability/contracts/llm-call-helper.md` (this section
+summarizes; that doc is authoritative for exact parameter defaults and edge-case behavior — do not
+duplicate it verbatim here on future edits, cross-reference it instead).
+
+**Signature**: `callOpenAIChat(prompt, { model, apiKey, endpoint, userId = null, purpose,
+maxCompletionTokens = 4000, useJsonFormat = true, fetchImpl = fetch }) → Promise<{ content, usage:
+{ promptTokens, completionTokens, totalTokens } }>`. Throws on any non-2xx OpenAI response or network
+failure, same as the three pre-existing implementations it replaced. Retries once without
+`response_format` if `useJsonFormat` was requested and the response indicates the model rejected it
+(ported verbatim from the prior `defaultCallLLM`/`callExplainLLM` behavior), but the retry flag is now
+function-local per call, not module-level shared state — a rejection on one model's call no longer
+silently disables `response_format` for a different model sharing the module.
+
+**Call sites** (all three rewired in place):
+
+| Call site | File | `{ endpoint, purpose }` |
+|---|---|---|
+| Production deep-reveal | `mechanismExplainer.mjs`'s `defaultCallLLM` (thin wrapper) | `{ endpoint: 'explain-move-llm', purpose: 'deep-reveal' }` |
+| Offline eval harness | `llmCoachHelpers.js`'s `callLLM` | `{ endpoint: 'run-eval', purpose: 'offline-eval' }` |
+| Offline compute/eval script | `scripts/compute.mjs`'s `runLlm` (its former local `callExplainLLM` copy is deleted) | `{ endpoint: 'compute-eval', purpose: 'offline-eval' }` |
+
+**`userId` threading is not purely mechanical.** Unlike the static `endpoint`/`purpose` literals above,
+`userId` is request-scoped. For the production deep-reveal path this requires two edit points, both
+required (skipping either silently leaves `userId` as `null` for every production call):
+`computeMechanism` (`mechanismExplainer.mjs`) accepts `userId = null` in its options object and forwards
+it into its internal `defaultCallLLM` call closure; and the route (`POST /api/explain-move-llm`,
+`index.js`) passes `userId: req.user.id` into `computeMechanism`'s options (safe because the route
+already guards `!req.user` earlier). The offline call sites always pass `userId: null` — there is no
+request-scoped user in a CLI/script context.
+
+**Fire-and-forget ledger write.** On a successful response, `callOpenAIChat` computes `costUsd` via
+`llmPricing.js`'s `estimateCost(model, usage)` and calls `llmUsageLedger.js`'s `recordUsage({ endpoint,
+purpose, userId, model, usage, costUsd })` **without awaiting it** — a ledger-write failure or delay
+must never affect the caller's response latency or success. On failure (thrown or non-2xx), it logs via
+`logError('[llm-chat]', err, { endpoint, purpose, userId, model })` and re-throws; no `recordUsage` call
+happens — no partial/fabricated ledger row. See `data-model.md`'s `llm_usage` section for the table
+this writes to and its append-only lifecycle (contrasted with `explanation_cache`'s deploy-time
+TRUNCATE).
+
+## CSP Directive Rationale (spec 047 US2, FR-003/004/005)
+
+The `helmet` CSP mounted in `index.js` (see the `app.use(helmet({ contentSecurityPolicy: { directives:
+{...} } }))` block, right after `app.set('trust proxy', 1)`) is deliberately narrow —
+`default-src 'self'` plus explicit, minimal per-directive allowances. Two omissions look like bugs to a
+future contributor scanning for a missing `connect-src`/`form-action` entry; they are not:
+
+- **No `connect-src` entry for Sentry.** `@sentry/react` is a listed frontend dependency and
+  `ErrorBoundary.jsx` calls `Sentry.captureException(...)`, but **no `Sentry.init(...)` call exists
+  anywhere in `connect-four/src/`** — an uninitialized client's `captureException` is a no-op that
+  issues no network request. There is nothing for the CSP to allow today. Do not add a speculative
+  `connect-src` entry for Sentry's ingest host; that would be dead configuration for traffic that
+  doesn't exist (tracked separately as a real gap: `docs/open_issues.md`, frontend Sentry never wired
+  up).
+- **No `form-action`/`frame-src` entry for Google OAuth.** `AuthModal.jsx` performs the OAuth handoff via
+  `window.location.href = '${oauthBase}/api/auth/oauth/google'` — a full top-level page navigation, not
+  a `fetch`/XHR (governed by `connect-src`), not a popup, and not an iframe (governed by `frame-src`).
+  Standard CSP source directives do not restrict top-level navigation via `location.href` assignment,
+  so no directive is needed to "permit" the OAuth redirect chain.
+- **`media-src` includes the Supabase host** (`'self'`, `` `https://${SUPABASE_HOST}` `` where
+  `SUPABASE_HOST = new URL(process.env.SUPABASE_URL).host`, computed once at startup) because signed
+  coach-audio URLs from Supabase Storage (the redirect target of `GET /api/user/tts/deep-reveal`) are
+  fetched cross-origin by the `<audio>` element. This is the one directive in the set that legitimately
+  needs a non-`'self'` origin.
+- **`style-src` stays `'self'`** with no `'unsafe-inline'` — there is no styled-components/emotion
+  dependency, and React's `style={{}}` prop sets element `.style` properties directly, which `style-src`
+  does not restrict. Add `'unsafe-inline'` only if a real CSP violation surfaces one (see the FR-005
+  smoke-test legs in `staging_checks.md`'s Epic 7 section), not preemptively.
+- **`connect-src` and `img-src` include `https://papergames.io` (and `wss://papergames.io` for
+  `connect-src`).** The Play-Online / Past-Games features talk to papergames.io directly from the browser:
+  `PlayOnlineScreen.jsx` opens a `wss://papergames.io/socket.io/...` WebSocket (governed by `connect-src`),
+  and `PastGamesListScreen.jsx` renders avatar `<img>` elements from `https://papergames.io/en/assets/...`
+  (governed by `img-src`). A bare `'self'` for either directive silently breaks online play and avatars in
+  production. **This was missed by the original spec-047 research §2 CSP analysis and caught in code review**
+  — these are real, load-bearing external dependencies, not speculative allowances, so unlike the Sentry
+  case above they MUST stay. **Caveat:** this only breaks when Express serves the built `dist/` with the CSP
+  header; `npm run dev` (Vite, port 5173) serves the SPA itself without Express's CSP, so the local FR-005
+  smoke test cannot surface a papergames CSP violation — verify online-play + avatars against a
+  **production-like** build (or the deployed staging system) specifically.
+- **The service-worker registration is in `src/main.jsx`, not an inline `<script>`.** It was moved out of
+  `index.html` precisely so `script-src 'self'` can stay strict (an inline `<script>` would need
+  `'unsafe-inline'`, a hash, or a nonce). Do not reintroduce inline scripts into `index.html` without
+  updating `script-src` accordingly.
+
+If a future change needs to add a `connect-src`/`form-action`/`frame-src` entry, first check whether it is
+a real dependency (like papergames.io above) or a speculative one (like Sentry). For Sentry/OAuth
+specifically: adding a directive almost certainly means Sentry has actually been `init()`'d or the OAuth
+flow has changed to a `fetch`/popup/iframe — re-verify the premise before adding, rather than restoring it
+"to be safe."
 
 ## Static Cross-Directory JSON Import
 
@@ -862,3 +956,64 @@ Each migration file runs inside its own `BEGIN/COMMIT` transaction. A failure:
 |---|---|
 | 0 | Success |
 | 1 | Failure — DATABASE_URL absent, connection error, migration SQL error, or file read error |
+
+---
+
+## Repo Hygiene — `.claude/` Tracking Decision (spec 047 US4)
+
+**Decision (2026-07-12): `.claude/` stays tracked in git.**
+
+**Rationale**: The project actively depends on `.claude/projects/.../memory/MEMORY.md` and its linked
+memory files as durable, cross-session, checked-in memory — this is a deliberate design choice (see this
+file's project CLAUDE.md, "Where information lives: memory vs. docs/architecture"), not an accident.
+Untracking `.claude/` would break that workflow: memory would no longer survive a fresh clone or a
+teammate's checkout, and the append-only memory-index convention depends on git history for provenance.
+
+The Epic 7 audit (F9) flagged `.claude/` as tracked reconnaissance-useful operational detail (skills
+content, memory of past bugs/decisions, internal architecture discussion) but found **no secrets** in it —
+the tradeoff is between some recon-useful detail being visible in a public/shared repo versus losing a
+working, load-bearing memory system. Given no secrets are present, this feature keeps `.claude/` tracked
+and accepts that tradeoff explicitly, rather than leaving the status quo unexamined. If the repo's
+visibility model changes (e.g., a public open-source release), this decision should be revisited — the
+recon-detail cost is a function of who can read the repo, not a fixed property of `.claude/` itself.
+
+## Security Regression Guards (spec 047 US4, audit F10 positive controls)
+
+The Epic 7 audit found the following properties **sound by design** at the time of the audit. They are
+recorded here as an explicit checklist so future work does not silently reintroduce a regression on any
+of them. Any PR touching an area below should re-confirm the guard still holds:
+
+1. **Service-role Supabase key stays server-only.** No `createClient`, `SUPABASE_SERVICE_ROLE_KEY`, or
+   `sb_secret`-prefixed key literal may appear anywhere under `connect-four/src/` (the frontend bundle).
+   The service-role key is read only in `connect-four/server/`.
+2. **RLS stays enabled, deny-by-default, on every user-data/backend table** — including the `llm_usage`
+   table added by spec 047 US5. A new table with user-scoped rows MUST ship with an RLS policy denying
+   anonymous/`authenticated`-role reads by default; server access relies on the `service_role` BYPASSRLS
+   grant, never a permissive table-level policy.
+3. **Solver invocations stay `spawn`/`spawnSync` with array args, never `shell: true`.** All c4solver
+   process invocations (`c4solver-wrapper.js` and any one-shot spawn site) MUST pass argv as an array;
+   never construct a shell command string or set `shell: true`.
+4. **No CORS middleware is added.** The API and SPA are served same-origin from one Express process by
+   design (see "SPA Catch-all Route" above). Do not add `cors` middleware or permissive
+   `Access-Control-Allow-Origin` headers without a documented reason re-litigating this.
+5. **No `dangerouslySetInnerHTML` / raw `innerHTML` / `eval` / `new Function`** may be introduced under
+   `connect-four/src/`. All rendered strings go through normal JSX text interpolation.
+6. **`tier` stays writable only by the Stripe webhook path.** `users.tier` MUST NOT be set by any
+   client-writable endpoint or user-controlled request field — the sole write path is
+   `stripeProcessor.js`'s `handleWebhook` (see "PaymentProcessor Seam" above, FR-025 status mirror).
+7. **Stripe webhook signature verification stays on the raw body.** `stripe.webhooks.constructEvent` MUST
+   continue to run against the raw (unparsed) request body — see "Webhook raw-body middleware ordering"
+   above. Never let a global JSON body-parser run ahead of the webhook route.
+
+## Localhost/IP gating under `trust proxy` (spec 047 US3, FR-009)
+
+`requireLocalhost` (gate on all `/api/admin/*` and `/api/debug/*` routes) MUST derive the peer address from
+**`req.socket.remoteAddress`**, never from `req.ip`. Because `app.set('trust proxy', 1)` is set globally
+(required so `express-rate-limit` sees real client IPs behind Railway's edge), Express computes `req.ip`
+from the client-supplied `X-Forwarded-For` header for one hop — so a direct (non-proxied) caller can send
+`X-Forwarded-For: 127.0.0.1` and spoof any `req.ip`-based localhost check. `req.socket.remoteAddress` is the
+raw TCP peer and is header-immune. In production this is Railway's proxy IP for all external traffic (→
+rejected); only a genuine on-box loopback connection (an operator shell in the same container) passes —
+which is exactly the intended "localhost-only" semantics. **Any new IP-based or localhost gate anywhere in
+the server must follow this rule**; reaching for `req.ip` reintroduces the spoof. (The original spec-047
+planning wrongly assumed `trust proxy` made `req.ip` safe; the bug was reproduced and fixed in QA.)

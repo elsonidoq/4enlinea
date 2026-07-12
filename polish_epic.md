@@ -1061,9 +1061,21 @@ record token/cost metadata for every LLM call. Grouped as the cross-cutting plat
   validation. **F9** (Info) — `.claude/` memory tracked (recon-useful; no secrets).
 - **F10** (Info) — positive controls verified sound; record so later epics don't regress them (service-role key
   server-only, RLS, no shell injection, no CORS footgun, no unsafe HTML, server-enforced tier, signed webhook).
-- LLM: `server/llmCoachHelpers.js` (`callLLM`, `:199`), `server/mechanismExplainer.mjs` (`:33`), `compute.mjs --llm`.
-  `OPENAI_MODEL=mini` for prod endpoints; `EXPLAIN_MODEL=full` for compute — names mislead. Wrap each `callLLM`
-  individually; an uncaught error silently drops the entry.
+- **LLM call sites are NOT a single choke-point — there are 4-5 independent call sites.** Verified on
+  `feature/polish`: the production `POST /api/explain-move-llm` (deep reveal) path calls
+  `computeMechanism` → `defaultCallLLM` in `server/mechanismExplainer.mjs` — **this is the primary production
+  OpenAI chat path**, not `callLLM`. `callLLM` (`server/llmCoachHelpers.js:199`) is **offline-only**, used by
+  `run_eval.mjs`; it returns only `data.choices[0].message.content` and discards `data.usage`, and receives only
+  a prompt string (no user/endpoint/purpose context) — that context lives one layer up in `index.js` request
+  handlers. `compute.mjs` (`--llm`, ~line 264) has its **own** independent OpenAI fetch (`EXPLAIN_MODEL`).
+  `index.js` also holds a **live Anthropic path** (`composeExplanation` → `anthropic.messages.create`,
+  ~`index.js:499`) with `input_tokens`/`output_tokens` — separate token semantics from OpenAI. OpenAI TTS
+  (~`index.js:3760`) is billable but char-priced, not token-priced. `OPENAI_MODEL=mini` for prod chat endpoints;
+  `EXPLAIN_MODEL=full` for `compute.mjs` — names mislead. Wrap each call individually; an uncaught error
+  silently drops the entry.
+- **Line numbers throughout this epic (`index.js:208`/`:499`/`:3760`, `llmCoachHelpers.js:199`,
+  `mechanismExplainer.mjs:33`) are as of the audit/critique pass and will drift** — re-confirm exact lines at
+  `/plan` time rather than trusting them verbatim.
 
 **Authoritative sources of truth**
 - **`docs/security_audit_fable.md`** — its §7 "Prioritized Remediation Checklist" is the task backbone; §5 is
@@ -1075,6 +1087,14 @@ record token/cost metadata for every LLM call. Grouped as the cross-cutting plat
 **Settled decisions**
 - **Audit + fix the safe items in-scope**; breaking/risky remediations → tracked tickets. (The audit's severity
   ranking + per-finding fix already say which is which.)
+- **Telemetry scope: unify OpenAI chat calls only.** `defaultCallLLM` (`mechanismExplainer.mjs`, primary
+  production path), `callLLM` (`llmCoachHelpers.js`, offline-only), and `compute.mjs`'s own OpenAI fetch route
+  through one instrumented helper returning `{ content, usage }` plus a per-call context object. The Anthropic
+  path (`composeExplanation`) and OpenAI TTS are separately-ticketed follow-ups, not v1 scope (see US7.5
+  Deferred).
+- **Usage storage target: new `llm_usage` table.** Append-only ledger (endpoint/purpose, model, user, tokens,
+  cost, timestamp), decoupled from `explanation_cache`'s lifecycle and never truncated on deploy, so cost
+  history survives.
 
 ### User stories & tasks
 
@@ -1089,10 +1109,29 @@ record token/cost metadata for every LLM call. Grouped as the cross-cutting plat
 **US7.2 — Deploy & transport hardening (audit F2, F3; checklist C1–C6).**
 *As the founder, I want prod to fail safe on session security and admin authz.*
 1. Confirm `NODE_ENV=production` on Railway; add a boot-time assertion/warning that refuses/loudly warns if `NODE_ENV` isn't `production` while `SUPABASE_URL` points at prod (F2).
-2. Add `helmet` with a tuned CSP + HSTS (`maxAge` 1y, includeSubDomains) + `nosniff` + `frame-ancestors`/XFO + Referrer-Policy (F3).
-3. Verify auth cookies ship `HttpOnly; Secure; SameSite=Lax` on `sb_access_token` + `sb_refresh_token` in prod (C3).
-4. Verify HTTPS is enforced (HTTP → 301/308) and that `.env`/`.git`/source maps are not served (C2, C4).
-5. Verify the admin gate is active in prod: unauthenticated `GET/POST /api/admin/lessons` → 401/403, not 200 (C5, C6).
+2. Add `helmet` with a tuned CSP + HSTS (`maxAge` 1y, includeSubDomains) + `nosniff` + `frame-ancestors`/XFO +
+   Referrer-Policy (F3). The CSP must not be a bare `default-src 'self'` placeholder if the app has real
+   external origins that a naive default would silently break — but planning (`specs/047.../research.md`
+   §2/§4/§5) found the two originally-assumed external origins don't actually apply here: `@sentry/react`'s
+   `Sentry.init()` is never called anywhere in `src/`, so `captureException` is currently a no-op that issues
+   no network request (frontend error reporting is dead code — tracked separately in `docs/open_issues.md`,
+   not fixed by this epic); and Google OAuth's redirect is a full top-level `window.location.href` navigation,
+   which standard CSP source directives (`connect-src`/`frame-src`/`form-action`) do not restrict. Neither
+   needs a CSP source directive. Enumerate sources explicitly:
+   - `connect-src`: `'self'` only (same-origin API — no client Supabase SDK, no Sentry ingest to allow).
+   - `img-src` / `media-src`: `'self'` + the Supabase Storage signed-URL host (`coach-tts` bucket audio),
+     derived from `SUPABASE_URL` at runtime.
+   - `frame-ancestors`: `'none'`.
+   - `script-src`/`style-src`: scope to `'self'` (ship `style-src 'self'`; add `'unsafe-inline'` only if the
+     step-3 smoke test surfaces a real violation).
+3. Add a smoke test (manual or scripted) verifying, with `helmet`/CSP enabled: deep-reveal TTS audio still
+   plays in the browser and a full Google OAuth sign-in round-trip still succeeds (no CSP `media-src`/
+   `connect-src`/script/style console violation). **Error-reporting is N/A for this smoke test** — no
+   error-reporting service is currently wired for the frontend (see Deferred, below); do not gate the CSP
+   ship on a Sentry check. Do not ship the CSP without the TTS + OAuth legs passing.
+4. Verify auth cookies ship `HttpOnly; Secure; SameSite=Lax` on `sb_access_token` + `sb_refresh_token` in prod (C3).
+5. Verify HTTPS is enforced (HTTP → 301/308) and that `.env`/`.git`/source maps are not served (C2, C4).
+6. Verify the admin gate is active in prod: unauthenticated `GET/POST /api/admin/lessons` → 401/403, not 200 (C5, C6).
 
 **US7.3 — Admin-gate & server-response hardening (audit F4, F5, F8; checklist C7).**
 *As the founder, I want admin endpoints unspoofable and error bodies leak-free.*
@@ -1110,13 +1149,49 @@ record token/cost metadata for every LLM call. Grouped as the cross-cutting plat
 4. Verify rate limiting is per-IP behind the proxy (429s appear after the limit) (C11); confirm GitHub `main` branch protection + audit CI for secret leakage (§6).
 5. Record the F10 positive controls as regression guards (service-role key server-only, RLS, no shell injection, no unsafe HTML, server-enforced tier, signed Stripe webhook) so later epics don't reintroduce them.
 
-**US7.5 — LLM token/cost telemetry (#20).**
-*As the founder, I want per-request token/cost accounting.*
-1. Capture usage (`prompt_tokens`/`completion_tokens`/`total_tokens`) at the `callLLM` choke-point (`llmCoachHelpers.js:199`).
-2. Derive a dollar estimate from a per-model rate table (respect `OPENAI_MODEL=mini` endpoints vs `EXPLAIN_MODEL=full` compute).
-3. Persist to a new `llm_usage` table (or column set) with context (endpoint/purpose, model, user, timestamp).
-4. Cover `mechanismExplainer.mjs` (`:33`) and `compute.mjs --llm`; centralize so new call sites inherit; never swallow the underlying call error (per `feedback_calllm_error_handling`).
-5. Test: deep-reveal + compute paths each record a usage row with the correct model + cost.
+**US7.5 — LLM token/cost telemetry (#20; scope: OpenAI chat only).**
+*As the founder, I want per-request token/cost accounting for the OpenAI chat call sites.*
+
+Scope decision: unify **OpenAI chat calls only** — `defaultCallLLM` (`mechanismExplainer.mjs`), `callLLM`
+(`llmCoachHelpers.js`), and `compute.mjs`'s own OpenAI fetch. The Anthropic path (`composeExplanation` in
+`index.js`) and OpenAI TTS are **out of scope for v1** (see Deferred, below) — this resolves the #20 ("every
+OpenAI call") vs the original AC ("deep-reveal + compute") scope gap in favor of the narrower, currently-real
+call sites.
+
+1. Change the return shape of the unified OpenAI-chat helper to `{ content, usage }` (currently every call
+   function — `callLLM`, `defaultCallLLM`, `compute.mjs`'s fetch — discards `data.usage` and returns only the
+   string content). Each caller must be updated to destructure `{ content, usage }` instead of a bare string.
+2. Change each caller to also pass a context object `{ endpoint, userId, purpose }` into the helper, since usage
+   context (which endpoint, which user, why) is known one layer up in the `index.js` request handlers, not
+   inside the call function itself. Enumerate the exact caller edits:
+   - `mechanismExplainer.mjs`'s `defaultCallLLM`, invoked from `POST /api/explain-move-llm` (deep reveal) —
+     pass `{ endpoint: 'explain-move-llm', userId: req.user?.id, purpose: 'deep-reveal' }`.
+   - `compute.mjs --llm`'s own OpenAI call — pass `{ endpoint: 'compute-eval', userId: null, purpose: 'offline-eval' }` (CLI, no request-scoped user).
+   - `llmCoachHelpers.js`'s `callLLM`, invoked from `run_eval.mjs` — pass `{ endpoint: 'run-eval', userId: null, purpose: 'offline-eval' }`.
+3. Derive a dollar estimate from a per-model rate table (respect `OPENAI_MODEL=mini` for prod chat endpoints vs
+   `EXPLAIN_MODEL=full` for `compute.mjs`).
+4. Persist each call's usage as a row in a **new, append-only `llm_usage` table** (endpoint, purpose, user_id,
+   model, prompt_tokens, completion_tokens, total_tokens, cost, timestamp). This table is decoupled from
+   `explanation_cache`'s lifecycle and must **not** be truncated on deploy — cost history must survive across
+   deploys (unlike `explanation_cache`, see memory `project_spec039_audio_interactive_coach`).
+5. Centralize so new OpenAI-chat call sites inherit the wrapper automatically; never swallow the underlying
+   call error (per `feedback_calllm_error_handling` — wrap each call individually, an uncaught error must not
+   silently drop the entry).
+6. Test: the deep-reveal path (`defaultCallLLM`) and the `compute.mjs --llm` path each record a usage row in
+   `llm_usage` with the correct model + cost.
+
+### Deferred
+- **Anthropic path (`composeExplanation` → `anthropic.messages.create`, ~`index.js:499`) instrumentation** —
+  separately-ticketed follow-up; Anthropic's usage shape (`input_tokens`/`output_tokens`) differs from OpenAI's
+  (`prompt_tokens`/`completion_tokens`), so it needs its own rate table and cannot share the unified OpenAI-chat
+  helper without complicating it.
+- **OpenAI TTS (~`index.js:3760`) cost telemetry** — separately-ticketed follow-up; TTS is billed per-character,
+  not per-token, so it needs a different usage shape and rate calculation than the chat helper produces.
+- **Frontend error-reporting (Sentry) wiring, and FR-005's error-reporting smoke-test leg** — not wired in prod;
+  `@sentry/react`'s `Sentry.init()` is never called, so `ErrorBoundary.jsx`'s `captureException` is currently a
+  no-op, and server-side Sentry's `SENTRY_DSN` is commented out/not confirmed set — FR-005's error-reporting leg
+  is therefore N/A this epic (CSP smoke test covers only TTS + Google OAuth); tracked as a `docs/open_issues.md`
+  backlog item (frontend Sentry init), not fixed here.
 
 **Acceptance criteria**
 - `npm audit --production` → 0 critical/high (or explicitly ticketed); `concurrently` is in `devDependencies`.
@@ -1126,21 +1201,29 @@ record token/cost metadata for every LLM call. Grouped as the cross-cutting plat
   debug endpoint rejects malformed movestrings.
 - Tracked `connect-four/log` + `.DS_Store` removed and gitignored; live RLS / private TTS bucket / redirect
   allowlist verified.
-- Deep-reveal + compute LLM paths each record a usage row with the correct model + cost.
+- `helmet` CSP is enabled with the enumerated sources (`connect-src 'self'`, Supabase Storage signed-URL host
+  via `media-src`, `frame-ancestors 'none'`); the smoke test confirms deep-reveal audio still plays and a full
+  Google OAuth round-trip still succeeds. (Error-reporting is N/A this epic — see Deferred.)
+- The deep-reveal path (`defaultCallLLM`) and the `compute.mjs --llm` path each record a usage row in the new
+  `llm_usage` table with the correct model + cost. (Anthropic path and OpenAI TTS are explicitly deferred —
+  see US7.5 Deferred.)
 
 **NOT included:** full pen-test/third-party audit (the audit is a static defensive review); breaking dependency
 upgrades (ticketed); a cost dashboard UI; spend rate-limiting; the Stripe-secret setup itself (Epic 5 owns keys;
-Epic 7 verifies handling). C1–C12 items whose *authoritative* confirmation is dashboard-side (Railway env,
-Supabase config, GitHub settings — audit §6) are owner-run verifications, not code tasks.
+Epic 7 verifies handling); Anthropic-path token/cost telemetry (deferred — different usage shape, see US7.5
+Deferred); OpenAI TTS cost telemetry (deferred — char-priced, not token-priced, see US7.5 Deferred). C1–C12
+items whose *authoritative* confirmation is dashboard-side (Railway env, Supabase config, GitHub settings —
+audit §6) are owner-run verifications, not code tasks.
 
 **Sizing verdict — Full speckit.** 5 stories × ≥5 tasks; deps + deploy config + server hardening + repo/live
-verification + LLM instrumentation; the audit resolves most "which vuln is safe" decisions but F2/F4 and the
-usage-storage target remain open. Report already exists (`docs/security_audit_fable.md`); this epic is its
-`/plan` + remediation.
+verification + LLM instrumentation; the audit resolves most "which vuln is safe" decisions but F2/F4 remain
+open (usage-storage target and CSP source list are now resolved — see Settled decisions / US7.5 / US7.2).
+Report already exists (`docs/security_audit_fable.md`); this epic is its `/plan` + remediation. Line numbers
+cited throughout are re-confirmed at `/plan` time (see Non-obvious facts).
 
 **Open questions (`/clarify`):** F2 boot-assertion behavior (refuse-to-boot vs warn); F4 add mandatory
-admin-session to localhost endpoints or leave localhost-only; keep `.claude/` tracked (F9)?; `llm_usage` table
-vs extending `explanation_cache`; rate-table source (constants vs config).
+admin-session to localhost endpoints or leave localhost-only; keep `.claude/` tracked (F9)?; rate-table source
+(constants vs config).
 
 ---
 

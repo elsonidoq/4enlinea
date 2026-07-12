@@ -209,7 +209,7 @@ try {
     // ── Step 2: Attempt 1 ─────────────────────────────────────────────────
     let raw1;
     try {
-      raw1 = await callLLM(context.prompt);
+      ({ content: raw1 } = await callLLM(context.prompt));
     } catch (err) {
       record.llm_error = err.message;
       appendFileSync(outputFile, JSON.stringify(record) + '\n');
@@ -232,7 +232,7 @@ try {
     // ── Step 3: Attempt 2 (retry) ─────────────────────────────────────────
     let raw2;
     try {
-      raw2 = await callLLM(context.prompt);
+      ({ content: raw2 } = await callLLM(context.prompt));
     } catch (err) {
       record.llm_error = err.message;
       appendFileSync(outputFile, JSON.stringify(record) + '\n');

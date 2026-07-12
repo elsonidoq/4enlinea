@@ -35,6 +35,7 @@ import { toNarratorVector, pruneVector } from './reasonNarratorVector.mjs';
 import { buildReasonRenderModel, assembleGroundedPrompt, buildRenderDecision } from './renderReasonModel.mjs';
 import { processAnnotations } from './reason_engine/zoneAnnotations.mjs';
 import { loadEnv } from './reason_engine/lib/boardUtils.mjs';
+import { callOpenAIChat } from '../llmChat.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -261,38 +262,6 @@ export function renderDecisionForCondition(nv, condition) {
   try { return buildRenderDecision(nv); } catch { return null; }
 }
 
-// ── OpenAI call (own fn; reads EXPLAIN_MODEL; larger budget than callLLM) ────────
-let useJsonFormat = true; // disabled globally if the model rejects response_format
-async function callExplainLLM(prompt) {
-  const body = {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_completion_tokens: 4000, // reasoning + output share this budget on gpt-5.x
-  };
-  if (useJsonFormat) body.response_format = { type: 'json_object' };
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    if (useJsonFormat && /response_format/i.test(errBody)) {
-      // Model doesn't support json_object — disable and retry once without it.
-      useJsonFormat = false;
-      return callExplainLLM(prompt);
-    }
-    throw new Error(`OpenAI API error ${res.status}: ${errBody}`);
-  }
-  const data = await res.json();
-  return data.choices[0].message.content;
-}
-
 // ── Lenient JSON parse (handles fenced or prose-wrapped output) ──────────────────
 function parseAnswer(raw) {
   try { return { answer: JSON.parse(raw), parse_error: null }; } catch {}
@@ -372,7 +341,13 @@ async function runLlm(evidenceRows) {
         // Per-call error isolation: a single failure drops ONE line, not the run.
         let raw = null, answer = null, parse_error = null, call_error = null;
         try {
-          raw = await callExplainLLM(prompt);
+          ({ content: raw } = await callOpenAIChat(prompt, {
+            model,
+            apiKey: process.env.OPENAI_API_KEY,
+            endpoint: 'compute-eval',
+            userId: null,
+            purpose: 'offline-eval',
+          }));
           ({ answer, parse_error } = parseAnswer(raw));
         } catch (err) {
           call_error = err.message;

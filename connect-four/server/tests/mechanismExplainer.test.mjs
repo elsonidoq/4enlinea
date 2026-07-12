@@ -66,6 +66,26 @@ test('two LLM failures surface the error without throwing and without a third at
   assert.match(res.callError, /persistent boom/);
 });
 
+test('threads a non-null userId to the injected callLLM (spec 047 T034 propagation)', async () => {
+  let seenUserId;
+  const res = await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver,
+    userId: 'user-abc-123',
+    callLLM: async (prompt, ctx) => { seenUserId = ctx?.userId; return okAnswer; },
+  });
+  assert.equal(res.notABlunder, false);
+  assert.equal(seenUserId, 'user-abc-123');
+});
+
+test('defaults userId to null when the caller supplies none', async () => {
+  let seenUserId = 'not-yet-set';
+  await computeMechanism(MOVESTRING, PLAYED_COL, {
+    solver,
+    callLLM: async (prompt, ctx) => { seenUserId = ctx?.userId; return okAnswer; },
+  });
+  assert.equal(seenUserId, null);
+});
+
 test('parseAnswer extracts a JSON object from prose-wrapped output', () => {
   const { answer, parse_error } = parseAnswer('Here you go: {"mechanism":"x"} thanks');
   assert.equal(parse_error, null);

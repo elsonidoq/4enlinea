@@ -208,3 +208,140 @@ For each check record:
   - **Expected**: Only lesson 1 (lowest `order`) is unlocked; all lessons with a higher `order` show as
     locked (order or tier).
   - **Source**: Epic 6 / spec 046 SC-001, US6.1.
+
+## Epic 7 — Platform Hardening & Cost Observability (spec 047)
+
+- [ ] **Production dependency vuln scan against the deployed image.**
+  - **What**: run `npm audit --production` against the deployed image.
+  - **Why staging**: the production dependency graph as actually built/deployed can differ from local
+    node_modules resolution.
+  - **Expected**: 0 critical/high findings.
+  - **Source**: audit C12, spec US1 AC4, SC-001.
+
+- [ ] **Security response headers present on a live response.**
+  - **What**: `curl -sI https://<staging-host>/` and confirm `content-security-policy`,
+    `strict-transport-security`, `x-content-type-options: nosniff`, and `referrer-policy` are all present
+    (the exact CSP directive set from `server/index.js`'s `helmet` mount).
+  - **Why staging**: `npm run test:fast`'s `tests/unit/securityHeaders.test.js` only proves the directive
+    set on a local throwaway app; this confirms `helmet` is actually mounted on the deployed process and
+    that no reverse-proxy/CDN layer strips or rewrites the headers before they reach the client.
+  - **Expected**: all four headers present on every response, values matching T009's directive set.
+  - **Source**: audit C1, spec US2 AC2, SC-002.
+
+- [ ] **Plain-HTTP → HTTPS redirect, and `.env`/`.git`/source-map requests return 404.**
+  - **What**: (1) `curl -I http://<staging-host>/` (no TLS) and confirm a 301/308 redirect to `https://`;
+    (2) `curl -I https://<staging-host>/.env`, `.../.git/config`, and `.../assets/<any>.js.map` and confirm
+    each returns 404.
+  - **Why staging**: depends on Railway's edge/proxy behavior and the deployed static-file serving
+    config — neither exists in local dev.
+  - **Expected**: HTTP → HTTPS redirect on every request; `.env`/`.git`/`*.map` all 404, not 200.
+  - **Note**: FR-007's redirect/dotfile-404 behavior is **verify-only** in spec 047 — no code task in this
+    feature implements the redirect middleware or a dotfile/source-map deny rule. If this check fails, open
+    a follow-up code task (Express force-HTTPS redirect behind `trust proxy = 1` reading
+    `X-Forwarded-Proto`, plus a dotfile/`.map` deny route or static-serving exclusion) rather than treating
+    the failure as merely informational.
+  - **Source**: audit C2/C4, spec US2 AC5.
+
+- [ ] **Session cookies carry `Secure; HttpOnly; SameSite=Lax` in production.**
+  - **What**: after a real sign-in against staging, inspect the `Set-Cookie` headers (or DevTools
+    Application → Cookies) for both `sb_access_token` and `sb_refresh_token`.
+  - **Why staging**: `cookieOpts()`'s `secure` flag is `process.env.NODE_ENV === 'production'` — only
+    true in the deployed environment, never in local dev.
+  - **Expected**: both cookies show `Secure`, `HttpOnly`, and `SameSite=Lax`.
+  - **Source**: audit C3, spec US2 AC4.
+
+- [ ] **`NODE_ENV=production` active in Railway, and unauthenticated admin endpoints are rejected.**
+  - **What**: (1) confirm via Railway logs/env that the server booted normally (T008's boot assertion did
+    NOT fire and exit(1) the process); (2) `curl` (no auth cookies) `GET` and `POST
+    https://<staging-host>/api/admin/lessons` and confirm the response.
+  - **Why staging**: T008's boot assertion and `requireAdmin`'s `NODE_ENV` bypass can only be observed
+    against the real deployed process/env.
+  - **Expected**: server boots normally (no fatal boot-assertion exit); unauthenticated admin requests
+    return 401/403, not 200.
+  - **Source**: audit C5/C6, spec US2 AC1/AC6.
+
+- [ ] **Repeat the FR-005 TTS + Google OAuth smoke-test legs against the real deployed CSP.**
+  - **What**: with the CSP live on staging (no local-dev shortcuts), (1) trigger a Deep Reveal and confirm
+    coach audio plays; (2) complete a full Google sign-in round-trip and confirm it succeeds; (3) click
+    through Home → Board → Deep Reveal with DevTools console open and confirm zero CSP-violation messages;
+    (4) **open Play Online and confirm the papergames WebSocket connects** (online play works, no
+    `connect-src` violation for `wss://papergames.io`); (5) **open Past Games and confirm papergames avatar
+    images render** (no `img-src` violation for `https://papergames.io`); (6) **confirm the service worker
+    registers** (Application → Service Workers in DevTools) with no `script-src` violation.
+  - **Why staging**: T010 exercised these legs against a **local Vite dev server, where Express's CSP header
+    is NOT applied to the SPA document** — so the papergames-WebSocket, papergames-avatar, and inline-script
+    CSP interactions are structurally invisible locally and can ONLY be confirmed against Express serving the
+    built `dist/` (staging/production). The deployed CSP, Supabase host, and OAuth redirect URIs must also be
+    independently confirmed against production config, which does not exist locally.
+  - **Expected**: all six legs pass with zero CSP-violation console messages; online play, avatars, and SW
+    registration all function.
+  - **Source**: spec FR-005 + spec-047 code-review (papergames.io connect-src/img-src, inline-SW-script
+    script-src — see `docs/architecture/server-conventions.md` "CSP Directive Rationale").
+
+- [ ] **Forged `X-Forwarded-For: 127.0.0.1` header does not bypass the localhost admin gate.**
+  - **What**: `curl -H 'X-Forwarded-For: 127.0.0.1' <staging-url>/api/admin/candidates` (and one other
+    `requireLocalhost`-gated endpoint, e.g. `POST <staging-url>/api/debug/classify-all`), sent from a
+    non-localhost client.
+  - **Why staging**: `requireLocalhost` now checks `req.socket.remoteAddress` (the raw TCP peer,
+    header-immune) rather than `req.ip` (which `trust proxy = 1` derives from `X-Forwarded-For` and is
+    therefore spoofable — this was found and fixed in spec-047 QA). In production, `req.socket.remoteAddress`
+    is Railway's proxy IP (non-loopback → rejected), so external traffic can never pass; only a genuine
+    on-box loopback connection does. Confirm this holds against Railway's actual edge topology, absent in
+    local dev.
+  - **Expected**: 403, never 200 — both with and without the forged `X-Forwarded-For: 127.0.0.1` header.
+  - **Source**: audit C7, spec US3 AC1, FR-009 (+ spec-047 QA fix: raw-socket-peer check).
+
+- [ ] **Anonymous-key data access to a user-data table returns no rows (RLS live-enforced).**
+  - **What**: using the Supabase **anon** key (never the service-role key) from a plain `supabase-js`
+    client with no session, attempt `select * from blunders limit 1` (or another user-data table) against
+    the staging project.
+  - **Why staging**: RLS policy *configuration* can be read from the migration files, but only a live query
+    against the deployed Supabase project confirms the policy is actually enforced end-to-end — deny-by-
+    default in the dashboard, not just in the `.sql` source.
+  - **Expected**: zero rows returned (or an explicit permission-denied error) — never real user rows.
+  - **Source**: audit C8, spec US4 AC3.
+
+- [ ] **Unsigned public URL to the private `coach-tts` audio bucket returns a client error.**
+  - **What**: construct a raw public-style URL to an object in the `coach-tts` storage bucket (no signed-URL
+    token) and `curl` it.
+  - **Why staging**: bucket privacy is a dashboard/storage-policy setting on the deployed Supabase project;
+    it cannot be verified from local config or source alone.
+  - **Expected**: 4xx client error (403/404), never the audio file content.
+  - **Source**: audit C9, spec US4 AC3.
+
+- [ ] **Sign-in/magic-link redirect allowlist has no wildcard or unintended origin.**
+  - **What**: in the Supabase Dashboard → Authentication → URL Configuration, inspect the "Redirect URLs"
+    allowlist for the staging/production project.
+  - **Why staging**: this is a dashboard-side config value with no local-dev equivalent — it can only be
+    read from the deployed project's auth settings.
+  - **Expected**: only the known production/staging frontend origin(s) are listed; no `*` wildcard, no
+    stray preview/localhost origin left over from earlier testing.
+  - **Source**: audit C10, spec US4 AC3.
+
+- [ ] **Rate limiting is effective per-client behind the Railway proxy.**
+  - **What**: issue a burst of requests exceeding the configured rate limit (e.g. `for i in $(seq 1 50);
+    do curl -s -o /dev/null -w '%{http_code}\n' https://<staging-host>/api/scores; done`) from a single
+    client address.
+  - **Why staging**: confirms the limiter keys on the real client address as seen through Railway's proxy
+    (via `trust proxy = 1` + `X-Forwarded-For`), not on the proxy's own address — a config that only
+    manifests against the deployed topology.
+  - **Expected**: requests begin returning `429` partway through the burst, not all `200`.
+  - **Source**: audit C11, spec US4 AC4.
+
+- [ ] **GitHub `main` branch protection + CI secret-leakage scanning are enabled (dashboard-only, owner-run).**
+  - **What**: in the GitHub repo settings → Branches, confirm branch protection is enabled on `main`
+    (e.g. required PR review / status checks before merge); in the CI configuration (GitHub Actions or
+    equivalent), confirm a secret-leakage scanning step (e.g. gitleaks/trufflehog or GitHub's native
+    secret scanning) runs on every push/PR.
+  - **Why staging**: this is a **kind-2 dashboard/platform-configuration item** — never code-addressable to
+    begin with (no file in this repo enables or disables it); it must be confirmed directly in GitHub's
+    settings UI by the repo owner, not inferred from source.
+  - **Expected**: `main` branch protection is ON; CI includes an active secret-leakage scan step.
+  - **Source**: audit §6, spec US4 (owner-run, dashboard-side verification).
+
+- [ ] **`llm_usage` row count survives a routine staging deploy (no truncation/purge).**
+  - **What**: query `llm_usage` row count immediately before and after a routine staging deploy.
+  - **Why staging**: only a real deploy cycle can confirm the table is never truncated/purged as a side
+    effect of deploy tooling.
+  - **Expected**: row count after ≥ row count before (zero loss).
+  - **Source**: FR-021/SC-007, spec US5 AC5.

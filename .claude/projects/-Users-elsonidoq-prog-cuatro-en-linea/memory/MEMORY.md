@@ -39,6 +39,8 @@
 - [OPENAI_API_KEY is present](feedback_openai_key_present.md) — real working key in connect-four/server/.env; DON'T defer real-TTS/LLM checks as "no key"; verify on localhost
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
 - [Admin localhost directive](project_admin_localhost_directive.md) — owner: ALL /admin (API+frontend) localhost-only, one-liner/route; requireAdmin is a NO-OP outside NODE_ENV=production
+- [index.js hardening traps](project_index_hardening_traps.md) — req.ip XFF-spoofable under trust proxy (use req.socket.remoteAddress); 500-body sweep misses {error}-destructure leak
+- [CSP/helmet traps](project_csp_helmet_traps.md) — CSP invisible under Vite dev (test Express-served dist); app has browser papergames.io wss+img deps; SW reg moved to main.jsx
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; magic-link hash race; OAuth lands on site root + NO route auth guard → gating a CTA never gates its screen
 - [IndexedDB sign-in hang](project_indexeddb_signin_hang.md) — deleteDatabase blocked by any open conn (incl. other tabs) → open() hangs → sign-in silently stalls (switchToSupabase awaits _db() before setSession); clear stores in place
 - [Supabase connection & storage](reference_supabase_connection.md) — sb_secret; session pooler; Node inline pattern; storage upload/createSignedUrl shapes (signedUrl not url)
@@ -68,6 +70,7 @@
 
 ## Production LLM coach / deep reveal (toFeatureVector / explainContext)
 
+- [Prod LLM call graph](project_prod_llm_call_graph.md) — prod deep-reveal = defaultCallLLM (mechanismExplainer), NOT callLLM (offline-only); +Anthropic composeExplanation +compute.mjs +TTS; no single choke-point
 - [Feature vector design](feedback_feature_vector_design.md) — toFeatureVector: keep grounded cells, drop plumbing/derivations/occurrence-artifacts; keep instance counts
 - [Explain prompt grounding traps](project_explain_prompt_grounding_traps.md) — 3 open explainContext traps (empty section, parity always_include, blunder-threat direction mismatch) drive fabrication
 - [LLM perspective bug](feedback_llm_perspective_bug.md) — name player explicitly in Move context section

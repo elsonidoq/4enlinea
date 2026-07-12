@@ -63,7 +63,7 @@ Rationale: jsonb for variable-shape structured data; typed columns for values us
 
 Two access tiers:
 
-**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`):
+**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`, `llm_usage`):
 - Enable RLS.
 - Define **no** public policies.
 - The Express server accesses these exclusively via the service role key, which bypasses RLS.
@@ -92,6 +92,45 @@ Per-table verbs actually granted to the frontend:
 | `users` | `SELECT, UPDATE` | No frontend `INSERT` — rows are auto-created by `loadUser` (GoTrue trigger), never by the frontend. |
 | `session_stats` | `SELECT, INSERT, UPDATE` | |
 | `puzzle_attempts` | `SELECT, INSERT` | |
+
+## `llm_usage` (migration 056)
+
+Append-only ledger of every OpenAI chat-completion call made through the unified `server/llmChat.js`
+helper (spec 047 US5). One row per call attempt that **completed successfully**; a failed call is
+logged via `logError` but never produces a row (no partial/fabricated records).
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `uuid` | no | PK, `gen_random_uuid()` default. |
+| `endpoint` | `text` | no | Which feature/endpoint triggered the call — free-text, not an enum/FK, so new call sites add new values without a migration. Current values: `'explain-move-llm'` (production deep-reveal), `'run-eval'` (offline eval harness), `'compute-eval'` (offline compute/eval script). |
+| `purpose` | `text` | no | Why the call was made. Current values: `'deep-reveal'`, `'offline-eval'`. |
+| `user_id` | `uuid` | **yes** | Supabase user id, when known. Null for offline/CLI calls. No FK to `users` — deliberately decoupled from a live user row, same rationale as `tracks` (an analytics/ledger table, not a relational one). |
+| `model` | `text` | no | The exact OpenAI model id string sent in the request (e.g. `'gpt-5.4-mini'`), never a display label. |
+| `prompt_tokens` | `integer` | no | From the OpenAI response's `usage.prompt_tokens`. |
+| `completion_tokens` | `integer` | no | From `usage.completion_tokens`. |
+| `total_tokens` | `integer` | no | From `usage.total_tokens`, kept as its own column rather than derived (prompt+completion), in case OpenAI's total ever diverges, e.g. reasoning tokens. |
+| `cost_usd` | `numeric` | **yes** | Derived via `server/llmPricing.js`'s in-repo rate table for `model`. Null only when `model` has no rate-table entry — the row is still written; a missing price is a data-quality gap surfaced via a `logError` warning, never a reason to drop the row. |
+| `created_at` | `timestamptz` | no | `now()` default. |
+
+**Indexes**: none beyond the PK — no dashboard/query FR consumes this table yet. A future consumer
+can add `(endpoint, created_at)` or `(user_id, created_at)` without touching this table's shape.
+
+**RLS**: enabled, deny-by-default, **no policies** — a backend-only table per the tier above
+(migrations `010`/`037`/`055` precedent). All access is server-side via the service-role client;
+writes go through `server/llmUsageLedger.js`'s `recordUsage(...)`, never a direct client-side insert.
+
+**Lifecycle — append-only, contrasted with `explanation_cache`**: `llm_usage` is **never truncated or
+purged by deploy** — this is the defining difference from `explanation_cache`, which the deploy
+pipeline `TRUNCATE`s before each release (memory `project_spec039_audio_interactive_coach`). No
+migration or deploy script may add a `TRUNCATE`/`DELETE` against `llm_usage`; it is a permanent,
+growing cost ledger, not a cache to be invalidated on redeploy.
+
+**Write path**: `server/llmUsageLedger.js` exports `recordUsage({ endpoint, purpose, userId, model,
+usage, costUsd })`, called fire-and-forget (never awaited) from `server/llmChat.js`'s
+`callOpenAIChat` after a successful OpenAI response — see server-conventions.md's "LLM Coach
+Helpers" section for the caller contract. Errors inside `recordUsage` are caught and logged via
+`logError('[llm-usage-ledger]', err, { endpoint, purpose })` internally; they never propagate to the
+LLM caller, so a ledger-write failure cannot fail or delay the user-facing LLM response.
 
 ## Migration Naming
 
