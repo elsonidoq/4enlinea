@@ -116,7 +116,7 @@ The auth-session contract still describes a server-side de-dup Map coalescing co
 
 ## OI-7 — No DOM/browser test harness exists in this repo
 
-**Status**: deferred (standing gap, not a blocker for any single feature)
+**Status**: ✅ RESOLVED 2026-07-12 — React Testing Library + jsdom adopted under `npm run test:dom`; documented in testing-conventions.md
 **Area**: project-wide test infrastructure — `connect-four/tests/`, `testing-conventions.md`
 **Discovered**: spec `046` plan review (2026-07-11), while resolving the FR-024/SC-007 board-flicker
 regression-check design
