@@ -14,6 +14,13 @@
       "coach": "¡Buena partida! ¿Quieres un análisis más profundo de las partidas que juegas en línea también?",
       "signInReason": "Inicia sesión para importar tu historial de Papergames."
     }
+  },
+  "settings": {
+    "language": {
+      "label": "Idioma",
+      "en": "Inglés",
+      "es": "Español"
+    }
   }
 }
 

@@ -841,5 +841,12 @@
       "coach": "Nice game! Want deeper analysis on the games you play online too?",
       "signInReason": "Sign in to import your Papergames history."
     }
+  },
+  "settings": {
+    "language": {
+      "label": "Language",
+      "en": "English",
+      "es": "Español"
+    }
   }
 }

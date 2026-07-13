@@ -4,12 +4,14 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { track } from '../lib/track.js';
 import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
+import { useLanguage } from '../lib/useLanguage.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SettingsScreen({ go, goBack }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
+  const { lang, changeLanguage } = useLanguage();
   const isAuthenticated = !!session;
 
   // Epic 8 — Onboarding Experience, US4 (T043/FR-010, research.md R6): "Replay intro" —
@@ -403,6 +405,23 @@ export function SettingsScreen({ go, goBack }) {
           >
             {t('onboarding.replayIntro')}
           </button>
+        </section>
+
+        {/* OI-15: language switcher machinery — es.json is a partial bundle
+            (2 of 24 sections) until the separate translation effort lands. */}
+        <section>
+          <label style={{ display: 'block', fontSize: 14, marginBottom: 6 }}>
+            {t('settings.language.label')}
+          </label>
+          <select
+            value={lang}
+            onChange={(e) => changeLanguage(e.target.value)}
+            className="btn btn-ghost"
+            style={{ width: '100%', fontSize: 14, padding: '10px' }}
+          >
+            <option value="en">{t('settings.language.en')}</option>
+            <option value="es">{t('settings.language.es')}</option>
+          </select>
         </section>
 
         {devReset}
