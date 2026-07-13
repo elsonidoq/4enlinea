@@ -30,10 +30,9 @@ import { dirname, join } from 'node:path';
 import { createServer } from 'node:http';
 import express from 'express';
 import { evaluatePredicate } from '../../server/predicates.js';
-import { scoreMove } from '../../server/moveQualityScorer.js';
+import { createEvaluateMoveHandler } from '../../server/evaluateMoveHandler.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const MULTI_SOLUTION_CATEGORIES = new Set(['immediate_threat', 'forced_block', 'double_threat']);
 
 describe('ChallengeScreen.jsx source — request body shape guard (T015/T021 orphaned-send regression)', () => {
   test('the /api/evaluate-move fetch call body includes movestring and category', () => {
@@ -56,43 +55,74 @@ describe('ChallengeScreen.jsx source — request body shape guard (T015/T021 orp
     assert.match(src, /MULTI_SOLUTION_CATEGORIES\.has\(effectiveCategory\)/);
     assert.match(src, /data\.accepted === true/);
   });
-});
 
-// Mounts the SAME production functions server/index.js's /api/evaluate-move handler uses, wired
-// the same way (see server/index.js ~1547-1616), so this is not a reimplementation of the
-// business logic — only the express boilerplate (route registration, EMPTY_BOARD_SCORES,
-// solver.query) is duplicated to avoid booting the full monolithic server.
-function buildEvaluateMoveApp(solver) {
-  const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
-  const app = express();
-  app.use(express.json());
-
-  app.post('/api/evaluate-move', async (req, res) => {
-    const { movestring, col, category } = req.body;
-    const colInt = typeof col === 'number' ? col : parseInt(col, 10);
-
-    const scores = movestring === '' ? EMPTY_BOARD_SCORES : await solver.query(movestring);
-    const { badge, quality } = scoreMove(scores, colInt);
-
-    let accepted = null;
-    if (MULTI_SOLUTION_CATEGORIES.has(category)) {
-      const predicateResult = evaluatePredicate({ category, moveString: movestring }, colInt, scores);
-      accepted = predicateResult.result === 'correct' || predicateResult.result === 'tied';
-    }
-
-    res.json({ badge, quality, accepted });
+  // Spec 049 (Epic 9) T016 — regression guard for the mandatory snake_case→camelCase remap
+  // (T010). The client's local puzzle object (`current`, from GET /api/puzzles/draw) is
+  // snake_case; the server's /api/evaluate-move handler reads camelCase (correctCol,
+  // highlightMetadata). If a future edit drops this remap, every single-answer-category puzzle
+  // silently fails closed (accepted:false for every attempt, indistinguishable from a genuine
+  // wrong answer — no error, no 400) per FR-007. This asserts the remap fields are present in
+  // the request-body construction, source-text only (mirrors the `data.accepted === true` check
+  // above).
+  test('the /api/evaluate-move request body remaps current.correct_col and current.highlight_metadata to camelCase', () => {
+    const src = readFileSync(
+      join(__dir, '../../src/screens/ChallengeScreen.jsx'),
+      'utf8'
+    );
+    const fetchBlockMatch = src.match(/fetch\(`\$\{API\}\/api\/evaluate-move`[\s\S]{0,1200}/);
+    assert.ok(fetchBlockMatch, 'expected to find the /api/evaluate-move fetch call in ChallengeScreen.jsx');
+    const block = fetchBlockMatch[0];
+    assert.match(block, /correctCol:\s*current\.correct_col/, 'request body must remap correctCol from current.correct_col');
+    assert.match(block, /highlightMetadata:\s*current\.highlight_metadata/, 'request body must remap highlightMetadata from current.highlight_metadata');
   });
 
+  // Spec 049 (Epic 9) T011/T012 — regression guard that SINGLE_ANSWER_CATEGORIES is imported
+  // from the mirrored src/lib/categories.js registry and actually used to widen the accepted
+  // gate, not just imported and left dead.
+  test('SINGLE_ANSWER_CATEGORIES is imported and used to widen the accepted gate', () => {
+    const src = readFileSync(
+      join(__dir, '../../src/screens/ChallengeScreen.jsx'),
+      'utf8'
+    );
+    // Tolerates SINGLE_ANSWER_CATEGORIES being imported alongside other named exports
+    // (e.g. MULTI_SOLUTION_CATEGORIES) from the shared registry — asserts the symbol is imported
+    // from src/lib/categories.js, not that it is the sole import.
+    assert.match(src, /import\s*\{[^}]*\bSINGLE_ANSWER_CATEGORIES\b[^}]*\}\s*from\s*['"]\.\.\/lib\/categories\.js['"]/);
+    assert.match(src, /SINGLE_ANSWER_CATEGORIES\.has\(effectiveCategory\)/);
+  });
+});
+
+// Spec 049 (Epic 9) T009 — mounts the REAL extracted handler (createEvaluateMoveHandler from
+// server/evaluateMoveHandler.js), not a hand-copied reimplementation, so this file exercises the
+// actual production accepted-gate (T006), correctCol/highlightMetadata destructuring (T004), and
+// buildPredicatePuzzle (T005) — closing critique B1/B2 (the prior buildEvaluateMoveApp copy had a
+// hardcoded MULTI_SOLUTION_CATEGORIES-only gate and never threaded correctCol/highlightMetadata,
+// so it could not exercise the single-answer-category fix at all).
+const i18nStub = { coach: {}, eval: {} };
+
+function buildEvaluateMoveApp(solver) {
+  const app = express();
+  app.use(express.json());
+  app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations: i18nStub }));
   return app;
 }
 
 describe('POST /api/evaluate-move — accepted field agrees with evaluatePredicate for a real double_threat fork board', () => {
   let server, baseUrl;
+  // Deterministic per-board scores stub avoids a live c4solver process for this parity check —
+  // every board below is used with its already-captured real solver scores, so no live solver
+  // call is needed to reproduce them. '333332' (T019 fixture) keeps its original single-board
+  // shape; the two OI-1 z_threat repro boards (T009) are keyed explicitly since they carry
+  // different real scores.
+  const scoresByMove = {
+    '333332': [-2, -3, 1, -3, -3, 1, -2],
+    // OI-1 repro board 1 — scores from a live solver.query() call made during test authoring.
+    '3333302444422222060315555054': [3, -1, -1000, -1000, 3, 3, 3],
+    // OI-1 repro board 2.
+    '3333334512266550121166': [4, 4, 8, -1000, -10, 4, 4],
+  };
   const solverStub = {
-    // Deterministic stub avoids a live c4solver process for this parity check — the board below
-    // (sourced via playGame during T019 fixture collection) is used with its already-captured
-    // real solver scores, so no live solver call is needed to reproduce them.
-    query: async () => [-2, -3, 1, -3, -3, 1, -2],
+    query: async (ms) => scoresByMove[ms] ?? scoresByMove['333332'],
   };
 
   before(() => new Promise(resolve => {
@@ -129,14 +159,36 @@ describe('POST /api/evaluate-move — accepted field agrees with evaluatePredica
     assert.equal(data.accepted, false);
   });
 
-  test('a single-answer category (z_threat) response has accepted:null (field is additive/gated, not universal)', async () => {
-    const body = { movestring: ms, col: 2, category: 'z_threat' };
+  // Spec 049 (Epic 9) T009 — z_threat moved from the "always null" set to the "real accepted
+  // value" set (research.md R9) once the accepted-gate widened (T006) to cover
+  // SINGLE_ANSWER_CATEGORIES. Split into two tests using the two OI-1 repro boards
+  // (docs/open_issues.md OI-1), reusing the same real taught-column metadata T008 sourced for
+  // board 1 (server/evaluateMoveHandler.js / tests/integration/singleAnswerCategoriesAccepted.test.js) —
+  // not re-derived here.
+  test('z_threat OI-1 repro board 1: non-taught, score-tying column (col 0) is accepted:false', async () => {
+    const board1 = '3333302444422222060315555054';
+    // Real taught column sourced via detectZThreat against this exact board through the live
+    // solver (see singleAnswerCategoriesAccepted.test.js's z_threat comment for the derivation).
+    const highlightMetadata = { type: 'capsule', column: 6, fromRow: 1, toRow: 5, badgeCount: 5 };
+    const body = { movestring: board1, col: 0, category: 'z_threat', highlightMetadata };
     const res = await fetch(`${baseUrl}/api/evaluate-move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    assert.equal(data.accepted, null);
+    assert.equal(data.accepted, false);
+  });
+
+  test('z_threat OI-1 repro board 2: taught column (col 0) is accepted:true despite a below-max solver score', async () => {
+    const board2 = '3333334512266550121166';
+    const body = { movestring: board2, col: 0, category: 'z_threat', highlightMetadata: { column: 0 } };
+    const res = await fetch(`${baseUrl}/api/evaluate-move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    assert.equal(data.accepted, true);
   });
 });

@@ -168,12 +168,47 @@ winning/blocking columns). For these three categories only:
   **`z_threat`/`overcut`/`claimeven`** (exactly one correct column) are explicitly OUT of this rule
   — their existing single-answer/avoid-the-pattern semantics are unchanged, and must never be
   widened to "any generating column."
-- **Client**: `POST /api/evaluate-move` (`server/index.js`) exposes an additive `accepted: bool |
-  null` response field, gated to these three categories via the request's `category` field
-  (`accepted` is `null` for every other category). It is computed via `evaluatePredicate` at solve
-  time — no persistence, no schema change. `ChallengeScreen.jsx`'s `handleColumnClick` reads
-  `data.accepted` (not a bare `data.quality === 'optimal'` check) for these three categories only;
-  every other category's client-side scoring is unchanged.
+- **Client**: `POST /api/evaluate-move` (`server/evaluateMoveHandler.js`'s
+  `createEvaluateMoveHandler`, registered from `server/index.js`) exposes an additive
+  `accepted: bool | null` response field, gated to these three categories via the request's
+  `category` field (`accepted` is `null` for every other category). It is computed via
+  `evaluatePredicate` at solve time — no persistence, no schema change. `ChallengeScreen.jsx`'s
+  `handleColumnClick` reads `data.accepted` (not a bare `data.quality === 'optimal'` check) for
+  these three categories only; every other category's client-side scoring is unchanged.
+
+### Single-answer categories widen the same gate (spec 049, Epic 9)
+
+`SINGLE_ANSWER_CATEGORIES` (`server/categories.js`, mirrored — duplicate literal, NOT
+cross-imported — in `src/lib/categories.js`) is a sibling list to `MULTI_SOLUTION_CATEGORIES`:
+`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape` — the six categories whose
+correctness model has exactly one taught answer column (or, for `undercut`'s avoid-the-pattern
+semantics, one taught avoid-column). It is **disjoint** from `MULTI_SOLUTION_CATEGORIES` and MUST
+NOT be derived as its complement — a category in neither set (`forced_win`, `forbidden_columns`,
+`odd_even_threat`) would otherwise be silently miscategorized as single-answer. The
+`POST /api/evaluate-move` `accepted` gate is `MULTI_SOLUTION_CATEGORIES.has(category) ||
+SINGLE_ANSWER_CATEGORIES.has(category)` — one shared boolean expression
+(`result === 'correct' || result === 'tied'`) applied uniformly across all nine categories, not a
+second category-conditional branch (the six single-answer categories' `eval*` functions never
+actually return `'tied'`, so this is equivalent to strict `'correct'` for them, but the shared
+expression is what's implemented).
+
+For the six single-answer categories, the predicate-object the handler evaluates against is built
+from the request's `correctCol`/`highlightMetadata` fields (client-sent, remapped from the
+puzzle's stored snake_case columns — see api-conventions.md) rather than recomputed server-side
+metadata, via `buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata })` in
+`server/predicates.js`. This same helper is shared with `POST /api/evaluate-move/inline`'s
+`evaluatePredicate` call site (previously a second, divergent construction of the predicate
+object) — the two endpoints now converge on one code path for building that object, closing a
+maintenance seam where the two handlers could silently drift.
+
+**Handler extraction**: the `/api/evaluate-move` route handler itself is extracted into
+`server/evaluateMoveHandler.js`'s `createEvaluateMoveHandler({ solver, i18nTranslations })` — a
+side-effect-free factory parameterized on the two values that differ between the live server and
+a test. `server/index.js` has no exported `app` and boots a live solver process at import time,
+so it cannot be imported directly by tests; this factory is what lets
+`tests/integration/singleAnswerCategoriesAccepted.test.js` and
+`tests/integration/evaluateMoveMultiSolution.test.js` mount the actual production handler instead
+of a hand-copied reimplementation.
 
 ## Classifier API — Perspective, classifyPattern, and tagBlunder
 

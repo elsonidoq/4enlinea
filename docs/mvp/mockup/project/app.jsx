@@ -20,6 +20,7 @@ const SCREENS = {
   mistakeDetail: (p) => <MistakesList {...p} category={p.selCategory} />,
   blunderDetail: (p) => <MistakeDetail {...p} />,
   pastGames:     (p) => <PastGamesList {...p} />,
+  obMission:  (p) => <MissionScreen {...p} />,
   obGame:     (p) => <OnboardingFlow key={p.obWelcome + p.obOffer} {...p} startAt="play" />,
   obAha:      (p) => <OnboardingFlow key={p.obWelcome + p.obOffer} {...p} startAt="aha" />,
   obImport:   (p) => <OnboardingFlow key={p.obWelcome + p.obOffer} {...p} startAt="import" />,
@@ -35,7 +36,7 @@ const NAV_GROUPS = [
   { label: "Sparring", items: [["difficulty", "Difficulty Picker", "10"], ["game", "Game Board", "11"], ["review", "Post-Game Review", "12"], ["explorer", "Position Explorer", "13"]] },
   { label: "Past Mistakes", items: [["mistakes", "Category List", "14"], ["mistakeDetail", "Category Detail", "15"], ["blunderDetail", "Blunder Detail", "·"]] },
   { label: "Past Games", items: [["pastGames", "Past Games List", "·"]] },
-  { label: "Onboarding", items: [["obGame", "Drop-in game", "16"], ["obAha", "Coach aha", "17"], ["obImport", "Import offer · game-end", "18"], ["obHomeOffer", "Import offer · on Home", "19"], ["obSkip", "Skip confirm", "20"], ["obSettings", "Settings · Replay intro", "21"]] },
+  { label: "Onboarding", items: [["obMission", "Mission", "15"], ["obGame", "Drop-in game", "16"], ["obAha", "Coach aha", "17"], ["obImport", "Import offer · game-end", "18"], ["obHomeOffer", "Import offer · on Home", "19"], ["obSkip", "Skip confirm", "20"], ["obSettings", "Settings · Replay intro", "21"]] },
 ];
 
 function Seg({ value, options, onChange }) {

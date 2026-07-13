@@ -1392,8 +1392,9 @@ after the open-issues remediation session. **No execution dependency** on Epics 
 
 **Two independent halves, bundled into one speckit cycle to share pipeline overhead** (per
 `docs/best_practices_spec_driven_development.md` §"Epic Sizing" — combined task count lands in the sweet spot;
-they share **no** code, no data, and no design decision). US9.1–US9.2 (puzzle scoring) carry the one open
-design decision and touch server + client + the predicate seam — the speckit-justifying half. US9.3–US9.4
+they share **no** code, no data, and no design decision). US9.1–US9.2 (puzzle scoring) carry the epic's design
+decisions (metadata delivery, handler convergence, answer source — all now RESOLVED, see Settled decisions)
+and touch server + client + the predicate seam — the speckit-justifying half. US9.3–US9.4
 (Spanish localization) are settled-approach content + one guard test. Keep them as separate user stories; do
 not let one half's `/clarify` leak into the other.
 
@@ -1422,8 +1423,8 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
 - `scoreMove(scores, playedCol) -> { badge, quality, bestCol }` (`server/moveQualityScorer.js`): `quality`
   is `'optimal'` iff the played column ties the **max** solver score — exactly the rule OI-1 must stop using
   for single-answer puzzles.
-- **The crux blocker (drives the open design decision):** `/api/evaluate-move` (`server/index.js` ~1687–1757)
-  receives only `{ movestring, col, category }` and computes `accepted` (~1746–1752) *only* for
+- **The crux blocker, now RESOLVED (see Settled decisions):** `/api/evaluate-move` (`server/index.js`
+  ~1687–1757) receives only `{ movestring, col, category }` and computes `accepted` (~1746–1752) *only* for
   `MULTI_SOLUTION_CATEGORIES`, via `evaluatePredicate({ category, moveString }, colInt, scores)`. It passes
   **no puzzle metadata**. But the six single-answer evaluators in `server/predicates.js` read stored
   puzzle data that is **not** derivable from `{ category, moveString }`:
@@ -1432,8 +1433,21 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
   - `evalUndercut` → every legal column **except** the killing column (`puzzle.highlightMetadata.cells`) —
     avoid-the-pattern semantics; **do not invert it**
   - `evalOvercut` → the major-threat column (`puzzle.highlightMetadata.cells`)
-  So naively adding the six to the gate makes every predicate return `wrong`. Getting the metadata (or the
-  puzzle id) to the handler is the design decision — see Open questions.
+  So naively adding the six to the gate makes every predicate return `wrong`. This epic delivers the metadata
+  from the client (Settled decisions), which the sibling `/api/evaluate-move/inline` handler already does —
+  see the precedent bullet below.
+- **Existing precedent for client-sent metadata: `/api/evaluate-move/inline` (`server/index.js` ~1765).** This
+  sibling handler already accepts a full `puzzle` object in the request body and runs `evaluatePredicate` with
+  `highlightMetadata`/`correctCol` for **all** categories, including the six single-answer ones (~1800–1808) —
+  not just `MULTI_SOLUTION_CATEGORIES`. `ChallengeScreen.jsx` already holds the full puzzle object
+  (`current.id`, `current.move_string`, etc.) at its fetch call site, so wiring the plain `/api/evaluate-move`
+  handler onto the same client-sends-`puzzle` shape is a small, precedented change, not a new pattern. US9.1
+  must **converge** the plain and inline handlers onto one `evaluatePredicate` code path for the six
+  single-answer categories rather than maintain two divergent correctness implementations.
+- Adjacent latent bug in that same inline handler (out of scope for the fix, log if untouched): it uses
+  `VALID_CATEGORIES.includes(category)` at ~server/index.js:1779, where `VALID_CATEGORIES` is a `Set` —
+  `.includes` is not a `Set` method, so this line **throws a `TypeError` and 500s the request** (not "always
+  returns false" — there is no silent-failure fallback here).
 - The six single-answer categories are **not grouped anywhere** — only `MULTI_SOLUTION_CATEGORIES` exists.
   Introduce an explicit `SINGLE_ANSWER_CATEGORIES` set, mirrored server + client, rather than relying on the
   implicit complement.
@@ -1441,14 +1455,17 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
   source-text assertion on `ChallengeScreen.jsx`'s fetch/`data.accepted` read, plus a minimal
   `buildEvaluateMoveApp` that imports the **production** `evaluatePredicate` + `scoreMove` and drives the
   handler over a real socket. It currently asserts `z_threat` returns `accepted: null` — that assertion **must
-  be updated** by this epic. Per-category integration tests already exist:
-  `tests/integration/{z_threat,claimeven,figure7_jshape,undercut_overcut}.test.js`. Runner is `node:test`;
-  new test files must be added to **both** `test` and `test:fast` lists in `connect-four/package.json`.
-- Adjacent latent bug (out of scope, log if untouched): the `/api/evaluate-move/inline` sibling handler
-  (`server/index.js` ~1775) uses `VALID_CATEGORIES.includes(category)` — `.includes` is not a `Set` method.
+  be updated** by this epic. It also currently appears in **only one** of the `test`/`test:fast` lists in
+  `connect-four/package.json` — this epic must correct that to both, not just copy the new US9.4 test in
+  alongside a still-wrong existing entry. Per-category integration tests already exist:
+  `tests/integration/{z_threat,claimeven,figure7_jshape,undercut_overcut}.test.js` — these are also the board-
+  provenance source for the five single-answer categories that have no OI-1 repro board (see US9.1 task 6).
+  Runner is `node:test`; new AND corrected test file entries must be added to **both** `test` and `test:fast`
+  lists in `connect-four/package.json`.
 - Never hand-construct movestrings for tests — source via DB / KB / `playGame`; validate through the
-  **production** detector (invariant I12), not the motivating example. Read `docs/knowledge-base/<slug>.md`
-  for each of the six patterns before touching its predicate.
+  **production** detector (invariant I12), not the motivating example. Read the mapped KB entry (or the
+  undercut fallback source) for each of the six patterns before touching its predicate — see Authoritative
+  sources of truth for the slug→filename map.
 - **OI-15:** the switcher machinery already shipped this session — `src/i18n/index.js` registers both `en`
   and `es` and reads `lng` from `readStoredLang()`; `useLanguage` hook + Settings `<select>` are live. This
   epic is **translation content + a parity test only**, NOT switcher work. `es.json` = 2-of-24 sections;
@@ -1462,8 +1479,17 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
   the `'tied'`-discard trap), `reference_classify_vs_classifyPattern`, `feedback_no_random_boards`,
   `reference_coordinate_convention`, `reference_i18n_english_only` (switcher shipped, `es.json` incomplete).
 - Epic 4 / spec 044 (the multi-solution accept-path this extends) + memory `project_new_category_wiring_checklist`.
-- `docs/knowledge-base/<slug>.md` for each of the six patterns (`formal_predicate` = the spec, `false_positives`
-  = tests you must not break).
+- KB entries for five of the six patterns (`formal_predicate` = the spec, `false_positives` = tests you must
+  not break) — the slug on disk does **not** match the category name; use this map:
+  - `z_threat` → `docs/knowledge-base/community-z-threat.md`
+  - `overcut` → `docs/knowledge-base/community-overcut.md`
+  - `claimeven` → `docs/knowledge-base/allis-claimeven.md`
+  - `figure_7` → `docs/knowledge-base/community-figure-7.md`
+  - `j_shape` → `docs/knowledge-base/allen-j-configuration.md`
+  - `undercut` → **no KB entry.** Use memory `reference_tactical_pattern_definitions.md` +
+    `docs/Connect_4_Training_Material_Design_2026-05-14.md` §G/H for the predicate, and
+    `tests/integration/undercut_overcut.test.js` for regression/false-positive cases in place of a KB
+    `false_positives` list.
 - `src/i18n/{en,es}.json`; the CLAUDE.md player-color table (green/gray).
 - `docs/best_practices_spec_driven_development.md`.
 
@@ -1476,6 +1502,23 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
 - The `accepted` verdict is an **additive** response field. Never repurpose `quality`/`badge`/`coachPhraseKey`
   (other callers depend on them) — mirror Epic 4 US4.3's additive contract.
 - The fix is **solve-time recompute** — no schema change, no persistence of an accepted-set.
+- **Metadata delivery (RESOLVED, was Open question (a)/(b)/(c)):** the client sends metadata — the request
+  body includes `correctCol`/`highlightMetadata` (or the full puzzle object) alongside `movestring`/`col`/
+  `category`; no server DB read is added. This mirrors the already-shipped `/api/evaluate-move/inline`
+  handler's request shape. Accept the client-trust trade-off (a client could spoof metadata to force
+  `accepted:true`) — it is no weaker than the existing inline handler, and adding server-side verification is
+  out of scope for this epic.
+- **Handler convergence (RESOLVED, follows from the metadata-delivery decision):** the plain `/api/evaluate-
+  move` and `/api/evaluate-move/inline` handlers converge on a single `evaluatePredicate`-driven code path for
+  the six single-answer categories, rather than maintaining two implementations. The inline handler's
+  `.includes`-on-a-`Set` bug (throws `TypeError`/500, `server/index.js` ~1779) is fixed as part of this
+  convergence, not deferred as a separate latent-bug log entry.
+- **Answer source for `z_threat`/`undercut`/`overcut` (RESOLVED, was Open question 2):** read the taught
+  answer from the (now client-delivered) stored puzzle metadata, exactly as the `predicates.js` evaluators do
+  today. Do **not** recompute the answer via a fresh detector pass over the board — recomputing is a larger
+  change, uniform read-from-metadata is smaller, and it avoids I0/I12 risk of introducing a second, possibly
+  divergent, detection path. This applies uniformly across all six single-answer categories, not just these
+  three.
 - OI-15 is content + guard test only; the switcher is already shipped and untouched. `es.json` stays in
   lockstep with `en.json`; `en` remains the source/fallback (this epic does not remove English).
 - The two halves are independent; bundled solely to share one speckit cycle.
@@ -1487,26 +1530,35 @@ already-shipped language switcher renders a genuinely Spanish app, guarded by a 
 requires the puzzle's stored answer/metadata to reach the evaluator.*
 1. Enumerate the six categories and the exact metadata each `predicates.js` evaluator reads (per Non-obvious
    facts) — confirm each against the current code; do not invent new semantics.
-2. Resolve the open design decision (see Open questions) for **how** metadata reaches `/api/evaluate-move`, then
-   implement the chosen delivery path.
+2. Implement the resolved metadata-delivery decision (Settled decisions): the client sends
+   `correctCol`/`highlightMetadata` (or the full puzzle object) in the `/api/evaluate-move` request body; no
+   server DB read.
 3. Extend the handler (`server/index.js` ~1746–1752) so the six single-answer categories compute `accepted`
-   via `evaluatePredicate` with the now-available metadata, as an **additive** field — never repurposing
-   `quality`/`badge`/`coachPhraseKey`.
+   via `evaluatePredicate` with the now-available client-sent metadata, as an **additive** field — never
+   repurposing `quality`/`badge`/`coachPhraseKey`. Converge this with `/api/evaluate-move/inline` (~1765,
+   already does this for all categories) onto one `evaluatePredicate` path for the six single-answer
+   categories, fixing the inline handler's `.includes`-on-a-`Set` `TypeError`/500 (~1779) as part of the
+   convergence.
 4. Introduce a single `SINGLE_ANSWER_CATEGORIES` source of truth, mirrored server + client, replacing the
    implicit "not multi-solution" complement.
 5. Preserve `quality`/`scoreMove` behavior for every other category and for non-Challenge callers; scope the
    change to exactly the six categories.
 6. Test (through the production `evaluatePredicate`, I12; boards sourced from DB/KB, never hand-built): each of
    the six returns `accepted:true` for its taught column and `accepted:false` for a non-pattern column,
-   including the two OI-1 repro boards; `undercut`'s killing column is still rejected.
+   including the two OI-1 repro boards (both `z_threat`); the other five categories have no OI-1 repro board,
+   so source their `accepted:true`/`accepted:false` test boards from the existing per-category integration
+   fixtures — `tests/integration/z_threat.test.js`, `claimeven.test.js`, `figure7_jshape.test.js` (covers both
+   `figure_7` and `j_shape`), `undercut_overcut.test.js` (covers both `undercut` and `overcut`); `undercut`'s
+   killing column is still rejected.
 
 **US9.2 — Consume pattern-membership on the Challenge screen (client).**
 *As a learner, I want the "correct/wrong" verdict to reflect pattern membership, not a bare solver-score tie.*
 1. Extend `ChallengeScreen.jsx`'s `isCorrect` (~line 241–242) so the six single-answer categories use the
    `data.accepted` path (via the shared `SINGLE_ANSWER_CATEGORIES` grouping from US9.1.4), not
    `data.quality === 'optimal'`.
-2. Ensure the request carries whatever the chosen design needs (it already sends `category` + `movestring`
-   ~line 225–229; add the puzzle id/metadata if the design requires it).
+2. Extend the request (it already sends `category` + `movestring` ~line 225–229) to also send
+   `correctCol`/`highlightMetadata` (or the full puzzle object) per the resolved client-sends-metadata
+   decision.
 3. Add the single-answer analogue of the multi-solution display override so a **pattern-correct-but-slower**
    move reads "correct", not "Suboptimal" (OI-1 repro board 2).
 4. Verify `isCorrect` drives SFX, coach mood, attempt-recording (`first_attempt_correct`), the win overlay,
@@ -1531,7 +1583,11 @@ requires the puzzle's stored answer/metadata to reach the evaluator.*
 *As a maintainer, I want a test that fails if `es.json` drifts out of key-parity with `en.json`.*
 1. Add a `node:test` unit test that deep-compares the full **nested** key sets of `en.json` and `es.json` and
    fails on any key present in one but not the other.
-2. Register the new test file in **both** `test` and `test:fast` lists in `connect-four/package.json`.
+2. Register the new test file in **both** `test` and `test:fast` lists in `connect-four/package.json`. While
+   doing so, also correct `tests/integration/evaluateMoveMultiSolution.test.js` (US9.2.6), which currently
+   appears in only one of the two lists — add it to whichever list it is missing from so both the new parity
+   test and the updated multi-solution test are registered in both lists, per the project's "add to both
+   lists" test-registration rule.
 3. Assert **key parity, not value equality** — an identical string (proper nouns) is allowed; a missing/extra
    key is not.
 4. Sequence US9.3 before US9.4 — the test only goes green once `es.json` is complete; landing it earlier breaks
@@ -1551,25 +1607,27 @@ requires the puzzle's stored answer/metadata to reach the evaluator.*
   representative screens render in Spanish with no raw keys and no leftover English in translated sections.
 
 **NOT included:** the multi-solution categories (already handled by spec 044 — untouched); `SocraticScreen.jsx`'s
-bypass (confirmed non-applicable); the `/api/evaluate-move/inline` `.includes`-on-a-Set latent bug (adjacent;
-log to `open_issues.md` if not fixed here); any language-switcher/detector work (shipped Theme E 2026-07-12);
-re-auditing/backfilling already-stored puzzle rows for scoring (solve-time recompute only, mirroring Epic 4);
-removing or de-registering English (`en` stays the source + fallback).
+bypass (confirmed non-applicable); server-side verification of client-sent metadata (client-trust trade-off is
+accepted, see Settled decisions — spoofing `accepted:true` is out of scope to prevent); recomputing the taught
+answer via a fresh detector pass for `z_threat`/`undercut`/`overcut` (read-stored-metadata was chosen instead,
+see Settled decisions); any language-switcher/detector work (shipped Theme E 2026-07-12); re-auditing/
+backfilling already-stored puzzle rows for scoring (solve-time recompute only, mirroring Epic 4); removing or
+de-registering English (`en` stays the source + fallback).
+
+**Note:** the `/api/evaluate-move/inline` `.includes`-on-a-`Set` bug is now **in scope** (fixed as part of
+handler convergence, US9.1.3) — it is no longer deferred to `open_issues.md` as previously assumed.
 
 **Sizing verdict — Full speckit (for the OI-1 half; OI-15 rides the cycle).** 4 stories × ≥5 tasks; the puzzle-
-scoring half touches server + client + the predicate seam and carries a genuine open design decision (metadata
-delivery) needing per-category I12 validation; the localization half is settled content + one guard test,
-bundled to reach the sweet spot rather than run its own thin pipeline.
+scoring half touches server + client + the predicate seam and — even with metadata delivery, handler
+convergence, and answer source now resolved (see Settled decisions) — needs per-category I12 validation across
+six categories with mixed board provenance (2 OI-1 repro boards + 5 categories sourced from existing
+integration fixtures); the localization half is settled content + one guard test, bundled to reach the sweet
+spot rather than run its own thin pipeline.
 
-**Open questions (`/clarify`):**
-- **How does the puzzle's `highlightMetadata`/`correctCol` reach `/api/evaluate-move`?** (a) pass a puzzle id →
-  server loads the row (adds a DB read per evaluate + id plumbing); (b) client includes the needed metadata in
-  the request body (no DB read, but trusts client-sent data); (c) evaluate pattern membership client-side
-  against already-loaded puzzle data (no server change). This changes the implementation shape materially — the
-  primary decision to resolve.
-- Whether the `z_threat`/`undercut`/`overcut` "taught answer" should be **recomputed from the board** by a
-  detector (removing the stored-metadata dependency) or **read from stored puzzle metadata** as the predicates
-  do today (recomputing is a larger change, but removes the metadata-delivery need for those three).
+**Open questions (`/clarify`):** none remaining for this epic. Both design decisions that previously lived
+here — (1) how metadata reaches `/api/evaluate-move`, and (2) recompute vs. read-stored-metadata for
+`z_threat`/`undercut`/`overcut` — are now **RESOLVED**; see Settled decisions ("Metadata delivery", "Handler
+convergence", "Answer source for `z_threat`/`undercut`/`overcut`"). `/clarify` should not re-litigate either.
 
 ---
 

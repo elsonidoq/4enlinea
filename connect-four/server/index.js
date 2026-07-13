@@ -10,7 +10,6 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
 import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
-import { classifyAiMove } from './classifyAiMove.js';
 import { loadKBShortSummary } from './llmCoachHelpers.js';
 import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
@@ -19,18 +18,14 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { evaluatePredicate } from './predicates.js';
+import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
+import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
 import { registerStripeRoutes } from './stripeRoutes.js';
 import { createStripeProcessor } from './stripeProcessor.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
-
-// Spec 044 US3 / FR-010–FR-012: the only three categories whose correctness model allows more
-// than one valid answer column. Used to gate the additive `accepted` field on
-// POST /api/evaluate-move (FR-015a) — see server-conventions.md.
-const MULTI_SOLUTION_CATEGORIES = new Set(['immediate_threat', 'forced_block', 'double_threat']);
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
 import { classifyStoredMistake } from './mistakeStorageRule.js';
@@ -1689,76 +1684,11 @@ function pickFromPool(translations, prefix) {
 }
 
 // POST /api/evaluate-move — score a played move and return coach phrase keys
-app.post('/api/evaluate-move', async (req, res) => {
-  const { movestring, col, category } = req.body;
-
-  // Validate movestring
-  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
-    return res.status(400).json({ error: 'invalid movestring' });
-  }
-
-  // Validate col
-  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
-  if (!isValidCol0(colInt)) {
-    return res.status(400).json({ error: 'invalid col' });
-  }
-
-  try {
-    // Get solver scores
-    let scores;
-    if (movestring === '' || movestring.length === 0) {
-      scores = EMPTY_BOARD_SCORES;
-    } else {
-      scores = await solver.query(movestring);
-    }
-
-    // Score the move
-    const { badge, quality, bestCol } = scoreMove(scores, colInt);
-
-    // Classify for pattern tag
-    let patternTag;
-    if (req.body.aiMove === true) {
-      patternTag = await classifyAiMove(movestring, colInt, solver);
-    } else {
-      const classifyResult = classify(movestring, colInt, scores);
-      patternTag = classifyResult?.tag ?? null;
-    }
-
-    // Determine phrase pool key (request category takes priority)
-    const phrasePoolKey = category || patternTag;
-
-    // Pick i18n keys from pools
-    const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
-      : null;
-
-    const summaryLineKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
-      : null;
-
-    // Determine coach mood
-    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
-    const coachMood = coachMoodMap[quality] ?? 'think';
-
-    // Spec 044 US3 / FR-015a: for the three multi-solution categories, add an additive
-    // `accepted` field computed via evaluatePredicate (which already treats a non-canonical
-    // but independently-satisfying column as 'tied' = accepted). This is recomputed at solve
-    // time — no persistence, no schema change — and gated strictly to these three categories so
-    // no other category's response shape changes. Does NOT touch quality/badge/coachPhraseKey/
-    // coachMood/summaryLineKey/patternTag, which have other callers (ChallengeScreen.jsx and
-    // others) — see server-conventions.md.
-    let accepted = null;
-    if (MULTI_SOLUTION_CATEGORIES.has(category)) {
-      const predicateResult = evaluatePredicate({ category, moveString: movestring }, colInt, scores);
-      accepted = predicateResult.result === 'correct' || predicateResult.result === 'tied';
-    }
-
-    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag, accepted });
-  } catch (err) {
-    logError('[evaluate-move]', err);
-    res.status(500).json({ error: 'internal error' });
-  }
-});
+// Spec 049 (Epic 9) T007a: the handler body itself now lives in server/evaluateMoveHandler.js,
+// as an importable, side-effect-free factory — this makes it mountable in integration tests
+// without booting the whole production server (see that module's header comment). No behavior
+// change here: this is a pure delegation, not a second implementation.
+app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations }));
 
 // POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
 // Returns richer results (correctCol, threatCells) than /api/evaluate-move.
@@ -1776,7 +1706,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     return res.status(400).json({ error: 'puzzle object is required' });
   }
   const category = puzzle.category || puzzle.goalPredicateType;
-  if (!category || !VALID_CATEGORIES.includes(category)) {
+  if (!category || !VALID_CATEGORIES.has(category)) {
     return res.status(400).json({ error: `invalid puzzle category: ${category}` });
   }
 
@@ -1796,15 +1726,9 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     const classifyResult = classify(movestring, colInt, scores);
     const patternTag = classifyResult?.tag ?? null;
 
-    // Run predicate evaluation for richer results
-    const predicatePuzzle = {
-      moveString: puzzle.moveString || movestring,
-      category,
-      goalPredicateType: puzzle.goalPredicateType || category,
-      goalPredicateParams: puzzle.goalPredicateParams ?? null,
-      highlightMetadata: puzzle.highlightMetadata ?? null,
-      correctCol: puzzle.correctCol,
-    };
+    // Run predicate evaluation for richer results — built via the shared T005 helper so this
+    // handler and POST /api/evaluate-move construct the predicate object identically (FR-006).
+    const predicatePuzzle = buildPredicatePuzzle(category, movestring, { puzzle });
     const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
 
     // Determine phrase pool key

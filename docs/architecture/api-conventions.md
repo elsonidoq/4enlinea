@@ -450,6 +450,22 @@ Three invariants: (1) the DB helpers return `{ error }` rather than throwing —
 - `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position via `classify()` (synchronous, pre-move board).
 - `aiMove`: absent or `false`.
 
+**`correctCol` / `highlightMetadata` (spec 049, Epic 9)**: optional request fields, sent by the
+client when `category` is one of `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`,
+`undercut`, `figure_7`, `j_shape`) — `{ correctCol: number | null, highlightMetadata: object |
+null }`. These are camelCase wire names matching what `evaluatePredicate`/`buildPredicatePuzzle`
+read (`puzzle.correctCol`, `puzzle.highlightMetadata`). **The client is responsible for remapping
+from its locally-held snake_case puzzle object** before sending: `correctCol:
+current.correct_col`, `highlightMetadata: current.highlight_metadata` — this is a top-level rename
+only, the inner `highlight_metadata` JSON shape (`.column`, `.cells[].role`) is unchanged. Ignored
+(harmless if sent) for every other category. Absence of these fields for a single-answer category
+is **not** a 400 — it flows through to `evaluatePredicate`'s existing fail-closed `{ result:
+'wrong' }` path, so a missed client-side remap silently yields `accepted: false` rather than an
+error; this is why `tests/integration/singleAnswerCategoriesAccepted.test.js` asserts a positive
+`accepted: true` case per category, not only negatives. See
+`specs/049-puzzle-scoring-spanish-localization/contracts/api-evaluate-move.md` for the full
+contract delta.
+
 ### AI-Move Path (`aiMove: true`)
 
 When `req.body.aiMove === true`, the server classifies the **post-move** board from the AI player's perspective:
@@ -480,7 +496,7 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
 - `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
 - `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
 - `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
-- `accepted` (spec 044 US3, FR-015a): additive field, computed via `evaluatePredicate`, present (non-null) only when the request's `category` is `immediate_threat`, `forced_block`, or `double_threat` — the three categories whose correctness model allows more than one valid answer column. `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category. Recomputed at solve time; not persisted. See server-conventions.md's "Multi-solution acceptance" note.
+- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012): additive field, computed via `evaluatePredicate`, present (non-null) for **nine categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the six single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape` — correctness has exactly one taught answer column, or in `undercut`'s case, one taught avoid-column). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`, `odd_even_threat`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time; not persisted. For the six single-answer categories, computed from the request's `correctCol`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
 - No auth required; anonymous calls are accepted.
 
 **Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.

@@ -143,11 +143,30 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 - `tests/integration/claimeven.test.js`
 - `tests/integration/figure7_jshape.test.js`
 - `tests/integration/undercut_overcut.test.js`
+- `tests/integration/evaluateMoveMultiSolution.test.js` (spec 049 Epic 9 T025 — moved into `npm test` alongside `test:fast`, FR-021)
+- `tests/integration/singleAnswerCategoriesAccepted.test.js` (spec 049 Epic 9 T025)
+- `tests/unit/i18nKeyParity.test.js` (spec 049 Epic 9 T025 — see "i18n key-parity guard" below)
 - `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer)
 
 **`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js`, `tests/blunder/insertGameBlunder.test.js`, the reason-engine suite `server/tests/reasonEngine{,.denial,.drawToLose,.enrichment,.witness,.winSamples}.test.mjs` (solver-backed but fast), `server/tests/reasonNarratorVector.test.mjs` (pure), and `server/tests/computeEvidenceIsolation.test.mjs` (the reason-eval `compute.mjs` per-board error-isolation regression, pure — uses a throwing solver stub), and the `server/tests/winDistribution.*.test.mjs` suite (the win_distribution pipeline: `playPolicyGame`, policies, `extractOutcome`, `aggregateRows`, `renderReport` — all pure/solver-free) but **excludes** `tests/integration/candidate-generator.test.js`. (The reason-engine and win_distribution tests are in `test:fast` but **not** in the slower `test` script.)
 
 Files in `tests/difficulty/` and `tests/scores/` exist but are **not included** in either script — add them explicitly when they are ready.
+
+### i18n key-parity guard (spec 049, Epic 9, `tests/unit/i18nKeyParity.test.js`)
+
+A future maintainer adding new English UI copy without the matching Spanish key (or vice versa)
+would silently reintroduce an English-fallback gap. `tests/unit/i18nKeyParity.test.js` guards
+against this: a pure `getNestedKeyPaths(obj) -> Set<string>` helper flattens `src/i18n/en.json`
+and `src/i18n/es.json` into dotted leaf-key-path sets (no arrays occur in either file), asserts
+the two sets are equal, and on failure reports the symmetric difference (`missingFromEs`,
+`missingFromEn`) in the assertion message so the maintainer sees exactly which key(s) are
+missing from which file. This is a **key-presence-only** comparison — a proper noun translated
+identically in both files still passes; only structural key divergence fails the test. Registered
+in both `test` and `test:fast` (FR-020) per the "add to both lists" rule above. To
+self-regression-check the guard, temporarily delete a leaf key from `es.json` and run
+`node --test tests/unit/i18nKeyParity.test.js` — it should fail with the missing key path named
+in the assertion message; restore the key and it passes again (never commit the temporary
+deletion).
 
 ### Pure Function Extraction Pattern
 

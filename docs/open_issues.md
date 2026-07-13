@@ -11,9 +11,10 @@ Each entry: what's wrong, why it's deferred, where it lives, and a concrete repr
 
 ## OI-1 — Single-answer puzzle categories score by solver-score, not by pattern (score-tie ≠ pattern-tie)
 
-**Status**: deferred (out of scope for spec 044; explicitly untouched per FR-014/FR-015b)
-**Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`)
+**Status**: 📋 SPEC-READY 2026-07-13 — full speckit artifacts authored at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, via `/epics-manager`); run `/coordinate-implementation` to build. Was: deferred out of spec 044 per FR-014/FR-015b.
+**Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`), `server/predicates.js`, `/api/evaluate-move` (+ `/inline`)
 **Discovered**: spec 044 QA (2026-07-11)
+**Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `project_puzzle_correctness_seams.md`); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
 
 For the single-answer categories (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`,
 `j_shape`), the Challenge screen judges correctness purely by the solver-score verdict
@@ -329,7 +330,7 @@ account row's `onboarding_status` reflects the migrated anonymous value. This is
 
 ## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
 
-**Status**: ⏳ PARTIAL 2026-07-12 — switcher machinery SHIPPED (useLanguage hook, es bundle registered, Settings selector). REMAINING: es.json covers only 2 of 24 key-sections; full Spanish translation is a separate content effort (see Theme H / its own spec). Selecting es renders English via fallback until then.
+**Status**: 📋 SPEC-READY 2026-07-13 — the remaining translation-content work is now specced at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, US9.3–US9.4). Switcher machinery already SHIPPED 2026-07-12 (useLanguage hook, es bundle registered, Settings selector). On-disk reality: `es.json` has 3 of 25 top-level sections complete (`setcard`, `onboarding`, `settings`), 22 missing; selecting es renders English via fallback until spec 049 lands. Spec 049 adds a `node:test` en/es key-parity guard (registered in both `test` + `test:fast`).
 **Area**: `connect-four/src/i18n/index.js` (`lng: 'en'`, only `en` resource registered), `connect-four/src/i18n/es.json`
 **Discovered**: spec 048 (Epic 8) QA (2026-07-12)
 

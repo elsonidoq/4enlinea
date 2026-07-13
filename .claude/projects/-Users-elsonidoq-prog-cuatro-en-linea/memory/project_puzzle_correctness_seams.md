@@ -51,4 +51,27 @@ via `'tied'`; the callers throw it away. Fix is per-category, not a blanket rule
 **When you change correctness for the three multi-solution categories, do an exhaustive `rg 'evaluatePredicate'`
 caller sweep** — a single missed caller silently re-introduces the "false wrong" bug.
 
+## Wiring client puzzle data into `evaluatePredicate` — the invisible fail-closed trap (spec 049 / OI-1)
+Three traps around this seam, all confirmed against live code (spec 049 planning):
+- **snake_case (client) vs camelCase (predicate).** `predicates.js` evaluators read `puzzle.correctCol` and
+  `puzzle.highlightMetadata` (camelCase); the client's loaded puzzle object is uniformly snake_case
+  (`current.correct_col`, `current.highlight_metadata`, `current.move_string`; the draw endpoint selects
+  snake_case). A snake→camel remap is **mandatory** when passing client puzzle data to the evaluator — and
+  only the **top-level** keys remap; the JSON *inside* `highlight_metadata` (`.column`, `.cells[].role`) is
+  stored and read as-is.
+- **Fail-closed masks the bug.** Every single-answer evaluator returns `{result:'wrong'}` on absent/undefined
+  metadata (never `'correct'`). So a missed remap does not error — it silently makes **every taught column read
+  "wrong,"** indistinguishable from a real wrong answer. A negative (`accepted:false`) test can therefore pass
+  for the wrong reason (absent metadata, not genuine non-membership); **only a positive `accepted:true` test with
+  correct metadata proves the wiring.** z_threat/undercut/overcut key off `highlightMetadata` (z_threat reads
+  `.column`); claimeven/figure_7/j_shape key off `correctCol`.
+- **`/api/evaluate-move/inline` is dead + broken.** No `src/` caller routes to it (not an end-to-end oracle),
+  and it currently 500s on **every** request: `VALID_CATEGORIES.includes(category)` at `index.js:~1779` calls
+  `.includes` on a `Set` (should be `.has`). Scoped into spec 049 (handler convergence fixes it).
+- **The integration test mounts a copied mini-handler, not the real route.** `evaluateMoveMultiSolution.test.js`
+  builds its own `buildEvaluateMoveApp` mini-handler (hardcoded to `MULTI_SOLUTION_CATEGORIES`, omits metadata)
+  — editing the real `/api/evaluate-move` in `index.js` is **not** covered by it. Spec 049 (T007a) extracts the
+  real handler into `server/evaluateMoveHandler.js` so tests mount production code; until then, a green suite can
+  hide a broken real handler.
+
 Related: [[classifier-architecture-and-score-convention]] (detectors + check*Predicate), [[reference_classify_vs_classifyPattern]], [[reference_valid_blunder_tags]], [[project_forced_win_refactor]] (CompletionStrategy).

@@ -34,6 +34,7 @@ psql "$DATABASE_URL" -f connect-four/server/migrations/NNN_slug.sql
 **Querying from Node.js (inline script pattern):**
 - `.env` file is at `connect-four/server/.env` (not project root)
 - Service key env var name is `SUPABASE_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_KEY`)
+- **`server/.env` has ONLY `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — NO anon/publishable key** (the anon key `VITE_SUPABASE_ANON_KEY` lives in the *frontend* Vite env, not here). Trap for any inline/CLI script that needs client-style auth (`signInWithPassword`, `refreshSession`): loading `--env-file=server/.env` gives you no anon key, so use the service-role key as the `createClient` apikey fallback (`SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY`). Verified 2026-07-12 while building `connect-four/scripts/probe-refresh-rotation.mjs` (OI-5).
 - `dotenv` is not reliably available in `node -e`; parse the file manually:
 
 ```bash

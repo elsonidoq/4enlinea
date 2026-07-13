@@ -55,6 +55,37 @@ function currentPlayer(moveCount) {
   return (moveCount % 2 === 0) ? 1 : 2;
 }
 
+// Spec 049 (Epic 9) T005 — single shared constructor for the object passed into
+// evaluatePredicate() from either POST /api/evaluate-move or POST /api/evaluate-move/inline.
+// Both handlers must build this object identically (FR-006's single-code-path mandate) — do not
+// add a second construction path in either handler.
+//
+// Plan.md Decision D2: goalPredicateType/goalPredicateParams are passed through, defaulted from
+// `puzzle` when present, matching the /inline handler's pre-existing
+// `puzzle.goalPredicateType || category` / `puzzle.goalPredicateParams ?? null` logic — this is
+// what keeps /inline's forced_win/forbidden_columns categories working once T007 routes it
+// through this same helper (those two categories read goalPredicateType/goalPredicateParams, not
+// correctCol/highlightMetadata).
+//
+// @param {string} category - the puzzle category slug
+// @param {string} movestring - 0-indexed move string for the position being evaluated
+// @param {object} [opts]
+// @param {number} [opts.correctCol] - camelCase scalar answer column (claimeven/figure_7/j_shape)
+// @param {object} [opts.highlightMetadata] - camelCase answer metadata (z_threat/undercut/overcut)
+// @param {object} [opts.puzzle] - optional richer puzzle object (as sent to /inline) to source
+//   goalPredicateType/goalPredicateParams/moveString overrides from
+// @returns {object} a predicate-ready puzzle object for evaluatePredicate()
+export function buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata, puzzle } = {}) {
+  return {
+    moveString: puzzle?.moveString || movestring,
+    category,
+    goalPredicateType: puzzle?.goalPredicateType || category,
+    goalPredicateParams: puzzle?.goalPredicateParams ?? null,
+    highlightMetadata: highlightMetadata ?? puzzle?.highlightMetadata ?? null,
+    correctCol: correctCol !== undefined ? correctCol : puzzle?.correctCol,
+  };
+}
+
 // Evaluate a puzzle attempt given the puzzle definition and solver scores.
 //
 // @param {object} puzzle  - { id, category, moveString, goalPredicateType, goalPredicateParams, cooperativeAiMoves }

@@ -142,6 +142,95 @@ function SkipConfirm({ onKeep, onExit }) {
   );
 }
 
+/* ============================================================
+   Mission screen — shown once, before the first sparring game.
+   Coach is the messenger; three pillars mirror the app's three
+   modes (learn → practice → review real games); one CTA into play.
+   ============================================================ */
+
+const MISSION_PILLARS = [
+  {
+    icon: "grad",
+    tint: "#e3eefc", ink: "#3b6fc4",
+    title: "Learn the tactics",
+    line: "The winning patterns behind every game — and why they work.",
+  },
+  {
+    icon: "swords",
+    tint: "#e9e1fb", ink: "#7a5bd0",
+    title: "Practice against a bot that teaches",
+    line: "Play me at your level and get the reasoning behind every move.",
+  },
+  {
+    icon: "flag",
+    tint: "var(--eval-mid-bg)", ink: "#b9760a",
+    title: "Understand your mistakes",
+    line: "Turn blunders into lessons — even your real games from Papergames.",
+  },
+];
+
+function PillarRow({ icon, tint, ink, title, line }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "flex-start", gap: 14,
+      background: "var(--card)", borderRadius: "var(--radius-sm)",
+      padding: "14px 15px", boxShadow: "var(--shadow-sm)", border: "1px solid #f0ebe1",
+    }}>
+      <span style={{ width: 46, height: 46, borderRadius: 14, flex: "0 0 auto", display: "grid", placeItems: "center", background: tint, color: ink }}>
+        <Icon name={icon} size={24} color={ink} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+        <span style={{ display: "block", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16.5, color: "var(--ink)", lineHeight: 1.2 }}>{title}</span>
+        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", lineHeight: 1.38, marginTop: 3 }}>{line}</span>
+      </span>
+    </div>
+  );
+}
+
+function MissionScreen({ go }) {
+  const [showAuth, setShowAuth] = useState(false);
+  return (
+    <div className="screen s-home">
+      {/* top bar — matches Home: app logo + profile/settings affordance */}
+      <div className="topbar" style={{ padding: "8px 22px 6px" }}>
+        <div className="tb-title" style={{ fontSize: 26, fontWeight: 800 }}>
+          Decode<span style={{ color: "var(--disc-green)" }}>C4</span>
+        </div>
+        <div className="tb-spacer"></div>
+        <button className="icon-btn" onClick={() => setShowAuth(true)} style={{ borderRadius: "50%" }}>
+          <Icon name="user" size={21} />
+        </button>
+      </div>
+
+      <div className="scroll" style={{ padding: "4px 22px 16px", display: "flex", flexDirection: "column" }}>
+        {/* coach greeting — same speech-bubble treatment as the coached game */}
+        <div style={{ margin: "0 -6px 4px" }}>
+          <CoachDialog size={58} messages={[{
+            lead: "Hi, I'm your coach.",
+            text: "Here's how we'll make you dangerous at Connect Four.",
+            mood: "happy",
+          }]} />
+        </div>
+
+        {/* three pillars — mirror learn → practice → review */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
+          {MISSION_PILLARS.map(p => <PillarRow key={p.title} {...p} />)}
+        </div>
+      </div>
+
+      {/* single primary CTA into the coached practice game */}
+      <Toolbar>
+        <button className="btn btn-primary" onClick={() => go("obGame")}>
+          Start sparring <Icon name="play" size={16} color="#fff" />
+        </button>
+      </Toolbar>
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      <div className="home-indicator"></div>
+    </div>
+  );
+}
+
 /*
   OnboardingFlow — one interactive screen driving the whole first run.
   startAt: "welcome" | "play" | "aha" | "import" | "skip"  (rail deep-links)
@@ -329,4 +418,4 @@ function HomeOffer({ go, obOffer = "card" }) {
   );
 }
 
-Object.assign(window, { OnboardingFlow, SettingsScreen, HomeOffer });
+Object.assign(window, { OnboardingFlow, SettingsScreen, HomeOffer, MissionScreen });

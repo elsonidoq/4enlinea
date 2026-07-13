@@ -15,12 +15,9 @@ import { pickRandomKey } from '../lib/coachUtils.js';
 import { COACH_PACING_MS } from '../lib/constants.js';
 import { useAudio } from '../lib/useAudio.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/categories.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
-
-// Spec 044 US3 / FR-010–FR-012: the only three categories whose correctness model allows more
-// than one valid answer column — must match server/index.js's MULTI_SOLUTION_CATEGORIES.
-const MULTI_SOLUTION_CATEGORIES = new Set(['immediate_threat', 'forced_block', 'double_threat']);
 
 const QUALITY_GLYPH = { optimal: '✓', suboptimal: '?', blunder: '✕' };
 
@@ -225,7 +222,18 @@ export function ChallengeScreen({
     fetch(`${API}/api/evaluate-move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movestring: current.move_string, col, category: effectiveCategory }),
+      body: JSON.stringify({
+        movestring: current.move_string,
+        col,
+        category: effectiveCategory,
+        // Spec 049 (Epic 9) T010 — mandatory snake_case→camelCase remap. The client's local
+        // puzzle object (from GET /api/puzzles/draw) is snake_case; the server reads camelCase.
+        // Top-level rename only — the inner highlight_metadata JSON (.column, .cells[].role)
+        // passes through unmodified. Sent unconditionally; harmless no-op for categories that
+        // don't consume it.
+        correctCol: current.correct_col,
+        highlightMetadata: current.highlight_metadata,
+      }),
     })
       .then(r => r.json())
       .then(data => {
@@ -236,18 +244,26 @@ export function ChallengeScreen({
         // the single max-score column, or a winning/blocking column that isn't the stored
         // canonical one). Read the additive `data.accepted` field instead, which the server
         // computes via evaluatePredicate (FR-012's 'tied'-as-correct rule) for these categories.
-        // Every other category keeps the original `data.quality === 'optimal'` check unchanged
-        // (FR-015b).
+        // Spec 049 (Epic 9) T012 — the six SINGLE_ANSWER_CATEGORIES (z_threat, overcut,
+        // claimeven, undercut, figure_7, j_shape) have the same problem (a taught-pattern column
+        // can tie or trail the raw solver score) and now route through the same `accepted` gate
+        // (FR-008/FR-011/FR-012). Every other category keeps the original
+        // `data.quality === 'optimal'` check unchanged (FR-011).
         const isMultiSolutionCategory = MULTI_SOLUTION_CATEGORIES.has(effectiveCategory);
-        const isCorrect = isMultiSolutionCategory ? data.accepted === true : data.quality === 'optimal';
+        const usesAcceptedGate = isMultiSolutionCategory || SINGLE_ANSWER_CATEGORIES.has(effectiveCategory);
+        const isCorrect = usesAcceptedGate ? data.accepted === true : data.quality === 'optimal';
+
+        // True when the accepted-gate promotes a pattern-correct-but-slower move to "correct":
+        // the server's raw score-only `quality` is below 'optimal' but the taught/tied pattern was
+        // actually played (OI-1 repro board 2 shape).
+        const acceptedPromoted = usesAcceptedGate && isCorrect && data.quality !== 'optimal';
 
         // The rendered badge/glyph/summary must agree with `isCorrect`, not the server's raw
-        // score-only `quality` — a valid tied answer (accepted:true) must visually read as
-        // correct, not "suboptimal". This only overrides the two display-driving fields
-        // (`quality`, `badge`) for the multi-solution categories when they'd otherwise
-        // contradict `accepted`; `coachPhraseKey`/`coachMood`/`summaryLineKey`/`patternTag` are
-        // left exactly as the server sent them (FR-015a: do not repurpose those fields).
-        const displayData = (isMultiSolutionCategory && isCorrect && data.quality !== 'optimal')
+        // score-only `quality` — a valid tied/taught answer (accepted:true) must visually read as
+        // correct, not "suboptimal". This overrides the display-driving `quality`/`badge` fields
+        // for the accepted-gated categories when they'd otherwise contradict `accepted`;
+        // `summaryLineKey`/`patternTag` are left as the server sent them (FR-010).
+        const displayData = acceptedPromoted
           ? { ...data, quality: 'optimal', badge: 'good' }
           : data;
         setEvaluation(displayData);
@@ -259,16 +275,22 @@ export function ChallengeScreen({
           playSfx('wrong_move');
         }
 
-        // Update coach — fall back to quality-aware generic pool when no category-specific key exists
+        // Update coach — fall back to quality-aware generic pool when no category-specific key exists.
+        // Spec 049 (Epic 9) Finding 1: when the accepted-gate promotes the move to "correct", the
+        // server's coachPhraseKey/coachMood were derived from the raw suboptimal quality and would
+        // contradict the corrected verdict (a "correct" badge/SFX alongside a hedging "think"-mood
+        // coach line — SC-002). Present a congruent optimal-voiced message instead: suppress the
+        // suboptimal category phrase (fall back to the optimal generic pool) and force the happy mood.
         const used = usedPhraseKeysRef.current;
-        let phraseKey = data.coachPhraseKey
-          ?? pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used);
+        const coachQuality = acceptedPromoted ? 'optimal' : (data.quality ?? 'blunder');
+        let phraseKey = (acceptedPromoted ? null : data.coachPhraseKey)
+          ?? pickRandomKey(t, `coach.generic.${coachQuality}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
         lastCoachKeyRef.current = phraseKey;
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
-          mood: data.coachMood ?? moodDefaults[data.quality] ?? 'think',
+          mood: acceptedPromoted ? 'happy' : (data.coachMood ?? moodDefaults[data.quality] ?? 'think'),
         }]);
 
         // Win overlay if optimal win
