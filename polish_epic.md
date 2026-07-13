@@ -6,6 +6,7 @@ epic and cross-referenced.
 
 **Sizing floor:** every epic carries **≥ 4 user stories**, and every user story lists **≥ 5 concrete tasks**.
 Result: **8 epics**, each in the full-speckit sweet spot (20+ tasks, multi-subsystem, ≥1 open decision).
+(**Epic 9** was appended later, 2026-07-12, from the `docs/open_issues.md` backlog — see the Overview table.)
 
 **Epic numbers ARE the execution order.** Epics are numbered so that running them 1 → 8 never hits an
 unbuilt dependency: the only hard dependency (mistake-review needs the unified counts + reachable queue) is
@@ -70,9 +71,11 @@ seeded this file with the persistent-logo/logged-out-CTA OAuth checks as the wor
 | **6** | Lessons: Progression, Audio & Polish | E9 | #8,#17,#3 | SagaScreen, lesson JSON, `/admin/lessons`, ConceptScreen/Board, CoachDialog TTS | 5 | Full speckit |
 | **7** | Platform Hardening & Cost Observability | E8+E12 | #12,#19,#20 | `package.json`/audit, `index.js`/`adminAuth.js` deploy gates + headers, repo hygiene, `llmCoachHelpers.js` `callLLM`, `mechanismExplainer.mjs` — grounded in **`docs/security_audit_fable.md`** | 5 | Full speckit |
 | **8** | Onboarding Experience | E13 | #4 | new onboarding flow/screens, first-run routing, store flag | 4 | Full speckit |
+| **9** | Puzzle Scoring-by-Pattern & Spanish Localization | — (open_issues) | OI-1, OI-15 | `/api/evaluate-move`, `predicates.js`, ChallengeScreen; `src/i18n/{en,es}.json` | 4 | Full speckit |
 
 **Coverage:** every `new_TODOs.md` #1–#26 and every QA finding (A/blocker, C/D/E/I majors, B/F/G/H minors)
-maps to exactly one epic (traceability table in the Appendix).
+maps to exactly one epic (traceability table in the Appendix). **Epic 9** was appended 2026-07-12 from the
+`docs/open_issues.md` backlog (OI-1, OI-15); it has **no dependency** on Epics 1–8 and may run at any time.
 
 ---
 
@@ -1382,6 +1385,194 @@ instrumentation; exact placement/timing of the post-aha import CTA within the po
 
 ---
 
+## Epic 9 — Puzzle Scoring-by-Pattern & Spanish Localization
+
+**Origin:** `docs/open_issues.md` (**OI-1**, **OI-15**), not `new_TODOs.md`/`agentic_QA.md`. Appended 2026-07-12
+after the open-issues remediation session. **No execution dependency** on Epics 1–8 — run any time.
+
+**Two independent halves, bundled into one speckit cycle to share pipeline overhead** (per
+`docs/best_practices_spec_driven_development.md` §"Epic Sizing" — combined task count lands in the sweet spot;
+they share **no** code, no data, and no design decision). US9.1–US9.2 (puzzle scoring) carry the one open
+design decision and touch server + client + the predicate seam — the speckit-justifying half. US9.3–US9.4
+(Spanish localization) are settled-approach content + one guard test. Keep them as separate user stories; do
+not let one half's `/clarify` leak into the other.
+
+**Intent:** (a) Judge the six *single-answer* puzzle categories by whether the played column matches the
+**taught pattern** (running the existing per-category predicate), not by a bare solver-score tie — closing the
+two teaching-correctness defects in OI-1. (b) Bring `es.json` to full key-parity with `en.json` so the
+already-shipped language switcher renders a genuinely Spanish app, guarded by a parity test.
+
+**Issues covered**
+- `[OI-1]` Single-answer categories (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape`)
+  score by solver-score (`quality === 'optimal'`), not pattern membership. Two live defects: a non-pattern
+  column can read "correct" on a score-tie; the stored canonical answer can read "Suboptimal" when it wins
+  slower than another column. Repro boards: `z_threat 3333302444422222060315555054` (col 0 reads correct but
+  is not the z-threat answer), `z_threat 3333334512266550121166` (`correct_col` 0 has a below-max score).
+- `[OI-15]` `es.json` ships only 2 of 24 top-level sections; the switcher (shipped 2026-07-12) therefore
+  renders mostly English via `fallbackLng:'en'`. Complete the translation + add a key-parity guard.
+
+**Non-obvious facts** (confirmed code locations + traps)
+- **This EXTENDS spec 044 / Epic 4's multi-solution accept-path; it does not build a new evaluator.** Spec 044
+  routed only the three *multi-solution* categories (`immediate_threat`, `forced_block`, `double_threat`)
+  through the `evaluatePredicate`-gated `accepted` field. OI-1 is the single-answer counterpart.
+- `ChallengeScreen.jsx` (~line 241–242) decides correctness as
+  `isCorrect = isMultiSolutionCategory ? data.accepted === true : data.quality === 'optimal'`. The six
+  single-answer categories fall into the `quality === 'optimal'` branch — a pure `scoreMove` solver-score
+  comparison. `MULTI_SOLUTION_CATEGORIES` is duplicated at `ChallengeScreen.jsx:~22` and `server/index.js:~33`.
+- `scoreMove(scores, playedCol) -> { badge, quality, bestCol }` (`server/moveQualityScorer.js`): `quality`
+  is `'optimal'` iff the played column ties the **max** solver score — exactly the rule OI-1 must stop using
+  for single-answer puzzles.
+- **The crux blocker (drives the open design decision):** `/api/evaluate-move` (`server/index.js` ~1687–1757)
+  receives only `{ movestring, col, category }` and computes `accepted` (~1746–1752) *only* for
+  `MULTI_SOLUTION_CATEGORIES`, via `evaluatePredicate({ category, moveString }, colInt, scores)`. It passes
+  **no puzzle metadata**. But the six single-answer evaluators in `server/predicates.js` read stored
+  puzzle data that is **not** derivable from `{ category, moveString }`:
+  - `evalZThreat` → `puzzle.highlightMetadata?.column`
+  - `evalClaimeven` / `evalFigure7` / `evalJShape` → `puzzle.correctCol`
+  - `evalUndercut` → every legal column **except** the killing column (`puzzle.highlightMetadata.cells`) —
+    avoid-the-pattern semantics; **do not invert it**
+  - `evalOvercut` → the major-threat column (`puzzle.highlightMetadata.cells`)
+  So naively adding the six to the gate makes every predicate return `wrong`. Getting the metadata (or the
+  puzzle id) to the handler is the design decision — see Open questions.
+- The six single-answer categories are **not grouped anywhere** — only `MULTI_SOLUTION_CATEGORIES` exists.
+  Introduce an explicit `SINGLE_ANSWER_CATEGORIES` set, mirrored server + client, rather than relying on the
+  implicit complement.
+- **Test precedent:** `tests/integration/evaluateMoveMultiSolution.test.js` is the pattern — a static
+  source-text assertion on `ChallengeScreen.jsx`'s fetch/`data.accepted` read, plus a minimal
+  `buildEvaluateMoveApp` that imports the **production** `evaluatePredicate` + `scoreMove` and drives the
+  handler over a real socket. It currently asserts `z_threat` returns `accepted: null` — that assertion **must
+  be updated** by this epic. Per-category integration tests already exist:
+  `tests/integration/{z_threat,claimeven,figure7_jshape,undercut_overcut}.test.js`. Runner is `node:test`;
+  new test files must be added to **both** `test` and `test:fast` lists in `connect-four/package.json`.
+- Adjacent latent bug (out of scope, log if untouched): the `/api/evaluate-move/inline` sibling handler
+  (`server/index.js` ~1775) uses `VALID_CATEGORIES.includes(category)` — `.includes` is not a `Set` method.
+- Never hand-construct movestrings for tests — source via DB / KB / `playGame`; validate through the
+  **production** detector (invariant I12), not the motivating example. Read `docs/knowledge-base/<slug>.md`
+  for each of the six patterns before touching its predicate.
+- **OI-15:** the switcher machinery already shipped this session — `src/i18n/index.js` registers both `en`
+  and `es` and reads `lng` from `readStoredLang()`; `useLanguage` hook + Settings `<select>` are live. This
+  epic is **translation content + a parity test only**, NOT switcher work. `es.json` = 2-of-24 sections;
+  `en.json` sections are: `nav, puzzle, sparring, auth, upgrade, common, games, home, coach, stats, error,
+  setpicker, setcard, challenge, eval, deepReveal, summary, challengeSet, mistakes, socratic, lesson, review,
+  saga, onboarding` (+ `settings`). Disc terms are **green/gray → verde/gris**, never rojo/amarillo.
+
+**Authoritative sources of truth**
+- `docs/open_issues.md` OI-1 + OI-15 (the deferral rationale + repro boards).
+- Memory `project_puzzle_correctness_seams` (ChallengeScreen bypasses via `scoreMove`; the dual-server seam;
+  the `'tied'`-discard trap), `reference_classify_vs_classifyPattern`, `feedback_no_random_boards`,
+  `reference_coordinate_convention`, `reference_i18n_english_only` (switcher shipped, `es.json` incomplete).
+- Epic 4 / spec 044 (the multi-solution accept-path this extends) + memory `project_new_category_wiring_checklist`.
+- `docs/knowledge-base/<slug>.md` for each of the six patterns (`formal_predicate` = the spec, `false_positives`
+  = tests you must not break).
+- `src/i18n/{en,es}.json`; the CLAUDE.md player-color table (green/gray).
+- `docs/best_practices_spec_driven_development.md`.
+
+**Settled decisions**
+- Consistent with Epic 4's resolved principle ("every category that has a classifier/predicate judges
+  correctness by running that predicate on the resulting position, not `correctCol` alone"): OI-1 extends that
+  to the six single-answer categories **at the Challenge-screen seam**. It does **not** introduce new per-
+  category semantics — `undercut` stays avoid-the-pattern; `z_threat`/`overcut`/`claimeven`/`figure_7`/`j_shape`
+  stay single-answer.
+- The `accepted` verdict is an **additive** response field. Never repurpose `quality`/`badge`/`coachPhraseKey`
+  (other callers depend on them) — mirror Epic 4 US4.3's additive contract.
+- The fix is **solve-time recompute** — no schema change, no persistence of an accepted-set.
+- OI-15 is content + guard test only; the switcher is already shipped and untouched. `es.json` stays in
+  lockstep with `en.json`; `en` remains the source/fallback (this epic does not remove English).
+- The two halves are independent; bundled solely to share one speckit cycle.
+
+### User stories & tasks
+
+**US9.1 — Deliver puzzle metadata to the single-answer correctness evaluator (server).**
+*As a learner, I want the six single-answer categories judged by whether I played the taught pattern — which
+requires the puzzle's stored answer/metadata to reach the evaluator.*
+1. Enumerate the six categories and the exact metadata each `predicates.js` evaluator reads (per Non-obvious
+   facts) — confirm each against the current code; do not invent new semantics.
+2. Resolve the open design decision (see Open questions) for **how** metadata reaches `/api/evaluate-move`, then
+   implement the chosen delivery path.
+3. Extend the handler (`server/index.js` ~1746–1752) so the six single-answer categories compute `accepted`
+   via `evaluatePredicate` with the now-available metadata, as an **additive** field — never repurposing
+   `quality`/`badge`/`coachPhraseKey`.
+4. Introduce a single `SINGLE_ANSWER_CATEGORIES` source of truth, mirrored server + client, replacing the
+   implicit "not multi-solution" complement.
+5. Preserve `quality`/`scoreMove` behavior for every other category and for non-Challenge callers; scope the
+   change to exactly the six categories.
+6. Test (through the production `evaluatePredicate`, I12; boards sourced from DB/KB, never hand-built): each of
+   the six returns `accepted:true` for its taught column and `accepted:false` for a non-pattern column,
+   including the two OI-1 repro boards; `undercut`'s killing column is still rejected.
+
+**US9.2 — Consume pattern-membership on the Challenge screen (client).**
+*As a learner, I want the "correct/wrong" verdict to reflect pattern membership, not a bare solver-score tie.*
+1. Extend `ChallengeScreen.jsx`'s `isCorrect` (~line 241–242) so the six single-answer categories use the
+   `data.accepted` path (via the shared `SINGLE_ANSWER_CATEGORIES` grouping from US9.1.4), not
+   `data.quality === 'optimal'`.
+2. Ensure the request carries whatever the chosen design needs (it already sends `category` + `movestring`
+   ~line 225–229; add the puzzle id/metadata if the design requires it).
+3. Add the single-answer analogue of the multi-solution display override so a **pattern-correct-but-slower**
+   move reads "correct", not "Suboptimal" (OI-1 repro board 2).
+4. Verify `isCorrect` drives SFX, coach mood, attempt-recording (`first_attempt_correct`), the win overlay,
+   and analytics consistently on the new path.
+5. Confirm `SocraticScreen.jsx`'s bare `col === correctCol` is **non-applicable** (no `category`/accepted-set
+   on hand-authored `lesson.socratic`) — leave it untouched; record in NOT included.
+6. Test: update the existing `evaluateMoveMultiSolution.test.js` assertion that `z_threat` → `accepted:null`;
+   add the two OI-1 repro boards asserting the corrected end-to-end verdict (server + Challenge-screen read).
+
+**US9.3 — Complete the Spanish translation of `es.json` to full parity.**
+*As a Spanish-speaking user, I want the whole app in Spanish, not two sections with the rest in English.*
+1. Translate the 22 missing top-level sections (all of `en.json` except the already-present `setcard`,
+   `onboarding`, `settings.language`) in lockstep with `en.json`'s keys.
+2. Use green/gray → **verde/gris** disc terminology, never rojo/amarillo; preserve coach voice and pedagogy
+   tone (no lost-position defeatism, per `feedback_pedagogy_preferences`).
+3. Preserve every i18next interpolation placeholder (`{{var}}`) and any plural/ICU form exactly as in `en.json`.
+4. Leave the switcher wiring untouched (shipped this session) — this story is content only.
+5. Manually verify representative screens render under `es` (Home, Challenge/Puzzle, Coach, Settings,
+   Onboarding) with no leftover English in translated sections and no raw `t()` keys.
+
+**US9.4 — Key-parity guard test for `en`/`es`.**
+*As a maintainer, I want a test that fails if `es.json` drifts out of key-parity with `en.json`.*
+1. Add a `node:test` unit test that deep-compares the full **nested** key sets of `en.json` and `es.json` and
+   fails on any key present in one but not the other.
+2. Register the new test file in **both** `test` and `test:fast` lists in `connect-four/package.json`.
+3. Assert **key parity, not value equality** — an identical string (proper nouns) is allowed; a missing/extra
+   key is not.
+4. Sequence US9.3 before US9.4 — the test only goes green once `es.json` is complete; landing it earlier breaks
+   the suite.
+5. Document the lockstep rule in a short comment (and optionally `testing-conventions.md`) so future copy
+   additions keep both files parallel.
+
+**Acceptance criteria**
+- Each of the six single-answer categories is judged by pattern membership on **both** the server and the
+  Challenge screen: the taught column reads "correct"; a non-pattern column reads "wrong"; a pattern-correct-
+  but-slower-win column reads "correct" (not "Suboptimal") — verified through the production detector (I12) on
+  the two OI-1 repro boards, sourced from DB/KB (never hand-built).
+- `undercut`'s avoid-the-pattern column set and the unique-answer categories' behavior are unchanged
+  (regression test).
+- `accepted` is exposed additively; `quality`/`badge`/`coachPhraseKey` and non-Challenge callers are unaffected.
+- `es.json` has full key-parity with `en.json`; the parity test is registered in `test`/`test:fast` and green;
+  representative screens render in Spanish with no raw keys and no leftover English in translated sections.
+
+**NOT included:** the multi-solution categories (already handled by spec 044 — untouched); `SocraticScreen.jsx`'s
+bypass (confirmed non-applicable); the `/api/evaluate-move/inline` `.includes`-on-a-Set latent bug (adjacent;
+log to `open_issues.md` if not fixed here); any language-switcher/detector work (shipped Theme E 2026-07-12);
+re-auditing/backfilling already-stored puzzle rows for scoring (solve-time recompute only, mirroring Epic 4);
+removing or de-registering English (`en` stays the source + fallback).
+
+**Sizing verdict — Full speckit (for the OI-1 half; OI-15 rides the cycle).** 4 stories × ≥5 tasks; the puzzle-
+scoring half touches server + client + the predicate seam and carries a genuine open design decision (metadata
+delivery) needing per-category I12 validation; the localization half is settled content + one guard test,
+bundled to reach the sweet spot rather than run its own thin pipeline.
+
+**Open questions (`/clarify`):**
+- **How does the puzzle's `highlightMetadata`/`correctCol` reach `/api/evaluate-move`?** (a) pass a puzzle id →
+  server loads the row (adds a DB read per evaluate + id plumbing); (b) client includes the needed metadata in
+  the request body (no DB read, but trusts client-sent data); (c) evaluate pattern membership client-side
+  against already-loaded puzzle data (no server change). This changes the implementation shape materially — the
+  primary decision to resolve.
+- Whether the `z_threat`/`undercut`/`overcut` "taught answer" should be **recomputed from the board** by a
+  detector (removing the stored-metadata dependency) or **read from stored puzzle metadata** as the predicates
+  do today (recomputing is a larger change, but removes the metadata-delivery need for those three).
+
+---
+
 ## Appendix — issue → deliverable traceability
 
 | Source issue | Epic |
@@ -1419,3 +1610,5 @@ instrumentation; exact placement/timing of the post-aha import CTA within the po
 | QA:G minor (fork square not highlighted) | 2 |
 | QA:H minor (raw sev/tree/movestring leak) | 2 |
 | QA:I major (/mistakeDetail reload → home) | 2 |
+| OI-1 (single-answer puzzle scoring by pattern) | 9 |
+| OI-15 (Spanish `es.json` full-parity translation) | 9 |
