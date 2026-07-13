@@ -911,6 +911,25 @@
       "decline": "Ahora no",
       "coach": "¡Buena partida! ¿Querés un análisis más profundo de las partidas que jugás en línea también?",
       "signInReason": "Iniciá sesión para importar tu historial de Papergames."
+    },
+    "mission": {
+      "coachLead": "Hola, soy tu entrenador.",
+      "coachText": "Así es como te volveremos peligroso en el Conecta 4.",
+      "cta": "Empezar a entrenar",
+      "pillars": {
+        "learn": {
+          "title": "Aprende las tácticas",
+          "line": "Los patrones ganadores detrás de cada partida, y por qué funcionan."
+        },
+        "practice": {
+          "title": "Practica contra un bot que enseña",
+          "line": "Juega contra mí a tu nivel y recibe el razonamiento de cada jugada."
+        },
+        "mistakes": {
+          "title": "Entiende tus errores",
+          "line": "Convierte los errores en lecciones, incluso en tus partidas reales de Papergames."
+        }
+      }
     }
   },
   "settings": {
