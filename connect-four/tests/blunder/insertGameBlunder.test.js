@@ -104,4 +104,20 @@ describe('insertGameBlunder — anon device path', () => {
     await insertGameBlunder(supabase, { board_state: '3344', move_played: 2, correct_move: 3, quality: 'blunder' });
     assert.equal(called, false);
   });
+
+  it('preserves authenticated row with device_uuid === null when user_id is present alone', async () => {
+    let captured = null;
+    const supabase = { from: () => ({ insert: async (row) => { captured = row; return { error: null }; } }) };
+    await insertGameBlunder(supabase, {
+      user_id: 'user-1',
+      board_state: '3344',
+      move_played: 2,
+      correct_move: 3,
+      quality: 'blunder',
+      game_id: 'g1',
+    });
+    assert.ok(captured, 'insert was called');
+    assert.equal(captured.user_id, 'user-1');
+    assert.equal(captured.device_uuid, null);
+  });
 });
