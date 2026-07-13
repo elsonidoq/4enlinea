@@ -195,26 +195,38 @@ updated lesson JSON and redeploy (per FR-012a, generation never runs in prod). R
 
 ## OI-10 — Frontend Sentry is imported but never initialized (error reporting is a silent no-op)
 
-**Status**: latent gap (frontend error reporting non-functional; not fixed — spec 047 tracks the remediation)
-**Area**: `connect-four/src/components/ErrorBoundary.jsx`; `connect-four/server/.env(.example)` (`SENTRY_DSN`)
+**Status**: ✅ RESOLVED 2026-07-12 — `Sentry.init()` added in `connect-four/src/main.jsx`, gated on
+`import.meta.env.VITE_SENTRY_DSN` (mirrors the server's existing `SENTRY_DSN` gate). `.env.example`
+documents the new frontend DSN var. CSP `connect-src` (`connect-four/server/index.js`) now allows the
+Sentry ingest host via an env-derived `SENTRY_INGEST` (`process.env.SENTRY_INGEST_HOST` or a
+`*.ingest.sentry.io` wildcard default). The CSP smoke-test error-reporting leg dropped by spec 047 FR-005
+has been re-added in `staging_checks.md`. **Deploy prerequisite**: `VITE_SENTRY_DSN` must be set in the
+frontend build env and `SENTRY_DSN` in the server env for either side to actually report; both remain
+no-ops (safe defaults) if unset.
+
+**Area**: `connect-four/src/components/ErrorBoundary.jsx`, `connect-four/src/main.jsx`;
+`connect-four/server/index.js` (CSP `connect-src`); `connect-four/.env.example` (`SENTRY_DSN`,
+`VITE_SENTRY_DSN`)
 
 **Discovered**: spec `047` (Epic 7) plan verification (2026-07-12)
 
-`ErrorBoundary.jsx` imports `@sentry/react` and calls `Sentry.captureException(error, { extra: info })`, but
-there is **no `Sentry.init()` anywhere in `src/`** and no frontend DSN env var — so the SDK is uninitialized
-and `captureException` is a no-op. Frontend errors are silently dropped. Server-side Sentry is separately gated
-on `SENTRY_DSN` (`index.js`, `logger.js`), which is **commented out in `.env.example`** and unconfirmed in prod
-— so server error reporting may also be inert. An agent reading `ErrorBoundary.jsx` would reasonably assume
-error reporting works; it does not.
+**Original gap** (historical, now fixed): `ErrorBoundary.jsx` imports `@sentry/react` and calls
+`Sentry.captureException(error, { extra: info })`, but there was **no `Sentry.init()` anywhere in `src/`**
+and no frontend DSN env var — so the SDK was uninitialized and `captureException` was a no-op. Frontend
+errors were silently dropped. Server-side Sentry is separately gated on `SENTRY_DSN` (`index.js`,
+`logger.js`), which is documented (commented out by default) in `.env.example`; its live-deploy
+configuration is unconfirmed and out of scope for this fix.
 
-**Consequence for spec 047**: this is why FR-005's CSP smoke test **dropped** the "error events still reach the
-reporting service" leg (marked N/A — nothing to break), and why the CSP has **no** Sentry `connect-src` entry
-(no browser-side Sentry traffic exists to allow). Spec 047 US2 task T012 files the formal backlog note for the
-frontend gap.
+**Consequence for spec 047 (historical)**: this is why FR-005's CSP smoke test **dropped** the "error
+events still reach the reporting service" leg (marked N/A — nothing to break), and why the CSP had **no**
+Sentry `connect-src` entry (no browser-side Sentry traffic existed to allow). Spec 047 US2 task T012 filed
+the formal backlog note for the frontend gap — this entry is that backlog item, now resolved.
 
-**If picked up**: decide whether error reporting is wanted; if so, add `Sentry.init({ dsn })` in the frontend
-entrypoint with a frontend DSN, confirm `SENTRY_DSN` is set in the deploy env for the server, and re-add the
-error-reporting leg to any CSP smoke test (browser Sentry needs a `connect-src` allowance for the ingest host).
+**Resolution**: `Sentry.init()` now runs in `src/main.jsx` gated on `VITE_SENTRY_DSN`; the CSP `connect-src`
+now allows the Sentry ingest host (`SENTRY_INGEST` in `server/index.js`); the CSP smoke-test error-reporting
+leg is re-added in `staging_checks.md`. Remaining work is operational, not code: provision a real
+`VITE_SENTRY_DSN` (frontend) and confirm `SENTRY_DSN` (server) in the deploy env, then run the re-added
+staging smoke-test leg.
 
 ## OI-11 — Admin gate has no second factor beyond `requireLocalhost` (FR-009 deferred scope)
 
