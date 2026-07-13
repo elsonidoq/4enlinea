@@ -169,6 +169,33 @@ When gating a feature, check what its screen shows to a signed-out visitor who a
 |---|---|
 | `VITE_API_BASE_URL` | Server base URL (default: `''` = same origin) |
 
+## DEV Board Injector (spec 049 QA tooling)
+
+A developer/QA aid for loading arbitrary board positions that normal play can't reach (e.g. the
+puzzle-scoring repro boards). **Every surface is `import.meta.env.DEV`-gated**, so Vite
+dead-code-eliminates it from production builds (verified: a prod `vite build` contains none of the
+`Dev: load board` / `DEV_QA_FIXTURES` / `devBoard` strings). Same convention as the AuthModal
+"🛠 Dev: skip auth" button.
+
+- **Modules:** `src/lib/devFixtures.js` (`DEV_QA_FIXTURES` frozen QA boards + pure
+  `buildDevPuzzle({movestring,category,correctCol,highlightMetadata})` → the inline puzzle shape),
+  `src/lib/devBoardParam.js` (`parseDevBoardSearch` pure + `readDevBoardParam` DEV-gated wrapper),
+  `src/components/DevBoardInjector.jsx` (the collapsed `🛠 Dev: load board ▾` panel — fixture
+  dropdown + custom movestring/category form).
+- **Challenge:** `ChallengeScreen` renders the panel (DEV-only) and its `loadPuzzles()` has a DEV
+  branch that takes a `devPuzzles` prop (set by the panel via `go('challenge', {category, devPuzzles})`)
+  **or** a `?devBoard=` URL param, in priority over the normal draw. The panel path re-navigates so
+  the `/challenge/:category` **path segment stays the authoritative category** for the accepted-gate;
+  there is no `devCategory` query param. `devPuzzles` is in the `loadPuzzles` effect deps so
+  re-loading a second board of the same category (no remount, since `go()` to the current screen
+  reuses the instance) actually re-runs.
+- **Sparring:** `App.jsx`'s mount effect has a DEV-gated exception — `/game?devBoard=…&devSide=…&devDifficulty=…`
+  cold-boots a seeded game via `GameScreen`'s existing `initialMoves` prop, bypassing the normal
+  session-only→home redirect for `game`.
+- **Gotcha:** fixture/deep-link boards go through the solver-backed `/api/evaluate-move`, which 500s
+  on a terminal (already-won) position — see memory `project_dev_board_injector`. Boards must be
+  solver-verified non-terminal, not hand-copied from predicate unit tests.
+
 ## Board Representation (Frontend)
 
 Board is a 2D array `board[row][col]` where row 0 is the bottom row.

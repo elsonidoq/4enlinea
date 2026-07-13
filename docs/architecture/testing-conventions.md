@@ -168,6 +168,15 @@ self-regression-check the guard, temporarily delete a leaf key from `es.json` an
 in the assertion message; restore the key and it passes again (never commit the temporary
 deletion).
 
+**Limitation (do not over-trust a green parity test):** this guard only proves `en.json` and
+`es.json` have the *same keys*. It is completely blind to user-facing strings that were never wired
+to `t()` at all — hardcoded English literals in JSX (`title="Review"`, `aria-label="Mute music"`,
+button text). Those render English in every language and the parity test stays green. Spec 049 QA
+found a batch of these (Stats logout, Settings→Papergames, Game TopBar, audio aria-labels, Lessons
+list) and more remain (`docs/open_issues.md` OI-19). A passing parity test means "no key-level
+drift," NOT "the app is fully translated." When adding UI, wire every user-facing string through
+`t()` — a hardcoded literal is invisible to this guard.
+
 ### Pure Function Extraction Pattern
 
 Server code in this repo has no HTTP-level test infrastructure: the Express `app` is not exported, there is no supertest harness, and the Supabase client has no dependency-injection seam at the endpoint level.

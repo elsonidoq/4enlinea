@@ -63,7 +63,9 @@
 
 - [Frontend architecture](project_frontend_architecture.md) — routes; component map; store layer
 - [en.json duplicate mistakes key](reference_en_json_duplicate_mistakes.md) — line ~707 is effective; ~492 is dead
-- [i18n is English-only](reference_i18n_english_only.md) — UPDATED: switcher SHIPPED (useLanguage hook, es registered, Settings selector, OI-15 PARTIAL); es.json still 2-of-24 sections so most translations still fall back to English
+- [i18n switcher + es.json](reference_i18n_english_only.md) — switcher SHIPPED; es.json now FULL key-parity (spec 049) in Argentinian voseo; parity guarded by i18nKeyParity.test.js
+- [Spanish = Argentinian voseo](project_spanish_is_argentinian_voseo.md) — es.json MUST be Rioplatense voseo (encontrá/tenés/sos/vos), NOT neutral tú-Spanish; keys/verde-gris/placeholders unchanged
+- [DEV board injector](project_dev_board_injector.md) — load any board into Challenge via panel/`?devBoard=`; seed sparring via `/game?devBoard=`; fixtures MUST be solver-verified non-terminal or /api/evaluate-move 500s
 - [Valid blunder tags vs categories](reference_valid_blunder_tags.md) — VALID_BLUNDER_TAGS != VALID_CATEGORIES
 - [Highlight cell roles](project_highlight_cell_colors.md) — use userIsYellow for role assignment; claimeven always Yellow perspective, cooperativeAiMoves empty
 - [Tier source](reference_tier_source.md) — tier from store.getProfile() not session.tier
