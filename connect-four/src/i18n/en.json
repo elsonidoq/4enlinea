@@ -160,6 +160,9 @@
         "0": "Let's sharpen your Connect Four tactics."
       }
     },
+    "onboardingMission": {
+      "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
+    },
     "weaknessMap": "Weakness map",
     "queueCount_one": "{{count}} position to review",
     "queueCount_other": "{{count}} positions to review",

@@ -160,6 +160,9 @@
         "0": "Vamos a afilar tus tácticas de Cuatro en Línea."
       }
     },
+    "onboardingMission": {
+      "greeting": "Hola, soy tu entrenador. Así es como te volveremos peligroso en el Conecta 4."
+    },
     "weaknessMap": "Mapa de debilidades",
     "queueCount_one": "{{count}} posición para repasar",
     "queueCount_other": "{{count}} posiciones para repasar",

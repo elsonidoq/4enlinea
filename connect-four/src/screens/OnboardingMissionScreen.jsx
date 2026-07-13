@@ -7,6 +7,7 @@ import { AuthModal } from '../components/AuthModal.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { track } from '../lib/track.js';
 import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 // Onboarding mission screen — shown once, before the first-run sparring game (anonymous
 // first-run only). The coach is the messenger; three pillars mirror the app's three modes
@@ -42,6 +43,7 @@ function PillarRow({ icon, tint, ink, title, line }) {
 export function OnboardingMissionScreen({ go }) {
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
+  const { speakCoachMessage } = useCoachSpeech();
 
   // Fire the onboarding-start event once on mount. Guarded by a ref (not just empty deps) so
   // React 18 StrictMode's dev-only double-invoke of mount effects cannot double-fire it — same
@@ -51,6 +53,8 @@ export function OnboardingMissionScreen({ go }) {
     if (startedRef.current) return;
     startedRef.current = true;
     track('onboarding_started', {});
+    speakCoachMessage('coach.onboardingMission.greeting');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleStart() {
