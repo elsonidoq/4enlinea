@@ -62,7 +62,7 @@
 
 - [Frontend architecture](project_frontend_architecture.md) — routes; component map; store layer
 - [en.json duplicate mistakes key](reference_en_json_duplicate_mistakes.md) — line ~707 is effective; ~492 is dead
-- [i18n is English-only](reference_i18n_english_only.md) — index.js hardcodes lng:'en', registers only en; es.json is dead code (no switcher); translating to es does nothing
+- [i18n is English-only](reference_i18n_english_only.md) — UPDATED: switcher SHIPPED (useLanguage hook, es registered, Settings selector, OI-15 PARTIAL); es.json still 2-of-24 sections so most translations still fall back to English
 - [Valid blunder tags vs categories](reference_valid_blunder_tags.md) — VALID_BLUNDER_TAGS != VALID_CATEGORIES
 - [Highlight cell roles](project_highlight_cell_colors.md) — use userIsYellow for role assignment; claimeven always Yellow perspective, cooperativeAiMoves empty
 - [Tier source](reference_tier_source.md) — tier from store.getProfile() not session.tier
