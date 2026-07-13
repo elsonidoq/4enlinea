@@ -840,6 +840,25 @@
       "decline": "Not now",
       "coach": "Nice game! Want deeper analysis on the games you play online too?",
       "signInReason": "Sign in to import your Papergames history."
+    },
+    "mission": {
+      "coachLead": "Hi, I'm your coach.",
+      "coachText": "Here's how we'll make you dangerous at Connect Four.",
+      "cta": "Start sparring",
+      "pillars": {
+        "learn": {
+          "title": "Learn the tactics",
+          "line": "The winning patterns behind every game — and why they work."
+        },
+        "practice": {
+          "title": "Practice against a bot that teaches",
+          "line": "Play me at your level and get the reasoning behind every move."
+        },
+        "mistakes": {
+          "title": "Understand your mistakes",
+          "line": "Turn blunders into lessons — even your real games from Papergames."
+        }
+      }
     }
   },
   "settings": {
