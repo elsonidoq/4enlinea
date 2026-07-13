@@ -10,6 +10,39 @@ let speechQueue = /** @type {Array<string | HTMLAudioElement>} */ ([]);
 let currentSpeechAudio = null;
 
 /**
+ * Browser autoplay policy blocks `audio.play()` until the page has received a
+ * user gesture. The coach's first line (e.g. the onboarding greeting, or any
+ * coach line on a freshly-loaded/refreshed screen) fires on mount with no prior
+ * gesture, so `play()` rejects with `NotAllowedError` and the clip would be lost.
+ *
+ * We handle this in two parts:
+ *   1. `audioUnlocked` tracks whether a user gesture has happened yet. A one-time
+ *      global gesture listener (registered below) flips it and flushes the queue.
+ *   2. `playNext()` does NOT drop a clip that `play()` rejected for autoplay while
+ *      still locked — it re-queues it at the head, so the first gesture replays it.
+ * The replay runs synchronously inside the gesture handler, so the browser counts
+ * it as gesture-initiated and allows it.
+ */
+let audioUnlocked = false;
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  if (typeof window !== 'undefined') {
+    for (const evt of ['pointerdown', 'keydown', 'touchend']) {
+      window.removeEventListener(evt, unlockAudio);
+    }
+  }
+  playNext(); // flush anything that was blocked before the gesture
+}
+
+if (typeof window !== 'undefined') {
+  for (const evt of ['pointerdown', 'keydown', 'touchend']) {
+    window.addEventListener(evt, unlockAudio);
+  }
+}
+
+/**
  * Set up a speech audio element with standard ended/error cleanup.
  * @param {HTMLAudioElement} audio
  */
@@ -39,7 +72,17 @@ function playNext() {
 
   currentSpeechAudio = audio;
   attachSpeechListeners(audio);
-  audio.play().catch(() => {});
+  audio.play().catch((err) => {
+    if (currentSpeechAudio === audio) currentSpeechAudio = null;
+    if (err && err.name === 'NotAllowedError' && !audioUnlocked) {
+      // Autoplay blocked and we haven't had a gesture yet — keep the clip and
+      // let unlockAudio() replay it on the first interaction. Do NOT loop.
+      speechQueue.unshift(item);
+    } else {
+      // Any other failure (or a block that persists after unlock): skip it.
+      playNext();
+    }
+  });
 }
 
 /**

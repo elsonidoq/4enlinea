@@ -417,3 +417,59 @@ TopBar titles; other screens were not exhaustively audited.
 positions (`title=`, `aria-label=`, button/label children) not wrapped in `t()`; add keys to both
 `en.json`/`es.json` (Spanish = Argentinian voseo, [[project_spanish_is_argentinian_voseo]]).
 Consider a lint/test that flags hardcoded JSX text to prevent regressions.
+
+## OI-20 — Onboarding post-game value loop incomplete (coach silent, no analysis, game lost on signup)
+
+**Status**: ✅ RESOLVED 2026-07-13 (onboarding follow-ups, branch `feature/polish`, commits `ef24f17`/`4522e78`/`ffca704`/`a21bff8`). All three gaps fixed and verified end-to-end in a real browser + DB: (1) coach speaks the greeting from `coach.onboardingMission.greeting` via `useCoachSpeech` (mp3 generated + approved); (2) game-end routes onboarding → review → onboarding-only "Continue" CTA → import offer (`pickGameEndScreen` returns `'review'` for both); (3) anon games re-associate on migrate via `device_uuid` and appear in Past games after sign-up. Regression confirmed: `puzzle_attempts` + `lesson_progress` still migrate. See [[project_games_dont_migrate]] and `api-conventions.md` Migrate Endpoint. One residual staging item logged (real-browser autoplay of the greeting — see `staging_checks.md` Epic 8).
+**Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/onboardingGameEnd.js`, `GameScreen.jsx`, `src/screens/ReviewScreen.jsx`, `src/store/IndexedDBStore.js` + `server/userRoutes.js` (`/api/user/migrate`), `server/index.js` (`/api/games`)
+**Discovered**: onboarding polish review, 2026-07-13 (post mission-screen merge)
+
+Three related gaps in the onboarding "play → learn" loop the mission screen feeds into. All are
+pre-existing Epic 8 behavior, not regressions from the mission screen:
+
+1. **Coach greeting is text-only, never spoken.** `OnboardingMissionScreen` shows the greeting via
+   `<CoachDialog>` but never calls `speakCoachMessage`, and the phrase lives under
+   `onboarding.mission.*` not the `coach.*` TTS namespace — so it isn't in `tts-registry.json` /
+   `/admin/audios` and has no audio. Fix needs: re-key under `coach.*`, generate+approve the clip,
+   and wire `useCoachSpeech()`. See [[project_lesson_progression_audio_traps]].
+2. **Game-end skips the post-game review.** `pickGameEndScreen(onboarding)` routes onboarding to
+   `'onboardingImportOffer'` instead of `'review'` — so the user never sees the mistake analysis
+   that is the whole point of starting with a game. `/api/games/analyze` already supports the
+   anonymous game, so routing onboarding → review works; decision needed on where the import offer
+   then lands (recommend review → then import offer). Update `tests/unit/onboardingGameEnd.test.js`.
+3. **Anonymous game is orphaned — never in Past games.** The onboarding game is written to the
+   server `games` table with `user_id: null` and is never re-associated on signup, and Past games
+   401s anon + filters by `user_id`. Fix options (server-side `device_uuid`→`user_id`
+   re-association in `/api/user/migrate`, vs replicating games into IndexedDB). See
+   [[project_games_dont_migrate]] for full detail.
+
+## OI-21 — Onboarding greeting cannot autoplay on a cold load; design a gesture-first entry so the coach can speak on arrival
+
+**Status**: open — product/UX design task (the runtime bug is FIXED; this is about making the greeting play *on arrival* rather than *on first interaction*).
+**Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/useCoachSpeech.js` (audio unlock), `src/lib/onboardingRouting.js` (the first-run auto-route), and whatever precedes the mission screen.
+**Discovered**: onboarding follow-ups coach-speech debugging, 2026-07-13.
+
+Browsers block `audio.play()` until the page has received a user gesture (confirmed observable:
+`play()` rejects with `NotAllowedError`, mp3 fetched but silent). The mission screen is reached via
+the anonymous first-run **auto-route** — it appears with **no prior gesture**, so the coach greeting
+is autoplay-blocked. The 2026-07-13 fix (`useCoachSpeech`: hold a blocked clip and replay it on the
+first `pointerdown`/`keydown`/`touchend`) makes the greeting play on the user's **first interaction**
+and makes all later coach speech robust — but on a truly cold mission screen the greeting still can't
+sound *the instant the screen appears*, because that is a hard browser rule, not a code bug.
+
+The product task: design a first-run entry that **naturally elicits a gesture before (or as) the
+mission screen is shown**, so the greeting can play on arrival without an awkward "click anywhere"
+gap. Options to weigh (do NOT just pick one — brainstorm):
+- A one-tap "Meet your coach" / "Start" splash *before* the mission screen; the tap both advances
+  and unlocks audio, so the greeting plays as the mission screen mounts.
+- Make the auto-route itself require a tap (e.g. land on a minimal welcome card whose only CTA
+  enters onboarding), instead of silently routing into the mission screen.
+- A visible speaker / "tap to hear the coach" affordance on the mission bubble (explicit, but adds
+  a tap and some UI).
+- Accept first-interaction playback (current behavior) + ensure the text bubble fully conveys the
+  greeting meanwhile; lowest effort, no new UI.
+
+Constraint: whatever the entry, it must not reintroduce a flash of the sparring game before the
+gesture, and must keep the anonymous-only auto-route semantics (`shouldAutoRouteToOnboarding`).
+Cross-ref: staging_checks.md Epic 8 "Coach greeting is actually AUDIBLE" item; `useCoachSpeech`
+unlock mechanism.
