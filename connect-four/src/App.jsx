@@ -7,6 +7,7 @@ import { SCREENS } from './lib/screenRegistry.jsx';
 import { SURFACE_BG } from './lib/surfaceGroups.js';
 import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
+import { readDevBoardParam } from './lib/devBoardParam.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
 import { shouldAutoRouteToOnboarding, ONBOARDING_GAME_PARAMS } from './lib/onboardingRouting.js';
 import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
@@ -24,9 +25,25 @@ function Navigator() {
   // Replaces the old effect that just called setActiveScreen('home').
   useEffect(() => {
     const { screenKey, params: initParams } = parseUrl(window.location.pathname);
-    const isSessionOnly = SESSION_ONLY_SCREENS.has(screenKey);
-    const resolved = isSessionOnly ? 'home' : screenKey;
-    const resolvedParams = isSessionOnly ? {} : initParams;
+    let isSessionOnly = SESSION_ONLY_SCREENS.has(screenKey);
+    let resolved = isSessionOnly ? 'home' : screenKey;
+    let resolvedParams = isSessionOnly ? {} : initParams;
+
+    // DEV-only: allow cold-booting a seeded Sparring game from /game?devBoard=... (game is
+    // session-only, so it would otherwise redirect to home). Entire block stripped from prod.
+    if (import.meta.env.DEV && screenKey === 'game') {
+      const devParam = readDevBoardParam(window.location.search);
+      if (devParam) {
+        isSessionOnly = false;
+        resolved = 'game';
+        resolvedParams = {
+          difficulty: devParam.difficulty ?? 'medium',
+          side: devParam.side ?? 'first',
+          initialMoves: devParam.movestring,
+        };
+      }
+    }
+
     const resolvedUrl = isSessionOnly ? '/' : buildUrl(resolved, resolvedParams);
 
     setActiveScreen(resolved);
