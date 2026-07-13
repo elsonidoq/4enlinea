@@ -410,3 +410,46 @@ For each check record:
   - **Expected**: The migrated `onboarding_status` lands on the account row via the conditional write
     (`... WHERE onboarding_status = 'not_encountered'`), never overwriting a real prior state.
   - **Source**: Epic 8 / spec 048 FR-012, User Story 1 Scenario 4; `docs/open_issues.md` OI-14.
+
+- [x] **Onboarding mission-screen first-run browser walkthrough (clean anonymous session).** ✅ run 2026-07-13 (onboarding follow-ups QA, isolated/incognito Chrome context): mission screen is the first screen; coach bubble + three pillars render; "Start sparring" → onboarding sparring game (easy, green/first); after a move `onboarding_status` flipped to `seen`; `onboarding_started` + `onboarding_sparring_started` both fired. (Auth-modal open/close was exercised from the home screen, not the mission screen's user icon — the icon wiring is identical.)
+  - **What**: From a genuinely clean/incognito session (no session, `onboarding_status`
+    `not_encountered`), confirm the mission screen (`OnboardingMissionScreen`) is the first screen
+    shown; the coach bubble + three pillars render; the user icon opens the auth modal and closes
+    back; "Start sparring" lands in the onboarding sparring game (easy, player green/first); playing
+    one move flips `onboarding_status` to `seen` (reload no longer re-shows the mission screen); and
+    `track('onboarding_started')` (mount) + `track('onboarding_sparring_started')` (CTA) both fire.
+  - **Why staging/blocked**: this feature merged with unit tests + a production build + 3 clean code
+    reviews, but the interactive clean-signed-out walkthrough was **not run** — the Chrome DevTools
+    browser was occupied by another session. It is locally verifiable in incognito; it was simply
+    never executed this session. Run it before treating the mission screen's runtime as confirmed.
+  - **Expected**: All steps pass; the mission screen appears exactly once before the game; downstream
+    game/aha/import-offer flow is unchanged.
+  - **Source**: onboarding mission-screen feature (merged `feature/polish` 2026-07-13); plan
+    `docs/superpowers/plans/2026-07-13-onboarding-mission-screen.md` Task 2 Step 6.
+
+- [ ] **Coach greeting is actually AUDIBLE on the mission screen in a real browser (autoplay policy).**
+  - **What**: From a clean/incognito session in a real (non-automation) browser, land on the mission
+    screen via the first-run auto-route and confirm the coach greeting
+    (`coach.onboardingMission.greeting`) is **audibly spoken** on arrival — not just fetched. If the
+    browser blocks it, confirm the intended fallback (plays on first interaction, or the replay
+    affordance works) and decide whether that is acceptable.
+  - **Why staging/real-browser**: the mission screen is reached via first-run auto-route with **no
+    prior user gesture**, so a real browser's autoplay policy may block `audio.play()` and leave the
+    coach silent. Local QA ran in automation Chrome (chrome-devtools MCP), which disables
+    autoplay-blocking — the greeting mp3 was fetched (`206`, no `play()` rejection) but that does NOT
+    prove audibility under a real autoplay policy.
+  - **Expected**: The greeting plays audibly on mission-screen arrival (or a defined, acceptable
+    fallback triggers). If it's silently blocked, that's a bug to file, not a pass.
+  - **Source**: Feature 1 (onboarding follow-ups, `feature/polish` 2026-07-13); `useCoachSpeech` +
+    `OnboardingMissionScreen` mount effect.
+
+## Anon free deep reveal
+
+- [ ] **Migration `058_blunders_device_uuid.sql` must be applied before deploy.**
+  - **What**: Confirm migration `058_blunders_device_uuid.sql` is applied to the target DB before
+    deploy (`node server/migrate.js` runs it automatically on the Railway deploy step).
+  - **Why staging**: Without it, anon blunder INSERTs fail (NOT NULL on `user_id`) and the onboarding
+    free reveal is a silent no-op.
+  - **Expected**: The migration is recorded in `schema_migrations` on the deployed DB before the
+    anon free deep reveal feature is exercised in staging/production.
+  - **Source**: Migration `058_blunders_device_uuid.sql` (anon free deep reveal feature).
