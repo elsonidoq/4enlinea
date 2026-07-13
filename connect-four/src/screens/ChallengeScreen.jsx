@@ -16,6 +16,9 @@ import { COACH_PACING_MS } from '../lib/constants.js';
 import { useAudio } from '../lib/useAudio.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/categories.js';
+import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
+import { buildDevPuzzle } from '../lib/devFixtures.js';
+import { readDevBoardParam } from '../lib/devBoardParam.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -48,6 +51,7 @@ export function ChallengeScreen({
   confirmationCategory,
   confirmationCount,
   confirmationChallenges = null,
+  devPuzzles = undefined,
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
@@ -128,6 +132,24 @@ export function ChallengeScreen({
   useEffect(() => {
     async function loadPuzzles() {
       try {
+        // DEV board injector (dead-code-eliminated in prod): a `devPuzzles` prop (set by handleDevLoad's
+        // go('challenge', {devPuzzles})) or a ?devBoard= URL param takes priority over the normal draw.
+        if (import.meta.env.DEV) {
+          let injected = devPuzzles?.length ? devPuzzles : null;
+          if (!injected) {
+            const p = readDevBoardParam();
+            if (p) injected = [buildDevPuzzle(p)];
+          }
+          if (injected?.length) {
+            sessionIdRef.current = null;
+            setPuzzles(injected);
+            setCurrentIdx(0);
+            initPuzzle(injected[0]);
+            setPhase('pre-move');
+            return;
+          }
+        }
+
         // Use embedded challenges when provided (lesson editor curation)
         if (lessonMode && confirmationChallenges?.length > 0) {
           const loaded = confirmationChallenges.map(ch => ({
@@ -189,6 +211,12 @@ export function ChallengeScreen({
     playMusic();
     return () => pauseMusic();
   }, [playMusic, pauseMusic]);
+
+  function handleDevLoad(puzzleObj, cat) {
+    // Re-navigate so the `category` prop (hence effectiveCategory + the accepted-gate) matches the
+    // loaded board; the DEV branch in loadPuzzles picks up devPuzzles on the remount.
+    go('challenge', { category: cat, devPuzzles: [puzzleObj] });
+  }
 
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
@@ -624,6 +652,8 @@ export function ChallengeScreen({
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
       background: 'var(--bg-chal)',
     }}>
+      {import.meta.env.DEV && <DevBoardInjector onLoad={handleDevLoad} />}
+
       {/* Top bar */}
       <TopBar
         onBack={handleBack}
