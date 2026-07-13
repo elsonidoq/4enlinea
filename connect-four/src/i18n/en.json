@@ -843,10 +843,40 @@
     }
   },
   "settings": {
+    "title": "Settings",
     "language": {
       "label": "Language",
       "en": "English",
       "es": "Español"
+    },
+    "papergames": {
+      "signInPrompt": "Sign in to connect your Papergames account.",
+      "title": "Papergames Import",
+      "description": "Enter your Papergames account ID to import your game history.",
+      "idPlaceholder": "Your Papergames account ID",
+      "findAccountId": "Find your account ID",
+      "saving": "Saving...",
+      "save": "Save",
+      "saved": "Saved!",
+      "importing": "Importing...",
+      "import": "Import",
+      "importingProcessing": "Importing... Processing games",
+      "importingStarting": "Importing... Starting",
+      "viewImportedGames": "View imported games",
+      "errorAccountIdLength": "Account ID must be between 1 and 64 characters.",
+      "errorInvalidInput": "Invalid input.",
+      "errorSaveFailed": "Failed to save. Please try again.",
+      "errorNetwork": "Network error. Please try again.",
+      "errorImportFailed": "Import failed. Please try again.",
+      "errorImportFailedGeneric": "Import failed.",
+      "errorJobLost": "Import job lost. Please try again.",
+      "capReached": "You've reached your 15-game limit.",
+      "importedCount_one": "Imported {{count}} game.",
+      "importedCount_other": "Imported {{count}} games.",
+      "skippedCount_one": " {{count}} game couldn't be processed and was skipped.",
+      "skippedCount_other": " {{count}} games couldn't be processed and were skipped.",
+      "blunderErrorsCount_one": "Your games were imported, but analysis failed to save for {{count}} move. Try re-importing to retry the analysis.",
+      "blunderErrorsCount_other": "Your games were imported, but analysis failed to save for {{count}} moves. Try re-importing to retry the analysis."
     }
   }
 }

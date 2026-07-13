@@ -63,7 +63,7 @@ export function SettingsScreen({ go, goBack }) {
 
     const trimmed = papergamesId.trim();
     if (!trimmed || trimmed.length > 64) {
-      setError('Account ID must be between 1 and 64 characters.');
+      setError(t('settings.papergames.errorAccountIdLength'));
       return;
     }
 
@@ -83,12 +83,12 @@ export function SettingsScreen({ go, goBack }) {
         setTimeout(() => setSuccess(false), 3000);
       } else if (res.status === 400) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error || 'Invalid input.');
+        setError(body.error || t('settings.papergames.errorInvalidInput'));
       } else {
-        setError('Failed to save. Please try again.');
+        setError(t('settings.papergames.errorSaveFailed'));
       }
     } catch (_) {
-      setError('Network error. Please try again.');
+      setError(t('settings.papergames.errorNetwork'));
     } finally {
       setSaving(false);
     }
@@ -114,11 +114,11 @@ export function SettingsScreen({ go, goBack }) {
         // Polling will start via the useEffect below
       } else {
         const body = await res.json().catch(() => ({}));
-        setImportError(body.error || 'Import failed. Please try again.');
+        setImportError(body.error || t('settings.papergames.errorImportFailed'));
         setImporting(false);
       }
     } catch (_) {
-      setImportError('Network error. Please try again.');
+      setImportError(t('settings.papergames.errorNetwork'));
       setImporting(false);
     }
   }
@@ -136,7 +136,7 @@ export function SettingsScreen({ go, goBack }) {
 
         if (!res.ok) {
           if (res.status === 404) {
-            setImportError('Import job lost. Please try again.');
+            setImportError(t('settings.papergames.errorJobLost'));
             stopPolling();
             return;
           }
@@ -149,7 +149,7 @@ export function SettingsScreen({ go, goBack }) {
         if (job.status === 'done') {
           stopPolling();
           if (job.capReached) {
-            setImportResult("You've reached your 15-game limit.");
+            setImportResult(t('settings.papergames.capReached'));
           } else {
             // T032/T036 (spec 041 US5/US6): report imported/skipped/blunderErrors as
             // distinct, honestly-worded counts rather than collapsing any non-zero
@@ -160,21 +160,21 @@ export function SettingsScreen({ go, goBack }) {
             // /api/user/papergames/import/status). Copy below describes what the
             // field actually measures instead of asserting "duplicate" causation
             // the code cannot back up.
-            let result = `Imported ${job.imported} game${job.imported !== 1 ? 's' : ''}.`;
+            let result = t('settings.papergames.importedCount', { count: job.imported });
             if (job.skipped > 0) {
-              result += ` ${job.skipped} game${job.skipped !== 1 ? 's' : ''} couldn't be processed and ${job.skipped !== 1 ? 'were' : 'was'} skipped.`;
+              result += t('settings.papergames.skippedCount', { count: job.skipped });
             }
             setImportResult(result);
 
             if (job.blunderErrors > 0) {
-              setImportError(`Your games were imported, but analysis failed to save for ${job.blunderErrors} move${job.blunderErrors !== 1 ? 's' : ''}. Try re-importing to retry the analysis.`);
+              setImportError(t('settings.papergames.blunderErrorsCount', { count: job.blunderErrors }));
             } else {
               setImportError(null);
             }
           }
         } else if (job.status === 'error') {
           stopPolling();
-          setImportError(job.error || 'Import failed.');
+          setImportError(job.error || t('settings.papergames.errorImportFailedGeneric'));
         }
         // pending/running — keep polling (no action needed)
       } catch (_) {
@@ -260,9 +260,9 @@ export function SettingsScreen({ go, goBack }) {
   if (!isAuthenticated) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
+        <TopBar title={t('settings.title')} onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-soft)' }}>
-          <p style={{ fontSize: 16, margin: 0 }}>Sign in to connect your Papergames account.</p>
+          <p style={{ fontSize: 16, margin: 0 }}>{t('settings.papergames.signInPrompt')}</p>
         </div>
         <div style={{ padding: '0 18px 26px' }}>
           <button
@@ -282,17 +282,17 @@ export function SettingsScreen({ go, goBack }) {
   // ── Authenticated view ────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Settings" onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
+      <TopBar title={t('settings.title')} onBack={() => goBack ? goBack() : go('home')} onLogoClick={() => go('home')} />
 
       <div style={{ padding: '8px 18px 26px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
 
         {/* ── Papergames section ─────────────────────────────────────────── */}
         <section>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px' }}>
-            Papergames Import
+            {t('settings.papergames.title')}
           </h2>
           <p style={{ fontSize: 14, color: 'var(--ink-soft)', margin: '0 0 16px', lineHeight: 1.5 }}>
-            Enter your Papergames account ID to import your game history.
+            {t('settings.papergames.description')}
           </p>
 
           {/* Input row: text field + "Find" link */}
@@ -301,7 +301,7 @@ export function SettingsScreen({ go, goBack }) {
               type="text"
               value={papergamesId}
               onChange={(e) => { setPapergamesId(e.target.value); setError(null); setSuccess(false); }}
-              placeholder="Your Papergames account ID"
+              placeholder={t('settings.papergames.idPlaceholder')}
               maxLength={128}
               style={{
                 flex: 1,
@@ -326,7 +326,7 @@ export function SettingsScreen({ go, goBack }) {
                 textDecoration: 'underline',
               }}
             >
-              Find your account ID
+              {t('settings.papergames.findAccountId')}
             </a>
           </div>
 
@@ -340,7 +340,7 @@ export function SettingsScreen({ go, goBack }) {
           {/* Success indicator */}
           {success && (
             <p style={{ fontSize: 13, color: 'var(--disc-green)', margin: '0 0 10px' }}>
-              Saved!
+              {t('settings.papergames.saved')}
             </p>
           )}
 
@@ -352,7 +352,7 @@ export function SettingsScreen({ go, goBack }) {
               disabled={saving}
               style={{ fontSize: 14, padding: '8px 20px' }}
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? t('settings.papergames.saving') : t('settings.papergames.save')}
             </button>
             <button
               className="btn btn-ghost"
@@ -360,14 +360,14 @@ export function SettingsScreen({ go, goBack }) {
               disabled={importing || !savedValue}
               style={{ fontSize: 14, padding: '8px 20px' }}
             >
-              {importing ? 'Importing...' : 'Import'}
+              {importing ? t('settings.papergames.importing') : t('settings.papergames.import')}
             </button>
           </div>
 
           {/* Import progress / result / error */}
           {importing && importStatus !== 'done' && importStatus !== 'error' && (
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '10px 0 0' }}>
-              Importing... {importStatus === 'running' ? 'Processing games' : 'Starting'}
+              {importStatus === 'running' ? t('settings.papergames.importingProcessing') : t('settings.papergames.importingStarting')}
             </p>
           )}
           {importResult && (
@@ -390,7 +390,7 @@ export function SettingsScreen({ go, goBack }) {
               onClick={() => go('pastGames')}
               style={{ fontSize: 14, padding: '8px 20px', marginTop: 10 }}
             >
-              View imported games
+              {t('settings.papergames.viewImportedGames')}
             </button>
           )}
         </section>

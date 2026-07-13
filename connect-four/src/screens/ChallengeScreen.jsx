@@ -288,13 +288,42 @@ export function ChallengeScreen({
         // actually played (OI-1 repro board 2 shape).
         const acceptedPromoted = usesAcceptedGate && isCorrect && data.quality !== 'optimal';
 
+        // Symmetric case (OI-1 repro board 1 shape): the played column ties the raw solver score
+        // (so the server's unchanged, score-only `quality`/`badge` read 'optimal'/'good' per
+        // FR-003 — those fields are additive-only and MUST NOT be mutated for other callers) but
+        // it is NOT the taught pattern, so `accepted` is false. Without this, the display would
+        // silently keep showing the server's score-only "correct" verdict even though `isCorrect`
+        // (derived from `accepted`) is false — a wrong-answer SFX/attempt-record alongside a
+        // "correct" badge/coach line (SC-002 contradiction).
+        const acceptedDemoted = usesAcceptedGate && !isCorrect && data.quality === 'optimal';
+
+        // Re-pick summaryLineKey from the corrected-tier pool, but only when that pool actually
+        // has content — several categories (overcut, undercut, figure_7, j_shape) have NO
+        // `eval.<category>.*.summary` keys at all in en.json, and pickRandomKey's fallback
+        // (`${prefix}.0`) returns a key that doesn't resolve, rendering the raw untranslated key
+        // string on screen. Feature-detect with t() before using the picked key.
+        function pickSummaryKeyOrNull(quality) {
+          const key = pickRandomKey(t, `eval.${effectiveCategory}.${quality}.summary`);
+          return t(key) !== key ? key : null;
+        }
+
         // The rendered badge/glyph/summary must agree with `isCorrect`, not the server's raw
         // score-only `quality` — a valid tied/taught answer (accepted:true) must visually read as
-        // correct, not "suboptimal". This overrides the display-driving `quality`/`badge` fields
-        // for the accepted-gated categories when they'd otherwise contradict `accepted`;
-        // `summaryLineKey`/`patternTag` are left as the server sent them (FR-010).
+        // correct, not "suboptimal", and a score-tied-but-non-taught answer (accepted:false) must
+        // visually read as wrong, not "correct". This overrides the display-driving `quality`/
+        // `badge` fields for the accepted-gated categories when they'd otherwise contradict
+        // `accepted`. `summaryLineKey` is ALSO re-picked from the corrected-tier pool above when
+        // available — otherwise the visible summary line (e.g. "Playable, but the Z-threat column
+        // gives stronger parity control.") would still read from the server's unmutated,
+        // score-only `quality` tier and contradict the corrected badge/coach line (SC-002); when no
+        // corrected-tier summary pool exists for the category, summaryLineKey falls back to
+        // whatever the server sent (null for these categories in practice, since the pool is empty
+        // across all tiers, so no contradiction). `patternTag` is left as the server sent them
+        // (FR-010).
         const displayData = acceptedPromoted
-          ? { ...data, quality: 'optimal', badge: 'good' }
+          ? { ...data, quality: 'optimal', badge: 'good', summaryLineKey: pickSummaryKeyOrNull('optimal') ?? data.summaryLineKey }
+          : acceptedDemoted
+          ? { ...data, quality: 'blunder', badge: 'bad', summaryLineKey: pickSummaryKeyOrNull('blunder') ?? data.summaryLineKey }
           : data;
         setEvaluation(displayData);
 
@@ -312,15 +341,18 @@ export function ChallengeScreen({
         // coach line — SC-002). Present a congruent optimal-voiced message instead: suppress the
         // suboptimal category phrase (fall back to the optimal generic pool) and force the happy mood.
         const used = usedPhraseKeysRef.current;
-        const coachQuality = acceptedPromoted ? 'optimal' : (data.quality ?? 'blunder');
-        let phraseKey = (acceptedPromoted ? null : data.coachPhraseKey)
+        // acceptedDemoted mirrors acceptedPromoted: suppress the server's optimal-voiced
+        // coachPhraseKey/coachMood (which would contradict the demoted "wrong" verdict) and fall
+        // back to the generic blunder-voiced pool, same mechanism as the promoted case.
+        const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' : (data.quality ?? 'blunder');
+        let phraseKey = (acceptedPromoted || acceptedDemoted ? null : data.coachPhraseKey)
           ?? pickRandomKey(t, `coach.generic.${coachQuality}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
         lastCoachKeyRef.current = phraseKey;
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
-          mood: acceptedPromoted ? 'happy' : (data.coachMood ?? moodDefaults[data.quality] ?? 'think'),
+          mood: acceptedPromoted ? 'happy' : acceptedDemoted ? 'oops' : (data.coachMood ?? moodDefaults[data.quality] ?? 'think'),
         }]);
 
         // Win overlay if optimal win
@@ -331,8 +363,13 @@ export function ChallengeScreen({
           }
         }
 
-        // Record attempt
-        store?.recordPuzzleAttempt({
+        // Record attempt. Skip for DEV-injector synthetic puzzles (`dev-<movestring>` ids,
+        // src/lib/devFixtures.js) — these have no real DB row, so `puzzle_id` isn't a valid uuid
+        // and the write 500s (Postgres "invalid input syntax for type uuid"). This is a pre-existing
+        // dev-tooling-only gap (unrelated to the spec-049 accepted-gate fix) surfaced while QA-ing
+        // via the fixture dropdown/deep-link; guarding here avoids masking real regressions with
+        // benign console noise during QA.
+        if (!String(current.id).startsWith('dev-')) store?.recordPuzzleAttempt({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],

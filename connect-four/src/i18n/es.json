@@ -7,14 +7,14 @@
   "puzzle": {
     "correctFirst": "¡Correcto! Mejor jugada.",
     "correctRetry": "Correcto — ¡lo encontraste!",
-    "wrong": "No es la mejor jugada — inténtalo de nuevo.",
+    "wrong": "No es la mejor jugada — intentalo de nuevo.",
     "tied": "También funciona — empata con la columna {{col}} según el análisis del motor.",
     "revealed": "Esta es la mejor jugada:",
     "seeWhy": "Ver por qué",
     "sessionAccuracy": "Precisión de la sesión",
     "attempted": "intentados",
     "correct": "correctos",
-    "locked": "Actualiza para desbloquear",
+    "locked": "Actualizá para desbloquear",
     "lockedDesc": "Fork Setup, Zugzwang y Control de Paridad requieren una suscripción de pago.",
     "noMoreAttempts": "Intentos agotados — mostrando la respuesta:"
   },
@@ -26,7 +26,7 @@
     "draw": "Es un empate.",
     "newGame": "Nueva partida",
     "difficulty": "Dificultad",
-    "chooseDifficulty": "Elige la dificultad",
+    "chooseDifficulty": "Elegí la dificultad",
     "sideGreen": "Verde",
     "sideGray": "Gris",
     "easy": "Fácil",
@@ -45,7 +45,7 @@
     "mediumSub": "Desafío equilibrado con errores ocasionales",
     "hardSub": "Oponente serio con pocos deslices",
     "perfectSub": "Impecable — sin errores, sin pistas",
-    "playAs": "Juega como",
+    "playAs": "Jugá como",
     "sideFirst": "mueve primero",
     "sideSecond": "mueve segundo",
     "startGame": "Iniciar partida",
@@ -69,17 +69,17 @@
   "auth": {
     "signIn": "Iniciar sesión",
     "signUp": "Crear cuenta gratis",
-    "deepRevealGate": "Crea una cuenta gratis para desbloquear 20 Revelaciones profundas por semana.",
+    "deepRevealGate": "Creá una cuenta gratis para desbloquear 20 Revelaciones profundas por semana.",
     "signOut": "Cerrar sesión",
     "dismiss": "Quizás más tarde",
-    "subtitle": "Guarda tu progreso, rachas y estadísticas en todos tus dispositivos.",
+    "subtitle": "Guardá tu progreso, rachas y estadísticas en todos tus dispositivos.",
     "continueWithGoogle": "Iniciar sesión con Google"
   },
   "upgrade": {
-    "heading": "Hazte Pro",
-    "body": "Actualiza a Pro para revelaciones profundas ilimitadas.",
+    "heading": "Hacete Pro",
+    "body": "Actualizá a Pro para revelaciones profundas ilimitadas.",
     "cta": "Continuar al pago",
-    "success": "¡Ahora eres miembro Pro!",
+    "success": "¡Ahora sos miembro Pro!",
     "dismiss": "Quizás más tarde",
     "planMonthly": "Mensual",
     "planAnnual": "Anual",
@@ -94,7 +94,7 @@
   },
   "games": {
     "title": "Partidas anteriores",
-    "empty": "Aún no hay partidas. Juega una partida de sparring para verla aquí.",
+    "empty": "Aún no hay partidas. Jugá una partida de sparring para verla aquí.",
     "load_more": "Cargar más",
     "loading": "Cargando…",
     "filter_all": "Todas",
@@ -114,18 +114,18 @@
   },
   "home": {
     "stats_button": "Progreso y estadísticas",
-    "tagline_prefix": "Bienvenido de nuevo. Aprende ",
+    "tagline_prefix": "Bienvenido de nuevo. Aprendé ",
     "tagline_why": "por qué",
     "tagline_suffix": " ganan las jugadas.",
     "lessons_title": "Lecciones",
-    "lessons_subtitle": "Aprende por qué ganan los patrones",
+    "lessons_subtitle": "Aprendé por qué ganan los patrones",
     "challenges_title": "Desafíos",
-    "challenges_subtitle": "Encuentra la mejor jugada",
+    "challenges_subtitle": "Encontrá la mejor jugada",
     "sparring_title": "Sparring",
-    "sparring_subtitle": "Juega contra un bot que enseña mientras avanzas",
+    "sparring_subtitle": "Jugá contra un bot que enseña mientras avanzás",
     "past_games": {
       "title": "Partidas anteriores",
-      "subtitle": "Revisa tu historial de sparring"
+      "subtitle": "Revisá tu historial de sparring"
     }
   },
   "coach": {
@@ -139,17 +139,17 @@
     "queueCount_one": "{{count}} posición para repasar",
     "queueCount_other": "{{count}} posiciones para repasar",
     "startReview": "Iniciar repaso",
-    "emptyQueue": "No hay posiciones en la cola — sigue entrenando para construir tu plan de estudio personal.",
+    "emptyQueue": "No hay posiciones en la cola — seguí entrenando para construir tu plan de estudio personal.",
     "missRate": "tasa de error",
     "immediate_threat": {
       "prompt": {
-        "0": "Puedes ganar ahora mismo — encuentra la columna.",
-        "1": "Hay una jugada ganadora inmediata en el tablero. ¿Puedes encontrarla?",
-        "2": "Una jugada termina la partida a tu favor. ¿Dónde juegas?"
+        "0": "Podés ganar ahora mismo — encontrá la columna.",
+        "1": "Hay una jugada ganadora inmediata en el tablero. ¿Podés encontrarla?",
+        "2": "Una jugada termina la partida a tu favor. ¿Dónde jugás?"
       },
       "hint": {
-        "0": "Busca una fila donde estés a una jugada de conectar cuatro.",
-        "1": "Revisa cada uno de tus grupos de tres — ¿alguno está a una ficha de conectar?"
+        "0": "Buscá una fila donde estés a una jugada de conectar cuatro.",
+        "1": "Revisá cada uno de tus grupos de tres — ¿alguno está a una ficha de conectar?"
       },
       "optimal": {
         "0": "Bien — encontraste la jugada ganadora."
@@ -163,13 +163,13 @@
     },
     "forced_block": {
       "prompt": {
-        "0": "Tu oponente está por ganar — detenlo.",
-        "1": "Hay un bloqueo forzado que debes hacer. Encuéntralo.",
+        "0": "Tu oponente está por ganar — detenelo.",
+        "1": "Hay un bloqueo forzado que debés hacer. Encontralo.",
         "2": "Una columna es la única jugada segura. ¿Cuál es?"
       },
       "hint": {
-        "0": "Busca una fila donde tu oponente esté a una jugada de conectar cuatro.",
-        "1": "Revisa cada uno de los grupos de tres de tu oponente — ¿alguno está a una ficha de conectar?"
+        "0": "Buscá una fila donde tu oponente esté a una jugada de conectar cuatro.",
+        "1": "Revisá cada uno de los grupos de tres de tu oponente — ¿alguno está a una ficha de conectar?"
       },
       "optimal": {
         "0": "Buena defensa — bloqueaste la amenaza."
@@ -183,12 +183,12 @@
     },
     "double_threat": {
       "prompt": {
-        "0": "Encuentra la jugada que crea dos amenazas ganadoras a la vez.",
+        "0": "Encontrá la jugada que crea dos amenazas ganadoras a la vez.",
         "1": "Una columna genera dos amenazas simultáneas que tu oponente no puede bloquear ambas.",
-        "2": "Busca una bifurcación (fork) — una jugada que amenaza en dos direcciones."
+        "2": "Buscá una bifurcación (fork) — una jugada que amenaza en dos direcciones."
       },
       "hint": {
-        "0": "Piensa en jugadas que se suman a dos grupos diferentes a la vez.",
+        "0": "Pensá en jugadas que se suman a dos grupos diferentes a la vez.",
         "1": "Una amenaza doble gana porque tu oponente solo puede bloquear una."
       },
       "optimal": {
@@ -203,19 +203,19 @@
     },
     "claimeven": {
       "prompt": {
-        "0": "Como Gris, puedes asegurar un empate — encuentra la jugada de Claimeven.",
+        "0": "Como Gris, podés asegurar un empate — encontrá la jugada de Claimeven.",
         "1": "Gris tiene una estrategia de empate aquí. ¿Qué columna la mantiene viva?",
-        "2": "Usa Claimeven: Gris juega debajo de cada amenaza de Verde en fila par."
+        "2": "Usá Claimeven: Gris juega debajo de cada amenaza de Verde en fila par."
       },
       "hint": {
-        "0": "Busca una fila par donde Verde tenga una amenaza — Gris debería reflejarse debajo.",
+        "0": "Buscá una fila par donde Verde tenga una amenaza — Gris debería reflejarse debajo.",
         "1": "Claimeven funciona asegurando que Gris siempre obtenga la casilla justo debajo de las amenazas de fila par de Verde."
       },
       "optimal": {
         "0": "Exacto — esa es la jugada de Claimeven que asegura el empate."
       },
       "suboptimal": {
-        "0": "Sigues en la zona de empate, pero la columna clave de Claimeven era más fuerte."
+        "0": "Seguís en la zona de empate, pero la columna clave de Claimeven era más fuerte."
       },
       "blunder": {
         "0": "Esa columna cede la ventaja de empate de Claimeven de Gris."
@@ -223,12 +223,12 @@
     },
     "z_threat": {
       "prompt": {
-        "0": "Una amenaza-Z te da control de paridad imparable — encuéntrala.",
-        "1": "Usa el patrón de amenaza-Z para asegurar la casilla ganadora de fila impar.",
+        "0": "Una amenaza-Z te da control de paridad imparable — encontrala.",
+        "1": "Usá el patrón de amenaza-Z para asegurar la casilla ganadora de fila impar.",
         "2": "Una columna establece la paridad de amenaza-Z para que tu oponente no pueda detenerte."
       },
       "hint": {
-        "0": "Busca una columna donde tu amenaza en fila impar no pueda ser reclamada por tu oponente.",
+        "0": "Buscá una columna donde tu amenaza en fila impar no pueda ser reclamada por tu oponente.",
         "1": "Las amenazas-Z funcionan creando una cadena de paridad que tu oponente está obligado a seguir."
       },
       "optimal": {
@@ -243,8 +243,8 @@
     },
     "odd_even_threat": {
       "prompt": {
-        "0": "Verde tiene dos jugadas de amenaza. Una cae en fila impar (la fila natural de Verde) — esa es la ganadora. ¿Qué columna eliges?",
-        "1": "Ambas jugadas crean amenazas, pero una cae en fila impar — la paridad natural de Verde. Esa es la jugada que le da a Verde control duradero. Juégala."
+        "0": "Verde tiene dos jugadas de amenaza. Una cae en fila impar (la fila natural de Verde) — esa es la ganadora. ¿Qué columna elegís?",
+        "1": "Ambas jugadas crean amenazas, pero una cae en fila impar — la paridad natural de Verde. Esa es la jugada que le da a Verde control duradero. Jugala."
       },
       "hint": {
         "0": "Una de las jugadas de amenaza cae en fila impar. Las filas impares pertenecen a Verde — ese es el objetivo correcto."
@@ -257,18 +257,18 @@
         "0": "Esa jugada crea una amenaza, pero cae en fila par — la paridad de Gris. La amenaza en fila impar de la otra columna es más fuerte."
       },
       "blunder": {
-        "0": "Esa columna no crea ninguna amenaza. Busca las jugadas que crean una ventana de victoria inmediata."
+        "0": "Esa columna no crea ninguna amenaza. Buscá las jugadas que crean una ventana de victoria inmediata."
       }
     },
     "forbidden_columns": {
       "prompt": {
-        "0": "Marca cada columna que le daría a tu oponente una victoria inmediata.",
-        "1": "¿Qué columnas están prohibidas? Márcalas todas antes de enviar.",
-        "2": "Encuentra cada columna donde perderías al instante — márcalas todas."
+        "0": "Marcá cada columna que le daría a tu oponente una victoria inmediata.",
+        "1": "¿Qué columnas están prohibidas? Marcalas todas antes de enviar.",
+        "2": "Encontrá cada columna donde perderías al instante — marcalas todas."
       },
       "hint": {
-        "0": "Busca columnas donde tu oponente ya tenga tres en línea — jugar ahí le da una victoria.",
-        "1": "Revisa cada columna: ¿tu oponente ganaría de inmediato si jugaras ahí?"
+        "0": "Buscá columnas donde tu oponente ya tenga tres en línea — jugar ahí le da una victoria.",
+        "1": "Revisá cada columna: ¿tu oponente ganaría de inmediato si jugaras ahí?"
       },
       "optimal": { "0": "Perfecto — identificaste cada columna prohibida." },
       "suboptimal": { "0": "Encontraste algunas pero te faltaron {{missed}} columna(s) prohibida(s)." },
@@ -279,21 +279,21 @@
     },
     "forced_win": {
       "prompt": {
-        "0": "Fuerza la victoria — juega la línea que no le deja escapatoria a tu oponente.",
-        "1": "Hay una secuencia forzada aquí. Juégala jugada por jugada.",
-        "2": "Cada jugada debe amenazar a tu oponente. Encuentra la línea forzada."
+        "0": "Forzá la victoria — jugá la línea que no le deja escapatoria a tu oponente.",
+        "1": "Hay una secuencia forzada aquí. Jugala jugada por jugada.",
+        "2": "Cada jugada debe amenazar a tu oponente. Encontrá la línea forzada."
       },
       "optimal": { "0": "Forzaste la victoria — bien jugado.", "1": "Secuencia perfecta — tu oponente no tenía escapatoria." },
       "blunder": { "0": "Esa jugada rompe la línea forzada.", "1": "La secuencia falla aquí — tu oponente puede escapar." }
     },
     "figure_7": {
       "prompt": {
-        "0": "Detecta el patrón Figura-7 — encuentra la jugada que crea dos amenazas imparables.",
-        "1": "Se está formando un patrón en forma de L. Juega la casilla clave para completarlo.",
+        "0": "Detectá el patrón Figura-7 — encontrá la jugada que crea dos amenazas imparables.",
+        "1": "Se está formando un patrón en forma de L. Jugá la casilla clave para completarlo.",
         "2": "La trampa Figura-7 está en el tablero. Una jugada crea dos amenazas."
       },
       "hint": {
-        "0": "Busca un grupo en forma de L de 4 fichas — la quinta pieza asegura dos amenazas.",
+        "0": "Buscá un grupo en forma de L de 4 fichas — la quinta pieza asegura dos amenazas.",
         "1": "Figura-7 crea dos amenazas que el oponente no puede bloquear ambas."
       },
       "optimal": {
@@ -308,21 +308,21 @@
         "2": "Buen juego, pero la finalización de Figura-7 era la jugada decisiva aquí."
       },
       "blunder": {
-        "0": "Eso deja pasar la trampa Figura-7. Busca el patrón en forma de L.",
+        "0": "Eso deja pasar la trampa Figura-7. Buscá el patrón en forma de L.",
         "1": "Casilla equivocada — el patrón Figura-7 necesita una pieza específica de finalización.",
-        "2": "Eso no crea la amenaza doble. Encuentra la casilla clave de Figura-7.",
-        "3": "Te perdiste la Figura-7. Busca una forma en L de 4 fichas."
+        "2": "Eso no crea la amenaza doble. Encontrá la casilla clave de Figura-7.",
+        "3": "Te perdiste la Figura-7. Buscá una forma en L de 4 fichas."
       }
     },
     "j_shape": {
       "prompt": {
-        "0": "La Forma-J crea tres direcciones ganadoras — encuentra la casilla clave.",
-        "1": "Un grupo en forma de L de 4 fichas — complétalo para crear amenazas triples.",
-        "2": "Encuentra la casilla que completa la Forma-J. Tu oponente no puede bloquear las tres amenazas."
+        "0": "La Forma-J crea tres direcciones ganadoras — encontrá la casilla clave.",
+        "1": "Un grupo en forma de L de 4 fichas — completalo para crear amenazas triples.",
+        "2": "Encontrá la casilla que completa la Forma-J. Tu oponente no puede bloquear las tres amenazas."
       },
       "hint": {
         "0": "La Forma-J es un grupo en L. La casilla de finalización desbloquea tres direcciones de amenaza.",
-        "1": "Busca 4 fichas en forma de L — la quinta pieza crea amenazas vertical, horizontal y diagonalmente."
+        "1": "Buscá 4 fichas en forma de L — la quinta pieza crea amenazas vertical, horizontal y diagonalmente."
       },
       "optimal": {
         "0": "Forma-J completa — tres direcciones de amenaza. ¡Imparable!",
@@ -336,20 +336,20 @@
         "2": "No está mal — la casilla de la Forma-J crea amenazas en tres direcciones a la vez."
       },
       "blunder": {
-        "0": "Eso no completa la Forma-J. Busca el grupo en L y su casilla clave.",
+        "0": "Eso no completa la Forma-J. Buscá el grupo en L y su casilla clave.",
         "1": "Casilla equivocada — la Forma-J necesita una pieza específica de finalización.",
         "2": "Te perdiste la Forma-J. El grupo en L de 4 fichas es la pista.",
-        "3": "Eso deja pasar la amenaza triple. Encuentra la casilla de finalización de la Forma-J."
+        "3": "Eso deja pasar la amenaza triple. Encontrá la casilla de finalización de la Forma-J."
       }
     },
     "overcut": {
       "prompt": {
-        "0": "Dos amenazas, misma columna — la de arriba gana. Encuentra el overcut.",
+        "0": "Dos amenazas, misma columna — la de arriba gana. Encontrá el overcut.",
         "1": "El overcut vence al undercut. Misma paridad, gana la amenaza superior.",
-        "2": "Juega por encima de la amenaza de tu oponente para neutralizarla — encuentra el overcut."
+        "2": "Jugá por encima de la amenaza de tu oponente para neutralizarla — encontrá el overcut."
       },
       "hint": {
-        "0": "Busca una amenaza superior que venza a una inferior — misma fila de paridad.",
+        "0": "Buscá una amenaza superior que venza a una inferior — misma fila de paridad.",
         "1": "El overcut funciona cuando ambas amenazas comparten la misma paridad."
       },
       "optimal": {
@@ -366,18 +366,18 @@
       "blunder": {
         "0": "Esa columna no aprovecha el overcut — la amenaza de tu oponente sobrevive.",
         "1": "Te perdiste el overcut. La amenaza superior gana cuando la paridad es la misma.",
-        "2": "Columna equivocada — busca amenazas de la misma paridad donde la superior venza a la inferior.",
+        "2": "Columna equivocada — buscá amenazas de la misma paridad donde la superior venza a la inferior.",
         "3": "Eso deja pasar la ventaja del overcut. Misma paridad, gana la amenaza superior."
       }
     },
     "undercut": {
       "prompt": {
-        "0": "Dos amenazas en la misma columna — la de abajo gana. Encuentra el undercut.",
-        "1": "Un undercut está esperando — identifica la columna donde una amenaza inferior mata a una superior.",
-        "2": "La gravedad juega a tu favor aquí. Encuentra la jugada de undercut."
+        "0": "Dos amenazas en la misma columna — la de abajo gana. Encontrá el undercut.",
+        "1": "Un undercut está esperando — identificá la columna donde una amenaza inferior mata a una superior.",
+        "2": "La gravedad juega a tu favor aquí. Encontrá la jugada de undercut."
       },
       "hint": {
-        "0": "Busca una columna con amenazas en dos filas distintas — la de abajo gana.",
+        "0": "Buscá una columna con amenazas en dos filas distintas — la de abajo gana.",
         "1": "Misma columna, filas de paridad opuesta — el undercut aprovecha la gravedad."
       },
       "optimal": {
@@ -395,7 +395,7 @@
         "0": "Eso juega la paridad equivocada — el undercut estaba en otra parte.",
         "1": "Te perdiste la columna del undercut. La amenaza inferior gana.",
         "2": "Columna equivocada — la amenaza de tu oponente sigue viva.",
-        "3": "Eso no aprovecha la ventaja de la gravedad. Vuelve a intentarlo."
+        "3": "Eso no aprovecha la ventaja de la gravedad. Volvé a intentarlo."
       }
     },
     "generic": {
@@ -418,18 +418,18 @@
         "15": "Manteniendo la presión.",
         "16": "Lo estás poniendo difícil.",
         "17": "No esperaba eso.",
-        "18": "Así es como mantienes el control.",
+        "18": "Así es como mantenés el control.",
         "19": "Estás apretando el cerco."
       },
       "suboptimal": {
         "0": "No está mal, pero había una jugada más aguda.",
-        "1": "Estás cerca — intenta encontrar la opción más fuerte.",
+        "1": "Estás cerca — intentá encontrar la opción más fuerte.",
         "2": "Razonable, pero no es la mejor aquí."
       },
       "blunder": {
         "0": "Mmm, esa no es la jugada más fuerte.",
         "1": "A tu oponente le va a gustar eso.",
-        "2": "Esa es complicada — revisa la pista si estás atascado.",
+        "2": "Esa es complicada — revisá la pista si estás atascado.",
         "3": "Eso deja un hueco para tu oponente.",
         "4": "No es la mejor elección aquí.",
         "5": "Tu oponente tiene una buena respuesta para eso."
@@ -437,7 +437,7 @@
     },
     "summary": {
       "perfect": {
-        "0": "Set perfecto. Prueba uno más difícil.",
+        "0": "Set perfecto. Probá uno más difícil.",
         "1": "Barrida limpia — ¡excelente trabajo!"
       }
     },
@@ -448,8 +448,8 @@
       },
       "hint": {
         "generic": {
-          "0": "La mejor jugada está resaltada — confía en la columna.",
-          "1": "Mira la columna resaltada. ¿Qué prepara?"
+          "0": "La mejor jugada está resaltada — confiá en la columna.",
+          "1": "Mirá la columna resaltada. ¿Qué prepara?"
         }
       },
       "review": {
@@ -466,7 +466,7 @@
       },
       "outcome": {
         "win": "¡Ganaste! Gran partida.",
-        "loss": "Gané esta. Sigue trabajando en ello.",
+        "loss": "Gané esta. Seguí trabajando en ello.",
         "draw": "Es un empate — bien jugado."
       }
     },
@@ -480,7 +480,7 @@
         "1": "No hay otra opción que defender. Buena presión."
       },
       "double_threat": {
-        "0": "Lo siento — he creado dos amenazas a la vez. Solo puedes bloquear una.",
+        "0": "Lo siento — he creado dos amenazas a la vez. Solo podés bloquear una.",
         "1": "Amenaza doble. Una de las dos va a conectar."
       },
       "claimeven": {
@@ -496,16 +496,16 @@
         "1": "Amenaza en fila impar establecida. Las filas pares no te van a salvar."
       },
       "forced_win": {
-        "0": "Puedo forzarte a perder desde aquí — veamos si encuentras la escapatoria.",
-        "1": "El camino está forzado — encuentra la escapatoria si puedes."
+        "0": "Puedo forzarte a perder desde aquí — veamos si encontrás la escapatoria.",
+        "1": "El camino está forzado — encontrá la escapatoria si podés."
       },
       "figure_7": {
-        "0": "Trampa Figura-7 preparada — dos amenazas que no puedes detener ambas.",
+        "0": "Trampa Figura-7 preparada — dos amenazas que no podés detener ambas.",
         "1": "He completado la Figura-7. Dos amenazas en camino."
       },
       "j_shape": {
         "0": "Forma-J en su lugar — ahora amenazo en tres direcciones.",
-        "1": "Tres amenazas simultáneas. Puedes bloquear una, quizás dos."
+        "1": "Tres amenazas simultáneas. Podés bloquear una, quizás dos."
       },
       "overcut": {
         "0": "Overcut — mi amenaza superior vence a la tuya en esta columna.",
@@ -516,9 +516,9 @@
         "1": "Voy a tomar la amenaza inferior. La tuya está bloqueada por mi ficha ahora."
       },
       "suboptimal": {
-        "0": "Puede que me haya perdido algo ahí — mira si puedes aprovecharlo.",
+        "0": "Puede que me haya perdido algo ahí — mirá si podés aprovecharlo.",
         "1": "No fue mi jugada más aguda. Puede que haya una oportunidad para ti.",
-        "2": "Te di algo — encuéntralo."
+        "2": "Te di algo — encontralo."
       },
       "neutral": {
         "0": "Voy a tomar esa casilla.",
@@ -551,17 +551,17 @@
     "day_streak": "Racha de días",
     "accuracy_by_pattern": "Precisión por patrón",
     "review_mistakes": "Repasar errores pasados",
-    "signup_prompt": "Regístrate para seguir tu progreso a lo largo del tiempo",
+    "signup_prompt": "Registrate para seguir tu progreso a lo largo del tiempo",
     "coach_recommendation_cta": "Ir a la lección de {{lessonTitle}}",
     "sparring_record": "{{W}}V / {{L}}D / {{D}}E"
   },
   "error": {
-    "generic": "Algo salió mal. Por favor, actualiza la página e inténtalo de nuevo.",
+    "generic": "Algo salió mal. Por favor, actualizá la página e intentalo de nuevo.",
     "solverUnavailable": "Solver no disponible temporalmente. Pistas deshabilitadas."
   },
   "setpicker": {
     "title": "Desafíos",
-    "subtitle": "Elige un set. Sin etiquetas en el tablero — igual tienes que encontrar la jugada.",
+    "subtitle": "Elegí un set. Sin etiquetas en el tablero — igual tenés que encontrar la jugada.",
     "positions_count": "{{count}} posiciones"
   },
   "setcard": {
@@ -690,42 +690,42 @@
     "by_pattern": "POR PATRÓN",
     "cta_lesson": "Ir a la lección de {{lessonName}}",
     "cta_back": "Volver a Desafíos",
-    "coach_recommend": "Trabaja en {{pattern}} a continuación."
+    "coach_recommend": "Trabajá en {{pattern}} a continuación."
   },
   "challengeSet": {
-    "immediate_threat": { "displayName": "Amenaza inmediata", "description": "Encuentra la jugada que gana ahora mismo." },
-    "forced_block":     { "displayName": "Bloqueo forzado", "description": "Bloquea la amenaza ganadora inmediata de tu oponente." },
-    "double_threat":    { "displayName": "Amenaza doble", "description": "Crea dos amenazas ganadoras simultáneas." },
-    "claimeven":        { "displayName": "Claimeven", "description": "Usa la estrategia Claimeven de Gris para asegurar un empate." },
-    "z_threat":         { "displayName": "Amenaza-Z", "description": "Aprovecha la paridad de amenaza-Z para asegurar la victoria." },
-    "odd_even_threat":  { "displayName": "Amenazas pares e impares", "description": "Verde tiene dos jugadas de amenaza. Elige la que cae en fila impar — la paridad natural de Verde — para asegurar el control." },
+    "immediate_threat": { "displayName": "Amenaza inmediata", "description": "Encontrá la jugada que gana ahora mismo." },
+    "forced_block":     { "displayName": "Bloqueo forzado", "description": "Bloqueá la amenaza ganadora inmediata de tu oponente." },
+    "double_threat":    { "displayName": "Amenaza doble", "description": "Creá dos amenazas ganadoras simultáneas." },
+    "claimeven":        { "displayName": "Claimeven", "description": "Usá la estrategia Claimeven de Gris para asegurar un empate." },
+    "z_threat":         { "displayName": "Amenaza-Z", "description": "Aprovechá la paridad de amenaza-Z para asegurar la victoria." },
+    "odd_even_threat":  { "displayName": "Amenazas pares e impares", "description": "Verde tiene dos jugadas de amenaza. Elegí la que cae en fila impar — la paridad natural de Verde — para asegurar el control." },
     "mixed":            { "displayName": "Mixto", "description": "Una mezcla de todos los tipos de desafío." },
-    "undercut":         { "displayName": "Undercut", "description": "Toma la casilla debajo de la amenaza de tu oponente." },
-    "overcut":          { "displayName": "Overcut", "description": "Juega por encima de la amenaza prevista de tu oponente." },
-    "figure_7":         { "displayName": "Figura 7", "description": "Aprovecha el patrón Figura-7." },
-    "j_shape":          { "displayName": "Forma-J", "description": "Aprovecha el patrón Forma-J." },
+    "undercut":         { "displayName": "Undercut", "description": "Tomá la casilla debajo de la amenaza de tu oponente." },
+    "overcut":          { "displayName": "Overcut", "description": "Jugá por encima de la amenaza prevista de tu oponente." },
+    "figure_7":         { "displayName": "Figura 7", "description": "Aprovechá el patrón Figura-7." },
+    "j_shape":          { "displayName": "Forma-J", "description": "Aprovechá el patrón Forma-J." },
     "forbidden_columns": {
       "displayName": "Columnas prohibidas",
-      "description": "Marca cada columna donde jugar de inmediato le da la victoria a tu oponente."
+      "description": "Marcá cada columna donde jugar de inmediato le da la victoria a tu oponente."
     },
     "forced_win": {
       "displayName": "Victoria forzada",
-      "description": "Juega la línea forzada que no le deja escapatoria a tu oponente."
+      "description": "Jugá la línea forzada que no le deja escapatoria a tu oponente."
     }
   },
   "mistakes": {
     "title": "Errores pasados",
     "reviewed": "Revisado",
-    "emptyFilter": "Nada aquí — cambia de pestaña para ver tus otras jugadas.",
+    "emptyFilter": "Nada aquí — cambiá de pestaña para ver tus otras jugadas.",
     "gate": {
       "heading": "Regístrate para guardar tus errores",
-      "body": "Crea una cuenta gratis y DecodeC4 recordará cada error grave para que puedas repasarlos con el Coach más tarde.",
+      "body": "Creá una cuenta gratis y DecodeC4 recordará cada error grave para que puedas repasarlos con el Coach más tarde.",
       "cta": "Crear cuenta gratis",
       "later": "Quizás más tarde"
     },
     "empty": {
       "heading": "Aún no hay errores capturados",
-      "body": "Juega una partida y revísala después — voy a recopilar los momentos difíciles aquí para que los estudiemos juntos.",
+      "body": "Jugá una partida y revisala después — voy a recopilar los momentos difíciles aquí para que los estudiemos juntos.",
       "cta": "Jugar una partida"
     },
     "filter": {
@@ -761,7 +761,7 @@
       },
       "coach": {
         "line1": "Jugaste la columna {{n}} aquí.",
-        "line2": "Déjame mostrarte lo que funcionaba mejor."
+        "line2": "Dejame mostrarte lo que funcionaba mejor."
       },
       "legend": {
         "yourMove": "tu jugada",
@@ -783,11 +783,11 @@
     }
   },
   "socratic": {
-    "ask":     "Voy a cometer un error aquí. Mira si puedes castigarlo.",
-    "wrong1":  "No exactamente — busca la casilla correcta. Inténtalo de nuevo.",
-    "wrong2":  "Déjame mostrarte.",
+    "ask":     "Voy a cometer un error aquí. Mirá si podés castigarlo.",
+    "wrong1":  "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+    "wrong2":  "Dejame mostrarte.",
     "correct": "¡Exacto! Lo viste.",
-    "hint":    "Busca una casilla par justo encima de una de mis fichas."
+    "hint":    "Buscá una casilla par justo encima de una de mis fichas."
   },
   "lesson": {
     "confirmation": {
@@ -797,24 +797,24 @@
     "opening-centre": {
       "title": "Domina el Centro",
       "socratic": {
-        "ask":     "Mueves primero — ¿dónde está la jugada de apertura más fuerte?",
+        "ask":     "Movés primero — ¿dónde está la jugada de apertura más fuerte?",
         "hint":    "¿Qué columna se encuentra en la mayor cantidad de posibles líneas de cuatro en línea?",
         "correct": "Exacto — la columna central. Mantiene vivas la mayor cantidad de caminos ganadores."
       }
     },
     "opening-imitate": {
-      "title": "Yo Juego Donde Tú Juegas",
+      "title": "Yo Juego Donde Vos Jugás",
       "socratic": {
         "ask":     "Gris acaba de jugar la columna 2 otra vez. ¿Cuál es la mejor respuesta de Verde?",
         "hint":    "¿Qué columna está justo encima de la última ficha de Gris?",
-        "correct": "Exacto — juega donde ellos juegan. Responder justo encima de la última ficha de Gris mantiene viva la imitación."
+        "correct": "Exacto — jugá donde ellos juegan. Responder justo encima de la última ficha de Gris mantiene viva la imitación."
       }
     },
     "opening-sharp": {
       "title": "Aperturas Agudas",
       "socratic": {
         "ask":     "Verde domina la tercera fila a la derecha, Gris tiene compensación en la quinta fila a la izquierda. Verde mueve — solo una columna gana. ¿Cuál es?",
-        "hint":    "Mira las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?",
+        "hint":    "Mirá las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?",
         "correct": "Exacto — esa columna completa la amenaza de tercera fila de Verde ahora mismo. Cualquier otra columna desperdicia la victoria; este es el 'Third-Row Gambit' de Allen, la única jugada que gana."
       }
     }
@@ -827,7 +827,7 @@
   },
   "saga": {
     "orderLock": {
-      "message": "Termina la lección anterior para desbloquear esta"
+      "message": "Terminá la lección anterior para desbloquear esta"
     }
   },
   "onboarding": {
@@ -835,18 +835,48 @@
     "replayIntro": "Repetir introducción",
     "importOffer": {
       "title": "Trae tus partidas reales",
-      "subtitle": "Importa tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente juegas.",
+      "subtitle": "Importá tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente jugás.",
       "accept": "Importar mis partidas",
       "decline": "Ahora no",
-      "coach": "¡Buena partida! ¿Quieres un análisis más profundo de las partidas que juegas en línea también?",
-      "signInReason": "Inicia sesión para importar tu historial de Papergames."
+      "coach": "¡Buena partida! ¿Querés un análisis más profundo de las partidas que jugás en línea también?",
+      "signInReason": "Iniciá sesión para importar tu historial de Papergames."
     }
   },
   "settings": {
+    "title": "Configuración",
     "language": {
       "label": "Idioma",
       "en": "Inglés",
       "es": "Español"
+    },
+    "papergames": {
+      "signInPrompt": "Iniciá sesión para conectar tu cuenta de Papergames.",
+      "title": "Importar de Papergames",
+      "description": "Ingresá tu ID de cuenta de Papergames para importar tu historial de partidas.",
+      "idPlaceholder": "Tu ID de cuenta de Papergames",
+      "findAccountId": "Encontrá tu ID de cuenta",
+      "saving": "Guardando...",
+      "save": "Guardar",
+      "saved": "¡Guardado!",
+      "importing": "Importando...",
+      "import": "Importar",
+      "importingProcessing": "Importando... Procesando partidas",
+      "importingStarting": "Importando... Iniciando",
+      "viewImportedGames": "Ver partidas importadas",
+      "errorAccountIdLength": "El ID de cuenta debe tener entre 1 y 64 caracteres.",
+      "errorInvalidInput": "Dato inválido.",
+      "errorSaveFailed": "No se pudo guardar. Intentá de nuevo.",
+      "errorNetwork": "Error de red. Intentá de nuevo.",
+      "errorImportFailed": "Falló la importación. Intentá de nuevo.",
+      "errorImportFailedGeneric": "Falló la importación.",
+      "errorJobLost": "Se perdió el trabajo de importación. Intentá de nuevo.",
+      "capReached": "Llegaste a tu límite de 15 partidas.",
+      "importedCount_one": "Se importó {{count}} partida.",
+      "importedCount_other": "Se importaron {{count}} partidas.",
+      "skippedCount_one": " {{count}} partida no se pudo procesar y se omitió.",
+      "skippedCount_other": " {{count}} partidas no se pudieron procesar y se omitieron.",
+      "blunderErrorsCount_one": "Tus partidas se importaron, pero el análisis no se pudo guardar para {{count}} jugada. Volvé a importar para reintentar el análisis.",
+      "blunderErrorsCount_other": "Tus partidas se importaron, pero el análisis no se pudo guardar para {{count}} jugadas. Volvé a importar para reintentar el análisis."
     }
   }
 }

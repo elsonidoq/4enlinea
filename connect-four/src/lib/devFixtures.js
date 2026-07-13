@@ -49,13 +49,22 @@ export const DEV_QA_FIXTURES = [
     correctCol: 2,
     taughtCol: 2,
   },
-  // figure_7 — taughtCol 2. Source: tests/integration/figure7_jshape.test.js:27 (F7_PRE, correctCol 2).
+  // figure_7 — taughtCol 3. NOTE: tests/integration/figure7_jshape.test.js's F7_PRE
+  // ('041015021326') is a hand-built board used ONLY to unit-test the static detectFigure7()
+  // shape-matcher — it is not a solver-reachable position (its bottom row requires 5
+  // consecutive Gray discs, i.e. Gray already won several moves earlier), so the real c4solver
+  // rejects it with "Invalid position" the moment this DEV fixture drives it through the live
+  // /api/evaluate-move endpoint (which calls solver.query, unlike the unit test). Replaced with
+  // the solver-verified board from docs/knowledge-base/community-figure-7.md's worked example
+  // ("43222430403", scores confirmed all-Yellow-loses) minus its last move — its correctCol=3 is
+  // independently confirmed by checkFigure7Predicate() (server/candidate-generator.js), the same
+  // production detector real puzzles are authored from.
   {
-    label: 'figure_7 (probe col 2 → CORRECT; any other col → WRONG)',
-    movestring: '041015021326',
+    label: 'figure_7 (probe col 3 → CORRECT; any other col → WRONG)',
+    movestring: '4322243040',
     category: 'figure_7',
-    correctCol: 2,
-    taughtCol: 2,
+    correctCol: 3,
+    taughtCol: 3,
   },
   // j_shape — taughtCol 1. Source: tests/integration/figure7_jshape.test.js:39 (J_PRE, correctCol 1).
   {
@@ -65,31 +74,46 @@ export const DEV_QA_FIXTURES = [
     correctCol: 1,
     taughtCol: 1,
   },
-  // undercut — avoid-the-pattern. Killing col is 3; probe col 3 → WRONG, any non-killing col
-  // (e.g. col 0) → CORRECT. Source: tests/integration/undercut_overcut.test.js:135-168.
+  // undercut — avoid-the-pattern. Killing col is 4; probe col 4 → WRONG, any non-killing col
+  // (e.g. col 0) → CORRECT.
+  // NOTE: the previously-cited source ('334455221100' from
+  // tests/integration/undercut_overcut.test.js:135-168) is a hand-built board used ONLY to
+  // unit-test evalUndercut() directly (which reads highlightMetadata and never touches the
+  // solver) — it is not a solver-reachable position (bottom row is 6 discs of the same player
+  // in a row, i.e. already won several moves earlier), so the real c4solver rejects it with
+  // "Invalid position" the moment this DEV fixture drives it through the live
+  // /api/evaluate-move endpoint (which always calls solver.query first, regardless of
+  // category). Replaced with a solver-verified, actually-reachable board found via
+  // self-play (gameSampling.js playGame) + checkUndercutPredicate (server/candidate-generator.js,
+  // the same production detector real puzzles are authored from).
   {
-    label: 'undercut (probe killing col 3 → WRONG; any other col → CORRECT)',
-    movestring: '334455221100',
+    label: 'undercut (probe killing col 4 → WRONG; any other col → CORRECT)',
+    movestring: '33333222220056056',
     category: 'undercut',
     highlightMetadata: {
       type: 'cells',
       cells: [
-        { column: 3, row: 2, role: 'killing_threat' },
-        { column: 3, row: 4, role: 'dead_threat' },
+        { column: 4, row: 1, role: 'killing_threat' },
+        { column: 4, row: 2, role: 'dead_threat' },
       ],
     },
     taughtCol: 0,
   },
   // overcut — taughtCol 4 (major_threat col); probe col 4 → CORRECT, any non-major col
-  // (e.g. col 0) → WRONG. Source: tests/integration/undercut_overcut.test.js:174-210.
+  // (e.g. col 0) → WRONG.
+  // NOTE: the previously-cited source ('33445522110033') has the same defect as the undercut
+  // fixture above (unit-tests evalOvercut() directly, which never touches the solver; the
+  // board itself is solver-illegal — an accidental 6-in-a-row on the bottom row). Replaced with
+  // a solver-verified, actually-reachable board found the same way (playGame +
+  // checkOvercutPredicate).
   {
     label: 'overcut (probe major col 4 → CORRECT; any other col → WRONG)',
-    movestring: '33445522110033',
+    movestring: '333332222200560560655351',
     category: 'overcut',
     highlightMetadata: {
       type: 'cells',
       cells: [
-        { column: 4, row: 1, role: 'neutralised_threat' },
+        { column: 4, row: 2, role: 'neutralised_threat' },
         { column: 4, row: 3, role: 'major_threat' },
       ],
     },

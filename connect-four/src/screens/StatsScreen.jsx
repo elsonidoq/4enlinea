@@ -159,7 +159,7 @@ export function StatsScreen({ go, goBack }) {
             onClick={() => signOut()}
             style={{ background: 'transparent', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', marginTop: 8, WebkitTapHighlightColor: 'transparent' }}
           >
-            Log out
+            {t('auth.signOut')}
           </button>
         )}
       </div>
