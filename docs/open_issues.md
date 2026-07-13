@@ -347,3 +347,14 @@ for the onboarding epic; nothing in spec 048 regressed it.
 **If picked up**: register the `es` bundle in `src/i18n/index.js`, add a language selector (Settings is
 the natural home), and verify onboarding + the rest of the app render under `es`. Keep `es.json` keys
 in lockstep with `en.json` if the switcher goes live.
+
+## OI-16 — Follow-ups from the Open-Issues Remediation branch (low-risk polish)
+
+**Status**: deferred (accepted as backlog by the final whole-branch review, 2026-07-12; not merge-blocking)
+**Area**: `connect-four/src/components/DeepRevealPane.jsx` + `src/lib/deepRevealTimeout.js`; `connect-four/package.json` (jsdom peer)
+**Discovered**: final review of plan `docs/superpowers/plans/2026-07-12-open-issues-remediation.md`
+
+Two small residues from remediating OI-12 and OI-7, both judged defer-not-fix:
+
+- **Dead tested helper (from OI-12):** `deepRevealPhase(elapsedMs, resolved)` in `src/lib/deepRevealTimeout.js` is unit-tested but **not consumed** — `DeepRevealPane.jsx` drives the `slow`/`timedOut` states inline via `setTimeout`, reimplementing the same 3-way branch. Both sides import the shared `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants, so the timing can't drift, only the branch shape. If picked up: either wire `deepRevealPhase` into the render, or drop the helper + its test.
+- **jsdom peer mismatch (from OI-7):** `global-jsdom@29` peer-wants `jsdom >=29 <30` but `jsdom@27` resolved. npm treats this as a warning, `npm run test:dom` passes, but a future `npm ci --strict-peer-deps` (or global-jsdom major) could fail. If picked up: bump `jsdom` to `^29` and re-run `npm run test:dom`.
