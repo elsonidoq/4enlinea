@@ -99,11 +99,12 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     // 5. Wait for sound to finish, then navigate onward. Epic 8 — Onboarding Experience, US3
     // (T034, research.md R5): every end-of-game outcome (win/loss/draw via the normal flow,
     // resign via handleResign()'s onGameEnd?.(...) call into this same saveGame() seam) funnels
-    // through this one branch point. An onboarding session routes to the import offer instead
-    // of the normal post-game review screen; a non-onboarding session is unaffected.
+    // through this one branch point. Feature 2: every outcome routes to the post-game review
+    // screen; an onboarding session advances from there to the import offer via review's own
+    // Continue CTA, so we pass the `onboarding` flag through as a nav param.
     const elapsed = Date.now() - soundStartedAt;
     await new Promise(resolve => setTimeout(resolve, Math.max(0, POST_GAME_SOUND_MS - elapsed)));
-    goReplace(pickGameEndScreen(onboarding), { id: gameId });
+    goReplace(pickGameEndScreen(onboarding), { id: gameId, onboarding });
   }
 
   // ── Game board hook ─────────────────────────────────────────────

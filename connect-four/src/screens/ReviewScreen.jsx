@@ -51,7 +51,7 @@ function getQualityColor(quality) {
 }
 
 
-export function ReviewScreen({ go, goBack, id }) {
+export function ReviewScreen({ go, goBack, id, onboarding }) {
   const { t } = useTranslation();
   const { session } = useStore();
 
@@ -478,6 +478,18 @@ export function ReviewScreen({ go, goBack, id }) {
               {t('sparring.nextMistake')}
             </button>
           </div>
+        </div>
+      )}
+
+      {onboarding && (
+        <div style={{ padding: '16px', marginTop: 'auto' }}>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={() => go('onboardingImportOffer')}
+          >
+            {t('review.onboardingContinue')}
+          </button>
         </div>
       )}
     </div>

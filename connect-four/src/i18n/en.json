@@ -892,7 +892,8 @@
     "share": {
       "button": "Share",
       "copied": "Link copied!"
-    }
+    },
+    "onboardingContinue": "Continue"
   },
   "saga": {
     "title": "Lessons",
