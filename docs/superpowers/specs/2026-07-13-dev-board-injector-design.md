@@ -92,13 +92,15 @@ path.
 
 ### 2. `src/lib/devBoardParam.js` (new)
 
-`readDevBoardParam(search = window.location.search)` → `{ movestring, category, correctCol,
+`readDevBoardParam(search = window.location.search)` → `{ movestring, correctCol,
 highlightMetadata, side, difficulty } | null`.
 
 - Returns `null` immediately when `!import.meta.env.DEV` or no `devBoard` key is present.
-- Parses: `devBoard` (movestring), `devCategory`, `devCorrectCol` (int), `devMeta` (URL-encoded
+- Parses: `devBoard` (movestring), `devCorrectCol` (int), `devMeta` (URL-encoded
   JSON → `highlightMetadata`; on parse failure returns the field as `undefined` and logs a dev
-  warning, does not throw), `devSide`, `devDifficulty`.
+  warning, does not throw), `devSide`, `devDifficulty`. There is no `devCategory` param: for the
+  Challenge deep-link the verdict category comes from the `/challenge/:category` path segment
+  (authoritative), never from a query param.
 - One param contract shared by all three consumers (Challenge deep-link, sparring cold-boot,
   panel's URL builder), so the format never diverges.
 
@@ -209,8 +211,12 @@ production ones — that is the whole point of injecting rather than mocking.
 
 ## Rollout / verification
 
-After implementation, verify by: `/challenge/z_threat?devBoard=3333334512266550121166&devCategory=z_threat&devMeta=%7B%22column%22%3A0%7D`
+After implementation, verify by: `/challenge/z_threat?devBoard=3333334512266550121166&devMeta=%7B%22column%22%3A0%7D`
 loads OI-1 board 2 and playing col 0 reads CORRECT (not Suboptimal) with a congruent coach
 message; the fixture dropdown loads all seven boards; `/game?devBoard=<any>&devSide=first`
 cold-boots a seeded sparring game; and a production `vite build` contains none of the DEV strings
 (`Dev: load board`, `DEV_QA_FIXTURES`).
+
+Note: the `z_threat` category above comes from the path segment (`/challenge/z_threat`), which is
+the sole and authoritative source of verdict category for the Challenge deep-link — there is no
+`devCategory` query param.

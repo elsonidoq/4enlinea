@@ -28,7 +28,6 @@ export function parseDevBoardSearch(search) {
 
   return {
     movestring,
-    category: params.get('devCategory') ?? undefined,
     correctCol: Number.isInteger(parsedCol) ? parsedCol : undefined,
     highlightMetadata,
     side: params.get('devSide') ?? undefined,

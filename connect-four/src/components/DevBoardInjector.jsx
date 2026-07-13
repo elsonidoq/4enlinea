@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { buildDevPuzzle } from '../lib/devFixtures.js';
-import { DEV_QA_FIXTURES } from '../lib/devFixtures.js';
+import { buildDevPuzzle, DEV_QA_FIXTURES } from '../lib/devFixtures.js';
 import { CATEGORY_ORDER, SINGLE_ANSWER_CATEGORIES } from '../lib/categories.js';
 
 const MOVES_RE = /^[0-6]{0,42}$/;

@@ -9,9 +9,8 @@ test('parseDevBoardSearch returns null when devBoard is absent', () => {
 
 test('parseDevBoardSearch parses a full param set with URL-encoded devMeta', () => {
   const meta = encodeURIComponent(JSON.stringify({ column: 0 }));
-  const r = parseDevBoardSearch(`?devBoard=3333334512266550121166&devCategory=z_threat&devMeta=${meta}`);
+  const r = parseDevBoardSearch(`?devBoard=3333334512266550121166&devMeta=${meta}`);
   assert.equal(r.movestring, '3333334512266550121166');
-  assert.equal(r.category, 'z_threat');
   assert.deepEqual(r.highlightMetadata, { column: 0 });
 });
 

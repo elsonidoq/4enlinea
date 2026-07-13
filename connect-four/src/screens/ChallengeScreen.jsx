@@ -138,7 +138,7 @@ export function ChallengeScreen({
           let injected = devPuzzles?.length ? devPuzzles : null;
           if (!injected) {
             const p = readDevBoardParam();
-            if (p) injected = [buildDevPuzzle(p)];
+            if (p) injected = [buildDevPuzzle({ ...p, category })];
           }
           if (injected?.length) {
             sessionIdRef.current = null;
