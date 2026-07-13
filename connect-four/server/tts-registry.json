@@ -1790,5 +1790,13 @@
     "reason": null,
     "generated_at": "2026-06-19T14:59:40.251Z",
     "approved_at": "2026-06-19T14:59:52.516Z"
+  },
+  {
+    "key": "coach.onboardingMission.greeting",
+    "slug": "coach--onboardingMission--greeting",
+    "status": "approved",
+    "reason": null,
+    "generated_at": "2026-07-13T19:28:53.189Z",
+    "approved_at": "2026-07-13T19:29:15.597Z"
   }
 ]
