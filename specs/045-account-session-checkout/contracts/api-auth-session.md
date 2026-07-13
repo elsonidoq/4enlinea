@@ -5,6 +5,13 @@ only — request/response shapes are unchanged except where noted.
 
 ## `POST /api/auth/refresh` (existing, `:257`)
 
+> **SUPERSEDED (OI-6, 2026-07-12):** The server-side de-dup / coalescing behavior
+> described below was never built. `research.md` R1 empirically found GoTrue does
+> not enforce refresh-token rotation-with-reuse-detection, so `attemptRefresh` has
+> no single-flight Map. Authoritative current behavior:
+> `docs/architecture/server-conventions.md` ("No de-dup Map — documented absence")
+> and `connect-four/server/authRefresh.js`. See OI-5 for the re-verification path.
+
 **Unchanged request/response.** Behavior change (FR-002a): concurrent calls presenting the **same**
 `sb_refresh_token` cookie value are coalesced server-side — only the first triggers
 `authClient.auth.refreshSession()`; subsequent concurrent callers await and receive the same result

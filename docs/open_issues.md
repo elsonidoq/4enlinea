@@ -218,7 +218,7 @@ error-reporting leg to any CSP smoke test (browser Sentry needs a `connect-src` 
 
 ## OI-11 — Admin gate has no second factor beyond `requireLocalhost` (FR-009 deferred scope)
 
-**Status**: deferred (accepted risk for this feature — not a bug; scope explicitly excluded by spec 047 US3)
+**Status**: ✅ CLOSED — won't-fix (accepted risk, owner-confirmed 2026-07-12). The header-spoof hardening (FR-009, `req.socket.remoteAddress`) is delivered; adding a mandatory authenticated admin session on top of `requireLocalhost` remains deliberately out of scope. Reopen only if the threat model changes (e.g. shared-host / SSH-forward exposure becomes real).
 **Area**: `connect-four/server/index.js` — all `/api/admin/*` and `/api/debug/*` routes gated by `requireLocalhost`
 
 **Discovered**: spec `047` (Epic 7) US3 implementation (2026-07-12)
@@ -269,7 +269,7 @@ on deploy per `project_spec039_audio_interactive_coach`, so the first post-deplo
 
 ## OI-13 — Onboarding "import offer shown once" marker is per-browser (localStorage), not per-account
 
-**Status**: accepted design limitation (spec 048 — SHIPPED 2026-07-12; trade-off confirmed accepted, kept per-browser)
+**Status**: ✅ CLOSED — accepted design limitation (owner-confirmed 2026-07-12). The `onboarding_offer_shown_v1` localStorage marker stays per-browser; a benign always-dismissible import offer re-showing on a new device is acceptable, and syncing it would reintroduce the server-row-for-anonymous problem the design avoids. Reopen only if the offer becomes non-dismissible or costly to re-show.
 **Area**: `connect-four/src/lib/onboardingOfferMarker.js` + `OnboardingImportOfferScreen.jsx` mount (the `onboarding_offer_shown_v1` localStorage marker)
 **Discovered**: spec 048 (Epic 8, onboarding) planning/review (2026-07-12)
 
