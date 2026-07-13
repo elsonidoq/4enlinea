@@ -1130,6 +1130,83 @@ describe('POST /api/user/migrate', () => {
     assert.equal(insertCalled, false); // empty array should not trigger insert
   });
 
+  // ── Feature 3: anonymous games re-association ─────────────────────────────
+  // The client sends its own device_uuid; the endpoint re-keys any anon game
+  // rows (user_id IS NULL) with that device_uuid to the signed-in user.
+
+  /** users-table stub that accepts the onboarding conditional-update chain and a
+   *  plain update().eq() (sparring_record/streak/onboarding), plus a games-table
+   *  stub that records the update payload + filters. */
+  function buildGamesMigrateSupabase() {
+    const calls = { gamesUpdate: null, gamesEqDeviceUuid: null, gamesIsUserId: undefined };
+    const supabase = {
+      from: (table) => {
+        if (table === 'games') {
+          return {
+            update: (payload) => {
+              calls.gamesUpdate = payload;
+              return {
+                eq: (col, val) => {
+                  if (col === 'device_uuid') calls.gamesEqDeviceUuid = val;
+                  return {
+                    is: async (col2, val2) => {
+                      calls.gamesIsUserId = { col: col2, val: val2 };
+                      return { error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+        if (table === 'users') {
+          return { update: () => ({ eq: () => ({ eq: async () => ({ error: null }), then: (r) => r({ error: null }) }) }) };
+        }
+        if (table === 'session_stats') return { upsert: async () => ({ error: null }) };
+        if (table === 'puzzle_attempts') return { insert: async () => ({ error: null }) };
+        if (table === 'lesson_progress') return { upsert: async () => ({ error: null }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+      },
+    };
+    return { supabase, calls };
+  }
+
+  it('re-keys anon games with the client-supplied device_uuid to the user, WHERE user_id IS NULL', async () => {
+    const { supabase, calls } = buildGamesMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        device_uuid: 'client-anon-uuid', // distinct from req.user.device_uuid ('dev-xyz-456')
+      },
+    });
+    assert.equal(status, 204);
+    assert.deepEqual(calls.gamesUpdate, { user_id: 'user-abc-123' });
+    assert.equal(calls.gamesEqDeviceUuid, 'client-anon-uuid'); // keyed on CLIENT uuid, not req.user.device_uuid
+    assert.deepEqual(calls.gamesIsUserId, { col: 'user_id', val: null });
+  });
+
+  it('does NOT touch games when device_uuid is absent (no-op)', async () => {
+    const { supabase, calls } = buildGamesMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: { puzzle_attempts: [], session_stats: [], lesson_progress: [], sparring_record: null, streak: null },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.gamesUpdate, null); // games.update never called
+  });
+
+  it('does NOT touch games when device_uuid is an empty string (no-op)', async () => {
+    const { supabase, calls } = buildGamesMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: { puzzle_attempts: [], session_stats: [], lesson_progress: [], sparring_record: null, streak: null, device_uuid: '' },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.gamesUpdate, null);
+  });
+
   // ── T022 (Epic 8 — Onboarding Experience, US1) ──────────────────────────────
   // onboarding_status carry-over: conditional write, WHERE onboarding_status =
   // 'not_encountered', silent no-op when absent/invalid.

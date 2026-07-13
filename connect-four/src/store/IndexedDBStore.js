@@ -273,6 +273,7 @@ export class IndexedDBStore {
         sparring_record: sparringRecord,
         streak,
         onboarding_status: profile?.onboarding_status,
+        device_uuid: profile?.device_uuid,
       }),
       credentials: 'include',
     });
