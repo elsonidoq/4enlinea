@@ -9,7 +9,7 @@ import { setActiveScreen, track } from './lib/track.js';
 import { buildUrl, parseUrl, SESSION_ONLY_SCREENS } from './lib/urlMapping.js';
 import { readDevBoardParam } from './lib/devBoardParam.js';
 import { consumeReturnTo } from './lib/postLoginReturn.js';
-import { shouldAutoRouteToOnboarding, ONBOARDING_GAME_PARAMS } from './lib/onboardingRouting.js';
+import { shouldAutoRouteToOnboarding } from './lib/onboardingRouting.js';
 import { isLocalhostOrigin } from './lib/isLocalhostOrigin.js';
 import AdminBlockedPage from './pages/AdminBlockedPage.jsx';
 import './i18n/index.js';
@@ -131,8 +131,9 @@ function Navigator() {
       const profile = await store.getProfile();
       if (cancelled) return;
       if (shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus: profile.onboarding_status })) {
-        go('game', ONBOARDING_GAME_PARAMS);
-        track('onboarding_started', {});
+        // Route to the mission screen (not the game directly). The mission screen fires
+        // track('onboarding_started') on mount and launches the onboarding game via its CTA.
+        go('onboardingMission');
       }
     })();
     return () => { cancelled = true; };
