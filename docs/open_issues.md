@@ -377,3 +377,43 @@ directly with a full 42-char movestring + `difficulty`.
 
 **If picked up**: guard `chooseSparringMove` (or the endpoint) to return a 4xx / explicit terminal
 signal when `playable.length === 0`, instead of `undefined`.
+
+## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
+
+**Status**: deferred (large content task, scoped out of spec 049 Spanish localization; 2026-07-13)
+**Area**: `connect-four/lessons/*.json` (~13 files, ~50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
+**Discovered**: spec 049 QA (browser walkthrough, 2026-07-13)
+
+Lesson *body* content — every slide's `coachMessages[].text` across all lesson JSON files — is raw
+hardcoded English data with **no i18n lookup at all**, unlike lesson *titles* (which do resolve via
+`t(\`lesson.<id>.title\`, {defaultValue})`). So when the app language is Spanish, lesson slides
+still render in English. This is a separate content-authoring system from `src/i18n/*.json` and was
+never in scope of the "translate the 22 missing `es.json` sections" work — the FR-019 key-parity
+guard cannot catch it because these strings are not i18n keys.
+
+**Why deferred**: translating it requires either a parallel-language lesson content pack or
+per-slide i18n keys wired into `ConceptScreen.jsx`/`SocraticScreen.jsx` — a distinct, large content
+task, not a translation-file edit. Sized as its own follow-up.
+**If picked up**: decide on a mechanism (parallel `lessons/es/*.json` vs per-slide keys), then
+translate to Argentinian voseo per memory [[project_spanish_is_argentinian_voseo]].
+
+## OI-19 — Hardcoded-English UI strings bypass the i18n key-parity guard
+
+**Status**: deferred (several instances fixed during spec 049 QA; audit for the rest outstanding; 2026-07-13)
+**Area**: `connect-four/src/screens/*.jsx` (TopBar titles, button labels, aria-labels not wired to `t()`)
+**Discovered**: spec 049 QA (2026-07-13)
+
+The FR-019 key-parity test only proves `en.json` and `es.json` have the same *keys* — it is blind to
+user-facing strings that were never wired to `t()` at all (hardcoded English literals in JSX). QA
+found and fixed a batch of these (Stats "Log out", the entire Settings→Papergames Import section,
+Game/Sparring TopBar title + move counter + "Resign", audio toggle aria-labels, the Lessons list
+titles/status labels), adding the missing keys to both locales. **Known-remaining instances not yet
+fixed**: `ReviewScreen.jsx` (`title="Review"`) and `PlayOnlineScreen.jsx` (`title="Play Online"`)
+TopBar titles; other screens were not exhaustively audited.
+
+**Why deferred**: the remaining instances are outside the screens spec 049's QA walked
+(Home/Challenge/Coach/Settings/Onboarding); a full sweep is its own task.
+**If picked up**: grep the `src/screens`/`src/components` JSX for string literals in user-facing
+positions (`title=`, `aria-label=`, button/label children) not wrapped in `t()`; add keys to both
+`en.json`/`es.json` (Spanish = Argentinian voseo, [[project_spanish_is_argentinian_voseo]]).
+Consider a lint/test that flags hardcoded JSX text to prevent regressions.

@@ -265,7 +265,12 @@ export function ChallengeScreen({
         highlightMetadata: current.highlight_metadata,
       }),
     })
-      .then(r => r.json())
+      // Guard against non-2xx responses (e.g. a solver/server error): without this, `r.json()`
+      // still parses an error body like `{ error: "internal error" }`, and the code below reads
+      // `data.quality`/`data.accepted` as undefined, which renders as a raw, untranslated
+      // `challenge.quality.undefined` i18n key on screen instead of failing gracefully like a
+      // network error does (see the existing `.catch` below).
+      .then(r => { if (!r.ok) throw new Error(`evaluate-move failed: ${r.status}`); return r.json(); })
       .then(data => {
         // Spec 044 US3 / FR-015a: for the three multi-solution categories (immediate_threat,
         // forced_block, double_threat), do NOT judge correctness by a bare
@@ -940,8 +945,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleSfx}
-          aria-label={sfxEnabled ? 'Mute sound effects' : 'Unmute sound effects'}
-          title={sfxEnabled ? 'SFX on' : 'SFX off'}
+          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+          title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -957,8 +962,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleMusic}
-          aria-label={musicEnabled ? 'Mute music' : 'Unmute music'}
-          title={musicEnabled ? 'Music on' : 'Music off'}
+          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+          title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -974,8 +979,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleSpeech}
-          aria-label={speechEnabled ? 'Mute speech' : 'Unmute speech'}
-          title={speechEnabled ? 'Speech on' : 'Speech off'}
+          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+          title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',

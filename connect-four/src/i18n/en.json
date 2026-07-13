@@ -4,6 +4,25 @@
     "puzzles": "Puzzles",
     "coach": "My Coach"
   },
+  "audio": {
+    "muteSfx": "Mute sound effects",
+    "unmuteSfx": "Unmute sound effects",
+    "sfxOn": "SFX on",
+    "sfxOff": "SFX off",
+    "muteMusic": "Mute music",
+    "unmuteMusic": "Unmute music",
+    "musicOn": "Music on",
+    "musicOff": "Music off",
+    "muteSpeech": "Mute speech",
+    "unmuteSpeech": "Unmute speech",
+    "speechOn": "Speech on",
+    "speechOff": "Speech off"
+  },
+  "game": {
+    "title": "Game",
+    "move": "Move {{n}}",
+    "resign": "Resign"
+  },
   "puzzle": {
     "correctFirst": "Correct! Best move.",
     "correctRetry": "Correct — you found it!",
@@ -36,6 +55,7 @@
     "commitFirst": "Commit-first",
     "commitFirstHint": "Hides hints until you commit a move",
     "hintsOn": "Hints on",
+    "hintActive": "Hint on",
     "commitMove": "Commit move",
     "postMoveReveal": "Move analysis",
     "yourMove": "Your move",
@@ -90,7 +110,12 @@
   "common": {
     "dismiss": "Dismiss",
     "confirm": "Confirm",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "back": "Back",
+    "continue": "Continue",
+    "error": "Something went wrong.",
+    "hint": "Hint",
+    "loading": "Loading…"
   },
   "games": {
     "title": "Past Games",
@@ -682,7 +707,10 @@
     "preparingAudio": "Preparing audio…",
     "unavailable": "Detailed explanation unavailable.",
     "flag": "Flag this explanation",
-    "flagged": "Thanks — flagged"
+    "flagged": "Thanks — flagged",
+    "flagCancel": "Cancel",
+    "flagSend": "Send",
+    "flagNotePlaceholder": "What's wrong with this explanation? (optional)"
   },
   "summary": {
     "hero": "Set complete!",
@@ -717,6 +745,11 @@
     "title": "Past Mistakes",
     "reviewed": "Reviewed",
     "emptyFilter": "Nothing here — switch tabs to see your other moves.",
+    "detail": {
+      "notFound": "Blunder not found",
+      "noBlunderFound": "no blunder found",
+      "signInToUnlock": "Sign in to unlock"
+    },
     "gate": {
       "heading": "Sign up to save your mistakes",
       "body": "Create a free account and DecodeC4 will remember every blunder so you can review them with the Coach later.",
@@ -790,9 +823,45 @@
     "hint":    "Look for an even square directly above one of my discs."
   },
   "lesson": {
+    "node": {
+      "done": "Completed",
+      "current": "In progress",
+      "unlocked": "Unlocked",
+      "locked": "Locked"
+    },
     "confirmation": {
       "header": "{{title}} — Practice",
       "empty":  "No practice puzzles available yet."
+    },
+    "immediate-threat": {
+      "title": "Immediate Threats"
+    },
+    "block-before-build": {
+      "title": "Block Before Build"
+    },
+    "the-fork": {
+      "title": "The Fork"
+    },
+    "odd-rows-belong-to-red": {
+      "title": "Odd Rows Belong to Green"
+    },
+    "claimeven": {
+      "title": "Claimeven"
+    },
+    "z-threats": {
+      "title": "Z-Threats"
+    },
+    "undercut": {
+      "title": "The Undercut"
+    },
+    "overcut": {
+      "title": "The Overcut"
+    },
+    "figure-7": {
+      "title": "Figure-7 Trap"
+    },
+    "j-shape": {
+      "title": "J-Shape"
     },
     "opening-centre": {
       "title": "Own the Centre",
@@ -826,6 +895,8 @@
     }
   },
   "saga": {
+    "title": "Lessons",
+    "empty": "No lessons available yet.",
     "orderLock": {
       "message": "Finish the previous lesson to unlock this one"
     }

@@ -178,9 +178,9 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
       }}
     >
       <TopBar
-        title="Game"
+        title={t('game.title')}
         onBack={() => go('difficulty')}
-        meta={`Move ${moveHistory.length}`}
+        meta={t('game.move', { n: moveHistory.length })}
         rightIcon="gear"
         onRight={() => {}}
         onLogoClick={() => go('home')}
@@ -229,7 +229,7 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
             transition: 'background .15s, color .15s',
           }}
         >
-          {hintActive ? 'Hint on' : t('sparring.hintsOn')}
+          {hintActive ? t('sparring.hintActive') : t('sparring.hintsOn')}
         </button>
 
         <button
@@ -244,7 +244,7 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
             color: 'var(--red)', opacity: gameOver ? 0.4 : 1,
           }}
         >
-          Resign
+          {t('game.resign')}
         </button>
 
         {/* Epic 8 — Onboarding Experience, US4 (T041/FR-009): skip control, onboarding sessions only */}
@@ -268,8 +268,8 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         <button
           type="button"
           onClick={toggleSfx}
-          aria-label={sfxEnabled ? 'Mute sound effects' : 'Unmute sound effects'}
-          title={sfxEnabled ? 'SFX on' : 'SFX off'}
+          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+          title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -284,8 +284,8 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         <button
           type="button"
           onClick={toggleMusic}
-          aria-label={musicEnabled ? 'Mute music' : 'Unmute music'}
-          title={musicEnabled ? 'Music on' : 'Music off'}
+          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+          title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -300,8 +300,8 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
         <button
           type="button"
           onClick={toggleSpeech}
-          aria-label={speechEnabled ? 'Mute speech' : 'Unmute speech'}
-          title={speechEnabled ? 'Speech on' : 'Speech off'}
+          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+          title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',

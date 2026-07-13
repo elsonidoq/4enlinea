@@ -110,7 +110,7 @@ function LessonNode({ lesson, state, onTap }) {
             fontSize: 15,
             color: 'var(--ink)',
           }}>
-            {lesson.title}
+            {t(`lesson.${lesson.id}.title`, { defaultValue: lesson.title })}
           </span>
           {lesson.free === false && (
             <span style={{

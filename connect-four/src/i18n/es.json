@@ -4,6 +4,25 @@
     "puzzles": "Puzzles",
     "coach": "Mi Coach"
   },
+  "audio": {
+    "muteSfx": "Silenciar efectos de sonido",
+    "unmuteSfx": "Activar efectos de sonido",
+    "sfxOn": "Efectos activados",
+    "sfxOff": "Efectos desactivados",
+    "muteMusic": "Silenciar música",
+    "unmuteMusic": "Activar música",
+    "musicOn": "Música activada",
+    "musicOff": "Música desactivada",
+    "muteSpeech": "Silenciar voz",
+    "unmuteSpeech": "Activar voz",
+    "speechOn": "Voz activada",
+    "speechOff": "Voz desactivada"
+  },
+  "game": {
+    "title": "Partida",
+    "move": "Jugada {{n}}",
+    "resign": "Abandonar"
+  },
   "puzzle": {
     "correctFirst": "¡Correcto! Mejor jugada.",
     "correctRetry": "Correcto — ¡lo encontraste!",
@@ -36,6 +55,7 @@
     "commitFirst": "Confirmar antes",
     "commitFirstHint": "Oculta las pistas hasta que confirmes una jugada",
     "hintsOn": "Pistas activadas",
+    "hintActive": "Pista activa",
     "commitMove": "Confirmar jugada",
     "postMoveReveal": "Análisis de la jugada",
     "yourMove": "Tu jugada",
@@ -90,7 +110,12 @@
   "common": {
     "dismiss": "Descartar",
     "confirm": "Confirmar",
-    "collapse": "Contraer"
+    "collapse": "Contraer",
+    "back": "Volver",
+    "continue": "Continuar",
+    "error": "Algo salió mal.",
+    "hint": "Pista",
+    "loading": "Cargando…"
   },
   "games": {
     "title": "Partidas anteriores",
@@ -682,7 +707,10 @@
     "preparingAudio": "Preparando audio…",
     "unavailable": "Explicación detallada no disponible.",
     "flag": "Marcar esta explicación",
-    "flagged": "Gracias — marcada"
+    "flagged": "Gracias — marcada",
+    "flagCancel": "Cancelar",
+    "flagSend": "Enviar",
+    "flagNotePlaceholder": "¿Qué está mal en esta explicación? (opcional)"
   },
   "summary": {
     "hero": "¡Set completo!",
@@ -717,6 +745,11 @@
     "title": "Errores pasados",
     "reviewed": "Revisado",
     "emptyFilter": "Nada aquí — cambiá de pestaña para ver tus otras jugadas.",
+    "detail": {
+      "notFound": "No se encontró el error",
+      "noBlunderFound": "no se encontró ningún error",
+      "signInToUnlock": "Iniciá sesión para desbloquear"
+    },
     "gate": {
       "heading": "Regístrate para guardar tus errores",
       "body": "Creá una cuenta gratis y DecodeC4 recordará cada error grave para que puedas repasarlos con el Coach más tarde.",
@@ -790,9 +823,45 @@
     "hint":    "Buscá una casilla par justo encima de una de mis fichas."
   },
   "lesson": {
+    "node": {
+      "done": "Completada",
+      "current": "En progreso",
+      "unlocked": "Desbloqueada",
+      "locked": "Bloqueada"
+    },
     "confirmation": {
       "header": "{{title}} — Práctica",
       "empty":  "Aún no hay puzzles de práctica disponibles."
+    },
+    "immediate-threat": {
+      "title": "Amenazas Inmediatas"
+    },
+    "block-before-build": {
+      "title": "Bloqueá Antes de Construir"
+    },
+    "the-fork": {
+      "title": "La Bifurcación"
+    },
+    "odd-rows-belong-to-red": {
+      "title": "Las Filas Impares Son de Verde"
+    },
+    "claimeven": {
+      "title": "Claimeven"
+    },
+    "z-threats": {
+      "title": "Amenazas-Z"
+    },
+    "undercut": {
+      "title": "El Undercut"
+    },
+    "overcut": {
+      "title": "El Overcut"
+    },
+    "figure-7": {
+      "title": "La Trampa Figura-7"
+    },
+    "j-shape": {
+      "title": "Forma-J"
     },
     "opening-centre": {
       "title": "Domina el Centro",
@@ -826,6 +895,8 @@
     }
   },
   "saga": {
+    "title": "Lecciones",
+    "empty": "Aún no hay lecciones disponibles.",
     "orderLock": {
       "message": "Terminá la lección anterior para desbloquear esta"
     }
