@@ -6,16 +6,19 @@ import { VALID_BLUNDER_TAGS } from './blunderTags.js';
  * the client no longer writes them via POST /api/blunders.
  *
  * @param {object} supabase - Supabase client
- * @param {object} row - { user_id, board_state, move_played, correct_move,
+ * @param {object} row - { user_id, device_uuid, board_state, move_played, correct_move,
  *   pattern_category, reason, direction, severity, blunder_severity, game_id,
  *   papergames_game_id }
+ *   Authenticated rows carry user_id; anonymous rows carry device_uuid.
  *   Pass game_id for AI sparring games, papergames_game_id for papergames imports.
  *   Both are nullable — omit or pass null for puzzle blunders.
  * @returns {Promise<void>}
  */
 export async function insertGameBlunder(supabase, row) {
-  // Auth gate: anonymous users cannot write blunders
-  if (!row.user_id) return;
+  // Owner gate: authenticated rows carry user_id; anonymous rows carry device_uuid
+  // (device-keyed, re-associated to user_id on /api/user/migrate). Reject only
+  // when NEITHER identity is present.
+  if (!row.user_id && !row.device_uuid) return;
 
   // Tag guard: substitute unrecognized tags before INSERT
   const safeTag = VALID_BLUNDER_TAGS.has(row.pattern_category)
@@ -25,7 +28,8 @@ export async function insertGameBlunder(supabase, row) {
   const quality = row.quality === 'suboptimal' ? 'suboptimal' : 'blunder';
 
   const payload = {
-    user_id: row.user_id,
+    user_id: row.user_id ?? null,
+    device_uuid: row.device_uuid ?? null,
     board_state: row.board_state,
     move_played: row.move_played,
     correct_move: row.correct_move,

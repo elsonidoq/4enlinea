@@ -77,3 +77,31 @@ describe('insertGameBlunder', () => {
     assert.ok(true, '23505 did not throw');
   });
 });
+
+describe('insertGameBlunder — anon device path', () => {
+  it('writes a device-keyed row when user_id is absent but device_uuid is present', async () => {
+    let captured = null;
+    const supabase = { from: () => ({ insert: async (row) => { captured = row; return { error: null }; } }) };
+    await insertGameBlunder(supabase, {
+      device_uuid: 'dev-123',
+      board_state: '3344',
+      move_played: 2,
+      correct_move: 3,
+      pattern_category: 'suboptimal_move',
+      quality: 'blunder',
+      severity: 5,
+      game_id: 'game-abc',
+    });
+    assert.ok(captured, 'insert was called');
+    assert.equal(captured.device_uuid, 'dev-123');
+    assert.equal(captured.user_id ?? null, null);
+    assert.equal(captured.game_id, 'game-abc');
+  });
+
+  it('still no-ops when BOTH user_id and device_uuid are absent', async () => {
+    let called = false;
+    const supabase = { from: () => ({ insert: async () => { called = true; return { error: null }; } }) };
+    await insertGameBlunder(supabase, { board_state: '3344', move_played: 2, correct_move: 3, quality: 'blunder' });
+    assert.equal(called, false);
+  });
+});
