@@ -196,7 +196,7 @@ export function ChallengeScreen({
     }
     loadPuzzles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges]);
+  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges, devPuzzles]);
 
   // ── Audio: coach speech playback ─────────────────────────────────
   useEffect(() => {
@@ -214,7 +214,9 @@ export function ChallengeScreen({
 
   function handleDevLoad(puzzleObj, cat) {
     // Re-navigate so the `category` prop (hence effectiveCategory + the accepted-gate) matches the
-    // loaded board; the DEV branch in loadPuzzles picks up devPuzzles on the remount.
+    // loaded board. `go()` to the same screen does NOT remount ChallengeScreen (no `key` prop in
+    // App.jsx); instead the new `devPuzzles` prop (a fresh array reference) re-runs the loadPuzzles
+    // effect in place, since devPuzzles is now listed in its dependency array.
     go('challenge', { category: cat, devPuzzles: [puzzleObj] });
   }
 
