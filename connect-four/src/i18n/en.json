@@ -678,6 +678,7 @@
   },
   "deepReveal": {
     "loading": "Reading the position…",
+    "stillThinking": "Still thinking… detailed explanations can take a few seconds on the first look.",
     "preparingAudio": "Preparing audio…",
     "unavailable": "Detailed explanation unavailable.",
     "flag": "Flag this explanation",

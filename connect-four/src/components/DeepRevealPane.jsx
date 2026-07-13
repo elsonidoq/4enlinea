@@ -8,6 +8,7 @@ import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -58,6 +59,7 @@ export function DeepRevealPane({
   const [loadingTts, setLoadingTts] = useState(false);
   const [data, setData] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [flagged, setFlagged] = useState(false);
@@ -71,6 +73,7 @@ export function DeepRevealPane({
     if (!isOpen) {
       setData(null);
       setTimedOut(false);
+      setSlow(false);
       setFlagged(false);
       setFlagOpen(false);
       setFlagNote('');
@@ -100,11 +103,14 @@ export function DeepRevealPane({
     setFlagNote('');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
+    setSlow(false);
+    const softId = setTimeout(() => setSlow(true), DEEP_REVEAL_SOFT_MS);
+    const hardId = setTimeout(() => {
+      controller.abort();
       setLoading(false);
       setLoadingTts(false);
       setTimedOut(true);
-    }, 6000);
+    }, DEEP_REVEAL_HARD_MS);
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
@@ -114,7 +120,7 @@ export function DeepRevealPane({
       body: JSON.stringify({ movestring: moveString, col }),
     })
       .then(res => {
-        clearTimeout(timeoutId);
+        clearTimeout(softId); clearTimeout(hardId);
         if (res.status === 401) { setLoading(false); setAuthOpen(true); return null; }
         if (res.status === 429) { setLoading(false); setUpgradeOpen(true); return null; }
         return res.json();
@@ -155,16 +161,17 @@ export function DeepRevealPane({
       })
       .catch(err => {
         if (err.name === 'AbortError') return;
-        clearTimeout(timeoutId);
+        clearTimeout(softId); clearTimeout(hardId);
         setLoading(false);
         setLoadingTts(false);
         setTimedOut(true);
       });
 
     return () => {
-      clearTimeout(timeoutId);
+      clearTimeout(softId); clearTimeout(hardId);
       controller.abort();
       stopSpeech();
+      setSlow(false);
       if (ttsAudioRef.current) {
         ttsAudioRef.current.src = '';
         ttsAudioRef.current = null;
@@ -212,7 +219,9 @@ export function DeepRevealPane({
           <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
             {loadingTts
               ? t('deepReveal.preparingAudio', 'Preparing audio…')
-              : t('deepReveal.loading', 'Reading the position…')}
+              : loading && slow && !timedOut
+                ? t('deepReveal.stillThinking', 'Still thinking… detailed explanations can take a few seconds on the first look.')
+                : t('deepReveal.loading', 'Reading the position…')}
           </p>
         </div>
       )}
