@@ -90,7 +90,7 @@ memory: `reference_tier_source`, `project_auth_payments_state`.
 
 ## OI-5 — FR-002a "no refresh-token rotation" finding verified only against anonymous sessions
 
-**Status**: deferred (empirical gate satisfied for the shipped scope, but narrow)
+**Status**: ⏳ probe-ready (2026-07-12) — a runnable re-verification harness now exists at `connect-four/scripts/probe-refresh-rotation.mjs`; the actual run is **owner-gated** (needs a real test account's email/password, unavailable headlessly). Run: `cd connect-four && node --env-file=server/.env scripts/probe-refresh-rotation.mjs <email> <password>`. If it prints "rotation detected", build the de-dup Map (plan Task F2) and update `server-conventions.md`; if "no rotation", close OI-5. Plan: `docs/superpowers/plans/2026-07-12-open-issues-remediation.md` Theme F.
 **Area**: `connect-four/server/authRefresh.js` (no de-dup Map), `GET /api/auth/session` silent refresh
 **Discovered**: spec `045` T002 (2026-07-11)
 
