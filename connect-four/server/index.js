@@ -106,6 +106,10 @@ app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rat
 const SUPABASE_HOST = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).host : null;
 const PAPERGAMES_ORIGIN = 'https://papergames.io';
 const PAPERGAMES_WS = 'wss://papergames.io';
+// Frontend Sentry (OI-10): browser SDK POSTs error events to the ingest host below.
+// Env-derived (not hardcoded to one Sentry project); defaults to the wildcard ingest
+// domain used by all Sentry SaaS projects.
+const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io';
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -114,7 +118,7 @@ app.use(helmet({
       styleSrc: ["'self'"],
       imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
-      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
       objectSrc: ["'none'"],

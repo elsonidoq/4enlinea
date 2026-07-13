@@ -71,7 +71,7 @@ literal `curl`/dashboard commands — this quickstart only maps them to this fea
 | OAuth/magic-link redirect allowlist has no wildcard (dashboard) | C10 | US4 AC3 |
 | Rate limiting effective behind the proxy (429s appear) | C11 | US4 AC4 |
 | Deployed image has the `npm audit` fixes | C12 | US1 AC4, SC-001 |
-| TTS/Google-OAuth smoke test with CSP active (error-reporting leg N/A — no error-reporting service is currently wired; see spec Deferred) | — (FR-005) | US2 AC3 |
+| TTS/Google-OAuth smoke test with CSP active (error-reporting leg re-added post-OI-10 — see `staging_checks.md` "Frontend error events reach the Sentry reporting service"; requires `VITE_SENTRY_DSN` set) | — (FR-005) | US2 AC3 |
 | `llm_usage` survives a full deploy cycle with zero row loss | — (FR-021/SC-007) | US5 AC5 |
 
 For each, follow the **What / Why staging / Expected / Source** format already established in

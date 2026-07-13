@@ -278,6 +278,24 @@ For each check record:
   - **Source**: spec FR-005 + spec-047 code-review (papergames.io connect-src/img-src, inline-SW-script
     script-src — see `docs/architecture/server-conventions.md` "CSP Directive Rationale").
 
+- [ ] **(OI-10, re-added) Frontend error events reach the Sentry reporting service under the live CSP.**
+  - **Prerequisite**: this leg was dropped as N/A by spec 047 FR-005 because frontend Sentry was never
+    `init()`'d (see `docs/open_issues.md` OI-10, now RESOLVED). It only applies once `VITE_SENTRY_DSN` is
+    set in the frontend build env (so `Sentry.init()` in `src/main.jsx` actually runs) and `SENTRY_DSN`
+    is set in the server env. If either is unset in this deploy, skip this leg and note why.
+  - **What**: with a real DSN configured and the app built+deployed (Express serving `dist/`, not Vite
+    dev — CSP is not applied under Vite dev), trigger a thrown error inside a component (temporary throw,
+    or an existing dev-only error trigger if one exists), open DevTools Network tab, and confirm a POST to
+    `https://<org>.ingest.sentry.io/...` succeeds (not blocked by CSP) and the event appears in the Sentry
+    project dashboard.
+  - **Why staging**: CSP `connect-src` is only enforced against the Express-served `dist/` build, not Vite
+    dev (see `project_csp_helmet_traps.md`); a genuinely deployed environment with a real DSN is required to
+    confirm the ingest POST is neither CSP-blocked nor otherwise dropped.
+  - **Expected**: no `connect-src` CSP-violation console message for the Sentry ingest host; the error event
+    appears in the Sentry dashboard within a few seconds.
+  - **Source**: `docs/open_issues.md` OI-10; `server/index.js` `SENTRY_INGEST` connect-src entry;
+    `src/main.jsx` `Sentry.init()`.
+
 - [ ] **Forged `X-Forwarded-For: 127.0.0.1` header does not bypass the localhost admin gate.**
   - **What**: `curl -H 'X-Forwarded-For: 127.0.0.1' <staging-url>/api/admin/candidates` (and one other
     `requireLocalhost`-gated endpoint, e.g. `POST <staging-url>/api/debug/classify-all`), sent from a
