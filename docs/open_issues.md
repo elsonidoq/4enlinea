@@ -329,7 +329,7 @@ account row's `onboarding_status` reflects the migrated anonymous value. This is
 
 ## OI-15 — Spanish i18n (`es.json`) ships translations but is never registered; app is English-only
 
-**Status**: deferred (pre-existing, app-wide; not a spec-048 regression)
+**Status**: ⏳ PARTIAL 2026-07-12 — switcher machinery SHIPPED (useLanguage hook, es bundle registered, Settings selector). REMAINING: es.json covers only 2 of 24 key-sections; full Spanish translation is a separate content effort (see Theme H / its own spec). Selecting es renders English via fallback until then.
 **Area**: `connect-four/src/i18n/index.js` (`lng: 'en'`, only `en` resource registered), `connect-four/src/i18n/es.json`
 **Discovered**: spec 048 (Epic 8) QA (2026-07-12)
 
