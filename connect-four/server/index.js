@@ -18,6 +18,7 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
+import { resolveGameBlunderOwner } from './anonBlunderAccess.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
@@ -2047,6 +2048,7 @@ app.post('/api/games/analyze', async (req, res) => {
 
   // Fetch game row — check AI sparring games first, then papergames imports
   let moves, side, difficulty, created_at, isPapergames = false;
+  let gameDeviceUuid = null;
   {
     const { data: aiGame } = await supabase
       .from('games')
@@ -2073,6 +2075,7 @@ app.post('/api/games/analyze', async (req, res) => {
         return res.status(404).json({ error: 'game not found' });
       }
       ({ moves, side, difficulty, created_at } = aiGame);
+      gameDeviceUuid = aiGame.device_uuid ?? null;
     } else {
       const { data: pgGame } = await supabase
         .from('papergames_games')
@@ -2266,10 +2269,15 @@ app.post('/api/games/analyze', async (req, res) => {
         blunderSeverity,
       });
 
-      // Server-side mistake INSERT — anonymous users skip (user_id would be NULL).
-      if (req.user && isMistake) {
+      // Server-side mistake INSERT. Authenticated → user-scoped (unchanged).
+      // Anonymous AI-sparring → device-scoped (user_id NULL, device_uuid from the
+      // game row), re-associated to user_id on /api/user/migrate. resolveGameBlunderOwner
+      // NEVER compares device_uuid to a user id.
+      const blunderOwner = resolveGameBlunderOwner(req.user, { device_uuid: gameDeviceUuid });
+      if (blunderOwner && isMistake) {
         await insertGameBlunder(supabase, {
-          user_id: req.user.id,
+          user_id: blunderOwner.user_id,
+          device_uuid: blunderOwner.device_uuid,
           board_state: movesBeforeThisPly,
           move_played: col,
           correct_move: bestCol,
