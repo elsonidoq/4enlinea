@@ -424,6 +424,72 @@ export function getImmediateThreats(board, colHeights, player) {
 }
 
 /**
+ * Per-turn probability that the non-perfect sparring AI makes a deliberate mistake.
+ * The only difficulty knob (softmax was removed): every other move is optimal.
+ */
+export const SPARRING_MISTAKE_RATES = {
+  easy: 1 / 2,
+  medium: 1 / 4,
+  hard: 1 / 8,
+  perfect: 0,
+};
+
+/**
+ * Choose the sparring AI's move for a non-perfect difficulty.
+ *
+ * Priority: take an own win-in-1 first (always); otherwise roll for a deliberate
+ * mistake. A non-mistake plays the optimal (argmax-score) column with random
+ * tie-break. A mistake blocks an opponent win-in-1 if one exists, else samples
+ * uniformly from columns that are strictly worse than best AND do not hand the
+ * opponent a win-in-1 (a genuine but non-suicidal mistake); it falls back to
+ * optimal only when no such move exists.
+ *
+ * `scores` are c4solver scores (INVALID_MOVE for full columns). `rng` is injected
+ * for deterministic tests: consumed once for the mistake roll, then once more for
+ * the uniform pick when a pool is sampled.
+ *
+ * @param {Board} board       position with the AI to move
+ * @param {string} difficulty 'easy' | 'medium' | 'hard' | 'perfect'
+ * @param {number[]} scores   per-column solver scores
+ * @param {() => number} rng  uniform [0,1) source (default Math.random)
+ * @returns {number} chosen 0-indexed column
+ */
+export function chooseSparringMove(board, difficulty, scores, rng = Math.random) {
+  const me = board.currentPlayer;
+  const opp = board.opponent;
+
+  // 1. Own immediate win — take it, before rolling for a mistake.
+  const myWins = board.immediateThreats(me);
+  if (myWins.length > 0) return myWins[0];
+
+  // Legal columns and the optimal (argmax) set.
+  const playable = [];
+  for (let c = 0; c < COLS; c++) if (board.colHeights[c] < ROWS) playable.push(c);
+  const best = Math.max(...playable.map(c => scores[c]));
+  const bestCols = playable.filter(c => scores[c] === best);
+
+  const pick = (pool) => pool[Math.floor(rng() * pool.length)];
+
+  // 2. Roll for a deliberate mistake.
+  const rate = SPARRING_MISTAKE_RATES[difficulty] ?? 0;
+  if (rng() >= rate) return pick(bestCols); // no mistake → optimal
+
+  // 3a. Never concede: block an opponent win-in-1 (covers the unblockable ≥2 case).
+  const oppThreats = board.immediateThreats(opp);
+  if (oppThreats.length > 0) return oppThreats[0];
+
+  // 3b. Sample a strictly-worse move that does not hand the opponent a win-in-1.
+  const forbidden = new Set(
+    playable.filter(c => board.withMove(c).immediateThreats(opp).length > 0),
+  );
+  const mistakePool = playable.filter(c => scores[c] < best && !forbidden.has(c));
+  if (mistakePool.length > 0) return pick(mistakePool);
+
+  // 3c. No safe strictly-worse move exists → fall back to optimal.
+  return pick(bestCols);
+}
+
+/**
  * Immutable board snapshot. Parses movestring once; all derived state is lazily cached.
  * Use `new Board(movestring)` in `classify()` and all `detect*` functions.
  * Use `board.withMove(col)` instead of the mutation+undo pattern.

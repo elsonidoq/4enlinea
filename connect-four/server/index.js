@@ -9,7 +9,7 @@ import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern, chooseSparringMove, SPARRING_MISTAKE_RATES } from './classifier.js';
 import { loadKBShortSummary } from './llmCoachHelpers.js';
 import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
@@ -913,20 +913,26 @@ app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) =
 });
 
 app.post('/api/scores', async (req, res) => {
-  const { moves, depth } = req.body;
+  const { moves, depth, difficulty } = req.body;
   if (typeof moves !== 'string') {
     return res.status(400).json({ error: 'moves must be a string' });
   }
-
-  if (moves === '' && !depth) {
-    return res.json({ scores: EMPTY_BOARD_SCORES });
+  // When `difficulty` is present the caller is the sparring AI: we return the
+  // chosen column (see chooseSparringMove) alongside the scores. The hint path
+  // omits `difficulty` and gets scores only.
+  if (difficulty !== undefined && !(difficulty in SPARRING_MISTAKE_RATES)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
   }
 
   try {
-    console.log(`[api] /api/scores moves="${moves}" depth=${depth ?? 'unlimited'}`);
-    const t0 = Date.now();
-    const scores = depth ? await queryDepth(moves, depth) : await solver.query(moves);
-    console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
+    const scores = (moves === '' && !depth)
+      ? EMPTY_BOARD_SCORES
+      : (depth ? await queryDepth(moves, depth) : await solver.query(moves));
+
+    if (difficulty !== undefined) {
+      const col = chooseSparringMove(new Board(moves), difficulty, scores);
+      return res.json({ scores, col });
+    }
     res.json({ scores });
   } catch (err) {
     logError('[scores]', err);

@@ -421,10 +421,12 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 ## Scores Endpoint
 
 `POST /api/scores` (**not** GET) — `server/index.js`.
-- **Request body**: `{ moves: string }` (the movestring so far, 0-indexed).
-- **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/aiDifficulty.js`).
-- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Callers: the deliberate-mistake mechanic (`secondBestColumn`) and the Hint overlay. Score semantics: see `reference_c4solver_scores` memory.
-- **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned in favor of softmax over full solver scores (`src/lib/aiDifficulty.js`). Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
+- **Request body**: `{ moves: string, depth?: number, difficulty?: 'easy'|'medium'|'hard'|'perfect' }` (the movestring so far, 0-indexed).
+- **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/constants.js`).
+- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver_scores` memory.
+- **Sparring-move mode (`difficulty` present)**: the response is `{ scores, col }`, where `col` is the AI's chosen 0-indexed move computed **server-side** by `chooseSparringMove(board, difficulty, scores)` (`server/classifier.js`). An unknown `difficulty` value → 400. This is the single move-selection path for the sparring AI (`src/lib/useGameBoard.js` `makeAiMove` POSTs `{ moves, difficulty }` and plays `col`; on any error it falls back to a random legal column). The Hint overlay calls the same endpoint **without** `difficulty` and consumes `scores` only.
+- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns. See memory `project_sparring_move_algorithm`.
+- **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
 
 ## Migrate Endpoint (POST /api/user/migrate)
 

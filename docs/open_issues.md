@@ -359,3 +359,21 @@ Two small residues from remediating OI-12 and OI-7, both judged defer-not-fix:
 
 - **Dead tested helper (from OI-12):** `deepRevealPhase(elapsedMs, resolved)` in `src/lib/deepRevealTimeout.js` is unit-tested but **not consumed** — `DeepRevealPane.jsx` drives the `slow`/`timedOut` states inline via `setTimeout`, reimplementing the same 3-way branch. Both sides import the shared `DEEP_REVEAL_SOFT_MS`/`DEEP_REVEAL_HARD_MS` constants, so the timing can't drift, only the branch shape. If picked up: either wire `deepRevealPhase` into the render, or drop the helper + its test.
 - **jsdom peer mismatch (from OI-7):** `global-jsdom@29` peer-wants `jsdom >=29 <30` but `jsdom@27` resolved. npm treats this as a warning, `npm run test:dom` passes, but a future `npm ci --strict-peer-deps` (or global-jsdom major) could fail. If picked up: bump `jsdom` to `^29` and re-run `npm run test:dom`.
+
+## OI-17 — `chooseSparringMove` returns `col: undefined` on a terminal/full board
+
+**Status**: deferred (latent; unreachable via the normal client flow, 2026-07-13)
+**Area**: `connect-four/server/classifier.js` (`chooseSparringMove`) via `POST /api/scores` with `difficulty`
+**Discovered**: implementing the sparring move-selection rewrite (2026-07-13)
+
+If `chooseSparringMove` is called on a position with **no playable columns** (a full/drawn board),
+`playable` is empty → `Math.max(...[])` is `-Infinity`, `bestCols` is `[]`, and `pick([])` returns
+`undefined`, so the endpoint responds `{ scores, col: undefined }` (serialized as `col` absent/null)
+rather than a clean error. Not a crash, but a malformed response.
+
+**Why deferred**: unreachable through the app — `makeAiMove` only runs when the game is not over, so
+the AI is never asked to move on a terminal board. It's only hittable by calling `POST /api/scores`
+directly with a full 42-char movestring + `difficulty`.
+
+**If picked up**: guard `chooseSparringMove` (or the endpoint) to return a 4xx / explicit terminal
+signal when `playable.length === 0`, instead of `undefined`.

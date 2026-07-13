@@ -38,6 +38,7 @@
 - [LLM model env vars](reference_llm_model_env_vars.md) — OPENAI_MODEL=mini (prod endpoints); EXPLAIN_MODEL=full (compute.mjs eval only); names mislead; Gemini id = gemini-3.1-pro-preview
 - [OPENAI_API_KEY is present](feedback_openai_key_present.md) — real working key in connect-four/server/.env; DON'T defer real-TTS/LLM checks as "no key"; verify on localhost
 - [Server architecture](project_server_architecture.md) — endpoint map; tier access; rate limits
+- [Sparring move algorithm](project_sparring_move_algorithm.md) — server-side chooseSparringMove via /api/scores?difficulty; softmax/aiDifficulty.js DELETED; own-win before roll; mistake=strictly-worse+non-forbidden; easy never falls for 1-move traps
 - [Admin localhost directive](project_admin_localhost_directive.md) — owner: ALL /admin (API+frontend) localhost-only, one-liner/route; requireAdmin is a NO-OP outside NODE_ENV=production
 - [index.js hardening traps](project_index_hardening_traps.md) — req.ip XFF-spoofable under trust proxy (use req.socket.remoteAddress); 500-body sweep misses {error}-destructure leak
 - [CSP/helmet traps](project_csp_helmet_traps.md) — CSP invisible under Vite dev (test Express-served dist); app has browser papergames.io wss+img deps; SW reg moved to main.jsx
