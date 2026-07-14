@@ -40,13 +40,13 @@ export function registerStripeRoutes(app, paymentProcessor) {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
     if (!paymentProcessor) return res.status(503).json({ error: 'Payments not configured' });
 
-    const { plan } = req.body;
+    const { plan, returnPath } = req.body;
     if (!['monthly', 'annual'].includes(plan)) {
       return res.status(400).json({ error: 'plan must be monthly or annual' });
     }
 
     try {
-      const { checkoutUrl } = await paymentProcessor.createCheckout({ userId: req.user.id, email: req.user.email, plan });
+      const { checkoutUrl } = await paymentProcessor.createCheckout({ userId: req.user.id, email: req.user.email, plan, returnPath });
       res.json({ checkoutUrl });
     } catch (err) {
       logError('[stripe/create-checkout]', err);

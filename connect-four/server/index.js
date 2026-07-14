@@ -532,6 +532,25 @@ async function checkAndDecrementQuota(user) {
   return { allowed: true, resetsAt };
 }
 
+// Read-only quota check — same logic as checkAndDecrementQuota but WITHOUT any
+// write. Used as an early gate (before the expensive LLM compute) so an
+// over-quota free user gets the paywall immediately instead of watching the
+// deep reveal "compute" first, then getting 429. checkAndDecrementQuota still
+// performs the real decrement afterwards (only on an actual blunder).
+function peekQuota(user) {
+  if (!user) return { allowed: false, reason: 'anonymous' };
+  if (user.tier === 'paid') return { allowed: true };
+  if (user.tier !== 'free') return { allowed: false, reason: 'anonymous' };
+
+  const now = new Date();
+  const resetAtRaw = user.deep_reveal_reset_at;
+  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+  // Past the weekly reset (or null) → the count would reset to 0, so it's allowed.
+  const count = now > resetAt ? 0 : (user.deep_reveal_count ?? 0);
+  if (count >= 5) return { allowed: false, resetsAt: resetAt.toISOString() };
+  return { allowed: true };
+}
+
 // ── LLM explanation composer ──────────────────────────────────────────────────
 
 async function composeExplanation(patternTag, scores, candidateCol, moves) {
@@ -1143,6 +1162,17 @@ app.post('/api/explain-move-llm', async (req, res) => {
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
       }));
+    }
+  }
+
+  // ── 1b. Quota gate BEFORE the expensive LLM compute ──────────────────────
+  // Cache misses for over-quota free users must 429 up front — not after the
+  // reveal has visibly "computed" (the actual decrement still happens post-
+  // compute, and only for real blunders, via checkAndDecrementQuota below).
+  if (resolveExplainQuota(req.user) && supabase) {
+    const gate = peekQuota(req.user);
+    if (!gate.allowed) {
+      return res.status(429).json({ error: 'quota_exceeded', resetsAt: gate.resetsAt });
     }
   }
 

@@ -26,7 +26,10 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
     setUiState('loading');
     try {
       await onUpgrade?.(selectedPlan);
-      setUiState('success');
+      // onUpgrade performs a full-page redirect to Stripe Checkout, so stay in
+      // 'loading' until the browser navigates away — never flash "You're now Pro"
+      // before the user has actually paid. The real post-payment 'success'/paid
+      // state is driven by CheckoutReturnBanner after the return redirect.
     } catch {
       setUiState('idle');
     }

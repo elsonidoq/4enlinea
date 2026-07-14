@@ -12,7 +12,10 @@ import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 export function PostSetSummaryScreen({ go, results = [], category }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
-  const handleUpgrade = useUpgradeCheckout();
+  // /summary is a SESSION_ONLY screen (its `results` prop can't survive the
+  // full-page Stripe redirect), so return the user to Challenges instead — the
+  // same place this screen's back/ghost buttons go.
+  const handleUpgrade = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [isFreeUser, setIsFreeUser] = useState(true);
 

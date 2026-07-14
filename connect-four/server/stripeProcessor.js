@@ -53,18 +53,29 @@ export function createStripeProcessor({
   }
 
   // ── createCheckout — mirrors old POST /api/stripe/create-checkout body ─────
-  async function createCheckout({ userId, email, plan }) {
+  // `returnPath` (optional) is the app screen the user launched checkout from;
+  // Stripe returns them there instead of the home page. Sanitized to a
+  // same-origin relative path — anything else (absolute URL, protocol-relative
+  // '//evil', missing leading slash) falls back to '/' to prevent open redirects.
+  async function createCheckout({ userId, email, plan, returnPath }) {
     const priceId = plan === 'monthly' ? monthlyPriceId : annualPriceId;
     if (!priceId) throw new PaymentConfigError('Price not configured', 503);
 
     const baseUrl = resolveBaseUrl();
+    const safePath = (typeof returnPath === 'string' && /^\/(?!\/)/.test(returnPath))
+      ? returnPath : '/';
+    const buildUrl = (outcome) => {
+      const url = new URL(safePath, `${baseUrl}/`);
+      url.searchParams.set('checkout', outcome);
+      return url.toString();
+    };
     const session = await stripeClient.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email,
       metadata: { user_id: userId },
-      success_url: `${baseUrl}/?checkout=success`,
-      cancel_url: `${baseUrl}/?checkout=cancelled`,
+      success_url: buildUrl('success'),
+      cancel_url: buildUrl('cancelled'),
     });
     return { checkoutUrl: session.url };
   }
