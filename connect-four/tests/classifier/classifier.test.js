@@ -153,6 +153,26 @@ describe('classify() double_threat', () => {
   });
 });
 
+describe('classify() double_threat transition gating', () => {
+  // Persisting double threat (the reported bug): P1 already holds a standing double threat
+  // (0-indexed cols 2 & 6 are gravity-top wins) and plays a DIFFERENT optimal developing move
+  // (col3, solver score 13 = max). Pre-fix classify tagged this double_threat every such move,
+  // so the coach falsely repeated "you created the double threat". Post-fix it must not.
+  test('3344000000111151 col3 → NOT double_threat (double threat already present, not created)', () => {
+    const result = classify('3344000000111151', 3, [-1000, 12, 13, 12, 12, 12, 13]);
+    assert.notEqual(result.tag, 'double_threat');
+    assert.equal(result.tag, 'best_move');
+  });
+
+  // Regression: a move that genuinely CREATES the double threat (absent before, present after)
+  // still fires. '3344' col2 is the classic figure-7 completing move; pre-move P1 has no double
+  // threat, post-move it does.
+  test('3344 col2 → double_threat (newly created — regression)', () => {
+    const result = classify('3344', 2, [-4, -3, 18, 2, 2, 18, -3]);
+    assert.equal(result.tag, 'double_threat');
+  });
+});
+
 describe('classify() edge cases', () => {
   test('returns fallback for empty board with negative score', () => {
     const scores = [-1, -1, -1, -1, -1, -1, -1];
