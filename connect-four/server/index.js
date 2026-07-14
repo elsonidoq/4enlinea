@@ -18,7 +18,7 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { resolveGameBlunderOwner, resolveQueueOwner } from './anonBlunderAccess.js';
+import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
@@ -1100,11 +1100,9 @@ app.post('/api/explain-move', async (req, res) => {
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, cached?: boolean }.
-// Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
+// Anon allowed (rate-capped by the per-IP prefix limiter below; no quota). Free-tier: weekly quota of 20 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-
   const { movestring, col, rounds } = req.body;
 
   if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
@@ -1153,7 +1151,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     const result = await computeMechanism(movestring, col, {
       solver,
       model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
-      userId: req.user.id,
+      userId: req.user?.id ?? null,
     });
 
     if (result.notABlunder) {
@@ -1208,7 +1206,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
 
     // ── Decrement quota (if free-tier), cache, and respond ──
-    if (req.user.tier === 'free' && supabase) {
+    if (resolveExplainQuota(req.user) && supabase) {
       const quota = await checkAndDecrementQuota(req.user);
       if (!quota.allowed) {
         return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
