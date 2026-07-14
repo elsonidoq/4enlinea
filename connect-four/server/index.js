@@ -44,7 +44,8 @@ import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
-import { localeMiddleware } from './locale.mjs';
+import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
+import { buildCacheFilter } from './explainCacheKey.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1146,13 +1147,15 @@ app.post('/api/explain-move-llm', async (req, res) => {
   if (board.colHeights[col] >= 6)
     return res.status(400).json({ error: 'column is full' });
 
+  const locale = req.locale ?? 'en';
+
   // ── 1. Cache check (before quota decrement) ──────────────────────────────
   const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
   if (supabase) {
     const { data: cached } = await supabase
       .from('explanation_cache')
       .select('deep_reveal_json')
-      .eq('position_hash', positionHash)
+      .match(buildCacheFilter(positionHash, locale))
       .single();
     if (cached?.deep_reveal_json) {
       // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
@@ -1163,6 +1166,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         prompt: cached.deep_reveal_json.prompt ?? '',
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
+        locale,
       }));
     }
   }
@@ -1184,14 +1188,16 @@ app.post('/api/explain-move-llm', async (req, res) => {
       solver,
       model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
       userId: req.user?.id ?? null,
+      locale,
     });
 
     if (result.notABlunder) {
       // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
       return res.json(guardExplainMoveLlmPayload({
-        explanation: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
+        explanation: serverT(locale, 'notABlunder'),
         prompt: '',
         terms: {},
+        locale,
       }));
     }
 
@@ -1233,7 +1239,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       const kbId = termMatch[1];
       if (seenTermIds.has(kbId)) continue;
       seenTermIds.add(kbId);
-      const shortSummary = loadKBShortSummary(kbId);
+      const shortSummary = loadKBShortSummary(kbId, locale);
       if (shortSummary) termsMap[kbId] = shortSummary;
     }
 
@@ -1248,6 +1254,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: '',
         deep_reveal_json: { explanation, prompt, terms: termsMap },
         template_version: 'v3',
@@ -1259,7 +1266,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
     // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
     // future cache hit.
-    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap }));
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -3758,7 +3765,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
   // dereferences req.user.
 
   // Validate query params
-  const { moveString, col: colStr } = req.query;
+  const { moveString, col: colStr, lang } = req.query;
   if (!moveString || !/^[0-6]{0,42}$/.test(moveString)) {
     return res.status(400).json({ error: 'invalid moveString' });
   }
@@ -3772,13 +3779,19 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     return res.status(503).json({ error: 'internal error' });
   }
 
+  // `Audio(url)` cannot set a custom Accept-Language header — it sends the browser's
+  // language, which may differ from the app's selected language. So the caller passes
+  // the in-app locale explicitly via ?lang=; whitelist it and fall back to req.locale
+  // (derived from Accept-Language) otherwise.
+  const locale = resolveTtsLocale(lang, req.locale);
+
   try {
     // Look up explanation_cache
     const positionHash = createHash('sha256').update(`${moveString}:${col}`).digest('hex');
     const { data: cacheEntry, error: cacheErr } = await supabase
       .from('explanation_cache')
       .select('deep_reveal_json, audio_path')
-      .eq('position_hash', positionHash)
+      .match(buildCacheFilter(positionHash, locale))
       .maybeSingle();
 
     if (cacheErr) {
@@ -3881,7 +3894,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
             return supabase
               .from('explanation_cache')
               .update({ audio_path: audioPath, audio_generated_at: new Date().toISOString() })
-              .eq('position_hash', positionHash)
+              .match(buildCacheFilter(positionHash, locale))
               .then(({ error: updateErr }) => {
                 if (updateErr) {
                   console.error('[tts/deep-reveal] cache update error:', updateErr.message);

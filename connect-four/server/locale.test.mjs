@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLocale, serverT, SUPPORTED_LOCALES } from './locale.mjs';
+import { resolveLocale, serverT, SUPPORTED_LOCALES, resolveTtsLocale } from './locale.mjs';
 
 describe('resolveLocale', () => {
   it('defaults to en when header missing', () => {
@@ -28,5 +28,23 @@ describe('serverT', () => {
   });
   it('falls back to en for unknown locale', () => {
     expect(serverT('fr', 'notABlunder')).toMatch(/best track/i);
+  });
+});
+
+describe('resolveTtsLocale', () => {
+  it('uses the explicit ?lang= param when it is a supported locale', () => {
+    expect(resolveTtsLocale('es', 'en')).toBe('es');
+  });
+  it('falls back to the given fallback when lang is missing', () => {
+    expect(resolveTtsLocale(undefined, 'es')).toBe('es');
+  });
+  it('falls back to the given fallback when lang is unsupported', () => {
+    expect(resolveTtsLocale('fr', 'es')).toBe('es');
+  });
+  it('falls back to en by default when no fallback is passed', () => {
+    expect(resolveTtsLocale('fr')).toBe('en');
+  });
+  it('ignores non-string lang values', () => {
+    expect(resolveTtsLocale(['es', 'en'], 'en')).toBe('en');
   });
 });

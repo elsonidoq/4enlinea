@@ -31,6 +31,26 @@ export function localeMiddleware(req, _res, next) {
   next();
 }
 
+/**
+ * Resolve the locale for an endpoint that accepts an explicit `?lang=` query param
+ * in addition to the Accept-Language-derived req.locale.
+ *
+ * Needed for requests where the client cannot set a custom header (e.g. `new Audio(url)`,
+ * which always sends the browser's own language) — so the caller passes the in-app
+ * selected language explicitly via `?lang=`. The param is whitelisted against
+ * SUPPORTED_LOCALES; anything else (missing, unsupported, malformed) falls back to
+ * `fallbackLocale` (normally req.locale).
+ * @param {string|undefined} explicitLangParam
+ * @param {string} [fallbackLocale='en']
+ * @returns {'en'|'es'}
+ */
+export function resolveTtsLocale(explicitLangParam, fallbackLocale = DEFAULT_LOCALE) {
+  if (typeof explicitLangParam === 'string' && SUPPORTED_LOCALES.includes(explicitLangParam)) {
+    return explicitLangParam;
+  }
+  return fallbackLocale;
+}
+
 // Server-side user-facing strings that are NOT produced by the LLM.
 const STRINGS = {
   en: {
