@@ -208,7 +208,7 @@ Returns per-category miss rates for the authenticated user.
 
 ### `GET /api/coach/queue`
 
-Returns the authenticated user's blunders with server-computed threat cell locations.
+Returns the caller's blunders with server-computed threat cell locations. Authenticated callers are scoped by `user_id`. **Anonymous callers** (anon free deep reveal) are served their device-scoped blunders when a valid `device_uuid` UUID query param is present (scoped `device_uuid = <param> AND user_id IS NULL`); an anon request without a valid `device_uuid` gets `401`. Response shape is identical for both. Scoping decision: `server/anonBlunderAccess.js#resolveQueueOwner`.
 
 **Query params**:
 - `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
@@ -354,6 +354,8 @@ Provides a pre-move recommendation for the current board position.
 
 Explains a specific move the human just played (post-move reflection).
 
+**Auth**: authenticated OR anonymous. Anonymous is allowed (anon free deep reveal) and bounded only by the per-IP `5 req/min` limiter — it never touches `users.deep_reveal_count` (anon has no users row). Authenticated free-tier still decrements the weekly quota (429 when exceeded); paid unlimited. Quota decision: `server/anonBlunderAccess.js#resolveExplainQuota`. The client enforces the "one free anon reveal" separately in `localStorage` (`anon_deep_reveal_v1`); the server does not track anon usage.
+
 **Request body**: `{ movestring: string, col: number, rounds?: number }`
 - `movestring`: position **before** the human's move
 - `col`: 0-indexed column the human played
@@ -391,6 +393,8 @@ Explains a specific move the human just played (post-move reflection).
 ### `GET /api/user/tts/deep-reveal`
 
 Returns spoken (TTS) audio for a cached deep-reveal explanation. The client points an `<audio>` element at this endpoint. On a cache hit, the server redirects (302) to a signed Supabase Storage URL; on a miss, it streams OpenAI TTS audio directly while buffering for background upload to the cache.
+
+**Auth**: authenticated OR anonymous (anon free deep reveal — the anon "aha" reveal gets a coach voice too). The endpoint is keyed purely by the position hash (`moveString:col`), reads no user data, and `404`s when no explanation is cached, so anon access exposes nothing; it never dereferences `req.user`. (Note: an empty `moveString` — the opening move — `400`s for all callers, a pre-existing validation quirk.)
 
 **Query params**: `moveString=<0-indexed movestring>&col=<0-indexed column>`
 - `moveString`: position **before** the move (0–42 chars, digits 0–6)
@@ -439,6 +443,17 @@ Three invariants: (1) the DB helpers return `{ error }` rather than throwing —
   — this is a `WHERE id = $1 AND onboarding_status = 'not_encountered'` write, so an account that already has a real prior `seen`/`skipped` status (e.g. from a different device's earlier migration) is never clobbered by a fresh device's migrating value.
 - Absent or invalid `onboarding_status` is a **silent no-op** — it does not add an entry to `operations` and MUST NOT fail the rest of the migration (the other five data categories migrate independently of this one optional field, matching the endpoint's existing per-category tolerance).
 - Client side: `IndexedDBStore.migrateToSupabase` (`connect-four/src/store/IndexedDBStore.js`) reads a fresh `getProfile()` and includes `profile?.onboarding_status` in the POST body as one more key — the `profile` object store is not cleared by this method (only the other 5 stores are).
+
+**`device_uuid` games re-association (Feature 3 — onboarding follow-ups, spec 048 follow-up, 2026-07-13)**: the request body accepts an optional seventh key, `device_uuid` (the client's own uuid, sent from the same `getProfile()` read). Handling:
+- Anonymous sparring games are written directly to the `games` table by `POST /api/games` with `user_id: null`, keyed by `device_uuid` — they are **not** in IndexedDB. This step claims them for the account with one more entry in `operations`:
+  `supabase.from('games').update({ user_id: req.user.id }).eq('device_uuid', body.device_uuid).is('user_id', null)`
+- **Key on the client's `body.device_uuid`, NOT the endpoint's locally-derived `deviceUuid`** (invariant 2 above generates a fresh `device_uuid` for new users — that value would never match the anon game rows). This is the whole point of sending it in the body.
+- `WHERE user_id IS NULL` is `.is('user_id', null)` (not `.eq`), so only unclaimed rows are taken and the op is idempotent on client retry.
+- Absent or empty-string `device_uuid` is a **silent no-op** (guard: `typeof body.device_uuid === 'string' && body.device_uuid.length > 0`) — must not add an entry to `operations` or fail the rest of the migration.
+- Trust model: `device_uuid` is client-supplied, same as every other migrate payload field; the `user_id IS NULL` guard caps the blast radius to unclaimed orphan rows. `papergames_games` is intentionally NOT re-associated (no anon path creates those rows).
+- **Anon blunders re-associate the same way (anon free deep reveal, 2026-07-13)**: keyed on the same `body.device_uuid`, one more `operations` entry mirrors the games block exactly, only the table differs:
+  `supabase.from('blunders').update({ user_id: req.user.id }).eq('device_uuid', body.device_uuid).is('user_id', null)`
+  Anon blunders are written by `POST /api/games/analyze` (see below) with `user_id NULL` + `device_uuid`; this claims them so Past Games mistake-counts and stats (both `user_id`-scoped) light up post-signup with no further change.
 
 ## Move Evaluation Endpoint
 
@@ -617,6 +632,8 @@ All validation is bitboard-only — no solver calls.
 ### `POST /api/games/analyze`
 
 Scores every user ply in a completed game and returns a quality summary.
+
+**Auth / blunder writes**: no-auth (anonymous callers may analyze). It is also a **write** vector — it INSERTs `blunders` rows. Authenticated callers write rows under `user_id` (unchanged). **Anonymous callers on a device-scoped game** (anon free deep reveal) write rows with `user_id NULL` + `device_uuid` stamped from the fetched game row — decided by `server/anonBlunderAccess.js#resolveGameBlunderOwner`. Never compare `device_uuid` to `req.user.id` (different id namespaces — see `db-schema.md`). The ownership gate still 404s a signed-in caller passing another *user's* (non-null `user_id`) game.
 
 **Request body**: `{ gameId: string }`
 

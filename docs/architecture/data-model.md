@@ -37,6 +37,8 @@ Migration 051 added `quality text NOT NULL DEFAULT 'blunder' CHECK (quality IN (
 
 Slower wins (both scores positive) are never stored: the reason engine's case taxonomy treats `win_to_slower_win` as `notABlunder`, so a stored row would serve a contradictory "no better alternative" deep-reveal explanation. Stored rows are graded by solver score drop: `bestScore − playedScore > 4` → `'blunder'`, else `'suboptimal'` (same threshold precedent as `scoreMove`'s losing branch). `scoreMove`'s per-move `quality` is unchanged and still drives the analyze response's badges/counters — a ply can read `suboptimal` in the review timeline yet have no `blunders` row (ReviewScreen's `selectStep` falls back to a board preview for those). The aliveness gate is deliberately **not** the old `bestScore < 0` skip warned about above: solver-lost-but-alive positions (the norm for the second player) keep their mistakes stored; only truly dead positions are exempt.
 
+Migration 058 (anon free deep reveal) made `blunders.user_id` nullable and added `device_uuid`. The storage rule above is unchanged; only the **owner keying** differs. `server/anonBlunderAccess.js#resolveGameBlunderOwner(reqUser, game)` decides it: an authenticated caller → `{user_id, device_uuid: null}` (prior behavior, byte-identical); an anonymous caller on a device-scoped game → `{user_id: null, device_uuid: game.device_uuid}` (stamped from the already-fetched game row — **never** compare `device_uuid` to `req.user.id`). `POST /api/user/migrate` re-associates anon blunders by the client's `body.device_uuid` (`.is('user_id', null)`), so after sign-up they behave like any authenticated blunder and light up Past Games / stats (both `user_id`-scoped) with no further change. Anon dedup uses `idx_blunders_device_game_unique` (see `db-schema.md`) since the `user_id`-keyed unique index doesn't dedup NULL-user rows.
+
 ## Soft Delete
 
 **MUST**: Use `is_active boolean NOT NULL DEFAULT true` on `puzzles` for soft delete.
@@ -230,6 +232,8 @@ Migration: `031_deep_reveal_failures.sql`.
 Index: `(device_uuid, created_at DESC)` for per-device game listing (Epic 3b).
 RLS: Disabled (server accesses via service-role key).
 Grants: `GRANT SELECT, INSERT ON public.games TO anon, authenticated;`
+
+**Anonymous → account re-association (Feature 3, 2026-07-13):** an anonymous sparring game is inserted with `user_id: null`, keyed by `device_uuid`. On first sign-in, `POST /api/user/migrate` claims it: `UPDATE games SET user_id = <id> WHERE device_uuid = <client body.device_uuid> AND user_id IS NULL` — see the Migrate Endpoint section in `api-conventions.md`. The `(device_uuid, created_at DESC)` index also serves this WHERE. There is no `games` object store in IndexedDB; games are server-only (unlike `puzzle_attempts`/`lesson_progress`, which are replicated locally and migrate as row payloads).
 
 ## PaperGames Games (`papergames_games`)
 

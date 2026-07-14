@@ -123,6 +123,7 @@
 - [Speckit/epic scoping + scope-by-diff](feedback_speckit_epic_scoping.md) — plan vs speckit vs epic+manager sizing bars; hard algos stay in spec; scope is a diff you MEASURE, not a whole you imagine
 - [Polish epics pipeline](project_polish_epics_pipeline.md) — counts ALREADY include suboptimal; epic AND critique-agent premises both proved false
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
+- [Proportion process to change](feedback_proportion_process_to_change.md) — small additive skill/doc edit: skip the full writing-skills RED-baseline ceremony; validate by using it once on a real task
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; rg/fd/sg; don't pkill shared server; commit pre-existing WIP before SDD
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; handoff + AskUserQuestion gate patterns; never preview for prose/code options; ASCII diagrams
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md) — preserve existing component API unless the change strictly requires otherwise (CLAUDE.md-referenced)

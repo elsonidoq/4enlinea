@@ -636,7 +636,7 @@ This function MUST be called on both the first attempt and retry LLM output befo
 
 ## Game Blunder Writes (`insertGameBlunder`)
 
-`insertGameBlunder(supabase, row)` in `server/insertGameBlunder.js` is the sole write path for all blunders — post-game analysis, puzzle attempts, and papergames imports. The client no longer writes blunders directly.
+`insertGameBlunder(supabase, row)` in `server/insertGameBlunder.js` is the sole write path for all blunders — post-game analysis, puzzle attempts, and papergames imports. The client no longer writes blunders directly. As of migration 058 (anon free deep reveal) it writes when `row.user_id || row.device_uuid` (was `user_id`-only), so anonymous rows carry `user_id NULL` + `device_uuid`. The **owner decision** (user- vs device-scoped, or skip) is a separate pure, unit-tested module `server/anonBlunderAccess.js#resolveGameBlunderOwner(reqUser, game)` — the analyze handler calls it and passes the result's `user_id`/`device_uuid` into the row. `anonBlunderAccess.js` also exports `resolveQueueOwner` (coach-queue scoping) and `resolveExplainQuota` (whether the free-tier weekly quota runs) — the standard extract-decision-from-`index.js`-so-it's-unit-testable pattern, since `index.js` has no HTTP harness.
 
 The `row` shape:
 ```js

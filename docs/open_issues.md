@@ -473,3 +473,41 @@ Constraint: whatever the entry, it must not reintroduce a flash of the sparring 
 gesture, and must keep the anonymous-only auto-route semantics (`shouldAutoRouteToOnboarding`).
 Cross-ref: staging_checks.md Epic 8 "Coach greeting is actually AUDIBLE" item; `useCoachSpeech`
 unlock mechanism.
+
+## OI-22 — Anon post-game review re-analysis re-runs the solver (analyze cache-check is `user_id`-only)
+
+**Status**: deferred (accepted deviation from the anon-free-deep-reveal design §2; low impact, 2026-07-13)
+**Area**: `connect-four/server/index.js` — `POST /api/games/analyze` cache-check (`if (req.user) { … }` ~line 2097)
+**Discovered**: anon free deep reveal — final whole-branch review (2026-07-13)
+
+The analyze endpoint's "reconstruct from stored blunders instead of re-running the solver" cache-check
+is gated on `if (req.user)`, so an **anonymous** re-analysis of the same game (e.g. re-opening the
+review) always recomputes the full solver pass and re-inserts (deduped via `23505`). The design
+(`docs/superpowers/specs/2026-07-13-anon-free-deep-reveal-design.md` §2, bullet 3) recommended
+extending the cache-check to also short-circuit anon by `device_uuid`; it was **deliberately dropped**
+to keep the sensitive handler change minimal. Not a correctness bug — anon blunders are written
+correctly on first analyze (awaited before the response), so the subsequent coach/queue fetch sees
+them; this is purely a redundant-solver-cost issue, bounded by the `/api/` 120-req/min limiter and the
+fact that onboarding visits the review once.
+
+**If picked up**: generalize the cache-check owner filter — when `!req.user`, match
+`.eq('device_uuid', gameDeviceUuid).is('user_id', null)` (the `gameDeviceUuid` already captured for the
+write path), mirroring the authenticated branch. Cross-ref: [[project_anon_deep_reveal_gates]].
+
+## OI-23 — Deep-reveal TTS 400s on the opening move (empty movestring) for ALL users
+
+**Status**: deferred (pre-existing; surfaced during anon free deep reveal QA, 2026-07-13)
+**Area**: `connect-four/server/index.js` — `GET /api/user/tts/deep-reveal` param validation (`if (!moveString || …)`)
+**Discovered**: anon free deep reveal QA (2026-07-13)
+
+The TTS endpoint validates `if (!moveString || !/^[0-6]{0,42}$/.test(moveString))` → `400`. Because
+`!""` is `true`, an **empty** `moveString` (the opening move — a first-move blunder such as playing an
+edge column) is rejected, so its deep reveal renders text but is **silently voiceless** (the client's
+TTS fetch 400s). Affects authenticated and anonymous callers equally — the regex itself allows 0 chars
+(`{0,42}`), so only the `!moveString` truthiness guard is wrong for the empty-but-valid case. Low impact
+(only the very first ply, and only its spoken audio), which is why it went unnoticed until the anon
+onboarding reveal (whose first blunder is often the opening move) exposed it.
+
+**If picked up**: change the guard to `typeof moveString !== 'string' || !/^[0-6]{0,42}$/.test(moveString)`
+(accept the empty string), matching how `POST /api/explain-move-llm` already validates its `movestring`.
+Cross-ref: [[project_anon_deep_reveal_gates]].

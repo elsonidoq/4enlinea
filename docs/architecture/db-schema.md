@@ -216,7 +216,8 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`, `papergames_game_id`
 | Column | Type | Nullable | Default |
 |---|---|---|---|
 | id | uuid | NO | `gen_random_uuid()` |
-| user_id | uuid | NO | |
+| user_id | uuid | YES | |
+| device_uuid | text | YES | |
 | puzzle_id | uuid | YES | |
 | board_state | text | NO | |
 | move_played | integer | NO | |
@@ -233,7 +234,11 @@ FK: `user_id` → `users.id`, `puzzle_id` → `puzzles.id`, `papergames_game_id`
 | resolved_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
 
+`user_id` was made **nullable** and `device_uuid text` added by migration `058_blunders_device_uuid.sql` (anon free deep reveal). An anonymous onboarding user's blunders are written with `user_id NULL` + `device_uuid` set (mirrors `games`); `POST /api/user/migrate` re-keys them to `user_id` on sign-up. Authenticated rows keep `user_id` set, `device_uuid NULL`. The table stays backend-only (service-role writes; RLS unchanged).
+
 Indexes:
+- `idx_blunders_device_game_unique` — UNIQUE `(device_uuid, game_id, move_index) WHERE user_id IS NULL AND device_uuid IS NOT NULL AND game_id IS NOT NULL` (migration `058`). Dedups **anon** AI-sparring rows — the `idx_blunders_game_unique` below does NOT, because Postgres treats NULL `user_id` as distinct. AI-sparring only; no anon papergames index.
+- `idx_blunders_device_created` — `(device_uuid, created_at DESC) WHERE user_id IS NULL` (migration `058`) — anon coach-queue read path.
 - `idx_blunders_user_unresolved` — `(user_id, created_at) WHERE resolved_at IS NULL`
 - `idx_blunders_severity` — `(user_id, severity DESC) WHERE resolved_at IS NULL`
 - `idx_blunders_papergames_unique` — UNIQUE `(user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (deduplication per **user** + papergames game + ply; idempotent re-import). Re-scoped to include `user_id` by migration `053_papergames_ownership_and_blunder_index.sql` (was `(papergames_game_id, move_index)` before — a global index, ship alongside the `papergames_games` ownership fix above since each user now gets their own `papergames_game_id` for the same imported room, so `move_index` values legitimately repeat across users' rows for the same position).

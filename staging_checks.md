@@ -453,3 +453,40 @@ For each check record:
   - **Expected**: The migration is recorded in `schema_migrations` on the deployed DB before the
     anon free deep reveal feature is exercised in staging/production.
   - **Source**: Migration `058_blunders_device_uuid.sql` (anon free deep reveal feature).
+
+- [ ] **Anon free deep reveal — full flow on DEPLOYED staging (CSP live, deployed server).**
+  - **What**: In a genuinely clean signed-out session on staging (not local Vite dev), play an
+    onboarding game → review → click a mistake → open the ONE free deep reveal → open a *second*
+    (different) mistake and confirm the sign-up gate ("Sign in to unlock" → AuthModal) → sign up →
+    confirm the game + its blunders appear in Past Games and a signed-in reveal decrements the
+    normal weekly quota. Watch the DevTools console for zero CSP-violation messages throughout.
+  - **Why staging**: local dev verified this against the real remote Supabase DB, but with the
+    **CSP disabled** (Vite dev) and the server run locally, not the deployed build. The
+    CSP-live + deployed-server combination (and a truly fresh anon session) is only available in
+    staging.
+  - **Expected**: all steps pass; no CSP violations; DB shows anon blunders (`user_id NULL`,
+    `device_uuid` set) then re-keyed to the account after migrate.
+  - **Source**: anon free deep reveal feature; final whole-branch review 2026-07-13.
+
+- [ ] **Anon deep reveal has a COACH VOICE on a mid-game reveal.**
+  - **What**: On staging, with speech enabled, open an anon free deep reveal on a **non-opening**
+    blunder (non-empty movestring) and confirm audible TTS plays (not just rendered text).
+  - **Why staging**: local QA only smoke-tested the endpoint (confirmed anon no longer 401s: 404
+    without a cached explanation, 400 on the empty-movestring opening case) — actual audible
+    playback for an anon mid-game reveal was not driven end-to-end in the QA browser (which also
+    mis-handles autoplay per `project_app_qa_setup_gotchas`). Note OI-23: the **opening** move
+    (empty movestring) is voiceless for everyone by a pre-existing quirk.
+  - **Expected**: audible coach voice for a mid-game anon reveal; no console 401 from
+    `/api/user/tts/deep-reveal`.
+  - **Source**: anon free deep reveal, post-review fix #2 (commit 85ecc8d).
+
+- [ ] **Anon-reachable LLM/TTS cost is bounded on staging (rate-limit + trust-proxy parity).**
+  - **What**: Confirm staging has the same `trust proxy` + `express-rate-limit` config as prod, so
+    the per-IP `makeLimit(5)` on `/api/explain-move-llm` (and the `/api/` 120/min catch-all)
+    actually key on the real client IP for anonymous callers.
+  - **Why staging**: anon can now trigger the reasoning-model LLM (explain) and OpenAI TTS — a new
+    anon-reachable cost surface. `req.ip` correctness under a proxy is environment-specific
+    (`project_index_hardening_traps`); it can't be exercised locally.
+  - **Expected**: rate limiter caps anon per-IP as configured; a burst of anon reveal requests is
+    throttled, not unbounded.
+  - **Source**: anon free deep reveal (design decision: IP rate-cap, no server counter).
