@@ -53,7 +53,7 @@ function getQualityColor(quality) {
 
 export function ReviewScreen({ go, goBack, id, onboarding }) {
   const { t } = useTranslation();
-  const { session } = useStore();
+  const { session, store } = useStore();
 
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -146,18 +146,28 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
           : null;
         track('game_reviewed', { gameId: id, accuracy, blunderCount: data.blunderCount });
 
-        // Fire-and-forget: fetch game blunder list for ✕-node navigation, paged to completion
-        if (session) {
-          const queueParam = data.source === 'papergames'
+        // Fire-and-forget: fetch game blunder list for ✕-node navigation, paged to completion.
+        // Signed-in → user-scoped. Anonymous onboarding → device-scoped: append the client's
+        // device_uuid so the anon free deep reveal can open the blunder detail (approach a).
+        (async () => {
+          const queueBase = data.source === 'papergames'
             ? `papergames_game_id=${id}`
             : `game_id=${id}`;
-          fetchAllQueueBlunders(queueParam)
-            .then(blunders => {
-              const sorted = blunders.slice().sort((a, b) => a.moveIndex - b.moveIndex);
-              setGameBlunderList(sorted);
-            })
-            .catch(() => setGameBlunderList([]));
-        }
+          let queueParam = queueBase;
+          if (!session) {
+            const profile = await store.getProfile().catch(() => null);
+            const deviceUuid = profile?.device_uuid;
+            if (!deviceUuid) return; // cannot fetch anon queue without a device id
+            queueParam = `${queueBase}&device_uuid=${encodeURIComponent(deviceUuid)}`;
+          }
+          try {
+            const blunders = await fetchAllQueueBlunders(queueParam);
+            const sorted = blunders.slice().sort((a, b) => a.moveIndex - b.moveIndex);
+            setGameBlunderList(sorted);
+          } catch {
+            setGameBlunderList([]);
+          }
+        })();
       })
       .catch(() => {
         setError(t('sparring.reviewError'));
