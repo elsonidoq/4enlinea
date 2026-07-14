@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
+import { useStripePrices, formatPrice } from '../lib/useStripePrices.js';
 
 // Spec 045 US3 (contracts/upgrade-flow-frontend.md, T023) — additive: onUpgrade now
 // takes a plan ('monthly'|'annual') and two new uiState values exist
@@ -13,7 +14,8 @@ import { Icon } from './Icon.jsx';
 // activating/timeout into a still-mounted modal (e.g. a resumed session) — no
 // existing call site uses it today, so nothing here is a breaking change.
 export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const prices = useStripePrices();
   // idle | loading | success | activating | timeout
   const [internalUiState, setInternalUiState] = useState('idle');
   const uiState = controlledUiState ?? internalUiState;
@@ -120,25 +122,37 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
               display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 14,
               padding: 4, marginBottom: 14, gap: 4,
             }}>
-              {['monthly', 'annual'].map((plan) => (
-                <button
-                  key={plan}
-                  onClick={() => setSelectedPlan(plan)}
-                  disabled={uiState === 'loading'}
-                  aria-pressed={selectedPlan === plan}
-                  style={{
-                    flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none',
-                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 14,
-                    cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
-                    background: selectedPlan === plan ? '#fff' : 'transparent',
-                    color: selectedPlan === plan ? 'var(--ink)' : 'var(--ink-soft)',
-                    boxShadow: selectedPlan === plan ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
-                    transition: 'background .15s',
-                  }}
-                >
-                  {plan === 'monthly' ? t('upgrade.planMonthly', 'Monthly') : t('upgrade.planAnnual', 'Annual')}
-                </button>
-              ))}
+              {['monthly', 'annual'].map((plan) => {
+                const priceLabel = prices ? formatPrice(prices[plan], i18n.language) : '';
+                return (
+                  <button
+                    key={plan}
+                    onClick={() => setSelectedPlan(plan)}
+                    disabled={uiState === 'loading'}
+                    aria-pressed={selectedPlan === plan}
+                    style={{
+                      flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 14,
+                      cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
+                      background: selectedPlan === plan ? '#fff' : 'transparent',
+                      color: selectedPlan === plan ? 'var(--ink)' : 'var(--ink-soft)',
+                      boxShadow: selectedPlan === plan ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                      transition: 'background .15s',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                    }}
+                  >
+                    <span>{plan === 'monthly' ? t('upgrade.planMonthly', 'Monthly') : t('upgrade.planAnnual', 'Annual')}</span>
+                    {priceLabel && (
+                      <span style={{
+                        fontSize: 12, fontWeight: 700,
+                        color: selectedPlan === plan ? 'var(--disc-green)' : 'var(--ink-soft)',
+                      }}>
+                        {priceLabel}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <button

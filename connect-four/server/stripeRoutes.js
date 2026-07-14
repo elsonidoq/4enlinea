@@ -19,6 +19,22 @@ import { logError } from './logger.js';
  * @param {(import('./paymentProcessor.js').PaymentProcessor & { createPortalSession: Function }) | null} paymentProcessor
  */
 export function registerStripeRoutes(app, paymentProcessor) {
+  // GET /api/stripe/config — public: live display prices for the upgrade UI.
+  // Unauthenticated (the modal shows before checkout). Returns 503 when Stripe
+  // is not configured; the client degrades to the plain plan labels.
+  app.get('/api/stripe/config', async (req, res) => {
+    if (!paymentProcessor || typeof paymentProcessor.getPrices !== 'function') {
+      return res.status(503).json({ error: 'Payments not configured' });
+    }
+    try {
+      const prices = await paymentProcessor.getPrices();
+      res.json({ prices });
+    } catch (err) {
+      logError('[stripe/config]', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/stripe/create-checkout
   app.post('/api/stripe/create-checkout', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });

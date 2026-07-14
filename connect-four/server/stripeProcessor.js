@@ -69,6 +69,27 @@ export function createStripeProcessor({
     return { checkoutUrl: session.url };
   }
 
+  // ── getPrices — live display amounts for the two configured prices ─────────
+  // Reads the actual Stripe price objects so the upgrade UI never drifts from
+  // what we charge. Returns null for a plan whose price id is unset. Amounts are
+  // in the currency's minor unit (cents); the client formats them.
+  async function getPrices() {
+    async function describe(priceId) {
+      if (!priceId) return null;
+      const price = await stripeClient.prices.retrieve(priceId);
+      return {
+        amount: price.unit_amount,
+        currency: price.currency,
+        interval: price.recurring?.interval ?? null,
+      };
+    }
+    const [monthly, annual] = await Promise.all([
+      describe(monthlyPriceId),
+      describe(annualPriceId),
+    ]);
+    return { monthly, annual };
+  }
+
   // ── handleWebhook ────────────────────────────────────────────────────────
   async function handleWebhook(rawBody, signatureHeader) {
     // constructEvent throws on bad signature; the route maps that to 400.
@@ -157,5 +178,6 @@ export function createStripeProcessor({
     handleWebhook,
     getSubscriptionStatus,
     createPortalSession,
+    getPrices,
   };
 }
