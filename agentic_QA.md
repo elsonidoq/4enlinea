@@ -159,3 +159,46 @@ Auth: `🛠 Dev: skip auth` → anonymous user `d2752b6b-4b9e-450b-8242-bcb10a39
 - Skip re-confirming the persistence-downstream symptoms next time — they're proven to collapse into the index fix. Focus reruns on the stepper, permalink, and coach-queue-cap findings which are independent.
 - Board cells still lack `role`/`aria-label` — a gradient-aware board helper (or that a11y fix) would remove the screenshot dependency for highlight checks.
 - **DB state left:** single user `d2752b6b` = **paid**, papergames_id `69e773d36bf9938bffc1509a`, 50 games, 137 blunders (1 forced_block resolved), 3 explanation_cache rows. `puzzles` empty.
+
+---
+
+# Agentic QA — 2026-07-13 (feature-verification mode): Anonymous free deep reveal
+
+Run scope: **feature-verification** (`--feature docs/superpowers/plans/2026-07-13-anon-free-deep-reveal.md`) — acceptance-test the "anonymous free deep reveal" flow end-to-end, then adjacent-sweep the touched screens.
+DB state: **preserved** (not reset) — appended one new anonymous onboarding game.
+Precondition: genuine **logged-out first-run** (`session === null`, IndexedDBStore) via Settings → "Dev: clear IndexedDB & sign out". (NOT `Dev: skip auth`, which would create an authenticated session and bypass the logged-out path under test.)
+Environment: local dev, Chrome (chrome-devtools MCP), API server log at `/private/tmp/claude-501/-Users-elsonidoq-prog-cuatro-en-linea/f1a35aff-ac84-48ba-9cfd-7741bc45ecc4/scratchpad/devserver.log`
+Artifacts: anon game `c5844459-0323-4c18-ab76-f467095f97d5`, device_uuid `0010889c-1266-48c4-a4ae-c9acd89e47e0`, migrated account `90a4897f…`.
+
+## Acceptance criteria — verdict: 11/11 pass (after fixing 1 blocker found mid-run)
+
+| # | Criterion | Verdict | Evidence |
+|---|-----------|---------|----------|
+| 1 | Anon (session=null) plays onboarding game → review | ✅ | Reset → first-run → Start sparring → game-end auto-routed to `/game/<id>` review (Acc 25%, 1 blunder / 2 suboptimal) |
+| 2 | Anon blunder rows stored (user_id NULL, device_uuid set) | ✅ | DB: 3 rows for game, all `user_id:null`, `device_uuid:0010889c…`; game row also anon |
+| 3 | ReviewScreen fetches anon nav-list by device_uuid | ✅ | Network: `GET /api/coach/queue?game_id=…&device_uuid=0010889c…&limit=200` → 200 |
+| 4 | Mistake chip → blunder detail (`/blunder/:id`) | ✅ | Chip 1 → `/blunder/7ee530ec…`, "Move 1/8", "1 of 3", mark-reviewed hidden (anon) |
+| 5 | ONE free deep reveal opens + grounded explanation | ✅ | Reveal rendered centrality explanation for the opening edge move; no fabricated threats (empty board). `POST /api/explain-move-llm` succeeded for anon (no 401) |
+| 6 | Free reveal marked spent | ✅ | `localStorage.anon_deep_reveal_v1 = ":0"` after the reveal |
+| 7 | Second/different blunder → sign-up gate | ✅ | `/blunder/25fe3043…` (key `0103:0`) shows "Sign in to unlock", no reveal button |
+| 8 | Re-open the SAME revealed blunder → still free | ✅ | Back to `/blunder/7ee530ec…` (key `:0`) → "What should I have played?" present |
+| 9 | Sign in → game + blunders re-associated (migrate) | ✅ | `Dev: skip auth` → DB: game + all 3 blunders now `user_id:90a4897f…`, device_uuid retained |
+| 10 | Migrated game appears in Past Games | ✅ | Past Games lists "Lost · Jul 13 · Easy · **3 mistakes**" |
+| 11 | Signed-in deep reveal uses normal quota; no anon leak | ✅ | New user `tier:free, deep_reveal_count:0` before → **1** after one signed-in reveal (reset 2026-07-20). Anon reveal never touched it. Signed-in reveal for board `0103` named best "column 3" = stored `correct_move:2` (0-idx) — grounded |
+
+## Blocker found & FIXED during this run
+
+### [FIXED] Anon user cannot open the free deep reveal — `MistakeDetailScreen` trigger gated on `session`
+- **Severity:** blocker (feature non-functional for its target user)
+- **Area / code:** `connect-four/src/screens/MistakeDetailScreen.jsx` (deep-reveal trigger, ~line 500)
+- **Repro:** anon (logged-out) onboarding game → review → click a mistake → blunder detail. Observed: only "Sign in to unlock" (a static `<div>`); no "What should I have played?" trigger. The pane — which enforces the anon 1-free gate (Task 10) — was never opened.
+- **Root cause:** the trigger was `{session ? <reveal button> : <"Sign in to unlock">}`. The plan's Task 10 fixed the gate *inside* `DeepRevealPane`, but with approach (a) (the real `MistakeDetailScreen`) the **trigger** is the actual entry point, and it was `session`-only — a 4th gate the plan didn't enumerate.
+- **Fix (commit `aed72a9`):** gate the trigger on `session || canRevealAnon(\`${blunder.board_state || ''}:${blunder.move_played}\`)` (same key the pane uses), so anon sees the trigger while their free reveal is unused/re-opening the same one, then falls through to the existing sign-in gate once spent. Re-verified live: criteria 5–8 all pass.
+
+## Minor (adjacent) — logged, not fixed
+- **[minor] Spent-reveal "Sign in to unlock" is not actionable.** On a gated (second) blunder the anon user sees a static "Sign in to unlock" label that is not a button — it does not open the AuthModal, so there's no sign-up affordance from that screen (the design intended "second click → sign-up gate → AuthModal"). Sign-up is still reachable via the onboarding Continue → import-offer flow and via Stats/Home CTAs, so this is UX polish, not a blocker. Suggested: make that label a button that opens `AuthModal` with the `auth.deepRevealGate` reason (MistakeDetailScreen would need to import AuthModal + an authOpen state). Area: `MistakeDetailScreen.jsx` ~line 522-538.
+- **[minor, pre-existing] Stored blunder `quality` vs badge `quality` mismatch** — review badge showed "1 Blunder / 2 Suboptimal" but all 3 stored rows are `quality:'suboptimal'` (score-drop grading differs from scoreMove badge grading). Known/intended per `project_mistake_storage_rule`; noted for completeness, not a defect of this feature.
+
+## Notes
+- Deep-reveal grounding was checked on 2 real positions (opening `:0`, mid-game `0103:0`); both explanations were sound centrality reasoning consistent with the solver's stored `correct_move`, with no fabricated threats. The QA browser's disc mis-render caveat (`project_app_qa_setup_gotchas`) did not affect this since grounding was cross-checked against DB `correct_move` + the solver, not rendered discs.
+- Server-side anon paths were also smoke-tested via curl before the browser run: coach/queue anon (200 with device_uuid / 401 without), explain-move-llm anon (no 401; a 500 seen was only an invalid-position test input, not a `req.user` null-deref).
