@@ -12,6 +12,7 @@ const STATUS_LABELS = {
 const STATUS_ORDER = ['awaiting_approval', 'needs_audio', 'approved', 'ineligible'];
 
 const TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
+const TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
 
 function StatusBadge({ status, reason }) {
   const colors = {
@@ -73,6 +74,7 @@ export function AdminAudioPage() {
   const [speed, setSpeed] = useState('1.0');
   const [speedError, setSpeedError] = useState('');
   const [voice, setVoice] = useState('alloy');
+  const [model, setModel] = useState('gpt-4o-mini-tts');
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptSaved, setPromptSaved] = useState(false);
   const [lang, setLang] = useState('en');
@@ -102,6 +104,7 @@ export function AdminAudioPage() {
         setPrompt(j.prompt || '');
         setSpeed(String(j.speed ?? 1.0));
         setVoice(j.voice || 'alloy');
+        setModel(j.model || 'gpt-4o-mini-tts');
       })
       .catch(() => {});
   }, []);
@@ -124,7 +127,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice }),
+        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice, model }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setPromptSaved(true);
@@ -303,6 +306,30 @@ export function AdminAudioPage() {
             >
               {TTS_VOICES.map(v => (
                 <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+              Model
+            </label>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'var(--surface-2)',
+                color: 'var(--text)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {TTS_MODELS.map(m => (
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>

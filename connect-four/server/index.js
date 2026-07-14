@@ -47,6 +47,7 @@ import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fe
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
 import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
+import { buildTtsInstructions } from './ttsInstructions.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
 
@@ -3504,6 +3505,11 @@ function resolveCoachText(key, lang) {
 }
 
 const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
+// gpt-4o-mini-tts is the default: it's the only model that honors the `instructions`
+// field (tts-1/tts-1-hd ignore it and always speak with a baked-in American-English
+// accent, regardless of the input text's language).
+const VALID_TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
+const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
 
 function readTtsConfig() {
   try {
@@ -3512,14 +3518,15 @@ function readTtsConfig() {
       prompt: data.prompt || '',
       speed: typeof data.speed === 'number' ? data.speed : 1.0,
       voice: VALID_TTS_VOICES.includes(data.voice) ? data.voice : 'alloy',
+      model: VALID_TTS_MODELS.includes(data.model) ? data.model : DEFAULT_TTS_MODEL,
     };
   } catch {
-    return { prompt: '', speed: 1.0, voice: 'alloy' };
+    return { prompt: '', speed: 1.0, voice: 'alloy', model: DEFAULT_TTS_MODEL };
   }
 }
 
-function writeTtsConfig(prompt, speed, voice) {
-  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice }, null, 2) + '\n', 'utf8');
+function writeTtsConfig(prompt, speed, voice, model) {
+  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice, model }, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -3572,9 +3579,9 @@ app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   res.json(readTtsConfig());
 });
 
-// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice)
+// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice + model)
 app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
-  const { prompt, speed, voice } = req.body;
+  const { prompt, speed, voice, model } = req.body;
   if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt must be a string' });
   const parsedSpeed = parseFloat(speed);
   if (isNaN(parsedSpeed) || parsedSpeed < 0.25 || parsedSpeed > 4.0) {
@@ -3583,7 +3590,11 @@ app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   if (!VALID_TTS_VOICES.includes(voice)) {
     return res.status(400).json({ error: `voice must be one of: ${VALID_TTS_VOICES.join(', ')}` });
   }
-  writeTtsConfig(prompt, parsedSpeed, voice);
+  const resolvedModel = model === undefined ? DEFAULT_TTS_MODEL : model;
+  if (!VALID_TTS_MODELS.includes(resolvedModel)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_TTS_MODELS.join(', ')}` });
+  }
+  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel);
   res.json({ ok: true });
 });
 
@@ -3640,9 +3651,10 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
-    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed}`);
-    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, lang);
+    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
     writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
@@ -3670,14 +3682,15 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, lang);
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
     let generated = 0;
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed} model=${model})`);
 
     for (const entry of needsAudio) {
       try {
@@ -3687,7 +3700,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
           continue;
         }
 
-        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
+        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
         writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
@@ -3859,7 +3872,8 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     }
 
     const { synthesizeStream } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, locale);
 
     let ttsResponse;
     try {
@@ -3867,6 +3881,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
         instructions: instructions || undefined,
         speed,
         voice,
+        model,
       });
     } catch (ttsErr) {
       console.error('[tts/deep-reveal] OpenAI TTS error:', ttsErr.message);

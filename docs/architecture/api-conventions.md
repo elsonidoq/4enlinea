@@ -8,6 +8,8 @@
 **MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
 **MUST**: Authenticated user-data routes use `/api/user/<resource>` (e.g., `/api/user/profile`, `/api/user/streak`). Established in spec 030; full endpoint contracts at `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
+**Stable core routes — keep the contract stable, don't rename/remove.** `GET /api/ping` (health check, `server/index.js`), `POST /api/scores`, and `POST /api/explain` are long-lived primitives depended on across the app (sparring calls `/api/scores?difficulty`, the column-score overlay calls `/api/explain`, uptime checks hit `/api/ping`). Extend them additively if needed, but do not change their paths, methods, or existing response shapes.
+
 ## Error Response Shape
 
 **MUST**: All error responses use `{ "error": "<message string>" }` with no other keys.
@@ -428,7 +430,7 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 
 **Errors**: 400 (invalid params), 401 (unauthenticated), 404 (no explanation cached), 500 (internal), 502 (OpenAI TTS service error), 503 (Supabase not configured / `OPENAI_API_KEY` missing).
 
-**TTS config**: Uses the same voice, speed, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`).
+**TTS config**: Uses the same voice, speed, model, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`, which now also carries a `model` field, default `'gpt-4o-mini-tts'` — the only OpenAI TTS model that honors the `instructions` field; `tts-1`/`tts-1-hd` ignore it and always speak with an American-English accent). Per-language instructions are built via `buildTtsInstructions(basePrompt, lang)` (`server/ttsInstructions.mjs`), which appends a Spanish-accent directive for `lang === 'es'` so Spanish text isn't read with an English accent.
 
 **Rate limit**: 120 req/min (default `/api/` bucket). No additional rate limiting.
 
