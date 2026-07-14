@@ -44,6 +44,7 @@ import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
+import { localeMiddleware } from './locale.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -131,6 +132,7 @@ app.use(helmet({
 // Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
+app.use(localeMiddleware);
 app.use(cookieParser());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
