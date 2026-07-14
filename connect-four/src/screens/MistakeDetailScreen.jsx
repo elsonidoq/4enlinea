@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
+import { AuthModal } from '../components/AuthModal.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -29,6 +30,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
   const [highlightCol, setHighlightCol] = useState(null);
   const [zhCells, setZhCells] = useState([]);
   const [deepRevealOpen, setDeepRevealOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [coldNavList, setColdNavList] = useState(null);
   const [coldBootState, setColdBootState] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'not_found' | 'error'
 
@@ -524,21 +526,32 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             {t('mistakes.detail.whatShouldIHave')}
           </button>
         ) : (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            padding: '13px 20px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 14,
-            fontWeight: 700,
-            border: '1.5px solid var(--line)',
-            color: 'var(--ink-soft)',
-            fontFamily: 'inherit',
-          }}>
+          <button
+            onClick={() => setAuthOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              padding: '13px 20px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 14,
+              fontWeight: 700,
+              border: '1.5px solid var(--line)',
+              background: 'transparent',
+              color: 'var(--ink-soft)',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
             {t('mistakes.detail.signInToUnlock', 'Sign in to unlock')}
-          </div>
+          </button>
+        )}
+        {authOpen && (
+          <AuthModal
+            onClose={() => setAuthOpen(false)}
+            reason={t('auth.deepRevealGate')}
+          />
         )}
 
         {/* Mark as reviewed */}

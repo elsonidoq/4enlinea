@@ -3719,8 +3719,11 @@ app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
 // Cache hit: 302 redirect to signed Supabase Storage URL.
 // Cache miss: streams OpenAI TTS directly to client, buffers for background upload.
 app.get('/api/user/tts/deep-reveal', async (req, res) => {
-  // Auth gate (401)
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+  // Anonymous allowed: the anon onboarding user's ONE free deep reveal should have
+  // a coach voice too. This endpoint is keyed purely by the position hash
+  // (moveString:col) and requires an already-cached explanation (404 otherwise),
+  // so it exposes no user data and is bounded by the /api/ rate limiter. It never
+  // dereferences req.user.
 
   // Validate query params
   const { moveString, col: colStr } = req.query;
