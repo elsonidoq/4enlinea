@@ -1,7 +1,7 @@
 # Coach creation-pattern praise: transition-gating design
 
 **Date**: 2026-07-14
-**Status**: design approved (pending written-spec review)
+**Status**: IMPLEMENTED 2026-07-14 (plan: docs/superpowers/plans/2026-07-14-coach-creation-pattern-transition.md)
 **Area**: `connect-four/server/classifier.js` (`classify()`), consumed by `POST /api/evaluate-move` (`server/evaluateMoveHandler.js`)
 
 ## Problem
@@ -66,17 +66,27 @@ no schema change, no API-shape change, no frontend change.
 ## Behavior when a pattern is suppressed
 
 No silence mechanism is needed. When a creation tag is suppressed, `classify()` continues down its
-existing priority chain and lands on `best_move` / `drawing_move`. Those tags have **no `coach.*`
-phrase pool**, so `pickFromPool` returns `null`, `evaluateMoveHandler` returns
+existing priority chain and lands on `best_move` / `drawing_move` / `suboptimal_move`. Those tags
+have **no `coach.*` phrase pool**, so `pickFromPool` returns `null`, `evaluateMoveHandler` returns
 `coachPhraseKey: null`, and the frontend's existing fallback (`useGameBoard.js:284–288`) speaks a
-generic `coach.generic.<quality>` line ("Nice move") — exactly what every other optimal move without
-a special pattern already gets. Consistent, and requires no client change.
+generic `coach.generic.<quality>` line — exactly what every other move without a special pattern
+already gets. Consistent, and requires no client change.
+
+Note on which generic line actually fires: `scoreMove`'s `quality` (not `classify`'s tag) drives the
+choice between `coach.generic.optimal` and `coach.generic.suboptimal`. Holding a *standing* double
+threat or forced win, the solver-max move is usually to cash one of the wins now (which triggers
+`immediate_threat`/a win, not a suppressed "persist"). So a move that *leaves the pattern standing*
+is, by construction, typically sub-max — the suppressed case therefore usually falls through to
+`coach.generic.suboptimal` ("Not bad, but there was a sharper move"), a mild nudge, not praise. This
+is still correct and truthful (the move genuinely is sub-max), but it is not the "Nice move" praise
+line; do not assume `coach.generic.optimal` is what fires.
 
 Worked example (transition-only, per the approved repeat rule):
 
 ```
 Move 10: user creates a double threat (absent → present)  → "Perfect — you created the double threat."
-Move 12: double threat still on board (present → present)  → "Nice move."  (generic fallback)
+Move 12: double threat still on board (present → present), move is sub-max → "Not bad, but there was
+         a sharper move." (generic.suboptimal fallback — no false "you created" claim)
 Move 14: opponent blocked it; user re-creates it (absent → present) → "Perfect — you created ..." (again)
 ```
 
@@ -134,8 +144,20 @@ prove the fix does not over-suppress genuine praise.
 - **Extra pre-move evaluation**: one additional `hasDoubleThreat` / `hasForcedWin` call on the
   pre-move board per `classify()` invocation. These are geometry-only (no solver call), so the cost
   is negligible.
-- **Consumer audit**: grep `classify(` callers before merge to confirm nothing depends on
-  `patternTag === 'double_threat'` / `'forced_win'` firing on a *persisting* pattern. Puzzle paths
-  pass an explicit `category`, which overrides `patternTag` for the phrase pool
-  (`evaluateMoveHandler.js:90`), so puzzle scoring is unaffected. The change only makes the live
-  `patternTag` more accurate (fires on creation, not on mere presence), which is the intent.
+- **Consumer audit**: `classify()` has more callers than the puzzle handlers. Puzzle paths pass an
+  explicit `category`, which overrides `patternTag` for the phrase pool (`evaluateMoveHandler.js:90`),
+  so puzzle scoring is unaffected. But two other callers are NOT shielded by an explicit `category`
+  and DO change behavior under this fix:
+  - `server/index.js:1091` — `POST /api/explain-move`. No `category` is passed, so
+    `patternTag = classify(...).tag` feeds `composeExplanation()` directly. After the fix, a move
+    that merely maintains (rather than creates) a double threat or forced win will produce a
+    different, more generic explanation here instead of the pattern-specific one. This is a live,
+    user-facing behavior change in the same (correct) direction as the fix; verify it manually
+    before merging (see plan Task 3).
+  - `server/candidate-generator.js:607` — pushes `cls.tag` into puzzle-generation metadata. Its test
+    (`candidate-generator.test.js`) is excluded from `npm run test:fast` per CLAUDE.md (it calls the
+    real solver and can hang), so this path is **not covered** by the plan's test gate; treat it as
+    an accepted, unverified-by-CI risk in the same low-severity direction as the fix.
+  The change only makes `patternTag` more accurate everywhere it is derived (fires on creation, not
+  on mere presence), which is the intent — but it does reach these two additional call sites, not
+  just the intended coach path.
