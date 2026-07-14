@@ -34,6 +34,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import { createAttemptRefresh } from './authRefresh.js';
 import { USER_PROFILE_SELECT_COLUMNS, defaultUserProfile } from './userHelpers.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+import i18nTranslationsEs from '../src/i18n/es.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
@@ -44,7 +45,9 @@ import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
-import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
+import { localeMiddleware, serverT, resolveTtsLocale, SUPPORTED_LOCALES } from './locale.mjs';
+import { resolveAdminLang } from './adminAudioLang.mjs';
+import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -3474,10 +3477,31 @@ function keyToAudioSlug(key) {
   return key.replace(/[._]/g, '--');
 }
 
-const TTS_REGISTRY_PATH = join(__dirname, 'tts-registry.json');
-const TTS_AUDIO_DIR = join(__dirname, '../public/audio/coach');
-const TTS_MANIFEST_PATH = join(TTS_AUDIO_DIR, 'coach-audio-manifest.json');
 const TTS_PROMPT_PATH = join(__dirname, 'tts-prompt.json');
+
+// Coach text source per language, keyed by the same `lang` values threaded
+// through the admin audio endpoints below.
+const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
+
+/**
+ * Resolve a dot-path i18n key ("coach.foo.bar") to its string value for a
+ * given language. Returns '' if the key is missing, non-string, or lang is
+ * unsupported (never throws).
+ * @param {string} key
+ * @param {string} lang
+ * @returns {string}
+ */
+function resolveCoachText(key, lang) {
+  const source = COACH_SOURCES[lang] || COACH_SOURCES.en;
+  try {
+    const parts = key.split('.');
+    let node = source;
+    for (const p of parts) node = node[p];
+    return typeof node === 'string' ? node : '';
+  } catch {
+    return '';
+  }
+}
 
 const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
 
@@ -3520,26 +3544,27 @@ function stripAnnotationsForTTS(raw) {
     .trim();
 }
 
-function readTtsRegistry() {
+function readTtsRegistry(lang = 'en') {
   try {
-    return JSON.parse(readFileSync(TTS_REGISTRY_PATH, 'utf8'));
+    return JSON.parse(readFileSync(registryPathForLang(lang), 'utf8'));
   } catch {
     return [];
   }
 }
 
-function writeTtsRegistry(entries) {
-  mkdirSync(dirname(TTS_REGISTRY_PATH), { recursive: true });
-  writeFileSync(TTS_REGISTRY_PATH, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+function writeTtsRegistry(entries, lang = 'en') {
+  const registryPath = registryPathForLang(lang);
+  mkdirSync(dirname(registryPath), { recursive: true });
+  writeFileSync(registryPath, JSON.stringify(entries, null, 2) + '\n', 'utf8');
 }
 
-function writeTtsManifest(entries) {
+function writeTtsManifest(entries, lang = 'en') {
   const slugs = entries
     .filter(e => e.status === 'approved')
     .map(e => e.slug)
     .sort();
-  mkdirSync(TTS_AUDIO_DIR, { recursive: true });
-  writeFileSync(TTS_MANIFEST_PATH, JSON.stringify(slugs, null, 2) + '\n', 'utf8');
+  mkdirSync(audioDirForLang(lang), { recursive: true });
+  writeFileSync(manifestPathForLang(lang), JSON.stringify(slugs, null, 2) + '\n', 'utf8');
 }
 
 // GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
@@ -3565,21 +3590,16 @@ app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
 // GET /api/admin/audio/status — grouped key list for the admin page
 app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
   try {
-    const registry = readTtsRegistry();
+    const lang = resolveAdminLang(req.query.lang);
+    const registry = readTtsRegistry(lang);
     const approved = [];
     const awaiting = [];
     const needs = [];
     const ineligible = [];
 
     for (const entry of registry) {
-      // Resolve the i18n key to its English text for preview
-      let text = '';
-      try {
-        const parts = entry.key.split('.');
-        let node = i18nTranslations;
-        for (const p of parts) node = node[p];
-        text = typeof node === 'string' ? node : '';
-      } catch { /* key not found in en.json */ }
+      // Resolve the i18n key to its language-specific text for preview
+      const text = resolveCoachText(entry.key, lang);
 
       const item = { key: entry.key, slug: entry.slug, text, status: entry.status, reason: entry.reason || null, generated_at: entry.generated_at || null, approved_at: entry.approved_at || null };
 
@@ -3605,32 +3625,31 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ error: 'key is required' });
   }
+  const lang = resolveAdminLang(req.body?.lang);
 
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const entry = registry.find(e => e.key === key);
     if (!entry) return res.status(404).json({ error: 'key not found in registry' });
     if (entry.status === 'ineligible') return res.status(400).json({ error: `key is ineligible: ${entry.reason}` });
 
-    // Resolve text from en.json
-    const parts = key.split('.');
-    let node = i18nTranslations;
-    for (const p of parts) node = node[p];
-    const text = typeof node === 'string' ? node : null;
+    // Resolve text from the language's i18n source
+    const text = resolveCoachText(key, lang) || null;
     if (!text || text.includes('{{')) {
       return res.status(400).json({ error: 'key has interpolated text or is missing' });
     }
 
     const { synthesize } = await import('./ttsProvider.js');
     const { prompt: instructions, speed, voice } = readTtsConfig();
-    console.log(`[admin/audio/generate] key=${key} voice=${voice} speed=${speed}`);
+    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed}`);
     const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
-    mkdirSync(TTS_AUDIO_DIR, { recursive: true });
-    writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+    const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
 
     entry.status = 'awaiting_approval';
     entry.generated_at = new Date().toISOString();
-    writeTtsRegistry(registry);
+    writeTtsRegistry(registry, lang);
 
     res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
   } catch (err) {
@@ -3641,8 +3660,9 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
 
 // POST /api/admin/audio/generate-all — synthesize all needs_audio keys
 app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const needsAudio = registry.filter(e => e.status === 'needs_audio');
 
     if (needsAudio.length === 0) {
@@ -3651,25 +3671,24 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
 
     const { synthesize } = await import('./ttsProvider.js');
     const { prompt: instructions, speed, voice } = readTtsConfig();
+    const audioDir = audioDirForLang(lang);
     let generated = 0;
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (voice=${voice} speed=${speed})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed})`);
 
     for (const entry of needsAudio) {
       try {
-        const parts = entry.key.split('.');
-        let node = i18nTranslations;
-        for (const p of parts) node = node[p];
-        const text = typeof node === 'string' ? node : null;
+        const text = resolveCoachText(entry.key, lang) || null;
         if (!text || text.includes('{{')) {
           failed.push({ key: entry.key, error: 'interpolated or missing text' });
           continue;
         }
 
         const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
-        writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+        mkdirSync(audioDir, { recursive: true });
+        writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
         generated++;
@@ -3681,7 +3700,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
       }
     }
 
-    writeTtsRegistry(registry);
+    writeTtsRegistry(registry, lang);
     res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
   } catch (err) {
     logError('[admin/audio/generate-all]', err);
@@ -3695,9 +3714,10 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ error: 'key is required' });
   }
+  const lang = resolveAdminLang(req.body?.lang);
 
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const entry = registry.find(e => e.key === key);
     if (!entry) return res.status(404).json({ error: 'key not found in registry' });
     if (entry.status === 'ineligible') return res.status(400).json({ error: 'ineligible keys cannot be approved' });
@@ -3705,8 +3725,8 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
     entry.status = 'approved';
     entry.approved_at = new Date().toISOString();
-    writeTtsRegistry(registry);
-    writeTtsManifest(registry);
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
 
     res.json({ key, slug: entry.slug, status: 'approved' });
   } catch (err) {
@@ -3717,8 +3737,9 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
 // POST /api/admin/audio/approve-all — approve all awaiting_approval keys
 app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const awaiting = registry.filter(e => e.status === 'awaiting_approval');
 
     if (awaiting.length === 0) {
@@ -3730,8 +3751,8 @@ app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
       entry.approved_at = new Date().toISOString();
     }
 
-    writeTtsRegistry(registry);
-    writeTtsManifest(registry);
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
 
     res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
   } catch (err) {
@@ -3747,7 +3768,8 @@ app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
   if (!/^[a-zA-Z0-9--]+$/.test(slug)) {
     return res.status(400).json({ error: 'invalid slug' });
   }
-  const filePath = join(TTS_AUDIO_DIR, `${slug}.mp3`);
+  const lang = resolveAdminLang(req.query.lang);
+  const filePath = join(audioDirForLang(lang), `${slug}.mp3`);
   if (!existsSync(filePath)) {
     return res.status(404).json({ error: 'audio file not found' });
   }
