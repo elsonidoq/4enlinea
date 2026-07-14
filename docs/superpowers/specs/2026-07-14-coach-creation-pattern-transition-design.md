@@ -146,18 +146,37 @@ prove the fix does not over-suppress genuine praise.
   is negligible.
 - **Consumer audit**: `classify()` has more callers than the puzzle handlers. Puzzle paths pass an
   explicit `category`, which overrides `patternTag` for the phrase pool (`evaluateMoveHandler.js:90`),
-  so puzzle scoring is unaffected. But two other callers are NOT shielded by an explicit `category`
-  and DO change behavior under this fix:
+  so puzzle scoring is unaffected. A final whole-branch review found the audit below (originally
+  two callers) under-counted the unshielded set; it is now five production call sites plus one
+  diagnostic script:
   - `server/index.js:1091` — `POST /api/explain-move`. No `category` is passed, so
     `patternTag = classify(...).tag` feeds `composeExplanation()` directly. After the fix, a move
     that merely maintains (rather than creates) a double threat or forced win will produce a
     different, more generic explanation here instead of the pattern-specific one. This is a live,
     user-facing behavior change in the same (correct) direction as the fix; verify it manually
-    before merging (see plan Task 3).
+    before merging (see plan Task 3). **Unshielded.**
+  - `server/index.js:1777` — `POST /api/evaluate-move/inline`. The phrase pool IS
+    category-shielded (`phrasePoolKey = category || patternTag` at `index.js:1786`), so
+    `coachPhraseKey`/`summaryLineKey` are unaffected. BUT the raw `patternTag` is still returned
+    verbatim in the response JSON (`index.js:1800`), so a client reading `patternTag` directly on a
+    persisting-pattern move now gets a generic/null tag instead of `double_threat`/`forced_win`.
+    Same-direction, low-severity. **Shielded for phrase selection, unshielded for the raw
+    `patternTag` field.**
+  - `server/index.js:3148` — `GET /api/admin/scores` (localhost-only, gated by
+    `requireLocalhost`). Surfaces the tag with no shielding at all:
+    `classifier_tags: classResult?.tag ? [classResult.tag] : []` (`index.js:3170`) — there is no
+    `category` override here, so this endpoint's output genuinely changes. This is a third
+    unshielded consumer; the audit's earlier "only explain-move and candidate-generator are
+    unshielded" claim was incomplete. Localhost-only admin diagnostics, same-direction,
+    low-severity. **Unshielded.**
   - `server/candidate-generator.js:607` — pushes `cls.tag` into puzzle-generation metadata. Its test
     (`candidate-generator.test.js`) is excluded from `npm run test:fast` per CLAUDE.md (it calls the
     real solver and can hang), so this path is **not covered** by the plan's test gate; treat it as
-    an accepted, unverified-by-CI risk in the same low-severity direction as the fix.
+    an accepted, unverified-by-CI risk in the same low-severity direction as the fix. **Unshielded.**
+  - `server/scripts/diagnose_blunders.mjs:168` — diagnostic script (non-production), logs
+    `classifyResult.tag` to the console for manual blunder inspection. Same-direction, no
+    production impact.
   The change only makes `patternTag` more accurate everywhere it is derived (fires on creation, not
-  on mere presence), which is the intent — but it does reach these two additional call sites, not
-  just the intended coach path.
+  on mere presence), which is the intent — but it does reach these five production call sites (plus
+  one diagnostic script), not just the intended coach path. The unshielded set is: `explain-move`,
+  `evaluate-move/inline`'s raw `patternTag` field, `admin/scores`, and `candidate-generator`.
