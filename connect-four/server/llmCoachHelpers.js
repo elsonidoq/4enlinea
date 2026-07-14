@@ -13,11 +13,10 @@ import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { callOpenAIChat } from './llmChat.js';
+import { KB_DIR } from './kbDir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const KB_DIR = join(__dirname, '../../docs/knowledge-base');
 
 // Score tier ordering for table sort (lower index = better for current player)
 export const TIER_ORDER = {

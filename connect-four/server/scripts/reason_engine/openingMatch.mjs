@@ -13,15 +13,9 @@
  * (per CLAUDE.md / reason-INVARIANTS I10).
  */
 
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { readFileSync } from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// connect-four/server/scripts/reason_engine -> repo root -> docs/knowledge-base
-const KB_DIR = join(__dirname, '../../../../docs/knowledge-base');
+import { KB_DIR } from '../../kbDir.js';
 
 const CENTRAL_COLUMN_FAMILY = 'central-column opening';
 const FIRST_ROW_FAMILY = 'first-row opening';
