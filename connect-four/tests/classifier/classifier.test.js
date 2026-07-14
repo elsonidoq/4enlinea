@@ -235,6 +235,27 @@ describe('detectForcedWin()', () => {
   });
 });
 
+describe('classify() forced_win transition gating', () => {
+  // Persisting forced win: P2 already has a forcing chain (detectForcedWin(pre) = true) and plays
+  // a maintaining move (col1) instead of cashing it. Pre-fix classify tagged this forced_win;
+  // post-fix it must not. NOTE: on this board the maintaining move is solver-suboptimal (score
+  // -4), so it correctly falls through to suboptimal_move — maintaining a forcing chain rather
+  // than advancing it is usually the sub-optimal line, which is why a *positive-score* persisting
+  // forced_win is rare in real play.
+  test('662345230545562635000001111212246 col1 → NOT forced_win (forced win already present)', () => {
+    const result = classify('662345230545562635000001111212246', 1, [-1000, -4, -1000, 5, -4, -4, -4]);
+    assert.notEqual(result.tag, 'forced_win');
+    assert.equal(result.tag, 'suboptimal_move');
+  });
+
+  // Regression: a move that ESTABLISHES the forcing chain (absent before, present after) still
+  // fires. On '662345230545562635000001', P1's col6 (score 6 = max) opens the forcing chain.
+  test('662345230545562635000001 col6 → forced_win (newly established — regression)', () => {
+    const result = classify('662345230545562635000001', 6, [-1000, -9, 9, -9, -9, -9, 6]);
+    assert.equal(result.tag, 'forced_win');
+  });
+});
+
 // SC-002: classify() constructs Board exactly once (no direct parseBoardState calls)
 describe('SC-002: classify() single Board construction', () => {
   test('classify() body contains zero parseBoardState calls', () => {

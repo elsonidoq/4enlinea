@@ -698,7 +698,10 @@ export function classify(moves, candidateCol, scores) {
     }
 
     // ── Category 4: Forced Win ──────────────────────────────────────────────
-    if (detectForcedWin(nextBoard, player).matched) {
+    // Same transition rule as double_threat: only when this move ESTABLISHED the forced win
+    // (present after, absent before). A forced win, once made, persists under optimal play, so
+    // without this gate every subsequent move would re-fire "you have a forced win".
+    if (detectForcedWin(nextBoard, player).matched && !detectForcedWin(board, player).matched) {
       return { tag: 'forced_win' };
     }
   }
