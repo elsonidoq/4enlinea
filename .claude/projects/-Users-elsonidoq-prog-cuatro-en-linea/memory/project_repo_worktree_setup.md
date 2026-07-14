@@ -32,13 +32,15 @@ Result: ~7 reason-engine/test files "fail" for a reason unrelated to your change
 `connect-four/server/.env` from the main checkout into the worktree before running
 `npm run test:fast`. (Also run `npm install` — node_modules isn't shared.)
 
-**2b. `npm install` in a fresh worktree FAILS without `--legacy-peer-deps`** (confirmed
-2026-07-13). A plain `npm install` in `connect-four/` aborts with `ERESOLVE` (`global-jsdom@29`
-peer-wants `jsdom >=29 <30` but `jsdom@27` is resolved — the OI-16 jsdom mismatch), leaving
-`node_modules` **empty** — every test then dies with `Cannot find package 'react'`, which looks
-like a broken worktree but is just a stalled install. Run `npm install --legacy-peer-deps`. (The
-main checkout works only because its `node_modules` was installed before the conflict, or with the
-flag.) Watch the real npm exit code, not a piped `tail`'s.
+**2b. `--legacy-peer-deps` is NO LONGER needed (fixed 2026-07-14).** The single peer conflict
+was the OI-16 jsdom mismatch (`global-jsdom@^29` peer-wanting `jsdom >=29 <30` while the repo pins
+`jsdom@^27`). It was fixed by aligning `global-jsdom` to `^27.0.0` (its major tracks jsdom's), so a
+plain strict `npm install`/`npm ci` now resolves cleanly with **no flag and no `.npmrc`** — verified
+via `npm ci --dry-run` + `npm run test:dom`. Do NOT re-add `--legacy-peer-deps` or an `.npmrc`
+`legacy-peer-deps=true` (it would only mask a future *real* peer conflict). *Historical (pre-fix): a
+plain `npm install` aborted with `ERESOLVE`, left `node_modules` empty, and every test died with
+`Cannot find package 'react'` — looked like a broken worktree but was a stalled install.* Watch the
+real npm exit code, not a piped `tail`'s.
 
 **Why:** worktrees share tracked git objects but not gitignored files (.env, node_modules),
 and the tool's base-ref is a harness setting, not something the repo can pin.

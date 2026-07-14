@@ -119,7 +119,7 @@
 - [gameSampling rng determinism trap](project_gamesampling_rng_determinism_trap.md) — changing rng usage shifts candidate-generator output; FR-011 minMoves floor protects T017
 - [Inline Node scripts](reference_inline_node_scripts.md) — inspect a reason vector w/ TOOLS/compute_feature_vector.mjs; absolute imports; solver hangs (try/finally); shell for-loop → EMPTY stdout
 - [Scripts need meaningful --help](feedback_scripts_meaningful_help.md) — every relevant CLI script ships a real --help/-h; check before required-arg validation
-- [Repo worktree setup traps](project_repo_worktree_setup.md) — base defaults to origin/main (stale); set .claude/settings.json worktree.baseRef=head; npm i needs --legacy-peer-deps; copy server/.env
+- [Repo worktree setup traps](project_repo_worktree_setup.md) — base defaults to origin/main (stale); set .claude/settings.json worktree.baseRef=head; npm i NO longer needs --legacy-peer-deps (jsdom fixed 2026-07-14); copy server/.env
 - [Speckit/epic scoping + scope-by-diff](feedback_speckit_epic_scoping.md) — plan vs speckit vs epic+manager sizing bars; hard algos stay in spec; scope is a diff you MEASURE, not a whole you imagine
 - [Polish epics pipeline](project_polish_epics_pipeline.md) — counts ALREADY include suboptimal; epic AND critique-agent premises both proved false
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
