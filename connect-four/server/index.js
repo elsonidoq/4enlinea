@@ -18,7 +18,7 @@ import { computeStatsAggregate } from './statsAggregate.js';
 import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
 import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { resolveGameBlunderOwner } from './anonBlunderAccess.js';
+import { resolveGameBlunderOwner, resolveQueueOwner } from './anonBlunderAccess.js';
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
@@ -2609,7 +2609,10 @@ app.get('/api/coach/category-counts', async (req, res) => {
 // GET /api/coach/queue
 app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
-  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  // Authenticated → user-scoped. Anonymous → device-scoped via ?device_uuid
+  // (onboarding free deep reveal). Missing/invalid device for an anon caller → 401.
+  const queueOwner = resolveQueueOwner(req.user, req.query.device_uuid || null);
+  if (!queueOwner.ok) return res.status(401).json({ error: 'unauthorized' });
 
   const status = req.query.status || 'all';
   if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
@@ -2643,7 +2646,9 @@ app.get('/api/coach/queue', async (req, res) => {
   // blunder- and suboptimal-severity rows are returned/counted (`total`, wire name
   // unchanged) to the coach queue.
   const applyFilters = (q) => {
-    let filtered = q.eq('user_id', req.user.id);
+    let filtered = queueOwner.scope === 'device'
+      ? q.eq('device_uuid', queueOwner.deviceUuid).is('user_id', null)
+      : q.eq('user_id', queueOwner.userId);
     if (status === 'unreviewed') {
       filtered = filtered.is('resolved_at', null);
     } else if (status === 'reviewed') {
