@@ -636,3 +636,31 @@ apply the **same absent→present transition-gating** the double-threat/forced-w
 all persist-across-moves "creation" patterns, so without transition-gating they would exhibit the
 identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
 [[reference_tactical_pattern_definitions]].
+
+## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
+
+**Status**: latent risk (surfaced 2026-07-14 while building `reset-staging-db.js`; not yet observed to break because no multi-statement DDL was run against staging via this file)
+**Area**: `connect-four/server/.env.staging` (`DATABASE_URL=...@aws-1-us-east-1.pooler.supabase.com:6543/...`) vs `connect-four/server/migrate.js` (wraps each migration in `BEGIN ... COMMIT`)
+
+The staging connection string points at the **transaction pooler (port 6543)**. Per the project's own session-vs-transaction-pooler rule (memory [[reference_supabase_connection]]), 6543 is FORBIDDEN for DDL and multi-statement transactions. `migrate.js` runs each migration inside an explicit `BEGIN...COMMIT` with arbitrary DDL, so applying migrations against staging using the `.env.staging` URL as-is can fail or misbehave. Single-statement ops (the `TRUNCATE ... CASCADE` in `reset-staging-db.js`) are unaffected.
+
+**Why deferred**: staging deploys on Railway may inject their own session-pooler `DATABASE_URL`, so this may only bite a *local* `node --env-file=server/.env.staging migrate.js` invocation — unconfirmed either way.
+
+**If picked up**: either change `.env.staging`'s `DATABASE_URL` port to 5432 (session pooler), or have `migrate.js`/the deploy path rewrite 6543→5432 for staging. Verify what URL the staging Railway deploy actually uses for migrations before editing. Cross-ref: [[reference_supabase_connection]], memory `project_spec031_staging_production_deploy`.
+
+## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
+
+**Status**: deferred (2026-07-14) — content/quality follow-up; harmless mix, each clip still plays
+**Area**: `connect-four/public/audio/coach/*.mp3`, `connect-four/public/audio/lessons/*.mp3`, `scripts/generate-tts.js`, `server/lessonAudio.js`
+
+The TTS default was switched from `tts-1` to `gpt-4o-mini-tts` (which honors the voice-instructions
+`prompt` — `tts-1` ignored it entirely). But all audio is cached by a hash of the *text*, so existing
+clips do NOT auto-regenerate: the ~220 approved English coach clips and all lesson-narration clips were
+synthesized on `tts-1` with **no voice styling** and keep playing until manually regenerated. New/changed
+text uses the new model. Result: an inconsistent voice character across old vs new clips, and the
+carefully-authored coaching-voice prompt is absent from the old English clips.
+
+**If picked up**: regenerate + re-approve English coach clips (`/admin/audio` en → Generate All New →
+Approve All, or `scripts/generate-tts.js --lang en --all-new`), and re-run `generateLessonAudio` for
+lessons. Costs OpenAI credit (~220 coach keys + lesson set). Cross-ref: memory
+`project_tts_audio_cached_by_text`, [[project_spanish_output_silent_fallback]].
