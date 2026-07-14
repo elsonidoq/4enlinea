@@ -9,6 +9,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
+import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -86,9 +87,14 @@ export function DeepRevealPane({
       return;
     }
 
+    // Anonymous onboarding user: allow ONE free deep reveal (or re-opening that
+    // same one). A second, different reveal opens the sign-up gate instead of
+    // fetching. The server permits the anon call (rate-capped); this is the UX gate.
     if (!session?.user) {
-      setAuthOpen(true);
-      return;
+      if (!canRevealAnon(`${moveString}:${col}`)) {
+        setAuthOpen(true);
+        return;
+      }
     }
 
     // Stop any ongoing coach speech — deep-reveal replaces the evaluation context
@@ -127,6 +133,7 @@ export function DeepRevealPane({
       })
       .then(async d => {
         if (!d) return;
+        if (d && !session?.user) markRevealedAnon(`${moveString}:${col}`);
         setData(d);
 
         // Phase 2: fetch TTS audio if speech is enabled
