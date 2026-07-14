@@ -541,3 +541,48 @@ so `/summary` can rehydrate after the round-trip; judged not worth it for now.
 
 **If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
 returnPath, and rehydrate on cold boot. Cross-ref: [[project_auth_payments_state]], [[OI-24]].
+
+## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
+
+**Status**: deferred (2026-07-14), non-blocking — localhost/admin-only, self-healing
+**Area**: `connect-four/server/index.js` `POST /api/admin/tts/cleanup` (~line 3958)
+
+Since migration 059 made `explanation_cache` PK composite `(position_hash, locale)`, the cleanup's
+`.update({ audio_path: null, ... }).in('position_hash', hashes)` filters by bare `position_hash`, so
+expiring the `en` row's audio also nulls a **non-expired** `es` row's `audio_path` (while the Storage
+object is deleted only for the expired path) — orphaning the `es` object and forcing needless
+re-synthesis on next request. Low impact: admin-only, self-heals on the next deep-reveal TTS request.
+
+**If picked up**: scope the `.update()` by the selected rows' `locale` too (join the pruned set on
+`(position_hash, locale)`, not `position_hash` alone). Cross-ref: [[project_spanish_output_silent_fallback]].
+
+## OI-27 — Spanish coach audio clips not generated; admin approval UI is English-only
+
+**Status**: deferred (2026-07-14) — content/ops step; app works via English-clip fallback
+**Area**: `connect-four/scripts/generate-tts.js`, coach approval UI in `connect-four/server/index.js`
+
+The per-language coach-audio machinery shipped (es clips → `public/audio/coach/es/`, per-lang manifest,
+client selection with English fallback), but only one smoke clip (`coach.title`) was generated. Spanish
+users hear English coach audio for every un-generated key. Two gaps: (1) bulk generation not run:
+`node --env-file=server/.env scripts/generate-tts.js --lang es --all-new` (~220 keys, OpenAI cost);
+(2) the admin approval UI is hardcoded to the English registry, so approving es clips into
+`public/audio/coach/es/coach-audio-manifest.json` is manual until the UI is extended.
+
+**If picked up**: run bulk es generation, then either extend the admin approval UI to select a language
+(registry `server/tts-registry.es.json`) or approve the es manifest manually. Cross-ref:
+[[project_spanish_output_silent_fallback]], [[project_lesson_progression_audio_traps]].
+
+## OI-28 — Spanish deep-reveal descoped siblings: lesson-narration audio & blunder one-liner badge
+
+**Status**: descoped by design (2026-07-14) — documented in the plan/spec
+**Area**: `connect-four/lessons/*.json`, `server/llmCoachHelpers.js` (`buildBlunderExplainPrompt`)
+
+Two deep-reveal-adjacent surfaces were left English. **Lesson narration**: lesson prose in
+`lessons/lesson-*.json` is inline English (not i18n keys), so Spanish lesson audio needs the lesson
+*content* translated first — a separate content project; lessons fall back to English audio meanwhile.
+**Blunder one-liner badge**: generated in the server-side harvest pipeline with no request/`req.locale`
+context, so `Accept-Language` can't reach it — localizing needs a locale threaded through harvest.
+
+**If picked up**: (lessons) translate lesson JSON content, then run per-language `generateLessonAudio`
+and store a per-locale audio path per message; (one-liner) thread a locale through the harvest/tagging
+pipeline into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`. Cross-ref: [[project_spanish_output_silent_fallback]].

@@ -1007,3 +1007,25 @@ The `papergames_games` row UUID. The client navigates to `ReviewScreen` with thi
 **Errors**: 400 `{ "error": "roomUid is required" }` / `{ "error": "papergamesAccountId is required" }` for missing/invalid input; 401 for unauthenticated (the client shows a "Log in to save" prompt and stays on the screen); 503 if Supabase not configured; 500 on save failure.
 
 **Auth**: Required (inline `requireUser` -> 401).
+
+---
+
+## Language / locale (i18n)
+
+The client's selected UI language reaches the server two ways — never assume one covers both:
+
+- **`Accept-Language` header → `req.locale`.** `localeMiddleware` (`server/locale.mjs`) resolves every request's `req.locale` to one of `SUPPORTED_LOCALES = ['en','es']` (default `'en'`, q-weighted parse, base-language match). The client sets `Accept-Language` from its i18next language via `langHeaders()` (`src/lib/apiLang.js`), attached to the deep-reveal `POST /api/explain-move-llm` fetch. Locale-scoped endpoints: `/api/explain-move-llm`, `/api/explain-move`, `/api/user/tts/deep-reveal`.
+- **Explicit `?lang=` query param on the TTS audio GET.** `GET /api/user/tts/deep-reveal` is fetched via `new Audio(url)`, which **cannot set a custom header**, so its language is passed as `&lang=<en|es>` on the URL (`DeepRevealPane.jsx`). The endpoint resolves locale via `resolveTtsLocale` = whitelisted `?lang=` **preferred over** `req.locale`. This keeps the audio row aligned with the text row regardless of the browser's own `Accept-Language`.
+
+Because the client i18n language is constrained to exactly `en`/`es` (no regional tags, no browser detector), the header's base-language match and the param's exact match never disagree.
+
+### Deep-reveal i18n contract ("English prompt → Spanish output")
+
+The deep-reveal LLM prompt scaffold stays **entirely English**; for `locale==='es'` a single `SPANISH_OUTPUT_DIRECTIVE` (`server/scripts/compute.mjs`) is appended instructing the model to write **only the player-facing `mechanism` field** in Argentinian voseo (discs = verde/gris), copying the `[zone:…]`/`[term:…]` tags and `cNrM` cells verbatim. The grounding/render validation is language-independent (matches only tag grammar + ids), so it is untouched. Consequences for anyone iterating on deep reveal:
+
+- **Content/grounding improvements transfer to Spanish for free** (same pipeline, one directive).
+- **New player-facing surfaces do NOT** — a new hardcoded string, a new `[term:…]` without a `short_summary_es`, or a newly player-facing LLM field ships English in Spanish builds unless explicitly covered. Fails *silently* (graceful English fallback).
+- **Cache invalidation is per-locale** — busting must cover every locale row.
+- **Spanish prose quality has no eval signal** — `judge-deep-reveals` / `grade-fv-sufficiency` run on English only.
+
+Server-side user-facing strings NOT produced by the LLM go through `serverT(locale, key)` (`server/locale.mjs`); localized KB term pop-up summaries use a `short_summary_es` frontmatter field with English fallback (`loadKBShortSummary(id, locale)`).
