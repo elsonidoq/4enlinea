@@ -8,6 +8,7 @@
 - [c4solver behavioral quirks](reference_c4solver_behavior.md) — error vs hang; JS formula off-by-1; exit 137 → delete binary + make
 - [Forced-block detection](reference_cat5_forced_block_detection.md) — use checkWin, not flat scores
 - [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/15-detector; +3 parity threats; Map priority
+- [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() double_threat uses LOOSE Case B (≠ strict detectDoubleThreat); coach falsely repeats "you created X" on persisting patterns (fix designed, not shipped)
 - [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast; deadlocks w/ concurrent solver harvest
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — predicates figure_7/j_shape/undercut/overcut (j_shape/undercut: NO KB)
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based; ~20 solver queries

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$PWD\" in /Users/elsonidoq/prog/cuatro_en_linea/connect-four*) printf \"%s\" \"{\\\"systemMessage\\\":\\\"\\n\\n\\n\\n\\n🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\\n\\n              ⛔  WRONG  DIRECTORY  ⛔\\n\\n        CLAUDE.md  IS  NOT  LOADED  IN  THIS  SESSION\\n\\n🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\\n\\n\\nYou launched Claude Code inside:\\n    connect-four/\\n\\nBut the project root is the PARENT directory:\\n    /Users/elsonidoq/prog/cuatro_en_linea\\n\\nThe project CLAUDE.md and ALL its instructions are NOT active here.\\n\\n>>>  QUIT  (Ctrl-C twice)  and  relaunch  claude  from  the  parent  directory.  <<<\\n\\n🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\\n\\n\\n\\n\\n\\\",\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"CRITICAL WORKSPACE WARNING: the user launched Claude Code from /Users/elsonidoq/prog/cuatro_en_linea/connect-four, which is the WRONG directory. The real project root is the parent /Users/elsonidoq/prog/cuatro_en_linea and its CLAUDE.md project instructions are NOT loaded in this session. Your VERY FIRST response, before anything else, must be a large, impossible-to-miss warning banner (use bold headings and 🚨) telling the user they are in the wrong directory and should quit and relaunch claude from the parent directory.\\\"}}\" ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}
