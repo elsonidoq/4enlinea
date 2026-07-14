@@ -556,20 +556,22 @@ re-synthesis on next request. Low impact: admin-only, self-heals on the next dee
 **If picked up**: scope the `.update()` by the selected rows' `locale` too (join the pruned set on
 `(position_hash, locale)`, not `position_hash` alone). Cross-ref: [[project_spanish_output_silent_fallback]].
 
-## OI-27 — Spanish coach audio clips not generated; admin approval UI is English-only
+## OI-27 — Spanish coach audio clips not yet generated (bulk content step)
 
-**Status**: deferred (2026-07-14) — content/ops step; app works via English-clip fallback
-**Area**: `connect-four/scripts/generate-tts.js`, coach approval UI in `connect-four/server/index.js`
+**Status**: partially resolved (2026-07-14) — admin UI gap CLOSED; only bulk content generation remains
+**Area**: `connect-four/scripts/generate-tts.js`, `/admin/audio`
 
 The per-language coach-audio machinery shipped (es clips → `public/audio/coach/es/`, per-lang manifest,
-client selection with English fallback), but only one smoke clip (`coach.title`) was generated. Spanish
-users hear English coach audio for every un-generated key. Two gaps: (1) bulk generation not run:
-`node --env-file=server/.env scripts/generate-tts.js --lang es --all-new` (~220 keys, OpenAI cost);
-(2) the admin approval UI is hardcoded to the English registry, so approving es clips into
-`public/audio/coach/es/coach-audio-manifest.json` is manual until the UI is extended.
+client selection with English fallback). **Admin-UI half RESOLVED**: `/admin/audio` now has a language
+dropdown (en/es) and the `/api/admin/audio/*` endpoints are language-aware — Spanish clips can be
+generated/approved/previewed through the UI, writing `server/tts-registry.es.json` +
+`public/audio/coach/es/coach-audio-manifest.json`. **Remaining gap**: only one smoke clip (`coach.title`)
+exists; the ~220-key es set has not been bulk-generated, so Spanish users hear English coach audio (graceful
+fallback) for every un-generated key.
 
-**If picked up**: run bulk es generation, then either extend the admin approval UI to select a language
-(registry `server/tts-registry.es.json`) or approve the es manifest manually. Cross-ref:
+**If picked up**: from `/admin/audio` pick "es" and "Generate All New" + "Approve All", or run
+`node --env-file=server/.env scripts/generate-tts.js --scan-only --lang es` then `--all-new --lang es`
+(note: the CLI has no approve command — approve via the admin UI). ~220 keys, OpenAI cost. Cross-ref:
 [[project_spanish_output_silent_fallback]], [[project_lesson_progression_audio_traps]].
 
 ## OI-28 — Spanish deep-reveal descoped siblings: lesson-narration audio & blunder one-liner badge
