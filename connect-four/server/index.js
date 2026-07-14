@@ -1053,6 +1053,7 @@ app.post('/api/explain-move', async (req, res) => {
   const positionHash = createHash('sha256')
     .update(`${moves}:${candidateCol}`)
     .digest('hex');
+  const locale = req.locale ?? 'en';
 
   // Check explanation cache first
   let cachedEntry = null;
@@ -1060,8 +1061,8 @@ app.post('/api/explain-move', async (req, res) => {
     const { data } = await supabase
       .from('explanation_cache')
       .select('one_liner, deep_reveal_json')
-      .eq('position_hash', positionHash)
-      .single();
+      .match(buildCacheFilter(positionHash, locale))
+      .maybeSingle();
     cachedEntry = data;
   }
 
@@ -1099,6 +1100,7 @@ app.post('/api/explain-move', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: oneLiner,
         deep_reveal_json: deepRevealData,
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
@@ -1302,7 +1304,8 @@ app.post('/api/llm-feedback', async (req, res) => {
         .from('explanation_cache')
         .select('deep_reveal_json')
         .eq('position_hash', positionHash)
-        .single();
+        .limit(1)
+        .maybeSingle();
       if (cached?.deep_reveal_json?.prompt) resolvedPrompt = cached.deep_reveal_json.prompt;
     } catch {
       // Non-fatal — proceed with whatever prompt we have (possibly empty).
