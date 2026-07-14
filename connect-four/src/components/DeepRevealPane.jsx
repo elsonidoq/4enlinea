@@ -10,6 +10,7 @@ import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpee
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -120,7 +121,7 @@ export function DeepRevealPane({
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...langHeaders() },
       credentials: 'include',
       signal: controller.signal,
       body: JSON.stringify({ movestring: moveString, col }),
