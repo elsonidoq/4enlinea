@@ -31,6 +31,7 @@ export function DifficultyPickerScreen({ go, goBack }) {
       <TopBar
         title={t('nav.sparring')}
         onBack={goBack}
+        onLogoClick={() => go('home')}
       />
 
       <div style={{ padding: '8px 18px 16px', display: 'flex', flexDirection: 'column', flex: 1 }}>

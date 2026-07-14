@@ -2,15 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildBoard } from './board.js';
 import { useBoardState } from './useBoardState.js';
-import {
-  INVALID_MOVE,
-  DIFFICULTY_TEMPERATURES,
-  MISTAKE_RATES,
-  sampleColumnFromScores,
-  secondBestColumn,
-} from './aiDifficulty.js';
 import { pickRandomKey } from './coachUtils.js';
-import { delay, COACH_PACING_MS } from './constants.js';
+import { delay, COACH_PACING_MS, INVALID_MOVE } from './constants.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -205,37 +198,15 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     const movesStr = currentMoves.join('');
     const { heights: curHeights } = buildBoard(movesStr);
 
-    const shouldMistake =
-      Math.random() < MISTAKE_RATES[difficulty];
-    let aiCol = null;
-    let isDeliberate = false;
-
-    // 1. Get solver scores
-    let scores;
-    try {
-      const res = await fetch(`${API}/api/scores`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moves: movesStr }),
-      });
-      const data = await res.json();
-      scores = data.scores;
-    } catch (e) {
-      // Network/API error — pick a random legal column as fallback
-      const legalCols = [];
-      for (let c = 0; c < 7; c++) {
-        if (curHeights[c] < 6) legalCols.push(c);
-      }
-      aiCol =
-        legalCols.length > 0
-          ? legalCols[Math.floor(Math.random() * legalCols.length)]
-          : 3;
-      const classifyPromise = (currentMoves.length === 0 && side === 'second')
+    // Coach commentary for the AI's move — classify the chosen column just before
+    // committing. Skipped on the opening auto-play; null on any error → neutral phrase.
+    const classifyFor = (aiCol) =>
+      (currentMoves.length === 0 && side === 'second')
         ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
         : fetch(`${API}/api/evaluate-move`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
+            body: JSON.stringify({ movestring: movesStr, col: aiCol, aiMove: true }),
           })
           .then(async r => {
             if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
@@ -243,51 +214,31 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
             return data.quality !== undefined ? data : null; // missing quality → neutral fallback
           })
           .catch(() => null);     // network error → neutral fallback (SC-006)
-      await commitAiMove(currentMoves, aiCol, classifyPromise);
-      return;
-    }
 
-    // 2. Guard: one legal column only
-    const legalCount = scores.filter((s) => s > INVALID_MOVE).length;
-
-    // Dev log: trace deliberate mistake triggers
-    if (import.meta.env.DEV && shouldMistake) {
-      console.log('[deliberate_mistake] trigger fired', { difficulty, legalCount, secondBest: secondBestColumn(scores) });
-    }
-
-    // 3. Deliberate mistake
-    if (shouldMistake && legalCount > 1) {
-      const secondBest = secondBestColumn(scores);
-      if (secondBest !== null) {
-        aiCol = secondBest;
-        isDeliberate = true;
+    // Move selection is server-side (chooseSparringMove): POST the difficulty and
+    // play the column it returns.
+    let aiCol;
+    try {
+      const res = await fetch(`${API}/api/scores`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moves: movesStr, difficulty }),
+      });
+      const data = await res.json();
+      if (typeof data.col !== 'number') throw new Error('missing col in /api/scores response');
+      aiCol = data.col;
+    } catch (e) {
+      // Network/API error — pick a random legal column as fallback.
+      const legalCols = [];
+      for (let c = 0; c < 7; c++) {
+        if (curHeights[c] < 6) legalCols.push(c);
       }
+      aiCol = legalCols.length > 0
+        ? legalCols[Math.floor(Math.random() * legalCols.length)]
+        : 3;
     }
 
-    // 4. Normal move (temperature-based sampling)
-    if (aiCol === null) {
-      const temp = DIFFICULTY_TEMPERATURES[difficulty];
-      aiCol = sampleColumnFromScores(scores, temp);
-    }
-
-    if (import.meta.env.DEV && isDeliberate) {
-      console.log('[deliberate_mistake] applied', { aiCol });
-    }
-
-    const classifyPromise = (currentMoves.length === 0 && side === 'second')
-      ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
-      : fetch(`${API}/api/evaluate-move`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
-        })
-        .then(async r => {
-          if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
-          const data = await r.json();
-          return data.quality !== undefined ? data : null; // missing quality → neutral fallback
-        })
-        .catch(() => null);     // network error → neutral fallback (SC-006)
-    await commitAiMove(currentMoves, aiCol, classifyPromise);
+    await commitAiMove(currentMoves, aiCol, classifyFor(aiCol));
   }
 
   // ── User move handler ──────────────────────────────────────────

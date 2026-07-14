@@ -5,3 +5,4 @@ supabase
 .env*
 *jsonl
 win_distribution_data
+.DS_Store

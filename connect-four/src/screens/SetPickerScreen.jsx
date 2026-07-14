@@ -4,12 +4,14 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { SetCard } from '../components/SetCard.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SetPickerScreen({ go, goBack }) {
   const { t } = useTranslation();
   const { session } = useStore();
+  const handleUpgrade = useUpgradeCheckout();
   const isAuthenticated = !!session;
   const [sets, setSets] = useState([]);
   const [counts, setCounts] = useState({});
@@ -64,6 +66,7 @@ export function SetPickerScreen({ go, goBack }) {
       <TopBar
         title={t('setpicker.title')}
         onBack={() => go('home')}
+        onLogoClick={() => go('home')}
       />
 
       <div style={{ padding: '2px 18px 26px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
@@ -105,7 +108,7 @@ export function SetPickerScreen({ go, goBack }) {
       {upgradeOpen && (
         <UpgradeModal
           onDismiss={() => setUpgradeOpen(false)}
-          onNotify={() => setUpgradeOpen(false)}
+          onUpgrade={handleUpgrade}
         />
       )}
     </div>

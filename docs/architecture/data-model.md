@@ -22,7 +22,7 @@ Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_categor
 
 Migration 028 added `severity INTEGER NOT NULL DEFAULT 0` to the `blunders` table. Value is `round((best_score − score) / 36 * 10)`, normalized to [0, 10]: 36 is the maximum possible spread on a 7×6 board (from +18 to −18), and the result is scaled to 10. Computed at insert time from the solver scores that are already in scope. Legacy rows default to 0. Never recompute on read — the solver may be unavailable for positions past a winning move. An index on `(user_id, severity DESC) WHERE resolved_at IS NULL` supports the queue endpoint's `ORDER BY severity DESC` without a full table scan.
 
-Migration 029 added `blunder_severity real` — a graduated loss-of-control measure: the fraction of depth-3 post-blunder continuations where the opponent wins (0–1 range). Unlike `severity` (instant score spread), `blunder_severity` captures how much the move *actually* increases losing scenarios vs winning scenarios. This is the primary quality gate for blunders from already-losing positions (i.e., virtually all second-player moves), replacing the former `bestScore < 0` skip. See [[blunder_severity_graduated_measure]].
+Migration 029 added `blunder_severity real` — a graduated loss-of-control measure: the fraction of depth-3 post-blunder continuations where the opponent wins (0–1 range). Unlike `severity` (instant score spread), `blunder_severity` captures how much the move *actually* increases losing scenarios vs winning scenarios. This is the primary quality gate for blunders from already-losing positions (i.e., virtually all second-player moves), replacing the former `bestScore < 0` skip. **Do NOT re-add the `bestScore < 0` guard** (to `POST /api/blunders`, `POST /api/games/analyze`, or `reprocess_blunders.mjs`) — it made the blunder system blind to virtually all second-player games, since the first player has a theoretical forced win from the opening; the losing-branch scorer already grades blunders in lost positions (`played < bestScore - 4`). `blunder_severity` is computed for ALL blunders in the analyze endpoint, not just `bestScore >= 0`. For per-ply blunder diagnostics on any movestring, use `connect-four/server/scripts/diagnose_blunders.mjs`.
 
 Migration 030 added a partial unique index `idx_blunders_game_unique` on `(user_id, board_state, move_played) WHERE puzzle_id IS NULL`, enabling atomic upsert deduplication of game blunders at the DB level. The `POST /api/blunders` endpoint now uses `.upsert()` with `ignoreDuplicates: true` instead of a check-then-insert pattern.
 Rationale: Slug-keyed constraints are self-documenting; integer IDs required cross-referencing a lookup table.
@@ -30,6 +30,14 @@ Rationale: Slug-keyed constraints are self-documenting; integer IDs required cro
 Migration 036 added `game_id uuid` (nullable FK → `games(id)`, `ON DELETE SET NULL`) to the `blunders` table. This links blunders created during post-game analysis to their originating sparring game row. Blunders from puzzle attempts continue to use `puzzle_id`; `game_id` is `null` for those. `GET /api/games` uses `game_id` to compute per-game `blunder_count` in a single query.
 
 Migration 051 added `quality text NOT NULL DEFAULT 'blunder' CHECK (quality IN ('suboptimal', 'blunder'))`. Both suboptimal and blunder plies from post-game analysis are now persisted. Existing rows (all blunders) default to `'blunder'`.
+
+**Storage rule (2026-07, supersedes migration 051's "store every non-optimal ply")**: `server/mistakeStorageRule.js`'s `classifyStoredMistake(bestScore, playedScore, movestring)` is the single gate for all three game-mistake write paths (`POST /api/games/analyze`, `papergamesImporter.extractBlunders`, `POST /api/blunders`). A non-optimal ply is stored only when:
+- it drops the game-theoretic outcome class (win→draw, win→loss, draw→loss), **or**
+- both scores are negative (faster loss) **and** the mover is still *alive* — at least one 4-in-a-row window on the pre-move board contains no opponent disc (`playerHasPotentialWin`).
+
+Slower wins (both scores positive) are never stored: the reason engine's case taxonomy treats `win_to_slower_win` as `notABlunder`, so a stored row would serve a contradictory "no better alternative" deep-reveal explanation. Stored rows are graded by solver score drop: `bestScore − playedScore > 4` → `'blunder'`, else `'suboptimal'` (same threshold precedent as `scoreMove`'s losing branch). `scoreMove`'s per-move `quality` is unchanged and still drives the analyze response's badges/counters — a ply can read `suboptimal` in the review timeline yet have no `blunders` row (ReviewScreen's `selectStep` falls back to a board preview for those). The aliveness gate is deliberately **not** the old `bestScore < 0` skip warned about above: solver-lost-but-alive positions (the norm for the second player) keep their mistakes stored; only truly dead positions are exempt.
+
+Migration 058 (anon free deep reveal) made `blunders.user_id` nullable and added `device_uuid`. The storage rule above is unchanged; only the **owner keying** differs. `server/anonBlunderAccess.js#resolveGameBlunderOwner(reqUser, game)` decides it: an authenticated caller → `{user_id, device_uuid: null}` (prior behavior, byte-identical); an anonymous caller on a device-scoped game → `{user_id: null, device_uuid: game.device_uuid}` (stamped from the already-fetched game row — **never** compare `device_uuid` to `req.user.id`). `POST /api/user/migrate` re-associates anon blunders by the client's `body.device_uuid` (`.is('user_id', null)`), so after sign-up they behave like any authenticated blunder and light up Past Games / stats (both `user_id`-scoped) with no further change. Anon dedup uses `idx_blunders_device_game_unique` (see `db-schema.md`) since the `user_id`-keyed unique index doesn't dedup NULL-user rows.
 
 ## Soft Delete
 
@@ -57,7 +65,7 @@ Rationale: jsonb for variable-shape structured data; typed columns for values us
 
 Two access tiers:
 
-**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`):
+**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`, `llm_usage`):
 - Enable RLS.
 - Define **no** public policies.
 - The Express server accesses these exclusively via the service role key, which bypasses RLS.
@@ -86,6 +94,97 @@ Per-table verbs actually granted to the frontend:
 | `users` | `SELECT, UPDATE` | No frontend `INSERT` — rows are auto-created by `loadUser` (GoTrue trigger), never by the frontend. |
 | `session_stats` | `SELECT, INSERT, UPDATE` | |
 | `puzzle_attempts` | `SELECT, INSERT` | |
+
+## `llm_usage` (migration 056)
+
+Append-only ledger of every OpenAI chat-completion call made through the unified `server/llmChat.js`
+helper (spec 047 US5). One row per call attempt that **completed successfully**; a failed call is
+logged via `logError` but never produces a row (no partial/fabricated records).
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `uuid` | no | PK, `gen_random_uuid()` default. |
+| `endpoint` | `text` | no | Which feature/endpoint triggered the call — free-text, not an enum/FK, so new call sites add new values without a migration. Current values: `'explain-move-llm'` (production deep-reveal), `'run-eval'` (offline eval harness), `'compute-eval'` (offline compute/eval script). |
+| `purpose` | `text` | no | Why the call was made. Current values: `'deep-reveal'`, `'offline-eval'`. |
+| `user_id` | `uuid` | **yes** | Supabase user id, when known. Null for offline/CLI calls. No FK to `users` — deliberately decoupled from a live user row, same rationale as `tracks` (an analytics/ledger table, not a relational one). |
+| `model` | `text` | no | The exact OpenAI model id string sent in the request (e.g. `'gpt-5.4-mini'`), never a display label. |
+| `prompt_tokens` | `integer` | no | From the OpenAI response's `usage.prompt_tokens`. |
+| `completion_tokens` | `integer` | no | From `usage.completion_tokens`. |
+| `total_tokens` | `integer` | no | From `usage.total_tokens`, kept as its own column rather than derived (prompt+completion), in case OpenAI's total ever diverges, e.g. reasoning tokens. |
+| `cost_usd` | `numeric` | **yes** | Derived via `server/llmPricing.js`'s in-repo rate table for `model`. Null only when `model` has no rate-table entry — the row is still written; a missing price is a data-quality gap surfaced via a `logError` warning, never a reason to drop the row. |
+| `created_at` | `timestamptz` | no | `now()` default. |
+
+**Indexes**: none beyond the PK — no dashboard/query FR consumes this table yet. A future consumer
+can add `(endpoint, created_at)` or `(user_id, created_at)` without touching this table's shape.
+
+**RLS**: enabled, deny-by-default, **no policies** — a backend-only table per the tier above
+(migrations `010`/`037`/`055` precedent). All access is server-side via the service-role client;
+writes go through `server/llmUsageLedger.js`'s `recordUsage(...)`, never a direct client-side insert.
+
+**Lifecycle — append-only, contrasted with `explanation_cache`**: `llm_usage` is **never truncated or
+purged by deploy** — this is the defining difference from `explanation_cache`, which the deploy
+pipeline `TRUNCATE`s before each release (memory `project_spec039_audio_interactive_coach`). No
+migration or deploy script may add a `TRUNCATE`/`DELETE` against `llm_usage`; it is a permanent,
+growing cost ledger, not a cache to be invalidated on redeploy.
+
+**Write path**: `server/llmUsageLedger.js` exports `recordUsage({ endpoint, purpose, userId, model,
+usage, costUsd })`, called fire-and-forget (never awaited) from `server/llmChat.js`'s
+`callOpenAIChat` after a successful OpenAI response — see server-conventions.md's "LLM Coach
+Helpers" section for the caller contract. Errors inside `recordUsage` are caught and logged via
+`logError('[llm-usage-ledger]', err, { endpoint, purpose })` internally; they never propagate to the
+LLM caller, so a ledger-write failure cannot fail or delay the user-facing LLM response.
+
+## `onboarding_status` (migration 057, Epic 8 — Onboarding Experience)
+
+A single `text` field present on **both** the anonymous local profile record and the server-side
+`users` row. Not a new entity/table — a field added to two existing records. **Three-state model**
+(aha/coach-reaction detection was dropped by owner decision; there is no fourth "engaged but no
+move" bucket):
+
+| Value | Set by | Meaning |
+|---|---|---|
+| `not_encountered` | default (new profile / new `users` row) | Auto-show onboarding routing is active. |
+| `seen` | first user move played in the onboarding sparring game | Suppresses auto-show; the engagement signal this feature measures. |
+| `skipped` | explicit skip (mid-game or on the import offer) | Suppresses auto-show. |
+
+There is no transition FROM `seen`/`skipped` back to `not_encountered` — the only writers are the
+`seen`/`skipped` transitions above, neither of which ever writes `not_encountered`.
+
+**Storage location 1 — anonymous local profile (`IndexedDBStore`, object store `profile`, keyPath
+`device_uuid`)**: `{ device_uuid: string, tier: 'free' | 'paid', onboarding_status?: 'not_encountered' | 'seen' | 'skipped' }`.
+`onboarding_status` is `undefined` on any profile created before this feature shipped — all read
+sites MUST treat `undefined`/`null` the same as `'not_encountered'`. No IndexedDB version bump was
+needed (plain field addition to an existing keyPath row, no new object store/index).
+
+**Storage location 2 — server `users` row** (migration `057_users_onboarding_status.sql`):
+```sql
+onboarding_status text NOT NULL DEFAULT 'not_encountered'
+  CHECK (onboarding_status IN ('not_encountered', 'seen', 'skipped'))
+```
+`NOT NULL DEFAULT` means every existing and future `users` row is well-formed with no backfill step
+required. No new grants needed — `012_explicit_grants.sql` and `040_service_role_grants.sql` are
+table-level and already cover `users`.
+
+**Server population seam**: `onboarding_status` is included in both `USER_PROFILE_SELECT_COLUMNS`
+and `defaultUserProfile()` (`server/userHelpers.js`) — see that file's doc comment for why both
+must stay in sync (`req.user.onboarding_status` is `undefined` if either is missed, regardless of
+whether the DB column exists). `server/userHelpers.js` also exports the single shared enum
+validator `isValidOnboardingStatus(value)`, imported by `PUT /api/user/profile` and
+`POST /api/user/migrate` — this is the ONE place the 3-value enum is validated; no other call site
+may duplicate the check inline.
+
+**Client store interface**: both `IndexedDBStore` and `SupabaseStore` (`connect-four/src/store/`)
+expose `async updateProfile(patch)`, matching the existing `getProfile()` pairing. `IndexedDBStore`
+merges `patch` into the existing single `profile` row and persists it; `SupabaseStore` `PUT`s
+`patch` to `/api/user/profile` with `credentials: 'include'`, swallowing errors client-side
+(fire-and-forget — must never block a user-facing render). Callers use the identical shape on
+either backend: `await store.updateProfile({ onboarding_status: 'seen' })`.
+
+**The one-time "show the import offer once" marker is NOT part of this field.** It is a plain
+device-scoped `localStorage` boolean (`onboarding_offer_shown_v1`), independent of
+`onboarding_status` and never synced to the server — see
+`specs/048-onboarding-experience/data-model.md` for the full rationale (a fourth persisted value
+would blur the three-state model above).
 
 ## Migration Naming
 
@@ -134,6 +233,8 @@ Index: `(device_uuid, created_at DESC)` for per-device game listing (Epic 3b).
 RLS: Disabled (server accesses via service-role key).
 Grants: `GRANT SELECT, INSERT ON public.games TO anon, authenticated;`
 
+**Anonymous → account re-association (Feature 3, 2026-07-13):** an anonymous sparring game is inserted with `user_id: null`, keyed by `device_uuid`. On first sign-in, `POST /api/user/migrate` claims it: `UPDATE games SET user_id = <id> WHERE device_uuid = <client body.device_uuid> AND user_id IS NULL` — see the Migrate Endpoint section in `api-conventions.md`. The `(device_uuid, created_at DESC)` index also serves this WHERE. There is no `games` object store in IndexedDB; games are server-only (unlike `puzzle_attempts`/`lesson_progress`, which are replicated locally and migrate as row payloads).
+
 ## PaperGames Games (`papergames_games`)
 
 Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. Separate from `games` (AI sparring) because the data shape is different: no `difficulty`, and opponent metadata is stored.
@@ -142,7 +243,7 @@ Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. 
 |---|---|---|
 | `id` | `uuid` | PK, `DEFAULT gen_random_uuid()` |
 | `user_id` | `uuid` | nullable FK → `auth.users(id)`, `ON DELETE SET NULL` |
-| `papergames_room_uid` | `text` | NOT NULL, UNIQUE — deduplication key (e.g. `"BfsnYZBT5"`) |
+| `papergames_room_uid` | `text` | NOT NULL, part of composite `UNIQUE (user_id, papergames_room_uid)` since migration 053 — deduplication key (e.g. `"BfsnYZBT5"`), scoped per user (was a global `UNIQUE` before 053) |
 | `papergames_account_id` | `text` | NOT NULL — user's papergames account ID |
 | `moves` | `text` | NOT NULL, 0-indexed movestring |
 | `side` | `text` | NOT NULL, CHECK IN ('first','second') |
@@ -161,9 +262,16 @@ Games imported from papergames.io via `scripts/import_papergames_blunders.mjs`. 
 
 Index: `(user_id, played_at DESC)` for per-user game listing.
 RLS: Disabled (server accesses via service-role key).
-Migrations: `038_papergames_games.sql` (table + `blunders.papergames_game_id`), `039_papergames_accuracy.sql` (accuracy column).
+Migrations: `038_papergames_games.sql` (table + `blunders.papergames_game_id`), `039_papergames_accuracy.sql` (accuracy column), `053_papergames_ownership_and_blunder_index.sql` (per-user ownership — see below).
 
 The `blunders` table has `papergames_game_id uuid nullable FK → papergames_games(id) ON DELETE SET NULL` (added by migration 038). This is separate from `game_id` which links to AI sparring games.
+
+**Migration 053 — per-user ownership (spec 041, User Story 4)**: Before this migration, `papergames_room_uid` was globally `UNIQUE`, so when a second user imported a room a first user had already imported, `upsertGame()`'s upsert (`onConflict: 'papergames_room_uid'`) reassigned the existing row's `user_id` to the second user — silently transferring the game (and its future blunder linkage) away from the first user, with no error. This migration:
+1. Drops `papergames_games_papergames_room_uid_key` (the old global `UNIQUE(papergames_room_uid)`), with a post-drop `DO $$` guard that hard-fails the migration if any other global single-column `UNIQUE(papergames_room_uid)` constraint is still present under a different name.
+2. Adds `papergames_games_user_room_unique UNIQUE (user_id, papergames_room_uid)`.
+3. Drops and recreates `idx_blunders_papergames_unique` on `blunders` as `UNIQUE (user_id, papergames_game_id, move_index) WHERE papergames_game_id IS NOT NULL` (was `(papergames_game_id, move_index)`), so the per-move dedup guarantee is scoped per user as well — necessary because each user now has their own `papergames_game_id` row for the same external room, so `move_index` values legitimately repeat across users for the same board position.
+
+No historical-data repair was performed (Out of Scope for spec 041 — the production DB had no real users at the time). `upsertGame()` (`server/papergamesImporter.js`) was updated in the same change to upsert with `onConflict: 'user_id,papergames_room_uid'`; this single change point covers both `importForUser` (self-service batch import) and `saveLiveGame` (live-game save), which share the function. `insertGameBlunder()` (`server/insertGameBlunder.js`) required no code change — it already inserts `user_id` on every row and treats `23505` as success; only the underlying index's column scope changed.
 
 `import_papergames_blunders.mjs` computes accuracy in the same solver pass as blunder extraction (optimal/scored plies ratio), then upserts it into the game row. Re-import is required to populate accuracy for rows created before migration 039.
 

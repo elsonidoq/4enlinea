@@ -76,8 +76,24 @@ On first sign-in, `IndexedDBStore.migrateToSupabase(supabaseStore, supabaseClien
 | `getLastChallengeSession()` | session object or `null` |
 | `recordActivityDay()` | `void` |
 | `getStreak()` | `{streak_count, last_active_date}` |
+| `updateProfile(patch)` | `void` (fire-and-forget) |
+| `peekProfile()` *(IndexedDBStore only)* | existing profile row or `null` (read-only, non-creating) |
 
 `IndexedDBStore` additionally provides `getAllPuzzleAttempts()` (used only during migration) and `migrateToSupabase(supabaseStore, supabaseClient)`. `SupabaseStore.migrateToSupabase()` exists but throws — it is not part of the shared interface and must never be called on a `SupabaseStore` instance.
+
+**`updateProfile(patch)` (Epic 8 — Onboarding Experience, spec 048, T006/T007)**: the FR-011 "small profile-write capability" — merges `patch` into the single existing profile record. `IndexedDBStore.updateProfile(patch)` reads the existing `profile` object-store row (keyPath `device_uuid`), merges `patch`, `put()`s it back (no new object store, no `DB_VERSION` bump). `SupabaseStore.updateProfile(patch)` `PUT`s `patch` straight through to `/api/user/profile` with `credentials: 'include'`. Both swallow errors client-side — this write must never block or interrupt the user-facing flow that triggered it (Constitution V), matching the existing `track()`/`_fetchPost` fire-and-forget posture. Callers never special-case which backend is active: `await store.updateProfile({ onboarding_status: 'seen' })`. Note `IndexedDBStore.updateProfile` is **create-safe**: if no profile row exists yet (the patch arrives before any `getProfile()` this session), it creates a well-formed row (`{ device_uuid: generateUUID(), tier: 'free', ...patch }`) rather than `put()`ing a `device_uuid: undefined` object, which the `device_uuid` keyPath would reject with `DataError`, silently dropping the write.
+
+**`IndexedDBStore.peekProfile()` (read-only, non-creating)**: unlike `getProfile()` — which *initializes* an anonymous `profile` row on read if none exists — `peekProfile()` returns the existing row or `null` without ever creating one. It exists specifically for `src/lib/track.js`: `track()` reads the local profile's `device_uuid` to populate the analytics `uid` (FR-015), and must not side-effect-create a spurious anonymous profile for, e.g., a signed-in user on a fresh device whose local `profile` store is empty. `SupabaseStore` has no `peekProfile` (track always reads the local IndexedDB profile, never the account row). Consequence: `track()` is now gated on an async IndexedDB read before it fires its POST — it is still fire-and-forget and never throws, but no longer strictly synchronous.
+
+**`recordPuzzleAttempt` canonical shape** — the store spreads its argument directly with no schema validation, so the 6-field snake_case shape is mandatory; any other shape silently writes an incompatible record that breaks Stats/accuracy aggregation:
+
+```js
+{ puzzle_id, device_uuid, moves_tried, outcome, first_attempt_correct, time_ms }
+```
+
+Do not introduce a new shape without migrating all callers and the store simultaneously. (Since spec 030, the server derives `device_uuid` from the session for `POST /api/user/puzzle-attempts`; the store method signature keeps the field.)
+
+**`recordPuzzleAttempt` must be called on every correct answer** — puzzle advancement filters the pool by `solvedIds` from recorded attempts. A correct-answer branch that skips the call leaves the puzzle in the pool and "Next puzzle" reloads the same puzzle forever. Every correct-answer submit handler (normal column click, forbidden-columns submit, future categories) MUST record the attempt; wrong answers need recording only for blunder tracking, not advancement.
 
 ## IndexedDB Schema
 
@@ -96,17 +112,95 @@ The frontend has no Supabase SDK dependency. Auth is entirely server-mediated vi
 3. **Session restore**: On page load, `checkSession` calls `GET /api/auth/session` to read the
    cookie and restore signed-in state.
 4. **Sign-out**: `POST /api/auth/signout` clears the cookies.
-5. **Store swap**: On successful sign-in, `ProfileStore` swaps `IndexedDBStore` for `SupabaseStore`
-   and calls `migrateToSupabase` to migrate locally-recorded puzzle attempts.
+5. **Store swap**: On successful sign-in, `ProfileStore.switchToSupabase` **`await`s
+   `migrateToSupabase` before calling `setSession`** — the React `session` state flips only after the
+   migration completes. `migrateToSupabase` begins with `await this._db()` (the IndexedDB open), so if
+   that open ever hangs, the whole sign-in silently stalls with a valid server cookie but a
+   still-signed-out UI (see memory `project_indexeddb_signin_hang`). The migration errors are caught,
+   but a *hang* is not — order any local-reset tooling accordingly (never `indexedDB.deleteDatabase`).
+
+### `sessionChecked` + boot-gate render (Epic 8 — Onboarding Experience, spec 048, T016/T017, research.md R3)
+
+`ProfileStore.jsx` exposes a `sessionChecked` boolean via context alongside `session`, set to `true` in a `finally` block wrapping the **entire body** of `checkSession()` (both the OAuth-hash branch and the cookie-restore branch). `session` staying `null` is ambiguous between "still checking" and "confirmed anonymous" — `sessionChecked` disambiguates it. Any consumer that needs to distinguish those two cases (not just `Navigator`) MUST read `sessionChecked` from `useStore()`, not infer it from `session`.
+
+`Navigator` (`App.jsx`) render-gates on `!sessionChecked`: it returns a neutral, near-instant "booting" frame (a blank `minHeight: 100vh` div matching the app shell background, no content) **before** its normal `return (...)` whenever `sessionChecked` is `false`, so `ScreenComponent` never mounts — and no real screen, including the `useState('home')` initial value, ever flashes — before session/OAuth-hash restoration and the first-run onboarding decision (below) have resolved. `checkSession()` is fast (a single cookie fetch or the OAuth-callback POST), so this is a brief unstyled frame, not a spinner.
+
+**First-run auto-route effect**: a third `Navigator` effect, gated on `sessionChecked && !session`, reads `store.getProfile()` and — if `onboarding_status` is `'not_encountered'` or `null`/`undefined` — calls `go('onboardingMission')`. The decision boolean itself is `shouldAutoRouteToOnboarding({ sessionChecked, session, onboardingStatus })`, extracted to `src/lib/onboardingRouting.js` — a **plain `.js` module, not inlined in `App.jsx`** — specifically so it is unit-testable via `node --test` (which cannot parse JSX; same constraint/pattern as `src/lib/postLoginReturn.js`). **Anonymous-only, by design** (settled decision, spec.md Assumptions): the `!session` guard means a signed-in user whose account has never been onboarded is never auto-routed on load — only `!session` (confirmed-anonymous) triggers it; they reach onboarding only via Settings "Replay intro".
+
+**`OnboardingMissionScreen`** (`src/screens/OnboardingMissionScreen.jsx`, screen key `onboardingMission`) is the first screen a first-run anonymous user sees — a coach-voiced "mission" screen (three pillars: learn → practice → understand mistakes) with a single **"Start sparring"** CTA. It is a **session-only screen** (registered only in `screenRegistry.jsx`, given `--bg-home` in `surfaceGroups.js`, **not** in `urlMapping.js` — same pattern as `onboardingImportOffer` below). The CTA calls `go('game', ONBOARDING_GAME_PARAMS)` (`{ difficulty: 'easy', side: 'first', onboarding: true }`, from `onboardingRouting.js`), so the onboarding game still runs on the reused `game` screen key. **Analytics moved here**: `track('onboarding_started', {})` now fires on the mission screen's mount (ref-guarded against React 18 StrictMode double-invoke), **not** in the auto-route effect; the CTA additionally fires `track('onboarding_sparring_started', {})`. `onboarding_status` is untouched by this screen (still flips to `'seen'` on the first *move* in `GameScreen`), so reloading on the mission screen re-shows it. NOTE: the coach greeting is currently **text-only — it is not spoken** (the phrase lives under `onboarding.mission.*`, not the `coach.*` TTS namespace, and the screen does not call `speakCoachMessage`); see `docs/open_issues.md` OI-20.
+
+### `OnboardingImportOfferScreen` + the `onboarding_offer_shown_v1` marker (Epic 8 — Onboarding Experience, spec 048, T032/T033/T036)
+
+`OnboardingImportOfferScreen.jsx` is a **session-only screen**, registered only in `src/lib/screenRegistry.jsx` (key `onboardingImportOffer`) — it is **not** added to `URL_MAP`/`SESSION_ONLY_SCREENS` in `urlMapping.js`, matching the existing `game`/`summary`/`review` pattern of screens reached only via `go()`/`goReplace()`, never from a cold-boot URL (research.md R4).
+
+It has two entry paths, both landing on the same screen component:
+1. **Game-end** — `GameScreen.jsx`'s `saveGame()` branches its end-of-game `goReplace(...)` target on the `onboarding` prop via the pure helper `pickGameEndScreen(onboarding)` (`src/lib/onboardingGameEnd.js`): `'onboardingImportOffer'` for an onboarding session, `'review'` otherwise. This single branch point covers every outcome that funnels through `saveGame()` — win/loss/draw via the normal flow, and resign via `handleResign()`'s existing `onGameEnd?.(...)` call into that same seam — no separate resign-path handling exists or is needed.
+2. **Home-fallback** — `HomeScreen.jsx`'s mount effect covers a user who engaged (`onboarding_status === 'seen'`) but exited before the game's natural end. It is **read-only**: it only ever reads the marker (`isOfferShownMarkerSet()`) and the profile's `onboarding_status`, feeding both into the pure decision `shouldShowHomeFallbackOffer({ onboardingStatus, offerShown })` (`src/lib/onboardingOfferMarker.js`); if true, it routes to `onboardingImportOffer`. It **never writes** the marker itself.
+
+**The single-write-site invariant**: the one-time `localStorage` marker `onboarding_offer_shown_v1` is written in exactly **one** place in the whole app — `OnboardingImportOfferScreen`'s own mount effect (`setOfferShownMarker()`, guarded by a `useRef` flag so React 18 StrictMode's dev-only double-invoke can't double-fire it), regardless of which of the two paths above reached it. This is what makes the cross-path guard hold: whichever path (game-end or Home-fallback) reaches the offer screen first sets the marker, so the other path's later check always sees it already set and never re-shows the offer. The marker is a plain, device-scoped `localStorage` boolean — **not** part of the profile record, **not** synced to the server, **not** written via `store.updateProfile(...)` (data-model.md "Storage location 1", FR-013 spirit) — because a user can be `'seen'` with the offer not yet shown (engaged, then left early), and adding a fourth persisted value to the three-state `onboarding_status` enum would blur that model. `setOfferShownMarker()`/`isOfferShownMarkerSet()`/`shouldShowHomeFallbackOffer(...)` live in `src/lib/onboardingOfferMarker.js`, extracted as a plain `.js` module (not inlined in either screen) for the same `node --test`-cannot-parse-JSX reason as `onboardingRouting.js`/`postLoginReturn.js`.
+
+The offer screen's own mount effect also fires `track('onboarding_finished', {})` at the same single call site as the marker write (FR-015); `onboarding_import_offer_accepted`/`onboarding_import_offer_declined` fire from the corresponding user-action handlers. Accepting composes with the existing sign-in flow using the same `stashReturnTo('settings')` + `AuthModal` pattern `HomeScreen`'s gated "Past games" card already uses, then lands on the existing `settings` screen (Papergames Import section, spec 038) — this feature does not rebuild that flow.
+
+### Anon free deep reveal — the "one free reveal" client gate
+
+Same extracted-plain-`.js`-gate-module pattern as `onboardingOfferMarker.js`: `src/lib/anonDeepReveal.js` (`canRevealAnon(key)` / `markRevealedAnon(key)`) fronts a device-local `localStorage` boolean `anon_deep_reveal_v1` that records **which** blunder the anonymous user spent their one free deep reveal on (key = `` `${movestring}:${col}` ``), so re-opening that same reveal stays free while any new one gates. Not synced to the server (the server does not track anon reveal usage — see `api-conventions.md` `/api/explain-move-llm`). **Two entry points enforce it with the identical key and MUST stay in sync**: `MistakeDetailScreen`'s "What should I have played?" trigger (`session || canRevealAnon(key)` — else it shows a "Sign in to unlock" button that opens `AuthModal` with `reason={t('auth.deepRevealGate')}`), and `DeepRevealPane`'s fetch effect (proceeds + `markRevealedAnon` on success when anon, else opens `AuthModal`). `ReviewScreen` fetches the anon blunder nav-list by appending `device_uuid` (from `store.getProfile()`) to `/api/coach/queue`, so anon mistake chips navigate to `blunderDetail` exactly like signed-in.
+
+### Skip control + Settings "Replay intro" (Epic 8 — Onboarding Experience, spec 048, T041/T043, FR-009/FR-010)
+
+**Skip** (FR-009): both `GameScreen.jsx` (a Toolbar button, rendered only when `onboarding === true`, alongside Hint/Resign) and `OnboardingImportOfferScreen.jsx` (a third button next to Accept/Decline, rendered unconditionally — every path that reaches that screen is already an onboarding pass) wire their skip control to the same pure factory, `createOnboardingSkipHandler({ updateProfile, track, go })` in `src/lib/onboardingSkip.js` — extracted for the same `node --test`-cannot-parse-JSX reason as the other onboarding lib modules. The returned handler fire-and-forgets `updateProfile({ onboarding_status: 'skipped' })`, fires `track('onboarding_skipped', {})`, and calls `go('home')` synchronously (it does not await the profile write). Because `'skipped'` is never `'seen'`, this is guaranteed by construction to bypass the Home-fallback import-offer check (`shouldShowHomeFallbackOffer`) — no separate bypass logic exists. On `OnboardingImportOfferScreen`, skip differs from the existing `handleDecline` only by *additionally* writing `onboarding_status: 'skipped'` — decline alone leaves `'seen'` standing (correct, since `'seen'` already suppresses nothing extra), while skip is an explicit opt-out.
+
+**Settings "Replay intro"** (FR-010, research.md R6): `SettingsScreen.jsx` renders a "Replay intro" button — in **both** its unauthenticated and authenticated views, visible for any onboarding state — that calls `go('game', ONBOARDING_GAME_PARAMS)` **directly** (the same `{ difficulty: 'easy', side: 'first', onboarding: true }` constant `onboardingRouting.js` exports for the auto-route effect). This deliberately **bypasses** the `Navigator` auto-detect effect (T018/`shouldAutoRouteToOnboarding`) entirely — it is an explicit user action, not the anonymous-only auto-route, so it works regardless of `session`/`onboarding_status`.
+
+**Home → Settings reachability (SC-004)**: `HomeScreen.jsx`'s gear icon (`onRight2`) navigates straight to `go('settings')` unconditionally — it no longer gates anonymous taps behind `AuthModal`. This was changed as part of T043: `SettingsScreen`'s unauthenticated view already rendered gracefully pre-Epic-8, but the gear icon's old `session ? go('settings') : setAuthOpen(true)` handler made Settings (and therefore "Replay intro") **unreachable without signing in first** for anonymous users — which defeats SC-004 ("re-launch from Settings in ≤2 nav actions"), since onboarding's auto-route (and therefore its skip path) is anonymous-only. Home gear → Settings → "Replay intro" is now 2 taps for any user, authenticated or not.
 
 The only frontend environment variable required for auth is `VITE_API_BASE_URL`.
 There is no `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, or client-side Supabase SDK.
+
+**The return leg always lands on the site root.** The server passes `redirect_to = FRONTEND_URL`
+(`server/index.js`), i.e. `/` — never the screen the user started from. Sign-in is a full-page
+redirect, so no in-memory callback survives it. Any "return the user to where they were headed"
+behavior must therefore stash the destination client-side before the redirect (sessionStorage
+survives it: same tab, same origin) and consume it after reload. Do not assume a user who signs
+in from screen X is still on screen X afterward — they are on Home.
+
+**There is no route-level auth guard.** Every screen key in `URL_MAP` is reachable while signed
+out; `SESSION_ONLY_SCREENS` is a cold-boot-state guard, not an auth guard. Gating a CTA gates the
+CTA, not the destination screen — a signed-out user can still reach that screen by bookmark, Back
+button, refresh, or a shared link, and will see whatever signed-out state the screen renders.
+When gating a feature, check what its screen shows to a signed-out visitor who arrives directly.
 
 ## Environment Variables
 
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Server base URL (default: `''` = same origin) |
+
+## DEV Board Injector (spec 049 QA tooling)
+
+A developer/QA aid for loading arbitrary board positions that normal play can't reach (e.g. the
+puzzle-scoring repro boards). **Every surface is `import.meta.env.DEV`-gated**, so Vite
+dead-code-eliminates it from production builds (verified: a prod `vite build` contains none of the
+`Dev: load board` / `DEV_QA_FIXTURES` / `devBoard` strings). Same convention as the AuthModal
+"🛠 Dev: skip auth" button.
+
+- **Modules:** `src/lib/devFixtures.js` (`DEV_QA_FIXTURES` frozen QA boards + pure
+  `buildDevPuzzle({movestring,category,correctCol,highlightMetadata})` → the inline puzzle shape),
+  `src/lib/devBoardParam.js` (`parseDevBoardSearch` pure + `readDevBoardParam` DEV-gated wrapper),
+  `src/components/DevBoardInjector.jsx` (the collapsed `🛠 Dev: load board ▾` panel — fixture
+  dropdown + custom movestring/category form).
+- **Challenge:** `ChallengeScreen` renders the panel (DEV-only) and its `loadPuzzles()` has a DEV
+  branch that takes a `devPuzzles` prop (set by the panel via `go('challenge', {category, devPuzzles})`)
+  **or** a `?devBoard=` URL param, in priority over the normal draw. The panel path re-navigates so
+  the `/challenge/:category` **path segment stays the authoritative category** for the accepted-gate;
+  there is no `devCategory` query param. `devPuzzles` is in the `loadPuzzles` effect deps so
+  re-loading a second board of the same category (no remount, since `go()` to the current screen
+  reuses the instance) actually re-runs.
+- **Sparring:** `App.jsx`'s mount effect has a DEV-gated exception — `/game?devBoard=…&devSide=…&devDifficulty=…`
+  cold-boots a seeded game via `GameScreen`'s existing `initialMoves` prop, bypassing the normal
+  session-only→home redirect for `game`.
+- **Gotcha:** fixture/deep-link boards go through the solver-backed `/api/evaluate-move`, which 500s
+  on a terminal (already-won) position — see memory `project_dev_board_injector`. Boards must be
+  solver-verified non-terminal, not hand-copied from predicate unit tests.
 
 ## Board Representation (Frontend)
 
@@ -132,7 +226,7 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 |---|---|---|---|
 | `board` | `board[row][col]` 2D array | 6×7 `'empty'` | Cell values: `'red'` → green disc, `'yellow'` → gray disc |
 | `onColumnClick` | `(col: number) => void` | — | Tap handler (0-indexed). Not called when `canPlay=false`, column full, or `onColToggle` provided. |
-| `canPlay` | boolean | `false` | Global interactivity gate |
+| `canPlay` | boolean | `false` | Global interactivity gate. Defaults to `false`, so a caller that omits it renders a read-only board. |
 | `overlays` | `Array<{c, r, type: OverlayType}>` | `[]` | Cell overlays. Replaces retired `highlightedCells` + `highlightMetadata`. |
 | `badge` | `{col, type: BadgeType, label}` | — | Single column evaluation badge |
 | `lastDrop` | `{c, r}` | — | Triggers `drop` CSS animation on that disc |
@@ -142,6 +236,22 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
 | `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 | `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
+
+### Which boards are interactive (read this before touching Board interactivity)
+
+The primary click target is a **per-column wrapper `<div>`** — one per column, carrying
+`onClick={handleClick}`, which branches to `onColToggle` in multi-select mode and otherwise to
+`onColumnClick`. It is *not* the per-cell handler: `onCellClick` is the deprecated curation shim
+below, live only for `CurationWorkspace`. Anything that adds column-level behavior (keyboard
+activation, ARIA roles, focus) belongs on the wrapper, and must route through the same
+`handleClick` so the multi-select branch is preserved.
+
+A board is interactive iff it passes `canPlay={true}`. Every such caller also passes
+`onColumnClick`. **`CurationWorkspace` and `BoardEditor`'s disc-placement mode are interactive
+boards**, despite being admin surfaces — do not classify them as read-only alongside the review,
+lesson, replay, and admin *display* boards. Conversely, `BoardEditor`'s overlay-annotation mode
+and every review/replay board are read-only. Verify a call site rather than inferring from the
+screen's name.
 
 ### OverlayType enum (LOCKED — cross-epic contract)
 
@@ -168,6 +278,46 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 **Do not use in any game-surface component.** Will be removed when CurationWorkspace is redesigned.
 
 `highlightMetadata` is fully retired — no shim. No caller other than `PuzzlesPage.jsx` used it (the old `SequenceHandler.jsx` no longer exists); all callers are now on `overlays`.
+
+### Per-column a11y attributes (spec 043 US1, `contracts/board-a11y-contract.md`)
+
+No new `Board` prop was added for this. `getColumnA11yProps({ col, canPlay, colFull })` (a pure
+function exported from `Board.jsx`) derives ARIA/keyboard attributes for the existing per-column
+wrapper `<div>` (`Board.jsx:211-229`) entirely from props that already exist (`canPlay`, `board`,
+`fullCols`) — it is not itself a `Board` prop.
+
+| Condition | `role` | `aria-label` | `tabIndex` | `aria-disabled` | Keyboard |
+|---|---|---|---|---|---|
+| `canPlay === false` (read-only board) | *(absent)* | *(absent)* | *(absent)* | *(absent)* | not focusable |
+| `canPlay === true`, column not full | `"button"` | `"column N"` (1-based) | `0` | *(absent)* | Enter/Space → same action as click |
+| `canPlay === true`, column full | `"button"` | `"column N"` | `-1` | `true` | not reachable by Tab; Enter/Space no-ops (same guard as click) |
+
+Invariants:
+
+- **I1 (FR-001/FR-002)**: A board renders either exactly 7 column controls (playable) or exactly
+  0 (read-only) — never a per-cell control count (42) and never a partial count.
+- **I2 (FR-004)**: Keyboard activation (Enter/Space) on a column control MUST call the exact same
+  `handleClick` function the mouse `onClick` calls — including its `multiSelectMode` branch
+  (`onColToggle` vs `onColumnClick`). No parallel/duplicated branch logic.
+- **I3 (FR-007)**: This addendum touches only the column wrapper's ARIA/tabIndex attributes. Disc
+  color rendering (`value === 'red'`/`'yellow'` → green/gray, `Board.jsx:303-317`) and all
+  `shimRole`/`overlays` highlight logic are untouched.
+- **I4 (FR-005)**: A focused column control (`:focus-visible`, `.board-col:focus-visible` in
+  `src/index.css`) MUST show a visible outline/ring distinct from the existing hover state
+  (`isHovered` background, `Board.jsx:223-224`) — focus and hover are visually distinguishable
+  states.
+
+**Verified: the gate is `canPlay`, not `onColumnClick` presence.** A plan-review critique raised
+the concern that admin boards with per-cell-only interaction (`canPlay={true}` but no
+`onColumnClick`) would incorrectly gain column controls with nothing behind them, and proposed
+gating on `onColumnClick` presence instead of `canPlay`. This was checked directly against the
+codebase: every call site that passes `canPlay={true}` (`GameScreen.jsx`, `SocraticScreen.jsx`,
+`PlayOnlineScreen.jsx`, `ChallengeScreen.jsx`, `CurationWorkspace.jsx:326-327`,
+`BoardEditor.jsx:109-111` when `mode==='disc'`) also passes `onColumnClick` in that same call.
+There is no site today where `canPlay` is `true` and `onColumnClick` is absent —
+`BoardEditor.jsx`'s per-cell overlay mode sets `canPlay={false}`, not `true`. The `canPlay` gate
+is therefore kept as-is; do not relitigate this — see `research.md` R1 in
+`specs/043-global-ui-ux-polish/` for the full verification trace.
 
 ## Shared Board Utility
 
@@ -250,6 +400,21 @@ The Tier-1 strip and "Learn more ▼" button are not rendered for sequence puzzl
 
 **Note:** Any reference in memory docs or older specs to a `SequenceHandler` component is stale. The component was removed; its logic lives entirely in `ChallengeScreen.handleSequenceClick`.
 
+**`threatCells` shape mismatch**: `POST /api/puzzles/:id/sequence/move` returns `threatCells` as `{ c, r }` objects — **not** `{ col, row }` as the `/check` endpoint uses.
+
+**`isSubmitting` is cleared per-branch, never in `finally`**: `handleSequenceClick` deliberately has no `finally` block. `setIsSubmitting(false)` is explicit in each branch — inside the `setTimeout` callback for `continue` (~300 ms, async), after `setPhase('post-move')` for `success`, after the coach message for `wrong`, and in `catch`. Any new branch MUST include its own `setIsSubmitting(false)`; a `finally` would clear it synchronously and break the animated `continue` path.
+
+### Evaluation state shape (polymorphic)
+
+`ChallengeScreen`'s `evaluation` state object differs by category:
+
+- **Standard single-move categories**: `{ quality, badge, summaryLineKey, patternTag?, coachMood? }` — `summaryLineKey` is an i18n key passed to `t()` at render time.
+- **forbidden_columns**: `{ quality, badge, summaryLine }` — `summaryLine` is a **pre-rendered string** (the suboptimal case needs `{{found}}/{{total}}` interpolation that can't be deferred); there is no `summaryLineKey` field.
+
+The Tier-1 strip renders `evaluation.summaryLine ?? t(evaluation.summaryLineKey)` — always use this fallback pattern; never assume one field is present. New categories needing interpolation in the summary line should use the pre-rendered `summaryLine` approach.
+
+**Mode extensions must audit bare `category` references**: when a new mode replaces the `category` prop (e.g. lesson mode with `confirmationCategory`), introduce `const effectiveCategory = newMode ? altCategory : category` and grep `ChallengeScreen.jsx` for bare `category` uses — a missed one silently produces raw i18n keys like `coach.undefined.prompt.0` at runtime.
+
 ### Deep Reveal bottom-sheet panel
 
 After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more ▼") for categories that support it (all except `forbidden_columns` and sequence puzzles). Tapping the strip calls `POST /api/explain-move-llm` and displays the LLM explanation inside the sheet.
@@ -257,6 +422,8 @@ After `'post-move'`, `ChallengeScreen` renders a bottom-sheet panel ("Learn more
 ### `challengeSets.js` i18n-key shape convention
 
 All entries in `connect-four/server/challengeSets.js` use `displayNameKey` and `descriptionKey` fields (i18n key strings, e.g. `'challengeSet.immediate_threat.displayName'`). No literal `displayName`/`description` strings are stored. `SetPickerScreen` resolves display names via `t(set.displayNameKey) ?? set.slug`.
+
+The registry is **server-side only** — there is no `src/lib/challengeSets.js` and none must be created. `SetPickerScreen` reads set data from the `GET /api/puzzles/counts` response, which returns the `challengeSets.js` entries verbatim. To add or modify a set, edit the server file only.
 
 ## Category Constants
 
@@ -381,6 +548,121 @@ import { speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 - **`speakDeepReveal(audio: HTMLAudioElement)`** — pushes a pre-built Audio element (with `src` already set and `canplay` already fired) into the unified speech queue. Does NOT check the manifest — dynamic TTS bypasses pre-approval. Used by `DeepRevealPane.jsx` for on-demand TTS playback.
 - **`stopSpeech()`** — pauses `currentSpeechAudio`, clears `src` (releases resources, prevents stale `ended`/`error` events), nulls `currentSpeechAudio`, and empties the queue. Call this when the user dismisses the panel that triggered the speech (e.g., deep-reveal close, navigation away).
 
+## Lesson Audio Narration (spec 046 US3)
+
+Lesson **concept slides** (never Socratic slides — see below) can carry pre-generated per-message
+narration via an additive nullable `audio` field on each `coachMessages[]` entry:
+
+```
+Lesson.slides[].coachMessages[] = { text: string, audio?: string | null, ... }
+```
+
+`audio` is a static path under `public/audio/lessons/` (e.g. `/audio/lessons/<hash>.mp3`), written by
+the admin "Generate audios" flow (see api-conventions.md `POST /api/admin/lessons/:id/generate-audio`).
+`null`/absent means no narration has been generated yet for that message — playback simply skips it.
+
+**`getNarrationQueue(coachMessages, speechEnabled)`** (`src/lib/lessonNarration.js`) — pure helper.
+Returns `[]` if `speechEnabled` is false or `coachMessages` isn't an array; otherwise returns the
+ordered list of non-empty `audio` paths (messages with no `audio` are silently skipped, not treated as
+an error).
+
+**`speakLessonAudio(path)`** (`src/lib/useCoachSpeech.js`) — thin wrapper: `speakDeepReveal(new
+Audio(path))`. Reuses the same shared module-level speech queue as deep-reveal TTS (see "Coach Audio
+Manifest" below) — it does NOT go through `speakCoachMessage(key)`/the manifest, since lesson audio is
+identified by a stored path, not an i18n key.
+
+`ConceptScreen.jsx` drives narration in an effect keyed `[lesson, slideIndex, speechEnabled]`, calling
+`stopSpeech()` on cleanup (slide change, unmount, or narration/speech toggle) so playback never bleeds
+across slides. **`SocraticScreen.jsx` is intentionally NOT wired to this** — Socratic-phase messages
+(`ask`/`wrong1`/`wrong2`/`correct`/`hint`) are i18n-key-driven per spec 018/039 and stay on the
+`speakCoachMessage(key)` path; no lesson JSON has `coachMessages[]` on a Socratic slide.
+
+`CoachDialog.jsx` gained an optional `onReplay` prop rendering a replay button, for re-triggering the
+current message's narration on demand.
+
+## Admin Localhost Guard (FR-028)
+
+All `/admin/*` frontend routes are localhost-only, enforced by a single guard in `App.jsx` **outside**
+any `lazy()` import (so the block renders even if the lazy admin bundle would fail to load):
+
+```js
+if (window.location.pathname.startsWith('/admin')) {
+  if (!isLocalhostOrigin()) return <AdminBlockedPage />;
+  // ...per-sub-route lazy-imported branches follow
+}
+```
+
+- **`isLocalhostOrigin(hostname = window.location.hostname)`** (`src/lib/isLocalhostOrigin.js`) — pure
+  function; `true` iff hostname is `localhost`, `127.0.0.1`, or `::1`. Mirrors the server-side
+  `requireLocalhost` middleware (api-conventions.md) so the frontend and backend gates agree.
+- **`AdminBlockedPage.jsx`** (`src/pages/AdminBlockedPage.jsx`) — minimal, dependency-free component
+  (no data fetch, no further lazy import) rendered for any `/admin/*` path reached from a non-localhost
+  origin.
+
+This is a frontend-only convenience gate (a non-localhost visitor never even requests the admin bundle);
+the server-side `requireLocalhost` on every `/api/admin/*` route (server-conventions.md /
+api-conventions.md) is the actual security boundary and must not be treated as redundant with this one.
+
+## Saga Lock Reasons (`sagaLock.js`, spec 046 US1/US2)
+
+`src/screens/sagaLock.js` is a plain `.js` module (not `.jsx`, so `node --test` can import it directly)
+holding `SagaScreen`'s lock-derivation logic:
+
+- **`deriveLockReason(lesson, lessons, progress, tier)` → `'none' | 'tier' | 'order' | 'both'`** —
+  computes WHY a lesson is locked. `tierLocked` is the pre-existing spec-018 FR-003 rule
+  (`lesson.free === false && tier !== 'paid'`). `orderLocked` is new: true when the lesson's
+  predecessor (next-lower `order` in the full sorted lesson list; `null`/never-locked for the
+  lowest-order lesson) has no `'complete'` entry in `progress` (from `getLessonProgress()`). The order
+  gate is layered **on top of**, not a replacement for, the tier gate — deliberately overriding spec
+  018 FR-003 rule 4's tier-only lock semantics.
+- **`dispatchLockAction(reason)` → `'upgrade' | 'orderLock' | 'navigate'`** — `'tier'`/`'both'` →
+  `'upgrade'` (tier always wins when both apply); `'order'` → `'orderLock'`; `'none'` → `'navigate'`.
+
+`SagaScreen.jsx`'s `deriveNodeState` returns `'locked'` whenever `deriveLockReason(...) !== 'none'`.
+`handleNodeTap` short-circuits already-`done` lessons, then dispatches on `dispatchLockAction`'s result:
+`'upgrade'` opens `UpgradeModal` (via `useUpgradeCheckout`, Epic 5); `'orderLock'` shows a new
+auto-dismiss inline banner (i18n key `saga.orderLock.message`) — never the `UpgradeModal`, since an
+order-lock is not a paywall; `'navigate'` proceeds normally.
+
+## Board Memoization (`boardPropsAreEqual`, spec 046 US5)
+
+`Board` is exported as `export const Board = memo(BoardImpl, boardPropsAreEqual)` — a custom
+`React.memo` comparator, not the default shallow-prop-equality check.
+
+- **`deriveBoardSignature(board)`** (`src/lib/board.js`) — pure function; walks the 6×7 `board[row][col]`
+  array and builds a compact string of only non-`'empty'` cells (`"r,c,value|..."`). Two different
+  array *references* holding the same disc layout hash to the same signature.
+- **`boardPropsAreEqual(prevProps, nextProps)`** (`src/lib/board.js`) — for the `board` prop, compares
+  `deriveBoardSignature(prev) !== deriveBoardSignature(next)` instead of `Object.is` reference equality;
+  every other prop falls back to `Object.is` (React.memo's default semantics unchanged for
+  `overlays`/`lastDrop`/etc.).
+
+**Why**: a parent re-render that constructs a fresh `board` array with identical cell contents (e.g.
+triggered by an unrelated state change during coach narration) no longer forces `Board` to re-render —
+this was the fix for a board-flicker class of bug when narration state changes while the board is on
+screen. Any new caller that constructs `board` inline on every render should rely on this memoization
+rather than hand-rolling its own `useMemo` for the board array. Callers that need to stabilize other
+reference-typed props (e.g. `overlays`) still need their own `useMemo` — this comparator only special-
+cases `board`. See `tests/unit/boardMemoStability.test.js` for the reference-vs-content-equality
+regression coverage. This memoization is retained as harmless referential-stability hardening, but it
+was **not** the cause of the reported spec-046 "board flicker" — see the next section.
+
+## Coach-message accumulation must not reflow the board (`CoachDialog fixed`)
+
+The spec-046 "board moves down / flickers when the coach speaks" defect was **not** a disc re-render — it
+was a **layout reflow**. `ChallengeScreen` (and other screens) render `<CoachDialog>` directly above the
+board in a `flex column`. `CoachDialog` renders **all** `messages` stacked, and screens that **accumulate**
+messages (append a post-move feedback bubble below the prompt, rather than replacing the single message)
+grow the coach region's height — pushing the board, the next flow sibling, downward.
+
+**Convention**: any screen that accumulates coach messages over a board MUST pass the `fixed` prop —
+`<CoachDialog fixed …>`. `fixed` reserves a stable outer `height:140` (inner `maxHeight:120,
+overflowY:auto`), so appended bubbles scroll within the region instead of growing it. `GameScreen`,
+`ReviewScreen`, and (as of the flicker fix) `ChallengeScreen` use `fixed`. Screens that only ever show a
+single, *replaced* message (`ConceptScreen`, `SocraticScreen`, `HomeScreen`) do not accumulate and so do
+not need it. If you add a board+coach screen and the board visibly shifts when feedback appears, the fix is
+`fixed`, not board memoization.
+
 ## Debug Panel (`ClassifyAllPanel`)
 
 A developer-only panel that shows the output of `classifyAll` for any board position: 11 detector rows (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns, z_threat, undercut, overcut, figure_7, j_shape, claimeven) + board state (scores, threats, parity).
@@ -447,6 +729,10 @@ The mistakes feature has three independent screen routes:
 - **Level 2**: `mistakeDetail` -- `MistakesListScreen` with `category` prop -- filtered blunder list for one category. Shows Unreviewed/Reviewed tabs.
 - **Level 3**: `blunderDetail` -- `MistakeDetailScreen` with `blunderNavList`, `index`, `mistakeContext` (`'list'` | `'game'`), `mistakeSource` (`{ date, gameId, totalMoves }` | null), and `difficulty` (string | null, passed from `ReviewScreen` for "Start a new game from here") -- individual mistake detail with Prev/Next nav. Both suboptimal and blunder quality rows use this screen. Prev/Next navigates the full `blunderNavList` (all non-optimal moves for the game). Actions: **What should I have played** (deep reveal, updates overlay), **Start a new game from here** (calls `POST /api/games/from-position`; shows difficulty picker when difficulty is null), **Mark as reviewed**. Contextual Back: from a game review the Back button returns to `review`; from the list it calls `goBack()`.
 
+**`ReviewScreen` navigation contract**: registered at `/game/:id`; navigate with `go('review', { id: game.id })` (game UUID) — do NOT pass `moveString`; it is not a prop and the URL mapping only knows `id`. The screen fetches `POST /api/games/analyze` with that id.
+
+**Timeline-to-blunder matching (`ReviewScreen`)**: `navigateToMistake(moveIndex)` takes a **number** (the user-move ordinal, 1-indexed). It routes ALL non-optimal moves to `blunderDetail` via the `gameBlunderList` DB match (no Explorer fallback since the 2026-06-21 unification; the list includes both suboptimal and blunder rows since migration 051). When no row matches (queue still loading, or anonymous user) it is a no-op. The global ply index is `globalPlyIndex = 2*(moveIndex-1)` for `side === 'first'`, `2*(moveIndex-1)+1` for `side === 'second'`; the blunder row is matched where `board_state.length === globalPlyIndex`. `displayMoveNumber = board_state.length + 1` (1-indexed, display only); raw `board_state.length` is the internal join key. These two formulas are the most common source of off-by-one bugs in review navigation.
+
 **Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 14 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
 
 **Back-stack pattern**: The Navigator maintains a one-level back-stack via `prevScreen`. `goBack()` restores `prevScreen` and clears it to `null`. Do NOT implement `goBack()` by calling `go(prevScreen)` — that would overwrite `prevScreen` with the current screen instead of clearing it, breaking subsequent back navigations.
@@ -459,7 +745,7 @@ The mistakes feature has three independent screen routes:
 
 `src/lib/urlMapping.js` exports:
 - `URL_MAP` — ordered array of `{ screenKey, pattern, buildPath }` entries for all 16 routable screens. This is the canonical URL ↔ screen-key mapping; no other file may hard-code URL paths.
-- `SESSION_ONLY_SCREENS` — `Set` of 3 screen keys whose state cannot survive a cold page load: `summary`, `mistakeDetail`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.)
+- `SESSION_ONLY_SCREENS` — `Set` of 2 screen keys whose state cannot survive a cold page load: `summary`, `game`. On cold boot, these screens redirect to `home`. (`explorer` was removed when the Explorer screen was unified into `MistakeDetailScreen`.) `mistakeDetail` was removed from this set in spec 042: its route changed from a bare `/mistakeDetail` to `/mistakeDetail/:category` (`URL_MAP` entry `{ pattern: '/mistakeDetail/:category', screenKey: 'mistakeDetail', paramNames: ['category'] }`), so the `category` param now round-trips through the URL itself and the screen survives a cold reload by staying on the category list instead of redirecting to `home`.
 - `buildUrl(screenKey, params)` — constructs the URL pathname for a given screen + params.
 - `parseUrl(pathname)` — parses a pathname and returns `{ screenKey, params }` or `null`.
 

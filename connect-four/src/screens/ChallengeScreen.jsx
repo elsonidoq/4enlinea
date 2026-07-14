@@ -15,6 +15,10 @@ import { pickRandomKey } from '../lib/coachUtils.js';
 import { COACH_PACING_MS } from '../lib/constants.js';
 import { useAudio } from '../lib/useAudio.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/categories.js';
+import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
+import { buildDevPuzzle } from '../lib/devFixtures.js';
+import { readDevBoardParam } from '../lib/devBoardParam.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -47,6 +51,7 @@ export function ChallengeScreen({
   confirmationCategory,
   confirmationCount,
   confirmationChallenges = null,
+  devPuzzles = undefined,
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
@@ -127,6 +132,24 @@ export function ChallengeScreen({
   useEffect(() => {
     async function loadPuzzles() {
       try {
+        // DEV board injector (dead-code-eliminated in prod): a `devPuzzles` prop (set by handleDevLoad's
+        // go('challenge', {devPuzzles})) or a ?devBoard= URL param takes priority over the normal draw.
+        if (import.meta.env.DEV) {
+          let injected = devPuzzles?.length ? devPuzzles : null;
+          if (!injected) {
+            const p = readDevBoardParam();
+            if (p) injected = [buildDevPuzzle({ ...p, category })];
+          }
+          if (injected?.length) {
+            sessionIdRef.current = null;
+            setPuzzles(injected);
+            setCurrentIdx(0);
+            initPuzzle(injected[0]);
+            setPhase('pre-move');
+            return;
+          }
+        }
+
         // Use embedded challenges when provided (lesson editor curation)
         if (lessonMode && confirmationChallenges?.length > 0) {
           const loaded = confirmationChallenges.map(ch => ({
@@ -173,7 +196,7 @@ export function ChallengeScreen({
     }
     loadPuzzles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges]);
+  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges, devPuzzles]);
 
   // ── Audio: coach speech playback ─────────────────────────────────
   useEffect(() => {
@@ -188,6 +211,14 @@ export function ChallengeScreen({
     playMusic();
     return () => pauseMusic();
   }, [playMusic, pauseMusic]);
+
+  function handleDevLoad(puzzleObj, cat) {
+    // Re-navigate so the `category` prop (hence effectiveCategory + the accepted-gate) matches the
+    // loaded board. `go()` to the same screen does NOT remount ChallengeScreen (no `key` prop in
+    // App.jsx); instead the new `devPuzzles` prop (a fresh array reference) re-runs the loadPuzzles
+    // effect in place, since devPuzzles is now listed in its dependency array.
+    go('challenge', { category: cat, devPuzzles: [puzzleObj] });
+  }
 
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
@@ -221,53 +252,141 @@ export function ChallengeScreen({
     fetch(`${API}/api/evaluate-move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movestring: current.move_string, col, category: effectiveCategory }),
+      body: JSON.stringify({
+        movestring: current.move_string,
+        col,
+        category: effectiveCategory,
+        // Spec 049 (Epic 9) T010 — mandatory snake_case→camelCase remap. The client's local
+        // puzzle object (from GET /api/puzzles/draw) is snake_case; the server reads camelCase.
+        // Top-level rename only — the inner highlight_metadata JSON (.column, .cells[].role)
+        // passes through unmodified. Sent unconditionally; harmless no-op for categories that
+        // don't consume it.
+        correctCol: current.correct_col,
+        highlightMetadata: current.highlight_metadata,
+      }),
     })
-      .then(r => r.json())
+      // Guard against non-2xx responses (e.g. a solver/server error): without this, `r.json()`
+      // still parses an error body like `{ error: "internal error" }`, and the code below reads
+      // `data.quality`/`data.accepted` as undefined, which renders as a raw, untranslated
+      // `challenge.quality.undefined` i18n key on screen instead of failing gracefully like a
+      // network error does (see the existing `.catch` below).
+      .then(r => { if (!r.ok) throw new Error(`evaluate-move failed: ${r.status}`); return r.json(); })
       .then(data => {
-        setEvaluation(data);
+        // Spec 044 US3 / FR-015a: for the three multi-solution categories (immediate_threat,
+        // forced_block, double_threat), do NOT judge correctness by a bare
+        // `data.quality === 'optimal'` check — that's a pure solver-score comparison and can
+        // disagree with the puzzle's actual accepted-answer set (e.g. a fork column that isn't
+        // the single max-score column, or a winning/blocking column that isn't the stored
+        // canonical one). Read the additive `data.accepted` field instead, which the server
+        // computes via evaluatePredicate (FR-012's 'tied'-as-correct rule) for these categories.
+        // Spec 049 (Epic 9) T012 — the six SINGLE_ANSWER_CATEGORIES (z_threat, overcut,
+        // claimeven, undercut, figure_7, j_shape) have the same problem (a taught-pattern column
+        // can tie or trail the raw solver score) and now route through the same `accepted` gate
+        // (FR-008/FR-011/FR-012). Every other category keeps the original
+        // `data.quality === 'optimal'` check unchanged (FR-011).
+        const isMultiSolutionCategory = MULTI_SOLUTION_CATEGORIES.has(effectiveCategory);
+        const usesAcceptedGate = isMultiSolutionCategory || SINGLE_ANSWER_CATEGORIES.has(effectiveCategory);
+        const isCorrect = usesAcceptedGate ? data.accepted === true : data.quality === 'optimal';
+
+        // True when the accepted-gate promotes a pattern-correct-but-slower move to "correct":
+        // the server's raw score-only `quality` is below 'optimal' but the taught/tied pattern was
+        // actually played (OI-1 repro board 2 shape).
+        const acceptedPromoted = usesAcceptedGate && isCorrect && data.quality !== 'optimal';
+
+        // Symmetric case (OI-1 repro board 1 shape): the played column ties the raw solver score
+        // (so the server's unchanged, score-only `quality`/`badge` read 'optimal'/'good' per
+        // FR-003 — those fields are additive-only and MUST NOT be mutated for other callers) but
+        // it is NOT the taught pattern, so `accepted` is false. Without this, the display would
+        // silently keep showing the server's score-only "correct" verdict even though `isCorrect`
+        // (derived from `accepted`) is false — a wrong-answer SFX/attempt-record alongside a
+        // "correct" badge/coach line (SC-002 contradiction).
+        const acceptedDemoted = usesAcceptedGate && !isCorrect && data.quality === 'optimal';
+
+        // Re-pick summaryLineKey from the corrected-tier pool, but only when that pool actually
+        // has content — several categories (overcut, undercut, figure_7, j_shape) have NO
+        // `eval.<category>.*.summary` keys at all in en.json, and pickRandomKey's fallback
+        // (`${prefix}.0`) returns a key that doesn't resolve, rendering the raw untranslated key
+        // string on screen. Feature-detect with t() before using the picked key.
+        function pickSummaryKeyOrNull(quality) {
+          const key = pickRandomKey(t, `eval.${effectiveCategory}.${quality}.summary`);
+          return t(key) !== key ? key : null;
+        }
+
+        // The rendered badge/glyph/summary must agree with `isCorrect`, not the server's raw
+        // score-only `quality` — a valid tied/taught answer (accepted:true) must visually read as
+        // correct, not "suboptimal", and a score-tied-but-non-taught answer (accepted:false) must
+        // visually read as wrong, not "correct". This overrides the display-driving `quality`/
+        // `badge` fields for the accepted-gated categories when they'd otherwise contradict
+        // `accepted`. `summaryLineKey` is ALSO re-picked from the corrected-tier pool above when
+        // available — otherwise the visible summary line (e.g. "Playable, but the Z-threat column
+        // gives stronger parity control.") would still read from the server's unmutated,
+        // score-only `quality` tier and contradict the corrected badge/coach line (SC-002); when no
+        // corrected-tier summary pool exists for the category, summaryLineKey falls back to
+        // whatever the server sent (null for these categories in practice, since the pool is empty
+        // across all tiers, so no contradiction). `patternTag` is left as the server sent them
+        // (FR-010).
+        const displayData = acceptedPromoted
+          ? { ...data, quality: 'optimal', badge: 'good', summaryLineKey: pickSummaryKeyOrNull('optimal') ?? data.summaryLineKey }
+          : acceptedDemoted
+          ? { ...data, quality: 'blunder', badge: 'bad', summaryLineKey: pickSummaryKeyOrNull('blunder') ?? data.summaryLineKey }
+          : data;
+        setEvaluation(displayData);
 
         // SFX feedback
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           playSfx('correct_move');
         } else {
           playSfx('wrong_move');
         }
 
-        // Update coach — fall back to quality-aware generic pool when no category-specific key exists
+        // Update coach — fall back to quality-aware generic pool when no category-specific key exists.
+        // Spec 049 (Epic 9) Finding 1: when the accepted-gate promotes the move to "correct", the
+        // server's coachPhraseKey/coachMood were derived from the raw suboptimal quality and would
+        // contradict the corrected verdict (a "correct" badge/SFX alongside a hedging "think"-mood
+        // coach line — SC-002). Present a congruent optimal-voiced message instead: suppress the
+        // suboptimal category phrase (fall back to the optimal generic pool) and force the happy mood.
         const used = usedPhraseKeysRef.current;
-        let phraseKey = data.coachPhraseKey
-          ?? pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used);
+        // acceptedDemoted mirrors acceptedPromoted: suppress the server's optimal-voiced
+        // coachPhraseKey/coachMood (which would contradict the demoted "wrong" verdict) and fall
+        // back to the generic blunder-voiced pool, same mechanism as the promoted case.
+        const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' : (data.quality ?? 'blunder');
+        let phraseKey = (acceptedPromoted || acceptedDemoted ? null : data.coachPhraseKey)
+          ?? pickRandomKey(t, `coach.generic.${coachQuality}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
         lastCoachKeyRef.current = phraseKey;
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
-          mood: data.coachMood ?? moodDefaults[data.quality] ?? 'think',
+          mood: acceptedPromoted ? 'happy' : acceptedDemoted ? 'oops' : (data.coachMood ?? moodDefaults[data.quality] ?? 'think'),
         }]);
 
         // Win overlay if optimal win
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           const winLine = getWinLine(newBoard, row, col, color);
           if (winLine.length >= 4) {
             setOverlays(winLine.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
           }
         }
 
-        // Record attempt
-        store?.recordPuzzleAttempt({
+        // Record attempt. Skip for DEV-injector synthetic puzzles (`dev-<movestring>` ids,
+        // src/lib/devFixtures.js) — these have no real DB row, so `puzzle_id` isn't a valid uuid
+        // and the write 500s (Postgres "invalid input syntax for type uuid"). This is a pre-existing
+        // dev-tooling-only gap (unrelated to the spec-049 accepted-gate fix) surfaced while QA-ing
+        // via the fixture dropdown/deep-link; guarding here avoids masking real regressions with
+        // benign console noise during QA.
+        if (!String(current.id).startsWith('dev-')) store?.recordPuzzleAttempt({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],
-          outcome: data.quality === 'optimal' ? 'correct_first' : 'abandoned',
-          first_attempt_correct: data.quality === 'optimal',
+          outcome: isCorrect ? 'correct_first' : 'abandoned',
+          first_attempt_correct: isCorrect,
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
         store?.recordActivityDay().catch(() => {});
 
         // Analytics
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           track('puzzle_solved_correct', { puzzleId: current.id, category });
         } else {
           track('puzzle_solved_wrong', { puzzleId: current.id, category });
@@ -536,7 +655,7 @@ export function ChallengeScreen({
   if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
-        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} />
+        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
           <button onClick={handleBack} style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--line)', color: 'var(--ink)', cursor: 'pointer', fontSize: 14 }}>
@@ -556,6 +675,7 @@ export function ChallengeScreen({
         <TopBar
           onBack={handleBack}
           title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
+          onLogoClick={() => go('home')}
         />
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -576,11 +696,14 @@ export function ChallengeScreen({
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
       background: 'var(--bg-chal)',
     }}>
+      {import.meta.env.DEV && <DevBoardInjector onLoad={handleDevLoad} />}
+
       {/* Top bar */}
       <TopBar
         onBack={handleBack}
         title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
         meta={puzzles.length > 0 ? t('challenge.progress', { current: currentIdx + 1, total: puzzles.length }) : undefined}
+        onLogoClick={() => go('home')}
       />
 
       {/* Progress bar */}
@@ -590,8 +713,12 @@ export function ChallengeScreen({
         </div>
       )}
 
-      {/* Coach dialog — always visible */}
-      <CoachDialog messages={coachMessages} size={58} />
+      {/* Coach dialog — always visible.
+          `fixed` reserves a stable height (140px) so appending the post-move
+          feedback bubble scrolls within the coach region instead of growing it
+          and pushing the board down (FR-022 board-stability fix — matches the
+          GameScreen/ReviewScreen accumulating-messages pattern). */}
+      <CoachDialog fixed messages={coachMessages} size={58} />
 
       {deepRevealOpen ? (
         <DeepRevealPane
@@ -818,8 +945,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleSfx}
-          aria-label={sfxEnabled ? 'Mute sound effects' : 'Unmute sound effects'}
-          title={sfxEnabled ? 'SFX on' : 'SFX off'}
+          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+          title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -835,8 +962,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleMusic}
-          aria-label={musicEnabled ? 'Mute music' : 'Unmute music'}
-          title={musicEnabled ? 'Music on' : 'Music off'}
+          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+          title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',
@@ -852,8 +979,8 @@ export function ChallengeScreen({
         <button
           type="button"
           onClick={toggleSpeech}
-          aria-label={speechEnabled ? 'Mute speech' : 'Unmute speech'}
-          title={speechEnabled ? 'Speech on' : 'Speech off'}
+          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+          title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 36, height: 36, borderRadius: 10, border: 'none',

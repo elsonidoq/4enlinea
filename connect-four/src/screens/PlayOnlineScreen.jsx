@@ -428,6 +428,7 @@ export function PlayOnlineScreen({ go, goBack }) {
           title="Play Online"
           onBack={goBack}
           meta={`Move ${moveHistory.length}`}
+          onLogoClick={() => go('home')}
         />
 
         {/* Opponent banner — replaces CoachDialog */}
@@ -518,7 +519,7 @@ export function PlayOnlineScreen({ go, goBack }) {
   // Non-playing phases wrapped in TopBar chrome
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Play Online" onBack={goBack} />
+      <TopBar title="Play Online" onBack={goBack} onLogoClick={() => go('home')} />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', textAlign: 'center' }}>
         {phase === 'idle' && (
           <button

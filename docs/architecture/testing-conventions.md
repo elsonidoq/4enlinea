@@ -143,11 +143,39 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 - `tests/integration/claimeven.test.js`
 - `tests/integration/figure7_jshape.test.js`
 - `tests/integration/undercut_overcut.test.js`
+- `tests/integration/evaluateMoveMultiSolution.test.js` (spec 049 Epic 9 T025 — moved into `npm test` alongside `test:fast`, FR-021)
+- `tests/integration/singleAnswerCategoriesAccepted.test.js` (spec 049 Epic 9 T025)
+- `tests/unit/i18nKeyParity.test.js` (spec 049 Epic 9 T025 — see "i18n key-parity guard" below)
 - `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer)
 
 **`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js`, `tests/blunder/insertGameBlunder.test.js`, the reason-engine suite `server/tests/reasonEngine{,.denial,.drawToLose,.enrichment,.witness,.winSamples}.test.mjs` (solver-backed but fast), `server/tests/reasonNarratorVector.test.mjs` (pure), and `server/tests/computeEvidenceIsolation.test.mjs` (the reason-eval `compute.mjs` per-board error-isolation regression, pure — uses a throwing solver stub), and the `server/tests/winDistribution.*.test.mjs` suite (the win_distribution pipeline: `playPolicyGame`, policies, `extractOutcome`, `aggregateRows`, `renderReport` — all pure/solver-free) but **excludes** `tests/integration/candidate-generator.test.js`. (The reason-engine and win_distribution tests are in `test:fast` but **not** in the slower `test` script.)
 
 Files in `tests/difficulty/` and `tests/scores/` exist but are **not included** in either script — add them explicitly when they are ready.
+
+### i18n key-parity guard (spec 049, Epic 9, `tests/unit/i18nKeyParity.test.js`)
+
+A future maintainer adding new English UI copy without the matching Spanish key (or vice versa)
+would silently reintroduce an English-fallback gap. `tests/unit/i18nKeyParity.test.js` guards
+against this: a pure `getNestedKeyPaths(obj) -> Set<string>` helper flattens `src/i18n/en.json`
+and `src/i18n/es.json` into dotted leaf-key-path sets (no arrays occur in either file), asserts
+the two sets are equal, and on failure reports the symmetric difference (`missingFromEs`,
+`missingFromEn`) in the assertion message so the maintainer sees exactly which key(s) are
+missing from which file. This is a **key-presence-only** comparison — a proper noun translated
+identically in both files still passes; only structural key divergence fails the test. Registered
+in both `test` and `test:fast` (FR-020) per the "add to both lists" rule above. To
+self-regression-check the guard, temporarily delete a leaf key from `es.json` and run
+`node --test tests/unit/i18nKeyParity.test.js` — it should fail with the missing key path named
+in the assertion message; restore the key and it passes again (never commit the temporary
+deletion).
+
+**Limitation (do not over-trust a green parity test):** this guard only proves `en.json` and
+`es.json` have the *same keys*. It is completely blind to user-facing strings that were never wired
+to `t()` at all — hardcoded English literals in JSX (`title="Review"`, `aria-label="Mute music"`,
+button text). Those render English in every language and the parity test stays green. Spec 049 QA
+found a batch of these (Stats logout, Settings→Papergames, Game TopBar, audio aria-labels, Lessons
+list) and more remain (`docs/open_issues.md` OI-19). A passing parity test means "no key-level
+drift," NOT "the app is fully translated." When adding UI, wire every user-facing string through
+`t()` — a hardcoded literal is invisible to this guard.
 
 ### Pure Function Extraction Pattern
 
@@ -168,6 +196,18 @@ const supabase = {
 };
 ```
 Three tests cover: auth gate (null `user_id` skips insert), tag guard (invalid tag → `'suboptimal_move'`), and 23505-as-success (unique violation does not throw).
+
+### DOM / component tests (React Testing Library)
+
+Pure function extraction covers logic, not rendering — assertions like "does this component mount," "does it re-render on retry," or "is this button reachable via role" need a real DOM. For that, this repo uses **React Testing Library** on jsdom, still driven by `node:test` (no Jest/vitest introduced).
+
+- **Location**: `connect-four/tests/dom/*.dom.test.jsx`
+- **Run with**: `npm run test:dom` (from `connect-four/`) — a **separate** script from `test`/`test:fast`, because DOM tests need a jsdom global registered via `tests/dom/setup.js` (imported with `node --import`), plus an esbuild-backed JSX loader hook (`tests/dom/jsxLoader.mjs`, also registered in `setup.js`) since Node has no native JSX support. Neither is wanted for the plain `node:test` suites.
+- **Tooling**: `@testing-library/react`'s `render`/`screen`, `@testing-library/dom`, `jsdom`, `global-jsdom`.
+- **File list convention**: like `test`/`test:fast`, `test:dom` enumerates files explicitly (no globbing) — the directory-recursion mode of `node --test` filters by extension and does not pick up `.jsx`. Add new DOM test files to the `test:dom` script in `connect-four/package.json` by name.
+- **First example**: `connect-four/tests/dom/ErrorBoundary.dom.test.jsx` — renders `ErrorBoundary` around a child that throws and asserts the fallback's Retry button mounts.
+
+Use DOM tests for render/remount/interaction assertions the pure-function pattern can't express. Keep pure-function extraction as the default for pure logic — it's cheaper to write and run.
 
 ### `node --test` Conventions
 

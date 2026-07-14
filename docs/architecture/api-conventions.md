@@ -31,6 +31,49 @@
 
 **MUST NOT**: Any route skip `loadUser` — it is registered globally via `app.use(loadUser)`.
 
+## Auth Session Endpoints: `POST /api/auth/refresh`, `GET /api/auth/session` (spec 045)
+
+Both read `sb_access_token`/`sb_refresh_token` httpOnly cookies and both delegate the actual token exchange to `attemptRefresh` (`server/authRefresh.js`) — see server-conventions.md "Session Persistence & Silent Refresh" for the shared helper and the `REFRESH_TOKEN_MAX_AGE` (60-day) change.
+
+### `POST /api/auth/refresh`
+
+Unchanged request/response shape. Reads `sb_refresh_token`; 401 `{ error: 'No refresh token' }` if absent. On success, sets new `sb_access_token`/`sb_refresh_token` cookies and returns `200 { ok: true }`. On failure (`attemptRefresh` returns `null`), clears both cookies and returns `401 { error: 'Refresh failed' }`.
+
+**Concurrent-call behavior (FR-002a)**: there is **no** server-side de-duplication/coalescing of concurrent calls presenting the same refresh token — each call independently invokes `authClient.auth.refreshSession()`. This is safe in practice because `specs/045-account-session-checkout/research.md` (R1) empirically confirmed this project's Supabase/GoTrue instance does not enforce refresh-token rotation-with-reuse-detection: a refresh token remains valid even after being exchanged once, so two concurrent refreshes from the same token both succeed independently rather than the second failing against an already-rotated token. (Only verified against anonymous sessions — re-verify before relying on this for a different auth provider config.)
+
+### `GET /api/auth/session`
+
+**New processing order** (spec 045 US2, FR-004/FR-005 — never surprise-sign-out mid-session):
+1. If `sb_access_token` is absent AND `sb_refresh_token` is absent → `401 { error: 'Not authenticated' }` (no cookies to clear).
+2. If `sb_access_token` is present, validate via `authClient.auth.getUser(token)`. Valid → fetch profile, `200 { user: { id, tier } }` (unchanged from pre-045 behavior).
+3. If the access token is absent/invalid/expired (including the "access token missing but refresh token present" case from step 1) → **silently attempt a refresh**: call `attemptRefresh(sb_refresh_token)`.
+   - Success → set new cookies (same as `POST /api/auth/refresh`), re-fetch the profile with the refreshed user id, return `200 { user: { id, tier } }`. The caller cannot distinguish this from "was already signed in" — no new response fields.
+   - Failure (refresh token itself invalid/expired/revoked/absent) → clear both cookies, `401 { error: 'Token invalid' }`.
+
+Response shape is unchanged either way: `{ user: { id, tier } }` on success, `{ error }` on 401/503. No client changes were required to consume the improved behavior.
+
+**FR-007 (in-flight sign-in guard)**: no interaction with the OAuth hash-callback branch — that branch returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called. The two paths are mutually exclusive by control flow.
+
+## Stripe Webhook Endpoint: `POST /api/stripe/webhook` (spec 045, FR-025)
+
+Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Stripe signature verification — see server-conventions.md).
+
+**Request**: raw Stripe event body + `stripe-signature` header. No auth (Stripe-signed, not user-authenticated).
+
+**Response**: `200 { received: true, handled: boolean, eventType: string }` on any recognized/processed event, including duplicates (`eventType: 'duplicate'`, `handled: false`) and passthrough event types the processor doesn't act on (`handled: false`). `400 { error }` if signature verification fails.
+
+**Tier-mirror contract (FR-025)** — `users.tier` is written as a **live derivation of the Stripe subscription's current status**, not set once at purchase:
+
+| Event | Status | Write |
+|---|---|---|
+| `checkout.session.completed` | — | `tier: 'paid'`, `stripe_customer_id` set, `tracks` insert (`upgrade_completed`) |
+| `customer.subscription.updated` | `active` / `trialing` | `tier: 'paid'` |
+| `customer.subscription.updated` | `past_due` | no write (retry window; does not downgrade) |
+| `customer.subscription.updated` | `canceled` / `unpaid` | `tier: 'free'` |
+| `customer.subscription.deleted` | — | `tier: 'free'` (unconditional, terminal) |
+
+**Idempotency**: every event is first inserted into `stripe_events` (`stripe_event_id` UNIQUE); a `23505` conflict short-circuits before any tier write or `tracks` insert, returning `{ handled: false, eventType: 'duplicate' }`. Webhook redelivery of the same event is therefore safe to re-send with no double side effects.
+
 ## Access Guards
 
 - **`requirePaid`**: Middleware for paid-tier coach endpoints. Returns 403 if `req.user?.tier !== 'paid'`. Currently used by `GET /api/coach/weakness-map` only. Queue and resolve endpoints use inline `requireAuth` (401) instead.
@@ -152,9 +195,9 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 
 **Rate limit**: 30 req/min.
 
-## Coach Endpoints: weakness-map, queue, resolve
+## Coach Endpoints: weakness-map, queue, category-counts, resolve
 
-`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue and resolve endpoints now use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
+`GET /api/coach/weakness-map` still requires `requirePaid` (403 if `req.user?.tier !== 'paid'`). Queue, category-counts, and resolve endpoints all use inline `requireAuth` (401 if `req.user` is null) instead of `requirePaid`, making them available to all authenticated users.
 
 ### `GET /api/coach/weakness-map`
 
@@ -165,14 +208,20 @@ Returns per-category miss rates for the authenticated user.
 
 ### `GET /api/coach/queue`
 
-Returns the authenticated user's blunders with server-computed threat cell locations.
+Returns the caller's blunders with server-computed threat cell locations. Authenticated callers are scoped by `user_id`. **Anonymous callers** (anon free deep reveal) are served their device-scoped blunders when a valid `device_uuid` UUID query param is present (scoped `device_uuid = <param> AND user_id IS NULL`); an anon request without a valid `device_uuid` gets `401`. Response shape is identical for both. Scoping decision: `server/anonBlunderAccess.js#resolveQueueOwner`.
 
 **Query params**:
 - `status`: `all` (default), `unreviewed` (resolved_at IS NULL), `reviewed` (resolved_at IS NOT NULL)
 - `category`: optional string, must be a valid blunder tag slug. Filters blunders to a single pattern category.
 - `game_id`: optional UUID string. Filters blunders to those linked to a specific **AI sparring game** via the `game_id` column. Does NOT match papergames blunders — those use `papergames_game_id` and are not filterable via this param.
+- `limit`: optional integer, default 50, max 200. 400 `{ "error": "invalid limit" }` if non-numeric, non-integer, `< 1`, or `> 200`.
+- `offset`: optional integer, default 0. 400 `{ "error": "invalid offset" }` if non-numeric, non-integer, or `< 0`.
 
 **Response**: `{ "blunders": [...], "total": number }`
+- `blunders`: up to `limit` rows for the current filter set, starting at `offset`, in the ordering below.
+- `total`: the **true count** of all rows matching the current filters (computed via a DB-side `count()` query with the same filter chain, minus `.order()`/`.range()`) — independent of `limit`/`offset`. This is a corrected behavior: prior to spec 041, `total` was `enriched.length` (silently `min(true_total, limit)`); it is now the actual total.
+
+**Pagination contract (spec 041, FR-001–FR-003a)**: The 50-row response is a **page**, not the full result set. Any caller (UI screen or internal consumer) that needs *all* of a user's matching blunders — not just one page — **MUST** page to completion: loop with `offset += limit` until either the page returned fewer than `limit` rows, or accumulated rows equal `total` (the dual guard; checking `accumulated === total` alone can spin forever if a row is deleted mid-session and `total` becomes unreachable). See `server/coachQueuePagination.js` (`parseQueuePaginationParams`) and `src/lib/coachQueuePagination.js` (`shouldContinuePaging`) for the extracted pure functions implementing this contract; `MistakesListScreen.jsx` and `ReviewScreen.jsx` are current examples of consumers paging to completion. A response with `blunders.length < limit` is not itself evidence that no more rows exist unless it also satisfies the dual guard above.
 
 Each blunder object:
 ```json
@@ -197,9 +246,36 @@ Each blunder object:
 
 - `threat_cells` is computed server-side via `Board.majorThreatCells()`, filtering for the opponent's major threats after the played move.
 - `severity` is `round((best_score − score) / 36 * 10)`, an integer in [0, 10]. Normalized by 36 (max possible spread on a 7×6 board) and scaled to 10. Stored at insert time; 0 for legacy rows. UI buckets: Minor=1, Moderate=2–3, Critical=4–10 (chosen from empirical simulation data — ~58% / 28% / 14% of non-zero blunders).
-- Capped at 50 rows, ordered by `severity DESC, created_at ASC` (worst mistakes first; ties broken by oldest-first).
+- One page is at most `limit` rows (default 50, max 200), ordered by `severity DESC, created_at ASC, id ASC` (worst mistakes first; ties broken by oldest-first, then by `id` as a final deterministic tiebreaker) and preserved identically across pages within one paging session (no re-sorting/re-windowing between pages). The `id` tiebreaker is load-bearing: without it, rows sharing an identical `(severity, created_at)` — e.g. a batch import inserting many blunders in one statement, all stamped with the same `created_at` — can be returned in different relative order across separate `OFFSET`/`LIMIT` queries, causing pagination to skip some rows and duplicate others (found via QA with 137 seeded blunders: 8 became unreachable).
 - Auth: inline `requireAuth` (401).
 - Errors: 400 `{ "error": "invalid category" }` when `?category=` is not a valid blunder tag; 400 `{ "error": "invalid game_id" }` when `?game_id=` is not a valid UUID.
+
+### `GET /api/coach/category-counts`
+
+Returns the true per-category blunder count for the authenticated user (spec 041, User Story 2 /
+FR-004–006, FR-009) — a DB-side grouped `count()` over `blunders.pattern_category`, independent of
+any single page of `/api/coach/queue`. Drives the mistakes-overview cards in
+`CategoryListScreen.jsx` so no category (e.g. `undercut`, `forced_win`) silently vanishes for
+users with more blunders than a queue page.
+
+**Request**: no query params. Always scoped to `user_id = req.user.id`.
+
+**Response**: `{ "categories": [{ "category": "undercut", "count": 8 }, ...] }`
+- One entry per `pattern_category` with `count ≥ 1` for this user. Categories with zero blunders
+  are omitted.
+- `count` is a true DB-side count (`supabase.from('blunders').select('pattern_category,
+  count()').eq('user_id', req.user.id)`), scale-correct beyond 1,000 rows since it never
+  materializes individual rows into Node.
+- Filter set is `eq('user_id', ...)` only — same as `/api/coach/queue` — no `quality` filter
+  (`blunder`- and `suboptimal`-quality rows both counted).
+- Sorted by `CATEGORY_ORDER` (`server/categories.js`) for a stable card layout; unrecognized
+  categories sort last, alphabetically.
+
+**Auth**: inline `requireAuth` (401 `{ "error": "unauthorized" }` if `req.user` is null) — same
+pattern as `/api/coach/queue`, not `requirePaid`.
+
+**Errors**: `401 { "error": "unauthorized" }`; `503 { "error": "database unavailable" }` (no
+`supabase` client); `500 { "error": "<message>" }` (DB error).
 
 ### `POST /api/coach/queue/:blunderId/resolve`
 
@@ -278,6 +354,8 @@ Provides a pre-move recommendation for the current board position.
 
 Explains a specific move the human just played (post-move reflection).
 
+**Auth**: authenticated OR anonymous. Anonymous is allowed (anon free deep reveal) and bounded only by the per-IP `5 req/min` limiter — it never touches `users.deep_reveal_count` (anon has no users row). Authenticated free-tier still decrements the weekly quota (429 when exceeded); paid unlimited. Quota decision: `server/anonBlunderAccess.js#resolveExplainQuota`. The client enforces the "one free anon reveal" separately in `localStorage` (`anon_deep_reveal_v1`); the server does not track anon usage.
+
 **Request body**: `{ movestring: string, col: number, rounds?: number }`
 - `movestring`: position **before** the human's move
 - `col`: 0-indexed column the human played
@@ -316,6 +394,8 @@ Explains a specific move the human just played (post-move reflection).
 
 Returns spoken (TTS) audio for a cached deep-reveal explanation. The client points an `<audio>` element at this endpoint. On a cache hit, the server redirects (302) to a signed Supabase Storage URL; on a miss, it streams OpenAI TTS audio directly while buffering for background upload to the cache.
 
+**Auth**: authenticated OR anonymous (anon free deep reveal — the anon "aha" reveal gets a coach voice too). The endpoint is keyed purely by the position hash (`moveString:col`), reads no user data, and `404`s when no explanation is cached, so anon access exposes nothing; it never dereferences `req.user`. (Note: an empty `moveString` — the opening move — `400`s for all callers, a pre-existing validation quirk.)
+
 **Query params**: `moveString=<0-indexed movestring>&col=<0-indexed column>`
 - `moveString`: position **before** the move (0–42 chars, digits 0–6)
 - `col`: 0-indexed column played
@@ -345,9 +425,35 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 ## Scores Endpoint
 
 `POST /api/scores` (**not** GET) — `server/index.js`.
-- **Request body**: `{ moves: string }` (the movestring so far, 0-indexed).
-- **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/aiDifficulty.js`).
-- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Callers: the deliberate-mistake mechanic (`secondBestColumn`) and the Hint overlay. Score semantics: see `reference_c4solver_scores` memory.
+- **Request body**: `{ moves: string, depth?: number, difficulty?: 'easy'|'medium'|'hard'|'perfect' }` (the movestring so far, 0-indexed).
+- **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/constants.js`).
+- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver_scores` memory.
+- **Sparring-move mode (`difficulty` present)**: the response is `{ scores, col }`, where `col` is the AI's chosen 0-indexed move computed **server-side** by `chooseSparringMove(board, difficulty, scores)` (`server/classifier.js`). An unknown `difficulty` value → 400. This is the single move-selection path for the sparring AI (`src/lib/useGameBoard.js` `makeAiMove` POSTs `{ moves, difficulty }` and plays `col`; on any error it falls back to a random legal column). The Hint overlay calls the same endpoint **without** `difficulty` and consumes `scores` only.
+- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns. See memory `project_sparring_move_algorithm`.
+- **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
+
+## Migrate Endpoint (POST /api/user/migrate)
+
+Three invariants: (1) the DB helpers return `{ error }` rather than throwing — the handler must check `results.find(r => r?.error)`; (2) `on_auth_user_created` gives new users `device_uuid = null` — the endpoint must generate one server-side **before** writing `puzzle_attempts`; (3) the bulk insert falls back to row-by-row on FK violations, skipping error codes `23503`/`23505`.
+
+**`onboarding_status` carry-over (Epic 8 — Onboarding Experience, spec 048, T021, FR-012)**: the request body accepts an optional sixth key, `onboarding_status`, alongside `puzzle_attempts`/`session_stats`/`lesson_progress`/`sparring_record`/`streak`. Handling:
+- Validated via the single shared `isValidOnboardingStatus()` (`server/userHelpers.js`) — no inline enum re-check.
+- Applied with a **conditional** update, never a blind overwrite:
+  `supabase.from('users').update({ onboarding_status }).eq('id', req.user.id).eq('onboarding_status', 'not_encountered')`
+  — this is a `WHERE id = $1 AND onboarding_status = 'not_encountered'` write, so an account that already has a real prior `seen`/`skipped` status (e.g. from a different device's earlier migration) is never clobbered by a fresh device's migrating value.
+- Absent or invalid `onboarding_status` is a **silent no-op** — it does not add an entry to `operations` and MUST NOT fail the rest of the migration (the other five data categories migrate independently of this one optional field, matching the endpoint's existing per-category tolerance).
+- Client side: `IndexedDBStore.migrateToSupabase` (`connect-four/src/store/IndexedDBStore.js`) reads a fresh `getProfile()` and includes `profile?.onboarding_status` in the POST body as one more key — the `profile` object store is not cleared by this method (only the other 5 stores are).
+
+**`device_uuid` games re-association (Feature 3 — onboarding follow-ups, spec 048 follow-up, 2026-07-13)**: the request body accepts an optional seventh key, `device_uuid` (the client's own uuid, sent from the same `getProfile()` read). Handling:
+- Anonymous sparring games are written directly to the `games` table by `POST /api/games` with `user_id: null`, keyed by `device_uuid` — they are **not** in IndexedDB. This step claims them for the account with one more entry in `operations`:
+  `supabase.from('games').update({ user_id: req.user.id }).eq('device_uuid', body.device_uuid).is('user_id', null)`
+- **Key on the client's `body.device_uuid`, NOT the endpoint's locally-derived `deviceUuid`** (invariant 2 above generates a fresh `device_uuid` for new users — that value would never match the anon game rows). This is the whole point of sending it in the body.
+- `WHERE user_id IS NULL` is `.is('user_id', null)` (not `.eq`), so only unclaimed rows are taken and the op is idempotent on client retry.
+- Absent or empty-string `device_uuid` is a **silent no-op** (guard: `typeof body.device_uuid === 'string' && body.device_uuid.length > 0`) — must not add an entry to `operations` or fail the rest of the migration.
+- Trust model: `device_uuid` is client-supplied, same as every other migrate payload field; the `user_id IS NULL` guard caps the blast radius to unclaimed orphan rows. `papergames_games` is intentionally NOT re-associated (no anon path creates those rows).
+- **Anon blunders re-associate the same way (anon free deep reveal, 2026-07-13)**: keyed on the same `body.device_uuid`, one more `operations` entry mirrors the games block exactly, only the table differs:
+  `supabase.from('blunders').update({ user_id: req.user.id }).eq('device_uuid', body.device_uuid).is('user_id', null)`
+  Anon blunders are written by `POST /api/games/analyze` (see below) with `user_id NULL` + `device_uuid`; this claims them so Past Games mistake-counts and stats (both `user_id`-scoped) light up post-signup with no further change.
 
 ## Move Evaluation Endpoint
 
@@ -360,6 +466,22 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 - `col`: 0-indexed column played.
 - `category`: optional override for the phrase pool key (e.g. `"forced_block"`). When omitted, the classifier derives the pattern tag from the position via `classify()` (synchronous, pre-move board).
 - `aiMove`: absent or `false`.
+
+**`correctCol` / `highlightMetadata` (spec 049, Epic 9)**: optional request fields, sent by the
+client when `category` is one of `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`,
+`undercut`, `figure_7`, `j_shape`) — `{ correctCol: number | null, highlightMetadata: object |
+null }`. These are camelCase wire names matching what `evaluatePredicate`/`buildPredicatePuzzle`
+read (`puzzle.correctCol`, `puzzle.highlightMetadata`). **The client is responsible for remapping
+from its locally-held snake_case puzzle object** before sending: `correctCol:
+current.correct_col`, `highlightMetadata: current.highlight_metadata` — this is a top-level rename
+only, the inner `highlight_metadata` JSON shape (`.column`, `.cells[].role`) is unchanged. Ignored
+(harmless if sent) for every other category. Absence of these fields for a single-answer category
+is **not** a 400 — it flows through to `evaluatePredicate`'s existing fail-closed `{ result:
+'wrong' }` path, so a missed client-side remap silently yields `accepted: false` rather than an
+error; this is why `tests/integration/singleAnswerCategoriesAccepted.test.js` asserts a positive
+`accepted: true` case per category, not only negatives. See
+`specs/049-puzzle-scoring-spanish-localization/contracts/api-evaluate-move.md` for the full
+contract delta.
 
 ### AI-Move Path (`aiMove: true`)
 
@@ -384,12 +506,14 @@ The `coachPhraseKey` in the AI-move response is ignored by the client. The clien
   "coachPhraseKey": "coach.immediate_threat.optimal.0" | null,
   "coachMood": "happy" | "think" | "oops",
   "summaryLineKey": "eval.immediate_threat.optimal.summary.0" | null,
-  "patternTag": "<category slug>" | null
+  "patternTag": "<category slug>" | null,
+  "accepted": true | false | null
 }
 ```
 - `badge` and `quality` are derived from the solver score for `col` relative to the best available score.
 - `coachPhraseKey` and `summaryLineKey` are randomly selected from the matching i18n pool; `null` if no pool exists for the pattern.
 - `patternTag` is the classifier's category slug for the position; `null` if the position doesn't match any known pattern.
+- `accepted` (spec 044 US3 FR-015a, widened by spec 049 Epic 9 FR-001–FR-012): additive field, computed via `evaluatePredicate`, present (non-null) for **nine categories total**: the three multi-solution categories (`immediate_threat`, `forced_block`, `double_threat` — correctness allows more than one valid answer column) plus the six single-answer categories via `SINGLE_ANSWER_CATEGORIES` (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`, `j_shape` — correctness has exactly one taught answer column, or in `undercut`'s case, one taught avoid-column). `true` when the played column independently satisfies the category's condition (`evaluatePredicate` result `'correct'` or `'tied'`), `false` otherwise, `null` for every other category (`forced_win`, `forbidden_columns`, `odd_even_threat`). One shared gate expression covers both sets (`server/categories.js`'s `SINGLE_ANSWER_CATEGORIES` is a separate, explicit list — never derived as "not multi-solution"). Recomputed at solve time; not persisted. For the six single-answer categories, computed from the request's `correctCol`/`highlightMetadata` fields (see above) via the shared `buildPredicatePuzzle` helper. See server-conventions.md's "Multi-solution acceptance" note.
 - No auth required; anonymous calls are accepted.
 
 **Errors**: 400 for invalid `movestring` or `col`, 500 for solver errors.
@@ -493,6 +617,8 @@ Saves a completed sparring game record.
 `GET /api/puzzles/:id` returns puzzle data including `userPlayer` (1 = Red, 2 = Yellow).
 Frontend uses `userPlayer` to determine which color disc to place on click and to display the "Playing as Red/Yellow" context chip.
 
+**Casing mismatch with `/draw`**: `GET /api/puzzles/draw` returns **raw DB rows in snake_case** (`move_string`, `correct_col`, `interaction_mode`, `highlight_metadata`, `user_player`, …) — it does NOT camelCase-transform, while `GET /api/puzzles/:id` returns camelCase (`moveString`, `goalPrompt`, …). Any component that passes a `/draw` row to a sub-component expecting camelCase needs a callsite adapter; read the consumer's field accesses first to catch every field.
+
 ## Sequence-Mode Puzzle Endpoint
 
 `POST /api/puzzles/:id/sequence/move` handles per-move validation for `interaction_mode = 'sequence'` puzzles.
@@ -506,6 +632,8 @@ All validation is bitboard-only — no solver calls.
 ### `POST /api/games/analyze`
 
 Scores every user ply in a completed game and returns a quality summary.
+
+**Auth / blunder writes**: no-auth (anonymous callers may analyze). It is also a **write** vector — it INSERTs `blunders` rows. Authenticated callers write rows under `user_id` (unchanged). **Anonymous callers on a device-scoped game** (anon free deep reveal) write rows with `user_id NULL` + `device_uuid` stamped from the fetched game row — decided by `server/anonBlunderAccess.js#resolveGameBlunderOwner`. Never compare `device_uuid` to `req.user.id` (different id namespaces — see `db-schema.md`). The ownership gate still 404s a signed-in caller passing another *user's* (non-null `user_id`) game.
 
 **Request body**: `{ gameId: string }`
 
@@ -540,9 +668,10 @@ Scores every user ply in a completed game and returns a quality summary.
 - `accuracy`: percentage of scored plies that were optimal.
 - `scored`: number of plies that were not forced (i.e., denominator for `accuracy`).
 - `summaryPhraseKey`: i18n key selected from the coach phrase pool based on blunder/suboptimal counts.
-- Auth: Optional (`loadUser` runs; `req.user` may be null). For authenticated users, **both suboptimal and blunder** plies are inserted into the `blunders` table with the appropriate `quality` value during analysis. Anonymous users get no persistence.
+- Auth: Optional (`loadUser` runs; `req.user` may be null). For authenticated users, non-optimal plies that pass the **storage rule** (`server/mistakeStorageRule.js` — see Data Model) are inserted into the `blunders` table with the rule's graded `quality`. Not every `suboptimal`/`blunder`-badged ply is persisted: slower wins and dead-position faster losses are skipped, so `moves[].quality` (from `scoreMove`, drives badges/counters) can differ from whether a `blunders` row exists. Anonymous users get no persistence.
+- **Ownership**: a game whose row has a non-null `user_id` is private to that user — a non-owner (including a different signed-in user) gets `404`, because this endpoint also *writes* blunder rows under the caller's `user_id` and a foreign `gameId` would corrupt the real owner's sibling data. Anonymous, device-scoped games (`user_id` null) stay open (no account to scope to, request body carries only `gameId`); do **not** authorize them by comparing `device_uuid` to `req.user.id` (different id namespaces — never matches). Papergames games always have a `user_id`, so ownership is always enforced for them.
 
-**Errors**: 400 (missing `gameId`), 404 (game not found), 500 (solver error), 503 (Supabase not configured).
+**Errors**: 400 (missing `gameId`), 404 (game not found **or not owned**), 500 (solver error), 503 (Supabase not configured).
 
 **Cache path (authenticated users with existing blunders)**: If the `blunders` table already contains rows for this user + game, the endpoint reconstructs the response from stored data instead of re-running the solver. One SELECT replaces all solver + tagBlunder + blunderSeverity calls. The cached `moves` array has `score`, `bestScore`, `bestCol` set to `null` (the ReviewScreen does not use these fields; MistakeDetailScreen reads them from the coach queue, not from here).
 
@@ -587,9 +716,12 @@ Records a blunder detected during post-game review. Fire-and-forget from the cli
 - `score`: c4solver score of the column actually played (current-player perspective, range ±18). Optional; defaults to 0.
 - `best_score`: c4solver score of the optimal column. Optional; defaults to 0.
 - The server computes `severity = best_score − score` and stores it. Do not send `severity` directly.
+- `quality` is derived server-side by the storage rule, not sent by the client.
 - Auth: **Required** (401 if `req.user` is null).
 
-**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key.
+**Storage rule**: the same `classifyStoredMistake` gate as `/api/games/analyze` (`server/mistakeStorageRule.js`) runs here. A move that is not a stored mistake (slower win, or a dead-position faster loss) is **not** inserted — the endpoint returns `200 { "stored": false, "reason": "not_a_stored_mistake" }` instead of `201`.
+
+**Response** (`201 Created`): `{ "id": "<uuid>" }` — the inserted blunder's primary key. **Or** (`200 OK`) `{ "stored": false, ... }` when the storage rule declined the move, or `{ "deduplicated": true }` on a unique-index conflict.
 
 **Notable behavior**: `puzzle_id` is always stored as `null` for blunders created from post-game review (as opposed to blunders created from puzzle attempts, which carry a `puzzle_id`).
 
@@ -614,10 +746,17 @@ Returns a single blunder by UUID. No auth required — this is the public permal
   "severity": 12,
   "blunder_severity": 7.50,
   "game_id": "<uuid>" | null,
+  "papergames_game_id": "<uuid>" | null,
   "moveIndex": 8,
   "threat_cells": [{ "col": 4, "row": 2 }],
+  "patternCells": [{ "col": 0, "row": 3 }],
   "quality": "blunder" | "suboptimal",
-  "is_owner": true
+  "is_owner": true,
+  "totalMoves": 41,
+  "siblingMistakes": [
+    { "id": "<uuid>", "moveIndex": 16, "quality": "suboptimal", "resolved_at": null },
+    { "id": "<uuid>", "moveIndex": 18, "quality": "blunder", "resolved_at": null }
+  ]
 }
 ```
 
@@ -626,6 +765,12 @@ Returns a single blunder by UUID. No auth required — this is the public permal
 - `user_id` is **never** exposed in the response.
 - Response shape is field-for-field identical to coach queue items, plus the `is_owner` boolean.
 - Threat cells are computed server-side via `computeThreatCells(board_state, move_played)`.
+- `papergames_game_id`: mutually exclusive with `game_id` — exactly one of the two is non-null for any real row. Always included in the `.select()` (spec 042 — previously omitted).
+- `totalMoves`: the parent game's total ply count (`moves.length` on the `games` or `papergames_games` row matching whichever of `game_id`/`papergames_game_id` is set). `null` only if neither FK is set on the blunder row.
+- `siblingMistakes`: every `blunders` row sharing the same parent game (matched on whichever of `game_id`/`papergames_game_id` is set on the requested row), ordered by `move_index` ascending, **including the row being requested**. Each entry carries only `id`, `moveIndex`, `quality`, `resolved_at` — no `board_state`/`move_played`/`correct_move`, so stepping to a sibling issues its own lazy `GET /api/blunders/:id`. No `user_id` filter is applied — consistent with the endpoint's public-permalink contract (a visitor sees the same sibling set the owner would). Rows are **de-duplicated by `move_index`** (keeping the currently-viewed `id` if it is itself a duplicate) so "X of Y" stays correct even against pre-existing duplicate AI-sparring rows — see `db-schema.md` `idx_blunders_game_unique` (migration 054).
+- `patternCells`: `[{ col, row }]`, 0-indexed, pattern-agnostic. Computed by looking up `pattern_category` in the tag→detector map (`PATTERN_TAG_TO_DETECTOR`, `server/blunderDetailResponse.js`; source map originates at `classifier.js:1536`) and, if mapped, running that pattern's detector against the board state/perspective that tag requires, converting the detector's 1-indexed `"cXrY"` cell strings to `{col, row}` via `parseCxRy`. Empty array when `pattern_category` has no detector mapping, the detector doesn't match, or the detector legitimately returns no cells (e.g. score-consuming/solver-based detectors). This is a *different* computation from `threat_cells` (which uses `move_played`, not `correct_move`) — see `specs/042-mistake-review-unification/contracts/api-blunders-id.md` for the full per-tag derivation table and the `double_threat`/`immediate_threat` traps. Feeds the same client highlight channel as `threat_cells`.
+- Shape composition (all four new fields) lives in `server/blunderDetailResponse.js` (`buildBlunderDetailResponse`, `fetchBlunderDetailContext`, `computePatternCells`, `parseCxRy`).
+- **List/enriched-map parity**: the list-variant endpoint (`GET /api/blunders`, builder in `server/index.js` around the `res.json({ blunders: enriched, ... })` call) independently constructs its own blunder shape and does **not** delegate to this handler — it carries the same `totalMoves`, `siblingMistakes`, and `patternCells` per row, computed the same way, so in-app navigation and cold-boot permalinks never diverge.
 
 **Errors**:
 - `400` — `{ "error": "invalid blunder id" }` when `id` is not a valid UUID.
@@ -679,20 +824,96 @@ Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, loca
 - `GET /api/admin/fv-suff/files` → `{ answers }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars).
 - `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
 
+## Lesson Audio Generation & Pruning Endpoints (spec 046 US3/US4)
+
+Additive routes under the existing `/api/admin/lessons/*` family. Both guarded by `requireLocalhost,
+requireAdmin` (same double-gate pattern as spec 039's `/api/admin/audio/generate*`). Full contract:
+`specs/046-lessons-progression-audio-polish/contracts/lesson-audio-generation.md`.
+
+### `POST /api/admin/lessons/:id/generate-audio`
+
+**Path param**: `id` — lesson id; `404 { error: 'not_found' }` if it doesn't exist.
+
+**Request body**: none — the server loads the lesson from disk (`getLesson(id)`), not from the client,
+so a stale client-held copy can't overwrite a concurrent edit.
+
+**Behavior**: for every concept-slide `coachMessages[]` entry with non-empty `text` whose current
+`audio` doesn't already match `hashMessageText(text) + '.mp3'`, calls `synthesize(text)`
+(`server/ttsProvider.js`), writes `public/audio/lessons/<hash>.mp3`, and sets
+`coachMessages[i].audio = '/audio/lessons/<hash>.mp3'`. Per-message failures are caught individually
+(that message's `audio` is left unchanged) — one bad synth does not abort the batch. Persists via
+`saveLessonFile` + `reloadLessons()`.
+
+**Response** (`200 OK`): `{ lesson, generated: [<locator>, ...], failed: [{ locator, error }, ...] }` —
+`generated` lists messages that got a *new* file this run (already-current messages are skipped
+silently); `failed` lists messages whose synthesis failed this run.
+
+**Errors**: `403` (non-localhost or non-admin), `404` (lesson not found), `500` (unexpected write error
+— per-message TTS errors are non-fatal, see above).
+
+### `POST /api/admin/lessons/prune-audio`
+
+**Request body**: none.
+
+**Behavior**: scans `public/audio/lessons/*.mp3`, computes the set of `audio` paths referenced across
+all lessons (`getLessonsAll()`), deletes any file not referenced.
+
+**Response** (`200 OK`): `{ deleted: [<filename>, ...] }` — empty array if nothing was orphaned.
+
+**Errors**: `403` (guard), `500` (filesystem error).
+
+## `requireLocalhost` Closure Across `/api/admin/*` (FR-028)
+
+**MUST**: every `/api/admin/*` route — all 39, as of spec 046 — carries `requireLocalhost` in addition
+to any existing `requireAdmin`, registered in that exact order: `app.<verb>('/api/admin/...',
+requireLocalhost, requireAdmin, handler)`. Grep-verifiable: `grep -n "app\.\(get\|post\|put\|delete\)('/api/admin" server/index.js` must show `requireLocalhost` in every match's handler-argument list.
+Previously some admin routes (lessons, puzzles) relied on `requireAdmin` alone, which is a no-op outside
+`NODE_ENV=production` (memory `project_admin_localhost_directive`) — this closure makes the localhost
+restriction unconditional and independent of `NODE_ENV`. New `/api/admin/*` routes MUST follow the same
+two-middleware order.
+
 ## Papergames Import Endpoints (spec 038)
+
+### `GET /api/user/profile`
+
+Returns an explicit, projected view of the authenticated user's profile — never `req.user` verbatim.
+
+**Response** (`200 OK`):
+```json
+{
+  "device_uuid": "<string>" | null,
+  "tier": "free" | "paid",
+  "deep_reveal_count": 3,
+  "deep_reveal_reset_at": "2026-06-16T00:00:00.000Z",
+  "papergames_id": "<string>" | null,
+  "last_import_at": "2026-05-01T12:00:00Z" | null,
+  "onboarding_status": "not_encountered" | "seen" | "skipped"
+}
+```
+- `onboarding_status` (Epic 8 — Onboarding Experience, spec 048): sourced from `req.user.onboarding_status`, itself populated by `USER_PROFILE_SELECT_COLUMNS` (`server/userHelpers.js`) — see that file's doc comment and `data-model.md`'s `onboarding_status` section for the three-state model.
+
+**Auth**: Required (inline `requireUser` -> 401). No DB call — `200` even when Supabase is not configured (all fields come from `req.user`, already populated by `loadUser`).
 
 ### `PUT /api/user/profile`
 
-Saves the user's Papergames account ID for self-service import.
+Saves the user's Papergames account ID and/or onboarding status. Both fields are optional but **at
+least one must be present**; either or both may be sent in a single call.
 
-**Request body**: `{ papergames_id: "<string>" }`
-- `papergames_id`: non-empty string, max 64 characters.
+**Request body**: `{ papergames_id?: "<string>", onboarding_status?: "not_encountered" | "seen" | "skipped" }`
+- `papergames_id`: non-empty string, max 64 characters, when present.
+- `onboarding_status` (Epic 8 — Onboarding Experience, spec 048): one of the fixed 3-value enum, when present. Validated via the single shared `isValidOnboardingStatus()` (`server/userHelpers.js`) — the ONE place this enum is checked; no other call site (including `POST /api/user/migrate`) may duplicate the check inline.
 
 **Response**: `204 No Content` on success.
 
-**Errors**: 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` for missing/invalid input; 401 for unauthenticated; 503 if Supabase not configured.
+**Errors**:
+- 400 `{ "error": "papergames_id must be a non-empty string (max 64 chars)" }` when `papergames_id` is present but invalid.
+- 400 `{ "error": "invalid onboarding_status" }` when `onboarding_status` is present but not one of the three enum values.
+- 400 `{ "error": "no valid fields provided" }` when neither field is present in the request body.
+- 401 for unauthenticated; 503 if Supabase not configured; 500 `{ "error": "Failed to update profile" }` on DB error.
 
 **Auth**: Required (inline `requireUser` -> 401).
+
+**Client store interface**: both `IndexedDBStore` and `SupabaseStore` (`connect-four/src/store/`) expose `async updateProfile(patch)` as the storage-agnostic entry point to this endpoint (`SupabaseStore`'s implementation `PUT`s `patch` straight through) — see `data-model.md`'s `onboarding_status` section. Callers never special-case which backend is active: `await store.updateProfile({ onboarding_status: 'seen' })`.
 
 ---
 
@@ -737,11 +958,17 @@ Polls the status of an import job.
   "status": "pending | running | done | error",
   "imported": 0,
   "skipped": 0,
+  "blunderErrors": 0,
   "capReached": false
 }
 ```
+- `imported`: count of rooms that were successfully fetched, parsed, analyzed, and upserted into `papergames_games` (spec 041 US5/FR-014).
+- `skipped`: count of rooms **abandoned mid-processing** due to a transient failure -- `fetchReplay` HTTP error, move-parsing error, an empty move string, a solver (`extractBlunders`) error, or an `upsertGame` write error (`server/papergamesImporter.js` ~:305-350). **This is not a duplicate-detection counter**: `importForUser` has no "already imported this room" check -- a room already owned by the user is simply re-processed and re-upserted (idempotent update via the `(user_id, papergames_room_uid)` unique constraint) and counts toward `imported`, not `skipped`. In practice, a same-user re-import shortly after a prior import is more likely to import 0 new rooms than to report `skipped > 0`, because the endpoint's incremental `lastImportAt` stop (see `POST /api/user/papergames/import` processing order) skips re-fetching rooms older than the last import entirely, before `importForUser` ever sees them.
+- `blunderErrors`: count of individual blunder-row inserts that failed for a genuine (non-duplicate) reason -- `insertGameBlunder` returning `false`. A `23505` (unique-violation) on the per-user blunder index is treated as an idempotent no-op success and is **not** counted here (`server/insertGameBlunder.js`).
 - `capReached`: `true` when the import was short-circuited because the user had already reached the 15-game free-tier limit.
 - `error`: present only when `status === "error"` -- contains the error message string.
+
+> **Known contract/implementation gap (spec 041 US5, flagged 2026-07-07)**: `contracts/papergames-ownership-migration.md` § US1.5 describes `skipped` as meaning "already-imported room for this user (genuine same-user duplicate)". The current `importForUser` implementation does not match that description -- it has no duplicate-room detection at all; `skipped` is purely a processing-failure counter, as documented above. Frontend copy (`SettingsScreen.jsx`) was written to describe the field's *actual* behavior (processing failures) rather than the contract's aspirational "duplicate" framing, to avoid presenting users with a fabricated explanation. A follow-up epic is needed if true duplicate-vs-error reporting is required by product.
 
 **Errors**: 400 `{ "error": "invalid jobId" }` for missing or non-UUID `jobId`; 401 for unauthenticated.
 

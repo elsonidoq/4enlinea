@@ -44,13 +44,23 @@ formal_predicate: |
   # threat per column.
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "16213263616"
     description: |
-      After T1–T7 simplification, Red holds uncancelled odd-row threats in columns
-      B (row 3), D (row 5), and F (row 3). Black holds no odd-row threats. V1 fires:
-      Red wins. The position's solver score should be positive (Red wins).
-    expected_behavior: "solver confirms Red wins; three separate Red odd-row threats remaining after T1–T7"
-    solver_verified: PENDING
+      0-indexed movestring (spec 044 / FR-020a backfill, independently re-verified
+      via `optimal_line.mjs`'s solver query against `TOOLS/` conventions and
+      `./visualize_board.sh`, not copied from the memory-only table uncritically —
+      the memory table's original movestring for V1 (`44452556366`) was checked and
+      found NOT to reproduce this pattern on re-verification, so this replacement
+      example was constructed and independently solver-confirmed instead). Red holds
+      three uncancelled major odd-row threats in separate columns: col0 row0, col4
+      row0 (both from a Red horizontal triple at row0 cols1-3), and col6 row4 (from
+      a Red vertical triple at col6 rows1-3, atop a single unrelated Black disc at
+      col6 row0). Black holds two EVEN-row threats (col0 row1, col4 row1) — these do
+      not count toward V1's Red-odd-count and do not block V1. Black to move; the
+      solver scores every column -15 for Black (Black loses regardless), consistent
+      with V1: Red wins via three separate uncancelled odd-row threats.
+    expected_behavior: "solver: all 7 columns score -15 for Black (mover) — Black loses regardless of move; major threats list shows exactly col0 row0 (X), col4 row0 (X), col6 row4 (X) as the odd-row threats (plus two even-row Black threats that don't affect V1's count)"
+    solver_verified: 2026-07-11
 
 false_positives:
   - movestring: PENDING
@@ -80,7 +90,7 @@ related:
   - "[[allen-v3]] — Red's simpler winning condition (one uncancelled odd-row threat)"
   - "[[allen-v5]] — Draw when neither V1–V4 applies"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-11
 ---
 
 ## Verbatim source

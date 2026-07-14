@@ -1,6 +1,38 @@
 // Goal predicate evaluator for puzzle categories.
 // Each category defines what "correct" means for a puzzle.
 
+// ── Spec 044 / T013 — exhaustive `evaluatePredicate` caller sweep (multi-solution 'tied' fix) ──
+// Run: `rg -n 'evaluatePredicate' connect-four` (2026-07-10). Every hit, classified:
+//
+//   fix-needed (branches on result === 'correct' only, ignoring 'tied'):
+//     - server/candidate-generator.js:493 (inside checkPredicateRaw's correctCols filter) — this
+//       IS the T016 fix itself (changed in this same commit to accept 'correct' || 'tied').
+//
+//   no-fix-needed (already treats 'tied' as accepted, or is category-agnostic passthrough,
+//   or is a non-production caller — test/debug script):
+//     - server/index.js:1646  (POST /api/evaluate-move/inline) — never branches on
+//       `result === 'correct'` at all; `quality`/`badge` come from scoreMove (solver-score
+//       comparison), and evaluatePredicate's result is only used to additively expose
+//       `correctCol`/`threatCells`/`forbiddenCols`. Category-agnostic passthrough — no fix needed.
+//     - server/index.js:2317  (POST /api/puzzles/:id/check) — already computes
+//       `isSuccess = evaluation.result === 'correct' || evaluation.result === 'tied'`.
+//     - server/index.js:3101  (GET /api/admin/scores, curation tool) — already computes
+//       `predicatePass = evalResult.result === 'correct' || evalResult.result === 'tied'`.
+//     - server/debug-immediate-threat.js:9 — standalone CLI debug script, prints raw
+//       `JSON.stringify(result)`; not a production caller, no accept/reject branch at all.
+//     - tests/predicates/predicates.test.js, tests/integration/claimeven.test.js,
+//       tests/integration/undercut_overcut.test.js, tests/integration/z_threat.test.js — test
+//       assertions read `evaluation.result` directly (asserting the exact expected string), they
+//       do not implement accept/reject business logic that could reintroduce the "false wrong" bug.
+//
+// Conclusion: exactly ONE production caller needed the fix (candidate-generator.js:493, the T016
+// change). The three server/index.js endpoints that gate on evaluatePredicate's result were
+// already written to accept 'tied' as correct — no T017 caller updates were required beyond T016.
+// `/api/evaluate-move` (server/index.js ~1543, the endpoint ChallengeScreen.jsx actually uses for
+// the puzzle-draw path) does NOT call evaluatePredicate at all today — see T015/T020 below, which
+// is a separate gap (client never got a category-aware verdict in the first place, not a 'tied'
+// mishandling) addressed by extending that endpoint in place.
+
 import { Board, detectDoubleThreat, detectForcedWin } from './classifier.js';
 
 const ROWS = 6;
@@ -21,6 +53,37 @@ function parseBoard(moveString) {
 // Returns the current player: 1 if even moves played, 2 if odd.
 function currentPlayer(moveCount) {
   return (moveCount % 2 === 0) ? 1 : 2;
+}
+
+// Spec 049 (Epic 9) T005 — single shared constructor for the object passed into
+// evaluatePredicate() from either POST /api/evaluate-move or POST /api/evaluate-move/inline.
+// Both handlers must build this object identically (FR-006's single-code-path mandate) — do not
+// add a second construction path in either handler.
+//
+// Plan.md Decision D2: goalPredicateType/goalPredicateParams are passed through, defaulted from
+// `puzzle` when present, matching the /inline handler's pre-existing
+// `puzzle.goalPredicateType || category` / `puzzle.goalPredicateParams ?? null` logic — this is
+// what keeps /inline's forced_win/forbidden_columns categories working once T007 routes it
+// through this same helper (those two categories read goalPredicateType/goalPredicateParams, not
+// correctCol/highlightMetadata).
+//
+// @param {string} category - the puzzle category slug
+// @param {string} movestring - 0-indexed move string for the position being evaluated
+// @param {object} [opts]
+// @param {number} [opts.correctCol] - camelCase scalar answer column (claimeven/figure_7/j_shape)
+// @param {object} [opts.highlightMetadata] - camelCase answer metadata (z_threat/undercut/overcut)
+// @param {object} [opts.puzzle] - optional richer puzzle object (as sent to /inline) to source
+//   goalPredicateType/goalPredicateParams/moveString overrides from
+// @returns {object} a predicate-ready puzzle object for evaluatePredicate()
+export function buildPredicatePuzzle(category, movestring, { correctCol, highlightMetadata, puzzle } = {}) {
+  return {
+    moveString: puzzle?.moveString || movestring,
+    category,
+    goalPredicateType: puzzle?.goalPredicateType || category,
+    goalPredicateParams: puzzle?.goalPredicateParams ?? null,
+    highlightMetadata: highlightMetadata ?? puzzle?.highlightMetadata ?? null,
+    correctCol: correctCol !== undefined ? correctCol : puzzle?.correctCol,
+  };
 }
 
 // Evaluate a puzzle attempt given the puzzle definition and solver scores.

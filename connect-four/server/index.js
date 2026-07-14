@@ -7,31 +7,68 @@ import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern } from './classifier.js';
-import { classifyAiMove } from './classifyAiMove.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern, chooseSparringMove, SPARRING_MISTAKE_RATES } from './classifier.js';
 import { loadKBShortSummary } from './llmCoachHelpers.js';
 import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
+import { parseQueuePaginationParams } from './coachQueuePagination.js';
+import { computeStatsAggregate } from './statsAggregate.js';
+import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
+import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { evaluatePredicate } from './predicates.js';
+import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
+import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
+import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
+import { registerStripeRoutes } from './stripeRoutes.js';
+import { createStripeProcessor } from './stripeProcessor.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
+import { classifyStoredMistake } from './mistakeStorageRule.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
+import { createAttemptRefresh } from './authRefresh.js';
+import { USER_PROFILE_SELECT_COLUMNS, defaultUserProfile } from './userHelpers.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
+import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
+import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
+import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Boot-time fail-safe (spec 047 FR-006) ──────────────────────────────────────
+// If we're pointed at a real (non-local) Supabase project but NODE_ENV isn't
+// 'production', cookies would silently ship without the `secure` flag (see
+// cookieOpts() below). Refuse to boot rather than risk a silent downgrade.
+// Inspects process.env only — never reads a file (avoids the boot-path .env
+// read crash trap; env-file loading via `node --env-file` has already resolved
+// by the time this module starts executing).
+{
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const isLocalSupabase = supabaseUrl && (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost'));
+  if (process.env.NODE_ENV !== 'production' && supabaseUrl && !isLocalSupabase) {
+    console.error('\n' + '!'.repeat(78));
+    console.error('FATAL: SUPABASE_URL points at a non-local project but NODE_ENV != "production".');
+    console.error(`  SUPABASE_URL=${supabaseUrl}`);
+    console.error(`  NODE_ENV=${process.env.NODE_ENV}`);
+    console.error('Refusing to boot: this would silently ship session cookies without the');
+    console.error('`secure` flag against a real backend. Set NODE_ENV=production, or point');
+    console.error('SUPABASE_URL at a local instance (127.0.0.1/localhost) for dev.');
+    console.error('!'.repeat(78) + '\n');
+    process.exit(1);
+  }
+}
 
 // ── Sentry (T004) ─────────────────────────────────────────────────────────────
 if (process.env.SENTRY_DSN) {
@@ -43,6 +80,56 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
+
+// ── Security headers (spec 047 FR-003/FR-004) ──────────────────────────────────
+// `<supabase-host>` for media-src is derived from SUPABASE_URL at startup — works
+// for both the production Supabase host and local 127.0.0.1:54321 with no env
+// branch. Falls back to omitting the extra media-src origin if SUPABASE_URL is
+// unset (e.g. Supabase not configured at all in this environment).
+//
+// FR-004: the CSP MUST permit the app's REAL external dependencies. Beyond the
+// Supabase media host, the Play-Online / Past-Games features talk to papergames.io
+// directly from the browser (spec 047 code-review, not caught in research.md §2):
+//   • PlayOnlineScreen.jsx opens `wss://papergames.io/socket.io/...` → needs
+//     connect-src (governs WebSocket) to allow papergames.io.
+//   • PastGamesListScreen.jsx renders avatar <img> from https://papergames.io →
+//     needs img-src to allow papergames.io.
+// A bare `connect-src/img-src 'self'` would silently break online play and avatars
+// in production (Express serves dist/ with this header; Vite dev does not, which is
+// why the local smoke test can't surface it). The inline service-worker <script>
+// that used to live in index.html was moved into src/main.jsx so `script-src 'self'`
+// can stay strict (no 'unsafe-inline'/nonce needed).
+const SUPABASE_HOST = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).host : null;
+const PAPERGAMES_ORIGIN = 'https://papergames.io';
+const PAPERGAMES_WS = 'wss://papergames.io';
+// Frontend Sentry (OI-10): browser SDK POSTs error events to the ingest host below.
+// Env-derived (not hardcoded to one Sentry project); defaults to the wildcard ingest
+// domain used by all Sentry SaaS projects.
+const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io';
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
+      mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+}));
+
+// Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
+// bytes. It MUST be parsed before the global express.json() below consumes the
+// request stream — otherwise by the time the route's own express.raw() middleware
+// runs (registerStripeRoutes is called much later in this file), the body stream has
+// already been read and parsed into an object, leaving nothing for raw() to read.
+// Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(cookieParser());
 app.use((req, res, next) => {
@@ -100,28 +187,9 @@ const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 // Shared UUID regex for blunder permalink endpoint + OG injection
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Compute opponent major threat cells after a move is played.
- * Hoisted from coach/queue so the blunder permalink endpoint can share it.
- * @param {string} board_state - move string before the move
- * @param {number} move_played - 0-indexed column played
- * @returns {{col: number, row: number}[]}
- */
-function computeThreatCells(board_state, move_played) {
-  try {
-    const postBoard = new Board(board_state + String(move_played));
-    const opponent = postBoard.currentPlayer;
-    const threatMap = postBoard.majorThreatCells();
-    return Object.entries(threatMap)
-      .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
-      .map(([key]) => {
-        const [row, col] = key.split(',').map(Number);
-        return { col, row };
-      });
-  } catch {
-    return [];
-  }
-}
+// computeThreatCells is imported from ./blunderDetailResponse.js (spec 042, T003) —
+// hoisted there so the blunder permalink endpoint's response shape is unit-testable
+// without booting the full app/solver.
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
@@ -201,6 +269,12 @@ try {
 
 // ── Auth proxy endpoints ──────────────────────────────────────────────────────
 
+// attemptRefresh(refreshToken) → { accessToken, refreshToken } | null — shared by
+// POST /api/auth/refresh and GET /api/auth/session (auto-refresh, see authRefresh.js).
+// authClient may be null if Supabase isn't configured; every call site below already
+// guards on `!supabase` (created alongside authClient) before reaching this.
+const attemptRefresh = createAttemptRefresh({ authClient });
+
 function cookieOpts() {
   return {
     httpOnly: true,
@@ -211,7 +285,7 @@ function cookieOpts() {
 }
 
 const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
-const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
+const REFRESH_TOKEN_MAX_AGE = 60 * 24 * 3600_000; // 60 days
 
 // GET /api/auth/oauth/google — redirect to Supabase Google OAuth
 app.get('/api/auth/oauth/google', (req, res) => {
@@ -256,7 +330,7 @@ app.post('/api/auth/callback', async (req, res) => {
     res.json({ user: { id: data.user.id, tier } });
   } catch (err) {
     logError('[auth/callback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -267,22 +341,22 @@ app.post('/api/auth/refresh', async (req, res) => {
   if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
   try {
-    const { data, error } = await authClient.auth.refreshSession({ refresh_token: refreshToken });
-    if (error || !data?.session) {
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Refresh failed' });
     }
 
-    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
-    if (data.session.refresh_token) {
-      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
     }
 
     res.json({ ok: true });
   } catch (err) {
     logError('[auth/refresh]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -293,32 +367,61 @@ app.post('/api/auth/signout', (_req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/auth/session — return current user from cookie token
+// GET /api/auth/session — return current user from cookie token, transparently
+// refreshing via the refresh-token cookie when the access token is missing/invalid
+// (spec 045 US2 / FR-004, FR-005: no surprise sign-out mid-session).
 app.get('/api/auth/session', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
-  const token = req.cookies?.sb_access_token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const accessToken = req.cookies?.sb_access_token;
+  const refreshToken = req.cookies?.sb_refresh_token;
+
+  if (!accessToken && !refreshToken) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
-    const { data, error } = await authClient.auth.getUser(token);
-    if (error || !data?.user) {
+    async function fetchProfileResponse(userId) {
+      let tier = 'free';
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', userId)
+        .single();
+      if (profile) tier = profile.tier;
+      return res.json({ user: { id: userId, tier } });
+    }
+
+    if (accessToken) {
+      const { data, error } = await authClient.auth.getUser(accessToken);
+      if (!error && data?.user) {
+        return await fetchProfileResponse(data.user.id);
+      }
+    }
+
+    // Access token absent/invalid/expired — fall through to a silent refresh.
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Token invalid' });
     }
 
-    let tier = 'free';
-    const { data: profile } = await supabase
-      .from('users')
-      .select('tier')
-      .eq('id', data.user.id)
-      .single();
-    if (profile) tier = profile.tier;
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
 
-    res.json({ user: { id: data.user.id, tier } });
+    const { data: refreshedUser, error: refreshedUserError } = await authClient.auth.getUser(result.accessToken);
+    if (refreshedUserError || !refreshedUser?.user) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Token invalid' });
+    }
+
+    return await fetchProfileResponse(refreshedUser.user.id);
   } catch (err) {
     logError('[auth/session]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -337,7 +440,7 @@ app.post('/api/auth/anonymous', async (req, res) => {
     res.json({ user: { id: data.user.id, tier: 'free' } });
   } catch (err) {
     logError('[auth/anonymous]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -358,17 +461,17 @@ async function loadUser(req, _res, next) {
 
     let { data: profile } = await supabase
       .from('users')
-      .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at')
+      .select(USER_PROFILE_SELECT_COLUMNS)
       .eq('id', data.user.id)
       .single();
 
     if (!profile) {
       // Trigger on auth.users may not have fired — create the row now.
-      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at').single()
+      await supabase.from('users').insert({ id: data.user.id }).select(USER_PROFILE_SELECT_COLUMNS).single()
         .then(({ data: created }) => { if (created) profile = created; });
     }
 
-    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString(), papergames_id: null, last_import_at: null };
+    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, ...defaultUserProfile() };
   } catch {
     // Non-fatal: treat as anonymous
   }
@@ -549,7 +652,8 @@ app.get('/api/admin/eval-set/:name', requireLocalhost, requireAdmin, (req, res) 
     res.json(JSON.parse(readFileSync(filePath, 'utf-8')));
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval set not found' });
-    res.status(500).json({ error: err.message });
+    logError('[admin/eval-set]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -592,7 +696,7 @@ app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (re
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'file not found' });
     logError('[admin/eval-results/:filename]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -625,7 +729,7 @@ app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) 
     res.status(201).json({ ok: true, feedback_file: feedbackName });
   } catch (err) {
     logError('[admin/eval-feedback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -665,7 +769,7 @@ app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'answers file not found' });
     logError('[admin/fv-suff]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -701,24 +805,24 @@ app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'reason evidence file not found' });
     logError('[admin/reason]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
-app.get('/api/admin/lessons', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   res.json(getLessonsAll());
 });
 
-app.get('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const all = getLessonsAll();
   const lesson = all.find(l => l.id === req.params.id);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
 
-app.post('/api/admin/lessons', requireAdmin, (req, res) => {
+app.post('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -728,11 +832,11 @@ app.post('/api/admin/lessons', requireAdmin, (req, res) => {
     res.status(201).json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/create]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
-app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.put('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -743,24 +847,50 @@ app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/update]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
-app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   try {
     deleteLessonFile(LESSONS_DIR, req.params.id);
     reloadLessons();
     res.json({ ok: true });
   } catch (e) {
     logError('[admin/lessons/delete]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// Requires requireLocalhost — the function declaration below (~:2795 in this file)
+// is hoisted, so it is safe to reference here at module init time.
+app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
+  const lesson = getLesson(req.params.id);
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  try {
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson);
+    saveLessonFile(LESSONS_DIR, updatedLesson);
+    reloadLessons();
+    res.json({ lesson: updatedLesson, generated, failed });
+  } catch (e) {
+    logError('[admin/lessons/generate-audio]', e);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/api/admin/lessons/prune-audio', requireLocalhost, requireAdmin, (req, res) => {
+  try {
+    const deleted = pruneOrphanedLessonAudio(getLessonsAll());
+    res.json({ deleted });
+  } catch (e) {
+    logError('[admin/lessons/prune-audio]', e);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin puzzle picker ──────────────────────────────────────────────────────────
 
-app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
+app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) => {
   const { category } = req.query;
   if (!category || typeof category !== 'string') {
     return res.status(400).json({ error: 'category query parameter is required' });
@@ -775,33 +905,39 @@ app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
       .eq('is_active', true)
       .eq('category', category)
       .order('created_at', { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[admin/puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
     res.json({ puzzles: puzzles || [] });
   } catch (e) {
     logError('[admin/puzzles]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 app.post('/api/scores', async (req, res) => {
-  const { moves, depth } = req.body;
+  const { moves, depth, difficulty } = req.body;
   if (typeof moves !== 'string') {
     return res.status(400).json({ error: 'moves must be a string' });
   }
-
-  if (moves === '' && !depth) {
-    return res.json({ scores: EMPTY_BOARD_SCORES });
+  // When `difficulty` is present the caller is the sparring AI: we return the
+  // chosen column (see chooseSparringMove) alongside the scores. The hint path
+  // omits `difficulty` and gets scores only.
+  if (difficulty !== undefined && !(difficulty in SPARRING_MISTAKE_RATES)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
   }
 
   try {
-    console.log(`[api] /api/scores moves="${moves}" depth=${depth ?? 'unlimited'}`);
-    const t0 = Date.now();
-    const scores = depth ? await queryDepth(moves, depth) : await solver.query(moves);
-    console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
+    const scores = (moves === '' && !depth)
+      ? EMPTY_BOARD_SCORES
+      : (depth ? await queryDepth(moves, depth) : await solver.query(moves));
+
+    if (difficulty !== undefined) {
+      const col = chooseSparringMove(new Board(moves), difficulty, scores);
+      return res.json({ scores, col });
+    }
     res.json({ scores });
   } catch (err) {
     logError('[scores]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -851,8 +987,8 @@ app.post('/api/explain', async (req, res) => {
     const { human, ai } = assignHeatmaps(current, opponent, moves.length, humanFirst);
     res.json({ human, ai });
   } catch (err) {
-    console.error('[explain]', err.message);
-    res.status(500).json({ error: err.message });
+    logError('[explain]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -954,18 +1090,19 @@ app.post('/api/explain-move', async (req, res) => {
     deepReveal = deepRevealData;
   }
 
-  res.json({ oneLiner, patternTag, deepReveal });
+  // Response-boundary guard (spec 042 US5, FR-019): strip internal community-/allen- label
+  // prefixes and raw cXrY coordinate tokens from every player-facing text field, regardless of
+  // whether it came from the cache or was just generated (research.md §5).
+  res.json(guardExplainMovePayload({ oneLiner, patternTag, deepReveal }));
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, cached?: boolean }.
-// Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
+// Anon allowed (rate-capped by the per-IP prefix limiter below; no quota). Free-tier: weekly quota of 20 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-
   const { movestring, col, rounds } = req.body;
 
   if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
@@ -997,12 +1134,15 @@ app.post('/api/explain-move-llm', async (req, res) => {
       .eq('position_hash', positionHash)
       .single();
     if (cached?.deep_reveal_json) {
-      return res.json({
+      // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
+      // module (computeMechanism/explainContext/llmCoachHelpers), so this is the ONLY seam that
+      // can catch a leak in a previously-cached row (research.md §5).
+      return res.json(guardExplainMoveLlmPayload({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
-      });
+      }));
     }
   }
 
@@ -1011,15 +1151,16 @@ app.post('/api/explain-move-llm', async (req, res) => {
     const result = await computeMechanism(movestring, col, {
       solver,
       model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
+      userId: req.user?.id ?? null,
     });
 
     if (result.notABlunder) {
       // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
-      return res.json({
+      return res.json(guardExplainMoveLlmPayload({
         explanation: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
         prompt: '',
         terms: {},
-      });
+      }));
     }
 
     // No fallback (by design): after one LLM retry, a persisting LLM error or an empty mechanism
@@ -1065,7 +1206,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     }
 
     // ── Decrement quota (if free-tier), cache, and respond ──
-    if (req.user.tier === 'free' && supabase) {
+    if (resolveExplainQuota(req.user) && supabase) {
       const quota = await checkAndDecrementQuota(req.user);
       if (!quota.allowed) {
         return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
@@ -1081,7 +1222,12 @@ app.post('/api/explain-move-llm', async (req, res) => {
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, prompt, terms: termsMap });
+    // Response-boundary guard (spec 042 US5, FR-019): applied here too (not just the cache-hit
+    // branch above) so a freshly-generated leak — e.g. an LLM non-compliance emitting
+    // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
+    // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
+    // future cache hit.
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -1131,11 +1277,11 @@ app.post('/api/llm-feedback', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[llm-feedback]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
     logError('[llm-feedback]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1188,10 +1334,15 @@ app.post('/api/blunders', async (req, res) => {
   // Auth required
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Blunders from losing positions are no longer skipped — the blunder_severity
-  // field provides the graduated measure of how much the move worsens the position.
-  // A move that drops from -2 to -15 is a meaningful blunder even if the position
-  // was already theoretically lost (as all second-player positions are).
+  // Storage rule (mistakeStorageRule.js, 2026-07): slower wins and faster losses
+  // from DEAD positions (no potential four-in-a-row left for the mover) are not
+  // stored; theoretically-lost-but-alive positions still are — this is NOT the
+  // old `bestScore < 0` skip (see data-model.md migration 029 note). Requires
+  // numeric score/best_score to classify; without them the move is not stored.
+  const storedMistake = classifyStoredMistake(best_score, score, board_state);
+  if (!storedMistake) {
+    return res.status(200).json({ stored: false, reason: 'not_a_stored_mistake' });
+  }
 
   try {
     // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
@@ -1215,6 +1366,7 @@ app.post('/api/blunders', async (req, res) => {
         move_played,
         correct_move,
         pattern_category: safeCategory,
+        quality: storedMistake.quality,
         severity: computeSeverity(best_score, score),
         blunder_severity: req.body.blunder_severity ?? null,
       })
@@ -1222,12 +1374,13 @@ app.post('/api/blunders', async (req, res) => {
 
     if (error) {
       if (error.code === '23505') return res.status(200).json({ deduplicated: true });
-      return res.status(500).json({ error: error.message });
+      logError('[blunders]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     res.status(201).json({ id: data[0].id });
   } catch (err) {
     logError('[blunders]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1239,44 +1392,19 @@ function userCanAccessCategory(user, categoryId) {
 }
 
 // GET /api/stats — per-user accuracy stats aggregated from puzzle_attempts
+// Scale-correct via computeStatsAggregate (spec 041 US3): DB-side grouped count() through the
+// puzzles!inner(category) join, not an unbounded per-row select — see server/statsAggregate.js.
 app.get('/api/stats', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { data, error } = await supabase
-    .from('puzzle_attempts')
-    .select('first_attempt_correct, puzzles!inner(category)')
-    .eq('user_id', req.user.id);
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  const byPattern = {};
-  let totalCorrect = 0;
-  for (const row of data) {
-    const category = row.puzzles?.category;
-    if (!category) continue;
-    if (!byPattern[category]) byPattern[category] = { correct: 0, attempted: 0 };
-    byPattern[category].attempted++;
-    if (row.first_attempt_correct) {
-      byPattern[category].correct++;
-      totalCorrect++;
-    }
+  try {
+    const result = await computeStatsAggregate(supabase, req.user.id);
+    res.json(result);
+  } catch (err) {
+    logError('[stats]', err);
+    res.status(500).json({ error: 'internal error' });
   }
-
-  const totalPuzzles = data.length;
-  for (const cat of Object.keys(byPattern)) {
-    const e = byPattern[cat];
-    byPattern[cat] = {
-      accuracy: e.attempted > 0 ? Math.round((e.correct / e.attempted) * 100) : 0,
-      attempted: e.attempted,
-    };
-  }
-
-  res.json({
-    accuracy: totalPuzzles > 0 ? Math.round((totalCorrect / totalPuzzles) * 100) : 0,
-    totalPuzzles,
-    byPattern,
-  });
 });
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
@@ -1302,7 +1430,7 @@ app.get('/api/puzzles', async (req, res) => {
     if (categoryId) query = query.eq('category', categoryId);
 
     const { data: puzzles, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
 
     // Group by category
     const byCategory = {};
@@ -1321,7 +1449,7 @@ app.get('/api/puzzles', async (req, res) => {
     res.json({ categories });
   } catch (err) {
     logError('[puzzles/admin]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1339,7 +1467,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
       .select('category, count()')
       .eq('is_active', true);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles/counts]', error); return res.status(500).json({ error: 'internal error' }); }
 
     const counts = {};
     for (const slug of CATEGORY_ORDER) {
@@ -1354,7 +1482,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
     res.json({ counts, sets: CHALLENGE_SETS });
   } catch (err) {
     logError('[puzzles/counts]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1417,7 +1545,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         .eq('is_active', true)
         .not('position', 'is', null);
 
-      if (countErr) return res.status(500).json({ error: countErr.message });
+      if (countErr) { logError('[puzzles/draw]', countErr); return res.status(500).json({ error: 'internal error' }); }
 
       if (totalIndexed === 0) {
         puzzles = [];
@@ -1432,7 +1560,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
           .order('position', { ascending: true })
           .range(offset, offset + n - 1);
 
-        if (resultErr) return res.status(500).json({ error: resultErr.message });
+        if (resultErr) { logError('[puzzles/draw]', resultErr); return res.status(500).json({ error: 'internal error' }); }
 
         puzzles = result || [];
 
@@ -1492,7 +1620,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
     res.json({ puzzles });
   } catch (err) {
     logError('[puzzles/draw]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1519,7 +1647,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
     res.status(204).send();
   } catch (err) {
     logError('[challenge-sessions/advance]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1561,63 +1689,11 @@ function pickFromPool(translations, prefix) {
 }
 
 // POST /api/evaluate-move — score a played move and return coach phrase keys
-app.post('/api/evaluate-move', async (req, res) => {
-  const { movestring, col, category } = req.body;
-
-  // Validate movestring
-  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
-    return res.status(400).json({ error: 'invalid movestring' });
-  }
-
-  // Validate col
-  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
-  if (!isValidCol0(colInt)) {
-    return res.status(400).json({ error: 'invalid col' });
-  }
-
-  try {
-    // Get solver scores
-    let scores;
-    if (movestring === '' || movestring.length === 0) {
-      scores = EMPTY_BOARD_SCORES;
-    } else {
-      scores = await solver.query(movestring);
-    }
-
-    // Score the move
-    const { badge, quality, bestCol } = scoreMove(scores, colInt);
-
-    // Classify for pattern tag
-    let patternTag;
-    if (req.body.aiMove === true) {
-      patternTag = await classifyAiMove(movestring, colInt, solver);
-    } else {
-      const classifyResult = classify(movestring, colInt, scores);
-      patternTag = classifyResult?.tag ?? null;
-    }
-
-    // Determine phrase pool key (request category takes priority)
-    const phrasePoolKey = category || patternTag;
-
-    // Pick i18n keys from pools
-    const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
-      : null;
-
-    const summaryLineKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
-      : null;
-
-    // Determine coach mood
-    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
-    const coachMood = coachMoodMap[quality] ?? 'think';
-
-    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
-  } catch (err) {
-    logError('[evaluate-move]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Spec 049 (Epic 9) T007a: the handler body itself now lives in server/evaluateMoveHandler.js,
+// as an importable, side-effect-free factory — this makes it mountable in integration tests
+// without booting the whole production server (see that module's header comment). No behavior
+// change here: this is a pure delegation, not a second implementation.
+app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations }));
 
 // POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
 // Returns richer results (correctCol, threatCells) than /api/evaluate-move.
@@ -1635,7 +1711,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     return res.status(400).json({ error: 'puzzle object is required' });
   }
   const category = puzzle.category || puzzle.goalPredicateType;
-  if (!category || !VALID_CATEGORIES.includes(category)) {
+  if (!category || !VALID_CATEGORIES.has(category)) {
     return res.status(400).json({ error: `invalid puzzle category: ${category}` });
   }
 
@@ -1655,15 +1731,9 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     const classifyResult = classify(movestring, colInt, scores);
     const patternTag = classifyResult?.tag ?? null;
 
-    // Run predicate evaluation for richer results
-    const predicatePuzzle = {
-      moveString: puzzle.moveString || movestring,
-      category,
-      goalPredicateType: puzzle.goalPredicateType || category,
-      goalPredicateParams: puzzle.goalPredicateParams ?? null,
-      highlightMetadata: puzzle.highlightMetadata ?? null,
-      correctCol: puzzle.correctCol,
-    };
+    // Run predicate evaluation for richer results — built via the shared T005 helper so this
+    // handler and POST /api/evaluate-move construct the predicate object identically (FR-006).
+    const predicatePuzzle = buildPredicatePuzzle(category, movestring, { puzzle });
     const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
 
     // Determine phrase pool key
@@ -1688,7 +1758,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     });
   } catch (err) {
     logError('[evaluate-move/inline]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1747,11 +1817,11 @@ app.post('/api/games', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[games/create]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
     logError('[games/create]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1798,7 +1868,7 @@ app.post('/api/games/from-position', async (req, res) => {
     res.json({ moves: truncated, side, difficulty });
   } catch (err) {
     logError('[games/from-position]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1865,33 +1935,29 @@ app.get('/api/games', async (req, res) => {
       pgQuery,
     ]);
 
-    if (aiError) return res.status(500).json({ error: aiError.message });
-    if (pgError) return res.status(500).json({ error: pgError.message });
+    if (aiError) { logError('[games]', aiError); return res.status(500).json({ error: 'internal error' }); }
+    if (pgError) { logError('[games]', pgError); return res.status(500).json({ error: 'internal error' }); }
 
-    // Fetch blunder counts for both game sets in parallel
+    // Fetch blunder counts for both game sets in parallel, via DB-side grouped count() —
+    // scale-correct past 1000 blunder rows and never uses `.in()` (see
+    // server/blunderCountsForGames.js for why `.in(gameIds)` is NOT safe here: aiIds/pgIds can
+    // be the user's FULL game set, not just the current page, since sorting happens before
+    // pagination below). computeBlunderCountsForGames applies no `quality` filter (spec 042
+    // T034/FR-005/FR-006) — the returned `blunder_count` (wire name unchanged, FR-007) already
+    // includes both blunder- and suboptimal-severity rows; a 0-blunder/≥1-suboptimal game is
+    // never miscounted as zero here.
     const aiIds = (aiGames || []).map(g => g.id);
     const pgIds = (pgGames || []).map(g => g.id);
 
-    // Use not-null filter instead of .in() to avoid URL-length limits (>~200 IDs causes 400 Bad Request)
-    const [aiBlundersRes, pgBlundersRes] = await Promise.all([
-      aiIds.length > 0
-        ? supabase.from('blunders').select('game_id').not('game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-      pgIds.length > 0
-        ? supabase.from('blunders').select('papergames_game_id').not('papergames_game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    if (aiBlundersRes.error) return res.status(500).json({ error: aiBlundersRes.error.message });
-    if (pgBlundersRes.error) return res.status(500).json({ error: pgBlundersRes.error.message });
-
-    const aiBlunderMap = {};
-    for (const b of (aiBlundersRes.data || [])) {
-      aiBlunderMap[b.game_id] = (aiBlunderMap[b.game_id] || 0) + 1;
-    }
-    const pgBlunderMap = {};
-    for (const b of (pgBlundersRes.data || [])) {
-      pgBlunderMap[b.papergames_game_id] = (pgBlunderMap[b.papergames_game_id] || 0) + 1;
+    let aiBlunderMap, pgBlunderMap;
+    try {
+      [aiBlunderMap, pgBlunderMap] = await Promise.all([
+        computeBlunderCountsForGames(supabase, userId, aiIds, 'game_id'),
+        computeBlunderCountsForGames(supabase, userId, pgIds, 'papergames_game_id'),
+      ]);
+    } catch (err) {
+      logError('[games]', err);
+      return res.status(500).json({ error: 'internal error' });
     }
 
     // Normalise both sets to a unified shape
@@ -1962,7 +2028,7 @@ app.get('/api/games', async (req, res) => {
     res.json({ games: page, total });
   } catch (err) {
     logError('[games]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1980,22 +2046,44 @@ app.post('/api/games/analyze', async (req, res) => {
 
   // Fetch game row — check AI sparring games first, then papergames imports
   let moves, side, difficulty, created_at, isPapergames = false;
+  let gameDeviceUuid = null;
   {
     const { data: aiGame } = await supabase
       .from('games')
-      .select('id, moves, side, difficulty, created_at')
+      .select('id, user_id, device_uuid, moves, side, difficulty, created_at')
       .eq('id', gameId)
       .single();
 
     if (aiGame) {
+      // Ownership check: a game with a user_id is private to that user. Without
+      // this, any signed-in user could pass another user's game id and both
+      // (a) read a full move-by-move analysis of a game they don't own, and
+      // (b) trigger the blunder INSERT below tied to their own user_id but
+      // referencing the foreign game_id — polluting that game's sibling-mistake
+      // data for its actual owner.
+      //
+      // Anonymous, device-scoped sparring games (user_id null) stay open per this
+      // endpoint's documented no-auth contract: the request body carries only
+      // gameId (no device_uuid to authorize against), and there is no account to
+      // pollute — a logged-out caller writes no blunders (the INSERT below is
+      // gated on req.user). Do NOT compare device_uuid to req.user.id — they are
+      // different id namespaces and never match, which 404'd every logged-out
+      // review of a just-played anonymous game.
+      if (aiGame.user_id && !(req.user && aiGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       ({ moves, side, difficulty, created_at } = aiGame);
+      gameDeviceUuid = aiGame.device_uuid ?? null;
     } else {
       const { data: pgGame } = await supabase
         .from('papergames_games')
-        .select('id, moves, side, played_at')
+        .select('id, user_id, moves, side, played_at')
         .eq('id', gameId)
         .single();
       if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      if (!(req.user && pgGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       moves = pgGame.moves;
       side = pgGame.side;
       difficulty = null;
@@ -2064,7 +2152,10 @@ app.post('/api/games/analyze', async (req, res) => {
       }
 
       const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
-      const phrasePool = cBlunder === 0
+      // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
+      // mistakes exist even if there are zero blunders — a game with 0 blunders and
+      // >=1 suboptimal move is still a game with mistakes.
+      const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
         ? 'coach.sparring.review.clean'
         : 'coach.sparring.review.mistakes';
       const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
@@ -2118,7 +2209,11 @@ app.post('/api/games/analyze', async (req, res) => {
       const score = scores[col];
       const bestScore = scores[bestCol];
 
-      const isMistake = quality === 'blunder' || quality === 'suboptimal';
+      // Storage rule (mistakeStorageRule.js): slower wins and dead-position
+      // faster losses are not stored; `quality` from scoreMove is kept as-is
+      // for the per-move badges/counters in the response.
+      const storedMistake = classifyStoredMistake(bestScore, score, movesBeforeThisPly);
+      const isMistake = storedMistake !== null;
 
       // Classify the position — tagBlunder may issue 60+ solver queries per ply;
       // acceptable here because this endpoint is called post-game, not during play.
@@ -2172,15 +2267,20 @@ app.post('/api/games/analyze', async (req, res) => {
         blunderSeverity,
       });
 
-      // Server-side mistake INSERT — anonymous users skip (user_id would be NULL).
-      if (req.user && isMistake) {
+      // Server-side mistake INSERT. Authenticated → user-scoped (unchanged).
+      // Anonymous AI-sparring → device-scoped (user_id NULL, device_uuid from the
+      // game row), re-associated to user_id on /api/user/migrate. resolveGameBlunderOwner
+      // NEVER compares device_uuid to a user id.
+      const blunderOwner = resolveGameBlunderOwner(req.user, { device_uuid: gameDeviceUuid });
+      if (blunderOwner && isMistake) {
         await insertGameBlunder(supabase, {
-          user_id: req.user.id,
+          user_id: blunderOwner.user_id,
+          device_uuid: blunderOwner.device_uuid,
           board_state: movesBeforeThisPly,
           move_played: col,
           correct_move: bestCol,
           pattern_category: patternTag,
-          quality,
+          quality: storedMistake.quality,
           reason,
           direction,
           severity: computeSeverity(bestScore, score),
@@ -2200,13 +2300,15 @@ app.post('/api/games/analyze', async (req, res) => {
     }
   } catch (err) {
     logError('[games/analyze]', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'internal error' });
   }
 
   const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
 
   // Pick summary phrase key
-  const phrasePool = blunderCount === 0
+  // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
+  // still a game with mistakes, never "clean"/"no mistakes to review."
+  const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
     ? 'coach.sparring.review.clean'
     : 'coach.sparring.review.mistakes';
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
@@ -2439,44 +2541,76 @@ function requirePaid(req, res, next) {
 }
 
 // GET /api/coach/weakness-map
+// spec 042 T034/FR-005/FR-007: neither the `coach_weakness_map` RPC call nor the
+// computeWeaknessMapFallback path below filters on `quality='blunder'` — both severities
+// contribute to the weakness map, and the RPC's underlying query is not modified here.
 app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { data, error } = await supabase.rpc('coach_weakness_map', { user_id_param: req.user.id });
   if (error) {
-    // Fallback: compute in JS
-    const { data: attempts } = await supabase
-      .from('puzzle_attempts')
-      .select('puzzle_id, first_attempt_correct, puzzles(category)')
-      .eq('user_id', req.user.id);
-
-    const map = {};
-    for (const attempt of (attempts || [])) {
-      const cat = attempt.puzzles?.category;
-      if (!cat) continue;
-      if (!map[cat]) map[cat] = { category: cat, attempted: 0, missed: 0 };
-      map[cat].attempted++;
-      if (!attempt.first_attempt_correct) map[cat].missed++;
+    // Dormant fallback (only reached on RPC error): computeWeaknessMapFallback uses DB-side
+    // grouped count() instead of an unbounded per-row select — scale-correct past 1000 rows.
+    // See server/weaknessMapFallback.js (spec 041 US3 / research.md Decision 4 — mechanical
+    // fix only, no RPC-reliability investigation).
+    try {
+      const result = await computeWeaknessMapFallback(supabase, req.user.id);
+      return res.json(result);
+    } catch (fallbackErr) {
+      logError('[coach/weakness-map]', fallbackErr);
+      return res.status(500).json({ error: 'internal error' });
     }
-
-    const weaknessMap = Object.values(map)
-      .map(({ category, attempted, missed }) => ({
-        category,
-        attempted,
-        missRate: attempted > 0 ? missed / attempted : 0,
-      }))
-      .sort((a, b) => b.missRate - a.missRate);
-
-    return res.json({ weaknessMap });
   }
 
   res.json({ weaknessMap: data ?? [] });
 });
 
+// GET /api/coach/category-counts
+// spec 041 (Past Games & Mistakes: Server Data Integrity), User Story 2 / FR-004-006 / FR-009.
+// True per-category blunder counts via a DB-side grouped count() — independent of any single
+// page of /api/coach/queue, and scale-correct beyond 1000 rows since it never materializes
+// individual rows into Node (see contracts/coach-category-counts.md). Same `.eq('user_id', ...)`
+// filter as /api/coach/queue; no `quality` filter added (FR-008) — blunder- and
+// suboptimal-quality rows are both counted.
+app.get('/api/coach/category-counts', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+
+  try {
+    const { data, error } = await supabase
+      .from('blunders')
+      .select('pattern_category, count()')
+      .eq('user_id', req.user.id);
+
+    if (error) { logError('[coach/category-counts]', error); return res.status(500).json({ error: 'internal error' }); }
+
+    const categories = (data || [])
+      .map(row => ({ category: row.pattern_category, count: Number(row.count) }))
+      .filter(row => row.count >= 1);
+
+    categories.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a.category);
+      const bi = CATEGORY_ORDER.indexOf(b.category);
+      if (ai === -1 && bi === -1) return a.category.localeCompare(b.category);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+
+    res.json({ categories });
+  } catch (err) {
+    logError('[coach/category-counts]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
 // GET /api/coach/queue
 app.get('/api/coach/queue', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
-  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  // Authenticated → user-scoped. Anonymous → device-scoped via ?device_uuid
+  // (onboarding free deep reveal). Missing/invalid device for an anon caller → 401.
+  const queueOwner = resolveQueueOwner(req.user, req.query.device_uuid || null);
+  if (!queueOwner.ok) return res.status(401).json({ error: 'unauthorized' });
 
   const status = req.query.status || 'all';
   if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
@@ -2498,37 +2632,75 @@ app.get('/api/coach/queue', async (req, res) => {
     return res.status(400).json({ error: 'invalid papergames_game_id' });
   }
 
-  let query = supabase
-    .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
-    .eq('user_id', req.user.id)
+  const pagination = parseQueuePaginationParams(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+  const { limit, offset } = pagination;
+
+  // Shared filter chain — applied identically to the page query and the count query below
+  // (count query omits .order()/.range() per contracts/coach-queue-pagination.md).
+  // spec 042 T034/FR-005/FR-007: no `.eq('quality', 'blunder')` filter here — both
+  // blunder- and suboptimal-severity rows are returned/counted (`total`, wire name
+  // unchanged) to the coach queue.
+  const applyFilters = (q) => {
+    let filtered = queueOwner.scope === 'device'
+      ? q.eq('device_uuid', queueOwner.deviceUuid).is('user_id', null)
+      : q.eq('user_id', queueOwner.userId);
+    if (status === 'unreviewed') {
+      filtered = filtered.is('resolved_at', null);
+    } else if (status === 'reviewed') {
+      filtered = filtered.not('resolved_at', 'is', null);
+    }
+    if (category) {
+      filtered = filtered.eq('pattern_category', category);
+    }
+    if (gameId) {
+      filtered = filtered.eq('game_id', gameId);
+    }
+    if (papergamesGameId) {
+      filtered = filtered.eq('papergames_game_id', papergamesGameId);
+    }
+    return filtered;
+  };
+
+  const pageQuery = applyFilters(
+    supabase
+      .from('blunders')
+      .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
+  )
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
+    // `id` is a final deterministic tiebreaker: without it, rows sharing the same
+    // (severity, created_at) — e.g. a batch import inserting many blunders in one
+    // statement, all stamped with the same created_at — can be ordered differently
+    // across separate paginated queries, causing OFFSET/LIMIT to skip some rows and
+    // duplicate others across pages (found via QA: 8/137 blunders unreachable).
     .order('severity', { ascending: false })
     .order('created_at', { ascending: true })
-    .limit(50);
+    .order('id', { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  if (status === 'unreviewed') {
-    query = query.is('resolved_at', null);
-  } else if (status === 'reviewed') {
-    query = query.not('resolved_at', 'is', null);
-  }
+  const countQuery = applyFilters(
+    supabase.from('blunders').select('id', { count: 'exact', head: true })
+  );
 
-  if (category) {
-    query = query.eq('pattern_category', category);
-  }
+  const [{ data: blunders, error }, { count: total, error: countError }] = await Promise.all([
+    pageQuery,
+    countQuery,
+  ]);
+  if (error) { logError('[coach/queue]', error); return res.status(500).json({ error: 'internal error' }); }
+  if (countError) { logError('[coach/queue]', countError); return res.status(500).json({ error: 'internal error' }); }
 
-  if (gameId) {
-    query = query.eq('game_id', gameId);
-  }
+  // FR-008/FR-009 (spec 042 US2): this endpoint independently constructs its own
+  // blunder shape (does not delegate to the GET /api/blunders/:id handler above),
+  // so totalMoves/siblingMistakes must be applied here too, unconditionally —
+  // otherwise a mistake reached in-app via this list loses the correct "Move N / M"
+  // / "X of Y" figures that the cold-boot permalink path already has.
+  const contexts = await Promise.all(
+    (blunders || []).map(b => fetchBlunderDetailContext(supabase, b))
+  );
 
-  if (papergamesGameId) {
-    query = query.eq('papergames_game_id', papergamesGameId);
-  }
-
-  const { data: blunders, error } = await query;
-  if (error) return res.status(500).json({ error: error.message });
-
-  const enriched = (blunders || []).map(b => ({
+  const enriched = (blunders || []).map((b, i) => ({
     id: b.id,
     board_state: b.board_state,
     move_played: b.move_played,
@@ -2540,12 +2712,15 @@ app.get('/api/coach/queue', async (req, res) => {
     severity: b.severity,
     blunder_severity: b.blunder_severity ?? null,
     threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+    patternCells: computePatternCells(b),
     game_id: b.game_id ?? null,
     papergames_game_id: b.papergames_game_id ?? null,
     moveIndex: (b.board_state || '').length,
+    totalMoves: contexts[i].totalMoves,
+    siblingMistakes: contexts[i].siblingMistakes,
   }));
 
-  res.json({ blunders: enriched, total: enriched.length });
+  res.json({ blunders: enriched, total: total ?? 0 });
 });
 
 // POST /api/coach/queue/:blunderId/resolve
@@ -2561,7 +2736,7 @@ app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
     .eq('id', blunderId)
     .eq('user_id', req.user.id); // ownership check
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[coach/queue/resolve]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
@@ -2577,152 +2752,54 @@ app.get('/api/blunders/:id', async (req, res) => {
   // FR-017: no user_id filter — public endpoint
   const { data, error } = await supabase
     .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, user_id')
+    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id, user_id')
     .eq('id', id)
     .single();
 
   if (error || !data) {
     if (error && error.code === 'PGRST116') return res.status(404).json({ error: 'not found' });
-    return res.status(error ? 500 : 404).json({ error: error?.message || 'not found' });
+    if (error) {
+      logError('[blunders/:id]', error);
+      return res.status(500).json({ error: 'internal error' });
+    }
+    return res.status(404).json({ error: 'not found' });
   }
 
-  // FR-029: compute ownership boolean, then strip user_id from response
-  const is_owner = req.user?.id != null && req.user.id === data.user_id;
+  // FR-008/FR-009 (spec 042 US2): parent-game total move count + sibling mistakes,
+  // needed so a cold-opened permalink shows "Move N / M" and "X of Y" correctly
+  // instead of defaulting to a single-item array. Two bounded, indexed reads —
+  // see contracts/api-blunders-id.md steps 2-3.
+  const context = await fetchBlunderDetailContext(supabase, data);
 
-  // FR-020: derive moveIndex and threat_cells in JS (not DB columns)
-  const moveIndex = (data.board_state || '').length;
-  const threat_cells = computeThreatCells(data.board_state, data.move_played);
-
-  // Strip user_id — must never be exposed to clients
-  const { user_id: _omit, ...blunderPublic } = data;
-
-  res.json({ ...blunderPublic, moveIndex, threat_cells, is_owner });
+  // FR-020/FR-029/FR-003: shared pure builder (server/blunderDetailResponse.js) —
+  // computes moveIndex/threat_cells, ownership, and strips user_id. Both
+  // 'blunder' and 'suboptimal' quality rows go through this identical path.
+  res.json(buildBlunderDetailResponse(data, req.user?.id, context));
 });
 
-// ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────
+// ── Stripe endpoints (T051-T053; extracted to stripeProcessor.js/stripeRoutes.js — spec 045 US3) ──
 
-let stripe = null;
+let paymentProcessor = null;
 if (process.env.STRIPE_SECRET_KEY) {
   const { default: Stripe } = await import('stripe');
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  paymentProcessor = createStripeProcessor({
+    stripeClient,
+    supabase,
+    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID,
+    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  });
 }
-
-// POST /api/stripe/create-checkout
-app.post('/api/stripe/create-checkout', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-
-  const { plan } = req.body;
-  if (!['monthly', 'annual'].includes(plan)) {
-    return res.status(400).json({ error: 'plan must be monthly or annual' });
-  }
-
-  const priceId = plan === 'monthly'
-    ? process.env.STRIPE_MONTHLY_PRICE_ID
-    : process.env.STRIPE_ANNUAL_PRICE_ID;
-
-  if (!priceId) return res.status(503).json({ error: 'Price not configured' });
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      customer_email: req.user.email,
-      metadata: { user_id: req.user.id },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=cancelled`,
-    });
-    res.json({ checkoutUrl: session.url });
-  } catch (err) {
-    logError('[stripe/create-checkout]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/stripe/webhook
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe) return res.status(503).end();
-
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    logError('[stripe/webhook]', err);
-    return res.status(400).json({ error: err.message });
-  }
-
-  // Store event record first
-  if (supabase) {
-    await supabase.from('stripe_events').insert({
-      stripe_event_id: event.id,
-      event_type: event.type,
-      payload: event,
-    }).catch(err => console.error('[stripe_event]', err.message));
-  }
-
-  if (supabase) {
-    const session = event.data.object;
-    if (event.type === 'checkout.session.completed') {
-      const userId = session.metadata?.user_id;
-      if (userId) {
-        const { error: tierErr } = await supabase.from('users').update({
-          tier: 'paid',
-          stripe_customer_id: session.customer,
-        }).eq('id', userId);
-        if (!tierErr) {
-          supabase.from('tracks').insert({
-            uid: userId,
-            user_id: userId,
-            path: '/stripe/webhook',
-            event: 'upgrade_completed',
-            event_data: { plan: session.metadata?.plan ?? 'unknown' },
-          }).then(() => {}).catch(err => console.error('[track upgrade]', err.message));
-        }
-      }
-    } else if (event.type === 'customer.subscription.deleted') {
-      const customerId = session.customer;
-      await supabase.from('users').update({ tier: 'free' })
-        .eq('stripe_customer_id', customerId);
-    } else if (event.type === 'customer.subscription.updated') {
-      const status = session.status;
-      const customerId = session.customer;
-      if (status === 'active') {
-        await supabase.from('users').update({ tier: 'paid' })
-          .eq('stripe_customer_id', customerId);
-      }
-    }
-  }
-
-  res.json({ received: true });
-});
-
-// POST /api/stripe/portal
-app.post('/api/stripe/portal', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-  if (!req.user.stripe_customer_id) return res.status(400).json({ error: 'No active subscription' });
-
-  try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: req.user.stripe_customer_id,
-      return_url: process.env.FRONTEND_URL || 'http://localhost:5173',
-    });
-    res.json({ portalUrl: session.url });
-  } catch (err) {
-    logError('[stripe/portal]', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+registerStripeRoutes(app, paymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 
-app.post('/api/debug/classify-all', async (req, res) => {
-  const ip = req.ip || req.socket?.remoteAddress || '';
-  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
-    return res.status(403).json({ error: 'Debug endpoints are localhost-only' });
-  }
+app.post('/api/debug/classify-all', requireLocalhost, async (req, res) => {
   const { moves: ms = '' } = req.body;
+  if (!MOVES_RE.test(ms)) {
+    return res.status(400).json({ error: 'moves must be 0–42 characters of digits 0–6' });
+  }
   try {
     const scores = ms.length > 0 ? await solver.query(ms) : EMPTY_BOARD_SCORES;
     const redResult = await classifyPattern(ms, 1, solver);
@@ -2753,15 +2830,23 @@ app.post('/api/debug/classify-all', async (req, res) => {
 
     res.json({ red, yellow, boardState, scores });
   } catch (err) {
-    console.error('[debug/classify-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[debug/classify-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin endpoints (localhost-only) ──────────────────────────────────────────
 
+// FR-009 (spec 047 US3/AC1): MUST NOT use `req.ip` here. With `trust proxy: 1` set (needed for
+// express-rate-limit to see real client IPs behind Railway's proxy), Express's `req.ip` resolves
+// from the client-controlled `X-Forwarded-For` header for exactly one hop — so any direct,
+// non-proxied caller can spoof it with `X-Forwarded-For: 127.0.0.1` and pass the check. Verified
+// locally: a request from a real non-loopback interface with a forged header reached this gate's
+// `next()` when checked against `req.ip`. `req.socket.remoteAddress` is the raw TCP peer address —
+// it is not influenced by any header, so it cannot be spoofed by a caller that isn't genuinely
+// connecting from loopback (e.g. an operator shell on the same host/container).
 function requireLocalhost(req, res, next) {
-  const ip = req.ip || req.socket?.remoteAddress || '';
+  const ip = req.socket?.remoteAddress || '';
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
   console.warn('[requireLocalhost] blocked request from', ip, 'for', req.method, req.originalUrl);
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
@@ -2804,7 +2889,7 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       correct_col: c.correct_col ?? null,
     }));
     const { error } = await supabase.from('candidates').insert(rows);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[admin/generate]', error); return res.status(500).json({ error: 'internal error' }); }
   }
 
   res.json({
@@ -2820,7 +2905,7 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { data, error } = await supabase.from('candidates').select('category, status, count()');
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/stats]', error); return res.status(500).json({ error: 'internal error' }); }
 
   const stats = {};
   for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0, unindexed_count: 0 };
@@ -2862,7 +2947,7 @@ app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
     .eq('category', category)
     .eq('is_active', true);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/reindex]', error); return res.status(500).json({ error: 'internal error' }); }
 
   if (!puzzles || puzzles.length === 0) {
     return res.json({ category, indexed: 0, shapeGroups: 0 });
@@ -2939,7 +3024,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates]', error); return res.status(500).json({ error: 'internal error' }); }
 
   res.set('Cache-Control', 'no-store');
   let candidates = data || [];
@@ -2984,7 +3069,7 @@ app.post('/api/admin/candidates/reject-batch', requireLocalhost, async (req, res
     .eq('status', 'pending')
     .select('id');
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/reject-batch]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ rejected: data?.length ?? 0 });
 });
 
@@ -3095,14 +3180,14 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
     .select('id')
     .single();
 
-  if (insertErr) return res.status(500).json({ error: insertErr.message });
+  if (insertErr) { logError('[admin/candidates/approve]', insertErr); return res.status(500).json({ error: 'internal error' }); }
 
   const { error: updateErr } = await supabase
     .from('candidates')
     .update({ status: 'approved', reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/approve]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   res.status(201).json({ puzzle_id: puzzle.id, candidate_id: id });
 });
@@ -3122,7 +3207,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
     .eq('category', category)
     .eq('status', 'pending');
 
-  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+  if (fetchErr) { logError('[admin/candidates/approve-batch]', fetchErr); return res.status(500).json({ error: 'internal error' }); }
   if (!candidates || candidates.length === 0) return res.json({ approved: 0, skipped: 0, errors: [] });
 
   let approved = 0;
@@ -3201,7 +3286,7 @@ app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) 
     .update({ status: 'rejected', rejection_reason: reason, reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/reject]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   let falsePositiveId = undefined;
   if (reason === 'false_positive') {
@@ -3244,7 +3329,7 @@ app.delete('/api/admin/candidates/:id', requireLocalhost, async (req, res) => {
   }
 
   const { error: deleteErr } = await supabase.from('candidates').delete().eq('id', id);
-  if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+  if (deleteErr) { logError('[admin/candidates/delete]', deleteErr); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
@@ -3261,7 +3346,7 @@ app.get('/api/admin/false-positives', requireLocalhost, async (req, res) => {
   if (category && VALID_CATEGORIES.has(category)) query = query.eq('category', category);
 
   const { data, error, count } = await query;
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/false-positives]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ false_positives: data || [], total: count ?? 0 });
 });
 
@@ -3276,7 +3361,7 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
     puzzles = JSON.parse(await readFile(dataPath, 'utf8'));
   } catch (err) {
     logError('[admin/seed-puzzles]', err);
-    return res.status(500).json({ error: `Could not read placeholder_puzzles.json: ${err.message}` });
+    return res.status(500).json({ error: 'internal error' });
   }
 
   let inserted = 0, skipped = 0;
@@ -3291,7 +3376,8 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
     if (existing) { skipped++; continue; }
     const { error } = await supabase.from('puzzles').insert(p);
     if (error) {
-      return res.status(500).json({ error: `Insert failed for category ${p.category}: ${error.message}` });
+      logError('[admin/seed-puzzles/insert]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     inserted++;
   }
@@ -3335,7 +3421,7 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
     .select('id')
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/create]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(201).json({ id: data.id, verified: false });
 });
 
@@ -3466,8 +3552,8 @@ app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
 
     res.json({ approved, awaiting_approval: awaiting, needs_audio: needs, ineligible, counts: { approved: approved.length, awaiting_approval: awaiting.length, needs_audio: needs.length, ineligible: ineligible.length, total: registry.length } });
   } catch (err) {
-    console.error('[admin/audio/status]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/status]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3506,8 +3592,8 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
 
     res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
   } catch (err) {
-    console.error('[admin/audio/generate]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/generate]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3556,8 +3642,8 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     writeTtsRegistry(registry);
     res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
   } catch (err) {
-    console.error('[admin/audio/generate-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/generate-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3582,8 +3668,8 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
     res.json({ key, slug: entry.slug, status: 'approved' });
   } catch (err) {
-    console.error('[admin/audio/approve]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/approve]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3607,8 +3693,8 @@ app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
 
     res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
   } catch (err) {
-    console.error('[admin/audio/approve-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[admin/audio/approve-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -3633,8 +3719,11 @@ app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
 // Cache hit: 302 redirect to signed Supabase Storage URL.
 // Cache miss: streams OpenAI TTS directly to client, buffers for background upload.
 app.get('/api/user/tts/deep-reveal', async (req, res) => {
-  // Auth gate (401)
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+  // Anonymous allowed: the anon onboarding user's ONE free deep reveal should have
+  // a coach voice too. This endpoint is keyed purely by the position hash
+  // (moveString:col) and requires an already-cached explanation (404 otherwise),
+  // so it exposes no user data and is bounded by the /api/ rate limiter. It never
+  // dereferences req.user.
 
   // Validate query params
   const { moveString, col: colStr } = req.query;

@@ -4,6 +4,25 @@
     "puzzles": "Puzzles",
     "coach": "My Coach"
   },
+  "audio": {
+    "muteSfx": "Mute sound effects",
+    "unmuteSfx": "Unmute sound effects",
+    "sfxOn": "SFX on",
+    "sfxOff": "SFX off",
+    "muteMusic": "Mute music",
+    "unmuteMusic": "Unmute music",
+    "musicOn": "Music on",
+    "musicOff": "Music off",
+    "muteSpeech": "Mute speech",
+    "unmuteSpeech": "Unmute speech",
+    "speechOn": "Speech on",
+    "speechOff": "Speech off"
+  },
+  "game": {
+    "title": "Game",
+    "move": "Move {{n}}",
+    "resign": "Resign"
+  },
   "puzzle": {
     "correctFirst": "Correct! Best move.",
     "correctRetry": "Correct — you found it!",
@@ -36,6 +55,7 @@
     "commitFirst": "Commit-first",
     "commitFirstHint": "Hides hints until you commit a move",
     "hintsOn": "Hints on",
+    "hintActive": "Hint on",
     "commitMove": "Commit move",
     "postMoveReveal": "Move analysis",
     "yourMove": "Your move",
@@ -78,14 +98,24 @@
   "upgrade": {
     "heading": "Become Pro",
     "body": "Upgrade to Pro for unlimited deep reveals.",
-    "cta": "Become Pro — free for now",
+    "cta": "Continue to checkout",
     "success": "You're now a Pro member!",
-    "dismiss": "Maybe later"
+    "dismiss": "Maybe later",
+    "planMonthly": "Monthly",
+    "planAnnual": "Annual",
+    "activating": "Activating your subscription…",
+    "timeout": "Payment received — still activating.",
+    "refresh": "Refresh"
   },
   "common": {
     "dismiss": "Dismiss",
     "confirm": "Confirm",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "back": "Back",
+    "continue": "Continue",
+    "error": "Something went wrong.",
+    "hint": "Hint",
+    "loading": "Loading…"
   },
   "games": {
     "title": "Past Games",
@@ -129,6 +159,9 @@
       "welcome": {
         "0": "Let's sharpen your Connect Four tactics."
       }
+    },
+    "onboardingMission": {
+      "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
     },
     "weaknessMap": "Weakness map",
     "queueCount_one": "{{count}} position to review",
@@ -539,59 +572,6 @@
       }
     }
   },
-  "mistakes": {
-    "title": "Past Mistakes",
-    "reviewed": "Reviewed",
-    "emptyFilter": "Nothing here — switch tabs to see your other moves.",
-    "gate": {
-      "heading": "Sign up to save your mistakes",
-      "body": "Create a free account and DecodeC4 will remember every blunder so you can review them with the Coach later.",
-      "cta": "Create free account",
-      "later": "Maybe later"
-    },
-    "empty": {
-      "heading": "No mistakes captured yet",
-      "body": "Play a game and review it afterwards — I'll collect the tricky moments here so we can study them together.",
-      "cta": "Play a game"
-    },
-    "filter": {
-      "all": "All",
-      "unreviewed": "Unreviewed",
-      "reviewed": "Reviewed"
-    },
-    "pattern": {
-      "immediate_threat": "Immediate threat",
-      "forced_block": "Forced block",
-      "double_threat": "Double threat",
-      "forced_win": "Forced win",
-      "forbidden_columns": "Forbidden columns",
-      "z_threat": "Z-threat",
-      "claimeven": "Claimeven",
-      "undercut": "Undercut",
-      "overcut": "Overcut",
-      "figure_7": "Figure 7",
-      "j_shape": "J-shape",
-      "odd_even_threat": "Odd & Even Threats",
-      "major_threat_parity": "Parity-aligned threat",
-      "major_threat_nonparity": "Off-parity threat",
-      "minor_threat": "Minor threat"
-    },
-    "detail": {
-      "topbarTitle": "Mistake",
-      "moveLabel": "Move {{n}}",
-      "coach": {
-        "line1": "You played column {{n}} here.",
-        "line2": "Let me show you what worked better."
-      },
-      "legend": {
-        "yourMove": "your move",
-        "opponentThreat": "opponent threat"
-      },
-      "whatShouldIHave": "What should I have played?",
-      "markReviewed": "Mark as reviewed",
-      "markedReviewed": "Marked as reviewed"
-    }
-  },
   "stats": {
     "title": "Progress & Stats",
     "avg_accuracy": "Avg accuracy",
@@ -726,10 +706,14 @@
   },
   "deepReveal": {
     "loading": "Reading the position…",
+    "stillThinking": "Still thinking… detailed explanations can take a few seconds on the first look.",
     "preparingAudio": "Preparing audio…",
     "unavailable": "Detailed explanation unavailable.",
     "flag": "Flag this explanation",
-    "flagged": "Thanks — flagged"
+    "flagged": "Thanks — flagged",
+    "flagCancel": "Cancel",
+    "flagSend": "Send",
+    "flagNotePlaceholder": "What's wrong with this explanation? (optional)"
   },
   "summary": {
     "hero": "Set complete!",
@@ -764,6 +748,11 @@
     "title": "Past Mistakes",
     "reviewed": "Reviewed",
     "emptyFilter": "Nothing here — switch tabs to see your other moves.",
+    "detail": {
+      "notFound": "Blunder not found",
+      "noBlunderFound": "no blunder found",
+      "signInToUnlock": "Sign in to unlock"
+    },
     "gate": {
       "heading": "Sign up to save your mistakes",
       "body": "Create a free account and DecodeC4 will remember every blunder so you can review them with the Coach later.",
@@ -802,6 +791,10 @@
     "detail": {
       "topbarTitle": "Mistake",
       "moveLabel": "Move {{n}}",
+      "severity": {
+        "blunder": "Blunder",
+        "suboptimal": "Suboptimal"
+      },
       "coach": {
         "line1": "You played column {{n}} here.",
         "line2": "Let me show you what worked better."
@@ -815,8 +808,8 @@
       "markedReviewed": "Marked as reviewed",
       "all_caught_up": "All caught up in this category!",
       "none_reviewed": "None reviewed yet — tap a blunder to study it.",
-      "meta_count": "{{count}} blunder",
-      "meta_count_pl": "{{count}} blunders",
+      "meta_count": "{{count}} mistake",
+      "meta_count_pl": "{{count}} mistakes",
       "source_game": "{{date}} game"
     },
     "to_review": "{{count}} to review",
@@ -833,9 +826,45 @@
     "hint":    "Look for an even square directly above one of my discs."
   },
   "lesson": {
+    "node": {
+      "done": "Completed",
+      "current": "In progress",
+      "unlocked": "Unlocked",
+      "locked": "Locked"
+    },
     "confirmation": {
       "header": "{{title}} — Practice",
       "empty":  "No practice puzzles available yet."
+    },
+    "immediate-threat": {
+      "title": "Immediate Threats"
+    },
+    "block-before-build": {
+      "title": "Block Before Build"
+    },
+    "the-fork": {
+      "title": "The Fork"
+    },
+    "odd-rows-belong-to-red": {
+      "title": "Odd Rows Belong to Green"
+    },
+    "claimeven": {
+      "title": "Claimeven"
+    },
+    "z-threats": {
+      "title": "Z-Threats"
+    },
+    "undercut": {
+      "title": "The Undercut"
+    },
+    "overcut": {
+      "title": "The Overcut"
+    },
+    "figure-7": {
+      "title": "Figure-7 Trap"
+    },
+    "j-shape": {
+      "title": "J-Shape"
     },
     "opening-centre": {
       "title": "Own the Centre",
@@ -866,6 +895,82 @@
     "share": {
       "button": "Share",
       "copied": "Link copied!"
+    },
+    "onboardingContinue": "Continue"
+  },
+  "saga": {
+    "title": "Lessons",
+    "empty": "No lessons available yet.",
+    "orderLock": {
+      "message": "Finish the previous lesson to unlock this one"
+    }
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "replayIntro": "Replay intro",
+    "importOffer": {
+      "title": "Bring your real games in",
+      "subtitle": "Import your Papergames history to get move-by-move analysis and mistake tracking on the games you actually play.",
+      "accept": "Import my games",
+      "decline": "Not now",
+      "coach": "Nice game! Want deeper analysis on the games you play online too?",
+      "signInReason": "Sign in to import your Papergames history."
+    },
+    "mission": {
+      "coachLead": "Hi, I'm your coach.",
+      "coachText": "Here's how we'll make you dangerous at Connect Four.",
+      "cta": "Start sparring",
+      "pillars": {
+        "learn": {
+          "title": "Learn the tactics",
+          "line": "The winning patterns behind every game — and why they work."
+        },
+        "practice": {
+          "title": "Practice against a bot that teaches",
+          "line": "Play me at your level and get the reasoning behind every move."
+        },
+        "mistakes": {
+          "title": "Understand your mistakes",
+          "line": "Turn blunders into lessons — even your real games from Papergames."
+        }
+      }
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": {
+      "label": "Language",
+      "en": "English",
+      "es": "Español"
+    },
+    "papergames": {
+      "signInPrompt": "Sign in to connect your Papergames account.",
+      "title": "Papergames Import",
+      "description": "Enter your Papergames account ID to import your game history.",
+      "idPlaceholder": "Your Papergames account ID",
+      "findAccountId": "Find your account ID",
+      "saving": "Saving...",
+      "save": "Save",
+      "saved": "Saved!",
+      "importing": "Importing...",
+      "import": "Import",
+      "importingProcessing": "Importing... Processing games",
+      "importingStarting": "Importing... Starting",
+      "viewImportedGames": "View imported games",
+      "errorAccountIdLength": "Account ID must be between 1 and 64 characters.",
+      "errorInvalidInput": "Invalid input.",
+      "errorSaveFailed": "Failed to save. Please try again.",
+      "errorNetwork": "Network error. Please try again.",
+      "errorImportFailed": "Import failed. Please try again.",
+      "errorImportFailedGeneric": "Import failed.",
+      "errorJobLost": "Import job lost. Please try again.",
+      "capReached": "You've reached your 15-game limit.",
+      "importedCount_one": "Imported {{count}} game.",
+      "importedCount_other": "Imported {{count}} games.",
+      "skippedCount_one": " {{count}} game couldn't be processed and was skipped.",
+      "skippedCount_other": " {{count}} games couldn't be processed and were skipped.",
+      "blunderErrorsCount_one": "Your games were imported, but analysis failed to save for {{count}} move. Try re-importing to retry the analysis.",
+      "blunderErrorsCount_other": "Your games were imported, but analysis failed to save for {{count}} moves. Try re-importing to retry the analysis."
     }
   }
 }

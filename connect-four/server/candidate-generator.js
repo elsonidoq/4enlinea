@@ -4,7 +4,7 @@ import {
   hasActiveDoubleThreat, Board, hasWon,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
   detectFigure7, detectJShape, detectOddEvenThreat,
-  detectDoubleThreat, detectForcedWin,
+  detectDoubleThreat, detectForcedWin, detectForcedBlock,
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -426,7 +426,48 @@ export function checkOddEvenThreatPredicate(ms, scores) {
 
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
-async function checkPredicate(category, moveString, scores, solver) {
+// Wraps checkPredicateRaw with two cross-cutting generation-time rejection rules (spec 044 US1/US2):
+//   US1 (FR-001-003): immediate_threat/forced_block candidates that would cast the learner as the
+//     wrong color are rejected outright, not silently corrected.
+//   US2 (FR-006-009): any candidate outside forced_block that also contains an unrelated, live
+//     (gravity-top) forced-block situation is rejected, unless that forced-block's blocking column
+//     coincides with the puzzle's own answer column(s).
+export async function checkPredicate(category, moveString, scores, solver) {
+  const result = await checkPredicateRaw(category, moveString, scores, solver);
+  if (!result.passes) return result;
+
+  // US1: color-cast guard. The learner always plays as `Board(moveString).currentPlayer` — the
+  // player to move at the stored puzzle position. immediate_threat requires that player to be P1
+  // (green, the side with the winning move); forced_block requires P2 (gray, the side that must
+  // block). Empirically: currentPlayer = moveString.length % 2 === 0 ? 1 : 2 (see Board ctor and
+  // predicates.js's local currentPlayer() — both derive it the same way).
+  if (category === 'immediate_threat' || category === 'forced_block') {
+    const learnerPlayer = new Board(moveString).currentPlayer;
+    const requiredPlayer = category === 'immediate_threat' ? 1 : 2;
+    if (learnerPlayer !== requiredPlayer) {
+      return { passes: false, correctCols: [] };
+    }
+  }
+
+  // US2: stray forced-block distraction guard. detectForcedBlock's default perspective
+  // (board.currentPlayer) is exactly "the player about to move at this puzzle position" — the same
+  // player the learner plays as, regardless of category. Only gravity-top-reachable blocking
+  // columns are ever returned (getImmediateThreats/immediateThreats are gravity-top-only by
+  // construction), so a non-reachable forced-block never triggers this rejection.
+  if (category !== 'forced_block') {
+    const fb = detectForcedBlock(new Board(moveString), scores);
+    if (fb.matched) {
+      const blockCols = fb.cols ?? [];
+      const answerCols = result.correctCols ?? [];
+      const coincides = answerCols.some(c => blockCols.includes(c));
+      if (!coincides) return { passes: false, correctCols: [] };
+    }
+  }
+
+  return result;
+}
+
+async function checkPredicateRaw(category, moveString, scores, solver) {
   if (category === 'forced_win') return checkForcedWinPredicate(moveString);
   if (category === 'forbidden_columns') return checkForbiddenColumnsPredicate(moveString);
 
@@ -447,12 +488,16 @@ async function checkPredicate(category, moveString, scores, solver) {
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  // immediate_threat/forced_block/double_threat: exactly one legal column must return 'correct'
+  // immediate_threat/forced_block/double_threat (spec 044 US3 / FR-010, FR-011): one or more
+  // legal columns must independently satisfy the category's condition. evaluatePredicate returns
+  // 'correct' only when a column is the SOLE satisfying column, and 'tied' when 2+ columns satisfy
+  // it — so both outcomes must be accepted here, or a multi-solution board collects zero correctCols
+  // (every column evaluates to 'tied', none to 'correct') and is wrongly rejected.
   const correctCols = legalCols.filter(c => {
     const r = evaluatePredicate(puzzle, c, scores);
-    return r.result === 'correct';
+    return r.result === 'correct' || r.result === 'tied';
   });
-  return { passes: correctCols.length === 1, correctCols, correct_col: correctCols[0] ?? null };
+  return { passes: correctCols.length >= 1, correctCols, correct_col: correctCols[0] ?? null };
 }
 
 // Reject positions that violate per-category board-quality constraints.

@@ -130,6 +130,78 @@ export function boardSpecToBoard(boardSpec) {
 }
 
 /**
+ * Derive a stable, value-based signature string for a 6×7 board array.
+ *
+ * Spec 046 US5 (FR-022/FR-024): used to gate `Board` re-rendering on VALUE
+ * equality rather than array-reference equality. Callers like ConceptScreen
+ * (`boardSpecToBoard(...)` inline in JSX) and SocraticScreen
+ * (`board.map(r => [...r])`) rebuild a brand-new `board` array on every
+ * render even when the underlying disc placements haven't changed; comparing
+ * signatures instead of references lets `Board` bail out of re-rendering
+ * (and touching already-placed-disc DOM nodes) in that case.
+ *
+ * Keyed by `(row, col, value)` for every cell, in row-major order — two
+ * boards with identical placements (regardless of array identity) produce
+ * the identical string.
+ *
+ * @param {string[][]} board  6×7 board array (row 0 = bottom); tolerates a
+ *   ragged/undefined board defensively (missing cells read as 'empty').
+ * @returns {string}
+ */
+export function deriveBoardSignature(board) {
+  const rows = Array.isArray(board) ? board.length : 0;
+  let sig = '';
+  for (let r = 0; r < rows; r++) {
+    const row = board[r] ?? [];
+    for (let c = 0; c < row.length; c++) {
+      const value = row[c] ?? 'empty';
+      if (value !== 'empty') sig += `${r},${c},${value}|`;
+    }
+  }
+  return sig;
+}
+
+/**
+ * Custom React.memo comparator for the `Board` component (spec 046 US5,
+ * FR-022/FR-024/SC-007).
+ *
+ * Root-cause context: `Board` is a fairly expensive render (42 cells, each
+ * rebuilding style objects, overlay/shim lookups, and a threat-zone SVG) and
+ * — before this fix — was a plain, non-memoized function component: React
+ * had no bail-out and fully re-executed it on every parent render. Its
+ * parents (`ConceptScreen.jsx`, `SocraticScreen.jsx`, and others) frequently
+ * hand it a brand-new `board` array on every render even when the disc
+ * placements are unchanged (e.g. `boardSpecToBoard(...)` called inline in
+ * JSX, or `board.map(r => [...r])` on every tap) — plain reference equality
+ * would defeat memoization for the one prop that matters most for the
+ * reported flicker. `board` is therefore compared by VALUE via
+ * `deriveBoardSignature`; every other prop falls back to `Object.is`
+ * (React.memo's default shallow-compare semantics), so a genuinely new
+ * overlay/lastDrop/etc. still triggers a re-render as before.
+ *
+ * Lives in this plain `.js` file (not `Board.jsx`) specifically so it is
+ * importable from a `node:test` unit test (`node --test` cannot import
+ * `.jsx`) — see `tests/unit/boardMemoStability.test.js`.
+ *
+ * @param {object} prevProps
+ * @param {object} nextProps
+ * @returns {boolean} true when React should SKIP re-rendering (props "equal")
+ */
+export function boardPropsAreEqual(prevProps, nextProps) {
+  const keys = new Set([...Object.keys(prevProps), ...Object.keys(nextProps)]);
+  for (const key of keys) {
+    if (key === 'board') {
+      if (deriveBoardSignature(prevProps.board) !== deriveBoardSignature(nextProps.board)) {
+        return false;
+      }
+      continue;
+    }
+    if (!Object.is(prevProps[key], nextProps[key])) return false;
+  }
+  return true;
+}
+
+/**
  * Convert a cols array (7 strings in g/d encoding, bottom-to-top per column)
  * to a 6x7 board array suitable for the Board component.
  *

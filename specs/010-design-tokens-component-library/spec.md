@@ -159,8 +159,8 @@ After a move, the surface appends a new message to `CoachDialog`'s `messages` pr
 
 **TopBar**
 
-- **FR-013**: `TopBar` MUST render: optional back button (left), title (Baloo 2 700 19 px), spacer, optional meta string (right), up to two right icon buttons.
-- **FR-014**: `TopBar` MUST accept: `title`, `onBack`, `meta`, `rightIcon`/`onRight`, `right2`/`onRight2` props; back button only renders when `onBack` is provided.
+- **FR-013**: ~~`TopBar` MUST render: optional back button (left), title (Baloo 2 700 19 px), spacer, optional meta string (right), up to two right icon buttons.~~ **(Amended by spec 043 FR-017/FR-018, NFR-001)**: `TopBar` MUST render: optional back button (left), **a persistent DecodeC4 logo mark (left, after the back button, before the title)**, optional title (Baloo 2 700 19 px), spacer, optional meta string (right), up to two right icon buttons. The logo renders unconditionally on every screen regardless of whether `title` is provided. Render order: `[back button?] [logo] [title?] [spacer] [meta?] [right2?] [rightIcon?]`.
+- **FR-014**: ~~`TopBar` MUST accept: `title`, `onBack`, `meta`, `rightIcon`/`onRight`, `right2`/`onRight2` props; back button only renders when `onBack` is provided.~~ **(Amended by spec 043 FR-017/FR-018, NFR-001)**: `TopBar` MUST accept: `title` (now explicitly optional — omitting it renders no title text), `onBack`, `meta`, `rightIcon`/`onRight`, `right2`/`onRight2`, **and `onLogoClick` (new, spec 043 FR-018)** props; back button only renders when `onBack` is provided; the logo is always rendered and always calls `onLogoClick` when tapped. **Exception (spec 043 FR-019)**: the Home screen's `TopBar` call omits `title` by convention, so the DecodeC4 mark appears exactly once on Home; every other screen's existing `title` usage is unchanged. Every existing `<TopBar title={...} onBack={...} .../>` call site keeps working unchanged — all new behavior is additive.
 
 **ProgressBar**
 

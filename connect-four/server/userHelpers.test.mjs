@@ -6,6 +6,9 @@ import {
   writePuzzleAttempts,
   writeSparringRecord,
   writeStreak,
+  USER_PROFILE_SELECT_COLUMNS,
+  defaultUserProfile,
+  isValidOnboardingStatus,
 } from './userHelpers.js';
 
 // --- Stub factory helpers ---
@@ -301,5 +304,58 @@ describe('writeStreak', () => {
       last_active_date: '',
     });
     assert.deepEqual(result, { error: 'fail' });
+  });
+});
+
+// --- USER_PROFILE_SELECT_COLUMNS / defaultUserProfile (spec 045 R3 regression) ---
+//
+// index.js's loadUser middleware selects USER_PROFILE_SELECT_COLUMNS on both its
+// initial-fetch and just-created-row code paths, and falls back to
+// defaultUserProfile() when no `users` row exists yet at all. These tests pin
+// stripe_customer_id's presence on all three paths so POST /api/stripe/portal and
+// getSubscriptionStatus never regress to reading an always-undefined field.
+
+describe('USER_PROFILE_SELECT_COLUMNS (loadUser initial-fetch and just-created-row paths)', () => {
+  it('includes stripe_customer_id alongside the other loadUser profile fields', () => {
+    const columns = USER_PROFILE_SELECT_COLUMNS.split(',').map((c) => c.trim());
+    assert.ok(columns.includes('stripe_customer_id'), 'stripe_customer_id must be selected');
+    assert.ok(columns.includes('tier'));
+    assert.ok(columns.includes('deep_reveal_count'));
+    assert.ok(columns.includes('deep_reveal_reset_at'));
+    assert.ok(columns.includes('device_uuid'));
+    assert.ok(columns.includes('papergames_id'));
+    assert.ok(columns.includes('last_import_at'));
+    assert.ok(columns.includes('onboarding_status'), 'onboarding_status must be selected');
+  });
+});
+
+describe('defaultUserProfile (loadUser no-row-found fallback path)', () => {
+  it('includes stripe_customer_id: null alongside the other anonymous-fallback fields', () => {
+    const profile = defaultUserProfile();
+    assert.equal(profile.stripe_customer_id, null);
+    assert.equal(profile.tier, 'free');
+    assert.equal(profile.deep_reveal_count, 0);
+    assert.equal(profile.papergames_id, null);
+    assert.equal(profile.last_import_at, null);
+    assert.equal(typeof profile.deep_reveal_reset_at, 'string');
+    assert.equal(profile.onboarding_status, 'not_encountered');
+  });
+});
+
+// --- isValidOnboardingStatus (Epic 8 — Onboarding Experience) ---
+
+describe('isValidOnboardingStatus', () => {
+  it('accepts the three valid enum values', () => {
+    assert.equal(isValidOnboardingStatus('not_encountered'), true);
+    assert.equal(isValidOnboardingStatus('seen'), true);
+    assert.equal(isValidOnboardingStatus('skipped'), true);
+  });
+
+  it('rejects invalid values', () => {
+    assert.equal(isValidOnboardingStatus('bogus'), false);
+    assert.equal(isValidOnboardingStatus(''), false);
+    assert.equal(isValidOnboardingStatus(null), false);
+    assert.equal(isValidOnboardingStatus(undefined), false);
+    assert.equal(isValidOnboardingStatus(1), false);
   });
 });

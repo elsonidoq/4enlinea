@@ -6,6 +6,7 @@
 import { tagBlunder, NotABlunderError } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
+import { classifyStoredMistake } from './mistakeStorageRule.js';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
 import { logError } from './logger.js';
@@ -117,6 +118,13 @@ async function extractBlunders(solver, moveString, side, userId) {
     const score = scores[col];
     const bestScore = scores[bestCol];
 
+    // Storage rule (mistakeStorageRule.js): slower wins and dead-position
+    // faster losses are not mistakes — skip before the expensive tagBlunder/
+    // computeBlunderSeverity calls. Accuracy still counts this ply as
+    // non-optimal (scored++/no optimalCount++ above).
+    const storedMistake = classifyStoredMistake(bestScore, score, movesBefore);
+    if (!storedMistake) continue;
+
     let patternTag = 'suboptimal_move';
     let reason = 'solver error: tagBlunder failed';
     let direction = 'missed_own';
@@ -148,7 +156,7 @@ async function extractBlunders(solver, moveString, side, userId) {
       move_played: col,
       correct_move: bestCol,
       pattern_category: patternTag,
-      quality,
+      quality: storedMistake.quality,
       reason,
       direction,
       severity: computeSeverity(bestScore, score),
@@ -163,7 +171,7 @@ async function extractBlunders(solver, moveString, side, userId) {
 async function upsertGame(supabase, gameRow) {
   const { data, error } = await supabase
     .from('papergames_games')
-    .upsert(gameRow, { onConflict: 'papergames_room_uid', ignoreDuplicates: false })
+    .upsert(gameRow, { onConflict: 'user_id,papergames_room_uid', ignoreDuplicates: false })
     .select('id')
     .single();
   if (error) throw new Error(`upsertGame ${gameRow.papergames_room_uid}: ${error.message}`);

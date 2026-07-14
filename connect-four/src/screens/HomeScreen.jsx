@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { FeatureCard } from '../components/FeatureCard.jsx';
@@ -6,11 +6,41 @@ import { CoachDialog } from '../components/CoachDialog.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
+import { stashReturnTo } from '../lib/postLoginReturn.js';
+import { isOfferShownMarkerSet, shouldShowHomeFallbackOffer } from '../lib/onboardingOfferMarker.js';
 
 export function HomeScreen({ go }) {
   const { t } = useTranslation();
-  const { session } = useStore();
+  const { store, session } = useStore();
   const [authOpen, setAuthOpen] = useState(false);
+
+  // Epic 8 — Onboarding Experience, US3 (T036, FR-007 Scenario 5, research.md R5).
+  // READ-ONLY fallback check: a user who engaged (onboarding_status === 'seen') but left before
+  // the onboarding game's natural end never got routed to the import offer via GameScreen's
+  // saveGame() (T034). This effect surfaces it once, on the next Home visit, by reading the
+  // localStorage marker — it must NEVER write the marker itself; OnboardingImportOfferScreen's
+  // own mount (T032) owns that single write site, which both this path and the game-end path
+  // funnel through (this is what makes the cross-path guard hold — see onboardingOfferMarker.js).
+  const fallbackCheckedRef = useRef(false);
+  useEffect(() => {
+    if (fallbackCheckedRef.current) return;
+    fallbackCheckedRef.current = true;
+    (async () => {
+      let profile;
+      try {
+        profile = await store.getProfile();
+      } catch {
+        return;
+      }
+      if (shouldShowHomeFallbackOffer({
+        onboardingStatus: profile?.onboarding_status,
+        offerShown: isOfferShownMarkerSet(),
+      })) {
+        go('onboardingImportOffer');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleProfile() {
     if (session) {
@@ -23,9 +53,15 @@ export function HomeScreen({ go }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopBar
-        title={<>Decode<span style={{ color: 'var(--disc-green)' }}>C4</span></>}
+        onLogoClick={() => go('home')}
         right2="gear"
-        onRight2={() => session ? go('settings') : setAuthOpen(true)}
+        // Epic 8 — Onboarding Experience, US4 (T043/FR-010, SC-004): navigate to Settings
+        // regardless of auth state — SettingsScreen already renders a graceful unauthenticated
+        // view, and "Replay intro" must be reachable from Home in <=2 nav actions for anonymous
+        // users too (onboarding's auto-route is anonymous-only, so skipped users are frequently
+        // anonymous). Previously this gated anonymous taps behind AuthModal, which made Settings
+        // (and therefore Replay intro) unreachable without signing in first.
+        onRight2={() => go('settings')}
         rightIcon="user"
         onRight={handleProfile}
       />
@@ -77,7 +113,14 @@ export function HomeScreen({ go }) {
           title={t('home.past_games.title')}
           subtitle={t('home.past_games.subtitle')}
           wide
-          onClick={() => go('pastGames')}
+          onClick={() => {
+            if (session) {
+              go('pastGames');
+            } else {
+              stashReturnTo('pastGames');
+              setAuthOpen(true);
+            }
+          }}
         />
 
         <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />

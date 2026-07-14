@@ -16,20 +16,12 @@
 
 - in immediate threat in all examples the user should be green, and in forced block the user must be gray
 
-- [post-MVP] When reviewing a game, the analysis is always recomputed, and it takes time. It should be computed once, and then cached
-
-- [post-MVP] Blunders now can be duplicated in the database. The number of times a user made a mistake is important. There should be a way for a user to know their most common mistakes
-
-- [post-MVP] Need to translate everything to spanish
-
 - Several Supabase queries fetch all rows and aggregate in JS instead of using DB-side count(); affected endpoints: GET /api/puzzles/counts, GET /api/stats, GET /api/games (blunder counting), GET /api/coach/weakness-map fallback. All are missing .limit() and will silently truncate at 1000 rows.
 
 - GET /api/coach/queue is hard-capped at .limit(50) with no pagination (server/index.js:2508). A user with >50 blunders can never review the rest, and because the /mistakes category cards are derived from that capped 50-item list, whole categories (e.g. undercut, forced_win) get no card at all even though the blunders exist and are reachable via ?category=. Needs pagination + DB-side per-category counts. (Surfaced in QA 2026-07-07 round 2 with 137 blunders.)
 
 
 - Current npm install reports this 15 vulnerabilities (1 low, 10 moderate, 2 high, 2 critical)
-
-- [post-MVP] language should be determined by browser's language. Everything should be translated if the translation is available. Otherwise it should be displayed in english
 
 - Except for forced_block, no puzzles can have a forced_block, unless the forced block is the move that creates the pattern / move
 
@@ -58,10 +50,4 @@
 - Add a logo at the top saying DecodeC4. Clicking it takes you to the home
 
 - After importing a call to action to view the imported games
-
-# Tasks for me
-
-- Register a new domain, maybe with new branding and icon
-
-- Finish the lessons
 

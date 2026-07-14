@@ -7,6 +7,9 @@ import { UpgradeModal } from './UpgradeModal.jsx';
 import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
+import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -51,11 +54,13 @@ export function DeepRevealPane({
   const { t } = useTranslation();
   const { session } = useStore();
   const { speechEnabled } = useCoachSpeech();
+  const handleUpgrade = useUpgradeCheckout();
 
   const [loading, setLoading] = useState(false);
   const [loadingTts, setLoadingTts] = useState(false);
   const [data, setData] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [flagged, setFlagged] = useState(false);
@@ -69,6 +74,7 @@ export function DeepRevealPane({
     if (!isOpen) {
       setData(null);
       setTimedOut(false);
+      setSlow(false);
       setFlagged(false);
       setFlagOpen(false);
       setFlagNote('');
@@ -81,9 +87,14 @@ export function DeepRevealPane({
       return;
     }
 
+    // Anonymous onboarding user: allow ONE free deep reveal (or re-opening that
+    // same one). A second, different reveal opens the sign-up gate instead of
+    // fetching. The server permits the anon call (rate-capped); this is the UX gate.
     if (!session?.user) {
-      setAuthOpen(true);
-      return;
+      if (!canRevealAnon(`${moveString}:${col}`)) {
+        setAuthOpen(true);
+        return;
+      }
     }
 
     // Stop any ongoing coach speech — deep-reveal replaces the evaluation context
@@ -98,11 +109,14 @@ export function DeepRevealPane({
     setFlagNote('');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
+    setSlow(false);
+    const softId = setTimeout(() => setSlow(true), DEEP_REVEAL_SOFT_MS);
+    const hardId = setTimeout(() => {
+      controller.abort();
       setLoading(false);
       setLoadingTts(false);
       setTimedOut(true);
-    }, 6000);
+    }, DEEP_REVEAL_HARD_MS);
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
@@ -112,13 +126,14 @@ export function DeepRevealPane({
       body: JSON.stringify({ movestring: moveString, col }),
     })
       .then(res => {
-        clearTimeout(timeoutId);
+        clearTimeout(softId); clearTimeout(hardId);
         if (res.status === 401) { setLoading(false); setAuthOpen(true); return null; }
         if (res.status === 429) { setLoading(false); setUpgradeOpen(true); return null; }
         return res.json();
       })
       .then(async d => {
         if (!d) return;
+        if (d && !session?.user) markRevealedAnon(`${moveString}:${col}`);
         setData(d);
 
         // Phase 2: fetch TTS audio if speech is enabled
@@ -153,16 +168,17 @@ export function DeepRevealPane({
       })
       .catch(err => {
         if (err.name === 'AbortError') return;
-        clearTimeout(timeoutId);
+        clearTimeout(softId); clearTimeout(hardId);
         setLoading(false);
         setLoadingTts(false);
         setTimedOut(true);
       });
 
     return () => {
-      clearTimeout(timeoutId);
+      clearTimeout(softId); clearTimeout(hardId);
       controller.abort();
       stopSpeech();
+      setSlow(false);
       if (ttsAudioRef.current) {
         ttsAudioRef.current.src = '';
         ttsAudioRef.current = null;
@@ -210,7 +226,9 @@ export function DeepRevealPane({
           <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
             {loadingTts
               ? t('deepReveal.preparingAudio', 'Preparing audio…')
-              : t('deepReveal.loading', 'Reading the position…')}
+              : loading && slow && !timedOut
+                ? t('deepReveal.stillThinking', 'Still thinking… detailed explanations can take a few seconds on the first look.')
+                : t('deepReveal.loading', 'Reading the position…')}
           </p>
         </div>
       )}
@@ -325,7 +343,7 @@ export function DeepRevealPane({
       {upgradeOpen && (
         <UpgradeModal
           onDismiss={() => { setUpgradeOpen(false); onClose?.(); }}
-          onNotify={() => { setUpgradeOpen(false); onClose?.(); }}
+          onUpgrade={handleUpgrade}
         />
       )}
     </>

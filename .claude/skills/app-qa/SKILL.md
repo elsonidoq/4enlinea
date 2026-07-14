@@ -2,7 +2,7 @@
 name: app-qa
 description: Use when asked to QA the Connect Four app, do a full app walkthrough, find UI/UX/navigation/tier bugs, or exercise the app end-to-end in a real browser and log the findings. Drives the local dev app in Chrome and records every failure to agentic_QA.md.
 user-invocable: true
-argument-hint: "[area: home | past-games | blunders | deep-reveal | lessons | challenges | import | nav | tier-journey]  [--mobile]  (no arg = full end-to-end sweep)"
+argument-hint: "[area: home | past-games | blunders | deep-reveal | lessons | challenges | import | nav | tier-journey]  [--feature <plan-or-spec-path>]  [--mobile]  (no arg = full end-to-end sweep)"
 ---
 
 # App QA — end-to-end browser walkthrough
@@ -23,8 +23,15 @@ Observe, don't assume. Never claim "works" without having driven the flow and re
 
 - User asks to "QA the app", "do a walkthrough", "find bugs", "test the whole thing".
 - Before a release, after a big merge, or to validate a feature area.
+- User asks to QA / acceptance-test a **specific feature** end-to-end in the browser
+  ("QA this feature", "verify the acceptance criteria", `--feature <plan/spec>`) — run
+  **feature-verification mode** (below): drive the feature's acceptance flow to a pass/fail
+  verdict, reusing this skill's browser/lifecycle/grounding/finding machinery, THEN sweep the
+  touched screens for adjacent bugs.
 - **Not** for: writing a fix (that's a follow-up), unit tests (use `npm run test:fast`),
-  or verifying one specific code change (use the `verify` skill).
+  or verifying one small self-contained code change with no multi-screen flow (use the
+  `verify` skill). Feature-verification mode is for a multi-screen browser flow whose
+  acceptance criteria are written down in a plan/spec.
 
 ## Setup checklist (do these first, in order)
 
@@ -58,11 +65,56 @@ Create a todo per step.
    `resize_page`/`emulate` (e.g. 390×844) so layout bugs that only appear on small screens are
    caught — see the mobile pass below.
 
-5. **Log in with "🛠 Dev: skip auth".** ALWAYS authenticate via the dev button (labeled
-   exactly `🛠 Dev: skip auth` in the AuthModal — magic-link email won't deliver in dev).
-   It creates an **anonymous, free-tier** user with **no email**.
+5. **Reach the required precondition state** (do NOT default to signed-in for a feature that
+   starts elsewhere):
+   - **Signed-in anonymous user** (the default for a general sweep) → click `🛠 Dev: skip auth`
+     in the AuthModal (magic-link email won't deliver in dev). It creates an **authenticated,
+     anonymous, free-tier** user with **no email** and a non-null `session`.
+   - **Logged-out / first-run user** (`session === null`, IndexedDBStore) — required by
+     onboarding and any logged-out-only flow → do NOT click Dev: skip auth; instead use Settings →
+     **"Dev: clear IndexedDB & sign out"** to reach a genuine pre-auth state. `🛠 Dev: skip auth`
+     produces an *authenticated* anonymous session and will silently bypass a logged-out-only path.
+   - **Paid tier** → reach signed-in first, then flip tier by DB update (anonymous users have no
+     email, so `set-tier.js` won't find them — see `references/environment.md`).
+
+   In **feature-verification mode**, the precondition is whatever the feature's plan/spec says its
+   flow starts from — honor that, not this step's default.
 
 6. **Create `agentic_QA.md`** at repo root using the template in `references/bug-template.md`.
+
+## Feature-verification mode (`--feature <plan-or-spec-path>`)
+
+Use when the goal is to acceptance-test **one specific feature's** end-to-end browser flow, not to
+hunt broadly. This mode reuses everything else in this skill unchanged — server lifecycle, the
+chrome-devtools conventions + token discipline, the deep-reveal **grounding oracles + rubric**, the
+finding template, and `project_app_qa_setup_gotchas` — and only changes what you're driving toward.
+
+The difference from a sweep is the **verdict shape**: a sweep answers "what's broken?"; feature mode
+answers "**do these acceptance criteria pass?**" — then also asks "what else did I break nearby?".
+
+1. **Read the acceptance criteria from the plan/spec.** Open the `--feature` path and extract its
+   QA / acceptance-criteria / "definition of done" section (e.g. a plan's `## QA` or a Task named
+   "browser QA"). Turn each criterion into an explicit checklist item. These are your pass/fail
+   gates — do not invent your own instead of the written ones.
+2. **Honor the feature's precondition state** (setup step 5) — the flow's starting user/auth/tier
+   state is whatever the plan says, NOT the default signed-in anon. A logged-out-only feature must
+   be driven from `session === null`; using `Dev: skip auth` would silently skip the very path
+   under test.
+3. **Drive each criterion and mark it `✅ pass` / `❌ fail`** in `agentic_QA.md`, with the same
+   evidence discipline as any finding (network/console/DB/log delta, oracle output for deep-reveal
+   grounding, screenshot-to-disk only for a visual defect). A criterion you cannot exercise is
+   `⚠️ blocked` with the reason — never silently drop it.
+4. **Verify server-side effects, not just the UI.** If the feature writes/reads data (rows,
+   columns, re-association, quota), confirm it in the DB (`references/environment.md` connection
+   recipe), because the QA browser can mis-render state (see `project_app_qa_setup_gotchas`).
+5. **Then sweep the touched screens for adjacent bugs** — every screen the flow crosses gets the
+   normal bug-hunt + a mobile-viewport glance. Feature acceptance and adjacent-bug findings both
+   land in `agentic_QA.md` (tag which is which).
+6. **End with a one-line verdict**: `Feature <name>: N/M criteria pass` + the list of any ❌/⚠️.
+
+Scope note: run feature mode **monolithically** unless the feature genuinely spans many independent
+areas; the acceptance flow is usually one linear journey and splitting it across subagents loses the
+cross-screen state (a mid-flow sign-up, a migrated row) the criteria depend on.
 
 ## Execution mode: monolithic vs coordinator
 

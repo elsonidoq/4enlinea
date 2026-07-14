@@ -7,6 +7,9 @@ import { Toolbar } from '../components/Toolbar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
+import { useAudio } from '../lib/useAudio.js';
+import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
+import { getNarrationQueue } from '../lib/lessonNarration.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -24,6 +27,7 @@ function swatchColor(type) {
 export function ConceptScreen({ go, goBack, lessonId }) {
   const { t } = useTranslation();
   const { store } = useStore();
+  const { speechEnabled } = useAudio();
   const [lesson, setLesson] = useState(null);
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [slideIndex, setSlideIndex] = useState(0);
@@ -53,6 +57,29 @@ export function ConceptScreen({ go, goBack, lessonId }) {
     }
   }, [lesson]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Narrate the current concept slide's coachMessages (spec 046 US3, FR-016/FR-019/FR-021).
+  // Keyed on slideIndex (and lesson, for the initial load) so narration re-fires on every
+  // slide change and on first mount. Cleanup unconditionally calls stopSpeech() so
+  // navigating away or changing slides mid-narration never leaves orphaned audio (FR-021).
+  useEffect(() => {
+    if (!lesson) return undefined;
+    const currentSlide = lesson.slides[slideIndex];
+    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+
+    return () => {
+      stopSpeech();
+    };
+  }, [lesson, slideIndex, speechEnabled]);
+
+  function handleReplayNarration() {
+    if (!lesson) return;
+    stopSpeech();
+    const currentSlide = lesson.slides[slideIndex];
+    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+  }
+
   function handleContinue() {
     if (slideIndex < lesson.slides.length - 1) {
       setSlideIndex(i => i + 1);
@@ -79,7 +106,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   if (loadState === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar onBack={() => goBack()} />
+        <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
           {t('common.loading', 'Loading…')}
         </div>
@@ -90,7 +117,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   if (loadState === 'error' || !lesson) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <TopBar onBack={() => goBack()} />
+        <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
           <p style={{ color: 'var(--ink-soft)', fontSize: 15 }}>{t('common.error', 'Something went wrong.')}</p>
           <button className="btn btn-ghost" onClick={() => goBack()}>{t('common.back', 'Back')}</button>
@@ -110,9 +137,10 @@ export function ConceptScreen({ go, goBack, lessonId }) {
         title={t(`lesson.${lessonId}.title`, { defaultValue: lesson.title })}
         onBack={() => go('saga')}
         meta={`${slideIndex + 1} / ${lesson.slides.length}`}
+        onLogoClick={() => go('home')}
       />
 
-      <CoachDialog messages={slide.coachMessages} />
+      <CoachDialog messages={slide.coachMessages} onReplay={handleReplayNarration} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
         <Board

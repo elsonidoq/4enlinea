@@ -14,6 +14,22 @@ Two LLM-grounded coaching features are live as server endpoints. CLI scripts in 
 
 Server endpoints share the solver singleton managed at startup. CLI scripts in `connect-four/server/scripts/` each spawn their own solver process. Shell wrappers at project root load `.env` via `node --env-file`.
 
+> **Production call-graph caveat (verified 2026-07 on `feature/polish`).** The table above pairs each feature
+> with its CLI harness, but the **production** HTTP handlers do NOT all route through `llmCoachHelpers.callLLM`:
+> - `POST /api/explain-move-llm` (the deep-reveal endpoint) → `computeMechanism` (`mechanismExplainer.mjs`) →
+>   **`defaultCallLLM`** (`mechanismExplainer.mjs`), a separate OpenAI-chat implementation. `computeMechanism`'s
+>   `callLLM` option is a **test-injection seam**. `llmCoachHelpers.callLLM` is used **only** by the offline
+>   `run_eval.mjs` harness — it serves **no** production traffic.
+> - The coach one-liner uses a **separate Anthropic path**: `composeExplanation` → `anthropic.messages.create`
+>   (usage fields `input_tokens`/`output_tokens`, not OpenAI's `prompt_tokens`/`completion_tokens`).
+> - `compute.mjs --llm` has its **own** OpenAI `fetch` (reads `EXPLAIN_MODEL`). OpenAI **TTS** (deep-reveal audio)
+>   is billable but char-priced (no token semantics).
+> - **`/api/recommend-move` is NOT a registered server route** — it is CLI-only (`recommend_next_move.mjs`),
+>   despite the "Server endpoint" column above. Do not treat it as a live prod endpoint.
+>
+> There is no single LLM choke-point. See memory `project_prod_llm_call_graph`; spec 047 (US7.5) unifies only the
+> three OpenAI-chat paths for token/cost telemetry.
+
 ---
 
 ## Shared infrastructure
@@ -52,7 +68,7 @@ Walks a game tree `numPlies` deep with optimal play, classifying positions via t
 - **Zero-count threats use bare `0`, not `[zone:tg]`.** `formatThreatStats` emits a bare `0` (no zone tag) when a threat count is zero. The LLM prompt has an explicit exception clause instructing the LLM to write bare `0` for zero-count lines rather than invent a zone tag. `checkP5Strong` always fails `[zone:tg]` — there is no valid use of that spec in LLM output.
 
 ### LLM call
-`callLLM(prompt)` — native `fetch` to OpenAI chat completions API. Model and key read from `OPENAI_API_KEY` / `OPENAI_MODEL` env vars.
+`callLLM(prompt)` — native `fetch` to OpenAI chat completions API. Model and key read from `OPENAI_API_KEY` / `OPENAI_MODEL` env vars. **Note:** this helper backs the CLI/eval harnesses, not the production `/api/explain-move-llm` endpoint — see the "Production call-graph caveat" above.
 
 ---
 
@@ -275,6 +291,17 @@ COL  TIER           OUTCOMES                 PATTERN             RATIO  TOP2
 - Column numbers are 1-indexed in the LLM prompt.
 
 ---
+
+## Deep Reveal TTS
+
+Deep Reveal TTS speaks the LLM explanation in `DeepRevealPane.jsx` via OpenAI streaming TTS, cached in Supabase Storage.
+
+- **`GET /api/user/tts/deep-reveal?moveString=...&col=...`** (auth-gated). Cache hit → 302 redirect to a signed Storage URL (1-week TTL). Cache miss → pipes the OpenAI TTS stream to the client (`audio/mpeg`, chunked) while buffering chunks; fire-and-forget upload to Storage + `explanation_cache` update. A `streamComplete` guard uploads only if the full stream finished (never caches partial MP3s).
+- **`POST /api/admin/tts/cleanup`** (localhost-only) deletes storage objects and nulls `audio_path`/`audio_generated_at` for rows older than 30 days.
+- **Cache key is `sha256(stripped_text)`, NOT `position_hash`** — regenerated explanations get fresh audio. `stripAnnotationsForTTS()` (in `server/index.js` near `readTtsConfig()`) removes `[zone:X]`/`[term:X]` tags before hashing/synthesis.
+- **Storage**: private bucket `coach-tts` (created in dashboard, no startup code); path `tts/deep-reveal/<sha256>.mp3`; upload `{ contentType: 'audio/mpeg', upsert: true }`.
+- **DB (migration 050)**: `explanation_cache.audio_path` (nullable text) + `audio_generated_at` (nullable timestamptz, drives the 30-day cleanup).
+- **Frontend**: two-phase reveal — fetch `/api/explain-move-llm` first, then create `new Audio(TTS_URL)`, wait for `canplay` (Promise with `{ once: true }` on both `canplay` and `error` + 5 s timeout), THEN reveal text and `speakDeepReveal(audio)`. Skipped when `speechEnabled` is off; TTS failure degrades silently to text-only. Panel close calls `stopSpeech()` and clears the Audio src. `useCoachSpeech.js`'s module-level queue accepts `string | HTMLAudioElement`; `speakDeepReveal` bypasses the manifest check.
 
 ## Environment variables required
 

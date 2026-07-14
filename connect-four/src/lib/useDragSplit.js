@@ -1,6 +1,39 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
+ * Spec 042 US6 (FR-022, SC-009, contracts/split-reveal-zoom-contract.md §2) —
+ * pure board-width computation, deliberately decoupled from live drag state.
+ *
+ * Computes the board's rendered maxWidth from the pane height implied by
+ * `initialSplitPct` (the split at open time, before any drag) and `containerH`
+ * — NEVER from the live `splitPct`/`topPx` that changes continuously during a
+ * drag. This is what makes the board's zoom stable across the full divider
+ * drag range: the caller (`SplitReveal.jsx`, T056) must call this once at
+ * mount / on a genuine container resize, and NOT on every `handleMove` tick.
+ *
+ * `isDragging` is accepted for interface/documentation symmetry with the
+ * contract's signature but intentionally does not affect the output — the
+ * whole point of "frozen" is that dragging never changes the result.
+ *
+ * Formula mirrors SplitReveal.jsx's board sizing (Board.jsx, pad=11, gap=7):
+ *   boardH = 6*(boardW - 64)/7 + 57 + badgePad
+ *   boardW = 7*(targetH - 57)/6 + 64
+ *
+ * @param {number} containerH - split-pane container's pixel height
+ * @param {number} initialSplitPct - top-pane percentage at open time (pre-drag)
+ * @param {boolean} [isDragging] - unused; kept for signature parity, see above
+ * @returns {number} boardW in px, or 0 when the pane is too short to compute a
+ *   sensible width (mirrors SplitReveal's existing `targetH > 57` guard).
+ */
+export function computeFrozenBoardWidth(containerH, initialSplitPct, isDragging) { // eslint-disable-line no-unused-vars
+  if (!containerH || containerH <= 0) return 0;
+  const topPx = (containerH * initialSplitPct) / 100;
+  const targetH = topPx - 32;
+  if (targetH <= 57) return 0;
+  return (7 * (targetH - 57)) / 6 + 64;
+}
+
+/**
  * Vertical drag-split hook.
  *
  * Uses native DOM event listeners for ALL drag phases — never React
@@ -157,5 +190,8 @@ export function useDragSplit({
     },
   };
 
-  return { splitPct, topPx, containerRef, dividerRef, dividerProps, isDragging };
+  // containerH/initialSplitPct exposed (spec 042 US6, T055) so callers can
+  // compute a one-time frozen board width via computeFrozenBoardWidth,
+  // independent of the live splitPct/topPx that changes during a drag.
+  return { splitPct, topPx, containerH, initialSplitPct, containerRef, dividerRef, dividerProps, isDragging };
 }

@@ -1,10 +1,13 @@
 You are compacting the project's auto-memory index. The `MEMORY.md` index has grown past the size that
-loads into context; your job is to shrink it to **115–130 lines** by migrating architecture-grade
-knowledge OUT to `docs/architecture/` and pruning stale or redundant memories — proposing the full plan
-and getting confirmation BEFORE you change anything.
+loads into context; your job is to shrink it to **150–175 lines and at most 20 KB** by migrating
+architecture-grade knowledge OUT to `docs/architecture/` and pruning stale or redundant memories —
+proposing the full plan and getting confirmation BEFORE you change anything.
 
-Optional argument ($ARGUMENTS): a target line count or band (e.g. `120` or `115-130`). If empty, use
-**115–130**.
+Optional argument ($ARGUMENTS): a target line count or band (e.g. `160` or `150-175`). If empty, use
+**150–175 lines, ≤20 KB** (both must hold).
+
+**If triggered from `/finish-session`:** finish writing the session's new/updated memories FIRST, then
+run this compaction. Never compact before the pending memories are saved.
 
 ## Locations
 
@@ -35,7 +38,11 @@ memories into one; **(3) DROP** stale, resolved, or git-derivable entries.
 
 ---
 
-## Phase 0 — Backup (do this first, always)
+## Phase 0 — Backup (do this first, always — NEVER skip)
+
+**Never omit this backup, and never assume an existing backup is recent** — a backup from an earlier
+session or an earlier point in this session does not count; the memory dir may have changed since.
+Always take a FRESH backup now, before touching anything.
 
 Copy the entire memory dir to the session scratchpad before touching anything. **The memory dir is a
 SYMLINK** (`~/.claude/projects/.../memory` → the repo's `.claude/projects/.../memory`), and a naive

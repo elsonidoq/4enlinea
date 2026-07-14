@@ -23,34 +23,13 @@ import {
   renderDecisionForCondition,
   postprocessAnswer,
 } from './scripts/compute.mjs';
+import { callOpenAIChat } from './llmChat.js';
 
-// ── OpenAI call (parameterized model; larger budget than callLLM, matches compute.mjs) ──────
-let useJsonFormat = true; // disabled process-wide if the model rejects response_format
-export async function defaultCallLLM(prompt, { model, apiKey }) {
-  const body = {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_completion_tokens: 4000, // reasoning + output share this budget on gpt-5.x
-  };
-  if (useJsonFormat) body.response_format = { type: 'json_object' };
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    if (useJsonFormat && /response_format/i.test(errBody)) {
-      // Model doesn't support json_object — disable and retry once without it.
-      useJsonFormat = false;
-      return defaultCallLLM(prompt, { model, apiKey });
-    }
-    throw new Error(`OpenAI API error ${res.status}: ${errBody}`);
-  }
-  const data = await res.json();
-  return data.choices[0].message.content;
+// ── OpenAI call (thin wrapper around the unified, instrumented helper; spec 047 US5) ─────────
+// Preserves the pre-existing bare-string-content contract for computeMechanism's callers.
+export async function defaultCallLLM(prompt, { model, apiKey, endpoint, userId, purpose }) {
+  const { content } = await callOpenAIChat(prompt, { model, apiKey, endpoint, userId, purpose });
+  return content;
 }
 
 // ── Lenient JSON parse (handles fenced or prose-wrapped output; ported from compute.mjs) ─────
@@ -96,14 +75,25 @@ const isLlmError = (r) => Boolean(r.callError || r.parseError);
 //   { notABlunder: false, evidence, nv, prompt, renderDecision,
 //     raw, answer, mechanism, parseError, callError, annotationRepairs }
 // `callLLM` may be injected (tests); otherwise defaultCallLLM(model, OPENAI_API_KEY) is used.
-export async function computeMechanism(movestring, col, { solver, model, callLLM } = {}) {
+export async function computeMechanism(movestring, col, { solver, model, callLLM, userId = null } = {}) {
   const evidence = await computeReason(movestring, col, { solver }); // terminal boards throw → propagate
   if (!evidence || evidence.notABlunder) return { notABlunder: true, evidence: evidence ?? null };
 
   const nv = toNarratorVector(evidence);
   const prompt = buildPromptForCondition(null, nv, 'D'); // condition D ignores the glossary arg
   const renderDecision = renderDecisionForCondition(nv, 'D');
-  const call = callLLM ?? ((p) => defaultCallLLM(p, { model, apiKey: process.env.OPENAI_API_KEY }));
+  // userId is threaded to BOTH the default closure and an injected callLLM (as a second arg) so
+  // that (a) production calls always carry the caller's userId and (b) tests can assert
+  // propagation end-to-end without relying solely on the default (network) closure.
+  const call = callLLM
+    ? (p) => callLLM(p, { userId })
+    : (p) => defaultCallLLM(p, {
+      model,
+      apiKey: process.env.OPENAI_API_KEY,
+      endpoint: 'explain-move-llm',
+      userId,
+      purpose: 'deep-reveal',
+    });
 
   let attempt = await runLlmAttempt(prompt, renderDecision, call);
   if (isLlmError(attempt)) attempt = await runLlmAttempt(prompt, renderDecision, call); // retry once

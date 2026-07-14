@@ -13,4 +13,4 @@ The `drawing_move` blunder tag is applied to positions where the **better move i
 
 **How to apply:** Fix 4 (done 2026-06-25) reworded the grounding rule to stop asserting "not a win" and instead say the played move only draws while a stronger move existed — a text-level patch. The **real** fix (Fix 6, NOT yet done) is upstream in the blunder-tagging pipeline: a move that forfeits a forced win should be categorized as a missed win / outcome_flip, not `drawing_move`. See [[project_blunder_tagging_design]]. Until then, `drawing_move` semantically conflates "played move draws, best draws" with "played move draws, best WINS".
 
-Related: the same eval drove the sparse-lookahead deepening and the always_include rollback — see [[project_sparse_lookahead_unvalidated]] and [[project_explain_system]].
+Related: the same eval drove the sparse-lookahead deepening and the always_include rollback — see [[project_lookahead_shared_seam]] and [[project_explain_system]].

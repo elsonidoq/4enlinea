@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
+import { callOpenAIChat } from './llmChat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -187,25 +188,15 @@ export async function callLLM(prompt) {
   if (!apiKey) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model)  throw new Error('OPENAI_MODEL not set in environment');
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 400,
-    }),
+  return callOpenAIChat(prompt, {
+    model,
+    apiKey,
+    endpoint: 'run-eval',
+    userId: null,
+    purpose: 'offline-eval',
+    maxCompletionTokens: 400,
+    useJsonFormat: false,
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${body}`);
-  }
-  const data = await res.json();
-  return data.choices[0].message.content;
 }
 
 /**

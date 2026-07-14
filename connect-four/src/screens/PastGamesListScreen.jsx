@@ -122,7 +122,7 @@ function GameCard({ game, t, onClick }) {
 const SORTS = [
   { key: 'recent',          label: 'Recent' },
   { key: 'played_well',     label: 'Played Well' },
-  { key: 'worst_blunders',  label: 'Worst Blunders' },
+  { key: 'worst_blunders',  label: 'Worst Mistakes' },
 ];
 
 const FILTERS = [
@@ -206,7 +206,7 @@ export function PastGamesListScreen({ go, goBack }) {
   if (!session) {
     return (
       <div style={{ background: 'var(--bg-spar)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-        <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} />
+        <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 36px', textAlign: 'center', gap: 16 }}>
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(0,0,0,0.06)', display: 'grid', placeItems: 'center', color: 'var(--ink-soft)' }}>
             <Icon name="user" size={34} />
@@ -221,7 +221,7 @@ export function PastGamesListScreen({ go, goBack }) {
 
   return (
     <div style={{ background: 'var(--bg-spar)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} />
+      <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} onLogoClick={() => go('home')} />
 
       {/* Sort picker */}
       <div style={{ padding: '6px 16px 0', display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -254,7 +254,7 @@ export function PastGamesListScreen({ go, goBack }) {
       </div>
 
       {/* Filter pills */}
-      <div style={{ padding: '8px 16px 4px', display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
+      <div className="hide-scrollbar" style={{ padding: '8px 16px 10px', display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
         {FILTERS.map(({ key, label }) => {
           const active = filter === key;
           return (

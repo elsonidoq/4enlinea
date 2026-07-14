@@ -53,13 +53,19 @@ Then group the stories into sequential **implementation batches**. Each batch:
 - Why those stories are grouped together
 - What the batch depends on from prior batches
 
-**Wait for the user to approve, modify, or reject the partition before proceeding.**
+**Then, you MUST end the partition proposal with a summary table** (this is required, not optional):
+
+| Batch | # Tasks | Why grouped together |
+|-------|---------|----------------------|
+[one row per batch: batch number, number of tasks.md tasks it covers, and a one-line rationale for grouping those stories/tasks into this batch]
+
+**Present the partition to the user for visibility, then proceed immediately to Step 3.** Do not wait for approval — the batches are shown so the user can follow along and interrupt if needed, but implementation begins right away.
 
 ---
 
 ## Step 3 — Execute sequentially
 
-Once the user approves, implement the batches one at a time.
+Implement the batches one at a time, starting immediately after presenting the partition in Step 2.
 
 For each batch, spawn a sub-agent using the Agent tool with:
 - `subagent_type`: omit (general-purpose)
@@ -148,13 +154,50 @@ After all batches have run, output a summary with:
 3. **Open items** — anything a sub-agent flagged as incomplete, skipped, deferred, or stubbed (drawn from each batch's `## Handoff context`)
 4. **Verification steps** — the acceptance scenarios the user should spot-check manually
 
+### Persist open issues to `docs/open_issues.md`
+
+After presenting the summary, record any **genuine deferred/latent issue** from the "Open items" list into `docs/open_issues.md` (create the file if it does not exist). This file is the human-triageable backlog of known-but-deferred bugs and quality gaps — distinct from auto-memory (trigger-first gotchas). 
+
+- **What qualifies**: a real latent bug, quality gap, or consciously scoped-out piece of work that someone might fix later. 
+- **What does NOT qualify**: ephemeral notes (test flakes, one-off environment quirks, "re-run X to seed data") — those belong in a memory or nowhere. A finished stub that the next batch already completed is not an open issue.
+- **Do not duplicate**: read the existing `docs/open_issues.md` first and skip anything already tracked.
+- **Entry format** (append, next sequential `OI-N`):
+
+```
+## OI-N — <one-line title>
+
+**Status**: deferred (reason / scoped out of <spec>)
+**Area**: <files or subsystem>
+**Discovered**: <spec id + date>
+
+<what's wrong, with a concrete repro if one exists>
+
+**Why deferred**: <why we're not fixing it now>
+**If picked up**: <concrete first step; cross-ref related memory/docs>
+```
+
+If you created or appended entries, add a one-line pointer to `docs/open_issues.md` in `docs/index.md` under "Other" if one is not already present.
+
 ---
 
-## Step 5 — QA and Bug Fix
+## Step 5 — Code review
 
-After the summary, spawn a QA sub-agent to perform a browser-driven review and fix any bugs found.
+After the summary, run a static code review over the **full accumulated branch diff** (all batches together). This catches a class of defects the browser-driven QA in Step 6 is structurally blind to: correctness bugs on paths QA never exercises, duplicated/reinvented logic across batches (each sub-agent only saw a handoff summary, not the prior diffs), violated `docs/architecture/` conventions, and dead code.
 
-**Wait for the user to confirm they want to proceed with QA before spawning this agent.**
+1. **Invoke the `code-review` skill** using the Skill tool (`skill: "code-review"`). Let it review the current working-tree/branch diff. Do **not** pass `--fix` — findings are reported so you can triage them yourself.
+   - If the diff is large, use a higher effort level (e.g. `code-review high`); otherwise the default is fine.
+
+2. **Present the findings to the user for visibility**, grouped most-severe first. For each finding include: the file:line, a one-sentence summary of the defect, and the concrete failure scenario. This is informational — do not wait for a response.
+
+3. **Triage and apply fixes yourself.** Fix the genuine, clearly-correct findings directly in the source and note what changed. Findings you consciously decide not to fix (too risky, out of scope, or low-value) become open-issue candidates in Step 7 — carry them forward.
+
+Report a short outcome: which findings were fixed and which were deferred (with a one-line reason). If the review surfaced nothing, say so and proceed.
+
+---
+
+## Step 6 — QA and Bug Fix
+
+After code review, spawn a QA sub-agent to perform a browser-driven review and fix any bugs found. Proceed directly — do not wait for user confirmation.
 
 Spawn a sub-agent using the Agent tool with:
 - `subagent_type`: omit (general-purpose)
@@ -252,3 +295,11 @@ For each bug:
 ### Remaining issues
 [Any issues that could not be fixed, with a reason. "None." if everything is clean.]
 ```
+
+---
+
+## Step 7 — Persist QA-surfaced open issues
+
+After the QA sub-agent returns, take any entry from its `### Remaining issues` section that is a **genuine deferred/latent issue** (same qualifies / does-not-qualify test as Step 4's "Persist open issues") and append it to `docs/open_issues.md` using the same `OI-N` entry format. Read the file first and skip anything already tracked. Pre-existing issues the QA agent flags as "out of scope / not a regression" still belong here if they're real latent bugs — that is exactly what this backlog is for.
+
+Report to the user which `OI-N` entries were added (or "no new open issues" if none qualified).
