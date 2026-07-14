@@ -586,3 +586,51 @@ context, so `Accept-Language` can't reach it — localizing needs a locale threa
 **If picked up**: (lessons) translate lesson JSON content, then run per-language `generateLessonAudio`
 and store a per-locale audio path per message; (one-liner) thread a locale through the harvest/tagging
 pipeline into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`. Cross-ref: [[project_spanish_output_silent_fallback]].
+
+## OI-29 — SplitReveal live-fit: stale spec-042 contract + missing render-level regression test
+
+**Status**: deferred (2026-07-14) — fix is shipped & user-verified; only follow-up docs/tests remain
+**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`
+
+The board-sizing fix (live-fit `maxWidth` from the current `splitPct`, floored at 120, replacing the
+frozen `boardW`/`>=200`-gate) is in and verified, but two follow-ups were left:
+(1) `contracts/split-reveal-zoom-contract.md §2` still describes the SUPERSEDED frozen behavior (FR-022,
+SC-009) and should be updated/annotated so it doesn't mislead;
+(2) `splitRevealZoom.test.js` only tests the pure `computeFrozenBoardWidth` (still frozen-by-signature),
+so it passes unchanged and gives NO coverage of the actual bug. Add a render-level regression test
+asserting the board never spills to full viewport width and never exceeds the top pane when the
+container's available height is small.
+
+**If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
+container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
+Cross-ref: [[project_split_reveal_board_fit]].
+
+## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
+
+**Status**: deferred (feature gap, not a bug; surfaced while designing the coach creation-pattern transition fix, 2026-07-14)
+**Area**: `connect-four/server/classifier.js` — `classify()` (live user-move single-tag path, ~line 627) vs `classifyPattern()` (multi-tag blunder/puzzle path, ~line 1607); coach phrase pools `coach.figure_7.*` etc. in `src/i18n/en.json`/`es.json`
+
+The live sparring coach round-trip (`POST /api/evaluate-move` → `classify()`) only ever emits one of:
+`immediate_threat`, `double_threat`, `forced_win`, `forced_block`, `forbidden_columns`,
+`best_move`, `drawing_move`, `suboptimal_move`. The other named tactics — **`figure_7`**, `j_shape`,
+`z_threat`, `undercut`, `overcut`, `odd_even_threat`, `claimeven` — are produced **only** by
+`classifyPattern()` (the async multi-tag detector powering blunder analysis and puzzles), never by
+`classify()`. So although `coach.figure_7.*` (and sibling) phrase pools exist in the i18n bundles,
+they are **unreachable on live user moves** (only selectable when a request passes an explicit
+`category: 'figure_7'`, i.e. a puzzle). The coach therefore never says "you built a figure-7" during
+normal sparring.
+
+**Why deferred**: making the live coach praise `figure_7` et al. is a *new feature* (extend
+`classify()`'s single-tag priority chain to run those detectors), not part of the reported
+double-threat/forced-win repeat fix. It also carries cost/complexity: those detectors are `async` and
+several call the solver (`detectZThreat`, `detectOddEvenThreat`, `detectClaimeven`), unlike the pure
+geometry checks `classify()` uses today — adding them to the per-move live path has latency
+implications.
+
+**If picked up**: decide which of the multi-tag tactics deserve live coach praise, add them to
+`classify()`'s priority chain (mind the sync→async change and solver-call cost), and — critically —
+apply the **same absent→present transition-gating** the double-threat/forced-win fix introduces
+(design: `docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md`). These are
+all persist-across-moves "creation" patterns, so without transition-gating they would exhibit the
+identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
+[[reference_tactical_pattern_definitions]].
