@@ -9,6 +9,7 @@ import { Toolbar } from '../components/Toolbar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { buildBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
+import { canRevealAnon } from '../lib/anonDeepReveal.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -497,8 +498,11 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           </p>
         )}
 
-        {/* Deep reveal trigger */}
-        {session ? (
+        {/* Deep reveal trigger. Anonymous onboarding users get ONE free reveal:
+            show the trigger while canRevealAnon is true (unused, or re-opening the
+            same one); once spent, fall through to the sign-in gate. DeepRevealPane
+            enforces the same gate on the fetch and marks it spent on success. */}
+        {(session || canRevealAnon(`${blunder.board_state || ''}:${blunder.move_played}`)) ? (
           <button
             onClick={() => setDeepRevealOpen(true)}
             style={{
