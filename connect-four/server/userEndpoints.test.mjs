@@ -1159,6 +1159,15 @@ describe('POST /api/user/migrate', () => {
             },
           };
         }
+        if (table === 'blunders') {
+          return {
+            update: () => ({
+              eq: () => ({
+                is: async () => ({ error: null }),
+              }),
+            }),
+          };
+        }
         if (table === 'users') {
           return { update: () => ({ eq: () => ({ eq: async () => ({ error: null }), then: (r) => r({ error: null }) }) }) };
         }
@@ -1205,6 +1214,100 @@ describe('POST /api/user/migrate', () => {
     });
     assert.equal(status, 204);
     assert.equal(calls.gamesUpdate, null);
+  });
+
+  // ── Task 7: anonymous blunders re-association ──────────────────────────────
+  // Mirrors the games re-association above: the client sends its own
+  // device_uuid; the endpoint re-keys any anon blunder rows (user_id IS NULL)
+  // with that device_uuid to the signed-in user.
+
+  /** Same shape as buildGamesMigrateSupabase, but also stubs the `blunders`
+   *  table's update().eq('device_uuid', ...).is('user_id', null) chain. */
+  function buildBlundersMigrateSupabase() {
+    const calls = {
+      gamesUpdate: null,
+      blundersUpdate: null,
+      blundersEqDeviceUuid: null,
+      blundersIsUserId: undefined,
+    };
+    const supabase = {
+      from: (table) => {
+        if (table === 'games') {
+          return {
+            update: (payload) => {
+              calls.gamesUpdate = payload;
+              return {
+                eq: () => ({
+                  is: async () => ({ error: null }),
+                }),
+              };
+            },
+          };
+        }
+        if (table === 'blunders') {
+          return {
+            update: (payload) => {
+              calls.blundersUpdate = payload;
+              return {
+                eq: (col, val) => {
+                  if (col === 'device_uuid') calls.blundersEqDeviceUuid = val;
+                  return {
+                    is: async (col2, val2) => {
+                      calls.blundersIsUserId = { col: col2, val: val2 };
+                      return { error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+        if (table === 'users') {
+          return { update: () => ({ eq: () => ({ eq: async () => ({ error: null }), then: (r) => r({ error: null }) }) }) };
+        }
+        if (table === 'session_stats') return { upsert: async () => ({ error: null }) };
+        if (table === 'puzzle_attempts') return { insert: async () => ({ error: null }) };
+        if (table === 'lesson_progress') return { upsert: async () => ({ error: null }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+      },
+    };
+    return { supabase, calls };
+  }
+
+  it('re-keys anon blunders with the client-supplied device_uuid to the user, WHERE user_id IS NULL', async () => {
+    const { supabase, calls } = buildBlundersMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: {
+        puzzle_attempts: [], session_stats: [], lesson_progress: [],
+        sparring_record: null, streak: null,
+        device_uuid: 'client-anon-uuid', // distinct from req.user.device_uuid ('dev-xyz-456')
+      },
+    });
+    assert.equal(status, 204);
+    assert.deepEqual(calls.blundersUpdate, { user_id: 'user-abc-123' });
+    assert.equal(calls.blundersEqDeviceUuid, 'client-anon-uuid'); // keyed on CLIENT uuid, not req.user.device_uuid
+    assert.deepEqual(calls.blundersIsUserId, { col: 'user_id', val: null });
+  });
+
+  it('does NOT touch blunders when device_uuid is absent (no-op)', async () => {
+    const { supabase, calls } = buildBlundersMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: { puzzle_attempts: [], session_stats: [], lesson_progress: [], sparring_record: null, streak: null },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.blundersUpdate, null); // blunders.update never called
+  });
+
+  it('does NOT touch blunders when device_uuid is an empty string (no-op)', async () => {
+    const { supabase, calls } = buildBlundersMigrateSupabase();
+    const app = createApp(supabase, authMiddleware);
+    const { status } = await request(app, 'POST', '/api/user/migrate', {
+      body: { puzzle_attempts: [], session_stats: [], lesson_progress: [], sparring_record: null, streak: null, device_uuid: '' },
+    });
+    assert.equal(status, 204);
+    assert.equal(calls.blundersUpdate, null);
   });
 
   // ── T022 (Epic 8 — Onboarding Experience, US1) ──────────────────────────────

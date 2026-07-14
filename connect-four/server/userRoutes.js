@@ -540,6 +540,21 @@ export function registerUserRoutes(app, supabase) {
         );
       }
 
+      // Anon free deep reveal — re-associate anonymous blunder rows, same
+      // device_uuid trick as the games block above. Anon blunders were written
+      // with user_id=null, device_uuid=<client's>. Key on body.device_uuid (the
+      // client's), NOT the derived deviceUuid. Absent/empty is a silent no-op.
+      if (typeof body.device_uuid === 'string' && body.device_uuid.length > 0) {
+        operations.push(
+          supabase
+            .from('blunders')
+            .update({ user_id: req.user.id })
+            .eq('device_uuid', body.device_uuid)
+            .is('user_id', null)
+            .then(({ error }) => (error ? { error: error.message } : undefined)),
+        );
+      }
+
       // onboarding_status (T021, FR-012): conditional write — only backfills an
       // account still at 'not_encountered', never clobbers a real prior seen/skipped
       // status recorded by a different device's earlier migration. Absent or invalid
