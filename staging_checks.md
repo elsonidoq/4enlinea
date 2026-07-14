@@ -172,6 +172,40 @@ For each check record:
     lingering charge.
   - **Source**: Epic 5 / spec 045 — production readiness (beyond FR-024's test-mode bar).
 
+- [ ] **Live price display in UpgradeModal via `GET /api/stripe/config` (2026-07-14).**
+  - **What**: On deployed staging (signed in or out), open the upgrade modal and confirm each plan toggle
+    shows the live amount — **$2.99/mo** and **$21.99/yr** — read from Stripe, not hardcoded.
+  - **Why staging**: `/api/stripe/config` 503s locally unless the full Stripe env is loaded, and the amounts
+    come from the real Stripe price objects (new ids after the old $7.99/$59.99 prices were archived). The
+    prod-like path (env present + real Stripe fetch + client formatting) is only exercised on the deploy.
+  - **Expected**: Both prices render; on a config failure the modal degrades to plain "Monthly/Annual"
+    labels (no crash) and checkout still works.
+  - **Source**: 2026-07-14 price-display fix; api-conventions.md `GET /api/stripe/config`.
+
+- [ ] **Return-to-origin after checkout across all four paywall entry points (2026-07-14).**
+  - **What**: Launch checkout from each of `/setpicker` (locked set), `/saga` (gated lesson), a
+    `/challenge/...` or `/blunder/...` (deep-reveal 429), and `/summary` (set-summary paywall); complete a
+    test-mode purchase; confirm you land back on the **originating** screen with `?checkout=success` — except
+    `/summary`, which by design returns you to **`/setpicker`** (it's SESSION_ONLY). Also confirm the CTA
+    button never flashes "You're now Pro" before the redirect.
+  - **Why staging**: This needs the real full-page Stripe redirect round-trip (the SPA reboots); local dev
+    can't exercise the cross-origin `success_url` return, and the SESSION_ONLY cold-boot behavior only
+    manifests after a genuine reload. These three fixes shipped AFTER the earlier successful staging purchase,
+    so they are unverified on a deploy.
+  - **Expected**: Each entry returns to its origin path (or `/setpicker` for `/summary`); `CheckoutReturnBanner`
+    polls and the tier flips to paid; no premature "Pro" flash.
+  - **Source**: 2026-07-14 return-to-origin + button-state fixes; frontend-conventions.md "Upgrade / Checkout flow".
+
+- [ ] **Deep-reveal quota paywall fires BEFORE the reveal computes (2026-07-14).**
+  - **What**: As an over-quota free user on staging (exhaust the 5/week cap), click a deep reveal and confirm
+    the upgrade paywall appears **immediately** — the reveal must NOT visibly "compute" first and then show
+    the paywall.
+  - **Why staging**: Requires a real over-quota free-tier `users` row and the production LLM path; the timing
+    difference (429 up front vs after a full `computeMechanism` LLM call) is only observable against real data.
+    Also confirms the intended side effect: an over-quota user is now paywalled even on a *non-blunder* position.
+  - **Expected**: 429 returns before any LLM compute; paywall shows without a preceding compute spinner.
+  - **Source**: 2026-07-14 quota-gate reorder (`peekQuota`); server-conventions.md "Quota timing (two-phase)".
+
 ## Epic 6 — Lessons: Progression, Audio & Polish (spec 046)
 
 - [ ] **Lesson audio requires a commit + redeploy to serve in production (FR-027 caveat).**

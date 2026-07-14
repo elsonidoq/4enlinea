@@ -511,3 +511,33 @@ onboarding reveal (whose first blunder is often the opening move) exposed it.
 **If picked up**: change the guard to `typeof moveString !== 'string' || !/^[0-6]{0,42}$/.test(moveString)`
 (accept the empty string), matching how `POST /api/explain-move-llm` already validates its `movestring`.
 Cross-ref: [[project_anon_deep_reveal_gates]].
+
+## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
+
+**Status**: deferred (surfaced during Stripe staging bring-up, 2026-07-14)
+**Area**: `connect-four/src/` — `UpgradeModal` call sites (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane)
+
+There is **no always-visible upgrade CTA** anywhere (no nav entry, no banner, no settings/account row).
+The only ways a free user reaches checkout are reactive: tapping a locked puzzle set, tapping a
+tier-gated lesson node, finishing a set whose recommended lesson is Pro-only, or exhausting the weekly
+deep-reveal quota (429). A paid-intent user who is not currently hitting a gate has no discoverable path
+to subscribe. This is what prompted the user's "I don't see any call to action" observation.
+
+**If picked up**: add a persistent entry point (e.g. an "Upgrade" row in Settings/account, a home banner,
+or a nav item) that opens `UpgradeModal` via `useUpgradeCheckout()` — it should pass a real
+`returnPathOverride` if launched from a session-only screen. Cross-ref: [[project_auth_payments_state]].
+
+## OI-25 — Paying from the /summary paywall cannot restore the summary (SESSION_ONLY state lost)
+
+**Status**: mitigated, full fix deferred (2026-07-14)
+**Area**: `connect-four/src/screens/PostSetSummaryScreen.jsx`, `src/lib/urlMapping.js` (`SESSION_ONLY_SCREENS`)
+
+`/summary` is a `SESSION_ONLY` screen driven by an in-memory `results` prop; a full-page Stripe checkout
+redirect reboots the SPA, so on return the `results` are gone and the cold-boot rule sends the user to
+`home`. **Mitigation shipped**: `PostSetSummaryScreen` passes `returnPathOverride='/setpicker'` so the
+user lands on Challenges (the screen's own back-button destination) instead of home — acceptable, since
+they have already seen the summary. A true restore would require persisting `results` (e.g. sessionStorage)
+so `/summary` can rehydrate after the round-trip; judged not worth it for now.
+
+**If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
+returnPath, and rehydrate on cold boot. Cross-ref: [[project_auth_payments_state]], [[OI-24]].

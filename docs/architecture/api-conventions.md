@@ -54,6 +54,16 @@ Response shape is unchanged either way: `{ user: { id, tier } }` on success, `{ 
 
 **FR-007 (in-flight sign-in guard)**: no interaction with the OAuth hash-callback branch — that branch returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called. The two paths are mutually exclusive by control flow.
 
+## Stripe Checkout Config: `GET /api/stripe/config`
+
+Registered by `registerStripeRoutes`. **Public / unauthenticated** — the upgrade modal renders it before the user is necessarily signed in. Returns the live display prices read off the actual Stripe price objects (`stripeProcessor.getPrices()`), so the UI never drifts from what is charged.
+
+**Response**: `200 { prices: { monthly: PriceInfo|null, annual: PriceInfo|null } }` where `PriceInfo = { amount: <minor units, e.g. 299 = $2.99>, currency: 'usd', interval: 'month'|'year'|null }`. Returns `503 { error: 'Payments not configured' }` when `paymentProcessor` is null (no `STRIPE_SECRET_KEY`); the client degrades to plain plan labels with no price.
+
+## Stripe Checkout: `POST /api/stripe/create-checkout` (returnPath)
+
+**Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from; the processor builds Stripe's `success_url`/`cancel_url` as `<FRONTEND_URL><returnPath>?checkout=<outcome>` so the user returns to their originating screen instead of home. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`. Omitting it preserves the legacy `/?checkout=success` behavior.
+
 ## Stripe Webhook Endpoint: `POST /api/stripe/webhook` (spec 045, FR-025)
 
 Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Stripe signature verification — see server-conventions.md).

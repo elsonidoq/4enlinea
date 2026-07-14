@@ -624,6 +624,14 @@ holding `SagaScreen`'s lock-derivation logic:
 auto-dismiss inline banner (i18n key `saga.orderLock.message`) — never the `UpgradeModal`, since an
 order-lock is not a paywall; `'navigate'` proceeds normally.
 
+## Upgrade / Checkout flow (Epic 5)
+
+`UpgradeModal.jsx` is opened by all four paywall entry points (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane) — all reactive; there is no persistent/always-visible upgrade CTA. Shared pieces:
+
+- **`useUpgradeCheckout(returnPathOverride?)`** (`src/lib/useUpgradeCheckout.js`) — returns the `onUpgrade(plan)` handler: POSTs `/api/stripe/create-checkout` with `{ plan, returnPath }` and does a full-page redirect to the Stripe URL. `returnPath` defaults to `window.location.pathname` so the user returns to their originating screen (the app is URL-backed; pathname restores the screen). **SESSION_ONLY trap**: a screen in `SESSION_ONLY_SCREENS` (`summary`, `game`) cannot be cold-booted after the full-page Stripe round-trip — its ephemeral prop state (e.g. `PostSetSummaryScreen`'s `results`) is gone, so returning there redirects to `home`. Such call sites MUST pass a cold-bootable `returnPathOverride`; `PostSetSummaryScreen` passes `'/setpicker'`. Any new paywall entry point on a session-only screen must do the same.
+- **`useStripePrices()` + `formatPrice(info, locale)`** (`src/lib/useStripePrices.js`) — fetches `GET /api/stripe/config` once and returns `{ monthly, annual }` live price info (or `null`); `UpgradeModal` renders the formatted amount under each plan toggle. On any failure (503 unconfigured, network) it degrades silently to plain plan labels — the toggle and checkout still work.
+- **`UpgradeModal` uiState**: `handleUpgrade` stays in `'loading'` through the redirect and never sets `'success'` locally (the redirect leaves the page before payment completes). The real post-payment paid state is driven by `CheckoutReturnBanner` on the `?checkout=success` return.
+
 ## Board Memoization (`boardPropsAreEqual`, spec 046 US5)
 
 `Board` is exported as `export const Board = memo(BoardImpl, boardPropsAreEqual)` — a custom

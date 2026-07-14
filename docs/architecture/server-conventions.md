@@ -730,7 +730,10 @@ The gate runs up to seven checks:
 
 **Tier-1 fallback**: On double failure, the server reads the most recent `explanation_cache` row for the same `position_hash` and returns its `deep_reveal_json.fullText`, or the static string `"Detailed explanation unavailable."` if no row exists. The failure is logged to `deep_reveal_failures`. No quota unit is consumed.
 
-**Quota timing**: The weekly quota is decremented only **after** a valid explanation is confirmed — never before the LLM call and never for fallback responses. Cache hits (served before the LLM is called) also do not consume quota.
+**Quota timing (two-phase — gate before compute, decrement after)**: The weekly free-tier quota (5/week; see "Free-tier quota" below) is enforced in **two** steps and both must stay in place:
+1. A **read-only gate** (`peekQuota(req.user)`) runs **immediately after the cache-miss, before** the expensive `computeMechanism` LLM call. An over-quota free user gets `429 quota_exceeded` **up front** — without this, the reveal visibly "computes" first and only then 429s. `peekQuota` mirrors the reset logic but performs **no** DB write.
+2. The actual **decrement** (`checkAndDecrementQuota`) still runs **after** a valid explanation is confirmed — never before the LLM call, never for fallback/cache-hit/non-blunder responses.
+Cache hits (served before the LLM is called) do not consume quota. Note the intended behavioral consequence: an over-quota free user is now paywalled even on a *non-blunder* position (the gate precedes the "not a blunder → no quota consumed" early return). Do not collapse these two phases into a single post-compute check.
 
 **All-or-nothing rejection**: If ANY zone fails ANY check, the entire LLM output is rejected (FR-010).
 
@@ -744,7 +747,7 @@ The gate runs up to seven checks:
 The `/api/explain-move-llm` endpoint enforces a weekly quota for free-tier users.
 
 - **Authentication**: Unauthenticated requests (no valid `Authorization` header) return `401 Unauthorized`. No quota logic is reached.
-- **Cap**: 20 Deep Reveals per week for free-tier users.
+- **Cap**: 5 Deep Reveals per week for free-tier users (hardcoded in `checkAndDecrementQuota`/`peekQuota` in `index.js` — no named constant; both must match).
 - **Reset**: Monday 00:00 UTC. The `deep_reveal_reset_at` column stores the next reset timestamp. A `null` value is treated as "already expired" — the quota resets to next Monday and the request is allowed.
 - **Paid-tier**: No quota check; all requests are allowed unconditionally.
 - **429 response shape**: `{ error: 'quota_exceeded', resetsAt: <ISO string> }`.
@@ -787,8 +790,8 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 `server/paymentProcessor.js`, `server/stripeProcessor.js`, and `server/stripeRoutes.js` extract the Stripe integration into a swappable interface, mirroring the `registerUserRoutes(app, supabase)` pattern below:
 
 - **`paymentProcessor.js`** — interface-only module: the `PaymentProcessor` JSDoc typedef (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`), the `PaymentConfigError` class (carries `.status` so route code needn't know Stripe specifics), the pure `getSubscriptionStatus({ tier, stripeCustomerId })` function, and a generic `createPaymentProcessor({ createCheckout, handleWebhook, getSubscriptionStatus })` assembly helper.
-- **`stripeProcessor.js`** — `createStripeProcessor({ stripeClient, supabase, monthlyPriceId, annualPriceId, webhookSecret, frontendUrl })` implements the interface against the real Stripe SDK. Also exposes `createPortalSession` (used by `/api/stripe/portal`, which is NOT part of the 3-method interface but lives on the same object for convenience).
-- **`stripeRoutes.js`** — `registerStripeRoutes(app, paymentProcessor)` registers `POST /api/stripe/create-checkout`, `POST /api/stripe/webhook`, and `POST /api/stripe/portal`, extracted verbatim out of `index.js`. `index.js` constructs `paymentProcessor` once at boot (`STRIPE_SECRET_KEY` present → `createStripeProcessor(...)`, else `null`) and calls `registerStripeRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`.
+- **`stripeProcessor.js`** — `createStripeProcessor({ stripeClient, supabase, monthlyPriceId, annualPriceId, webhookSecret, frontendUrl })` implements the interface against the real Stripe SDK. Also exposes two methods beyond the 3-method interface (on the same object for convenience): `createPortalSession` (used by `/api/stripe/portal`) and `getPrices()` (retrieves the two configured Stripe price objects → `{ monthly, annual }` display info for `GET /api/stripe/config`; returns `null` for a plan whose price id is unset). `createCheckout({ userId, email, plan, returnPath })` sanitizes `returnPath` (same-origin relative only, else `/`) into the `success_url`/`cancel_url` — see api-conventions.md.
+- **`stripeRoutes.js`** — `registerStripeRoutes(app, paymentProcessor)` registers `GET /api/stripe/config`, `POST /api/stripe/create-checkout`, `POST /api/stripe/webhook`, and `POST /api/stripe/portal`. `index.js` constructs `paymentProcessor` once at boot (`STRIPE_SECRET_KEY` present → `createStripeProcessor(...)`, else `null`) and calls `registerStripeRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`. Every route 503s ("Payments not configured") when `paymentProcessor` is null — so an unset `STRIPE_SECRET_KEY` on a deploy makes the whole `/api/stripe/*` surface 503, not just checkout.
 
 **Why this seam matters (US4 substitutability)**: because `registerStripeRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope `stripe` singleton, a test can call it twice against two fresh Express apps — once with `StripeProcessor`, once with a `StubProcessor` — and assert identical route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md`.
 
