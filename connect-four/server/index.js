@@ -522,7 +522,7 @@ async function checkAndDecrementQuota(user) {
     resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 20) return { allowed: false, resetsAt };
+  if (count >= 5) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
@@ -1100,7 +1100,7 @@ app.post('/api/explain-move', async (req, res) => {
 
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, cached?: boolean }.
-// Anon allowed (rate-capped by the per-IP prefix limiter below; no quota). Free-tier: weekly quota of 20 (429 when exceeded).
+// Anon allowed (rate-capped by the per-IP prefix limiter below; no quota). Free-tier: weekly quota of 5 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
 app.post('/api/explain-move-llm', async (req, res) => {
   const { movestring, col, rounds } = req.body;
