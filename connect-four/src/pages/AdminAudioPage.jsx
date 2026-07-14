@@ -443,7 +443,7 @@ export function AdminAudioPage() {
                         {item.key}
                       </div>
                       <div style={{ fontSize: 13, lineHeight: 1.35 }}>
-                        {item.text || <span style={{ opacity: 0.3 }}>(no text in en.json)</span>}
+                        {item.text || <span style={{ opacity: 0.3 }}>(no text in {lang}.json)</span>}
                       </div>
                     </div>
 

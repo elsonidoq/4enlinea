@@ -45,7 +45,7 @@ import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
-import { localeMiddleware, serverT, resolveTtsLocale, SUPPORTED_LOCALES } from './locale.mjs';
+import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
@@ -3672,6 +3672,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     const { synthesize } = await import('./ttsProvider.js');
     const { prompt: instructions, speed, voice } = readTtsConfig();
     const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
     let generated = 0;
     const failed = [];
     const total = needsAudio.length;
@@ -3687,7 +3688,6 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
         }
 
         const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
-        mkdirSync(audioDir, { recursive: true });
         writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
