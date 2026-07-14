@@ -79,18 +79,18 @@ export function AdminAudioPage() {
   const [promptSaved, setPromptSaved] = useState(false);
   const [lang, setLang] = useState('en');
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch(`${API}/api/admin/audio/status?lang=${lang}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      if (!silent) setError(err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [lang]);
 
@@ -182,6 +182,9 @@ export function AdminAudioPage() {
   async function handleGenerateAll() {
     if (!window.confirm(`Generate audio for all ${data?.counts?.needs_audio || 0} keys needing audio? This will call the OpenAI TTS API.`)) return;
     setBulkLoading(true);
+    // Poll status while the batch runs — the server persists each audio as it is
+    // generated, so keys flip to "awaiting_approval" and become playable mid-run.
+    const poll = setInterval(() => { fetchStatus({ silent: true }); }, 3000);
     try {
       const res = await fetch(`${API}/api/admin/audio/generate-all`, {
         method: 'POST',
@@ -192,7 +195,9 @@ export function AdminAudioPage() {
       await fetchStatus();
     } catch (err) {
       alert(`Generate all failed: ${err.message}`);
+      await fetchStatus();
     } finally {
+      clearInterval(poll);
       setBulkLoading(false);
     }
   }

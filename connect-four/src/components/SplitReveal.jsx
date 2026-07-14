@@ -38,7 +38,7 @@ export function SplitReveal({
   initialSplitPct = 40,
 }) {
   const {
-    splitPct, topPx, containerH, initialSplitPct: hookInitialSplitPct,
+    splitPct, topPx, containerH,
     containerRef, dividerRef, dividerProps, isDragging,
   } = useDragSplit({
     minTopPct,
@@ -46,29 +46,32 @@ export function SplitReveal({
     initialSplitPct,
   });
 
-  // Spec 042 US6 (FR-022, SC-009, contracts/split-reveal-zoom-contract.md §2):
-  // boardW is FROZEN — computed only from the pane height implied by
-  // initialSplitPct/containerH, and re-derived only when containerH itself
-  // changes for a real reason (a genuine container resize/orientation change
-  // — useDragSplit's ResizeObserver is the only thing that ever updates
-  // containerH; dragging only ever changes splitPct/topPx, never containerH).
-  // Deliberately NOT in the dependency list: splitPct/topPx/isDragging — this
-  // is what decouples the board's rendered maxWidth from live drag position.
-  // "store it in a ref (or equivalent stable value)" per the contract — a
-  // memo keyed only on the genuinely-changing inputs is the equivalent
-  // stable value here (a ref alone wouldn't trigger the re-render needed to
-  // reflect a real resize). The pane itself (`flex: 0 0 ${topPx}px` below)
-  // keeps resizing live with the drag as before — only the board's rendered
-  // maxWidth decouples from it.
-  // isDragging deliberately NOT passed here (and not a dep) — the frozen
-  // computation must never key off live drag state; computeFrozenBoardWidth
-  // accepts an isDragging param for signature parity with the contract but
-  // ignores it (see useDragSplit.js docstring).
-  const boardW = useMemo(
-    () => computeFrozenBoardWidth(containerH, hookInitialSplitPct),
-    [containerH, hookInitialSplitPct]
-  );
-  const constrain = boardW >= 200;
+  // Board fit: derive the board's max-width from the CURRENT top-pane height
+  // (live splitPct) so the board always fits fully inside the pane. It shrinks
+  // as the divider is dragged up (giving the explanation more room) and grows
+  // back as it is dragged down — never overflowing/clipping and never spilling
+  // to full viewport width. computeFrozenBoardWidth stays a pure function of
+  // (containerH, splitPct); we just feed it the live split instead of freezing
+  // it to the open-time split.
+  //
+  // Supersedes spec 042 US6 (FR-022, SC-009,
+  // contracts/split-reveal-zoom-contract.md §2), which FROZE boardW to the
+  // open-time split to stop the board zooming during a drag. That freeze is the
+  // root cause of the reported bug: once the pane got short (short device, a
+  // tall coach dialog, or the old `boardW >= 200` gate), the frozen
+  // height-derived cap either clipped a fixed-size square or was dropped
+  // entirely (`constrain === false`), leaving `width: 100%` to blow the board
+  // up to full screen width.
+  const boardW = useMemo(() => {
+    if (!containerH) return 0;
+    // MIN_BOARD_W keeps the cap strictly positive so it is NEVER dropped —
+    // dropping it falls back to width:100% (= full-bleed). In a pane too short
+    // to fit even this, the board stays small and centered instead of
+    // spilling to the full viewport width.
+    const MIN_BOARD_W = 120;
+    return Math.max(computeFrozenBoardWidth(containerH, splitPct), MIN_BOARD_W);
+  }, [containerH, splitPct]);
+  const constrain = boardW > 0;
 
   if (!isOpen) {
     return boardContent;

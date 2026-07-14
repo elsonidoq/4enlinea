@@ -3704,6 +3704,9 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
         writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
+        // Persist after each success so the audio is immediately visible/playable in
+        // /admin/audio and progress survives a mid-batch crash (files already on disk).
+        writeTtsRegistry(registry, lang);
         generated++;
         const remaining = total - generated - failed.length;
         console.log(`[admin/audio/generate-all] generated ${generated}/${total} — ${remaining} remaining | key=${entry.key}`);
@@ -3713,7 +3716,6 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
       }
     }
 
-    writeTtsRegistry(registry, lang);
     res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
   } catch (err) {
     logError('[admin/audio/generate-all]', err);

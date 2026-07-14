@@ -9,6 +9,18 @@ Optional argument ($ARGUMENTS): a target line count or band (e.g. `160` or `150-
 **If triggered from `/finish-session`:** finish writing the session's new/updated memories FIRST, then
 run this compaction. Never compact before the pending memories are saved.
 
+**RUN THE COMPACTION IN A FRESH CLEAR-CONTEXT SUB-AGENT.** This command is often invoked at the end of
+a long session, where the caller's context is full of unrelated work and its judgment on
+migrate/merge/drop calls is degraded. So the caller must NOT execute Phases 0–7 inline. Instead:
+1. First (in the caller) finish saving any pending memories — that needs the session's context.
+2. Then dispatch the ENTIRE compaction (Phases 0–7 below) to a fresh general-purpose sub-agent whose
+   only job is this compaction. Give it: this command file's path (to follow verbatim), the memory dir,
+   the arch-docs dir, `CLAUDE.md`, and the target band. The sub-agent still runs its own Phase-5 audit
+   in a SECOND fresh sub-agent (audit reviewer ≠ executor) and Phase-6 fix agent as specified.
+3. The caller relays the sub-agent's Phase-7 report; it does not re-derive the work.
+The Phase-2 confirmation gate still applies — the sub-agent presents its plan and waits for approval
+before editing (surface the plan through the caller to the user).
+
 ## Locations
 
 - **Memory dir:** `/Users/elsonidoq/.claude/projects/-Users-elsonidoq-prog-cuatro-en-linea/memory/`
@@ -35,6 +47,16 @@ there, then delete or fold the memory.
 invisible. The reduction comes from three moves, in priority order: **(1) MIGRATE** arch-grade content
 to the right doc and delete/merge the now-redundant memory; **(2) MERGE** overlapping same-topic
 memories into one; **(3) DROP** stale, resolved, or git-derivable entries.
+
+**Trimming hooks barely moves the byte count — do NOT rely on it.** (Learned the hard way across
+multiple sessions: rewriting every hook shorter cut <10% and never reached target.) Each index line
+carries a fixed, un-trimmable overhead — `- [Title](slug.md) — ` is ~70 bytes — so for ~115 entries
+roughly **8 KB is pure link syntax that no amount of hook-shortening can touch**. The byte total is
+therefore dominated by the NUMBER OF ENTRIES, not hook length. **Real reduction comes ONLY from
+removing whole entries** (MIGRATE→drop, MERGE, DROP). Measure the structural floor first
+(`grep -oE '^- \[[^]]*\]\([a-z0-9_]+\.md\) — ' MEMORY.md | wc -c`); if the target is below floor +
+minimal hooks, you MUST cut entries — trimming alone is mathematically incapable of getting there.
+Use hook-tightening only as a final polish AFTER entry count is right, never as the primary lever.
 
 ---
 
