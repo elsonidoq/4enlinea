@@ -24,6 +24,10 @@ short_summary: |
   An immediate threat is a major threat whose empty cell is directly playable right now —
   it is the topmost empty cell in its column (gravity-top). Playing there wins the game
   on this move.
+short_summary_es: |
+  Una amenaza inmediata es una amenaza mayor cuya casilla vacía es jugable ahora mismo:
+  es la casilla vacía más alta de esa columna (gravity-top). Jugar ahí gana la partida
+  en esta misma jugada.
 
 preconditions:
   - "A 4-window (horizontal, vertical, or diagonal) contains exactly 3 discs of player P."

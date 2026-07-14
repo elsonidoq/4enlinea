@@ -23,6 +23,10 @@ short_summary: |
   A double threat (fork) is a single move that creates two simultaneous immediate
   threats. Since the opponent can play only one column per turn, one threat is always
   left open — guaranteeing a win on the very next move.
+short_summary_es: |
+  Una amenaza doble (bifurcación) es una sola jugada que crea dos amenazas inmediatas
+  al mismo tiempo. Como el rival solo puede jugar una columna por turno, siempre queda
+  una amenaza sin bloquear, lo que garantiza la victoria en la próxima jugada.
 
 preconditions:
   - "After the player's move, at least two distinct immediate threats exist for that player."
