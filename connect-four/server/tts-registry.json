@@ -2,17 +2,17 @@
   {
     "key": "coach.title",
     "slug": "coach--title",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T14:53:39.874Z",
+    "generated_at": "2026-07-14T19:58:22.981Z",
     "approved_at": "2026-06-19T14:59:52.515Z"
   },
   {
     "key": "coach.home.welcome.0",
     "slug": "coach--home--welcome--0",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T14:53:41.252Z",
+    "generated_at": "2026-07-14T19:58:29.012Z",
     "approved_at": "2026-06-19T14:59:52.515Z"
   },
   {

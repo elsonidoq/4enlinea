@@ -75,12 +75,12 @@ const isLlmError = (r) => Boolean(r.callError || r.parseError);
 //   { notABlunder: false, evidence, nv, prompt, renderDecision,
 //     raw, answer, mechanism, parseError, callError, annotationRepairs }
 // `callLLM` may be injected (tests); otherwise defaultCallLLM(model, OPENAI_API_KEY) is used.
-export async function computeMechanism(movestring, col, { solver, model, callLLM, userId = null } = {}) {
+export async function computeMechanism(movestring, col, { solver, model, callLLM, userId = null, locale = 'en' } = {}) {
   const evidence = await computeReason(movestring, col, { solver }); // terminal boards throw → propagate
   if (!evidence || evidence.notABlunder) return { notABlunder: true, evidence: evidence ?? null };
 
   const nv = toNarratorVector(evidence);
-  const prompt = buildPromptForCondition(null, nv, 'D'); // condition D ignores the glossary arg
+  const prompt = buildPromptForCondition(null, nv, 'D', locale); // condition D ignores the glossary arg
   const renderDecision = renderDecisionForCondition(nv, 'D');
   // userId is threaded to BOTH the default closure and an injected callLLM (as a second arg) so
   // that (a) production calls always carry the caller's userId and (b) tests can assert

@@ -14,6 +14,19 @@ originSessionId: 5719c43c-8011-4e5d-a333-7894384b241b
 
 **This project has a REMOTE Supabase instance only — no local Supabase.** There is no `supabase start` / local setup. All migrations must be applied via psql against the remote pooler.
 
+**There are THREE distinct environments — do not mix them up (easy way to hit the WRONG DB):**
+| Env | File | SUPABASE_URL host / project ref | DATABASE_URL pooler |
+|---|---|---|---|
+| local | `server/.env` (and `.env.local`) | `127.0.0.1:54321` (local Supabase, port 54322) | local |
+| **staging** | `server/.env.staging` | `jkqilynpshutqcceopdn.supabase.co` (us-east-1) | `aws-1-us-east-1.pooler.supabase.com:6543` ⚠️ **transaction pooler** |
+| **production** | `server/.env.production` | `kxtqwsumojtexokrtlfp.supabase.co` (us-west-2) = **DecodeC4** | `aws-1-us-west-2.pooler.supabase.com:5432` (session pooler) |
+
+The prod ref `kxtqwsumojtexokrtlfp` is the one this memory's other sections describe. Staging is a SEPARATE project. `server/.env` (root, unsuffixed) points at LOCAL, not staging/prod.
+
+**Staging DATABASE_URL trap:** `.env.staging` uses the **transaction pooler (port 6543)**, which per the session-vs-transaction rule below is FORBIDDEN for DDL / multi-statement transactions. A single-statement op (e.g. one `TRUNCATE ... CASCADE`) works fine; but `migrate.js` (wraps each migration in `BEGIN...COMMIT` DDL) needs port 5432 — swap the port before running migrations against staging. See [[OI-31]].
+
+**Wiping staging data:** `connect-four/server/scripts/reset-staging-db.js` TRUNCATEs all `public` tables except `schema_migrations` (keeps schema + migration history). Reads `.env.staging` only, hard-refuses the prod ref, requires typing `Yes` twice. `--dry-run` lists targets. Uses a single TRUNCATE statement so the 6543 pooler is OK.
+
 **Applying migrations:**
 ```
 psql "$DATABASE_URL" -f connect-four/server/migrations/NNN_slug.sql

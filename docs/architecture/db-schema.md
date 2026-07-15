@@ -278,17 +278,20 @@ FK: `user_id` → `users.id`
 
 ## `explanation_cache`
 
-PK: `position_hash`
+PK: `(position_hash, locale)` — composite (migration 059). Was `position_hash` alone through migration 058.
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
 | position_hash | text | NO | |
+| locale | text | NO | `'en'` |
 | one_liner | text | NO | |
 | deep_reveal_json | jsonb | NO | |
 | created_at | timestamptz | NO | `now()` |
 | template_version | text | YES | (none) |
 | audio_path | text | YES | (none) |
 | audio_generated_at | timestamptz | YES | (none) |
+
+**`locale`**: NOT NULL, default `'en'` (added in migration 059, which also promoted the PK to `(position_hash, locale)`). Language of the cached explanation — one of `'en'`/`'es'`. English and Spanish explanations for the same position are **distinct rows** sharing a `position_hash`. Existing rows backfilled to `'en'` via the default. **Trap:** any reader querying by `position_hash` alone with `.single()`/`.maybeSingle()` now risks matching two rows — every single-row reader must either scope by locale (use `buildCacheFilter(hash, locale)` from `server/explainCacheKey.mjs`) or `.limit(1)`. Locale reaches the endpoint via `req.locale` (from the `Accept-Language` header) except the TTS audio GET, which reads an explicit `?lang=` query param (see `api-conventions.md`).
 
 **`audio_path`**: nullable TEXT (added in migration 050). Supabase Storage object path for the spoken (TTS) version of this deep-reveal explanation, e.g. `tts/deep-reveal/<sha256>.mp3`. A `null` value means TTS audio has not been generated yet. Keyed by `sha256(stripped_explanation_text)` — intentionally NOT keyed by `position_hash`, so a regenerated explanation gets its own audio.
 

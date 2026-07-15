@@ -15,6 +15,8 @@
 // Matches a `community-` or `allen-` provenance prefix anywhere it appears (KB-slug-shaped
 // tokens are always prefixed this way in `llmCoachHelpers.js`'s `PATTERN_KB`; a bare
 // `community-`/`allen-` substring never legitimately appears in player-facing prose otherwise).
+import { serverT } from './locale.mjs';
+
 const LABEL_PREFIX_RE = /\b(?:community|allen)-/gi;
 
 // Matches a raw internal grid-coordinate token, e.g. "c1r4" — the classifier's own
@@ -33,13 +35,15 @@ const CXRY_RE = /\bc(\d+)r\d+\b/gi;
  * Clean text (no matches) passes through unchanged.
  *
  * @param {string} text
+ * @param {string} [locale='en']
  * @returns {string}
  */
-export function stripInternalTokens(text) {
+export function stripInternalTokens(text, locale = 'en') {
   if (typeof text !== 'string' || text.length === 0) return text;
+  const columnWord = serverT(locale, 'column'); // (n) => "column n" | "columna n"
   return text
     .replace(LABEL_PREFIX_RE, '')
-    .replace(CXRY_RE, (_match, col) => `column ${col}`);
+    .replace(CXRY_RE, (_match, col) => columnWord(col));
 }
 
 /**
@@ -90,12 +94,12 @@ export function guardExplainMovePayload({ oneLiner, patternTag, deepReveal }) {
  * branches of that endpoint are provably guarded through one shared function. Any extra fields
  * (e.g. `cached: true`) pass through untouched.
  *
- * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>}} payload
+ * @param {{explanation: string, prompt?: string, terms?: Record<string, unknown>, locale?: string}} payload
  */
-export function guardExplainMoveLlmPayload({ explanation, prompt, terms, ...rest }) {
+export function guardExplainMoveLlmPayload({ explanation, prompt, terms, locale = 'en', ...rest }) {
   return {
     ...rest,
-    explanation: stripInternalTokens(explanation),
+    explanation: stripInternalTokens(explanation, locale),
     prompt,
     terms: sanitizeTermsMap(terms),
   };

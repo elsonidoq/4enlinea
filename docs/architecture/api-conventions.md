@@ -8,6 +8,8 @@
 **MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
 **MUST**: Authenticated user-data routes use `/api/user/<resource>` (e.g., `/api/user/profile`, `/api/user/streak`). Established in spec 030; full endpoint contracts at `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
+**Stable core routes — keep the contract stable, don't rename/remove.** `GET /api/ping` (health check, `server/index.js`), `POST /api/scores`, and `POST /api/explain` are long-lived primitives depended on across the app (sparring calls `/api/scores?difficulty`, the column-score overlay calls `/api/explain`, uptime checks hit `/api/ping`). Extend them additively if needed, but do not change their paths, methods, or existing response shapes.
+
 ## Error Response Shape
 
 **MUST**: All error responses use `{ "error": "<message string>" }` with no other keys.
@@ -428,7 +430,7 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 
 **Errors**: 400 (invalid params), 401 (unauthenticated), 404 (no explanation cached), 500 (internal), 502 (OpenAI TTS service error), 503 (Supabase not configured / `OPENAI_API_KEY` missing).
 
-**TTS config**: Uses the same voice, speed, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`).
+**TTS config**: Uses the same voice, speed, model, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`, which now also carries a `model` field, default `'gpt-4o-mini-tts'` — the only OpenAI TTS model that honors the `instructions` field; `tts-1`/`tts-1-hd` ignore it and always speak with an American-English accent). Per-language instructions are built via `buildTtsInstructions(basePrompt, lang)` (`server/ttsInstructions.mjs`), which appends a Spanish-accent directive for `lang === 'es'` so Spanish text isn't read with an English accent. `ttsProvider.js`'s own default `model` was also flipped to `gpt-4o-mini-tts`, so callers that don't read `tts-prompt.json` (notably **lesson audio** via `lessonAudio.js`) get the steerable model too; nothing relies on `tts-1` anymore (it remains selectable in the admin model dropdown). Note: all TTS audio is cached by a hash of the *text*, not the model/voice — changing the model/voice/prompt does NOT regenerate existing clips (see memory `project_tts_audio_cached_by_text`).
 
 **Rate limit**: 120 req/min (default `/api/` bucket). No additional rate limiting.
 
@@ -1007,3 +1009,25 @@ The `papergames_games` row UUID. The client navigates to `ReviewScreen` with thi
 **Errors**: 400 `{ "error": "roomUid is required" }` / `{ "error": "papergamesAccountId is required" }` for missing/invalid input; 401 for unauthenticated (the client shows a "Log in to save" prompt and stays on the screen); 503 if Supabase not configured; 500 on save failure.
 
 **Auth**: Required (inline `requireUser` -> 401).
+
+---
+
+## Language / locale (i18n)
+
+The client's selected UI language reaches the server two ways — never assume one covers both:
+
+- **`Accept-Language` header → `req.locale`.** `localeMiddleware` (`server/locale.mjs`) resolves every request's `req.locale` to one of `SUPPORTED_LOCALES = ['en','es']` (default `'en'`, q-weighted parse, base-language match). The client sets `Accept-Language` from its i18next language via `langHeaders()` (`src/lib/apiLang.js`), attached to the deep-reveal `POST /api/explain-move-llm` fetch. Locale-scoped endpoints: `/api/explain-move-llm`, `/api/explain-move`, `/api/user/tts/deep-reveal`.
+- **Explicit `?lang=` query param on the TTS audio GET.** `GET /api/user/tts/deep-reveal` is fetched via `new Audio(url)`, which **cannot set a custom header**, so its language is passed as `&lang=<en|es>` on the URL (`DeepRevealPane.jsx`). The endpoint resolves locale via `resolveTtsLocale` = whitelisted `?lang=` **preferred over** `req.locale`. This keeps the audio row aligned with the text row regardless of the browser's own `Accept-Language`.
+
+Because the client i18n language is constrained to exactly `en`/`es` (no regional tags, no browser detector), the header's base-language match and the param's exact match never disagree.
+
+### Deep-reveal i18n contract ("English prompt → Spanish output")
+
+The deep-reveal LLM prompt scaffold stays **entirely English**; for `locale==='es'` a single `SPANISH_OUTPUT_DIRECTIVE` (`server/scripts/compute.mjs`) is appended instructing the model to write **only the player-facing `mechanism` field** in Argentinian voseo (discs = verde/gris), copying the `[zone:…]`/`[term:…]` tags and `cNrM` cells verbatim. The grounding/render validation is language-independent (matches only tag grammar + ids), so it is untouched. Consequences for anyone iterating on deep reveal:
+
+- **Content/grounding improvements transfer to Spanish for free** (same pipeline, one directive).
+- **New player-facing surfaces do NOT** — a new hardcoded string, a new `[term:…]` without a `short_summary_es`, or a newly player-facing LLM field ships English in Spanish builds unless explicitly covered. Fails *silently* (graceful English fallback).
+- **Cache invalidation is per-locale** — busting must cover every locale row.
+- **Spanish prose quality has no eval signal** — `judge-deep-reveals` / `grade-fv-sufficiency` run on English only.
+
+Server-side user-facing strings NOT produced by the LLM go through `serverT(locale, key)` (`server/locale.mjs`); localized KB term pop-up summaries use a `short_summary_es` frontmatter field with English fallback (`loadKBShortSummary(id, locale)`).

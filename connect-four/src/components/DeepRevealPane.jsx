@@ -10,6 +10,8 @@ import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpee
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
+import { langHeaders } from '../lib/apiLang.js';
+import i18n from '../i18n/index.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -120,7 +122,7 @@ export function DeepRevealPane({
 
     fetch(`${API}/api/explain-move-llm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...langHeaders() },
       credentials: 'include',
       signal: controller.signal,
       body: JSON.stringify({ movestring: moveString, col }),
@@ -139,7 +141,7 @@ export function DeepRevealPane({
         // Phase 2: fetch TTS audio if speech is enabled
         if (speechEnabled && !noSpeech) {
           setLoadingTts(true);
-          const ttsUrl = `${API}/api/user/tts/deep-reveal?moveString=${encodeURIComponent(moveString)}&col=${col}`;
+          const ttsUrl = `${API}/api/user/tts/deep-reveal?moveString=${encodeURIComponent(moveString)}&col=${col}&lang=${encodeURIComponent(i18n.language || 'en')}`;
           const audio = new Audio(ttsUrl);
           ttsAudioRef.current = audio;
 

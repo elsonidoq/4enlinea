@@ -12,6 +12,7 @@ const STATUS_LABELS = {
 const STATUS_ORDER = ['awaiting_approval', 'needs_audio', 'approved', 'ineligible'];
 
 const TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
+const TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
 
 function StatusBadge({ status, reason }) {
   const colors = {
@@ -42,21 +43,26 @@ function StatusBadge({ status, reason }) {
   );
 }
 
-function AudioPlayer({ slug, generatedAt }) {
+function AudioPlayer({ slug, generatedAt, lang }) {
   if (!slug) return null;
 
-  const cacheBuster = generatedAt ? `?t=${encodeURIComponent(generatedAt)}` : '';
+  const cacheBuster = generatedAt ? `&t=${encodeURIComponent(generatedAt)}` : '';
 
   return (
     <audio
-      key={`${slug}-${generatedAt}`}
+      key={`${slug}-${lang}-${generatedAt}`}
       controls
       preload="none"
-      src={`${API}/api/admin/audio/play/${slug}${cacheBuster}`}
+      src={`${API}/api/admin/audio/play/${slug}?lang=${lang}${cacheBuster}`}
       style={{ height: 28, width: 200 }}
     />
   );
 }
+
+const TTS_LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+];
 
 export function AdminAudioPage() {
   const [data, setData] = useState(null);
@@ -68,23 +74,25 @@ export function AdminAudioPage() {
   const [speed, setSpeed] = useState('1.0');
   const [speedError, setSpeedError] = useState('');
   const [voice, setVoice] = useState('alloy');
+  const [model, setModel] = useState('gpt-4o-mini-tts');
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptSaved, setPromptSaved] = useState(false);
+  const [lang, setLang] = useState('en');
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
-      const res = await fetch(`${API}/api/admin/audio/status`);
+      if (!silent) setLoading(true);
+      const res = await fetch(`${API}/api/admin/audio/status?lang=${lang}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      if (!silent) setError(err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
@@ -96,6 +104,7 @@ export function AdminAudioPage() {
         setPrompt(j.prompt || '');
         setSpeed(String(j.speed ?? 1.0));
         setVoice(j.voice || 'alloy');
+        setModel(j.model || 'gpt-4o-mini-tts');
       })
       .catch(() => {});
   }, []);
@@ -118,7 +127,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice }),
+        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice, model }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setPromptSaved(true);
@@ -136,7 +145,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key, lang }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -156,7 +165,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key, lang }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -173,16 +182,22 @@ export function AdminAudioPage() {
   async function handleGenerateAll() {
     if (!window.confirm(`Generate audio for all ${data?.counts?.needs_audio || 0} keys needing audio? This will call the OpenAI TTS API.`)) return;
     setBulkLoading(true);
+    // Poll status while the batch runs — the server persists each audio as it is
+    // generated, so keys flip to "awaiting_approval" and become playable mid-run.
+    const poll = setInterval(() => { fetchStatus({ silent: true }); }, 3000);
     try {
       const res = await fetch(`${API}/api/admin/audio/generate-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lang }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await fetchStatus();
     } catch (err) {
       alert(`Generate all failed: ${err.message}`);
+      await fetchStatus();
     } finally {
+      clearInterval(poll);
       setBulkLoading(false);
     }
   }
@@ -194,6 +209,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/approve-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lang }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await fetchStatus();
@@ -225,6 +241,31 @@ export function AdminAudioPage() {
       <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 16px', fontFamily: 'var(--font-display)' }}>
         Coach Audio Manager
       </h1>
+
+      {/* Language selector */}
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+          Language
+        </label>
+        <select
+          value={lang}
+          onChange={e => setLang(e.target.value)}
+          style={{
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'var(--surface-2)',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {TTS_LANGUAGES.map(({ code, label }) => (
+            <option key={code} value={code}>{label}</option>
+          ))}
+        </select>
+      </div>
 
       {/* Voice instructions prompt */}
       <div style={{ marginBottom: 24 }}>
@@ -270,6 +311,30 @@ export function AdminAudioPage() {
             >
               {TTS_VOICES.map(v => (
                 <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+              Model
+            </label>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'var(--surface-2)',
+                color: 'var(--text)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {TTS_MODELS.map(m => (
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>
@@ -410,7 +475,7 @@ export function AdminAudioPage() {
                         {item.key}
                       </div>
                       <div style={{ fontSize: 13, lineHeight: 1.35 }}>
-                        {item.text || <span style={{ opacity: 0.3 }}>(no text in en.json)</span>}
+                        {item.text || <span style={{ opacity: 0.3 }}>(no text in {lang}.json)</span>}
                       </div>
                     </div>
 
@@ -418,7 +483,7 @@ export function AdminAudioPage() {
 
                     {/* Playback — show for awaiting_approval and approved */}
                     {item.status !== 'needs_audio' && item.status !== 'ineligible' && (
-                      <AudioPlayer slug={item.slug} generatedAt={item.generated_at} />
+                      <AudioPlayer slug={item.slug} generatedAt={item.generated_at} lang={lang} />
                     )}
 
                     {/* Actions */}

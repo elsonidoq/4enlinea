@@ -614,6 +614,53 @@ export class Board {
 }
 
 /**
+ * True if `player` has a double threat on `board`, evaluated as-is (no candidate move).
+ *
+ * Extracted verbatim from the inline logic classify() has always used for its post-move
+ * double_threat check, so the SAME predicate can also run on the PRE-move board for transition
+ * gating (praise only an absent→present creation).
+ *
+ * NOTE: this intentionally differs from the exported detectDoubleThreat() in Case B. This loose
+ * variant matches ANY two consecutive-row reachable threats in a column; detectDoubleThreat()
+ * additionally requires the lower threat to sit at the gravity-top. They are NOT interchangeable:
+ * swapping classify() to detectDoubleThreat() would change existing post-move classifications
+ * (e.g. '3333344044114' col0 stops being double_threat). Reconciling the two loose/strict Case B
+ * definitions is out of scope here — see
+ * docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md.
+ *
+ * @param {Board} board
+ * @param {number} player  1 or 2
+ * @returns {boolean}
+ */
+function hasDoubleThreat(board, player) {
+  const threatCells = [];
+  for (const [col, rows] of board.reachableThreats(player)) {
+    for (const row of rows) threatCells.push({ col, row });
+  }
+
+  // Case A: two or more distinct columns each have a threat at their gravity-top
+  const gravityTopCols = new Set(
+    threatCells.filter(t => t.row === board.colHeights[t.col]).map(t => t.col)
+  );
+  if (gravityTopCols.size >= 2) return true;
+
+  // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
+  const byCol = {};
+  for (const t of threatCells) {
+    if (!byCol[t.col]) byCol[t.col] = [];
+    byCol[t.col].push(t.row);
+  }
+  for (const rows of Object.values(byCol)) {
+    const sorted = rows.sort((a, b) => a - b);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (sorted[i + 1] === sorted[i] + 1) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Classifies a position given the move string, candidate column (0-indexed),
  * and the solver scores for all 7 columns.
  * Constructs a single Board instance and delegates to all category checks.
@@ -641,32 +688,20 @@ export function classify(moves, candidateCol, scores) {
     const nextBoard = board.withMove(candidateCol);
 
     // ── Category 3: Double Threat ───────────────────────────────────────────
-    const threatCells = [];
-    for (const [col, rows] of nextBoard.reachableThreats(board.currentPlayer)) {
-      for (const row of rows) threatCells.push({ col, row });
-    }
-
-    // Case A: two or more distinct columns each have a threat at their gravity-top
-    const gravityTopCols = new Set(
-      threatCells.filter(t => t.row === nextBoard.colHeights[t.col]).map(t => t.col)
-    );
-    if (gravityTopCols.size >= 2) return { tag: 'double_threat' };
-
-    // Case B: two consecutive-row threats in the same column (opponent needs 2 turns to block)
-    const byCol = {};
-    for (const t of threatCells) {
-      if (!byCol[t.col]) byCol[t.col] = [];
-      byCol[t.col].push(t.row);
-    }
-    for (const rows of Object.values(byCol)) {
-      const sorted = rows.sort((a, b) => a - b);
-      for (let i = 0; i < sorted.length - 1; i++) {
-        if (sorted[i + 1] === sorted[i] + 1) return { tag: 'double_threat' };
-      }
+    // Only praise a double threat this move CREATED: present on the post-move board AND
+    // absent on the pre-move board, both from the mover's perspective. A double threat that
+    // was already present and merely persists is not "created" here — fall through so the
+    // coach does not repeat "you created the double threat" on every subsequent move.
+    const player = board.currentPlayer;
+    if (hasDoubleThreat(nextBoard, player) && !hasDoubleThreat(board, player)) {
+      return { tag: 'double_threat' };
     }
 
     // ── Category 4: Forced Win ──────────────────────────────────────────────
-    if (detectForcedWin(nextBoard, board.currentPlayer).matched) {
+    // Same transition rule as double_threat: only when this move ESTABLISHED the forced win
+    // (present after, absent before). A forced win, once made, persists under optimal play, so
+    // without this gate every subsequent move would re-fire "you have a forced win".
+    if (detectForcedWin(nextBoard, player).matched && !detectForcedWin(board, player).matched) {
       return { tag: 'forced_win' };
     }
   }

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useAudio } from './useAudio.js';
+import i18n from '../i18n/index.js';
 
 /**
  * Module-level queue so only one speech plays at a time across all callers.
@@ -137,65 +138,129 @@ function keyToSlug(key) {
 }
 
 /**
+ * Manifest URL for a language. English keeps the existing root path
+ * (public/audio/coach/coach-audio-manifest.json) unchanged; every other
+ * language's manifest lives under its own subdirectory.
+ * @param {string} lang
+ * @returns {string}
+ */
+function manifestUrlForLang(lang) {
+  return `/audio/coach/${lang === 'en' ? '' : `${lang}/`}coach-audio-manifest.json`;
+}
+
+/**
+ * Speech-queue item for a coach slug in a given language. English resolves
+ * to the bare slug (root path, unchanged); every other language is prefixed
+ * with `<lang>/` so `playNext`'s `/audio/coach/${item}.mp3` template resolves
+ * to the per-language subdirectory without any change to `playNext` itself.
+ * @param {string} slug
+ * @param {string} lang
+ * @returns {string}
+ */
+export function coachQueueItem(slug, lang) {
+  return lang === 'en' ? slug : `${lang}/${slug}`;
+}
+
+/**
+ * Fetch a language's approved-slug manifest. Resolves to an empty Set on
+ * any failure (missing file, network error, non-array payload) so callers
+ * can always fall back safely.
+ * @param {string} lang
+ * @returns {Promise<Set<string>>}
+ */
+function fetchManifest(lang) {
+  return fetch(manifestUrlForLang(lang))
+    .then(r => (r.ok ? r.json() : []))
+    .then(slugs => new Set(Array.isArray(slugs) ? slugs : []))
+    .catch(() => new Set());
+}
+
+/**
  * Coach speech hook — plays pre-recorded coach audio when speech is enabled.
  * Messages are queued and played sequentially; no overlapping audio.
+ *
+ * Manifests are fetched per-language and cached by language code. English
+ * audio lives at the historical root path; Spanish (and any future
+ * non-default language) lives under `/audio/coach/<lang>/`. If the current
+ * language lacks an approved clip for a key but English has one, we fall
+ * back to the English clip rather than staying silent.
  */
 export function useCoachSpeech() {
   const { speechEnabled } = useAudio();
-  const manifestRef = useRef(/** @type {Set<string>|null} */ null);
-  const fetchAttemptedRef = useRef(false);
+  // manifestsRef.current: { [lang]: Set<string> | null } — null = not yet fetched.
+  const manifestsRef = useRef(/** @type {Record<string, Set<string>|null>} */ ({}));
+  const fetchingRef = useRef(/** @type {Record<string, boolean>} */ ({}));
   const pendingKeyRef = useRef(null);
   const speechEnabledRef = useRef(speechEnabled);
   speechEnabledRef.current = speechEnabled;
 
-  // Fetch manifest once on mount; flush any pending key when it arrives
-  useEffect(() => {
-    if (fetchAttemptedRef.current) return;
-    fetchAttemptedRef.current = true;
-
-    fetch('/audio/coach/coach-audio-manifest.json')
-      .then(r => {
-        if (!r.ok) return [];
-        return r.json();
-      })
-      .then(slugs => {
-        manifestRef.current = new Set(Array.isArray(slugs) ? slugs : []);
-        if (pendingKeyRef.current && speechEnabledRef.current) {
-          const slug = keyToSlug(pendingKeyRef.current);
-          pendingKeyRef.current = null;
-          if (manifestRef.current.has(slug)) {
-            speechQueue.push(slug);
-            playNext();
-          }
-        }
-      })
-      .catch(() => {
-        manifestRef.current = new Set();
+  const ensureManifest = useCallback((lang) => {
+    if (manifestsRef.current[lang] || fetchingRef.current[lang]) return;
+    fetchingRef.current[lang] = true;
+    fetchManifest(lang).then((set) => {
+      manifestsRef.current[lang] = set;
+      fetchingRef.current[lang] = false;
+      if (pendingKeyRef.current && speechEnabledRef.current && lang === i18n.language) {
+        const key = pendingKeyRef.current;
         pendingKeyRef.current = null;
-      });
+        enqueueIfApproved(key, lang);
+      }
+    });
   }, []);
 
+  function enqueueIfApproved(key, lang) {
+    const slug = keyToSlug(key);
+    const manifest = manifestsRef.current[lang];
+    if (manifest && manifest.has(slug)) {
+      speechQueue.push(coachQueueItem(slug, lang));
+      playNext();
+      return;
+    }
+    // Fallback: current language has no approved clip — try English.
+    if (lang !== 'en') {
+      const enManifest = manifestsRef.current.en;
+      if (enManifest && enManifest.has(slug)) {
+        speechQueue.push(coachQueueItem(slug, 'en'));
+        playNext();
+      }
+    }
+  }
+
+  // Fetch the current language's manifest on mount (and English too, for
+  // fallback), and refresh whenever the language changes.
+  useEffect(() => {
+    ensureManifest(i18n.language || 'en');
+    ensureManifest('en');
+
+    const onLanguageChanged = (lang) => {
+      ensureManifest(lang);
+    };
+    i18n.on('languageChanged', onLanguageChanged);
+    return () => i18n.off('languageChanged', onLanguageChanged);
+  }, [ensureManifest]);
+
   /**
-   * Enqueue a coach message by its i18n key.
-   * No-op if speech is disabled or the key is not in the approved manifest.
-   * If the manifest hasn't loaded yet, stores the key and plays it once ready.
+   * Enqueue a coach message by its i18n key, in the current UI language.
+   * No-op if speech is disabled or the key is not approved in either the
+   * current language's manifest or (as fallback) the English manifest.
+   * If the current language's manifest hasn't loaded yet, stores the key
+   * and plays it once ready.
    *
    * @param {string} key - i18n key (e.g. "coach.immediate_threat.optimal.0")
    */
   const speakCoachMessage = useCallback(
     (key) => {
       if (!speechEnabled) return;
-      if (!manifestRef.current) {
+      const lang = i18n.language || 'en';
+      const manifest = manifestsRef.current[lang];
+      if (!manifest) {
         pendingKeyRef.current = key; // manifest still loading — queue it
+        ensureManifest(lang);
         return;
       }
-      const slug = keyToSlug(key);
-      if (!manifestRef.current.has(slug)) return; // key not approved
-
-      speechQueue.push(slug);
-      playNext();
+      enqueueIfApproved(key, lang);
     },
-    [speechEnabled],
+    [speechEnabled, ensureManifest],
   );
 
   return { speakCoachMessage, speechEnabled };

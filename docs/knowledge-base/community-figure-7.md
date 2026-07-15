@@ -22,6 +22,11 @@ short_summary: |
   A five-disc "7"-shaped configuration that generates two major threats in the same
   column; the opponent cannot block both because one is above gravity, making it a
   zugzwang trap rather than a direct fork.
+short_summary_es: |
+  Figura 7: una configuración de cinco fichas con forma de "7" que genera dos amenazas
+  mayores en la misma columna; el rival no puede bloquear las dos porque una está por
+  encima de la gravedad (gravity-top), así que es una trampa de zugzwang y no una
+  bifurcación directa.
 
 preconditions:
   - "Player P owns all five cells: diagonal arm {(x,y), (x+1,y+1), (x+2,y+2)} and horizontal arm {(x,y+2), (x+1,y+2), (x+2,y+2)}, with (x+2,y+2) as the shared hinge."

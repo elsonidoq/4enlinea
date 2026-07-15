@@ -541,3 +541,126 @@ so `/summary` can rehydrate after the round-trip; judged not worth it for now.
 
 **If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
 returnPath, and rehydrate on cold boot. Cross-ref: [[project_auth_payments_state]], [[OI-24]].
+
+## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
+
+**Status**: deferred (2026-07-14), non-blocking — localhost/admin-only, self-healing
+**Area**: `connect-four/server/index.js` `POST /api/admin/tts/cleanup` (~line 3958)
+
+Since migration 059 made `explanation_cache` PK composite `(position_hash, locale)`, the cleanup's
+`.update({ audio_path: null, ... }).in('position_hash', hashes)` filters by bare `position_hash`, so
+expiring the `en` row's audio also nulls a **non-expired** `es` row's `audio_path` (while the Storage
+object is deleted only for the expired path) — orphaning the `es` object and forcing needless
+re-synthesis on next request. Low impact: admin-only, self-heals on the next deep-reveal TTS request.
+
+**If picked up**: scope the `.update()` by the selected rows' `locale` too (join the pruned set on
+`(position_hash, locale)`, not `position_hash` alone). Cross-ref: [[project_spanish_output_silent_fallback]].
+
+## OI-27 — Spanish coach audio clips not yet generated (bulk content step)
+
+**Status**: partially resolved (2026-07-14) — admin UI gap CLOSED; only bulk content generation remains
+**Area**: `connect-four/scripts/generate-tts.js`, `/admin/audio`
+
+The per-language coach-audio machinery shipped (es clips → `public/audio/coach/es/`, per-lang manifest,
+client selection with English fallback). **Admin-UI half RESOLVED**: `/admin/audio` now has a language
+dropdown (en/es) and the `/api/admin/audio/*` endpoints are language-aware — Spanish clips can be
+generated/approved/previewed through the UI, writing `server/tts-registry.es.json` +
+`public/audio/coach/es/coach-audio-manifest.json`. **Remaining gap**: only one smoke clip (`coach.title`)
+exists; the ~220-key es set has not been bulk-generated, so Spanish users hear English coach audio (graceful
+fallback) for every un-generated key.
+
+**If picked up**: from `/admin/audio` pick "es" and "Generate All New" + "Approve All", or run
+`node --env-file=server/.env scripts/generate-tts.js --scan-only --lang es` then `--all-new --lang es`
+(note: the CLI has no approve command — approve via the admin UI). ~220 keys, OpenAI cost. Cross-ref:
+[[project_spanish_output_silent_fallback]], [[project_lesson_progression_audio_traps]].
+
+## OI-28 — Spanish deep-reveal descoped siblings: lesson-narration audio & blunder one-liner badge
+
+**Status**: descoped by design (2026-07-14) — documented in the plan/spec
+**Area**: `connect-four/lessons/*.json`, `server/llmCoachHelpers.js` (`buildBlunderExplainPrompt`)
+
+Two deep-reveal-adjacent surfaces were left English. **Lesson narration**: lesson prose in
+`lessons/lesson-*.json` is inline English (not i18n keys), so Spanish lesson audio needs the lesson
+*content* translated first — a separate content project; lessons fall back to English audio meanwhile.
+**Blunder one-liner badge**: generated in the server-side harvest pipeline with no request/`req.locale`
+context, so `Accept-Language` can't reach it — localizing needs a locale threaded through harvest.
+
+**If picked up**: (lessons) translate lesson JSON content, then run per-language `generateLessonAudio`
+and store a per-locale audio path per message; (one-liner) thread a locale through the harvest/tagging
+pipeline into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`. Cross-ref: [[project_spanish_output_silent_fallback]].
+
+## OI-29 — SplitReveal live-fit: stale spec-042 contract + missing render-level regression test
+
+**Status**: deferred (2026-07-14) — fix is shipped & user-verified; only follow-up docs/tests remain
+**Area**: `connect-four/src/components/SplitReveal.jsx`, `specs/042-mistake-review-unification/contracts/split-reveal-zoom-contract.md`, `connect-four/tests/unit/splitRevealZoom.test.js`
+
+The board-sizing fix (live-fit `maxWidth` from the current `splitPct`, floored at 120, replacing the
+frozen `boardW`/`>=200`-gate) is in and verified, but two follow-ups were left:
+(1) `contracts/split-reveal-zoom-contract.md §2` still describes the SUPERSEDED frozen behavior (FR-022,
+SC-009) and should be updated/annotated so it doesn't mislead;
+(2) `splitRevealZoom.test.js` only tests the pure `computeFrozenBoardWidth` (still frozen-by-signature),
+so it passes unchanged and gives NO coverage of the actual bug. Add a render-level regression test
+asserting the board never spills to full viewport width and never exceeds the top pane when the
+container's available height is small.
+
+**If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
+container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
+Cross-ref: [[project_split_reveal_board_fit]].
+
+## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
+
+**Status**: deferred (feature gap, not a bug; surfaced while designing the coach creation-pattern transition fix, 2026-07-14)
+**Area**: `connect-four/server/classifier.js` — `classify()` (live user-move single-tag path, ~line 627) vs `classifyPattern()` (multi-tag blunder/puzzle path, ~line 1607); coach phrase pools `coach.figure_7.*` etc. in `src/i18n/en.json`/`es.json`
+
+The live sparring coach round-trip (`POST /api/evaluate-move` → `classify()`) only ever emits one of:
+`immediate_threat`, `double_threat`, `forced_win`, `forced_block`, `forbidden_columns`,
+`best_move`, `drawing_move`, `suboptimal_move`. The other named tactics — **`figure_7`**, `j_shape`,
+`z_threat`, `undercut`, `overcut`, `odd_even_threat`, `claimeven` — are produced **only** by
+`classifyPattern()` (the async multi-tag detector powering blunder analysis and puzzles), never by
+`classify()`. So although `coach.figure_7.*` (and sibling) phrase pools exist in the i18n bundles,
+they are **unreachable on live user moves** (only selectable when a request passes an explicit
+`category: 'figure_7'`, i.e. a puzzle). The coach therefore never says "you built a figure-7" during
+normal sparring.
+
+**Why deferred**: making the live coach praise `figure_7` et al. is a *new feature* (extend
+`classify()`'s single-tag priority chain to run those detectors), not part of the reported
+double-threat/forced-win repeat fix. It also carries cost/complexity: those detectors are `async` and
+several call the solver (`detectZThreat`, `detectOddEvenThreat`, `detectClaimeven`), unlike the pure
+geometry checks `classify()` uses today — adding them to the per-move live path has latency
+implications.
+
+**If picked up**: decide which of the multi-tag tactics deserve live coach praise, add them to
+`classify()`'s priority chain (mind the sync→async change and solver-call cost), and — critically —
+apply the **same absent→present transition-gating** the double-threat/forced-win fix introduces
+(design: `docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md`). These are
+all persist-across-moves "creation" patterns, so without transition-gating they would exhibit the
+identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
+[[reference_tactical_pattern_definitions]].
+
+## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
+
+**Status**: latent risk (surfaced 2026-07-14 while building `reset-staging-db.js`; not yet observed to break because no multi-statement DDL was run against staging via this file)
+**Area**: `connect-four/server/.env.staging` (`DATABASE_URL=...@aws-1-us-east-1.pooler.supabase.com:6543/...`) vs `connect-four/server/migrate.js` (wraps each migration in `BEGIN ... COMMIT`)
+
+The staging connection string points at the **transaction pooler (port 6543)**. Per the project's own session-vs-transaction-pooler rule (memory [[reference_supabase_connection]]), 6543 is FORBIDDEN for DDL and multi-statement transactions. `migrate.js` runs each migration inside an explicit `BEGIN...COMMIT` with arbitrary DDL, so applying migrations against staging using the `.env.staging` URL as-is can fail or misbehave. Single-statement ops (the `TRUNCATE ... CASCADE` in `reset-staging-db.js`) are unaffected.
+
+**Why deferred**: staging deploys on Railway may inject their own session-pooler `DATABASE_URL`, so this may only bite a *local* `node --env-file=server/.env.staging migrate.js` invocation — unconfirmed either way.
+
+**If picked up**: either change `.env.staging`'s `DATABASE_URL` port to 5432 (session pooler), or have `migrate.js`/the deploy path rewrite 6543→5432 for staging. Verify what URL the staging Railway deploy actually uses for migrations before editing. Cross-ref: [[reference_supabase_connection]], memory `project_spec031_staging_production_deploy`.
+
+## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
+
+**Status**: deferred (2026-07-14) — content/quality follow-up; harmless mix, each clip still plays
+**Area**: `connect-four/public/audio/coach/*.mp3`, `connect-four/public/audio/lessons/*.mp3`, `scripts/generate-tts.js`, `server/lessonAudio.js`
+
+The TTS default was switched from `tts-1` to `gpt-4o-mini-tts` (which honors the voice-instructions
+`prompt` — `tts-1` ignored it entirely). But all audio is cached by a hash of the *text*, so existing
+clips do NOT auto-regenerate: the ~220 approved English coach clips and all lesson-narration clips were
+synthesized on `tts-1` with **no voice styling** and keep playing until manually regenerated. New/changed
+text uses the new model. Result: an inconsistent voice character across old vs new clips, and the
+carefully-authored coaching-voice prompt is absent from the old English clips.
+
+**If picked up**: regenerate + re-approve English coach clips (`/admin/audio` en → Generate All New →
+Approve All, or `scripts/generate-tts.js --lang en --all-new`), and re-run `generateLessonAudio` for
+lessons. Costs OpenAI credit (~220 coach keys + lesson set). Cross-ref: memory
+`project_tts_audio_cached_by_text`, [[project_spanish_output_silent_fallback]].

@@ -232,20 +232,32 @@ Notes:
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
   \`_with_best_play\` outcomes mean "with correct continuation".`;
 
-export function buildPromptForCondition(glossary, fv, condition) {
+const SPANISH_OUTPUT_DIRECTIVE = `
+
+# Output language
+Write the \`mechanism\` field — the ONLY player-facing field — in **Argentinian Spanish
+(Rioplatense voseo)**: use "usá / tenés / podés / jugá / sos / vos", never tú-Spanish. Refer to
+the two discs as **verde** (first player) and **gris** (second player); never say red, yellow, or
+the English words green/gray. Keep every OTHER field exactly as specified above (English JSON keys,
+English enum values like "win"/"draw"/"loss", numeric \`better_move\`, \`cNrM\` cells). Do NOT
+translate, rename, or reformat the [zone:…] / [term:…] tags or the cell references inside
+\`mechanism\` — copy those tokens verbatim; only the surrounding prose is Spanish.`;
+
+export function buildPromptForCondition(glossary, fv, condition, locale = 'en') {
+  const localeSuffix = locale === 'es' ? SPANISH_OUTPUT_DIRECTIVE : '';
   if (condition === 'D') {
     return `${assembleGroundedPrompt(buildReasonRenderModel(fv))}
 
 ---
 
-${TASK}`;
+${TASK}${localeSuffix}`;
   }
   const projected = projectVector(fv, condition);
   return `${glossary}
 
 ---
 
-${TASK}
+${TASK}${localeSuffix}
 
 # Feature vector
 

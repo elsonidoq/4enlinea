@@ -15,7 +15,7 @@
  * @param {{ voice?: string, model?: string, speed?: number, instructions?: string }} opts
  * @returns {Request} the fetch Request object ready to execute
  */
-function buildTtsRequest(text, { voice = 'alloy', model = 'tts-1', speed = 1.0, instructions } = {}) {
+function buildTtsRequest(text, { voice = 'alloy', model = 'gpt-4o-mini-tts', speed = 1.0, instructions } = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY environment variable is not set');
@@ -40,7 +40,7 @@ function buildTtsRequest(text, { voice = 'alloy', model = 'tts-1', speed = 1.0, 
  * @param {string} text - The text to speak (max 4096 chars).
  * @param {{ voice?: string, model?: string, speed?: number, instructions?: string }} opts
  * @param {string} [opts.voice='alloy'] - OpenAI voice id (alloy, echo, fable, onyx, nova, shimmer).
- * @param {string} [opts.model='tts-1'] - Model name (tts-1 = standard, tts-1-hd = high-definition).
+ * @param {string} [opts.model='gpt-4o-mini-tts'] - Model name (gpt-4o-mini-tts default, steerable via instructions + best multilingual; tts-1 / tts-1-hd are legacy, English-accented, ignore instructions).
  * @param {number} [opts.speed=1.0] - Playback speed (0.25 to 4.0).
  * @returns {Promise<Buffer>} MP3 audio data.
  */

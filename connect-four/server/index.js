@@ -34,6 +34,7 @@ import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardS
 import { createAttemptRefresh } from './authRefresh.js';
 import { USER_PROFILE_SELECT_COLUMNS, defaultUserProfile } from './userHelpers.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+import i18nTranslationsEs from '../src/i18n/es.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
@@ -44,6 +45,11 @@ import { buildGoogleAuthorizeUrl } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
+import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
+import { resolveAdminLang } from './adminAudioLang.mjs';
+import { buildTtsInstructions } from './ttsInstructions.mjs';
+import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
+import { buildCacheFilter } from './explainCacheKey.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -131,6 +137,7 @@ app.use(helmet({
 // Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
+app.use(localeMiddleware);
 app.use(cookieParser());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
@@ -1050,6 +1057,7 @@ app.post('/api/explain-move', async (req, res) => {
   const positionHash = createHash('sha256')
     .update(`${moves}:${candidateCol}`)
     .digest('hex');
+  const locale = req.locale ?? 'en';
 
   // Check explanation cache first
   let cachedEntry = null;
@@ -1057,8 +1065,8 @@ app.post('/api/explain-move', async (req, res) => {
     const { data } = await supabase
       .from('explanation_cache')
       .select('one_liner, deep_reveal_json')
-      .eq('position_hash', positionHash)
-      .single();
+      .match(buildCacheFilter(positionHash, locale))
+      .maybeSingle();
     cachedEntry = data;
   }
 
@@ -1096,6 +1104,7 @@ app.post('/api/explain-move', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: oneLiner,
         deep_reveal_json: deepRevealData,
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
@@ -1144,13 +1153,15 @@ app.post('/api/explain-move-llm', async (req, res) => {
   if (board.colHeights[col] >= 6)
     return res.status(400).json({ error: 'column is full' });
 
+  const locale = req.locale ?? 'en';
+
   // ── 1. Cache check (before quota decrement) ──────────────────────────────
   const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
   if (supabase) {
     const { data: cached } = await supabase
       .from('explanation_cache')
       .select('deep_reveal_json')
-      .eq('position_hash', positionHash)
+      .match(buildCacheFilter(positionHash, locale))
       .single();
     if (cached?.deep_reveal_json) {
       // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
@@ -1161,6 +1172,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
         prompt: cached.deep_reveal_json.prompt ?? '',
         terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
+        locale,
       }));
     }
   }
@@ -1182,14 +1194,16 @@ app.post('/api/explain-move-llm', async (req, res) => {
       solver,
       model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
       userId: req.user?.id ?? null,
+      locale,
     });
 
     if (result.notABlunder) {
       // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
       return res.json(guardExplainMoveLlmPayload({
-        explanation: 'This move keeps the game on its best track — there is no better alternative to highlight here.',
+        explanation: serverT(locale, 'notABlunder'),
         prompt: '',
         terms: {},
+        locale,
       }));
     }
 
@@ -1231,7 +1245,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
       const kbId = termMatch[1];
       if (seenTermIds.has(kbId)) continue;
       seenTermIds.add(kbId);
-      const shortSummary = loadKBShortSummary(kbId);
+      const shortSummary = loadKBShortSummary(kbId, locale);
       if (shortSummary) termsMap[kbId] = shortSummary;
     }
 
@@ -1246,6 +1260,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: '',
         deep_reveal_json: { explanation, prompt, terms: termsMap },
         template_version: 'v3',
@@ -1257,7 +1272,7 @@ app.post('/api/explain-move-llm', async (req, res) => {
     // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
     // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
     // future cache hit.
-    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap }));
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -1293,7 +1308,8 @@ app.post('/api/llm-feedback', async (req, res) => {
         .from('explanation_cache')
         .select('deep_reveal_json')
         .eq('position_hash', positionHash)
-        .single();
+        .limit(1)
+        .maybeSingle();
       if (cached?.deep_reveal_json?.prompt) resolvedPrompt = cached.deep_reveal_json.prompt;
     } catch {
       // Non-fatal — proceed with whatever prompt we have (possibly empty).
@@ -3462,12 +3478,38 @@ function keyToAudioSlug(key) {
   return key.replace(/[._]/g, '--');
 }
 
-const TTS_REGISTRY_PATH = join(__dirname, 'tts-registry.json');
-const TTS_AUDIO_DIR = join(__dirname, '../public/audio/coach');
-const TTS_MANIFEST_PATH = join(TTS_AUDIO_DIR, 'coach-audio-manifest.json');
 const TTS_PROMPT_PATH = join(__dirname, 'tts-prompt.json');
 
+// Coach text source per language, keyed by the same `lang` values threaded
+// through the admin audio endpoints below.
+const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
+
+/**
+ * Resolve a dot-path i18n key ("coach.foo.bar") to its string value for a
+ * given language. Returns '' if the key is missing, non-string, or lang is
+ * unsupported (never throws).
+ * @param {string} key
+ * @param {string} lang
+ * @returns {string}
+ */
+function resolveCoachText(key, lang) {
+  const source = COACH_SOURCES[lang] || COACH_SOURCES.en;
+  try {
+    const parts = key.split('.');
+    let node = source;
+    for (const p of parts) node = node[p];
+    return typeof node === 'string' ? node : '';
+  } catch {
+    return '';
+  }
+}
+
 const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
+// gpt-4o-mini-tts is the default: it's the only model that honors the `instructions`
+// field (tts-1/tts-1-hd ignore it and always speak with a baked-in American-English
+// accent, regardless of the input text's language).
+const VALID_TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
+const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
 
 function readTtsConfig() {
   try {
@@ -3476,14 +3518,15 @@ function readTtsConfig() {
       prompt: data.prompt || '',
       speed: typeof data.speed === 'number' ? data.speed : 1.0,
       voice: VALID_TTS_VOICES.includes(data.voice) ? data.voice : 'alloy',
+      model: VALID_TTS_MODELS.includes(data.model) ? data.model : DEFAULT_TTS_MODEL,
     };
   } catch {
-    return { prompt: '', speed: 1.0, voice: 'alloy' };
+    return { prompt: '', speed: 1.0, voice: 'alloy', model: DEFAULT_TTS_MODEL };
   }
 }
 
-function writeTtsConfig(prompt, speed, voice) {
-  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice }, null, 2) + '\n', 'utf8');
+function writeTtsConfig(prompt, speed, voice, model) {
+  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice, model }, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -3508,26 +3551,27 @@ function stripAnnotationsForTTS(raw) {
     .trim();
 }
 
-function readTtsRegistry() {
+function readTtsRegistry(lang = 'en') {
   try {
-    return JSON.parse(readFileSync(TTS_REGISTRY_PATH, 'utf8'));
+    return JSON.parse(readFileSync(registryPathForLang(lang), 'utf8'));
   } catch {
     return [];
   }
 }
 
-function writeTtsRegistry(entries) {
-  mkdirSync(dirname(TTS_REGISTRY_PATH), { recursive: true });
-  writeFileSync(TTS_REGISTRY_PATH, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+function writeTtsRegistry(entries, lang = 'en') {
+  const registryPath = registryPathForLang(lang);
+  mkdirSync(dirname(registryPath), { recursive: true });
+  writeFileSync(registryPath, JSON.stringify(entries, null, 2) + '\n', 'utf8');
 }
 
-function writeTtsManifest(entries) {
+function writeTtsManifest(entries, lang = 'en') {
   const slugs = entries
     .filter(e => e.status === 'approved')
     .map(e => e.slug)
     .sort();
-  mkdirSync(TTS_AUDIO_DIR, { recursive: true });
-  writeFileSync(TTS_MANIFEST_PATH, JSON.stringify(slugs, null, 2) + '\n', 'utf8');
+  mkdirSync(audioDirForLang(lang), { recursive: true });
+  writeFileSync(manifestPathForLang(lang), JSON.stringify(slugs, null, 2) + '\n', 'utf8');
 }
 
 // GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
@@ -3535,9 +3579,9 @@ app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   res.json(readTtsConfig());
 });
 
-// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice)
+// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice + model)
 app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
-  const { prompt, speed, voice } = req.body;
+  const { prompt, speed, voice, model } = req.body;
   if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt must be a string' });
   const parsedSpeed = parseFloat(speed);
   if (isNaN(parsedSpeed) || parsedSpeed < 0.25 || parsedSpeed > 4.0) {
@@ -3546,28 +3590,27 @@ app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   if (!VALID_TTS_VOICES.includes(voice)) {
     return res.status(400).json({ error: `voice must be one of: ${VALID_TTS_VOICES.join(', ')}` });
   }
-  writeTtsConfig(prompt, parsedSpeed, voice);
+  const resolvedModel = model === undefined ? DEFAULT_TTS_MODEL : model;
+  if (!VALID_TTS_MODELS.includes(resolvedModel)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_TTS_MODELS.join(', ')}` });
+  }
+  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel);
   res.json({ ok: true });
 });
 
 // GET /api/admin/audio/status — grouped key list for the admin page
 app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
   try {
-    const registry = readTtsRegistry();
+    const lang = resolveAdminLang(req.query.lang);
+    const registry = readTtsRegistry(lang);
     const approved = [];
     const awaiting = [];
     const needs = [];
     const ineligible = [];
 
     for (const entry of registry) {
-      // Resolve the i18n key to its English text for preview
-      let text = '';
-      try {
-        const parts = entry.key.split('.');
-        let node = i18nTranslations;
-        for (const p of parts) node = node[p];
-        text = typeof node === 'string' ? node : '';
-      } catch { /* key not found in en.json */ }
+      // Resolve the i18n key to its language-specific text for preview
+      const text = resolveCoachText(entry.key, lang);
 
       const item = { key: entry.key, slug: entry.slug, text, status: entry.status, reason: entry.reason || null, generated_at: entry.generated_at || null, approved_at: entry.approved_at || null };
 
@@ -3593,32 +3636,32 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ error: 'key is required' });
   }
+  const lang = resolveAdminLang(req.body?.lang);
 
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const entry = registry.find(e => e.key === key);
     if (!entry) return res.status(404).json({ error: 'key not found in registry' });
     if (entry.status === 'ineligible') return res.status(400).json({ error: `key is ineligible: ${entry.reason}` });
 
-    // Resolve text from en.json
-    const parts = key.split('.');
-    let node = i18nTranslations;
-    for (const p of parts) node = node[p];
-    const text = typeof node === 'string' ? node : null;
+    // Resolve text from the language's i18n source
+    const text = resolveCoachText(key, lang) || null;
     if (!text || text.includes('{{')) {
       return res.status(400).json({ error: 'key has interpolated text or is missing' });
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
-    console.log(`[admin/audio/generate] key=${key} voice=${voice} speed=${speed}`);
-    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
-    mkdirSync(TTS_AUDIO_DIR, { recursive: true });
-    writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, lang);
+    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
 
     entry.status = 'awaiting_approval';
     entry.generated_at = new Date().toISOString();
-    writeTtsRegistry(registry);
+    writeTtsRegistry(registry, lang);
 
     res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
   } catch (err) {
@@ -3629,8 +3672,9 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
 
 // POST /api/admin/audio/generate-all — synthesize all needs_audio keys
 app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const needsAudio = registry.filter(e => e.status === 'needs_audio');
 
     if (needsAudio.length === 0) {
@@ -3638,28 +3682,31 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, lang);
+    const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
     let generated = 0;
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (voice=${voice} speed=${speed})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed} model=${model})`);
 
     for (const entry of needsAudio) {
       try {
-        const parts = entry.key.split('.');
-        let node = i18nTranslations;
-        for (const p of parts) node = node[p];
-        const text = typeof node === 'string' ? node : null;
+        const text = resolveCoachText(entry.key, lang) || null;
         if (!text || text.includes('{{')) {
           failed.push({ key: entry.key, error: 'interpolated or missing text' });
           continue;
         }
 
-        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice });
-        writeFileSync(join(TTS_AUDIO_DIR, `${entry.slug}.mp3`), audio);
+        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+        writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
+        // Persist after each success so the audio is immediately visible/playable in
+        // /admin/audio and progress survives a mid-batch crash (files already on disk).
+        writeTtsRegistry(registry, lang);
         generated++;
         const remaining = total - generated - failed.length;
         console.log(`[admin/audio/generate-all] generated ${generated}/${total} — ${remaining} remaining | key=${entry.key}`);
@@ -3669,7 +3716,6 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
       }
     }
 
-    writeTtsRegistry(registry);
     res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
   } catch (err) {
     logError('[admin/audio/generate-all]', err);
@@ -3683,9 +3729,10 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
   if (!key || typeof key !== 'string') {
     return res.status(400).json({ error: 'key is required' });
   }
+  const lang = resolveAdminLang(req.body?.lang);
 
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const entry = registry.find(e => e.key === key);
     if (!entry) return res.status(404).json({ error: 'key not found in registry' });
     if (entry.status === 'ineligible') return res.status(400).json({ error: 'ineligible keys cannot be approved' });
@@ -3693,8 +3740,8 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
     entry.status = 'approved';
     entry.approved_at = new Date().toISOString();
-    writeTtsRegistry(registry);
-    writeTtsManifest(registry);
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
 
     res.json({ key, slug: entry.slug, status: 'approved' });
   } catch (err) {
@@ -3705,8 +3752,9 @@ app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
 
 // POST /api/admin/audio/approve-all — approve all awaiting_approval keys
 app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
   try {
-    const registry = readTtsRegistry();
+    const registry = readTtsRegistry(lang);
     const awaiting = registry.filter(e => e.status === 'awaiting_approval');
 
     if (awaiting.length === 0) {
@@ -3718,8 +3766,8 @@ app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
       entry.approved_at = new Date().toISOString();
     }
 
-    writeTtsRegistry(registry);
-    writeTtsManifest(registry);
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
 
     res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
   } catch (err) {
@@ -3735,7 +3783,8 @@ app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
   if (!/^[a-zA-Z0-9--]+$/.test(slug)) {
     return res.status(400).json({ error: 'invalid slug' });
   }
-  const filePath = join(TTS_AUDIO_DIR, `${slug}.mp3`);
+  const lang = resolveAdminLang(req.query.lang);
+  const filePath = join(audioDirForLang(lang), `${slug}.mp3`);
   if (!existsSync(filePath)) {
     return res.status(404).json({ error: 'audio file not found' });
   }
@@ -3756,7 +3805,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
   // dereferences req.user.
 
   // Validate query params
-  const { moveString, col: colStr } = req.query;
+  const { moveString, col: colStr, lang } = req.query;
   if (!moveString || !/^[0-6]{0,42}$/.test(moveString)) {
     return res.status(400).json({ error: 'invalid moveString' });
   }
@@ -3770,13 +3819,19 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     return res.status(503).json({ error: 'internal error' });
   }
 
+  // `Audio(url)` cannot set a custom Accept-Language header — it sends the browser's
+  // language, which may differ from the app's selected language. So the caller passes
+  // the in-app locale explicitly via ?lang=; whitelist it and fall back to req.locale
+  // (derived from Accept-Language) otherwise.
+  const locale = resolveTtsLocale(lang, req.locale);
+
   try {
     // Look up explanation_cache
     const positionHash = createHash('sha256').update(`${moveString}:${col}`).digest('hex');
     const { data: cacheEntry, error: cacheErr } = await supabase
       .from('explanation_cache')
       .select('deep_reveal_json, audio_path')
-      .eq('position_hash', positionHash)
+      .match(buildCacheFilter(positionHash, locale))
       .maybeSingle();
 
     if (cacheErr) {
@@ -3819,7 +3874,8 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     }
 
     const { synthesizeStream } = await import('./ttsProvider.js');
-    const { prompt: instructions, speed, voice } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const instructions = buildTtsInstructions(basePrompt, locale);
 
     let ttsResponse;
     try {
@@ -3827,6 +3883,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
         instructions: instructions || undefined,
         speed,
         voice,
+        model,
       });
     } catch (ttsErr) {
       console.error('[tts/deep-reveal] OpenAI TTS error:', ttsErr.message);
@@ -3879,7 +3936,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
             return supabase
               .from('explanation_cache')
               .update({ audio_path: audioPath, audio_generated_at: new Date().toISOString() })
-              .eq('position_hash', positionHash)
+              .match(buildCacheFilter(positionHash, locale))
               .then(({ error: updateErr }) => {
                 if (updateErr) {
                   console.error('[tts/deep-reveal] cache update error:', updateErr.message);

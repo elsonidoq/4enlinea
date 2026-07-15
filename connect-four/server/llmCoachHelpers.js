@@ -109,38 +109,50 @@ export function loadKBStatement(id) {
 }
 
 /**
- * Extracts the `short_summary` field from a KB article's YAML frontmatter.
+ * Extracts a block-scalar frontmatter field (e.g. `short_summary` or
+ * `short_summary_es`) from a KB article's YAML frontmatter.
  * Returns null if the file cannot be read or the field is missing.
  */
-function _loadKBShortSummaryRaw(id) {
+function _loadKBFieldRaw(id, field) {
   try {
     const text = readFileSync(join(KB_DIR, `${id}.md`), 'utf8');
     const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
     if (!fmMatch) return null;
     const fm = fmMatch[1];
     const lines = fm.split('\n');
-    let inSummary = false;
-    const summaryLines = [];
+    let inField = false;
+    const out = [];
+    const re = new RegExp(`^${field}:\\s*\\|`);
     for (const line of lines) {
-      if (!inSummary) {
-        if (/^short_summary:\s*\|/.test(line)) { inSummary = true; }
-        continue;
-      }
+      if (!inField) { if (re.test(line)) inField = true; continue; }
       if (line.length > 0 && !/^\s/.test(line)) break;
-      summaryLines.push(line.replace(/^  /, ''));
+      out.push(line.replace(/^  /, ''));
     }
-    return summaryLines.join('\n').trim() || null;
+    return out.join('\n').trim() || null;
   } catch {
     return null;
   }
 }
 
-export function loadKBShortSummary(id) {
-  const result = _loadKBShortSummaryRaw(id);
-  if (result !== null) return result;
-  // Alias fallback: if id matches a PATTERN_KB key (e.g. 'fork'), resolve through to the real slug
+/**
+ * Extracts the `short_summary` field from a KB article's YAML frontmatter,
+ * localized when `locale === 'es'` and a `short_summary_es` field is present.
+ * Falls back to English `short_summary` (same id, then alias resolution)
+ * when the localized field is missing. Returns null only when no English
+ * summary is available either.
+ */
+export function loadKBShortSummary(id, locale = 'en') {
+  // Resolve the alias (e.g. 'claimeven' -> 'allis-claimeven') once; PATTERN_KB keys are
+  // caller-facing pattern names, but the localized field lives on the resolved KB file,
+  // so both the localized and English lookups below must go through the same resolved
+  // slug, not just the caller's raw id.
   const kb = PATTERN_KB[id];
-  return kb ? _loadKBShortSummaryRaw(kb.id) : null;
+  const resolvedId = kb ? kb.id : id;
+  if (locale === 'es') {
+    const localized = _loadKBFieldRaw(resolvedId, 'short_summary_es');
+    if (localized !== null) return localized;
+  }
+  return _loadKBFieldRaw(resolvedId, 'short_summary');
 }
 
 /**

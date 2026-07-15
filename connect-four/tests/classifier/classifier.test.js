@@ -153,6 +153,26 @@ describe('classify() double_threat', () => {
   });
 });
 
+describe('classify() double_threat transition gating', () => {
+  // Persisting double threat (the reported bug): P1 already holds a standing double threat
+  // (0-indexed cols 2 & 6 are gravity-top wins) and plays a DIFFERENT optimal developing move
+  // (col3, solver score 13 = max). Pre-fix classify tagged this double_threat every such move,
+  // so the coach falsely repeated "you created the double threat". Post-fix it must not.
+  test('3344000000111151 col3 → NOT double_threat (double threat already present, not created)', () => {
+    const result = classify('3344000000111151', 3, [-1000, 12, 13, 12, 12, 12, 13]);
+    assert.notEqual(result.tag, 'double_threat');
+    assert.equal(result.tag, 'best_move');
+  });
+
+  // Regression: a move that genuinely CREATES the double threat (absent before, present after)
+  // still fires. '3344' col2 is the classic figure-7 completing move; pre-move P1 has no double
+  // threat, post-move it does.
+  test('3344 col2 → double_threat (newly created — regression)', () => {
+    const result = classify('3344', 2, [-4, -3, 18, 2, 2, 18, -3]);
+    assert.equal(result.tag, 'double_threat');
+  });
+});
+
 describe('classify() edge cases', () => {
   test('returns fallback for empty board with negative score', () => {
     const scores = [-1, -1, -1, -1, -1, -1, -1];
@@ -212,6 +232,27 @@ describe('detectForcedWin()', () => {
     const scores = [-4, -2, -2, -1, -2, -2, -4];
     const result = classify('3', 3, scores);
     assert.notEqual(result.tag, 'forced_win');
+  });
+});
+
+describe('classify() forced_win transition gating', () => {
+  // Persisting forced win: P2 already has a forcing chain (detectForcedWin(pre) = true) and plays
+  // a maintaining move (col1) instead of cashing it. Pre-fix classify tagged this forced_win;
+  // post-fix it must not. NOTE: on this board the maintaining move is solver-suboptimal (score
+  // -4), so it correctly falls through to suboptimal_move — maintaining a forcing chain rather
+  // than advancing it is usually the sub-optimal line, which is why a *positive-score* persisting
+  // forced_win is rare in real play.
+  test('662345230545562635000001111212246 col1 → NOT forced_win (forced win already present)', () => {
+    const result = classify('662345230545562635000001111212246', 1, [-1000, -4, -1000, 5, -4, -4, -4]);
+    assert.notEqual(result.tag, 'forced_win');
+    assert.equal(result.tag, 'suboptimal_move');
+  });
+
+  // Regression: a move that ESTABLISHES the forcing chain (absent before, present after) still
+  // fires. On '662345230545562635000001', P1's col6 (score 6 = max) opens the forcing chain.
+  test('662345230545562635000001 col6 → forced_win (newly established — regression)', () => {
+    const result = classify('662345230545562635000001', 6, [-1000, -9, 9, -9, -9, -9, 6]);
+    assert.equal(result.tag, 'forced_win');
   });
 });
 

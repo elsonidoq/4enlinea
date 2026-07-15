@@ -524,3 +524,13 @@ For each check record:
   - **Expected**: rate limiter caps anon per-IP as configured; a burst of anon reveal requests is
     throttled, not unbounded.
   - **Source**: anon free deep reveal (design decision: IP rate-cap, no server counter).
+
+---
+
+## Spanish audio & deep-reveal i18n (feature/full-spanish, 2026-07-14)
+
+- [ ] **Apply migration 059 (`explanation_cache` locale column + composite PK) on staging/prod**
+  - **What**: run the deploy migration path so `059_explanation_cache_locale.sql` executes against the deployed DB, then confirm: `explanation_cache` has a `locale text NOT NULL DEFAULT 'en'` column, its PK is `(position_hash, locale)`, all pre-existing rows backfilled to `locale='en'`, and a Spanish deep reveal writes a distinct `es` row alongside the `en` row for the same position.
+  - **Why staging**: migrations apply at deploy time via `migrate.js`; local dev may run a different DB. Migration 059 is **multi-statement DDL** (`ALTER` + `DROP CONSTRAINT ... CASCADE` + `ADD PRIMARY KEY`), so it is exactly the case OI-31 flags — verify the staging deploy uses a **session pooler (5432)** connection, not the transaction pooler (6543), or the migration can fail.
+  - **Expected**: migration applies cleanly; English deep-reveal cache hits are unchanged; Spanish requests (`Accept-Language: es` / `?lang=es`) produce and serve Spanish text + Spanish-accented audio from their own locale rows.
+  - **Source**: this session's Spanish deep-reveal plan (Task 5), `docs/superpowers/plans/2026-07-14-spanish-audio-and-deep-reveal-i18n.md`. Cross-ref OI-31, OI-26.
