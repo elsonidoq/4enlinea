@@ -1,34 +1,53 @@
 ---
 name: project_coach_creation_transition_gate
-description: "classify() double_threat uses LOOSE Case B (≠ strict detectDoubleThreat); coach falsely repeats \"you created X\" on persisting patterns — transition-gating fix designed, NOT yet shipped"
+description: classify() double_threat/forced_win fire only on absent->present transition; two loose/strict double-threat predicates coexist
 metadata: 
   node_type: memory
   type: project
-  originSessionId: 976d5ff4-777c-4bab-9080-20c2287ce6e8
+  originSessionId: 746f6892-a180-4223-b740-e03e252ce6fd
 ---
 
-Two traps around `classify()`'s creation-pattern detection (`connect-four/server/classifier.js`):
+`classify()` (server/classifier.js, live user-move coach path) tags `double_threat` and
+`forced_win` **only when the move creates them** (present on post-move board AND absent on
+pre-move board, from the mover's perspective) — not on mere presence. This stops the coach
+repeating "you created the double threat" while a pattern persists across moves.
 
-**1. Loose vs strict double-threat Case B (TRUE NOW).** `classify()`'s INLINE `double_threat`
-check uses **loose** Case B — ANY two consecutive-row reachable threats in a column → `double_threat`.
-The exported `detectDoubleThreat()` (used by `classifyPattern`/`tagBlunder`) uses **strict** Case B —
-the lower threat must ALSO sit at the gravity-top. They are NOT interchangeable: swapping `classify()`
-to `detectDoubleThreat()` makes `3333344044114` col0 stop being `double_threat` (verified). Don't
-"DRY them up" without re-validating the full `classify() double_threat` fixture set in
-`tests/classifier/classifier.test.js`.
+**Trap:** there are now TWO double-threat predicates that differ in Case B. Private
+`hasDoubleThreat(board, player)` (used by `classify()`) uses LOOSE Case B (any two
+consecutive-row reachable threats). Exported `detectDoubleThreat()` (used by
+`classifyPattern`/`tagBlunder`) uses STRICT Case B (lower threat must be gravity-top). They are
+NOT interchangeable — swapping `classify()` to `detectDoubleThreat()` breaks `3333344044114`
+col0 (stops being double_threat). Don't "dedupe" them without re-validating.
 
-**2. Coach falsely repeats "you created the double threat" (open bug; fix designed, NOT shipped).**
-`classify()` tags `double_threat`/`forced_win` as pure post-move geometry — it never checks whether the
-pattern was ALREADY present pre-move. So the live sparring coach re-praises a *persisting* double
-threat / forced win on every subsequent move. Repro: `3344000000111151` col3 — P1 already holds a
-standing double threat (0-idx cols 2 & 6) and plays an unrelated optimal developing move, yet the coach
-says "you created the double threat." **Approved fix** = transition-gate (praise only on absent→present,
-both from the mover's perspective) in `classify()` ONLY. Design:
-`docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md`; plan:
-`docs/superpowers/plans/2026-07-14-coach-creation-pattern-transition.md`. Scope EXCLUDES the AI-move /
-puzzle paths (`classifyAiMove`/`classifyPattern`) and `figure_7`+siblings, which are never emitted on
-live user moves (see OI-30 in `docs/open_issues.md`). When implemented, a suppressed tag falls through
-to `best_move` → no `coach.*` pool → frontend speaks `coach.generic.<quality>` (existing fallback in
-`src/lib/useGameBoard.js`). No API/frontend change needed.
+**Out of scope / see also:** AI-move path (`classifyAiMove`/`classifyPattern`) is NOT
+transition-gated; `figure_7` & other multi-tag tactics never fire on live user moves — [[OI-30]].
+Design: docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md.
+
+**`classify().tag` has FIVE production consumers, not just the coach** — the transition change
+now shifts a persisting-pattern move's tag `double_threat`/`forced_win` → `best_move`/etc. in ALL
+of them (same direction, low-severity). Coach pools are `category`-shielded (`evaluateMoveHandler.js`,
+`/api/evaluate-move/inline` `phrasePoolKey = category || patternTag`), but the raw tag is surfaced
+UNSHIELDED in three places: `POST /api/explain-move` (`patternTag`, no category), `/api/evaluate-move/inline`'s
+response `patternTag` field, and `GET /api/admin/scores` (`classifier_tags`, localhost-only). Plus
+`candidate-generator.js:607` puts `cls.tag` in puzzle-gen metadata — and its test is excluded from
+`npm run test:fast`, so that consumer is NOT covered by the fast suite ([[OI-33]]).
+
+**Status: SHIPPED 2026-07-14** (commits 7be5c7f double_threat, 0393258 forced_win). Verified
+end-to-end: `classify()` four-case fixture set (persisting DT/FW → best_move/suboptimal_move,
+created DT/established FW → double_threat/forced_win) all pass; `POST /api/explain-move`
+(server/index.js:1091, a second `classify()` consumer with no `category` override) manually
+re-checked post-fix and returns `best_move`/"Column 4: best move." for the persisting-DT fixture
+— no more false "created a double threat" claim. `npm run test:fast` 1265/0 green.
+
+**Trap hit while verifying Step 3 (explain-move):** `explanation_cache` is keyed by
+`sha256(moves:candidateCol)` + locale, independent of `patternTag`/`scores` — a row cached
+BEFORE this fix shipped will keep serving the stale pre-fix `patternTag`/`oneLiner` forever,
+making the fix look broken even though `classify()` itself is correct. The persisting-DT fixture
+(`3344000000111151` col3) had exactly such a stale cached row on the local dev Supabase
+(`explanation_cache`, position_hash `b758df4d9a9d5c5e693c56edb8fab6c5a7d7caea64d6d289e5f33844e1b4023e`,
+locale `en`) from earlier design-phase testing; deleting it before curling `/api/explain-move`
+was required to observe the corrected response. When manually verifying any `explain-move`
+change, always confirm no matching cache row exists first (or delete it) — a clean `classify()`
+result is not sufficient proof the endpoint is fixed.
 
 Cross-ref: [[reference_classify_vs_classifyPattern]], [[project_classifier_architecture]].

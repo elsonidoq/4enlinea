@@ -8,7 +8,7 @@
 - [c4solver behavioral quirks](reference_c4solver_behavior.md) — error vs hang; JS formula off-by-1; exit 137 → delete binary + make
 - [Forced-block detection](reference_cat5_forced_block_detection.md) — use checkWin, not flat scores
 - [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/15-detector; +3 parity threats; Map priority
-- [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() double_threat uses LOOSE Case B (≠ strict detectDoubleThreat); coach falsely repeats "you created X" on persisting patterns (fix designed, not shipped)
+- [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() double_threat/forced_win fire only on absent→present transition; loose vs strict double-threat predicates coexist (don't dedupe)
 - [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast; deadlocks w/ concurrent solver harvest
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — predicates figure_7/j_shape/undercut/overcut (j_shape/undercut: NO KB)
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based; ~20 solver queries
@@ -55,6 +55,7 @@
 - [Stats architecture](project_stats_architecture.md) — stats from puzzle_attempts; session_stats orphaned; session-stats/all byPattern empty; /api/stats byPattern FINE
 - [Spec 030 session-stats write asymmetry](project_spec030_server_mediated_data_access.md) — asymmetric write shapes; must not unify
 - [Auth/payments state](project_auth_payments_state.md) — httpOnly cookies only (credentials:'include', NOT Authorization header); PaymentProcessor + Stripe webhook mirror
+- [Checkout verify-session fallback](project_checkout_verify_session_fallback.md) — account stays free after paying = no webhook (local needs `stripe listen`); /verify-session now backstops dropped webhooks; charge exists but 0 stripe_events = smoking gun
 - [Stripe webhook live testing](project_stripe_webhook_live_testing.md) — mocked tests miss column/grant bugs; `stripe trigger` live (event_type→type, tracks/stripe_events grants)
 - [Local Supabase setup](project_local_supabase_setup.md) — JWT format for service_role key; sb_secret_* fails locally; missing grants → 403/42501 (+046/048/055)
 - [Spec 039 deploy requirement](project_spec039_audio_interactive_coach.md) — TRUNCATE explanation_cache before deploy; +musicEnabled placeholder, slug-derivation, pre-existing test fails
