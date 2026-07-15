@@ -2,7 +2,7 @@
 name: app-qa
 description: Use when asked to QA the Connect Four app, do a full app walkthrough, find UI/UX/navigation/tier bugs, or exercise the app end-to-end in a real browser and log the findings. Drives the local dev app in Chrome and records every failure to agentic_QA.md.
 user-invocable: true
-argument-hint: "[area: home | past-games | blunders | deep-reveal | lessons | challenges | import | nav | tier-journey]  [--feature <plan-or-spec-path>]  [--mobile]  (no arg = full end-to-end sweep)"
+argument-hint: "[area: home | past-games | blunders | deep-reveal | lessons | challenges | import | nav | tier-journey]  [--feature <plan-or-spec-path>]  [--focus \"<free-text context on what to scrutinize>\"]  [--mobile]  (no arg = full end-to-end sweep)"
 ---
 
 # App QA — end-to-end browser walkthrough
@@ -80,7 +80,12 @@ Create a todo per step.
    In **feature-verification mode**, the precondition is whatever the feature's plan/spec says its
    flow starts from — honor that, not this step's default.
 
-6. **Create `agentic_QA.md`** at repo root using the template in `references/bug-template.md`.
+6. **Create the per-run findings file** at repo root: `agentic_QA_<YYYY-MM-DD-HHMM>.md`, using the
+   template in `references/bug-template.md`. Derive the stamp **once** at run start
+   (`date +%Y-%m-%d-%H%M`) and reuse that exact filename for the whole run — including every
+   subagent (the coordinator passes it into each dispatch prompt), so a coordinator run stays in one
+   file. Time (not just date) is in the name so two runs the same day never collide. Wherever this
+   skill says "`agentic_QA.md`", it means **this run's stamped file**.
 
 ## Feature-verification mode (`--feature <plan-or-spec-path>`)
 
@@ -115,6 +120,32 @@ answers "**do these acceptance criteria pass?**" — then also asks "what else d
 Scope note: run feature mode **monolithically** unless the feature genuinely spans many independent
 areas; the acceptance flow is usually one linear journey and splitting it across subagents loses the
 cross-screen state (a mid-flow sign-up, a migrated row) the criteria depend on.
+
+## Focus mode (`--focus "<text>"`)
+
+Use when the user hands you **free-form prose** describing what to scrutinize — typically written by
+an agent that read a set of specs/epics and summarized *what has been built and what to check* (e.g.
+`polish_epic.md` plus recent design specs). Unlike `--feature` (which reads criteria from one file),
+`--focus` takes the context inline and composes with `area`, `--feature`, and `--mobile`.
+
+**Semantics — full sweep + deep focus.** `--focus` does **not** narrow coverage. Still run the
+**whole app end-to-end** (coordinator mode by default), but spend extra depth on the focused areas:
+
+1. **Parse the focus text into (a) emphasis on existing areas** it maps to (home, past-games,
+   blunders, deep-reveal, lessons, challenges, import, nav, tier-journey), **and (b) derived
+   focus-areas not in the fixed area list** (e.g. "dev board injector", "spanish audio i18n",
+   "onboarding mission screen"). Dispatch the derived focus-areas as **extra subagent passes** so the
+   prose can name anything and have it actually get driven.
+2. **Focused + derived areas get acceptance-criteria treatment** — apply the feature-verification
+   mechanics above: turn the focus claims into explicit ✅ pass / ❌ fail / ⚠️ blocked checklist
+   items driven to a verdict, with the same evidence discipline (verify server-side effects in the
+   DB, not just the UI). Unfocused areas get the normal bug-hunt.
+3. **Thread the full `--focus` text verbatim into every subagent prompt**, each tagged with a
+   one-line "why this area is in focus" (or "not in focus — regression pass only"), so the context
+   reaches the agents that actually drive the browser.
+4. **Tag every finding `focus` vs `adjacent`** (as feature mode does).
+5. **End with a focus summary** written into the run file (not just chat):
+   `Focus: N/M checklist items pass` + the list of any ❌/⚠️.
 
 ## Execution mode: monolithic vs coordinator
 
@@ -215,8 +246,20 @@ Log each deep-reveal defect with the movestring/board as input and the oracle ou
 
 ## Recording a finding
 
-Every bug, error, or misbehavior gets one entry in `agentic_QA.md`, grouped by app area,
-using the structured template (see `references/bug-template.md`). Each entry MUST have:
+Every bug, error, or misbehavior gets one entry in **this run's findings file** (the stamped
+`agentic_QA_<YYYY-MM-DD-HHMM>.md` from setup step 6), using the structured template (see
+`references/bug-template.md`).
+
+**Persist immediately — nothing is lost.** Append each finding to the file **the moment it's
+confirmed** (append-on-discovery, not buffered to the end of the run), and **the agent that finds it
+writes it** — a subagent appends its own findings and focus checklist verdicts to the run file
+**before returning**, rather than returning them for the coordinator to write. Subagents run
+sequentially (one writer at a time), so direct append is safe; if a subagent or the whole run dies
+mid-way, everything found so far is already on disk. Appended findings may land chronologically
+rather than grouped by area — the optional final synthesis pass regroups them; do not delay writing
+to keep the file tidy.
+
+Each entry MUST have:
 
 - **Title** + **Severity** (`blocker` / `major` / `minor` / `polish`).
 - **Area** and **Suspected code location** (screen/component/endpoint — so findings can be

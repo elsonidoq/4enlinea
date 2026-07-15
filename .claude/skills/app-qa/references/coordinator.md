@@ -1,8 +1,16 @@
 # app-qa — coordinator mode (full-sweep dispatch)
 
-Use this for a **no-arg full sweep**. The coordinator owns the plan + `agentic_QA.md`; each area
-is driven by a **fresh, foreground, sequential** subagent whose token-heavy tool output
-(a11y snapshots, screenshots, network dumps) stays in *its* context and never reaches yours.
+Use this for a **no-arg full sweep** (and for a `--focus` full-sweep-plus-deep-focus run). The
+coordinator owns the plan; each area is driven by a **fresh, foreground, sequential** subagent whose
+token-heavy tool output (a11y snapshots, screenshots, network dumps) stays in *its* context and never
+reaches yours.
+
+**Findings file.** Derive the per-run stamp **once** at setup (`date +%Y-%m-%d-%H%M`) →
+`$RUN_FILE = agentic_QA_<stamp>.md` at repo root, and pass `$RUN_FILE` (the exact filename) into
+**every** subagent prompt so the whole run consolidates into one file. Subagents **append their own
+findings directly** to `$RUN_FILE` before returning (see procedure step 4) — this is safe because
+subagents are **sequential** (one writer at a time) and guarantees nothing is lost if a subagent or
+the run dies mid-way.
 
 ## Why this shape
 
@@ -10,15 +18,16 @@ is driven by a **fresh, foreground, sequential** subagent whose token-heavy tool
   subagents driving the same browser — or one flipping tier while another reads it — collide.
 - **Context isolation is the win, not parallelism.** A subagent returns only compact structured
   findings; its snapshots are discarded with its context.
-- **Foreground only.** Background subagents cannot write files in this repo. Run each blocking, and
-  have it **return** findings text; the coordinator appends to `agentic_QA.md` (single writer avoids
-  interleaved writes).
+- **Foreground only.** Background subagents cannot write files in this repo. Run each blocking. Each
+  subagent **appends its own findings directly to `$RUN_FILE`** as it confirms them, then returns
+  only a compact summary + metrics. Sequential dispatch means one writer at a time (no interleaving),
+  and append-on-discovery means a subagent that dies mid-area has already persisted what it found.
 
 ## Model per role
 
 | Role | Model | Why |
 |---|---|---|
-| Coordinator (plan, dispatch, append findings) | **Sonnet** | Light orchestration; small context (no snapshots). |
+| Coordinator (plan, dispatch, track state, optional synthesis) | **Sonnet** | Light orchestration; small context (no snapshots). Subagents write findings themselves. |
 | Area driver (home, past-games, blunders, lessons, challenges, import, nav) | **Sonnet** | Token-heavy but bug recognition is within Sonnet's reach. |
 | Tier-journey driver | **Sonnet** | Mechanical DB flips + re-checks. |
 | **Deep-reveal grader** | **Opus** | Hardest judgment; board-claim soundness + highlight integrity + tone. Do not downgrade. Bounded to **3** pre-selected blunders. |
@@ -31,10 +40,16 @@ that's where the tokens are and Sonnet is good enough.
 
 1. Do the shared setup **once** yourself (SKILL.md setup checklist): read the mindset seeds, **ask
    the user preserve-vs-reset**, launch the API server to `$LOG_PATH` + Vite in the background,
-   open Chrome, log in via `🛠 Dev: skip auth`, create `agentic_QA.md` with the header + Summary
-   block. You own the server — relaunch it (kill port 3001 + truncate `$LOG_PATH`) if a subagent
-   reports it crashed or you change server code.
-2. Pass **`$LOG_PATH`** and DB/tier state to every subagent so they can delta-read server stack
+   open Chrome, log in via `🛠 Dev: skip auth`, stamp `$RUN_FILE = agentic_QA_$(date +%Y-%m-%d-%H%M).md`
+   and create it with the header + Summary block. You own the server — relaunch it (kill port 3001 +
+   truncate `$LOG_PATH`) if a subagent reports it crashed or you change server code.
+   **If `--focus "<text>"` was given:** parse it into (a) emphasis on the existing areas below and
+   (b) any **derived focus-areas** not in the fixed list (e.g. dev-board-injector, spanish-audio-i18n,
+   onboarding-mission-screen) → add those as extra subagent passes. Focused + derived areas run with
+   **acceptance-criteria treatment** (✅/❌/⚠️ checklist to a verdict); keep the full focus text to
+   thread into each prompt (step 2).
+2. Pass **`$LOG_PATH`**, **`$RUN_FILE`**, and DB/tier state to every subagent so they can delta-read
+   server stack
    traces (offset before action → `tail -n +$START` after) and know the starting tier.
    Also build a tiny **screen map** once (10–15 lines: route/URL per screen + the click-label to
    reach it — labels survive across sessions, uids don't) and paste it into every subagent prompt.
@@ -48,13 +63,15 @@ that's where the tokens are and Sonnet is good enough.
    Have the **Blunders** subagent return **3 candidate blunder IDs/movestrings** (varied: opening /
    mid-game fork / losing) and pass them to the grader so it jumps straight there instead of
    re-navigating.
-4. After each returns, append its findings verbatim to the matching area section of
-   `agentic_QA.md`. Do not re-drive the browser to "confirm" — trust the subagent's evidence.
-   **Track tier state:** after the tier-journey subagent returns, record the tier it left the DB in
-   (it should end paid, or explicitly say what it left).
-5. (Optional) Run the **Opus final-synthesis pass** over the assembled findings: dedup the same
-   defect seen on multiple screens, normalize severities, and cluster by suspected code location so
-   the fixer gets clean user stories. Update the Summary block. (Re-reads `agentic_QA.md` once —
+4. Each subagent **has already appended its findings directly to `$RUN_FILE`** (append-on-discovery)
+   and returns only a compact summary + metrics. Do NOT re-write its findings and do not re-drive the
+   browser to "confirm" — trust the evidence on disk. **Track tier state:** after the tier-journey
+   subagent returns, record the tier it left the DB in (it should end paid, or explicitly say what it
+   left).
+5. (Optional) Run the **Opus final-synthesis pass** over the assembled findings in `$RUN_FILE`: dedup
+   the same defect seen on multiple screens, normalize severities, **regroup the chronologically-
+   appended findings by area/suspected code location**, and (focus runs) write the
+   `Focus: N/M checklist items pass` summary. Update the Summary block. (Re-reads `$RUN_FILE` once —
    fine, it's findings-only text.)
 
 ## Per-area subagent prompt (template)
@@ -69,6 +86,15 @@ skill's text once per area). Carry the rules inline; have it read ONLY
 You are a QA driver for the Connect Four app. QA ONLY this area: <AREA>.
 Read ONLY .claude/skills/app-qa/references/bug-template.md for the finding format — do NOT read
 the whole app-qa skill.
+
+Focus for this run: <FOCUS TEXT verbatim, or "none — general sweep">.
+This area is: <in focus: why — drive it against acceptance criteria and mark each ✅/❌/⚠️
+              | not in focus — regression pass only>.
+
+Findings file: <RUN_FILE> (repo root). APPEND each finding to this file the MOMENT you confirm it —
+do not buffer to the end. Write findings yourself (do not hand them back for someone else to write);
+if you're in focus, append your ✅/❌/⚠️ checklist verdicts too. Tag each finding as `focus` or
+`adjacent`. Use the bug-template.md format.
 
 Environment is already running:
 - Chrome is open at http://localhost:5173, logged in via "🛠 Dev: skip auth"
@@ -97,10 +123,9 @@ Do:
    inline. Do not screenshot to confirm loads/clicks.
 5. Verify any board/deep-reveal claim with ./visualize_board.sh before judging it.
 
-Return ONLY:
-(a) findings using the bug-template format (title, severity, area, suspected code location, repro,
-    input [incl. viewport WxH], observed vs expected, evidence: console/network/server-log/
-    screenshot-path). No inline snapshots or images. If you found nothing, say so and note what you
+Return ONLY (your findings are already in <RUN_FILE> — do NOT repeat them in full here):
+(a) a compact summary: count + one-line title/severity per finding you appended (and, if in focus,
+    the ✅/❌/⚠️ tally). No inline snapshots or images. If you found nothing, say so and note what you
     could not reach.
 (b) a one-line metrics record for the Run Metrics table:
     | <AREA> | <#actions> | <#snapshots> | <#screenshots> | <#console/net reads> | <~output lines> | <biggest single tool output ~lines> | <#findings> |

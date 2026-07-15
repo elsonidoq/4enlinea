@@ -1,6 +1,7 @@
-# agentic_QA.md — file structure & per-finding template
+# findings file — structure & per-finding template
 
-`agentic_QA.md` lives at the **repo root**. Group findings by app area. Each finding is one
+The findings file lives at the **repo root**, named per-run: `agentic_QA_<YYYY-MM-DD-HHMM>.md`
+(the coordinator/monolithic driver stamps it once at run start). Group findings by app area. Each finding is one
 entry using the template below. Keep entries self-contained: a later agent must be able to
 (a) locate the code to fix and group similar findings into a user story, and (b) reproduce
 it from the recorded input + evidence.
