@@ -66,6 +66,16 @@ Registered by `registerStripeRoutes`. **Public / unauthenticated** — the upgra
 
 **Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from; the processor builds Stripe's `success_url`/`cancel_url` as `<FRONTEND_URL><returnPath>?checkout=<outcome>` so the user returns to their originating screen instead of home. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`. Omitting it preserves the legacy `/?checkout=success` behavior.
 
+The **`success_url` additionally carries a raw `&session_id={CHECKOUT_SESSION_ID}`** template (appended as a raw string, not via `URLSearchParams`, which would percent-encode the braces and break Stripe's substitution). Stripe replaces the template with the real Checkout Session id on redirect, and the client passes it to `/api/stripe/verify-session` (below). `cancel_url` gets no `session_id`.
+
+## Stripe Activation Fallback: `POST /api/stripe/verify-session`
+
+**Auth required.** **Body**: `{ sessionId: string }` (the `session_id` the client read off the `?checkout=success` return URL). Registered by `registerStripeRoutes`.
+
+This is the **synchronous activation fallback** — the webhook (below) remains the primary tier-mirror, but a webhook that is dropped, delayed, or (in local dev) never forwarded would otherwise strand a paying user on the "still activating" banner forever. `syncCheckoutSession` retrieves the Checkout Session straight from Stripe, verifies `session.metadata.user_id === req.user.id` (security — the client's session id is never trusted to belong to the caller) and `payment_status === 'paid'`, then applies the **same idempotent** `tier: 'paid'` + `stripe_customer_id` write as `checkout.session.completed`.
+
+**Response**: `200 { activated: boolean, reason?: string }` — `{ activated: true }` on success; `{ activated: false, reason }` with `reason ∈ { 'no_session', 'user_mismatch', 'not_paid' }` otherwise. `503` when Stripe is not configured. Idempotent with the webhook: both converge on `tier='paid'` for the same user, so whichever lands first wins and the other is a no-op write. See server-conventions.md "PaymentProcessor Seam".
+
 ## Stripe Webhook Endpoint: `POST /api/stripe/webhook` (spec 045, FR-025)
 
 Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Stripe signature verification — see server-conventions.md).

@@ -69,12 +69,18 @@ export function createStripeProcessor({
       url.searchParams.set('checkout', outcome);
       return url.toString();
     };
+    // Stripe substitutes the literal {CHECKOUT_SESSION_ID} template into
+    // success_url. Appended raw (not via URLSearchParams, which would percent-
+    // encode the braces and break the substitution) so the client can read the
+    // session id on return and call /verify-session — the synchronous
+    // activation fallback for a dropped or delayed webhook.
+    const successUrl = `${buildUrl('success')}&session_id={CHECKOUT_SESSION_ID}`;
     const session = await stripeClient.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email,
       metadata: { user_id: userId },
-      success_url: buildUrl('success'),
+      success_url: successUrl,
       cancel_url: buildUrl('cancelled'),
     });
     return { checkoutUrl: session.url };
@@ -172,6 +178,36 @@ export function createStripeProcessor({
     return { handled: true, eventType: event.type };
   }
 
+  // ── syncCheckoutSession — synchronous activation fallback ──────────────────
+  // The webhook (handleWebhook) is the PRIMARY tier-mirror. But a webhook that
+  // is dropped, delayed, or (in local dev) never forwarded would otherwise
+  // strand a paying user at "still activating" forever. On the ?checkout=success
+  // return the client posts the Checkout Session id here; we retrieve the
+  // session straight from Stripe (the source of truth), confirm it belongs to
+  // THIS authenticated user and is paid, then apply the same idempotent
+  // tier -> 'paid' flip as checkout.session.completed. Safe to run alongside the
+  // webhook: both converge on tier='paid' + the same stripe_customer_id, so
+  // whichever lands first wins and the other is a no-op write.
+  async function syncCheckoutSession({ sessionId, userId }) {
+    if (!sessionId) return { activated: false, reason: 'no_session' };
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
+    // Security: only the user who started this checkout may activate from it —
+    // never trust the client's session id to belong to the caller.
+    if (session.metadata?.user_id !== userId) {
+      return { activated: false, reason: 'user_mismatch' };
+    }
+    if (session.payment_status !== 'paid') {
+      return { activated: false, reason: 'not_paid' };
+    }
+    if (!supabase) return { activated: true };
+    const { error } = await supabase.from('users').update({
+      tier: 'paid',
+      stripe_customer_id: session.customer,
+    }).eq('id', userId);
+    if (error) throw new Error(error.message);
+    return { activated: true };
+  }
+
   // ── createPortalSession — mirrors old POST /api/stripe/portal body ─────────
   // Not part of the 3-method PaymentProcessor interface (contract explicitly
   // excludes portal from it), but kept on this object so stripeRoutes.js can
@@ -188,6 +224,7 @@ export function createStripeProcessor({
     createCheckout,
     handleWebhook,
     getSubscriptionStatus,
+    syncCheckoutSession,
     createPortalSession,
     getPrices,
   };

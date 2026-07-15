@@ -664,3 +664,29 @@ carefully-authored coaching-voice prompt is absent from the old English clips.
 Approve All, or `scripts/generate-tts.js --lang en --all-new`), and re-run `generateLessonAudio` for
 lessons. Costs OpenAI credit (~220 coach keys + lesson set). Cross-ref: memory
 `project_tts_audio_cached_by_text`, [[project_spanish_output_silent_fallback]].
+
+## OI-33 — Coach creation-transition gate: two accepted residuals (edge over-suppression + candidate-generator not in test:fast)
+
+**Status**: accepted / knowingly-left (surfaced 2026-07-14 by the final whole-branch review of the coach creation-pattern transition fix, commits 7be5c7f/0393258/882209b/ebfe335; both judged no-production-risk, not fixed)
+**Area**: `connect-four/server/classifier.js` — `classify()` Category 3/4 gates (`hasDoubleThreat`, `detectForcedWin`); `connect-four/server/candidate-generator.js:607`; test excluded from `npm run test:fast` per CLAUDE.md
+
+Two low-severity residuals were deliberately left when the transition gate shipped (it praises `double_threat`/`forced_win` only on an absent→present transition):
+
+1. **Distinct-second-fork over-suppression.** The gate suppresses the tag whenever the mover *already* held the pattern pre-move (`!hasDoubleThreat(board, player)`). If a player already holds a standing fork in cols A&B and this move *creates a second, distinct* fork in cols C&D, the new creation is suppressed too — `hasDoubleThreat(board, player)` is already true. Harmless (the player already had a winning fork, so the coaching truth "you have a winning position" is unchanged), but it is a real "creation" the coach won't call out. Same latent shape applies to `forced_win` via `detectForcedWin`'s inherited geometric imprecision.
+
+2. **`candidate-generator.js:607` classify() consumer is not covered by `test:fast`.** It pushes `cls.tag` into puzzle-generation metadata; its test `candidate-generator.test.js` is excluded from `npm run test:fast` (solver-IPC hang), so the transition change's effect there rode on manual reasoning, not an automated gate. Direction is the same/low-severity, but a regression here would not be caught by the fast suite.
+
+**Why deferred**: both are same-direction (more accurate, fires on creation not persistence) and carry no production risk per the final review. Fixing #1 would require tracking *which* fork columns are new (per-column diff, not a boolean), i.e. more state than the boolean gate; #2 needs a `test:fast`-safe candidate-generator path or a targeted non-hanging fixture.
+
+**If picked up**: for #1, diff pre/post threat *columns* (or gravity-top cells) rather than the boolean `hasDoubleThreat`, so a genuinely-new fork alongside an existing one still counts as creation; for #2, add a non-solver-hanging regression that runs `candidate-generator`'s classify path under `test:fast`. Cross-ref: memory [[project_coach_creation_transition_gate]], [[OI-30]].
+
+## OI-34 — Fallback-only checkout activations do not record the `upgrade_completed` analytics track
+
+**Status**: accepted / knowingly-left (2026-07-15, when the `/api/stripe/verify-session` synchronous activation fallback shipped)
+**Area**: `connect-four/server/stripeProcessor.js` — `syncCheckoutSession` vs `handleWebhook`
+
+`syncCheckoutSession` (the fallback that flips `tier: 'paid'` when the webhook is delayed/undelivered) intentionally does **not** insert the `tracks` `upgrade_completed` row — that analytics write lives only in `handleWebhook`'s `checkout.session.completed` branch, to avoid double-tracking when both paths fire (the normal case, where they race and converge). Consequence: if a purchase activates via the fallback **and the webhook never arrives at all** (e.g. a permanently misconfigured/undelivered webhook endpoint in some environment), that upgrade is missing from the `upgrade_completed` analytics stream even though the user is correctly `paid`. Tier correctness is unaffected — this is purely an analytics undercount in the webhook-fully-down edge case.
+
+**Why deferred**: the webhook is the primary path and is expected to deliver in staging/prod (a registered endpoint); the fallback firing *alone* (no webhook ever) is an operational-failure edge, not the steady state. Making the track idempotent-per-session (so either path could safely write it) would need a dedup key (e.g. a `stripe_events`-style ledger keyed on the checkout session id, or an upsert on `(user_id, session_id)`), which is more machinery than the analytics gap warrants today.
+
+**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory [[project_checkout_verify_session_fallback]]; server-conventions.md "Activation: webhook primary + verify-session fallback".

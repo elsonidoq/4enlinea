@@ -9,8 +9,8 @@ import { PaymentConfigError } from './paymentProcessor.js';
 
 // --- Mock Stripe SDK factory ---
 
-function makeMockStripe({ checkoutUrl = 'https://checkout.stripe.test/session', portalUrl = 'https://billing.stripe.test/session', event, constructEventThrows } = {}) {
-  const calls = { checkoutCreate: [], constructEvent: [], portalCreate: [] };
+function makeMockStripe({ checkoutUrl = 'https://checkout.stripe.test/session', portalUrl = 'https://billing.stripe.test/session', event, constructEventThrows, retrieveSession } = {}) {
+  const calls = { checkoutCreate: [], constructEvent: [], portalCreate: [], sessionRetrieve: [] };
   return {
     calls,
     checkout: {
@@ -18,6 +18,10 @@ function makeMockStripe({ checkoutUrl = 'https://checkout.stripe.test/session', 
         create: async (args) => {
           calls.checkoutCreate.push(args);
           return { url: checkoutUrl };
+        },
+        retrieve: async (id) => {
+          calls.sessionRetrieve.push(id);
+          return typeof retrieveSession === 'function' ? retrieveSession(id) : retrieveSession;
         },
       },
     },
@@ -95,7 +99,9 @@ describe('createStripeProcessor.createCheckout', () => {
     assert.deepEqual(args.line_items, [{ price: 'price_monthly_123', quantity: 1 }]);
     assert.equal(args.customer_email, 'a@b.com');
     assert.deepEqual(args.metadata, { user_id: 'user-1' });
-    assert.equal(args.success_url, 'https://app.test/?checkout=success');
+    // success_url carries the raw {CHECKOUT_SESSION_ID} template so the client can
+    // call /verify-session on return (synchronous activation fallback).
+    assert.equal(args.success_url, 'https://app.test/?checkout=success&session_id={CHECKOUT_SESSION_ID}');
     assert.equal(args.cancel_url, 'https://app.test/?checkout=cancelled');
   });
 
@@ -513,5 +519,61 @@ describe('createStripeProcessor.getSubscriptionStatus', () => {
     });
     assert.deepEqual(processor.getSubscriptionStatus({ tier: 'free', stripeCustomerId: null }), { status: 'free' });
     assert.deepEqual(processor.getSubscriptionStatus({ tier: 'free', stripeCustomerId: 'cus_1' }), { status: 'free' });
+  });
+});
+
+// --- syncCheckoutSession (synchronous activation fallback) ---
+
+describe('createStripeProcessor.syncCheckoutSession', () => {
+  const base = { monthlyPriceId: 'p1', annualPriceId: 'p2', webhookSecret: 'whsec_test' };
+
+  it('flips tier -> paid + stores customer id when the session is paid and owned by the user', async () => {
+    const supabase = makeMockSupabase();
+    const processor = createStripeProcessor({
+      stripeClient: makeMockStripe({
+        retrieveSession: { payment_status: 'paid', customer: 'cus_9', metadata: { user_id: 'u1' } },
+      }),
+      supabase, ...base,
+    });
+    const result = await processor.syncCheckoutSession({ sessionId: 'cs_1', userId: 'u1' });
+    assert.deepEqual(result, { activated: true });
+    assert.equal(supabase.calls.updates.length, 1);
+    assert.deepEqual(supabase.calls.updates[0], {
+      table: 'users', patch: { tier: 'paid', stripe_customer_id: 'cus_9' }, col: 'id', val: 'u1',
+    });
+  });
+
+  it('refuses to activate a session belonging to a different user (no DB write)', async () => {
+    const supabase = makeMockSupabase();
+    const processor = createStripeProcessor({
+      stripeClient: makeMockStripe({
+        retrieveSession: { payment_status: 'paid', customer: 'cus_9', metadata: { user_id: 'someone_else' } },
+      }),
+      supabase, ...base,
+    });
+    const result = await processor.syncCheckoutSession({ sessionId: 'cs_1', userId: 'u1' });
+    assert.deepEqual(result, { activated: false, reason: 'user_mismatch' });
+    assert.equal(supabase.calls.updates.length, 0);
+  });
+
+  it('does not activate an unpaid session (no DB write)', async () => {
+    const supabase = makeMockSupabase();
+    const processor = createStripeProcessor({
+      stripeClient: makeMockStripe({
+        retrieveSession: { payment_status: 'unpaid', customer: 'cus_9', metadata: { user_id: 'u1' } },
+      }),
+      supabase, ...base,
+    });
+    const result = await processor.syncCheckoutSession({ sessionId: 'cs_1', userId: 'u1' });
+    assert.deepEqual(result, { activated: false, reason: 'not_paid' });
+    assert.equal(supabase.calls.updates.length, 0);
+  });
+
+  it('returns no_session when sessionId is missing (never calls Stripe)', async () => {
+    const stripeClient = makeMockStripe();
+    const processor = createStripeProcessor({ stripeClient, supabase: makeMockSupabase(), ...base });
+    const result = await processor.syncCheckoutSession({ sessionId: undefined, userId: 'u1' });
+    assert.deepEqual(result, { activated: false, reason: 'no_session' });
+    assert.equal(stripeClient.calls.sessionRetrieve.length, 0);
   });
 });

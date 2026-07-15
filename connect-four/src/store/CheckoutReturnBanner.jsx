@@ -17,12 +17,34 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from './ProfileStore.jsx';
 import { runCheckoutPoll } from '../lib/checkoutReturnFlow.js';
 
+const API = import.meta.env.VITE_API_BASE_URL || '';
+
+/** Synchronous activation fallback: confirm the just-completed Checkout Session
+ * with the server so a dropped/delayed webhook can't strand a paying user at
+ * "still activating". Best-effort — the poll (+ the webhook itself) still cover
+ * activation if this fails, so we swallow errors. credentials:'include' for the
+ * httpOnly-cookie auth (api-conventions.md). */
+async function verifyCheckoutSession(sessionId) {
+  if (!sessionId) return;
+  try {
+    await fetch(`${API}/api/stripe/verify-session`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+  } catch {
+    /* ignore — poll + webhook remain as backstops */
+  }
+}
+
 /** Strip `?checkout=...` from the URL while preserving path, other query params, and
  * the hash — App.jsx:31 relies on the hash surviving replaceState for the magic-link
  * OAuth callback flow, and that trap applies here too. */
 function stripCheckoutParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete('checkout');
+  url.searchParams.delete('session_id');
   const search = url.searchParams.toString();
   const newPath = url.pathname + (search ? `?${search}` : '') + window.location.hash;
   window.history.replaceState(window.history.state, '', newPath);
@@ -63,12 +85,15 @@ export function CheckoutReturnBanner() {
 
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
+    const sessionId = params.get('session_id');
     if (!checkout) return;
 
     stripCheckoutParam();
 
     if (checkout === 'success') {
-      startPoll();
+      // Confirm the session server-side FIRST (flips tier synchronously if the
+      // webhook hasn't), THEN poll — so the first poll attempt already sees paid.
+      verifyCheckoutSession(sessionId).finally(startPoll);
     }
     // 'cancelled': strip the param only — free tier, no banner, no error, retryable.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

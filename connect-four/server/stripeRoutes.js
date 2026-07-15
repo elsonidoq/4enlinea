@@ -68,6 +68,29 @@ export function registerStripeRoutes(app, paymentProcessor) {
     }
   });
 
+  // POST /api/stripe/verify-session — synchronous activation fallback.
+  // The client posts the Checkout Session id it received on ?checkout=success
+  // return. We confirm the session with Stripe and mirror tier -> paid, so a
+  // dropped/delayed/never-forwarded webhook can't strand a paying user. The
+  // webhook remains the primary source of truth; this is idempotent with it.
+  app.post('/api/stripe/verify-session', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    if (!paymentProcessor || typeof paymentProcessor.syncCheckoutSession !== 'function') {
+      return res.status(503).json({ error: 'Payments not configured' });
+    }
+
+    try {
+      const result = await paymentProcessor.syncCheckoutSession({
+        sessionId: req.body?.sessionId,
+        userId: req.user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      logError('[stripe/verify-session]', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/stripe/portal
   app.post('/api/stripe/portal', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });

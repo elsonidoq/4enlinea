@@ -206,6 +206,26 @@ For each check record:
   - **Expected**: 429 returns before any LLM compute; paywall shows without a preceding compute spinner.
   - **Source**: 2026-07-14 quota-gate reorder (`peekQuota`); server-conventions.md "Quota timing (two-phase)".
 
+- [ ] **`/verify-session` fallback + webhook cross-fire on a real deploy (2026-07-15).**
+  - **What**: On the deployed staging server (with a Dashboard-registered webhook endpoint **live** and
+    delivering, unlike the local repro), complete a test-mode `4242` checkout and confirm: (a) the account
+    activates with **no** "still activating" timeout, and (b) the webhook (`checkout.session.completed`) and
+    the client's `POST /api/stripe/verify-session` both firing produce exactly ONE coherent paid state — no
+    error, no duplicate `stripe_customer_id` churn — regardless of which lands first. Also confirm the
+    `success_url` `session_id={CHECKOUT_SESSION_ID}` template is substituted by Stripe on the real redirect
+    (the client needs the real session id to call verify).
+  - **Why staging**: The fix was verified locally only in the **webhook-OFF** condition (`stripe listen` not
+    running) — that proves the fallback activates, but NOT the production race where both paths fire nearly
+    simultaneously. The idempotency between them is a plain last-writer-wins tier write (the fallback is NOT
+    in the `stripe_events` ledger), so the concurrent case is only truly exercised against a live webhook
+    endpoint. The `{CHECKOUT_SESSION_ID}` substitution also can't be observed without a real Stripe-hosted
+    redirect to the deployed domain.
+  - **Expected**: Account flips to `paid` promptly via whichever path wins; the other is a silent no-op; no
+    500s in the server log; `users.stripe_customer_id` set once; only the webhook writes the
+    `upgrade_completed` track (the fallback intentionally does not).
+  - **Source**: 2026-07-15 synchronous activation fallback; api-conventions.md "Stripe Activation Fallback",
+    server-conventions.md "Activation: webhook primary + verify-session fallback".
+
 ## Epic 6 — Lessons: Progression, Audio & Polish (spec 046)
 
 - [ ] **Lesson audio requires a commit + redeploy to serve in production (FR-027 caveat).**
