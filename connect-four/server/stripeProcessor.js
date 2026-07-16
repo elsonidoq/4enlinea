@@ -19,6 +19,19 @@
 
 import { getSubscriptionStatus, PaymentConfigError } from './paymentProcessor.js';
 
+// Shared open-redirect guard for any `returnPath` sent by the client — extracted
+// from createCheckout's original inline `safePath` expression (D3/Task 8). Only
+// a same-origin relative path (starting with exactly one leading slash, never
+// `//...` which the browser treats as protocol-relative) is trusted; anything
+// else falls back to the app root. This is the predicate only — the URL that
+// gets built from it differs per caller (createCheckout appends checkout-outcome
+// query params; createPortalSession does not), so callers build their own URL
+// rather than sharing a URL-builder.
+export function sanitizeReturnPath(returnPath) {
+  return (typeof returnPath === 'string' && /^\/(?!\/)/.test(returnPath))
+    ? returnPath : '/';
+}
+
 /**
  * Builds a Stripe-backed PaymentProcessor.
  *
@@ -62,8 +75,7 @@ export function createStripeProcessor({
     if (!priceId) throw new PaymentConfigError('Price not configured', 503);
 
     const baseUrl = resolveBaseUrl();
-    const safePath = (typeof returnPath === 'string' && /^\/(?!\/)/.test(returnPath))
-      ? returnPath : '/';
+    const safePath = sanitizeReturnPath(returnPath);
     const buildUrl = (outcome) => {
       const url = new URL(safePath, `${baseUrl}/`);
       url.searchParams.set('checkout', outcome);
@@ -212,10 +224,11 @@ export function createStripeProcessor({
   // Not part of the 3-method PaymentProcessor interface (contract explicitly
   // excludes portal from it), but kept on this object so stripeRoutes.js can
   // reach the same Stripe client without index.js exposing it separately.
-  async function createPortalSession({ stripeCustomerId }) {
+  async function createPortalSession({ stripeCustomerId, returnPath }) {
+    const returnUrl = new URL(sanitizeReturnPath(returnPath), `${resolveBaseUrl()}/`).toString();
     const session = await stripeClient.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: resolveBaseUrl(),
+      return_url: returnUrl,
     });
     return { portalUrl: session.url };
   }

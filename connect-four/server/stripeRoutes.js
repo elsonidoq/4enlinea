@@ -98,7 +98,10 @@ export function registerStripeRoutes(app, paymentProcessor) {
     if (!req.user.stripe_customer_id) return res.status(400).json({ error: 'No active subscription' });
 
     try {
-      const { portalUrl } = await paymentProcessor.createPortalSession({ stripeCustomerId: req.user.stripe_customer_id });
+      const { portalUrl } = await paymentProcessor.createPortalSession({
+        stripeCustomerId: req.user.stripe_customer_id,
+        returnPath: req.body?.returnPath,
+      });
       res.json({ portalUrl });
     } catch (err) {
       logError('[stripe/portal]', err);
