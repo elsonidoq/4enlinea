@@ -772,3 +772,21 @@ const deviceUuid = req.user?.device_uuid || req.body.deviceUuid || 'anonymous';
 The final fallback, `'anonymous'`, is a **string literal**, not a per-device identifier. Any anonymous client that omits `deviceUuid` in its request body (e.g. a stale client build, a client whose local profile hasn't generated a `device_uuid` yet, or a bug in a future caller) has its attempt rows written under that same shared literal — silently merging its puzzle-attempt history with every other anonymous caller that also fell through to the fallback. This is an access-control/data-integrity smell: the now-fixed `GET /api/user/challenge-progress` read path (Task 23) would faithfully **serve back** this cross-contaminated pool to whichever anon device happens to pass `device_uuid=anonymous` (it wouldn't, since that fails UUID validation — but any two real clients that both hit the fallback would still share one one bucket keyed by the literal, invisible to either).
 
 **Do not fix as part of Task 23** — this is a write-path bug, independent of and out of scope for the read-path 401 fix, and deserves its own scoped change (likely: derive/require a real device_uuid client-side before this call, or reject the write with 400 when no identifier is available, rather than defaulting to a shared bucket).
+
+## OI-42 — Lesson audio is not manageable from `/admin/audio`
+
+**Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
+**Area**: `connect-four/src/pages/AdminAudioPage.jsx` (coach audio admin UI) vs. `connect-four/src/screens/AdminLessonEditorScreen.jsx` + `connect-four/server/index.js` (lesson audio endpoints)
+
+`/admin/audio` manages **coach** clips only, and does it well: a grouped status list (`awaiting_approval` / `needs_audio` / `approved` / `ineligible`) via `GET /api/admin/audio/status?lang=`, per-key generation (`POST /api/admin/audio/generate`), an inline player (`GET /api/admin/audio/play/:slug?lang=`), an en/es dropdown, and a TTS prompt/speed/voice/model editor.
+
+**Lesson** narration has none of that. The lesson editor only exposes a whole-lesson `POST /api/admin/lessons/:id/generate-audio` and a separate `POST /api/admin/lessons/prune-audio`. There is no way to audition a lesson clip in-app — the filename is `sha256(text).slice(0,16) + '.mp3'`, so auditing one today means hand-resolving the hash and finding the file on disk.
+
+**Why this isn't a trivial merge into the existing coach admin UI** — the two systems differ on every axis:
+- **Keying**: lesson clips are keyed by `sha256` of the narration text; coach clips are keyed by an i18n key/slug.
+- **Source of truth**: lesson audio paths live on the lesson JSON's own `audio`/`audio_es` fields, which FR-013 deliberately keeps registry-free (no separate DB/JSON index to drift from the lesson content); coach audio has an explicit registry (`tts-registry.json` / `tts-registry.es.json`) with an approval workflow (`awaiting_approval` etc.) that lesson audio has no equivalent of.
+- **Storage layout**: lesson clips sit flat in `public/audio/lessons/`; coach clips are nested `public/audio/coach/<lang>/`.
+
+**Suggested shape if picked up**: add a Lessons section to `/admin/audio` that lists each lesson's `coachMessages` per language, with status **derived live from the lesson JSON** (not stored, to respect FR-013's registry-free decision), plus an inline player and a per-message generate action — mirroring the coach UX without introducing a second registry.
+
+**Motivation**: the repo owner wants a single place to manage and audition all TTS audio in the app, including judging whether the Argentinian-accent narration on lesson clips actually sounds right — something currently impossible without leaving the admin UI.
