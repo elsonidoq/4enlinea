@@ -815,7 +815,7 @@
       "markReviewed": "Marcar como revisado",
       "markedReviewed": "Marcado como revisado",
       "all_caught_up": "¡Todo al día en esta categoría!",
-      "none_reviewed": "Ninguno revisado todavía — toca un error grave para estudiarlo.",
+      "none_reviewed": "Ninguno revisado todavía — tocá un error grave para estudiarlo.",
       "meta_count": "{{count}} error",
       "meta_count_pl": "{{count}} errores",
       "source_game": "partida del {{date}}",
@@ -980,7 +980,7 @@
     "skip": "Saltar",
     "replayIntro": "Repetir introducción",
     "importOffer": {
-      "title": "Trae tus partidas reales",
+      "title": "Traé tus partidas reales",
       "subtitle": "Importá tu historial de Papergames para obtener análisis jugada a jugada y seguimiento de errores en las partidas que realmente jugás.",
       "accept": "Importar mis partidas",
       "decline": "Ahora no",
@@ -993,16 +993,16 @@
       "cta": "Empezar a entrenar",
       "pillars": {
         "learn": {
-          "title": "Aprende las tácticas",
+          "title": "Aprendé las tácticas",
           "line": "Los patrones ganadores detrás de cada partida, y por qué funcionan."
         },
         "practice": {
-          "title": "Practica contra un bot que enseña",
-          "line": "Juega contra mí a tu nivel y recibe el razonamiento de cada jugada."
+          "title": "Practicá contra un bot que enseña",
+          "line": "Jugá contra mí a tu nivel y recibí el razonamiento de cada jugada."
         },
         "mistakes": {
-          "title": "Entiende tus errores",
-          "line": "Convierte los errores en lecciones, incluso en tus partidas reales de Papergames."
+          "title": "Entendé tus errores",
+          "line": "Convertí los errores en lecciones, incluso en tus partidas reales de Papergames."
         }
       }
     }
