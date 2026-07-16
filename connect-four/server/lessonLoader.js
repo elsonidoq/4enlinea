@@ -168,6 +168,19 @@ function pickLocalized(obj, key, locale) {
   return (typeof es === 'string' && es.length > 0) ? es : obj[key];
 }
 
+/**
+ * Assign `obj[key] = pickLocalized(source, key, locale)` only if that value is
+ * not undefined. Guards against the case where `<key>_es` exists but the English
+ * base does not: the existence guard (`'key' in x || 'key_es' in x`) still fires,
+ * but for a non-'es' locale `pickLocalized` would resolve to `obj[key]` ===
+ * undefined, re-injecting the exact undefined-valued-key bug the guards exist to
+ * prevent.
+ */
+function assignLocalized(target, source, key, locale) {
+  const value = pickLocalized(source, key, locale);
+  if (value !== undefined) target[key] = value;
+}
+
 function stripEsKeys(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
@@ -189,20 +202,20 @@ export function localizeLesson(lesson, locale = 'en') {
   const slides = (lesson.slides ?? []).map((slide) => {
     const next = stripEsKeys(slide);
     if ('infoProse' in slide || 'infoProse_es' in slide) {
-      next.infoProse = pickLocalized(slide, 'infoProse', locale);
+      assignLocalized(next, slide, 'infoProse', locale);
     }
     if (Array.isArray(slide.coachMessages)) {
       next.coachMessages = slide.coachMessages.map((m) => {
         const nm = stripEsKeys(m);
-        if ('text' in m || 'text_es' in m) nm.text = pickLocalized(m, 'text', locale);
-        if ('audio' in m || 'audio_es' in m) nm.audio = pickLocalized(m, 'audio', locale);
+        if ('text' in m || 'text_es' in m) assignLocalized(nm, m, 'text', locale);
+        if ('audio' in m || 'audio_es' in m) assignLocalized(nm, m, 'audio', locale);
         return nm;
       });
     }
     if (Array.isArray(slide.legendItems)) {
       next.legendItems = slide.legendItems.map((li) => {
         const nl = stripEsKeys(li);
-        if ('label' in li || 'label_es' in li) nl.label = pickLocalized(li, 'label', locale);
+        if ('label' in li || 'label_es' in li) assignLocalized(nl, li, 'label', locale);
         return nl;
       });
     }
@@ -215,14 +228,14 @@ export function localizeLesson(lesson, locale = 'en') {
   if (lesson.socratic) {
     const s = stripEsKeys(lesson.socratic);
     if ('goalPrompt' in lesson.socratic || 'goalPrompt_es' in lesson.socratic) {
-      s.goalPrompt = pickLocalized(lesson.socratic, 'goalPrompt', locale);
+      assignLocalized(s, lesson.socratic, 'goalPrompt', locale);
     }
     out.socratic = s;
   }
   if (Array.isArray(lesson.confirmationChallenges)) {
     out.confirmationChallenges = lesson.confirmationChallenges.map((c) => {
       const nc = stripEsKeys(c);
-      if ('goalPrompt' in c || 'goalPrompt_es' in c) nc.goalPrompt = pickLocalized(c, 'goalPrompt', locale);
+      if ('goalPrompt' in c || 'goalPrompt_es' in c) assignLocalized(nc, c, 'goalPrompt', locale);
       return nc;
     });
   }

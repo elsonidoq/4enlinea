@@ -315,6 +315,44 @@ test('getLesson(id): single-arg call defaults to en and strips any _es keys', ()
   assert.ok(!('text_es' in result.slides[0]));
 });
 
+test('es-only field (no English base) does not inject an undefined key for locale=en', () => {
+  const fixture = {
+    id: 'demo-es-only',
+    title: 'Es Only',
+    slides: [{ infoProse_es: 'Solo en español.' }],
+    socratic: null,
+  };
+  const out = localizeLesson(fixture, 'en');
+  assert.ok(!('infoProse' in out.slides[0]), 'infoProse must not appear as undefined when only infoProse_es exists');
+  assert.ok(!('infoProse_es' in out.slides[0]));
+});
+
+test('es-only nested coachMessages[].text_es (no text) does not inject an undefined key for locale=en', () => {
+  const fixture = {
+    id: 'demo-es-only-coach',
+    title: 'Es Only Coach',
+    slides: [{
+      coachMessages: [{ text_es: 'Solo en español.' }],
+    }],
+    socratic: null,
+  };
+  const out = localizeLesson(fixture, 'en');
+  assert.ok(!('text' in out.slides[0].coachMessages[0]), 'text must not appear as undefined when only text_es exists');
+  assert.ok(!('text_es' in out.slides[0].coachMessages[0]));
+});
+
+test('es-only socratic.goalPrompt_es (no goalPrompt) does not inject an undefined key for locale=en', () => {
+  const fixture = {
+    id: 'demo-es-only-socratic',
+    title: 'Es Only Socratic',
+    slides: [{ infoProse: 'Hi' }],
+    socratic: { goalPrompt_es: 'Encontrá la jugada.' },
+  };
+  const out = localizeLesson(fixture, 'en');
+  assert.ok(!('goalPrompt' in out.socratic), 'goalPrompt must not appear as undefined when only goalPrompt_es exists');
+  assert.ok(!('goalPrompt_es' in out.socratic));
+});
+
 test('getLesson(id, "es"): merges locale after backward-compat transforms are applied', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-locale-compat-'));
   const lesson = makeValidLesson({
