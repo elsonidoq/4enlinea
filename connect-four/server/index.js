@@ -48,6 +48,8 @@ import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRen
 import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { buildTtsInstructions } from './ttsInstructions.mjs';
+import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFAULT_TTS_MODEL } from './ttsConfig.mjs';
+import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
 
@@ -892,10 +894,19 @@ app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) 
 // Requires requireLocalhost — the function declaration below (~:2795 in this file)
 // is hoisted, so it is safe to reference here at module init time.
 app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
-  const lesson = getLesson(req.params.id);
+  const rawLang = req.body?.lang;
+  if (rawLang !== undefined && !SUPPORTED_LOCALES.includes(rawLang)) {
+    return res.status(400).json({ error: `lang must be one of: ${SUPPORTED_LOCALES.join(', ')}` });
+  }
+  const lang = rawLang ?? 'en';
+
+  // D1: getLesson() applies localizeLesson, which STRIPS all `_es` fields — using it
+  // here would both feed generateLessonAudio(lang='es') empty text_es AND destroy
+  // every _es field on save. This endpoint must read/write the RAW lesson object.
+  const lesson = getLessonsAll().find(l => l.id === req.params.id) ?? null;
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   try {
-    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson);
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson, { lang });
     saveLessonFile(LESSONS_DIR, updatedLesson);
     reloadLessons();
     res.json({ lesson: updatedLesson, generated, failed });
@@ -3479,8 +3490,6 @@ function keyToAudioSlug(key) {
   return key.replace(/[._]/g, '--');
 }
 
-const TTS_PROMPT_PATH = join(__dirname, 'tts-prompt.json');
-
 // Coach text source per language, keyed by the same `lang` values threaded
 // through the admin audio endpoints below.
 const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
@@ -3503,31 +3512,6 @@ function resolveCoachText(key, lang) {
   } catch {
     return '';
   }
-}
-
-const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
-// gpt-4o-mini-tts is the default: it's the only model that honors the `instructions`
-// field (tts-1/tts-1-hd ignore it and always speak with a baked-in American-English
-// accent, regardless of the input text's language).
-const VALID_TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
-const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
-
-function readTtsConfig() {
-  try {
-    const data = JSON.parse(readFileSync(TTS_PROMPT_PATH, 'utf8'));
-    return {
-      prompt: data.prompt || '',
-      speed: typeof data.speed === 'number' ? data.speed : 1.0,
-      voice: VALID_TTS_VOICES.includes(data.voice) ? data.voice : 'alloy',
-      model: VALID_TTS_MODELS.includes(data.model) ? data.model : DEFAULT_TTS_MODEL,
-    };
-  } catch {
-    return { prompt: '', speed: 1.0, voice: 'alloy', model: DEFAULT_TTS_MODEL };
-  }
-}
-
-function writeTtsConfig(prompt, speed, voice, model) {
-  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice, model }, null, 2) + '\n', 'utf8');
 }
 
 /**

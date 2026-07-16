@@ -16,12 +16,13 @@ import {
   hashMessageText,
   generateLessonAudio,
   pruneOrphanedLessonAudio,
+  collectReferencedAudio,
 } from '../../server/lessonAudio.js';
 
 function makeStubSynthesize({ failFor = [] } = {}) {
   const calls = [];
-  const fn = async (text) => {
-    calls.push(text);
+  const fn = async (text, opts) => {
+    calls.push({ text, opts });
     if (failFor.includes(text)) throw new Error(`synthesis failed for: ${text}`);
     return Buffer.from(`fake-mp3:${text}`);
   };
@@ -172,6 +173,72 @@ describe('generateLessonAudio', () => {
 
     assert.deepEqual(result.lesson.socratic, { movestring: '123', correctCol: 3 });
   });
+
+  it('lang=es reads text_es and writes audio_es, leaving audio/text untouched', async () => {
+    const lesson = makeLesson({
+      slides: [
+        {
+          movestring: '',
+          coachMessages: [{ text: 'Hello there', text_es: 'Hola', mood: 'happy' }],
+        },
+      ],
+    });
+    const synthesize = makeStubSynthesize();
+    const result = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    const hash = hashMessageText('Hola');
+    const message = result.lesson.slides[0].coachMessages[0];
+    assert.equal(message.audio_es, `/audio/lessons/${hash}.mp3`);
+    assert.equal(message.audio, undefined, 'lang=en audio field must not be written for an es pass');
+    assert.equal(synthesize.calls.length, 1);
+    assert.equal(synthesize.calls[0].text, 'Hola');
+    assert.ok(fs.existsSync(path.join(tmpDir, `${hash}.mp3`)));
+  });
+
+  it('lang=es skips a message with no text_es (untranslated message generates nothing)', async () => {
+    const lesson = makeLesson({
+      slides: [
+        {
+          movestring: '',
+          coachMessages: [{ text: 'Hello there', mood: 'happy' }],
+        },
+      ],
+    });
+    const synthesize = makeStubSynthesize();
+    const result = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    assert.equal(synthesize.calls.length, 0);
+    assert.deepEqual(result.generated, []);
+    assert.equal(result.lesson.slides[0].coachMessages[0].audio_es, undefined);
+  });
+
+  it('lang=es skips regeneration when audio_es already matches the current text_es hash', async () => {
+    const hash = hashMessageText('Hola');
+    const lesson = makeLesson({
+      slides: [
+        {
+          movestring: '',
+          coachMessages: [{ text: 'Hello there', text_es: 'Hola', audio_es: `/audio/lessons/${hash}.mp3` }],
+        },
+      ],
+    });
+    const synthesize = makeStubSynthesize();
+    const result = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    assert.equal(synthesize.calls.length, 0);
+    assert.deepEqual(result.generated, []);
+  });
+
+  it('passes TTS instructions/voice/speed/model opts to synthesize (not called bare)', async () => {
+    const lesson = makeLesson();
+    const synthesize = makeStubSynthesize();
+    await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
+
+    assert.equal(synthesize.calls.length, 1);
+    const opts = synthesize.calls[0].opts;
+    assert.ok(opts && typeof opts === 'object', 'synthesize must receive an opts object, not be called bare');
+    assert.ok('voice' in opts && 'speed' in opts && 'model' in opts, 'opts must carry voice/speed/model from readTtsConfig()');
+  });
 });
 
 describe('pruneOrphanedLessonAudio', () => {
@@ -213,5 +280,51 @@ describe('pruneOrphanedLessonAudio', () => {
   it('returns an empty array when the directory does not exist', () => {
     const missingDir = path.join(tmpDir, 'does-not-exist');
     assert.deepEqual(pruneOrphanedLessonAudio([], missingDir), []);
+  });
+
+  it('treats a referenced audio_es clip as referenced, not orphaned', () => {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'en1.mp3'), 'a');
+    fs.writeFileSync(path.join(tmpDir, 'es1.mp3'), 'b');
+    fs.writeFileSync(path.join(tmpDir, 'orphan.mp3'), 'c');
+
+    const lessons = [
+      makeLesson({
+        slides: [
+          {
+            movestring: '',
+            coachMessages: [{
+              text: 'x', audio: '/audio/lessons/en1.mp3',
+              text_es: 'y', audio_es: '/audio/lessons/es1.mp3',
+            }],
+          },
+        ],
+      }),
+    ];
+
+    const deleted = pruneOrphanedLessonAudio(lessons, tmpDir);
+
+    assert.deepEqual(deleted, ['orphan.mp3']);
+    assert.ok(fs.existsSync(path.join(tmpDir, 'en1.mp3')));
+    assert.ok(fs.existsSync(path.join(tmpDir, 'es1.mp3')));
+  });
+});
+
+describe('collectReferencedAudio', () => {
+  it('collects BOTH en and es audio as referenced', () => {
+    const lessons = [{
+      slides: [{ coachMessages: [
+        { text: 'hi', audio: '/audio/lessons/aaa.mp3', text_es: 'hola', audio_es: '/audio/lessons/bbb.mp3' },
+      ] }],
+    }];
+    const refs = collectReferencedAudio(lessons);
+    assert.ok(refs.has('aaa.mp3'), 'English clip must be referenced');
+    assert.ok(refs.has('bbb.mp3'), 'Spanish clip must be referenced — else prune deletes every es clip');
+  });
+
+  it('tolerates a message with no es audio', () => {
+    const lessons = [{ slides: [{ coachMessages: [{ text: 'hi', audio: '/audio/lessons/aaa.mp3' }] }] }];
+    const refs = collectReferencedAudio(lessons);
+    assert.deepStrictEqual([...refs], ['aaa.mp3']);
   });
 });
