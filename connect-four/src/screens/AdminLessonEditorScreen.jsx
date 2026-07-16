@@ -4,7 +4,7 @@ import SlideEditor from '../components/admin/SlideEditor.jsx';
 import SocraticEditor from '../components/admin/SocraticEditor.jsx';
 import PuzzlePickerModal from '../components/admin/PuzzlePickerModal.jsx';
 import PuzzlePickerRow from '../components/admin/PuzzlePickerRow.jsx';
-import { parseMovestring, boardToSpec } from '../lib/movestring.js';
+import { lessonToJsonPayload } from '../lib/lessonPayload.js';
 
 function authHeaders() {
   const sb = localStorage.getItem('supabase.auth.token');
@@ -64,35 +64,6 @@ function hydrateLesson(data) {
       _boardInstructions: data.socratic._boardInstructions ?? '',
     } : null,
     confirmationChallenges: data.confirmationChallenges ?? [],
-  };
-}
-
-// Convert editor state to the lesson JSON payload.
-// boardSpec is derived from movestring (used by the app to render).
-// movestring is stored alongside boardSpec so the editor can round-trip cleanly.
-function lessonToJsonPayload(lesson) {
-  const { _idManuallyEdited, ...rest } = lesson;
-  const convertBoard = (ms) => boardToSpec(parseMovestring(ms ?? ''));
-  const challenges = rest.confirmationChallenges ?? [];
-  return {
-    ...rest,
-    confirmationCount: challenges.length > 0 ? challenges.length : rest.confirmationCount,
-    confirmationChallenges: challenges.length > 0 ? challenges : undefined,
-    slides: rest.slides.map(slide => ({
-      movestring: slide.movestring ?? '',
-      coachMessages: slide.coachMessages,
-      boardSpec: convertBoard(slide.movestring),
-      overlays: slide.overlays,
-      legendItems: slide.legendItems,
-      infoProse: slide.infoProse,
-    })),
-    socratic: rest.socratic ? {
-      movestring: rest.socratic.movestring ?? '',
-      boardSpec: convertBoard(rest.socratic.movestring),
-      overlays: rest.socratic.overlays ?? [],
-      correctCol: rest.socratic.correctCol,
-      _boardInstructions: rest.socratic._boardInstructions ?? '',
-    } : null,
   };
 }
 
