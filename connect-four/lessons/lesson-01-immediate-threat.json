@@ -12,7 +12,8 @@
           "text": "Look at the board. Can you find a four-cell window that already has three Gray discs and one empty space?",
           "mood": "think",
           "audio": "/audio/lessons/a7bce21fb8387231.mp3",
-          "text_es": "Mirá el tablero. ¿Podés encontrar una ventana de cuatro celdas que ya tenga tres fichas grises y un espacio vacío?"
+          "text_es": "Mirá el tablero. ¿Podés encontrar una ventana de cuatro celdas que ya tenga tres fichas grises y un espacio vacío?",
+          "audio_es": "/audio/lessons/322aa384a15af4ea.mp3"
         }
       ],
       "boardSpec": [
@@ -68,7 +69,8 @@
           "text": "Threats look the same in every direction — horizontal, vertical, diagonal. Train your eye to scan all four.",
           "mood": "think",
           "audio": "/audio/lessons/41dcfb2a0d945146.mp3",
-          "text_es": "Las amenazas se ven igual en todas las direcciones — horizontal, vertical, diagonal. Entrená la vista para revisar las cuatro."
+          "text_es": "Las amenazas se ven igual en todas las direcciones — horizontal, vertical, diagonal. Entrená la vista para revisar las cuatro.",
+          "audio_es": "/audio/lessons/d323ea2517604d2d.mp3"
         }
       ],
       "boardSpec": [
@@ -124,7 +126,8 @@
           "text": "The empty square does not have to be at the end of the line — it can sit anywhere inside the four-cell window.",
           "mood": "think",
           "audio": "/audio/lessons/4d377642248f22e2.mp3",
-          "text_es": "La casilla vacía no tiene que estar al final de la línea: puede estar en cualquier lugar dentro de la ventana de cuatro casillas."
+          "text_es": "La casilla vacía no tiene que estar al final de la línea: puede estar en cualquier lugar dentro de la ventana de cuatro casillas.",
+          "audio_es": "/audio/lessons/7e6dacdc3113a2a9.mp3"
         }
       ],
       "boardSpec": [
@@ -180,7 +183,8 @@
           "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
           "mood": "think",
           "audio": "/audio/lessons/e378834b9957dba3.mp3",
-          "text_es": "Viste tu propia oportunidad de construir, pero tu oponente ya tiene tres en línea. ¿Qué pasa si primero extendés tu propia línea?"
+          "text_es": "Viste tu propia oportunidad de construir, pero tu oponente ya tiene tres en línea. ¿Qué pasa si primero extendés tu propia línea?",
+          "audio_es": "/audio/lessons/a5b50e8346bf658a.mp3"
         }
       ],
       "boardSpec": [
