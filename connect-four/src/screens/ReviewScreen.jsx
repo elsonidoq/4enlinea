@@ -219,12 +219,20 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   function selectStep(moveIndex) {
     const move = analysis.moves.find(m => m.moveIndex === moveIndex);
     if (!move) return;
+    // T17 remediation: gate on the SAME quality source the chip is colored
+    // with (resolveChipQuality — stored quality when a row exists, else the
+    // live badge), not the raw live badge alone. Display and dispatch must
+    // agree: badge quality != stored quality is a known divergence (memory
+    // project_mistake_storage_rule), and previously a chip could render as a
+    // colored mistake (stored quality) yet clicking it only previewed the
+    // board (live badge said 'optimal') instead of opening the detail.
+    const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
     // Navigate only when a stored mistake row exists for this ply. Non-optimal
     // moves the storage rule excludes (slower wins, dead-position faster
     // losses — see server/mistakeStorageRule.js) have no row, so they fall
     // back to the in-place board preview like optimal steps (FR-013: every
     // step control must change the board).
-    if (move.quality !== 'optimal') {
+    if (displayQuality !== 'optimal') {
       const globalPlyIndex = analysis.side === 'first'
         ? 2 * (moveIndex - 1)
         : 2 * (moveIndex - 1) + 1;
