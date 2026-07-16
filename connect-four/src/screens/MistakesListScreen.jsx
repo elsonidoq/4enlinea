@@ -10,6 +10,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { buildBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
 import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
+import { resolveCategoryListBack } from './categoryListBack.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -17,7 +18,7 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 // max (200) to minimize round trips for users with many blunders in one category.
 const QUEUE_PAGE_LIMIT = 200;
 
-export function MistakesListScreen({ go, goBack, category }) {
+export function MistakesListScreen({ go, goBack, category, navContext }) {
   const { t } = useTranslation();
   const { session } = useStore();
   const [blunders, setBlunders] = useState([]);
@@ -96,7 +97,14 @@ export function MistakesListScreen({ go, goBack, category }) {
     <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         title={t('mistakes.pattern.' + category)}
-        onBack={() => go('mistakes')}
+        onBack={() => {
+          // Task 1b: identical push-instead-of-pop bug as CategoryListScreen (see
+          // categoryListBack.js) — this screen was reached in-app by a `go('mistakeDetail', ...)`
+          // push from CategoryListScreen, so Back must pop, not push a fresh contextless
+          // '/mistakes'. Reuses the same decision function; do not duplicate it.
+          if (resolveCategoryListBack({ navContext }) === 'home') { go('home'); return; }
+          goBack();
+        }}
         onLogoClick={() => go('home')}
         meta={
           blunders.length === 1

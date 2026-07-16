@@ -148,7 +148,7 @@ export function CategoryListScreen({ go, goBack, navContext }) {
           {categories.map(cat => (
             <button
               key={cat.category}
-              onClick={() => go('mistakeDetail', { category: cat.category })}
+              onClick={() => go('mistakeDetail', { category: cat.category, navContext: 'mistakes' })}
               style={{
                 display: 'flex',
                 gap: 12,
