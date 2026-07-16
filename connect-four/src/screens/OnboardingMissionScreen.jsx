@@ -40,7 +40,7 @@ function PillarRow({ icon, tint, ink, title, line }) {
   );
 }
 
-export function OnboardingMissionScreen({ go }) {
+export function OnboardingMissionScreen({ go, onboardingSource }) {
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
   const { speakCoachMessage } = useCoachSpeech();
@@ -48,11 +48,17 @@ export function OnboardingMissionScreen({ go }) {
   // Fire the onboarding-start event once on mount. Guarded by a ref (not just empty deps) so
   // React 18 StrictMode's dev-only double-invoke of mount effects cannot double-fire it — same
   // pattern as OnboardingImportOfferScreen's marker/analytics write.
+  //
+  // Task 20 (finding 17): SettingsScreen's "Replay intro" now routes here instead of straight
+  // into the game, so it passes `onboardingSource: 'settings_replay'` rather than firing its
+  // own separate track() call — this screen is the single place `onboarding_started` fires, so
+  // annotating the one call with the caller's source (when present) keeps the event firing
+  // exactly once instead of twice (auto-route omits the param and gets `{}`, same as before).
   const startedRef = useRef(false);
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    track('onboarding_started', {});
+    track('onboarding_started', onboardingSource ? { source: onboardingSource } : {});
     speakCoachMessage('coach.onboardingMission.greeting');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

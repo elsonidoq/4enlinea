@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
-import { track } from '../lib/track.js';
-import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
 import { useLanguage } from '../lib/useLanguage.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
@@ -18,14 +16,18 @@ export function SettingsScreen({ go, goBack }) {
 
   // Epic 8 — Onboarding Experience, US4 (T043/FR-010, research.md R6): "Replay intro" —
   // visible for ANY onboarding state, reaches Settings from Home in <=2 nav actions (SC-004).
-  // Calls go('game', {...onboarding:true}) DIRECTLY, bypassing the Navigator auto-detect effect
-  // (T018) entirely — this is an explicit user action, not the anonymous-only auto-route.
-  // Fires onboarding_started here because the auto-route effect (App.jsx) early-returns on the
-  // replay path, so this is the ONLY start signal for a manual replay (contracts/onboarding-api.md
-  // event table: "first-run redirect fires (or manual Settings replay starts)").
+  //
+  // Task 20 (finding 17): the 2026-07-13 mission-screen spec put a mission screen in front of
+  // first-run onboarding, but only retargeted the App.jsx auto-route — this control still
+  // dropped straight into the game, bypassing the mission screen the control's own name
+  // promises ("Replay intro" should replay the intro, and the mission screen now IS the
+  // intro). Route through onboardingMission instead; its CTA still launches the game with
+  // ONBOARDING_GAME_PARAMS. `onboarding_started` is fired ONCE from the mission screen's own
+  // mount effect (not here) — pass the source through as a param so the single call still
+  // carries `{source: 'settings_replay'}` instead of double-firing (mission screen mount +
+  // this handler).
   function handleReplayIntro() {
-    track('onboarding_started', { source: 'settings_replay' });
-    go('game', ONBOARDING_GAME_PARAMS);
+    go('onboardingMission', { onboardingSource: 'settings_replay' });
   }
 
   const [papergamesId, setPapergamesId] = useState('');
