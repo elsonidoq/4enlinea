@@ -8,6 +8,16 @@
 // No credentials needed: /api/stripe/config is public (the modal renders before
 // the user is necessarily authenticated).
 import { useEffect, useState } from 'react';
+// Read the period suffix straight from the i18n bundles rather than the i18next
+// runtime singleton: this module (and its test) must work under plain `node --test`
+// (no i18next `init()`/loader), and formatPrice already takes an explicit `locale`
+// param decoupled from the app's live language — a static bundle lookup matches that
+// shape exactly. `with { type: 'json' }` is required by Node's ESM loader for JSON
+// imports (see tests/unit/i18nKeyParity.test.js for the same pattern).
+import en from '../i18n/en.json' with { type: 'json' };
+import es from '../i18n/es.json' with { type: 'json' };
+
+const SUFFIX_BUNDLES = { en, es };
 
 const API = import.meta.env?.VITE_API_BASE_URL || '';
 
@@ -41,7 +51,13 @@ export function formatPrice(info, locale) {
     style: 'currency',
     currency: info.currency.toUpperCase(),
   }).format(info.amount / 100);
-  const suffix = info.interval === 'year' ? '/yr' : info.interval === 'month' ? '/mo' : '';
+  // Resolve the period suffix from the i18n bundles (not hardcoded English) so
+  // Spanish gets "/mes"/"/año" instead of a leaked "/mo"/"/yr".
+  const lang = (locale || 'en').split('-')[0];
+  const bundle = SUFFIX_BUNDLES[lang] || SUFFIX_BUNDLES.en;
+  const suffix = info.interval === 'year' ? bundle.upgrade.suffixYear
+    : info.interval === 'month' ? bundle.upgrade.suffixMonth
+    : '';
   return `${amount}${suffix}`;
 }
 

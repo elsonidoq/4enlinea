@@ -107,7 +107,9 @@
     "perMonthEquivalent": "{{price}}/mo billed annually",
     "activating": "Activating your subscription…",
     "timeout": "Payment received — still activating.",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "suffixMonth": "/mo",
+    "suffixYear": "/yr"
   },
   "common": {
     "dismiss": "Dismiss",

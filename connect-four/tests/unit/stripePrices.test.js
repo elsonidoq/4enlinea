@@ -32,6 +32,33 @@ test('returns null on a currency mismatch (not a meaningful discount)', () => {
   }), null);
 });
 
+test('formatPrice localizes the /mo and /yr suffix (es)', () => {
+  const rendered = formatPrice(MONTHLY, 'es');
+  assert.ok(rendered.includes('/mes'), `expected Spanish "/mes" suffix, got: ${rendered}`);
+  assert.ok(!rendered.includes('/mo'), `expected no English "/mo" leak, got: ${rendered}`);
+
+  const renderedYear = formatPrice(ANNUAL, 'es');
+  assert.ok(renderedYear.includes('/año'), `expected Spanish "/año" suffix, got: ${renderedYear}`);
+  assert.ok(!renderedYear.includes('/yr'), `expected no English "/yr" leak, got: ${renderedYear}`);
+});
+
+test('formatPrice keeps the English /mo and /yr suffix (en)', () => {
+  const rendered = formatPrice(MONTHLY, 'en');
+  assert.ok(rendered.includes('/mo'), `expected English "/mo" suffix, got: ${rendered}`);
+
+  const renderedYear = formatPrice(ANNUAL, 'en');
+  assert.ok(renderedYear.includes('/yr'), `expected English "/yr" suffix, got: ${renderedYear}`);
+});
+
+test('formatPrice adds no suffix for interval: null, in any locale (regression guard)', () => {
+  const noInterval = { amount: 183, currency: 'usd', interval: null };
+  assert.strictEqual(formatPrice(noInterval, 'en'), '$1.83');
+  assert.strictEqual(
+    formatPrice(noInterval, 'es'),
+    new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' }).format(1.83)
+  );
+});
+
 test('formatPrice(perMonth) carries no interval suffix — the i18n copy key owns it', () => {
   // Regression for the "$1.83/mo/mo billed annually" / Spanish-with-hardcoded-"/mo" bug:
   // computeAnnualSavings' perMonth used to come back with interval: 'month', so

@@ -107,7 +107,9 @@
     "perMonthEquivalent": "{{price}}/mes facturado anual",
     "activating": "Activando tu suscripción…",
     "timeout": "Pago recibido — todavía activando.",
-    "refresh": "Actualizar"
+    "refresh": "Actualizar",
+    "suffixMonth": "/mes",
+    "suffixYear": "/año"
   },
   "common": {
     "dismiss": "Descartar",
