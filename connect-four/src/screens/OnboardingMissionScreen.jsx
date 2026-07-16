@@ -59,7 +59,7 @@ export function OnboardingMissionScreen({ go, onboardingSource }) {
     if (startedRef.current) return;
     startedRef.current = true;
     track('onboarding_started', onboardingSource ? { source: onboardingSource } : {});
-    speakCoachMessage('coach.onboardingMission.greeting');
+    speakCoachMessage('coach.spoken.onboardingMission.greeting');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

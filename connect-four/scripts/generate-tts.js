@@ -129,7 +129,7 @@ async function saveManifest(entries, lang = 'en') {
 
 async function scanOnly(lang = 'en') {
   const enRaw = JSON.parse(await readFile(sourceJsonForLang(lang), 'utf8'));
-  const coachKeys = flattenKeys(enRaw, 'coach.');
+  const coachKeys = flattenKeys(enRaw, 'coach.spoken.');
 
   const entries = [];
   for (const { key, value } of coachKeys) {
@@ -180,11 +180,11 @@ async function synthesizeAndWrite(entry, value, lang = 'en') {
 
 async function generateSingle(key, lang = 'en') {
   const enRaw = JSON.parse(await readFile(sourceJsonForLang(lang), 'utf8'));
-  const coachKeys = flattenKeys(enRaw, 'coach.');
+  const coachKeys = flattenKeys(enRaw, 'coach.spoken.');
   const match = coachKeys.find(k => k.key === key);
 
   if (!match) {
-    console.error(`Key "${key}" not found in ${lang}.json coach.* namespace.`);
+    console.error(`Key "${key}" not found in ${lang}.json coach.spoken.* namespace.`);
     process.exit(1);
   }
 
@@ -222,7 +222,7 @@ async function generateSingle(key, lang = 'en') {
 
 async function generateAllNew(lang = 'en') {
   const enRaw = JSON.parse(await readFile(sourceJsonForLang(lang), 'utf8'));
-  const coachKeys = flattenKeys(enRaw, 'coach.');
+  const coachKeys = flattenKeys(enRaw, 'coach.spoken.');
   const keyMap = new Map(coachKeys.map(k => [k.key, k.value]));
 
   const entries = await loadRegistry(lang);

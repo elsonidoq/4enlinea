@@ -15,7 +15,7 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
  *   onGameEnd?: (result: string, finalMoves: number[]) => void
  * }} opts
  */
-export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, introKey = 'coach.sparring.intro' }) {
+export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, introKey = 'coach.spoken.sparring.intro' }) {
   const { t } = useTranslation();
 
   // ── Board state (pure mechanics, extracted to useBoardState) ───
@@ -103,7 +103,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       setHintOverlays(bestCols);
 
       // Show generic hint phrase
-      const key = trackPhrase(pickRandomKey(t, 'coach.sparring.hint.generic', usedPhraseKeysRef.current));
+      const key = trackPhrase(pickRandomKey(t, 'coach.spoken.sparring.hint.generic', usedPhraseKeysRef.current));
       updateCoach(t(key), 'think', false, key);
     } catch (e) {
       // Silently handle network errors
@@ -147,17 +147,17 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     // Quality-gated coach phrase selection (FR-007)
     let phraseKey, mood;
     const patternPool = classification?.patternTag
-      ? `coach.ai_move.${classification.patternTag}`
+      ? `coach.spoken.ai_move.${classification.patternTag}`
       : null;
 
     const used = usedPhraseKeysRef.current;
     if (!classification) {
       // Null classification (network error, HTTP error, missing quality, or auto-play skip)
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
       mood = 'think';
     } else if (classification.quality !== 'optimal') {
       // Suboptimal or blunder AI move → suboptimal pool
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.suboptimal', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.suboptimal', used));
       mood = 'oops';
     } else if (patternPool) {
       // Quality is optimal, patternTag is non-null — probe pool existence
@@ -166,12 +166,12 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
         phraseKey = trackPhrase(pickRandomKey(t, patternPool, used));
         mood = 'think';
       } else {
-        phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+        phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
         mood = 'think';
       }
     } else {
       // Optimal quality but no patternTag → neutral fallback
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
       mood = 'think';
     }
 
@@ -181,14 +181,14 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
     // Check AI win — from commitMove return value
     if (won) {
-      updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.sparring.outcome.loss');
+      updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
       onGameEnd?.('loss', newHistory);
       return;
     }
 
     // Check draw
     if (draw) {
-      updateCoach(t('sparring.draw'), 'think', false, 'coach.sparring.outcome.draw');
+      updateCoach(t('sparring.draw'), 'think', false, 'coach.spoken.sparring.outcome.draw');
       onGameEnd?.('draw', newHistory);
       return;
     }
@@ -278,12 +278,12 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       } else if (data.quality === 'blunder') {
         // Fallback for blunders without category-specific keys:
         // use the generic blunder pool so the coach signals the mistake
-        coachKey = trackPhrase(pickRandomKey(t, 'coach.generic.blunder', used));
+        coachKey = trackPhrase(pickRandomKey(t, 'coach.spoken.generic.blunder', used));
         coachText = t(coachKey);
         coachMood = data.coachMood || 'oops';
       } else {
         // Fallback: random generic phrase for non-blunder moves (FR-011)
-        coachKey = trackPhrase(pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used));
+        coachKey = trackPhrase(pickRandomKey(t, `coach.spoken.generic.${data.quality ?? 'blunder'}`, used));
         coachText = t(coachKey);
       }
       updateCoach(coachText, coachMood, false, coachKey);
@@ -293,7 +293,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
 
     // 5. Check win (from commitMove return value)
     if (won) {
-      updateCoach(t('sparring.youWon'), 'happy', false, 'coach.sparring.outcome.win');
+      updateCoach(t('sparring.youWon'), 'happy', false, 'coach.spoken.sparring.outcome.win');
       onGameEnd?.('win', newHistory);
       return;
     }
@@ -318,7 +318,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     setAiThinking(false);
     // useBoardState only sets gameOver on win/draw — resign uses local override
     setResignedOver({ result: 'loss' });
-    updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.sparring.outcome.loss');
+    updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
     onGameEnd?.('loss', moveHistory);
   }
 
