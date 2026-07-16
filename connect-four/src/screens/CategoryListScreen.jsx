@@ -6,10 +6,11 @@ import { Icon } from '../components/Icon.jsx';
 import { MistakesGate } from '../components/MistakesGate.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
+import { resolveCategoryListBack } from './categoryListBack.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function CategoryListScreen({ go, goBack }) {
+export function CategoryListScreen({ go, goBack, navContext }) {
   const { t } = useTranslation();
   const { session } = useStore();
   // categories: [{ category, count }], one entry per pattern_category with >=1 blunder for
@@ -59,7 +60,10 @@ export function CategoryListScreen({ go, goBack }) {
     <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         title={t('mistakes.title')}
-        onBack={() => go('stats')}
+        onBack={() => {
+          if (resolveCategoryListBack({ navContext }) === 'home') { go('home'); return; }
+          goBack();
+        }}
         onLogoClick={() => go('home')}
       />
 
