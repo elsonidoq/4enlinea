@@ -155,6 +155,80 @@ export function reloadLessons() {
   if (_dir) loadLessons(_dir);
 }
 
+// QA 2026-07-15 finding #2 / decision D1. Spanish lesson text lives in `_es` sibling
+// fields inside the lesson JSON. Merge is PER FIELD: a missing `_es` falls back to
+// English so a partial translation degrades gracefully instead of blanking a slide.
+// `title` is deliberately excluded — `lesson.<id>.title` in en/es.json already owns it
+// via t(..., {defaultValue: lesson.title}), and a title_es would silently lose to it.
+const LOCALIZABLE_SUFFIX = '_es';
+
+function pickLocalized(obj, key, locale) {
+  if (locale !== 'es') return obj[key];
+  const es = obj[`${key}${LOCALIZABLE_SUFFIX}`];
+  return (typeof es === 'string' && es.length > 0) ? es : obj[key];
+}
+
+function stripEsKeys(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k.endsWith(LOCALIZABLE_SUFFIX)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Merge `_es` sibling fields over their English base, per field, when locale === 'es'.
+ * Falls back to English per field (so a partial translation never blanks a slide) and
+ * strips all `_es` keys from the output regardless of locale. `title` is never touched.
+ * @param {Object} lesson
+ * @param {string} [locale='en']
+ * @returns {Object}
+ */
+export function localizeLesson(lesson, locale = 'en') {
+  const slides = (lesson.slides ?? []).map((slide) => {
+    const next = stripEsKeys(slide);
+    if ('infoProse' in slide || 'infoProse_es' in slide) {
+      next.infoProse = pickLocalized(slide, 'infoProse', locale);
+    }
+    if (Array.isArray(slide.coachMessages)) {
+      next.coachMessages = slide.coachMessages.map((m) => {
+        const nm = stripEsKeys(m);
+        if ('text' in m || 'text_es' in m) nm.text = pickLocalized(m, 'text', locale);
+        if ('audio' in m || 'audio_es' in m) nm.audio = pickLocalized(m, 'audio', locale);
+        return nm;
+      });
+    }
+    if (Array.isArray(slide.legendItems)) {
+      next.legendItems = slide.legendItems.map((li) => {
+        const nl = stripEsKeys(li);
+        if ('label' in li || 'label_es' in li) nl.label = pickLocalized(li, 'label', locale);
+        return nl;
+      });
+    }
+    return next;
+  });
+
+  const out = stripEsKeys(lesson);
+  out.slides = slides;
+
+  if (lesson.socratic) {
+    const s = stripEsKeys(lesson.socratic);
+    if ('goalPrompt' in lesson.socratic || 'goalPrompt_es' in lesson.socratic) {
+      s.goalPrompt = pickLocalized(lesson.socratic, 'goalPrompt', locale);
+    }
+    out.socratic = s;
+  }
+  if (Array.isArray(lesson.confirmationChallenges)) {
+    out.confirmationChallenges = lesson.confirmationChallenges.map((c) => {
+      const nc = stripEsKeys(c);
+      if ('goalPrompt' in c || 'goalPrompt_es' in c) nc.goalPrompt = pickLocalized(c, 'goalPrompt', locale);
+      return nc;
+    });
+  }
+  return out;
+}
+
 export function getLessonsAll() {
   return [..._lessons];
 }
@@ -172,22 +246,23 @@ export function getLessons() {
  * Applies backward-compat transformations:
  * - If confirmationChallenges is missing but legacy fields exist, sets explicit null.
  * - Derives confirmationCount from confirmationChallenges.length when non-empty.
+ * Then applies the locale merge (D1): `_es` sibling fields merged over English per
+ * field, falling back per field, with all `_es` keys stripped from the response.
  * @param {string} id
+ * @param {string} [locale='en']
  * @returns {Object|null}
  */
-export function getLesson(id) {
-  const lesson = _lessons.find(l => l.id === id) ?? null;
+export function getLesson(id, locale = 'en') {
+  let lesson = _lessons.find(l => l.id === id) ?? null;
   if (!lesson) return null;
 
   // Backward compat: explicit null signals "use legacy draw"
   if (lesson.confirmationChallenges === undefined && lesson.confirmationCategory != null && lesson.confirmationCount > 0) {
-    return { ...lesson, confirmationChallenges: null };
+    lesson = { ...lesson, confirmationChallenges: null };
+  } else if (Array.isArray(lesson.confirmationChallenges) && lesson.confirmationChallenges.length > 0) {
+    // Derive confirmationCount from curated challenges when present
+    lesson = { ...lesson, confirmationCount: lesson.confirmationChallenges.length };
   }
 
-  // Derive confirmationCount from curated challenges when present
-  if (Array.isArray(lesson.confirmationChallenges) && lesson.confirmationChallenges.length > 0) {
-    return { ...lesson, confirmationCount: lesson.confirmationChallenges.length };
-  }
-
-  return lesson;
+  return localizeLesson(lesson, locale);
 }

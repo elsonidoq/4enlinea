@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from '../../server/lessonLoader.js';
+import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson, localizeLesson } from '../../server/lessonLoader.js';
 
 /** Minimal valid lesson fixture */
 function makeValidLesson(overrides = {}) {
@@ -250,4 +250,86 @@ test('getLesson: derives confirmationCount from curated challenges when present'
   const result = getLesson(lesson.id);
   assert.equal(result.confirmationCount, 2, 'should derive count from confirmationChallenges.length');
   assert.equal(result.confirmationChallenges.length, 2);
+});
+
+// ── locale-merge seam (D1) ─────────────────────────────────────────────────────
+
+const LOCALE_FIXTURE = {
+  id: 'demo',
+  title: 'Immediate Threats',
+  slides: [{
+    infoProse: 'An immediate threat is any four-cell window.',
+    infoProse_es: 'Una amenaza inmediata es cualquier ventana de cuatro celdas.',
+    coachMessages: [
+      { text: 'Look at the board.', text_es: 'Mirá el tablero.', audio: '/audio/lessons/aaa.mp3', audio_es: '/audio/lessons/bbb.mp3' },
+      { text: 'No translation yet.', audio: '/audio/lessons/ccc.mp3' },
+    ],
+    legendItems: [{ label: 'Threat square', label_es: 'Casilla de amenaza' }],
+  }],
+  socratic: { goalPrompt: 'Find the winning move.', goalPrompt_es: 'Encontrá la jugada ganadora.' },
+};
+
+test('locale en returns English untouched and strips _es keys', () => {
+  const out = localizeLesson(LOCALE_FIXTURE, 'en');
+  assert.strictEqual(out.slides[0].infoProse, 'An immediate threat is any four-cell window.');
+  assert.strictEqual(out.slides[0].coachMessages[0].text, 'Look at the board.');
+  assert.strictEqual(out.slides[0].coachMessages[0].audio, '/audio/lessons/aaa.mp3');
+  assert.ok(!('infoProse_es' in out.slides[0]), '_es keys must not leak to the client');
+  assert.ok(!('text_es' in out.slides[0].coachMessages[0]));
+});
+
+test('locale es merges Spanish text AND its matching audio', () => {
+  const out = localizeLesson(LOCALE_FIXTURE, 'es');
+  assert.strictEqual(out.slides[0].infoProse, 'Una amenaza inmediata es cualquier ventana de cuatro celdas.');
+  assert.strictEqual(out.slides[0].coachMessages[0].text, 'Mirá el tablero.');
+  assert.strictEqual(out.slides[0].coachMessages[0].audio, '/audio/lessons/bbb.mp3');
+  assert.strictEqual(out.slides[0].legendItems[0].label, 'Casilla de amenaza');
+  assert.strictEqual(out.socratic.goalPrompt, 'Encontrá la jugada ganadora.');
+  assert.ok(!('text_es' in out.slides[0].coachMessages[0]));
+});
+
+test('es falls back PER FIELD so a partial translation never blanks a slide', () => {
+  const out = localizeLesson(LOCALE_FIXTURE, 'es');
+  assert.strictEqual(out.slides[0].coachMessages[1].text, 'No translation yet.');
+  assert.strictEqual(out.slides[0].coachMessages[1].audio, '/audio/lessons/ccc.mp3');
+});
+
+test('title is never touched — the lesson.<id>.title i18n key owns it', () => {
+  assert.strictEqual(localizeLesson(LOCALE_FIXTURE, 'es').title, 'Immediate Threats');
+});
+
+test('an unknown locale degrades to English rather than throwing', () => {
+  assert.strictEqual(localizeLesson(LOCALE_FIXTURE, 'fr').slides[0].infoProse, 'An immediate threat is any four-cell window.');
+});
+
+test('getLesson(id): single-arg call defaults to en and strips any _es keys', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-locale-'));
+  const lesson = makeValidLesson({
+    slides: [{ type: 'text', text: 'Hello', text_es: 'Hola' }],
+  });
+  writeTempLesson(dir, 'lesson-01-test.json', lesson);
+  loadLessons(dir);
+
+  const result = getLesson(lesson.id);
+  assert.equal(result.slides[0].text, 'Hello');
+  assert.ok(!('text_es' in result.slides[0]));
+});
+
+test('getLesson(id, "es"): merges locale after backward-compat transforms are applied', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-locale-compat-'));
+  const lesson = makeValidLesson({
+    confirmationCategory: 'immediate_threat',
+    confirmationCount: 99,
+    confirmationChallenges: [
+      { moveString: '33201', correctCol: 3, userPlayer: 1 },
+      { moveString: '44452', correctCol: 0, userPlayer: 2 },
+    ],
+    slides: [{ type: 'text', text: 'Hello', text_es: 'Hola' }],
+  });
+  writeTempLesson(dir, 'lesson-01-test.json', lesson);
+  loadLessons(dir);
+
+  const result = getLesson(lesson.id, 'es');
+  assert.equal(result.confirmationCount, 2, 'derived confirmationCount transform must still apply');
+  assert.equal(result.slides[0].text, 'Hello', 'slide.text has no _es-suffixed sibling here, not affected by transform ordering');
 });

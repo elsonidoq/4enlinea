@@ -642,7 +642,8 @@ app.get('/api/papergames/tournament/open', async (req, res) => {
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
 app.get('/api/lessons', (req, res) => res.json(getLessons()));
 app.get('/api/lessons/:id', (req, res) => {
-  const lesson = getLesson(req.params.id);
+  const locale = req.locale ?? 'en';
+  const lesson = getLesson(req.params.id, locale);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
