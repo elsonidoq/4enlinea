@@ -706,3 +706,25 @@ Headline items still unfixed at session close (see the file for the rest — sev
 **Reclassified during the session (NOT a bug)**: the candidate-generation "fetch failed" finding was downgraded [major]→[minor] as an environmental flake — see memory [[project_generate_candidates_fetch_failed_flake]]. The paid-puzzle-category paywall it left unexercised is now positively testable (generate→approve→reindex a paid category, then confirm a free user hits the paywall).
 
 **Why deferred**: this was a QA + planning session, not an implementation one; fixes are being routed through a plan. **If picked up**: consume `agentic_QA_2026-07-15-1321.md` as the work-list and `staging_checks.md` for the deploy-only verification residue.
+
+## OI-36 — Spanish lesson content: only lesson 1 of 13 translated; lessons 2–13 (~6,000 words) remain English-only
+
+**Status**: deferred / open (scoped down by explicit user decision 2026-07-16 — see Task 4 in `.superpowers/sdd/`; NOT an oversight)
+**Area**: `connect-four/lessons/lesson-02-*.json` through `lesson-13-*.json`; `connect-four/scripts/translate-lessons.mjs` (script, validated); `server/lessonLoader.js#localizeLesson` (plumbing, already shipped and unaffected by this gap)
+
+D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped for **lesson 1 (`immediate-threat`) only**. The drafting script (`connect-four/scripts/translate-lessons.mjs`) is written, has a real `--help`/`-h` that exits 0 doing no work, supports `--lesson <id>` / `--dry-run` / `--force`, and was validated end-to-end on lesson 1 (dry-run reviewed for voseo + verde/gris correctness, real run diffed line-by-line, `npm run test:fast` green). Lessons 2–13 were deliberately **not** run: translating ~6,860 words across 12 lessons on a still-unvalidated prompt in one shot would let a systematic voseo or green/gray-perspective error land in all of them before a human ever reviewed one. Lesson 1 was the calibration sample; the user reviews it before authorizing the rest.
+
+**Non-breaking in the meantime**: `localizeLesson`'s per-field English fallback means every untranslated lesson (2–13) simply renders English text in Spanish mode — the same behavior as before this task, not a regression. No code changes are needed to "support" the gap; it self-resolves as each lesson gets translated.
+
+**If picked up**, per lesson id:
+1. `cd connect-four && node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id> --dry-run` — read the printed Spanish first.
+2. Review checklist on the dry-run output before running for real:
+   - **Voseo**: `usá/tenés/podés/jugá/encontrá/sos/vos` — never tú-Spanish (`usa/tienes/puedes/juega/encuentra/eres/tú`).
+   - **verde/gris**, never rojo/amarillo or the raw English words green/gray. Remember `userPerspective: 'red'` → player 1 = **verde**; `'yellow'` → player 2 = **gris**. This is the internal-token trap that inverts a lesson's meaning if mistranslated.
+   - `[term:...]`/`[zone:...]` tags and `columna N` references preserved verbatim.
+   - Diff contains **only** added `_es` keys — no reformatting/reordering churn.
+3. `node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id>` (real run), then `git diff` line-by-line before committing.
+4. **After the text is committed**, generate narration audio for that lesson: `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally), then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`).
+5. Run `npm run test:fast` once per lesson (or batch) before committing.
+
+Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`, `project_spanish_is_argentinian_voseo`; OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
