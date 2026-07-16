@@ -1689,7 +1689,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
 
 /**
  * Navigate a nested translations object by dot-separated prefix and return
- * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * a randomly chosen full key string (e.g. 'coach.spoken.immediate_threat.optimal.0').
  * Returns null if the prefix resolves to a non-object or empty object.
  */
 /**
@@ -1774,7 +1774,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     const phrasePoolKey = category || patternTag;
 
     const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
       : null;
 
     const summaryLineKey = phrasePoolKey
@@ -2190,8 +2190,8 @@ app.post('/api/games/analyze', async (req, res) => {
       // mistakes exist even if there are zero blunders — a game with 0 blunders and
       // >=1 suboptimal move is still a game with mistakes.
       const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
-        ? 'coach.sparring.review.clean'
-        : 'coach.sparring.review.mistakes';
+        ? 'coach.spoken.sparring.review.clean'
+        : 'coach.spoken.sparring.review.mistakes';
       const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
       return res.json({
@@ -2343,8 +2343,8 @@ app.post('/api/games/analyze', async (req, res) => {
   // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
   // still a game with mistakes, never "clean"/"no mistakes to review."
   const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
-    ? 'coach.sparring.review.clean'
-    : 'coach.sparring.review.mistakes';
+    ? 'coach.spoken.sparring.review.clean'
+    : 'coach.spoken.sparring.review.mistakes';
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
   res.json({

@@ -113,9 +113,9 @@ export function ChallengeScreen({
     setHintUsed(false);
     setSeqPosition(puzzle.move_string ?? '');
 
-    // Pick a random prompt key from coach.<category>.prompt.*
+    // Pick a random prompt key from coach.spoken.<category>.prompt.*
     const effectiveCategory = lessonMode ? confirmationCategory : category;
-    const candidateKeys = [0, 1, 2].map(i => `coach.${effectiveCategory}.prompt.${i}`);
+    const candidateKeys = [0, 1, 2].map(i => `coach.spoken.${effectiveCategory}.prompt.${i}`);
     const validKeys = candidateKeys.filter(k => t(k) !== k);
     const pickedKey = validKeys.length > 0
       ? validKeys[Math.floor(Math.random() * validKeys.length)]
@@ -351,7 +351,7 @@ export function ChallengeScreen({
         // back to the generic blunder-voiced pool, same mechanism as the promoted case.
         const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' : (data.quality ?? 'blunder');
         let phraseKey = (acceptedPromoted || acceptedDemoted ? null : data.coachPhraseKey)
-          ?? pickRandomKey(t, `coach.generic.${coachQuality}`, used);
+          ?? pickRandomKey(t, `coach.spoken.generic.${coachQuality}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
         lastCoachKeyRef.current = phraseKey;
@@ -398,7 +398,7 @@ export function ChallengeScreen({
   function handleHint() {
     if (hintUsed) return;
     const effectiveCategory = lessonMode ? confirmationCategory : category;
-    const keys = [`coach.${effectiveCategory}.hint.0`, `coach.${effectiveCategory}.hint.1`];
+    const keys = [`coach.spoken.${effectiveCategory}.hint.0`, `coach.spoken.${effectiveCategory}.hint.1`];
     const valid = keys.filter(k => t(k) !== k);
     if (valid.length === 0) return;
     const key = valid[Math.floor(Math.random() * valid.length)];
@@ -546,7 +546,7 @@ export function ChallengeScreen({
     }
 
     // Update coach
-    const coachKey = `coach.forbidden_columns.${quality}.0`;
+    const coachKey = `coach.spoken.forbidden_columns.${quality}.0`;
     lastCoachKeyRef.current = coachKey;
     setCoachMessages(prev => [...prev, { text: t(coachKey, { missed: missedForbidden.length }), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
 
@@ -618,9 +618,9 @@ export function ChallengeScreen({
         setBoard(b);
         setHeights(h);
         setLastDrop({ c: col, r: heights[col] });
-        setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.forced_win.optimal.0' });
-        lastCoachKeyRef.current = 'coach.forced_win.optimal.0';
-        setCoachMessages(prev => [...prev, { text: t('coach.forced_win.optimal.0'), mood: 'happy' }]);
+        setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.spoken.forced_win.optimal.0' });
+        lastCoachKeyRef.current = 'coach.spoken.forced_win.optimal.0';
+        setCoachMessages(prev => [...prev, { text: t('coach.spoken.forced_win.optimal.0'), mood: 'happy' }]);
         // Highlight both threat cells on double-threat success
         if (data.threatCells && data.threatCells.length > 0) {
           setOverlays(data.threatCells.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
@@ -640,9 +640,9 @@ export function ChallengeScreen({
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       } else {
         playSfx('wrong_move');
-        lastCoachKeyRef.current = data.reason ? null : 'coach.forced_win.blunder.0';
+        lastCoachKeyRef.current = data.reason ? null : 'coach.spoken.forced_win.blunder.0';
         setCoachMessages(prev => [...prev, {
-          text: data.reason ?? t('coach.forced_win.blunder.0'),
+          text: data.reason ?? t('coach.spoken.forced_win.blunder.0'),
           mood: 'oops',
         }]);
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)

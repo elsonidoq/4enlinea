@@ -82,7 +82,7 @@
     "terminalPosition": "This position is terminal — no moves available.",
     "startFromHere": "Start new game from here",
     "deepReveal": "Deep Reveal",
-"explanationFlagged": "Explanation flagged. Thank you!",
+    "explanationFlagged": "Explanation flagged. Thank you!",
     "explanationUnavailable": "Detailed explanation unavailable.",
     "flagExplanation": "Flag this explanation"
   },
@@ -161,422 +161,436 @@
     }
   },
   "coach": {
-    "title": "Personal AI Coach",
-    "home": {
-      "welcome": {
-        "0": "Let's sharpen your Connect Four tactics."
-      }
-    },
-    "onboardingMission": {
-      "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
-    },
-    "weaknessMap": "Weakness map",
-    "queueCount_one": "{{count}} position to review",
-    "queueCount_other": "{{count}} positions to review",
-    "startReview": "Start review",
-    "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
-    "missRate": "miss rate",
-    "immediate_threat": {
-      "prompt": {
-        "0": "You can win right now — find the column.",
-        "1": "There's an immediate winning move on the board. Can you spot it?",
-        "2": "One move ends the game in your favor. Where do you play?"
-      },
-      "hint": {
-        "0": "Look for a row where you're one move from four in a row.",
-        "1": "Check each of your existing groups of three — is any of them one away from connecting?"
-      },
-      "optimal": {
-        "0": "Nice — you spotted the winning move."
-      },
-      "suboptimal": {
-        "0": "Close — there was a faster win available."
-      },
-      "blunder": {
-        "0": "That misses your winning opportunity."
-      }
-    },
-    "forced_block": {
-      "prompt": {
-        "0": "Your opponent is about to win — stop them.",
-        "1": "There's a forced block you must make. Find it.",
-        "2": "One column is the only safe move. Which is it?"
-      },
-      "hint": {
-        "0": "Look for a row where your opponent is one move from four in a row.",
-        "1": "Check each of your opponent's groups of three — is any of them one away from connecting?"
-      },
-      "optimal": {
-        "0": "Well defended — you blocked the threat."
-      },
-      "suboptimal": {
-        "0": "You blocked, but there was a cleaner defensive move."
-      },
-      "blunder": {
-        "0": "That leaves your opponent's winning threat wide open."
-      }
-    },
-    "double_threat": {
-      "prompt": {
-        "0": "Find the move that creates two winning threats at once.",
-        "1": "One column sets up two simultaneous threats your opponent can't both stop.",
-        "2": "Look for a fork — a move that threatens in two directions."
-      },
-      "hint": {
-        "0": "Think about moves that add to two different groups at once.",
-        "1": "A double threat wins because your opponent can only block one."
-      },
-      "optimal": {
-        "0": "Perfect — you created the double threat."
-      },
-      "suboptimal": {
-        "0": "Good move, but a different column creates two threats at once."
-      },
-      "blunder": {
-        "0": "That misses the chance to create two simultaneous threats."
-      }
-    },
-    "claimeven": {
-      "prompt": {
-        "0": "As Gray, you can secure a draw — find the Claimeven move.",
-        "1": "Gray has a drawing strategy here. Which column keeps it alive?",
-        "2": "Use Claimeven: Gray plays below every Green even-row threat."
-      },
-      "hint": {
-        "0": "Look for an even row where Green has a threat — Gray should mirror below it.",
-        "1": "Claimeven works by ensuring Gray always gets the square directly below Green's even-row threats."
-      },
-      "optimal": {
-        "0": "Exactly — that's the Claimeven move that secures the draw."
-      },
-      "suboptimal": {
-        "0": "You're still in the draw zone, but the Claimeven key column was stronger."
-      },
-      "blunder": {
-        "0": "That column gives up Gray's Claimeven drawing advantage."
-      }
-    },
-    "z_threat": {
-      "prompt": {
-        "0": "A Z-threat gives you unstoppable parity control — find it.",
-        "1": "Use the Z-threat pattern to guarantee you get the winning odd-row square.",
-        "2": "One column sets up Z-threat parity so your opponent can't stop you."
-      },
-      "hint": {
-        "0": "Look for a column where your odd-row threat can't be claimed by your opponent.",
-        "1": "Z-threats work by creating a parity chain your opponent is forced to follow."
-      },
-      "optimal": {
-        "0": "Spot on — you activated the Z-threat."
-      },
-      "suboptimal": {
-        "0": "Reasonable move, but the Z-threat column creates stronger parity control."
-      },
-      "blunder": {
-        "0": "That move hands away your Z-threat parity advantage."
-      }
-    },
-    "odd_even_threat": {
-      "prompt": {
-        "0": "Green has two threat moves. One lands on an odd row (Green's home row) — that's the winner. Which column do you choose?",
-        "1": "Both moves create threats, but one lands on an odd row — Green's natural parity. That's the move that gives Green lasting control. Play it."
-      },
-      "hint": {
-        "0": "One of the threat moves lands on an odd row. Odd rows belong to Green — that's the correct target."
-      },
-      "optimal": {
-        "0": "Correct! The odd-row threat gives Green parity control — it can't be neutralised by Gray's claimeven strategy.",
-        "1": "Exactly right. Playing to the odd row aligns with Green's natural parity advantage."
-      },
-      "suboptimal": {
-        "0": "That move creates a threat, but it lands on an even row — Gray's parity. The odd-row threat in the other column is stronger."
-      },
-      "blunder": {
-        "0": "That column doesn't create a threat at all. Look for the moves that create an immediate winning window."
-      }
-    },
-    "forbidden_columns": {
-      "prompt": {
-        "0": "Mark every column that would hand your opponent an immediate win.",
-        "1": "Which columns are forbidden? Tag them all before submitting.",
-        "2": "Find every column where you would lose instantly — mark them all."
-      },
-      "hint": {
-        "0": "Look for columns where your opponent already has three in a row — playing there hands them a win.",
-        "1": "Check each column: would your opponent win immediately if you played there?"
-      },
-      "optimal": { "0": "Perfect — you identified every forbidden column." },
-      "suboptimal": { "0": "You found some but missed {{missed}} forbidden column(s)." },
-      "blunder": {
-        "0": "You tagged a safe column — that counts as a mistake.",
-        "1": "At least one of your tagged columns was safe to play."
-      }
-    },
-    "forced_win": {
-      "prompt": {
-        "0": "Force the win — play the line that leaves your opponent no escape.",
-        "1": "There's a forcing sequence here. Play it move by move.",
-        "2": "Every move must threaten your opponent. Find the forcing line."
-      },
-      "optimal": { "0": "You forced the win — well played.", "1": "Perfect sequence — your opponent had no escape." },
-      "blunder": { "0": "That move breaks the forcing line.", "1": "The sequence fails here — your opponent can escape." }
-    },
-    "figure_7": {
-      "prompt": {
-        "0": "Spot the Figure-7 pattern — find the move that creates two unstoppable threats.",
-        "1": "An L-shaped pattern is forming. Play the key cell to complete it.",
-        "2": "The Figure-7 trap is on the board. One move creates two threats."
-      },
-      "hint": {
-        "0": "Look for an L-shaped cluster of 4 discs — the fifth piece locks in two threats.",
-        "1": "Figure 7 creates two threats the opponent can't both block."
-      },
-      "optimal": {
-        "0": "Figure-7 trap complete — your opponent cannot block both threats.",
-        "1": "That completes the Figure-7 pattern. Two unstoppable threats.",
-        "2": "Perfect — the L-shape locks in. Your opponent is trapped.",
-        "3": "Exactly the right cell — the opponent can block one threat but not both."
-      },
-      "suboptimal": {
-        "0": "Good move, but completing the Figure-7 pattern was stronger.",
-        "1": "Close — the Figure-7 key cell creates two threats at once.",
-        "2": "Solid play, but the Figure-7 completion was the decisive move here."
-      },
-      "blunder": {
-        "0": "That misses the Figure-7 trap. Look for the L-shaped pattern.",
-        "1": "Wrong cell — the Figure-7 pattern needs one specific completing piece.",
-        "2": "That doesn't create the double threat. Find the key cell of the Figure-7.",
-        "3": "You missed the Figure-7. Scan for an L-shape of 4 discs."
-      }
-    },
-    "j_shape": {
-      "prompt": {
-        "0": "The J-Shape creates three winning directions — find the key cell.",
-        "1": "An L-shaped cluster of 4 discs — complete it to create triple threats.",
-        "2": "Find the J-Shape completing cell. Your opponent can't block all three threats."
-      },
-      "hint": {
-        "0": "The J-Shape is an L-cluster. The completing cell unlocks three threat directions.",
-        "1": "Look for 4 discs in an L — the fifth piece creates threats vertically, horizontally, and diagonally."
-      },
-      "optimal": {
-        "0": "J-Shape complete — three threat directions. Unblockable!",
-        "1": "That locks in the J-Shape. Your opponent can block one, maybe two — not all three.",
-        "2": "Perfect — vertical, horizontal, and diagonal threats. Game over.",
-        "3": "Exactly — the triple threat from the J-Shape is unstoppable."
-      },
-      "suboptimal": {
-        "0": "Good, but completing the J-Shape gives you three unblockable threats.",
-        "1": "Solid move, but the J-Shape completing cell was the decisive play.",
-        "2": "Not bad — the J-Shape cell creates threats in three directions at once."
-      },
-      "blunder": {
-        "0": "That doesn't complete the J-Shape. Look for the L-cluster and its key cell.",
-        "1": "Wrong cell — the J-Shape needs one specific completing piece.",
-        "2": "You missed the J-Shape. The L-cluster of 4 discs is the clue.",
-        "3": "That skips the triple threat. Find the J-Shape completing cell."
-      }
-    },
-    "overcut": {
-      "prompt": {
-        "0": "Two threats, same column — the upper one wins. Find the overcut.",
-        "1": "The overcut beats the undercut. Same parity, upper threat wins.",
-        "2": "Play above your opponent's threat to neutralize it — find the overcut."
-      },
-      "hint": {
-        "0": "Look for an upper threat that beats a lower one — same parity row.",
-        "1": "The overcut works when both threats share the same parity."
-      },
-      "optimal": {
-        "0": "Perfect overcut — the upper threat neutralizes the lower one.",
-        "1": "Same parity advantage — your upper threat wins the column.",
-        "2": "Clean overcut. Your opponent's lower threat can't reach first.",
-        "3": "Exactly — playing above the threat gives you the advantage."
-      },
-      "suboptimal": {
-        "0": "Good move, but the overcut column gave you a stronger position.",
-        "1": "Close — there was a column where an upper threat beats a lower one.",
-        "2": "Not bad, but the overcut opportunity was more decisive."
-      },
-      "blunder": {
-        "0": "That column doesn't exploit the overcut — your opponent's threat survives.",
-        "1": "You missed the overcut. The upper threat wins when parity is the same.",
-        "2": "Wrong column — look for same-parity threats where upper beats lower.",
-        "3": "That skips the overcut advantage. Same parity, upper threat wins."
-      }
-    },
-    "undercut": {
-      "prompt": {
-        "0": "Two threats in the same column — the lower one wins. Find the undercut.",
-        "1": "An undercut is waiting — identify the column where a lower threat kills an upper one.",
-        "2": "Gravity works in your favor here. Find the undercut move."
-      },
-      "hint": {
-        "0": "Look for a column with threats at two different rows — the lower one wins.",
-        "1": "Same column, opposite parity rows — the undercut is a gravity exploit."
-      },
-      "optimal": {
-        "0": "That undercut neutralizes the upper threat perfectly.",
-        "1": "Gravity does the work — the lower threat wins the column.",
-        "2": "Clean undercut. Your opponent's upper threat is dead.",
-        "3": "Exactly right — same column, lower threat kills the upper one."
-      },
-      "suboptimal": {
-        "0": "Good thinking, but the undercut column was the killing move here.",
-        "1": "Close — there was a column where a lower threat neutralizes an upper one.",
-        "2": "Not bad, but you missed the undercut opportunity."
-      },
-      "blunder": {
-        "0": "That plays into the wrong parity — the undercut was elsewhere.",
-        "1": "You missed the undercut column. The lower threat wins.",
-        "2": "Wrong column — your opponent's threat is still alive.",
-        "3": "That doesn't exploit the gravity advantage. Look again."
-      }
-    },
-    "generic": {
-      "optimal": {
-        "0": "Good move.",
-        "1": "Nice choice.",
-        "2": "That's the one.",
-        "3": "Well played.",
-        "4": "Sharp.",
-        "5": "Solid.",
-        "6": "You found it.",
-        "7": "That's the play.",
-        "8": "You're reading the board.",
-        "9": "Clean.",
-        "10": "Efficient.",
-        "11": "Exactly right.",
-        "12": "Strong.",
-        "13": "No wasted moves.",
-        "14": "You're thinking ahead.",
-        "15": "Keeping the pressure on.",
-        "16": "You're making this difficult.",
-        "17": "I didn't expect that.",
-        "18": "That's how you stay in control.",
-        "19": "You're tightening the grip."
-      },
-      "suboptimal": {
-        "0": "Not bad, but there was a sharper move.",
-        "1": "You're close — try to find the stronger option.",
-        "2": "Reasonable, but not the best here."
-      },
-      "blunder": {
-        "0": "Hmm, not the strongest move there.",
-        "1": "Your opponent will like that.",
-        "2": "That one's tricky — check the hint if you're stuck.",
-        "3": "That leaves a gap for your opponent.",
-        "4": "Not the best choice here.",
-        "5": "Your opponent has a good answer to that."
-      }
-    },
-    "summary": {
-      "perfect": {
-        "0": "Perfect set. Try a harder one.",
-        "1": "Clean sweep — excellent work!"
-      }
-    },
-    "sparring": {
-      "intro": {
-        "0": "Ready to play? I'll give you a real fight.",
-        "1": "Let's see what you've got. Good luck."
-      },
-      "hint": {
-        "generic": {
-          "0": "The best move is highlighted — trust the column.",
-          "1": "Look at the highlighted column. What does it set up?"
+    "spoken": {
+      "home": {
+        "welcome": {
+          "0": "Let's sharpen your Connect Four tactics."
         }
       },
-      "review": {
-        "clean": {
-          "0": "Clean game. Nothing to revisit.",
-          "1": "Excellent — no mistakes to review."
-        },
-        "mistakes": {
-          "0": "Good game. One parity mistake decided it.",
-          "1": "A few moments to learn from — let's look.",
-          "2": "You played well. Let's find the edge.",
-          "3": "Some tactical moments worth revisiting."
-        }
+      "onboardingMission": {
+        "greeting": "Hi, I'm your coach. Here's how we'll make you dangerous at Connect Four."
       },
-      "outcome": {
-        "win": "You won! Great game.",
-        "loss": "I won this one. Keep working at it.",
-        "draw": "It's a draw — well played."
-      }
-    },
-    "ai_move": {
       "immediate_threat": {
-        "0": "I can win right now.",
-        "1": "That's game — connecting four."
+        "prompt": {
+          "0": "You can win right now — find the column.",
+          "1": "There's an immediate winning move on the board. Can you spot it?",
+          "2": "One move ends the game in your favor. Where do you play?"
+        },
+        "hint": {
+          "0": "Look for a row where you're one move from four in a row.",
+          "1": "Check each of your existing groups of three — is any of them one away from connecting?"
+        },
+        "optimal": {
+          "0": "Nice — you spotted the winning move."
+        },
+        "suboptimal": {
+          "0": "Close — there was a faster win available."
+        },
+        "blunder": {
+          "0": "That misses your winning opportunity."
+        }
       },
       "forced_block": {
-        "0": "I had to block that — you had a real threat there.",
-        "1": "No choice but to defend. Nice pressure."
+        "prompt": {
+          "0": "Your opponent is about to win — stop them.",
+          "1": "There's a forced block you must make. Find it.",
+          "2": "One column is the only safe move. Which is it?"
+        },
+        "hint": {
+          "0": "Look for a row where your opponent is one move from four in a row.",
+          "1": "Check each of your opponent's groups of three — is any of them one away from connecting?"
+        },
+        "optimal": {
+          "0": "Well defended — you blocked the threat."
+        },
+        "suboptimal": {
+          "0": "You blocked, but there was a cleaner defensive move."
+        },
+        "blunder": {
+          "0": "That leaves your opponent's winning threat wide open."
+        }
       },
       "double_threat": {
-        "0": "Sorry — I've created two threats at once. You can only block one.",
-        "1": "Double threat. One of them will connect."
+        "prompt": {
+          "0": "Find the move that creates two winning threats at once.",
+          "1": "One column sets up two simultaneous threats your opponent can't both stop.",
+          "2": "Look for a fork — a move that threatens in two directions."
+        },
+        "hint": {
+          "0": "Think about moves that add to two different groups at once.",
+          "1": "A double threat wins because your opponent can only block one."
+        },
+        "optimal": {
+          "0": "Perfect — you created the double threat."
+        },
+        "suboptimal": {
+          "0": "Good move, but a different column creates two threats at once."
+        },
+        "blunder": {
+          "0": "That misses the chance to create two simultaneous threats."
+        }
       },
       "claimeven": {
-        "0": "Claimeven working in my favor — I'm claiming below your even-row threat.",
-        "1": "I'll take that even-row claim. Your threat is neutralized."
+        "prompt": {
+          "0": "As Gray, you can secure a draw — find the Claimeven move.",
+          "1": "Gray has a drawing strategy here. Which column keeps it alive?",
+          "2": "Use Claimeven: Gray plays below every Green even-row threat."
+        },
+        "hint": {
+          "0": "Look for an even row where Green has a threat — Gray should mirror below it.",
+          "1": "Claimeven works by ensuring Gray always gets the square directly below Green's even-row threats."
+        },
+        "optimal": {
+          "0": "Exactly — that's the Claimeven move that secures the draw."
+        },
+        "suboptimal": {
+          "0": "You're still in the draw zone, but the Claimeven key column was stronger."
+        },
+        "blunder": {
+          "0": "That column gives up Gray's Claimeven drawing advantage."
+        }
       },
       "z_threat": {
-        "0": "Z-threat activated — that odd-row square is mine now.",
-        "1": "I've secured the parity chain. You'd need an even number of moves to stop me."
+        "prompt": {
+          "0": "A Z-threat gives you unstoppable parity control — find it.",
+          "1": "Use the Z-threat pattern to guarantee you get the winning odd-row square.",
+          "2": "One column sets up Z-threat parity so your opponent can't stop you."
+        },
+        "hint": {
+          "0": "Look for a column where your odd-row threat can't be claimed by your opponent.",
+          "1": "Z-threats work by creating a parity chain your opponent is forced to follow."
+        },
+        "optimal": {
+          "0": "Spot on — you activated the Z-threat."
+        },
+        "suboptimal": {
+          "0": "Reasonable move, but the Z-threat column creates stronger parity control."
+        },
+        "blunder": {
+          "0": "That move hands away your Z-threat parity advantage."
+        }
       },
       "odd_even_threat": {
-        "0": "Playing to the odd row — that's parity control on my side.",
-        "1": "Odd-row threat in place. Even rows won't save you."
+        "prompt": {
+          "0": "Green has two threat moves. One lands on an odd row (Green's home row) — that's the winner. Which column do you choose?",
+          "1": "Both moves create threats, but one lands on an odd row — Green's natural parity. That's the move that gives Green lasting control. Play it."
+        },
+        "hint": {
+          "0": "One of the threat moves lands on an odd row. Odd rows belong to Green — that's the correct target."
+        },
+        "optimal": {
+          "0": "Correct! The odd-row threat gives Green parity control — it can't be neutralised by Gray's claimeven strategy.",
+          "1": "Exactly right. Playing to the odd row aligns with Green's natural parity advantage."
+        },
+        "suboptimal": {
+          "0": "That move creates a threat, but it lands on an even row — Gray's parity. The odd-row threat in the other column is stronger."
+        },
+        "blunder": {
+          "0": "That column doesn't create a threat at all. Look for the moves that create an immediate winning window."
+        }
+      },
+      "forbidden_columns": {
+        "prompt": {
+          "0": "Mark every column that would hand your opponent an immediate win.",
+          "1": "Which columns are forbidden? Tag them all before submitting.",
+          "2": "Find every column where you would lose instantly — mark them all."
+        },
+        "hint": {
+          "0": "Look for columns where your opponent already has three in a row — playing there hands them a win.",
+          "1": "Check each column: would your opponent win immediately if you played there?"
+        },
+        "optimal": {
+          "0": "Perfect — you identified every forbidden column."
+        },
+        "suboptimal": {
+          "0": "You found some but missed {{missed}} forbidden column(s)."
+        },
+        "blunder": {
+          "0": "You tagged a safe column — that counts as a mistake.",
+          "1": "At least one of your tagged columns was safe to play."
+        }
       },
       "forced_win": {
-        "0": "I can force you to lose from here — let's see if you can find the escape.",
-        "1": "The path is forced — find the escape if you can."
+        "prompt": {
+          "0": "Force the win — play the line that leaves your opponent no escape.",
+          "1": "There's a forcing sequence here. Play it move by move.",
+          "2": "Every move must threaten your opponent. Find the forcing line."
+        },
+        "optimal": {
+          "0": "You forced the win — well played.",
+          "1": "Perfect sequence — your opponent had no escape."
+        },
+        "blunder": {
+          "0": "That move breaks the forcing line.",
+          "1": "The sequence fails here — your opponent can escape."
+        }
       },
       "figure_7": {
-        "0": "Figure-7 trap set — two threats you can't both stop.",
-        "1": "I've completed the Figure-7. Two threats incoming."
+        "prompt": {
+          "0": "Spot the Figure-7 pattern — find the move that creates two unstoppable threats.",
+          "1": "An L-shaped pattern is forming. Play the key cell to complete it.",
+          "2": "The Figure-7 trap is on the board. One move creates two threats."
+        },
+        "hint": {
+          "0": "Look for an L-shaped cluster of 4 discs — the fifth piece locks in two threats.",
+          "1": "Figure 7 creates two threats the opponent can't both block."
+        },
+        "optimal": {
+          "0": "Figure-7 trap complete — your opponent cannot block both threats.",
+          "1": "That completes the Figure-7 pattern. Two unstoppable threats.",
+          "2": "Perfect — the L-shape locks in. Your opponent is trapped.",
+          "3": "Exactly the right cell — the opponent can block one threat but not both."
+        },
+        "suboptimal": {
+          "0": "Good move, but completing the Figure-7 pattern was stronger.",
+          "1": "Close — the Figure-7 key cell creates two threats at once.",
+          "2": "Solid play, but the Figure-7 completion was the decisive move here."
+        },
+        "blunder": {
+          "0": "That misses the Figure-7 trap. Look for the L-shaped pattern.",
+          "1": "Wrong cell — the Figure-7 pattern needs one specific completing piece.",
+          "2": "That doesn't create the double threat. Find the key cell of the Figure-7.",
+          "3": "You missed the Figure-7. Scan for an L-shape of 4 discs."
+        }
       },
       "j_shape": {
-        "0": "J-Shape in place — I'm threatening in three directions now.",
-        "1": "Three simultaneous threats. You can block one, maybe two."
+        "prompt": {
+          "0": "The J-Shape creates three winning directions — find the key cell.",
+          "1": "An L-shaped cluster of 4 discs — complete it to create triple threats.",
+          "2": "Find the J-Shape completing cell. Your opponent can't block all three threats."
+        },
+        "hint": {
+          "0": "The J-Shape is an L-cluster. The completing cell unlocks three threat directions.",
+          "1": "Look for 4 discs in an L — the fifth piece creates threats vertically, horizontally, and diagonally."
+        },
+        "optimal": {
+          "0": "J-Shape complete — three threat directions. Unblockable!",
+          "1": "That locks in the J-Shape. Your opponent can block one, maybe two — not all three.",
+          "2": "Perfect — vertical, horizontal, and diagonal threats. Game over.",
+          "3": "Exactly — the triple threat from the J-Shape is unstoppable."
+        },
+        "suboptimal": {
+          "0": "Good, but completing the J-Shape gives you three unblockable threats.",
+          "1": "Solid move, but the J-Shape completing cell was the decisive play.",
+          "2": "Not bad — the J-Shape cell creates threats in three directions at once."
+        },
+        "blunder": {
+          "0": "That doesn't complete the J-Shape. Look for the L-cluster and its key cell.",
+          "1": "Wrong cell — the J-Shape needs one specific completing piece.",
+          "2": "You missed the J-Shape. The L-cluster of 4 discs is the clue.",
+          "3": "That skips the triple threat. Find the J-Shape completing cell."
+        }
       },
       "overcut": {
-        "0": "Overcut — my upper threat beats yours in this column.",
-        "1": "Same parity, upper wins. Your lower threat is dead."
+        "prompt": {
+          "0": "Two threats, same column — the upper one wins. Find the overcut.",
+          "1": "The overcut beats the undercut. Same parity, upper threat wins.",
+          "2": "Play above your opponent's threat to neutralize it — find the overcut."
+        },
+        "hint": {
+          "0": "Look for an upper threat that beats a lower one — same parity row.",
+          "1": "The overcut works when both threats share the same parity."
+        },
+        "optimal": {
+          "0": "Perfect overcut — the upper threat neutralizes the lower one.",
+          "1": "Same parity advantage — your upper threat wins the column.",
+          "2": "Clean overcut. Your opponent's lower threat can't reach first.",
+          "3": "Exactly — playing above the threat gives you the advantage."
+        },
+        "suboptimal": {
+          "0": "Good move, but the overcut column gave you a stronger position.",
+          "1": "Close — there was a column where an upper threat beats a lower one.",
+          "2": "Not bad, but the overcut opportunity was more decisive."
+        },
+        "blunder": {
+          "0": "That column doesn't exploit the overcut — your opponent's threat survives.",
+          "1": "You missed the overcut. The upper threat wins when parity is the same.",
+          "2": "Wrong column — look for same-parity threats where upper beats lower.",
+          "3": "That skips the overcut advantage. Same parity, upper threat wins."
+        }
       },
       "undercut": {
-        "0": "Undercut. Gravity fills bottom-up — your upper threat can't reach first.",
-        "1": "I'm taking the lower threat. Yours is blocked by my disc now."
+        "prompt": {
+          "0": "Two threats in the same column — the lower one wins. Find the undercut.",
+          "1": "An undercut is waiting — identify the column where a lower threat kills an upper one.",
+          "2": "Gravity works in your favor here. Find the undercut move."
+        },
+        "hint": {
+          "0": "Look for a column with threats at two different rows — the lower one wins.",
+          "1": "Same column, opposite parity rows — the undercut is a gravity exploit."
+        },
+        "optimal": {
+          "0": "That undercut neutralizes the upper threat perfectly.",
+          "1": "Gravity does the work — the lower threat wins the column.",
+          "2": "Clean undercut. Your opponent's upper threat is dead.",
+          "3": "Exactly right — same column, lower threat kills the upper one."
+        },
+        "suboptimal": {
+          "0": "Good thinking, but the undercut column was the killing move here.",
+          "1": "Close — there was a column where a lower threat neutralizes an upper one.",
+          "2": "Not bad, but you missed the undercut opportunity."
+        },
+        "blunder": {
+          "0": "That plays into the wrong parity — the undercut was elsewhere.",
+          "1": "You missed the undercut column. The lower threat wins.",
+          "2": "Wrong column — your opponent's threat is still alive.",
+          "3": "That doesn't exploit the gravity advantage. Look again."
+        }
       },
-      "suboptimal": {
-        "0": "I might have missed something there — see if you can take advantage.",
-        "1": "Not my sharpest move. There may be an opportunity for you.",
-        "2": "I gave you something — find it."
+      "generic": {
+        "optimal": {
+          "0": "Good move.",
+          "1": "Nice choice.",
+          "2": "That's the one.",
+          "3": "Well played.",
+          "4": "Sharp.",
+          "5": "Solid.",
+          "6": "You found it.",
+          "7": "That's the play.",
+          "8": "You're reading the board.",
+          "9": "Clean.",
+          "10": "Efficient.",
+          "11": "Exactly right.",
+          "12": "Strong.",
+          "13": "No wasted moves.",
+          "14": "You're thinking ahead.",
+          "15": "Keeping the pressure on.",
+          "16": "You're making this difficult.",
+          "17": "I didn't expect that.",
+          "18": "That's how you stay in control.",
+          "19": "You're tightening the grip."
+        },
+        "suboptimal": {
+          "0": "Not bad, but there was a sharper move.",
+          "1": "You're close — try to find the stronger option.",
+          "2": "Reasonable, but not the best here."
+        },
+        "blunder": {
+          "0": "Hmm, not the strongest move there.",
+          "1": "Your opponent will like that.",
+          "2": "That one's tricky — check the hint if you're stuck.",
+          "3": "That leaves a gap for your opponent.",
+          "4": "Not the best choice here.",
+          "5": "Your opponent has a good answer to that."
+        }
       },
-      "neutral": {
-        "0": "I'll take that square.",
-        "1": "Setting up my position.",
-        "2": "Let's see how this develops.",
-        "3": "Building my foundation.",
-        "4": "Keeping my options open.",
-        "5": "Every move counts.",
-        "6": "I like this square.",
-        "7": "Expanding my reach.",
-        "8": "Laying the groundwork.",
-        "9": "Staying flexible.",
-        "10": "A quiet move, but purposeful.",
-        "11": "I have a plan.",
-        "12": "Patience.",
-        "13": "Filling the gaps.",
-        "14": "The threat is stronger than the execution.",
-        "15": "Watching and waiting.",
-        "16": "Nothing flashy — just solid.",
-        "17": "I'm keeping my options alive.",
-        "18": "One move at a time.",
-        "19": "Holding my ground."
+      "summary": {
+        "perfect": {
+          "0": "Perfect set. Try a harder one.",
+          "1": "Clean sweep — excellent work!"
+        }
+      },
+      "sparring": {
+        "intro": {
+          "0": "Ready to play? I'll give you a real fight.",
+          "1": "Let's see what you've got. Good luck."
+        },
+        "hint": {
+          "generic": {
+            "0": "The best move is highlighted — trust the column.",
+            "1": "Look at the highlighted column. What does it set up?"
+          }
+        },
+        "review": {
+          "clean": {
+            "0": "Clean game. Nothing to revisit.",
+            "1": "Excellent — no mistakes to review."
+          },
+          "mistakes": {
+            "0": "Good game. One parity mistake decided it.",
+            "1": "A few moments to learn from — let's look.",
+            "2": "You played well. Let's find the edge.",
+            "3": "Some tactical moments worth revisiting."
+          }
+        },
+        "outcome": {
+          "win": "You won! Great game.",
+          "loss": "I won this one. Keep working at it.",
+          "draw": "It's a draw — well played."
+        }
+      },
+      "ai_move": {
+        "immediate_threat": {
+          "0": "I can win right now.",
+          "1": "That's game — connecting four."
+        },
+        "forced_block": {
+          "0": "I had to block that — you had a real threat there.",
+          "1": "No choice but to defend. Nice pressure."
+        },
+        "double_threat": {
+          "0": "Sorry — I've created two threats at once. You can only block one.",
+          "1": "Double threat. One of them will connect."
+        },
+        "claimeven": {
+          "0": "Claimeven working in my favor — I'm claiming below your even-row threat.",
+          "1": "I'll take that even-row claim. Your threat is neutralized."
+        },
+        "z_threat": {
+          "0": "Z-threat activated — that odd-row square is mine now.",
+          "1": "I've secured the parity chain. You'd need an even number of moves to stop me."
+        },
+        "odd_even_threat": {
+          "0": "Playing to the odd row — that's parity control on my side.",
+          "1": "Odd-row threat in place. Even rows won't save you."
+        },
+        "forced_win": {
+          "0": "I can force you to lose from here — let's see if you can find the escape.",
+          "1": "The path is forced — find the escape if you can."
+        },
+        "figure_7": {
+          "0": "Figure-7 trap set — two threats you can't both stop.",
+          "1": "I've completed the Figure-7. Two threats incoming."
+        },
+        "j_shape": {
+          "0": "J-Shape in place — I'm threatening in three directions now.",
+          "1": "Three simultaneous threats. You can block one, maybe two."
+        },
+        "overcut": {
+          "0": "Overcut — my upper threat beats yours in this column.",
+          "1": "Same parity, upper wins. Your lower threat is dead."
+        },
+        "undercut": {
+          "0": "Undercut. Gravity fills bottom-up — your upper threat can't reach first.",
+          "1": "I'm taking the lower threat. Yours is blocked by my disc now."
+        },
+        "suboptimal": {
+          "0": "I might have missed something there — see if you can take advantage.",
+          "1": "Not my sharpest move. There may be an opportunity for you.",
+          "2": "I gave you something — find it."
+        },
+        "neutral": {
+          "0": "I'll take that square.",
+          "1": "Setting up my position.",
+          "2": "Let's see how this develops.",
+          "3": "Building my foundation.",
+          "4": "Keeping my options open.",
+          "5": "Every move counts.",
+          "6": "I like this square.",
+          "7": "Expanding my reach.",
+          "8": "Laying the groundwork.",
+          "9": "Staying flexible.",
+          "10": "A quiet move, but purposeful.",
+          "11": "I have a plan.",
+          "12": "Patience.",
+          "13": "Filling the gaps.",
+          "14": "The threat is stronger than the execution.",
+          "15": "Watching and waiting.",
+          "16": "Nothing flashy — just solid.",
+          "17": "I'm keeping my options alive.",
+          "18": "One move at a time.",
+          "19": "Holding my ground."
+        }
       }
+    },
+    "ui": {
+      "title": "Personal AI Coach",
+      "weaknessMap": "Weakness map",
+      "queueCount_one": "{{count}} position to review",
+      "queueCount_other": "{{count}} positions to review",
+      "startReview": "Start review",
+      "emptyQueue": "No positions in queue — keep training to build your personal curriculum.",
+      "missRate": "miss rate"
     }
   },
   "stats": {
@@ -708,9 +722,21 @@
       }
     },
     "forbidden_columns": {
-      "optimal":    { "summary": { "0": "You found every forbidden column." } },
-      "suboptimal": { "summary": { "0": "{{found}} / {{total}} forbidden columns found." } },
-      "blunder":    { "summary": { "0": "At least one of your tagged columns was safe to play." } }
+      "optimal": {
+        "summary": {
+          "0": "You found every forbidden column."
+        }
+      },
+      "suboptimal": {
+        "summary": {
+          "0": "{{found}} / {{total}} forbidden columns found."
+        }
+      },
+      "blunder": {
+        "summary": {
+          "0": "At least one of your tagged columns was safe to play."
+        }
+      }
     }
   },
   "deepReveal": {
@@ -736,17 +762,50 @@
     "coach_recommend": "Work on {{pattern}} next."
   },
   "challengeSet": {
-    "immediate_threat": { "displayName": "Immediate Threat", "description": "Find the move that wins right now." },
-    "forced_block":     { "displayName": "Forced Block", "description": "Block your opponent's immediate winning threat." },
-    "double_threat":    { "displayName": "Double Threat", "description": "Create two simultaneous winning threats." },
-    "claimeven":        { "displayName": "Claimeven", "description": "Use Gray's Claimeven strategy to secure a draw." },
-    "z_threat":         { "displayName": "Z-Threat", "description": "Exploit Z-threat parity to guarantee the win." },
-    "odd_even_threat":  { "displayName": "Odd & Even Threats", "description": "Green has two threat moves. Pick the one that lands on an odd row — Green's natural parity — to guarantee control." },
-    "mixed":            { "displayName": "Mixed", "description": "A mix of all challenge types." },
-    "undercut":         { "displayName": "Undercut", "description": "Take the square below your opponent's threat." },
-    "overcut":          { "displayName": "Overcut", "description": "Play above your opponent's intended threat." },
-    "figure_7":         { "displayName": "Figure 7", "description": "Exploit the Figure-7 pattern." },
-    "j_shape":          { "displayName": "J-Shape", "description": "Exploit the J-Shape pattern." },
+    "immediate_threat": {
+      "displayName": "Immediate Threat",
+      "description": "Find the move that wins right now."
+    },
+    "forced_block": {
+      "displayName": "Forced Block",
+      "description": "Block your opponent's immediate winning threat."
+    },
+    "double_threat": {
+      "displayName": "Double Threat",
+      "description": "Create two simultaneous winning threats."
+    },
+    "claimeven": {
+      "displayName": "Claimeven",
+      "description": "Use Gray's Claimeven strategy to secure a draw."
+    },
+    "z_threat": {
+      "displayName": "Z-Threat",
+      "description": "Exploit Z-threat parity to guarantee the win."
+    },
+    "odd_even_threat": {
+      "displayName": "Odd & Even Threats",
+      "description": "Green has two threat moves. Pick the one that lands on an odd row — Green's natural parity — to guarantee control."
+    },
+    "mixed": {
+      "displayName": "Mixed",
+      "description": "A mix of all challenge types."
+    },
+    "undercut": {
+      "displayName": "Undercut",
+      "description": "Take the square below your opponent's threat."
+    },
+    "overcut": {
+      "displayName": "Overcut",
+      "description": "Play above your opponent's intended threat."
+    },
+    "figure_7": {
+      "displayName": "Figure 7",
+      "description": "Exploit the Figure-7 pattern."
+    },
+    "j_shape": {
+      "displayName": "J-Shape",
+      "description": "Exploit the J-Shape pattern."
+    },
     "forbidden_columns": {
       "displayName": "Forbidden Columns",
       "description": "Mark every column where playing immediately hands your opponent a win."
@@ -761,9 +820,32 @@
     "reviewed": "Reviewed",
     "emptyFilter": "Nothing here — switch tabs to see your other moves.",
     "detail": {
-      "notFound": "Blunder not found",
-      "noBlunderFound": "no blunder found",
-      "signInToUnlock": "Sign in to unlock"
+      "topbarTitle": "Mistake",
+      "moveLabel": "Move {{n}}",
+      "severity": {
+        "blunder": "Blunder",
+        "suboptimal": "Suboptimal"
+      },
+      "coach": {
+        "line1": "You played column {{n}} here.",
+        "line2": "Let me show you what worked better."
+      },
+      "legend": {
+        "yourMove": "your move",
+        "opponentThreat": "opponent threat"
+      },
+      "whatShouldIHave": "What should I have played?",
+      "markReviewed": "Mark as reviewed",
+      "markedReviewed": "Marked as reviewed",
+      "all_caught_up": "All caught up in this category!",
+      "none_reviewed": "None reviewed yet — tap a blunder to study it.",
+      "meta_count": "{{count}} mistake",
+      "meta_count_pl": "{{count}} mistakes",
+      "source_game": "{{date}} game",
+      "moveOf": "Move {{n}} / {{total}}",
+      "prev": "Prev",
+      "next": "Next",
+      "ofTotal": "{{n}} of {{total}}"
     },
     "gate": {
       "heading": "Sign up to save your mistakes",
@@ -800,34 +882,6 @@
       "suboptimal_move": "Suboptimal move",
       "drawing_move": "Drawing move"
     },
-    "detail": {
-      "topbarTitle": "Mistake",
-      "moveLabel": "Move {{n}}",
-      "severity": {
-        "blunder": "Blunder",
-        "suboptimal": "Suboptimal"
-      },
-      "coach": {
-        "line1": "You played column {{n}} here.",
-        "line2": "Let me show you what worked better."
-      },
-      "legend": {
-        "yourMove": "your move",
-        "opponentThreat": "opponent threat"
-      },
-      "whatShouldIHave": "What should I have played?",
-      "markReviewed": "Mark as reviewed",
-      "markedReviewed": "Marked as reviewed",
-      "all_caught_up": "All caught up in this category!",
-      "none_reviewed": "None reviewed yet — tap a blunder to study it.",
-      "meta_count": "{{count}} mistake",
-      "meta_count_pl": "{{count}} mistakes",
-      "source_game": "{{date}} game",
-      "moveOf": "Move {{n}} / {{total}}",
-      "prev": "Prev",
-      "next": "Next",
-      "ofTotal": "{{n}} of {{total}}"
-    },
     "to_review": "{{count}} to review",
     "cat": {
       "done": "done",
@@ -835,11 +889,11 @@
     }
   },
   "socratic": {
-    "ask":     "I'm going to make a mistake here. See if you can punish it.",
-    "wrong1":  "Not quite — look for the right square. Try again.",
-    "wrong2":  "Let me show you.",
+    "ask": "I'm going to make a mistake here. See if you can punish it.",
+    "wrong1": "Not quite — look for the right square. Try again.",
+    "wrong2": "Let me show you.",
     "correct": "Exactly! You saw it.",
-    "hint":    "Look for an even square directly above one of my discs."
+    "hint": "Look for an even square directly above one of my discs."
   },
   "lesson": {
     "node": {
@@ -850,7 +904,7 @@
     },
     "confirmation": {
       "header": "{{title}} — Practice",
-      "empty":  "No practice puzzles available yet."
+      "empty": "No practice puzzles available yet."
     },
     "immediate-threat": {
       "title": "Immediate Threats"
@@ -885,24 +939,24 @@
     "opening-centre": {
       "title": "Own the Centre",
       "socratic": {
-        "ask":     "You move first — where is the strongest opening move?",
-        "hint":    "Which column sits on the most possible four-in-a-row lines?",
+        "ask": "You move first — where is the strongest opening move?",
+        "hint": "Which column sits on the most possible four-in-a-row lines?",
         "correct": "Exactly — the centre column. It keeps the most winning paths alive."
       }
     },
     "opening-imitate": {
       "title": "I Play Where You Play",
       "socratic": {
-        "ask":     "Gray just played column 2 again. What is Green's best reply?",
-        "hint":    "Which column sits directly above Gray's last disc?",
+        "ask": "Gray just played column 2 again. What is Green's best reply?",
+        "hint": "Which column sits directly above Gray's last disc?",
         "correct": "Exactly — play where they play. Answering directly above Gray's last disc keeps the imitation going."
       }
     },
     "opening-sharp": {
       "title": "Sharp Openings",
       "socratic": {
-        "ask":     "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
-        "hint":    "Look at Green's threats on the right flank. Which column completes them right now?",
+        "ask": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
+        "hint": "Look at Green's threats on the right flank. Which column completes them right now?",
         "correct": "Exactly — that column completes Green's third-row threat right now. Every other column throws the win away; this is Allen's 'only one move to win' Third-Row Gambit."
       }
     }

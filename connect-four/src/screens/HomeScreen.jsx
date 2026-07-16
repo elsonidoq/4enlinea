@@ -8,11 +8,25 @@ import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { stashReturnTo } from '../lib/postLoginReturn.js';
 import { isOfferShownMarkerSet, shouldShowHomeFallbackOffer } from '../lib/onboardingOfferMarker.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function HomeScreen({ go }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
   const [authOpen, setAuthOpen] = useState(false);
+  const { speakCoachMessage } = useCoachSpeech();
+
+  // `coach.spoken.home.welcome.0` declares intent to be voiced (see
+  // docs/architecture/coach-audio-conventions.md) but had no play site — the text was rendered
+  // via t() only, so the clip never played. Mirrors OnboardingMissionScreen's startedRef guard
+  // against React 18 StrictMode's double-mount.
+  const spokeRef = useRef(false);
+  useEffect(() => {
+    if (spokeRef.current) return;
+    spokeRef.current = true;
+    speakCoachMessage('coach.spoken.home.welcome.0');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Epic 8 — Onboarding Experience, US3 (T036, FR-007 Scenario 5, research.md R5).
   // READ-ONLY fallback check: a user who engaged (onboarding_status === 'seen') but left before
@@ -123,7 +137,7 @@ export function HomeScreen({ go }) {
           }}
         />
 
-        <CoachDialog messages={[{ text: t('coach.home.welcome.0'), mood: 'happy' }]} />
+        <CoachDialog messages={[{ text: t('coach.spoken.home.welcome.0'), mood: 'happy' }]} />
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button

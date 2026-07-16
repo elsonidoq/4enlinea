@@ -288,7 +288,7 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   } else if (analysis) {
     const disc = analysis.side === 'first' ? 'green' : 'gray';
     const discLabel = analysis.side === 'first' ? t('review.playedGreen') : t('review.playedGray');
-    const isCleanPhrase = analysis.summaryPhraseKey.startsWith('coach.sparring.review.clean');
+    const isCleanPhrase = analysis.summaryPhraseKey.startsWith('coach.spoken.sparring.review.clean');
     const summaryText = (isCleanPhrase && isLoss)
       ? t('review.cleanButLost')
       : t(analysis.summaryPhraseKey);

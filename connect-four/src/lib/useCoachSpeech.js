@@ -246,7 +246,7 @@ export function useCoachSpeech() {
    * If the current language's manifest hasn't loaded yet, stores the key
    * and plays it once ready.
    *
-   * @param {string} key - i18n key (e.g. "coach.immediate_threat.optimal.0")
+   * @param {string} key - i18n key (e.g. "coach.spoken.immediate_threat.optimal.0")
    */
   const speakCoachMessage = useCallback(
     (key) => {

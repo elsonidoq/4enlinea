@@ -30,7 +30,7 @@ function isValidCol0(col) {
 
 /**
  * Navigate a nested translations object by dot-separated prefix and return
- * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * a randomly chosen full key string (e.g. 'coach.spoken.immediate_threat.optimal.0').
  * Returns null if the prefix resolves to a non-object or empty object.
  */
 function pickFromPool(translations, prefix) {
@@ -91,7 +91,7 @@ export function createEvaluateMoveHandler({ solver, i18nTranslations }) {
 
       // Pick i18n keys from pools
       const coachPhraseKey = phrasePoolKey
-        ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+        ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
         : null;
 
       const summaryLineKey = phrasePoolKey
