@@ -616,3 +616,25 @@ second user, which local dev could not exercise. Confirm on staging with seeded 
     duplicates (not a generic error); B's first import of an already-imported room reports success with
     zero collision count.
   - **Source**: spec 041 (Batch C items 40–44).
+
+---
+
+## Epic 5 / Epic 4 — Paid puzzle category paywall (spec 045 / W11 Batch C Task 28)
+
+Task 28 generated, approved, and reindexed a real paid category (`undercut`) locally and confirmed
+the free-user paywall fires. The paid-user (unlocked-access) side of the same check could not be
+exercised locally at all.
+
+- [ ] **Paid user reaches a paid puzzle category without a paywall.**
+  - **What**: as a genuinely paid user, open Challenges, pick the `undercut` set (or any of
+    undercut/overcut/figure_7/j_shape/mixed), and confirm it opens straight into the puzzle set —
+    no `UpgradeModal`.
+  - **Why staging**: the auto-mode safety classifier blocks every `users`-table UPDATE locally,
+    including narrowly-scoped ones (Batches D and E both hit this same wall) — there is no way to
+    flip a local test account's `tier` to `'paid'` to exercise this branch.
+  - **Expected**: paid user's `tier==='paid'` gate (existing, documented-intentional per W6 Task 16)
+    lets the category load with no paywall interruption.
+  - **Source**: W11 Task 28 Step 4; spec 045.
+- [ ] **Paid user sees no deep-reveal quota counter and no upgrade CTA** (W4 Task 7's paid branch is
+      unit-tested only — carried here for the same reason, listed previously under Epic 5's other
+      staging checks; not new, cross-referenced).
