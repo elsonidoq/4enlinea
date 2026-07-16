@@ -6,6 +6,7 @@
 // All DB-accessing routes also require supabase to be initialized.
 
 import { CHALLENGE_SETS } from './challengeSets.js';
+import { resolveQueueOwner } from './anonBlunderAccess.js';
 import { importForUser, saveLiveGame, extractAndSaveBlunders } from './papergamesImporter.js';
 import { randomUUID } from 'node:crypto';
 import { logError } from './logger.js';
@@ -222,8 +223,12 @@ export function registerUserRoutes(app, supabase) {
   });
 
   // T015: Challenge progress — per-category accuracy, cleared status
+  // Authenticated → user_id-scoped (unchanged). Anonymous → device_uuid-scoped via
+  // ?device_uuid, mirroring the anon-blunder-queue precedent (resolveQueueOwner,
+  // migration 058). Missing/invalid device_uuid for an anon caller → 401.
   app.get('/api/user/challenge-progress', async (req, res) => {
-    if (!requireUser(req, res)) return;
+    const owner = resolveQueueOwner(req.user, req.query.device_uuid || null);
+    if (!owner.ok) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
 
     try {
@@ -245,11 +250,13 @@ export function registerUserRoutes(app, supabase) {
         activePuzzleIds.add(p.id);
       }
 
-      // Query 2: user attempts with puzzle category via inner join
-      const { data: attempts, error: err2 } = await supabase
+      // Query 2: attempts with puzzle category via inner join, scoped per owner
+      const attemptsQuery = supabase
         .from('puzzle_attempts')
-        .select('puzzle_id, first_attempt_correct, puzzles!inner(category)')
-        .eq('user_id', req.user.id);
+        .select('puzzle_id, first_attempt_correct, puzzles!inner(category)');
+      const { data: attempts, error: err2 } = owner.scope === 'user'
+        ? await attemptsQuery.eq('user_id', owner.userId)
+        : await attemptsQuery.eq('device_uuid', owner.deviceUuid).is('user_id', null);
 
       if (err2) return res.status(500).json({ error: err2.message });
 

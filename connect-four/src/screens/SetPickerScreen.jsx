@@ -10,7 +10,7 @@ const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SetPickerScreen({ go, goBack }) {
   const { t } = useTranslation();
-  const { session } = useStore();
+  const { session, store } = useStore();
   const handleUpgrade = useUpgradeCheckout();
   const isAuthenticated = !!session;
   const [sets, setSets] = useState([]);
@@ -25,13 +25,29 @@ export function SetPickerScreen({ go, goBack }) {
         const fetches = [
           fetch(`${API}/api/puzzles/counts`),
         ];
+        let progressFetchIndex = null;
         if (isAuthenticated) {
+          progressFetchIndex = fetches.length;
           fetches.push(
             fetch(`${API}/api/user/challenge-progress`, {
               credentials: 'include',
               headers: { Authorization: `Bearer ${session.access_token}` },
             }),
           );
+        } else {
+          // Anonymous caller: scope progress by the local device_uuid (same
+          // pattern as the anon free deep-reveal queue lookup in ReviewScreen).
+          // No device_uuid yet (fresh profile) → degrade silently, no request.
+          const profile = await store.getProfile().catch(() => null);
+          const deviceUuid = profile?.device_uuid;
+          if (deviceUuid) {
+            progressFetchIndex = fetches.length;
+            fetches.push(
+              fetch(`${API}/api/user/challenge-progress?device_uuid=${encodeURIComponent(deviceUuid)}`, {
+                credentials: 'include',
+              }),
+            );
+          }
         }
 
         const results = await Promise.all(fetches);
@@ -43,9 +59,9 @@ export function SetPickerScreen({ go, goBack }) {
         setSets(allSets.filter(s => (allCounts[s.slug] ?? 0) > 0));
         setCounts(allCounts);
 
-        if (isAuthenticated && results[1]) {
+        if (progressFetchIndex !== null && results[progressFetchIndex]) {
           try {
-            const progressData = await results[1].json();
+            const progressData = await results[progressFetchIndex].json();
             setProgressData(progressData);
           } catch (err) {
             console.error('Failed to fetch challenge progress', err);
