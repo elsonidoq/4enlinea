@@ -41,7 +41,7 @@ import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvS
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
-import { buildGoogleAuthorizeUrl } from './authUtils.js';
+import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
@@ -452,10 +452,7 @@ app.post('/api/auth/anonymous', async (req, res) => {
 
 async function loadUser(req, _res, next) {
   req.user = null;
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : req.cookies?.sb_access_token;
+  const token = resolveAuthToken(req.headers.authorization, req.cookies);
 
   if (!token || !supabase) return next();
 

@@ -31,7 +31,6 @@ export function SetPickerScreen({ go, goBack }) {
           fetches.push(
             fetch(`${API}/api/user/challenge-progress`, {
               credentials: 'include',
-              headers: { Authorization: `Bearer ${session.access_token}` },
             }),
           );
         } else {
@@ -75,7 +74,7 @@ export function SetPickerScreen({ go, goBack }) {
       }
     }
     fetchData();
-  }, [isAuthenticated, session?.access_token]);
+  }, [isAuthenticated]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
