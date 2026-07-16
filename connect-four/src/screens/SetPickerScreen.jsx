@@ -8,6 +8,37 @@ import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
+// Anonymous progress is derived entirely from the LOCAL store — anon puzzle
+// attempts are written to IndexedDB (IndexedDBStore#recordPuzzleAttempt) and
+// never reach the server, so a server-side read for an anon caller always
+// returns empty. `/api/puzzles` is public static puzzle metadata (id →
+// category), not per-user state, so consulting it to bucket the local
+// attempts by category is not a "server round trip for progress" in the
+// sense this fix removes.
+function buildLocalProgress(allCounts, puzzleCategoryMap, attempts) {
+  const attemptedByCategory = {};
+  const correctByCategory = {};
+  for (const a of attempts) {
+    const cat = puzzleCategoryMap[a.puzzle_id];
+    if (!cat) continue;
+    if (!attemptedByCategory[cat]) attemptedByCategory[cat] = new Set();
+    if (!correctByCategory[cat]) correctByCategory[cat] = new Set();
+    attemptedByCategory[cat].add(a.puzzle_id);
+    if (a.first_attempt_correct) correctByCategory[cat].add(a.puzzle_id);
+  }
+
+  const progress = {};
+  for (const slug of Object.keys(allCounts)) {
+    const total = allCounts[slug] ?? 0;
+    const attempted = attemptedByCategory[slug]?.size || 0;
+    const correct = correctByCategory[slug]?.size || 0;
+    const accuracy = attempted > 0 ? correct / attempted : 0;
+    const cleared = correct >= total && total > 0;
+    progress[slug] = { attempted, correct, total, accuracy, cleared };
+  }
+  return { progress };
+}
+
 export function SetPickerScreen({ go, goBack }) {
   const { t } = useTranslation();
   const { session, store } = useStore();
@@ -33,20 +64,6 @@ export function SetPickerScreen({ go, goBack }) {
               credentials: 'include',
             }),
           );
-        } else {
-          // Anonymous caller: scope progress by the local device_uuid (same
-          // pattern as the anon free deep-reveal queue lookup in ReviewScreen).
-          // No device_uuid yet (fresh profile) → degrade silently, no request.
-          const profile = await store.getProfile().catch(() => null);
-          const deviceUuid = profile?.device_uuid;
-          if (deviceUuid) {
-            progressFetchIndex = fetches.length;
-            fetches.push(
-              fetch(`${API}/api/user/challenge-progress?device_uuid=${encodeURIComponent(deviceUuid)}`, {
-                credentials: 'include',
-              }),
-            );
-          }
         }
 
         const results = await Promise.all(fetches);
@@ -58,12 +75,34 @@ export function SetPickerScreen({ go, goBack }) {
         setSets(allSets.filter(s => (allCounts[s.slug] ?? 0) > 0));
         setCounts(allCounts);
 
-        if (progressFetchIndex !== null && results[progressFetchIndex]) {
+        if (isAuthenticated) {
+          if (progressFetchIndex !== null && results[progressFetchIndex]) {
+            try {
+              const progressData = await results[progressFetchIndex].json();
+              setProgressData(progressData);
+            } catch (err) {
+              console.error('Failed to fetch challenge progress', err);
+              setProgressData(null);
+            }
+          }
+        } else {
+          // Anonymous: read progress from the local store (see
+          // buildLocalProgress above) instead of the server.
           try {
-            const progressData = await results[progressFetchIndex].json();
-            setProgressData(progressData);
+            const [puzzlesRes, attempts] = await Promise.all([
+              fetch(`${API}/api/puzzles`),
+              store.getAllPuzzleAttempts(),
+            ]);
+            const puzzlesData = await puzzlesRes.json();
+            const puzzleCategoryMap = {};
+            for (const cat of puzzlesData.categories || []) {
+              for (const p of cat.puzzles || []) {
+                puzzleCategoryMap[p.id] = cat.id;
+              }
+            }
+            setProgressData(buildLocalProgress(allCounts, puzzleCategoryMap, attempts));
           } catch (err) {
-            console.error('Failed to fetch challenge progress', err);
+            console.error('Failed to compute local challenge progress', err);
             setProgressData(null);
           }
         }

@@ -50,3 +50,41 @@ test('SetCard renders singular/plural position counts correctly in Spanish', () 
   assert.ok(screen.getByText('· 66 posiciones'));
   cleanup();
 });
+
+// QA remediation Fix 2: anon progress must come from the LOCAL store, and
+// SetCard must render it regardless of `isAuthenticated` — the previous gate
+// (`isAuthenticated && progress && !locked`) silently discarded anon progress
+// that the screen now legitimately supplies. Assert what the user sees.
+test('SetCard renders progress for an anonymous (isAuthenticated=false), non-locked card', () => {
+  const progress = { attempted: 3, correct: 2, total: 5, accuracy: 2 / 3, cleared: false };
+  renderWithLang('en', (
+    <SetCard
+      title="Immediate Threat"
+      stars={3}
+      positionCount={5}
+      locked={false}
+      isAuthenticated={false}
+      progress={progress}
+      onClick={() => {}}
+    />
+  ));
+  assert.ok(screen.getByLabelText('Puzzle progress'));
+  cleanup();
+});
+
+test('SetCard hides progress on a locked card even when progress data exists (anon or signed-in)', () => {
+  const progress = { attempted: 3, correct: 2, total: 5, accuracy: 2 / 3, cleared: false };
+  renderWithLang('en', (
+    <SetCard
+      title="Immediate Threat"
+      stars={3}
+      positionCount={5}
+      locked={true}
+      isAuthenticated={false}
+      progress={progress}
+      onClick={() => {}}
+    />
+  ));
+  assert.equal(screen.queryByLabelText('Puzzle progress'), null);
+  cleanup();
+});

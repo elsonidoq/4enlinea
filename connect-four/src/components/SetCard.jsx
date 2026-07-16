@@ -11,9 +11,15 @@ function getAccuracyColor(accuracy) {
   return '#f44336';
 }
 
-export function SetCard({ title, stars, positionCount, locked, onClick, progress, isAuthenticated }) {
+// `isAuthenticated` is intentionally accepted-but-unused: callers (e.g.
+// SetPickerScreen) still pass it, but progress display no longer gates on
+// it — see showProgress below.
+export function SetCard({ title, stars, positionCount, locked, onClick, progress }) {
   const { t } = useTranslation();
-  const showProgress = isAuthenticated && progress && !locked;
+  // Progress renders for anyone (signed-in or anon) once it exists and the
+  // set isn't locked — anon progress comes from the local store (see
+  // SetPickerScreen), so auth state is not a valid gate here.
+  const showProgress = !!progress && !locked;
 
   const rightSlot = showProgress && progress.cleared ? (
     <div style={{
