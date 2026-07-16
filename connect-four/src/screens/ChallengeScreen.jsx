@@ -446,9 +446,22 @@ export function ChallengeScreen({
       initPuzzle(puzzles[nextIdx]);
       setPhase('pre-move');
     } else if (lessonMode) {
-      store.saveLessonProgress(lessonId, 'complete');
-      track('lesson_completed', { lessonId });
-      go('saga');
+      // Task 19 fix (finding 16): SagaScreen refetches lesson-progress on every mount
+      // (its useEffect deps are empty besides `store`, and it genuinely remounts —
+      // SCREENS[key] returns the same stable component reference each time, but the
+      // Navigator swaps component *type* on every go(), which React always unmounts
+      // and remounts). The stale-map bug was a race: this save fired without being
+      // awaited, so go('saga') could land and re-fetch before the write committed —
+      // reproducing exactly as "server already agrees, but /saga still shows old
+      // state until a manual reload". Await the save (or let it fail loudly) before
+      // navigating so the refetch on the new mount always sees the fresh status.
+      store.saveLessonProgress(lessonId, 'complete')
+        .catch(err => console.error('[ChallengeScreen] saveLessonProgress failed:', err))
+        .finally(() => {
+          track('lesson_completed', { lessonId });
+          go('saga');
+        });
+      return;
     } else {
       go('summary', { results: newResults, category });
     }

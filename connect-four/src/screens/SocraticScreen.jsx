@@ -63,9 +63,15 @@ export function SocraticScreen({ go, goBack, lessonId }) {
         confirmationChallenges: lesson.confirmationChallenges || null,
       });
     } else {
-      store.saveLessonProgress(lessonId, 'complete');
-      track('lesson_completed', { lessonId });
-      go('saga');
+      // Task 19 fix (finding 16): same race as ChallengeScreen's lessonMode completion —
+      // await the save before navigating so SagaScreen's mount-refetch always sees the
+      // committed status (see ChallengeScreen.jsx handleNext for the full explanation).
+      store.saveLessonProgress(lessonId, 'complete')
+        .catch(err => console.error('[SocraticScreen] saveLessonProgress failed:', err))
+        .finally(() => {
+          track('lesson_completed', { lessonId });
+          go('saga');
+        });
     }
   }
 
