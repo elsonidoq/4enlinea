@@ -818,7 +818,11 @@
       "none_reviewed": "None reviewed yet — tap a blunder to study it.",
       "meta_count": "{{count}} mistake",
       "meta_count_pl": "{{count}} mistakes",
-      "source_game": "{{date}} game"
+      "source_game": "{{date}} game",
+      "moveOf": "Move {{n}} / {{total}}",
+      "prev": "Prev",
+      "next": "Next",
+      "ofTotal": "{{n}} of {{total}}"
     },
     "to_review": "{{count}} to review",
     "cat": {
@@ -900,6 +904,9 @@
     }
   },
   "review": {
+    "title": "Review",
+    "playedGreen": "You played Green",
+    "playedGray": "You played Gray",
     "share": {
       "button": "Share",
       "copied": "Link copied!"

@@ -272,7 +272,7 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
     coachMessages = [{ text: error, mood: 'sad' }];
   } else if (analysis) {
     const disc = analysis.side === 'first' ? 'green' : 'gray';
-    const discLabel = analysis.side === 'first' ? 'You played Green' : 'You played Gray';
+    const discLabel = analysis.side === 'first' ? t('review.playedGreen') : t('review.playedGray');
     coachMessages = [{ text: t(analysis.summaryPhraseKey), mood: 'happy', disc, discLabel }];
   }
 
@@ -283,7 +283,7 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Review" onBack={goBack} onLogoClick={() => go('home')} />
+      <TopBar title={t('review.title')} onBack={goBack} onLogoClick={() => go('home')} />
 
       <CoachDialog fixed messages={coachMessages} />
 

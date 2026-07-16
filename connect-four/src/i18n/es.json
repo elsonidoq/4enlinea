@@ -818,7 +818,11 @@
       "none_reviewed": "Ninguno revisado todavía — toca un error grave para estudiarlo.",
       "meta_count": "{{count}} error",
       "meta_count_pl": "{{count}} errores",
-      "source_game": "partida del {{date}}"
+      "source_game": "partida del {{date}}",
+      "moveOf": "Jugada {{n}} / {{total}}",
+      "prev": "Anterior",
+      "next": "Siguiente",
+      "ofTotal": "{{n}} de {{total}}"
     },
     "to_review": "{{count}} para repasar",
     "cat": {
@@ -900,6 +904,9 @@
     }
   },
   "review": {
+    "title": "Análisis",
+    "playedGreen": "Jugaste con Verde",
+    "playedGray": "Jugaste con Gris",
     "share": {
       "button": "Compartir",
       "copied": "¡Enlace copiado!"
