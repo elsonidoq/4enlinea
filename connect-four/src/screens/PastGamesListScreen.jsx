@@ -120,9 +120,9 @@ function GameCard({ game, t, onClick }) {
 }
 
 const SORTS = [
-  { key: 'recent',          label: 'Recent' },
-  { key: 'played_well',     label: 'Played Well' },
-  { key: 'worst_blunders',  label: 'Worst Mistakes' },
+  { key: 'recent',          label: 'games.sort_recent' },
+  { key: 'played_well',     label: 'games.sort_played_well' },
+  { key: 'worst_blunders',  label: 'games.sort_worst_mistakes' },
 ];
 
 const FILTERS = [
@@ -247,7 +247,7 @@ export function PastGamesListScreen({ go, goBack }) {
                 WebkitTapHighlightColor: 'transparent',
               }}
             >
-              {label}
+              {t(label)}
             </button>
           );
         })}
