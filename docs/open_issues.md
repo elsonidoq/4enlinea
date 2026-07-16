@@ -728,3 +728,12 @@ D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped f
 5. Run `npm run test:fast` once per lesson (or batch) before committing.
 
 Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`, `project_spanish_is_argentinian_voseo`; OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
+
+## OI-37 — Accuracy 100% still reads oddly next to a lost game (product question, not a bug)
+
+**Status**: deferred / open (surfaced during Batch B task 18, finding 15)
+**Area**: `connect-four/src/screens/ReviewScreen.jsx` (Accuracy card)
+
+Task 18 fixed the *copy* contradiction: a 0-mistake resigned/lost game now shows `review.cleanButLost` ("No mistakes on the board — but the game was lost. Review how it ended.") instead of the old "Clean game. Nothing to revisit." copy, and the Past Games card suppresses its "No mistakes" chip when `outcome === 'lost'`. **The Accuracy metric itself (100%) was deliberately left unchanged** — it measures board-move optimality (every scored move matched the solver's best line) and is correct on its own terms; resigning isn't a board move and is out of its denominator by design. Per memory `project_polish_epics_pipeline`, do not "fix" this by folding resignation into the accuracy calculation.
+
+Whether a 100%-accuracy badge should still be visually softened, annotated, or paired with an explicit "you resigned" note when the outcome is a loss is a product/UX call, not a mechanical fix — needs its own brainstorm if picked up. Not blocking; the copy fix already removes the "flawless" contradiction from the coach line.
