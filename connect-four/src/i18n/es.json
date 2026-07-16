@@ -941,6 +941,12 @@
   },
   "settings": {
     "title": "Configuración",
+    "subscriptionHeading": "Suscripción",
+    "planFree": "Plan gratis",
+    "planPaid": "DecodeC4 Pro",
+    "upgradeCta": "Hacete Pro",
+    "manageSubscription": "Gestioná tu suscripción",
+    "portalError": "No pudimos abrir el portal de facturación. Probá de nuevo.",
     "language": {
       "label": "Idioma",
       "en": "Inglés",

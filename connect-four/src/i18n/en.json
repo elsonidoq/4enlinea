@@ -941,6 +941,12 @@
   },
   "settings": {
     "title": "Settings",
+    "subscriptionHeading": "Subscription",
+    "planFree": "Free plan",
+    "planPaid": "DecodeC4 Pro",
+    "upgradeCta": "Upgrade to Pro",
+    "manageSubscription": "Manage subscription",
+    "portalError": "Couldn't open the billing portal. Please try again.",
     "language": {
       "label": "Language",
       "en": "English",

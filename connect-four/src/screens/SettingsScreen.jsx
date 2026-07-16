@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
+import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { track } from '../lib/track.js';
 import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
 import { useLanguage } from '../lib/useLanguage.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -32,6 +34,29 @@ export function SettingsScreen({ go, goBack }) {
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ── Subscription section (D3) ───────────────────────────────────────────
+  const [tier, setTier] = useState('free');
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [portalError, setPortalError] = useState(false);
+  const handleUpgrade = useUpgradeCheckout('/settings');
+
+  async function openPortal() {
+    setPortalError(false);
+    try {
+      const res = await fetch(`${API}/api/stripe/portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ returnPath: '/settings' }),
+      });
+      if (!res.ok) { setPortalError(true); return; }
+      const { portalUrl } = await res.json();
+      window.location.href = portalUrl;
+    } catch (_) {
+      setPortalError(true);
+    }
+  }
+
   // ── Import state ───────────────────────────────────────────────────────────
   const [importing, setImporting] = useState(false);
   const [importJobId, setImportJobId] = useState(null);
@@ -50,6 +75,7 @@ export function SettingsScreen({ go, goBack }) {
         const id = profile.papergames_id || '';
         setPapergamesId(id);
         setSavedValue(id);
+        setTier(profile.tier === 'paid' ? 'paid' : 'free');
       } catch (_) {
         // Ignore — user can still type
       }
@@ -407,6 +433,28 @@ export function SettingsScreen({ go, goBack }) {
           </button>
         </section>
 
+        {/* D3: tier-aware Subscription section — free -> UpgradeModal (5th call
+            site, identical props to the other four); paid -> Stripe billing
+            portal, which had zero frontend callers before this. */}
+        <section>
+          <h3>{t('settings.subscriptionHeading')}</h3>
+          <p>{tier === 'paid' ? t('settings.planPaid') : t('settings.planFree')}</p>
+          {tier === 'paid' ? (
+            <button className="btn btn-ghost" onClick={openPortal} style={{ width: '100%', fontSize: 14, padding: '10px 0' }}>
+              {t('settings.manageSubscription')}
+            </button>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => setUpgradeOpen(true)} style={{ width: '100%', fontSize: 14, padding: '10px 0' }}>
+              {t('settings.upgradeCta')}
+            </button>
+          )}
+          {portalError && (
+            <p role="alert" style={{ fontSize: 13, color: 'var(--eval-bad)', margin: '10px 0 0' }}>
+              {t('settings.portalError')}
+            </p>
+          )}
+        </section>
+
         {/* OI-15: language switcher machinery — es.json is a partial bundle
             (2 of 24 sections) until the separate translation effort lands. */}
         <section>
@@ -426,6 +474,10 @@ export function SettingsScreen({ go, goBack }) {
 
         {devReset}
       </div>
+
+      {upgradeOpen && (
+        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
+      )}
     </div>
   );
 }
