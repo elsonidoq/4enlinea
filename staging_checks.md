@@ -554,3 +554,65 @@ For each check record:
   - **Why staging**: migrations apply at deploy time via `migrate.js`; local dev may run a different DB. Migration 059 is **multi-statement DDL** (`ALTER` + `DROP CONSTRAINT ... CASCADE` + `ADD PRIMARY KEY`), so it is exactly the case OI-31 flags — verify the staging deploy uses a **session pooler (5432)** connection, not the transaction pooler (6543), or the migration can fail.
   - **Expected**: migration applies cleanly; English deep-reveal cache hits are unchanged; Spanish requests (`Accept-Language: es` / `?lang=es`) produce and serve Spanish text + Spanish-accented audio from their own locale rows.
   - **Source**: this session's Spanish deep-reveal plan (Task 5), `docs/superpowers/plans/2026-07-14-spanish-audio-and-deep-reveal-i18n.md`. Cross-ref OI-31, OI-26.
+
+## Epic 7 — Platform Hardening (spec 047) — added by Batch F
+
+Live-verified GOOD on https://staging.decodec4.xyz via `curl -sI` (2026-07-15): CSP present
+(`frame-ancestors 'none'`, `object-src 'none'`, `script-src 'self'`, `media-src 'self' https://jkqilynpshutqcceopdn.supabase.co`,
+`connect-src 'self' https://papergames.io wss://papergames.io https://*.ingest.sentry.io`),
+HSTS `max-age=31536000; includeSubDomains`, `x-content-type-options: nosniff`,
+`x-frame-options: SAMEORIGIN`, `referrer-policy: no-referrer`, HTTP→HTTPS `301`. `/.env`, `/.git/config`,
+`/assets/index.js.map` return `200` but with `content-type: text/html` (the SPA index.html fallback, NOT
+the real files) — no secret leak, though a true `404` would be tidier. The items below still need a real
+browser/session on staging and could NOT be settled by header curls:
+
+- [ ] **Coach/deep-reveal audio actually PLAYS under the active CSP.** CSP is only enforced on the
+      Express-served build (invisible under local Vite dev), so local playback does not prove `media-src`
+      lets the `<audio>` element fetch the signed Supabase URL. **Why staging:** need the CSP-active deploy.
+      **Expected:** a coach/deep-reveal clip plays with no `media-src`/CSP console violation.
+      **Source:** spec 047 item 9.
+- [ ] **Full Google OAuth round-trip completes under CSP** (redirect to `localhost:3001`/prod host, return,
+      session set) with no CSP `connect-src`/`form-action` violation. **Why staging:** real cross-origin
+      OAuth redirect never exercised locally (dev-skip-auth only). **Source:** spec 047 item 13.
+- [ ] **Prod session cookies are `Secure; HttpOnly; SameSite=Lax`.** Verify the `Set-Cookie` on
+      `/api/auth/*` at staging (local dev sets non-Secure cookies over http). **Source:** spec 047 item 13.
+- [ ] **XFF spoof rejected under trust-proxy.** A forged `X-Forwarded-For: 127.0.0.1` must NOT grant
+      localhost-only/admin access (server should key off `req.socket.remoteAddress`, per memory
+      `project_index_hardening_traps`). **Why staging:** requires the prod trust-proxy config.
+      **Source:** spec 047 item 13.
+- [ ] **Unauth admin endpoints rejected in prod** (`requireAdmin`/`requireLocalhost` are NO-OPs outside
+      `NODE_ENV=production`, so this is only real on a prod-flagged deploy). **Source:** spec 047 item 13.
+- [ ] **Server fails safe if the prod flag is unset while pointing at the prod DB** (boot refuses / does not
+      silently downgrade auth). Code-inspect + verify on deploy. **Source:** spec 047 item 13.
+
+---
+
+## Epic 1 — Past Games & Mistakes Data Integrity (spec 041) — added by Batch C (QA run 2026-07-15)
+
+Batch C verified the mistake-review / deep-reveal UI and small-scale category counts locally, but the
+following data-integrity acceptance items depend on production-like data volume or a genuinely separate
+second user, which local dev could not exercise. Confirm on staging with seeded data.
+
+- [ ] **Coach queue reachability at volume (no 50-row ceiling).**
+  - **What**: seed a user with ~137 blunders (incl. low-frequency categories like `undercut`, `forced_win`);
+    page the coach queue to completion.
+  - **Why staging**: local run had only a handful of blunders — the 50-row truncation / pagination boundary
+    is never crossed locally.
+  - **Expected**: all 137 are reachable; ordering (severity DESC, created_at ASC) holds across pages; the
+    "N to review" count equals the true total, not 50.
+  - **Source**: spec 041 FR (Batch C items 31–34).
+- [ ] **Aggregate counts beyond the 1,000-row cap.**
+  - **What**: seed >1,000 blunder rows and >1,000 puzzle-attempt rows; check overall stats, per-game mistake
+    counts, weakness map, and per-category aggregates.
+  - **Why staging**: local data never approaches 1,000 rows, so a silent cap would not surface.
+  - **Expected**: every surface reflects all rows; no 1,000 truncation.
+  - **Source**: spec 041 (Batch C items 38–39).
+- [ ] **Per-user import isolation (same papergames room, two users).**
+  - **What**: as user A import room X; then as a genuinely separate user B import the same room X.
+  - **Why staging**: needs two real, separately-authenticated accounts — the local dev-skip anon can't
+    represent a true second owner.
+  - **Expected**: B gets its own game + blunder rows; A's room-X game and blunders stay intact/visible;
+    re-importing the same room as the same user produces no dup rows and reports blunders skipped as
+    duplicates (not a generic error); B's first import of an already-imported room reports success with
+    zero collision count.
+  - **Source**: spec 041 (Batch C items 40–44).

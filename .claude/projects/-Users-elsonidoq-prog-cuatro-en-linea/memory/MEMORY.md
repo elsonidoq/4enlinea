@@ -10,6 +10,7 @@
 - [Classify vs classifyPattern](reference_classify_vs_classifyPattern.md) — sync/8-tag vs async/15-detector; +3 parity threats; Map priority
 - [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() double_threat/forced_win fire only on absent→present transition; loose vs strict double-threat predicates coexist (don't dedupe)
 - [Integration test hang](project_integration_test_slowness.md) — IPC deadlock; use test:fast; deadlocks w/ concurrent solver harvest
+- [generate_all_candidates "fetch failed" flake](project_generate_candidates_fetch_failed_flake.md) — many categories 0 = env flake (just-resumed Docker/concurrent solver load), NOT broken pipeline; re-run standalone
 - [Tactical pattern definitions](reference_tactical_pattern_definitions.md) — predicates figure_7/j_shape/undercut/overcut (j_shape/undercut: NO KB)
 - [Claimeven detection](reference_claimeven_detection.md) — simulation-based; ~20 solver queries
 - [Z-threat detection](reference_z_threat_detection.md) — odd empty cell count; UI viz spec

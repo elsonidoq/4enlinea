@@ -690,3 +690,19 @@ Two low-severity residuals were deliberately left when the transition gate shipp
 **Why deferred**: the webhook is the primary path and is expected to deliver in staging/prod (a registered endpoint); the fallback firing *alone* (no webhook ever) is an operational-failure edge, not the steady state. Making the track idempotent-per-session (so either path could safely write it) would need a dedup key (e.g. a `stripe_events`-style ledger keyed on the checkout session id, or an upsert on `(user_id, session_id)`), which is more machinery than the analytics gap warrants today.
 
 **If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory [[project_checkout_verify_session_fallback]]; server-conventions.md "Activation: webhook primary + verify-session fallback".
+
+## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — unfixed at close
+
+**Status**: deferred / open (surfaced 2026-07-15 by the 6-batch `/app-qa` coordinator run; a plan to address the full findings set is queued via a `superpowers:writing-plans` prompt, not yet executed). **The authoritative, full-detail backlog for this run is the committed findings file `agentic_QA_2026-07-15-1321.md` at repo root** — this OI is a discoverability pointer, not a re-listing. Read that file (per-finding severity, exact code location, repro) before working any item.
+**Area**: multiple (mistake-review nav, lessons/Spanish localization, upgrade funnel, input validation)
+
+Headline items still unfixed at session close (see the file for the rest — several [minor] English-in-Spanish leaks, `/api/scores` 500 on malformed movestring, scattered `tier==='paid'` checks, anon challenge-progress 401):
+
+- **[major] Back button infinite-toggles `/mistakes ↔ /stats` on a COLD-loaded `/mistakes`** (empty nav stack), never reaching Home. In-session nav unwinds fine — bug is cold-load specific.
+- **[major] Lesson CONTENT is English-only in Spanish mode** — lesson JSON has no `_es` fields and `lessonLoader.js` has no locale logic; narration/concept/highlight text renders English. The whole "Learn" surface degrades. (Needs a product decision on approach — static `_es` vs reuse the deep-reveal LLM localization path vs deferral.)
+- **[product decision] Anon single free deep-reveal is spendable on a *suboptimal* move**, contradicting the "blunders only" design intent — needs a product call, not a mechanical fix.
+- **[product/UX] Upgrade funnel has orphaned ends**: `/api/stripe/portal` has zero frontend call sites (paid users can't manage/cancel in-app); no standalone Settings upgrade entry (free users can only upgrade by hitting a specific paywall); annual plan has no savings framing.
+
+**Reclassified during the session (NOT a bug)**: the candidate-generation "fetch failed" finding was downgraded [major]→[minor] as an environmental flake — see memory [[project_generate_candidates_fetch_failed_flake]]. The paid-puzzle-category paywall it left unexercised is now positively testable (generate→approve→reindex a paid category, then confirm a free user hits the paywall).
+
+**Why deferred**: this was a QA + planning session, not an implementation one; fixes are being routed through a plan. **If picked up**: consume `agentic_QA_2026-07-15-1321.md` as the work-list and `staging_checks.md` for the deploy-only verification residue.

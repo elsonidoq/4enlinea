@@ -4,8 +4,9 @@
  *
  * What it does:
  *   TRUNCATE every table in the `public` schema (CASCADE, RESTART IDENTITY),
- *   EXCEPT `schema_migrations`. Schema/structure and applied-migration history
- *   are preserved, so the app runs immediately with no re-migration.
+ *   EXCEPT `schema_migrations`, `puzzles`, and `candidates`. Schema/structure,
+ *   applied-migration history, and the puzzle/candidate content are preserved,
+ *   so the app runs immediately with no re-migration and puzzles stay intact.
  *
  * Safety:
  *   - Reads DATABASE_URL from connect-four/server/.env.staging ONLY.
@@ -31,14 +32,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STAGING_REF = 'jkqilynpshutqcceopdn';
 const PRODUCTION_REF = 'kxtqwsumojtexokrtlfp';
 const ENV_PATH = path.join(__dirname, '..', '.env.staging');
-const KEEP_TABLES = new Set(['schema_migrations']);
+const KEEP_TABLES = new Set(['schema_migrations', 'puzzles', 'candidates']);
 
 function printHelp() {
   console.log(`
 reset-staging-db.js — wipe ALL data from the STAGING database.
 
 TRUNCATEs every table in the public schema (CASCADE, RESTART IDENTITY),
-except schema_migrations. Schema and migration history are preserved.
+except schema_migrations, puzzles, and candidates. Schema, migration history,
+and puzzle/candidate content are preserved.
 
 Target: connect-four/server/.env.staging  (project ref ${STAGING_REF})
 Refuses to run against production (ref ${PRODUCTION_REF}).
