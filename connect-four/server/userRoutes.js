@@ -17,6 +17,7 @@ import {
   writeStreak,
   isValidOnboardingStatus,
 } from './userHelpers.js';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT } from './quotaLimits.js';
 
 // ── Import job tracking (in-memory, not persisted; restarts clear all) ──────
 const jobMap = new Map();
@@ -98,6 +99,7 @@ export function registerUserRoutes(app, supabase) {
       tier: req.user.tier,
       deep_reveal_count: req.user.deep_reveal_count,
       deep_reveal_reset_at: req.user.deep_reveal_reset_at,
+      deep_reveal_limit: FREE_DEEP_REVEAL_WEEKLY_LIMIT,
       papergames_id: req.user.papergames_id ?? null,
       last_import_at: req.user.last_import_at ?? null,
       onboarding_status: req.user.onboarding_status,

@@ -52,6 +52,7 @@ import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFA
 import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -531,7 +532,7 @@ async function checkAndDecrementQuota(user) {
     resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 5) return { allowed: false, resetsAt };
+  if (count >= FREE_DEEP_REVEAL_WEEKLY_LIMIT) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
@@ -556,7 +557,7 @@ function peekQuota(user) {
   const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
   // Past the weekly reset (or null) → the count would reset to 0, so it's allowed.
   const count = now > resetAt ? 0 : (user.deep_reveal_count ?? 0);
-  if (count >= 5) return { allowed: false, resetsAt: resetAt.toISOString() };
+  if (count >= FREE_DEEP_REVEAL_WEEKLY_LIMIT) return { allowed: false, resetsAt: resetAt.toISOString() };
   return { allowed: true };
 }
 
