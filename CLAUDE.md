@@ -121,6 +121,14 @@ Use `npm run test:fast` (inside `connect-four/`) for all regular development and
 ## When writing specs for existing components
 Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See memory: feedback_spec_existing_apis.md
 
+## Verifying any claim about this codebase
+
+**Every false belief hides in a layer of representation.** Before believing a claim — yours, a doc's, or a subagent's — name the layer it came from and go down to where the truth lives: the **signature** not the doc comment, the **diff** not the agent's report, the **producer's real output** not your mental model of it, the **app's actual request** not a curl you hand-wrote, **all N instances** not a sample of 3, the **call sites** not the helper's tests, the **working tree** not the file list. See memory: feedback_verify_at_the_source_layer.md — it carries the worked evidence and the full table.
+
+Two that bite hardest here:
+- **A green test is not evidence.** If you authored the fixture, it tests your belief, not the code. It must exercise the production path with a real value and RED for the right reason.
+- **"Already satisfied / no task needed" is the highest-risk claim in any plan.** It asserts something about existing code while doing the least checking. Read the code that allegedly satisfies it.
+
 ## Writing implementation plans
 
 A plan is a set of **claims about this codebase**. Every claim needs a citation. Claims that were cited hold up; claims that were recalled do not. `writing-plans` demands complete code and no placeholders — that rule is right, but it pressures you to *author* specifics instead of *harvesting* them. Authored specifics that touch existing code are wrong by default.
@@ -137,4 +145,4 @@ A plan is a set of **claims about this codebase**. Every claim needs a citation.
 
 **Line numbers drift; symbol names don't.** Treat every line reference as approximate and locate by symbol name.
 
-Worked example of all six failing at once: `docs/superpowers/plans/2026-07-16-qa-2026-07-15-remediation.md` (see its Global Constraints + the `CORRECTED`/`REVISED` boxes). See memory: feedback_plan_authoring_verification.md
+Worked example of all six failing at once: `docs/superpowers/plans/2026-07-16-qa-2026-07-15-remediation.md` (see its Global Constraints + the `CORRECTED`/`REVISED` boxes). See memory: feedback_verify_at_the_source_layer.md
