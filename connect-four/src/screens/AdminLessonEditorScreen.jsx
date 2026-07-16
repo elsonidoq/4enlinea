@@ -29,6 +29,20 @@ const EDITOR_LANGUAGES = [
   { code: 'es', label: 'Español' },
 ];
 
+// Extracted seam so the "generate audios" request shape (method/headers/body) can be
+// pinned by a test without rendering the whole editor. Must stay in sync with the
+// `lang` toggle state — see handleGenerateAudio below.
+export function buildGenerateAudioRequest(lessonId, lang) {
+  return {
+    url: `/api/admin/lessons/${lessonId}/generate-audio`,
+    init: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ lang }),
+    },
+  };
+}
+
 function emptyLesson() {
   return {
     title: '',
@@ -145,10 +159,8 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
     }
     setAudioState('generating');
     try {
-      const res = await fetch(`/api/admin/lessons/${lessonId}/generate-audio`, {
-        method: 'POST',
-        headers: { ...authHeaders() },
-      });
+      const { url, init } = buildGenerateAudioRequest(lessonId, lang);
+      const res = await fetch(url, init);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Audio generation failed');
       setLesson(hydrateLesson(data.lesson));
@@ -158,7 +170,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       setAudioState('error');
       setAudioError(e.message);
     }
-  }, [handleSave, isNew, lessonId]);
+  }, [handleSave, isNew, lessonId, lang]);
 
   const handleDelete = useCallback(async () => {
     await fetch(`/api/admin/lessons/${lessonId}`, { method: 'DELETE', headers: authHeaders() });
