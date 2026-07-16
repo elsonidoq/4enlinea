@@ -203,13 +203,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-const MOVES_RE = /^[0-6]{0,42}$/;
-
-function validateMoves(moves) {
-  if (typeof moves !== 'string') return 'moves must be a string';
-  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 0–6';
-  return null;
-}
+import { MOVES_RE, validateMoves } from './validateMoves.mjs';
 
 // ── Solver process ────────────────────────────────────────────────────────────
 
@@ -939,9 +933,8 @@ app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) =
 
 app.post('/api/scores', async (req, res) => {
   const { moves, depth, difficulty } = req.body;
-  if (typeof moves !== 'string') {
-    return res.status(400).json({ error: 'moves must be a string' });
-  }
+  const movesErr = validateMoves(moves);
+  if (movesErr) return res.status(400).json({ error: movesErr });
   // When `difficulty` is present the caller is the sparring AI: we return the
   // chosen column (see chooseSparringMove) alongside the scores. The hint path
   // omits `difficulty` and gets scores only.
