@@ -85,7 +85,10 @@ describe('generateLessonAudio', () => {
     assert.equal(synthesize.calls.length, 1);
   });
 
-  it('skips a message whose audio already matches the current text hash (no stub call)', async () => {
+  it('regenerates even when audio already matches the current text hash', async () => {
+    // The voice/prompt/speed/model are not in the hash, so a hash match says
+    // nothing about whether the clip still sounds right. "Generate audios" must
+    // re-voice on demand — see the note on generateLessonAudio.
     const hash = hashMessageText('Hello there');
     const lesson = makeLesson({
       slides: [
@@ -98,9 +101,30 @@ describe('generateLessonAudio', () => {
     const synthesize = makeStubSynthesize();
     const result = await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
 
-    assert.equal(synthesize.calls.length, 0, 'synthesize should not have been called');
-    assert.deepEqual(result.generated, []);
+    assert.equal(synthesize.calls.length, 1, 'synthesize must be called despite the hash matching');
+    assert.deepEqual(result.generated, ['slides[0].coachMessages[0]']);
+    // Same text -> same hash -> same path: overwritten in place, no orphan.
     assert.equal(result.lesson.slides[0].coachMessages[0].audio, `/audio/lessons/${hash}.mp3`);
+  });
+
+  it('regenerates a message whose mp3 is missing from disk (self-heals silent audio)', async () => {
+    // The old skip never checked the filesystem, so a lesson whose mp3 vanished
+    // stayed silent forever and no button could fix it.
+    const hash = hashMessageText('Hello there');
+    const lesson = makeLesson({
+      slides: [
+        {
+          movestring: '',
+          coachMessages: [{ text: 'Hello there', audio: `/audio/lessons/${hash}.mp3` }],
+        },
+      ],
+    });
+    assert.equal(fs.existsSync(path.join(tmpDir, `${hash}.mp3`)), false, 'precondition: mp3 absent');
+
+    const synthesize = makeStubSynthesize();
+    await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
+
+    assert.equal(fs.existsSync(path.join(tmpDir, `${hash}.mp3`)), true, 'the missing mp3 must be recreated');
   });
 
   it('regenerates a message whose audio points at a stale hash (text changed)', async () => {
@@ -212,7 +236,7 @@ describe('generateLessonAudio', () => {
     assert.equal(result.lesson.slides[0].coachMessages[0].audio_es, undefined);
   });
 
-  it('lang=es skips regeneration when audio_es already matches the current text_es hash', async () => {
+  it('lang=es regenerates even when audio_es already matches the current text_es hash', async () => {
     const hash = hashMessageText('Hola');
     const lesson = makeLesson({
       slides: [
@@ -225,8 +249,10 @@ describe('generateLessonAudio', () => {
     const synthesize = makeStubSynthesize();
     const result = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
 
-    assert.equal(synthesize.calls.length, 0);
-    assert.deepEqual(result.generated, []);
+    assert.equal(synthesize.calls.length, 1, 're-voicing a Spanish clip must not be skipped');
+    assert.deepEqual(result.generated, ['slides[0].coachMessages[0]']);
+    // Only the es side is touched — the English clip is not regenerated.
+    assert.equal(synthesize.calls[0].text, 'Hola');
   });
 
   it('passes TTS instructions/voice/speed/model opts to synthesize (not called bare)', async () => {

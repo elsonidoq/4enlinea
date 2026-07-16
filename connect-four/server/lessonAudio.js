@@ -37,14 +37,25 @@ export function hashMessageText(text) {
 }
 
 /**
- * Generate audio for every concept-slide coachMessage in `lesson` whose current
- * `audio` does not already match hashMessageText(text) + '.mp3'. Mutates and
- * returns a copy of the lesson (mutates slide message objects in place on a
- * shallow-cloned lesson so callers can inspect exactly what changed).
+ * Generate audio for EVERY concept-slide coachMessage in `lesson` that has text.
+ * Mutates and returns a copy of the lesson (mutates slide message objects in
+ * place on a shallow-cloned lesson so callers can inspect exactly what changed).
+ *
+ * Unconditional by design: the text hash keys the *filename*, but the voice,
+ * prompt, speed and model live in `tts-prompt.<lang>.json` and are NOT part of
+ * that hash — so a voice change is invisible to any hash comparison. This used
+ * to skip a message whose `audio` already matched the hash, which meant the
+ * admin "Generate audios" button could never re-voice a lesson after a prompt
+ * change, and a lesson whose mp3 went missing stayed permanently silent (the
+ * check never touched the filesystem). Same text -> same hash -> same path, so
+ * regeneration overwrites in place and creates no orphans. The cost is one TTS
+ * call per message per click, which is the point: you cannot hear a change you
+ * did not synthesize.
  *
  * Never touches lesson.socratic (no coachMessages there). Skips empty/whitespace
- * text. Each message's synthesis is isolated in its own try/catch: one failure
- * leaves that message's `audio` unset/unchanged and does not abort the batch.
+ * text — that is "nothing to say", not a cache hit. Each message's synthesis is
+ * isolated in its own try/catch: one failure leaves that message's `audio`
+ * unset/unchanged and does not abort the batch.
  *
  * D1 (lesson audio i18n): `lang='es'` reads `text_es`/`audio_es` instead of
  * `text`/`audio`, and threads a Spanish accent `instructions` directive through
@@ -84,9 +95,6 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 
       const hash = hashMessageText(text);
       const expectedBasename = `${hash}.mp3`;
-      const currentBasename = message[audioField] ? path.basename(message[audioField]) : null;
-
-      if (currentBasename === expectedBasename) continue; // already current — skip
 
       try {
         const buffer = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });

@@ -682,8 +682,14 @@ directly `node --test`-able without an Express app or a real TTS provider.
   dependency-injected `synthesize` and `dir` params are the test seam (a test passes a stub synthesize
   function and a temp dir; production code omits both and gets the real `server/ttsProvider.js`
   `synthesize` + the real `public/audio/lessons/` dir). Iterates only `lesson.slides[].coachMessages[]`
-  (concept slides) — never `lesson.socratic`, which carries no `coachMessages`. Skips a message whose
-  current `audio` already matches `hashMessageText(text) + '.mp3'` (no wasted TTS call). Each message's
+  (concept slides) — never `lesson.socratic`, which carries no `coachMessages`. **Regenerates
+  unconditionally**: the text hash keys the *filename*, but the voice/prompt/speed/model live in
+  `tts-prompt.<lang>.json` and are not in that hash, so a hash match says nothing about whether the clip
+  still sounds right. It used to skip on a hash match, which made the admin "Generate audios" button
+  unable to re-voice a lesson after a prompt change and left a lesson whose mp3 went missing
+  permanently silent (the check never touched the filesystem). Same text → same hash → same path, so
+  regeneration overwrites in place and orphans nothing; the cost is one TTS call per message per click.
+  Empty/whitespace text is still skipped — that is "nothing to say", not a cache hit. Each message's
   synthesis is isolated in its own try/catch — one failure doesn't abort the batch; that message's
   `audio` is left unset/unchanged and recorded in the `failed` array. Returns `{ lesson, generated,
   failed }`, mutating (and returning) the same lesson object passed in.
