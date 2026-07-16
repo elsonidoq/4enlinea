@@ -2,9 +2,18 @@
  * generate-tts.js — CLI script for managing coach TTS audio.
  *
  * Usage:
- *   node scripts/generate-tts.js [--scan-only]          Initialize/reset registry from en.json
- *   node scripts/generate-tts.js --key <i18n_key>       Synthesize a single key
+ *   node scripts/generate-tts.js [--scan-only]          REBUILD registry from <lang>.json (destructive)
+ *   node scripts/generate-tts.js --key <i18n_key>       Synthesize a single key (safe; merges)
  *   node scripts/generate-tts.js --all-new              Synthesize all needs_audio keys
+ *   Flags: [--lang <code>|all] [--yes]
+ *
+ * `--scan-only` REBUILDS the registry from scratch — it does not merge. Every
+ * `status` / `generated_at` / `approved_at` is discarded and every key returns to
+ * `needs_audio`, so the record of which clips a human approved is erased. It is
+ * intended for initializing an empty registry, not for picking up newly-added
+ * keys: to add a key without losing approvals use `--key <key>`, which merges into
+ * the existing registry. When the registry is non-empty, `--scan-only` now explains
+ * what it will erase and requires typed confirmation (`--yes` to skip, for scripts).
  *
  * Requires Node 20.6+ (for --env-file flag):
  *   node --env-file=server/.env scripts/generate-tts.js ...
@@ -14,6 +23,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline/promises';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_DIR = join(__dirname, '..');
@@ -125,9 +135,114 @@ async function saveManifest(entries, lang = 'en') {
   await writeFile(manifestPathForLang(lang), JSON.stringify(slugs, null, 2) + '\n', 'utf8');
 }
 
-// ── scan-only: build/refresh registry from <lang>.json ─────────────────────
+// ── scan-only: REBUILD registry from <lang>.json (destructive) ─────────────
 
-async function scanOnly(lang = 'en') {
+/**
+ * Tally what a `--scan-only` rebuild would discard from an existing registry.
+ * @param {Array<{status: string, generated_at: string|null, approved_at: string|null}>} entries
+ * @returns {{total: number, approved: number, awaitingApproval: number, withApprovalRecord: number, withGeneratedAudio: number}}
+ */
+export function summarizeResetImpact(entries) {
+  return {
+    total: entries.length,
+    approved: entries.filter(e => e.status === 'approved').length,
+    awaitingApproval: entries.filter(e => e.status === 'awaiting_approval').length,
+    withApprovalRecord: entries.filter(e => e.approved_at).length,
+    withGeneratedAudio: entries.filter(e => e.generated_at).length,
+  };
+}
+
+/**
+ * The warning shown before a destructive rebuild. It states the blast radius in
+ * both directions — what is erased AND what survives — because "are you sure?"
+ * with no stakes attached just trains people to say yes.
+ * @param {string} lang
+ * @param {ReturnType<typeof summarizeResetImpact>} impact
+ * @returns {string}
+ */
+export function formatResetWarning(lang, impact) {
+  return [
+    '',
+    `WARNING: --scan-only REBUILDS the "${lang}" registry from scratch. It does not merge.`,
+    '',
+    `  ${registryPathForLang(lang)}`,
+    `  currently holds ${impact.total} entries: ${impact.approved} approved, ` +
+      `${impact.awaitingApproval} awaiting approval, ${impact.withGeneratedAudio} with generated audio.`,
+    '',
+    `  WILL BE ERASED: every status/generated_at/approved_at — including ${impact.withApprovalRecord} ` +
+      'approval record(s). Every key returns to "needs_audio".',
+    '',
+    '  NOT touched: the .mp3 files and coach-audio-manifest.json. The app keeps playing',
+    '  the existing audio, because playback reads the manifest, not the registry. What you',
+    '  lose is the record of which clips a human approved — after which the admin UI will',
+    `  offer to regenerate ${impact.withGeneratedAudio} clip(s), costing real API spend to`,
+    '  produce byte-identical audio.',
+    '',
+    '  To pick up newly-added keys WITHOUT losing approvals, use --key <key> instead:',
+    '  it merges into the existing registry rather than replacing it.',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Gate a destructive rebuild behind an explicit typed confirmation.
+ * Returns false (rather than hanging or proceeding) when stdin is not a TTY, so
+ * CI and piped invocations fail closed.
+ *
+ * @param {string} lang
+ * @param {ReturnType<typeof summarizeResetImpact>} impact
+ * @param {{assumeYes?: boolean, input?: NodeJS.ReadableStream, output?: NodeJS.WritableStream, isTTY?: boolean}} [opts]
+ * @returns {Promise<boolean>}
+ */
+export async function confirmReset(lang, impact, opts = {}) {
+  const {
+    assumeYes = false,
+    input = process.stdin,
+    output = process.stdout,
+    isTTY = process.stdin.isTTY,
+  } = opts;
+
+  if (assumeYes) return true;
+
+  output.write(formatResetWarning(lang, impact));
+
+  if (!isTTY) {
+    output.write(
+      'Refusing to rebuild a non-empty registry without confirmation (stdin is not a TTY).\n' +
+        'Re-run with --yes if this is genuinely intended.\n',
+    );
+    return false;
+  }
+
+  const phrase = `reset ${lang}`;
+  const rl = createInterface({ input, output });
+  try {
+    const answer = await rl.question(`Type "${phrase}" to confirm (anything else aborts): `);
+    return answer.trim() === phrase;
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * @param {string} lang
+ * @param {{assumeYes?: boolean}} [opts]
+ * @returns {Promise<boolean>} true if the registry was rewritten, false if aborted
+ */
+async function scanOnly(lang = 'en', opts = {}) {
+  // Read the existing registry BEFORE overwriting it, so the operator is told what
+  // this costs. An empty/missing registry has nothing to lose — that is the
+  // "initialize" case, and it proceeds without a prompt.
+  const existing = await loadRegistry(lang);
+  const impact = summarizeResetImpact(existing);
+  if (impact.total > 0) {
+    const confirmed = await confirmReset(lang, impact, { assumeYes: opts.assumeYes });
+    if (!confirmed) {
+      console.log(`Aborted — ${registryPathForLang(lang)} left unchanged.`);
+      return false;
+    }
+  }
+
   const enRaw = JSON.parse(await readFile(sourceJsonForLang(lang), 'utf8'));
   const coachKeys = flattenKeys(enRaw, 'coach.spoken.');
 
@@ -163,6 +278,7 @@ async function scanOnly(lang = 'en') {
     await saveManifest([], lang);
     console.log('Manifest initialized (empty).');
   }
+  return true;
 }
 
 // ── synthesize helpers ────────────────────────────────────────────────────
@@ -290,7 +406,14 @@ if (isMainModule()) {
   const langs = langArg === 'all' ? SUPPORTED_LOCALES : [langArg];
 
   if (args.length === 0 || args.includes('--scan-only')) {
-    for (const lang of langs) await scanOnly(lang);
+    const assumeYes = args.includes('--yes');
+    for (const lang of langs) {
+      const written = await scanOnly(lang, { assumeYes });
+      // Abort the whole run on a declined confirmation: with --lang all, silently
+      // continuing to the next language would rebuild it after the operator just
+      // said no.
+      if (!written) process.exit(1);
+    }
   } else if (args.includes('--key')) {
     const idx = args.indexOf('--key');
     const key = args[idx + 1];
@@ -302,7 +425,8 @@ if (isMainModule()) {
   } else if (args.includes('--all-new')) {
     for (const lang of langs) await generateAllNew(lang);
   } else {
-    console.error('Usage: node generate-tts.js [--scan-only] [--key <key>] [--all-new] [--lang <code>|all]');
+    console.error('Usage: node generate-tts.js [--scan-only] [--key <key>] [--all-new] [--lang <code>|all] [--yes]');
+    console.error('  --scan-only REBUILDS the registry and erases approval state; --key merges and is safe.');
     process.exit(1);
   }
 }
