@@ -3,7 +3,7 @@ import i18n from '../i18n/index.js';
 
 /**
  * Header advertising the user's current UI language to the server.
- * Attach to any API fetch whose response depends on locale (deep reveal, TTS).
+ * Attach to any API fetch whose response depends on locale (deep reveal, TTS, lesson content).
  * @returns {Record<string,string>}
  */
 export function langHeaders() {

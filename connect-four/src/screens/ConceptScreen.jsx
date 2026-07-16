@@ -10,6 +10,7 @@ import { boardSpecToBoard } from '../lib/board.js';
 import { useAudio } from '../lib/useAudio.js';
 import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getNarrationQueue } from '../lib/lessonNarration.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -34,7 +35,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   const startedRef = useRef(false);
 
   useEffect(() => {
-    fetch(`${API}/api/lessons/${lessonId}`)
+    fetch(`${API}/api/lessons/${lessonId}`, { headers: langHeaders() })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

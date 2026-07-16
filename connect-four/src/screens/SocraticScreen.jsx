@@ -9,6 +9,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
 import { socraticReducer } from '../lib/socraticReducer.js';
+import { langHeaders } from '../lib/apiLang.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -24,7 +25,7 @@ export function SocraticScreen({ go, goBack, lessonId }) {
   const [lastDrop, setLastDrop] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/lessons/${lessonId}`)
+    fetch(`${API}/api/lessons/${lessonId}`, { headers: langHeaders() })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
