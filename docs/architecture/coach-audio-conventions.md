@@ -64,13 +64,37 @@ that entry's `status` to `awaiting_approval` and updates `generated_at` **withou
 manifest**. Any bulk operation must therefore **remap the existing manifest array in place**, never
 rebuild it from registry status — a rebuild silently drops whatever the manifest disagrees about.
 
-## `--scan-only` destroys approval state
+## Registry state is not derivable — so nothing discards it silently
 
-`generate-tts.js --scan-only` rebuilds the registry **from scratch**: every entry is pushed with
-`status: 'needs_audio'`, `generated_at: null`, `approved_at: null`, and the file is overwritten with
-no merge. Never use it to reconcile a rename or a namespace change — it resets every approved entry
-and presents unchanged clips as needing regeneration, i.e. real API spend for identical audio. Text
-unchanged ⇒ no clip needs re-synthesis; move assets with `git mv`.
+`status` / `generated_at` / `approved_at` record **that a human listened to a clip**. That fact exists
+nowhere else: it cannot be recomputed from the i18n tree, the mp3s, or the manifest. So every
+`generate-tts.js` command either preserves it or asks first.
+
+| Command | Effect |
+|---|---|
+| `--sync` | Merges the i18n tree into the registry: adds new keys as `needs_audio`, **preserves** the state of everything already there. Idempotent. This is what you want after adding a coach line. |
+| `--scan-only` | Deprecated alias for `--sync` (it used to rebuild — see below). |
+| `--all-new` | Synthesizes only `needs_audio` entries. Never touches an approved clip. |
+| `--key <k>` | Synthesizes one key. **Prompts** if that key is already approved. |
+| `--reset` | Rebuilds from scratch, discarding every approval. **Prompts.** Rarely correct. |
+| `--help` | Usage. Also the no-argument default — running the script bare does nothing. |
+
+`--sync` emits entries in i18n order, which is canonical. Because `--key` appends new entries at the
+end, a sync can rewrite the file purely to reorder it; that loses nothing and is reported as
+`↕ entries reordered`.
+
+**Why `--reset` is worse than it looks.** It keeps the mp3s and the manifest, so the app keeps playing
+audio and nothing looks broken — but the registry and manifest then **disagree**, and `/admin/audio`
+offers to regenerate every clip whose text never changed (real API spend for byte-identical audio).
+Never use it to reconcile a rename or a namespace change: text unchanged ⇒ no clip needs
+re-synthesis; move assets with `git mv`.
+
+**Why `--key` prompts on an approved clip.** `synthesizeAndWrite` overwrites the mp3 **in place**, and
+the manifest still lists that slug — so the new take goes live *immediately, unapproved*, and the
+recording someone signed off on is gone (recoverable only via `git checkout`).
+
+Destructive prompts require typing the literal word `yes`. With no TTY they refuse rather than hang;
+pass `--yes` to proceed in CI.
 
 ## Adding a new coach string — checklist
 
@@ -78,5 +102,8 @@ unchanged ⇒ no clip needs re-synthesis; move assets with `git mv`.
    (`i18nKeyParity.test.js` enforces the pair). Chrome? `coach.ui.*`, and you are done.
 2. Add the play site — `speakCoachMessage('coach.spoken.…')` — in the same change. Intent without a
    play site is a bug.
-3. Run `generate-tts.js` for the new key only; approve it. Do **not** run `--scan-only`.
-4. `npm run test:fast` — `coachSpokenNamespace.test.js` checks registry/manifest/asset agreement.
+3. `generate-tts.js --sync --lang all` to register the key, then
+   `node --env-file=server/.env scripts/generate-tts.js --key <key> --lang all` to synthesize it.
+   Approve via `/admin/audio` (the CLI has no approve command). Never `--reset`.
+4. `npm run test:fast` — `coachSpokenNamespace.test.js` checks registry/manifest/asset agreement;
+   `generateTtsMerge.test.js` covers the merge itself.

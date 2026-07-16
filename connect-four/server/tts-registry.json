@@ -8,6 +8,14 @@
     "approved_at": "2026-07-16T17:59:14.353Z"
   },
   {
+    "key": "coach.spoken.onboardingMission.greeting",
+    "slug": "coach--spoken--onboardingMission--greeting",
+    "status": "approved",
+    "reason": null,
+    "generated_at": "2026-07-13T22:30:27.731Z",
+    "approved_at": "2026-07-13T22:30:33.982Z"
+  },
+  {
     "key": "coach.spoken.immediate_threat.prompt.0",
     "slug": "coach--spoken--immediate--threat--prompt--0",
     "status": "approved",
@@ -1734,13 +1742,5 @@
     "reason": null,
     "generated_at": "2026-06-19T14:59:40.251Z",
     "approved_at": "2026-06-19T14:59:52.516Z"
-  },
-  {
-    "key": "coach.spoken.onboardingMission.greeting",
-    "slug": "coach--spoken--onboardingMission--greeting",
-    "status": "approved",
-    "reason": null,
-    "generated_at": "2026-07-13T22:30:27.731Z",
-    "approved_at": "2026-07-13T22:30:33.982Z"
   }
 ]
