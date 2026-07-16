@@ -5,6 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useLanguage } from '../lib/useLanguage.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { fetchWithAuthRetry } from '../lib/fetchWithAuthRetry.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -97,12 +98,18 @@ export function SettingsScreen({ go, goBack }) {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API}/api/user/profile`, {
+      // Task 22 (finding 19): landing on /settings and saving immediately can race the
+      // session-refresh (memory project_app_qa_setup_gotchas), 401ing on the very first
+      // attempt even though the session is valid a moment later — it then self-recovers on
+      // manual retry. Transparently refresh-and-retry ONCE so that race never reaches the
+      // user as a "Failed to save" flash; a second 401 is a genuine auth failure and still
+      // surfaces as an error below.
+      const res = await fetchWithAuthRetry(`${API}/api/user/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ papergames_id: trimmed }),
-      });
+      }, { apiBase: API });
 
       if (res.status === 204) {
         setSavedValue(trimmed);
