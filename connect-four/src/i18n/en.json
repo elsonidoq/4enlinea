@@ -713,7 +713,10 @@
     "flagged": "Thanks — flagged",
     "flagCancel": "Cancel",
     "flagSend": "Send",
-    "flagNotePlaceholder": "What's wrong with this explanation? (optional)"
+    "flagNotePlaceholder": "What's wrong with this explanation? (optional)",
+    "quotaRemaining": "{{count}} of {{limit}} Deep Reveals left this week",
+    "quotaUpgradeCta": "Go unlimited with Pro",
+    "quotaResetsAt": "Your free Deep Reveals return {{date}}"
   },
   "summary": {
     "hero": "Set complete!",

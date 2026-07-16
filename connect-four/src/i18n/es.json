@@ -713,7 +713,10 @@
     "flagged": "Gracias — marcada",
     "flagCancel": "Cancelar",
     "flagSend": "Enviar",
-    "flagNotePlaceholder": "¿Qué está mal en esta explicación? (opcional)"
+    "flagNotePlaceholder": "¿Qué está mal en esta explicación? (opcional)",
+    "quotaRemaining": "Te quedan {{count}} de {{limit}} Revelaciones profundas esta semana",
+    "quotaUpgradeCta": "Hacete Pro y tené revelaciones ilimitadas",
+    "quotaResetsAt": "Tus Revelaciones profundas gratis vuelven el {{date}}"
   },
   "summary": {
     "hero": "¡Set completo!",

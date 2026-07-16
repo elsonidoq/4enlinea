@@ -52,7 +52,7 @@ import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFA
 import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
-import { FREE_DEEP_REVEAL_WEEKLY_LIMIT } from './quotaLimits.js';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -513,15 +513,15 @@ async function checkAndDecrementQuota(user) {
 
   const now = new Date();
 
-  // Treat null deep_reveal_reset_at as already expired
+  // Treat null deep_reveal_reset_at as already expired — shared with peekQuota
+  // via quotaLimits.js so the reset/normalize rule exists in exactly one place.
   const resetAtRaw = user.deep_reveal_reset_at;
-  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+  const resetAt = resolveResetAt({ resetAt: resetAtRaw });
 
   // Reset quota if past the weekly reset time (or null)
-  let count = user.deep_reveal_count ?? 0;
+  let count = effectiveDeepRevealCount({ count: user.deep_reveal_count, resetAt: resetAtRaw, now });
   let resetsAt;
-  if (now > resetAt) {
-    count = 0;
+  if (isPastReset({ resetAt: resetAtRaw, now })) {
     const nextMonday = nextMondayUtcMidnight(now);
     resetsAt = nextMonday.toISOString();
     await supabase
@@ -542,24 +542,9 @@ async function checkAndDecrementQuota(user) {
   return { allowed: true, resetsAt };
 }
 
-// Read-only quota check — same logic as checkAndDecrementQuota but WITHOUT any
-// write. Used as an early gate (before the expensive LLM compute) so an
-// over-quota free user gets the paywall immediately instead of watching the
-// deep reveal "compute" first, then getting 429. checkAndDecrementQuota still
-// performs the real decrement afterwards (only on an actual blunder).
-function peekQuota(user) {
-  if (!user) return { allowed: false, reason: 'anonymous' };
-  if (user.tier === 'paid') return { allowed: true };
-  if (user.tier !== 'free') return { allowed: false, reason: 'anonymous' };
-
-  const now = new Date();
-  const resetAtRaw = user.deep_reveal_reset_at;
-  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
-  // Past the weekly reset (or null) → the count would reset to 0, so it's allowed.
-  const count = now > resetAt ? 0 : (user.deep_reveal_count ?? 0);
-  if (count >= FREE_DEEP_REVEAL_WEEKLY_LIMIT) return { allowed: false, resetsAt: resetAt.toISOString() };
-  return { allowed: true };
-}
+// peekQuota (read-only quota check, no write) now lives in quotaLimits.js —
+// imported above — so index.js and quotaLimits.js's tests exercise the exact
+// same function instead of two independently-maintained copies of the rule.
 
 // ── LLM explanation composer ──────────────────────────────────────────────────
 
