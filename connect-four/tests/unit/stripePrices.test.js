@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeAnnualSavings } from '../../src/lib/useStripePrices.js';
+import { computeAnnualSavings, formatPrice } from '../../src/lib/useStripePrices.js';
 
 const MONTHLY = { amount: 299, currency: 'usd', interval: 'month' };
 const ANNUAL = { amount: 2199, currency: 'usd', interval: 'year' };
@@ -8,7 +8,9 @@ const ANNUAL = { amount: 2199, currency: 'usd', interval: 'year' };
 test('computes the real discount from live PriceInfo prices', () => {
   const s = computeAnnualSavings({ monthly: MONTHLY, annual: ANNUAL });
   assert.strictEqual(s.percent, 39);                    // 1 - (2199 / (299*12)) = 38.7% -> 39
-  assert.deepStrictEqual(s.perMonth, { amount: 183, currency: 'usd', interval: 'month' }); // 2199/12 = 183.25 -> 183
+  // interval: null — formatPrice must add no suffix; the i18n copy key
+  // ("{{price}}/mo billed annually" / "{{price}}/mes facturado anual") owns it.
+  assert.deepStrictEqual(s.perMonth, { amount: 183, currency: 'usd', interval: null }); // 2199/12 = 183.25 -> 183
 });
 
 test('returns null when prices are unavailable (degrade silently)', () => {
@@ -28,4 +30,19 @@ test('returns null on a currency mismatch (not a meaningful discount)', () => {
     monthly: { amount: 299, currency: 'usd', interval: 'month' },
     annual: { amount: 2199, currency: 'eur', interval: 'year' },
   }), null);
+});
+
+test('formatPrice(perMonth) carries no interval suffix — the i18n copy key owns it', () => {
+  // Regression for the "$1.83/mo/mo billed annually" / Spanish-with-hardcoded-"/mo" bug:
+  // computeAnnualSavings' perMonth used to come back with interval: 'month', so
+  // formatPrice appended its own "/mo" on top of the "{{price}}/mo billed annually"
+  // (or Spanish "{{price}}/mes facturado anual") copy key, producing a doubled/mixed-
+  // language suffix. The copy key must be the ONLY source of the suffix.
+  const savings = computeAnnualSavings({ monthly: MONTHLY, annual: ANNUAL });
+  const rendered = formatPrice(savings.perMonth);
+  assert.strictEqual(rendered, '$1.83'); // no trailing /mo — the key supplies "/mo billed annually"
+  const composedEn = `${rendered}/mo billed annually`;
+  const composedEs = `${rendered}/mes facturado anual`;
+  assert.ok(!composedEn.includes('/mo/mo'), `expected no doubled suffix, got: ${composedEn}`);
+  assert.ok(!composedEs.includes('/mo'), `expected no stray English "/mo" in Spanish copy, got: ${composedEs}`);
 });

@@ -63,6 +63,10 @@ export function computeAnnualSavings(prices) {
   if (annual.amount >= yearlyAtMonthly) return null;
   return {
     percent: Math.round((1 - annual.amount / yearlyAtMonthly) * 100),
-    perMonth: { amount: Math.round(annual.amount / 12), currency: annual.currency, interval: 'month' },
+    // interval is deliberately null: the "/mo billed annually" (en) / "/mes facturado
+    // anual" (es) copy key owns the suffix. If formatPrice also appended '/mo' here,
+    // English would render "$1.83/mo/mo billed annually" and Spanish would render a
+    // hardcoded English "/mo" wedged into Spanish copy.
+    perMonth: { amount: Math.round(annual.amount / 12), currency: annual.currency, interval: null },
   };
 }
