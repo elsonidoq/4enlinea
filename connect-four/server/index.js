@@ -2925,8 +2925,24 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       category_evidence: c.category_evidence ?? null,
       correct_col: c.correct_col ?? null,
     }));
-    const { error } = await supabase.from('candidates').insert(rows);
-    if (error) { logError('[admin/generate]', error); return res.status(500).json({ error: 'internal error' }); }
+    // Task 26 (finding 23): a transient dropped DB connection previously aborted the whole
+    // category with 0 inserted after an expensive generateCandidates() run. Bounded retry with
+    // exponential backoff (3 attempts, 500ms/1000ms) survives a blip instead of losing the
+    // batch. Do NOT retry solver calls (generateCandidates() above) — that's a different
+    // failure (IPC deadlock under concurrent load, memory project_integration_test_slowness)
+    // with a different fix; only this insert is retried.
+    const MAX_INSERT_ATTEMPTS = 3;
+    let insertError = null;
+    for (let attempt = 1; attempt <= MAX_INSERT_ATTEMPTS; attempt++) {
+      const { error } = await supabase.from('candidates').insert(rows);
+      if (!error) { insertError = null; break; }
+      insertError = error;
+      logError(`[admin/generate] insert attempt ${attempt}/${MAX_INSERT_ATTEMPTS} failed`, error);
+      if (attempt < MAX_INSERT_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 500 * attempt));
+      }
+    }
+    if (insertError) { logError('[admin/generate]', insertError); return res.status(500).json({ error: 'internal error' }); }
   }
 
   res.json({

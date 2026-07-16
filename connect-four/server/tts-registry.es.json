@@ -10,10 +10,10 @@
   {
     "key": "coach.home.welcome.0",
     "slug": "coach--home--welcome--0",
-    "status": "awaiting_approval",
+    "status": "approved",
     "reason": null,
     "generated_at": "2026-07-16T17:29:16.712Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "approved_at": "2026-07-16T17:59:17.148Z"
   },
   {
     "key": "coach.onboardingMission.greeting",
@@ -50,10 +50,10 @@
   {
     "key": "coach.startReview",
     "slug": "coach--startReview",
-    "status": "awaiting_approval",
+    "status": "approved",
     "reason": null,
     "generated_at": "2026-07-16T17:28:52.878Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "approved_at": "2026-07-16T17:59:17.783Z"
   },
   {
     "key": "coach.emptyQueue",
