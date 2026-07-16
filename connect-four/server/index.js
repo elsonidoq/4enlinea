@@ -49,6 +49,7 @@ import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { buildTtsInstructions } from './ttsInstructions.mjs';
 import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFAULT_TTS_MODEL } from './ttsConfig.mjs';
+import { validatePreviewRequest } from './ttsPreviewValidation.mjs';
 import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
@@ -3643,6 +3644,36 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
     res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
   } catch (err) {
     logError('[admin/audio/generate]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/preview — TTS sandbox: synthesize arbitrary text with
+// experimental voice params and stream the mp3 straight back.
+//
+// Deliberately WRITES NOTHING — no mp3 on disk, no registry entry, no manifest
+// change, no config write. The registry/manifest/file trio already drifts; a
+// sandbox that wrote would be a fourth drift source. Instructions are routed
+// through buildTtsInstructions(prompt, lang) so the owner tunes against the
+// exact instruction string production uses (for `es` that appends
+// SPANISH_ACCENT_DIRECTIVE). Uncached by design: one real API call per click is
+// the point — you cannot hear a change you did not synthesize.
+app.post('/api/admin/audio/preview', requireLocalhost, async (req, res) => {
+  const validation = validatePreviewRequest(req.body);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const { text, prompt, speed, voice, model } = validation.value;
+  const lang = resolveAdminLang(req.body?.lang);
+
+  try {
+    const { synthesize } = await import('./ttsProvider.js');
+    const instructions = buildTtsInstructions(prompt, lang);
+    console.log(`[admin/audio/preview] lang=${lang} voice=${voice} speed=${speed} model=${model} chars=${text.length}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    res.type('audio/mpeg').send(audio);
+  } catch (err) {
+    logError('[admin/audio/preview]', err);
     res.status(500).json({ error: 'internal error' });
   }
 });

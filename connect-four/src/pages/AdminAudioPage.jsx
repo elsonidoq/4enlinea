@@ -14,6 +14,13 @@ const STATUS_ORDER = ['awaiting_approval', 'needs_audio', 'approved', 'ineligibl
 const TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
 const TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
 
+// --- TTS sandbox styles (same inline idiom as the rest of this page) ---
+const sbLabelStyle = { display: 'block', fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' };
+const sbInlineLabelStyle = { fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' };
+const sbFieldStyle = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.5, resize: 'vertical' };
+const sbControlStyle = { padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: 13, cursor: 'pointer' };
+const sbSecondaryButtonStyle = { padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.16)', background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 12, fontFamily: 'var(--font-display)', cursor: 'pointer' };
+
 function StatusBadge({ status, reason }) {
   const colors = {
     approved: { bg: '#dcfce7', fg: '#166534' },
@@ -79,6 +86,20 @@ export function AdminAudioPage() {
   const [promptSaved, setPromptSaved] = useState(false);
   const [lang, setLang] = useState('en');
 
+  // --- TTS sandbox state -------------------------------------------------
+  // Deliberately SEPARATE from the saved-config state above (prompt/speed/
+  // voice/model). Tuning here must never write the saved config; promotion is
+  // explicit via the "Save to config" button.
+  const [sbText, setSbText] = useState('');
+  const [sbPrompt, setSbPrompt] = useState('');
+  const [sbSpeed, setSbSpeed] = useState('1.0');
+  const [sbVoice, setSbVoice] = useState('alloy');
+  const [sbModel, setSbModel] = useState('gpt-4o-mini-tts');
+  const [sbPending, setSbPending] = useState(false);
+  const [sbError, setSbError] = useState('');
+  const [sbAudioUrl, setSbAudioUrl] = useState(null);
+  const sbAudioUrlRef = useRef(null);
+
   const fetchStatus = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
@@ -119,15 +140,19 @@ export function AdminAudioPage() {
     }
   }
 
-  async function handleSavePrompt() {
-    if (speedError) return;
+  // `cfg` lets the sandbox's "Save to config" promote its own values through
+  // the exact same save flow. Called bare (from the config editor's Save
+  // button) it saves the saved-config state as before.
+  async function handleSavePrompt(cfg) {
+    const c = cfg || { prompt, speed: parseFloat(speed), voice, model };
+    if (!cfg && speedError) return;
     setPromptSaving(true);
     setPromptSaved(false);
     try {
       const res = await fetch(`${API}/api/admin/audio/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice, model, lang }),
+        body: JSON.stringify({ ...c, lang }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setPromptSaved(true);
@@ -136,6 +161,68 @@ export function AdminAudioPage() {
       alert(`Save failed: ${err.message}`);
     } finally {
       setPromptSaving(false);
+    }
+  }
+
+  // Revoke the outstanding preview blob URL on unmount — without this we leak
+  // one blob per "Generate preview" click for the life of the document.
+  useEffect(() => () => {
+    if (sbAudioUrlRef.current) URL.revokeObjectURL(sbAudioUrlRef.current);
+  }, []);
+
+  function setPreviewUrl(url) {
+    if (sbAudioUrlRef.current) URL.revokeObjectURL(sbAudioUrlRef.current);
+    sbAudioUrlRef.current = url;
+    setSbAudioUrl(url);
+  }
+
+  function handleLoadFromConfig() {
+    setSbPrompt(prompt);
+    setSbSpeed(speed);
+    setSbVoice(voice);
+    setSbModel(model);
+    setSbError('');
+  }
+
+  async function handleSaveSandboxToConfig() {
+    const n = parseFloat(sbSpeed);
+    if (isNaN(n) || n < 0.25 || n > 4.0) {
+      setSbError('Speed must be a number between 0.25 and 4.0');
+      return;
+    }
+    // Mirror into the saved-config editor so the page shows what was saved.
+    setPrompt(sbPrompt);
+    setSpeed(sbSpeed);
+    setSpeedError('');
+    setVoice(sbVoice);
+    setModel(sbModel);
+    await handleSavePrompt({ prompt: sbPrompt, speed: n, voice: sbVoice, model: sbModel });
+  }
+
+  async function handlePreview() {
+    setSbError('');
+    if (!sbText.trim()) {
+      setSbError('Enter some text to speak.');
+      return;
+    }
+    setSbPending(true);
+    try {
+      const res = await fetch(`${API}/api/admin/audio/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sbText, prompt: sbPrompt, speed: parseFloat(sbSpeed), voice: sbVoice, model: sbModel, lang }),
+      });
+      if (!res.ok) {
+        const msg = await res.json().then(j => j.error).catch(() => null);
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setPreviewUrl(null);
+      setSbError(err.message);
+    } finally {
+      setSbPending(false);
     }
   }
 
@@ -364,7 +451,7 @@ export function AdminAudioPage() {
         </div>
 
         <button
-          onClick={handleSavePrompt}
+          onClick={() => handleSavePrompt()}
           disabled={promptSaving || !!speedError}
           style={{
             marginTop: 8,
@@ -384,6 +471,67 @@ export function AdminAudioPage() {
           {promptSaving ? 'Saving...' : promptSaved ? 'Saved!' : 'Save'}
         </button>
       </div>
+
+      {/* TTS sandbox — experiment-only. Generates nothing on disk: no mp3, no
+          registry entry, no manifest change, no config write. Each preview is
+          a real (paid) API call; there is no cache, by design. */}
+      <details style={{ marginBottom: 24, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, background: 'var(--surface-2)' }}>
+        <summary style={{ padding: '10px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'var(--font-display)' }}>
+          TTS Sandbox
+        </summary>
+        <div style={{ padding: '0 12px 14px' }}>
+          <p style={{ fontSize: 12, opacity: 0.5, margin: '0 0 12px', lineHeight: 1.5 }}>
+            Try arbitrary text against experimental voice params. Saves nothing — no clip, no registry entry, no config change.
+            Each preview costs one real TTS API call. Instructions are built exactly as production builds them for <strong>{lang}</strong>.
+          </p>
+
+          <label style={sbLabelStyle}>Text to speak</label>
+          <textarea value={sbText} onChange={e => setSbText(e.target.value)} rows={3} style={sbFieldStyle} />
+
+          <label style={{ ...sbLabelStyle, marginTop: 12 }}>Voice instructions (sandbox)</label>
+          <textarea value={sbPrompt} onChange={e => setSbPrompt(e.target.value)} rows={4} style={sbFieldStyle} />
+
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={sbInlineLabelStyle}>Voice</label>
+              <select value={sbVoice} onChange={e => setSbVoice(e.target.value)} style={sbControlStyle}>
+                {TTS_VOICES.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={sbInlineLabelStyle}>Model</label>
+              <select value={sbModel} onChange={e => setSbModel(e.target.value)} style={sbControlStyle}>
+                {TTS_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={sbInlineLabelStyle}>Speed</label>
+              <input type="text" value={sbSpeed} onChange={e => setSbSpeed(e.target.value)} style={{ ...sbControlStyle, width: 80, cursor: 'text' }} />
+              <span style={{ fontSize: 11, opacity: 0.4 }}>0.25 – 4.0</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={handlePreview}
+              disabled={sbPending}
+              style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: 'var(--disc-green)', color: '#fff', fontWeight: 700, fontSize: 13, fontFamily: 'var(--font-display)', cursor: sbPending ? 'not-allowed' : 'pointer', opacity: sbPending ? 0.6 : 1 }}
+            >
+              {sbPending ? 'Generating...' : 'Generate preview'}
+            </button>
+            <button onClick={handleLoadFromConfig} style={sbSecondaryButtonStyle}>Load from saved config</button>
+            <button onClick={handleSaveSandboxToConfig} disabled={promptSaving} style={sbSecondaryButtonStyle}>Save to config</button>
+          </div>
+
+          {sbError && (
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--red)' }}>{sbError}</div>
+          )}
+
+          {sbAudioUrl && (
+            <audio controls src={sbAudioUrl} style={{ marginTop: 12, width: '100%' }} />
+          )}
+        </div>
+      </details>
 
       {/* Summary bar */}
       <div style={{
