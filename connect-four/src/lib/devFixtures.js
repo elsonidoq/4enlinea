@@ -6,9 +6,20 @@
 // (never hand-constructed — CLAUDE.md/I12). The anti-drift guard in tests/unit/devFixtures.test.js
 // asserts each single-answer fixture still carries the metadata its category requires.
 
+// Finding 21: categories whose goal/coach copy is authored for a SPECIFIC side rather than
+// "whoever is to move". Production puzzles for these categories set user_player explicitly
+// (claimeven -> 2/Gray, matching the "As Gray, you can secure a draw" copy) — leaving it
+// undefined let ChallengeScreen derive "You're playing Green" from the board's side-to-move
+// instead, which for '3233333556' (Green to move, verified via ./visualize_board.sh) directly
+// contradicted the claimeven goal_prompt. Every other category's copy is side-agnostic, so
+// undefined (board-derived) stays correct for them.
+const CATEGORY_USER_PLAYER = {
+  claimeven: 2,
+};
+
 // Builds the inline puzzle object ChallengeScreen consumes — identical shape to the
 // `confirmationChallenges` mapping in ChallengeScreen.loadPuzzles().
-export function buildDevPuzzle({ movestring, category, correctCol, highlightMetadata }) {
+export function buildDevPuzzle({ movestring, category, correctCol, highlightMetadata, userPlayer }) {
   return {
     id: `dev-${movestring}`,
     category,
@@ -16,7 +27,7 @@ export function buildDevPuzzle({ movestring, category, correctCol, highlightMeta
     interaction_mode: 'single_move',
     highlight_metadata: highlightMetadata ?? null,
     correct_col: Number.isInteger(correctCol) ? correctCol : null,
-    user_player: undefined,
+    user_player: userPlayer ?? CATEGORY_USER_PLAYER[category] ?? undefined,
   };
 }
 
