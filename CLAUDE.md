@@ -120,3 +120,21 @@ Use `npm run test:fast` (inside `connect-four/`) for all regular development and
 
 ## When writing specs for existing components
 Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See memory: feedback_spec_existing_apis.md
+
+## Writing implementation plans
+
+A plan is a set of **claims about this codebase**. Every claim needs a citation. Claims that were cited hold up; claims that were recalled do not. `writing-plans` demands complete code and no placeholders — that rule is right, but it pressures you to *author* specifics instead of *harvesting* them. Authored specifics that touch existing code are wrong by default.
+
+**Harvest fixtures; never invent them.** Before putting a test fixture in a plan, produce one real value (`node -e`, `curl`, a `console.log`) and paste **that**. A hand-written fixture tests the plan's imagination, not the code — it goes green while the app breaks, and `test:fast` cannot catch it. If a fixture can't be harvested, label it `UNVERIFIED SKETCH — adapt` rather than letting it look authoritative.
+
+**Quote, don't paraphrase.** Cite `file:line` **and paste the verbatim line**. Paraphrase is where staleness hides. If you can't paste it, you didn't read it.
+
+**Read the signature, not the prose.** Doc comments and file headers go stale and actively lie. Prefer `export async function foo(text, opts = {})` over any comment describing it. Subagent exploration reports are **hypotheses**, not facts — a report that summarizes a doc comment inherits its lie.
+
+**Open every negative claim.** "X doesn't exist", "Y has no Z", "the seam needs widening" — negative claims silently manufacture scope. Verify each one at source before a task depends on it.
+
+**Read the boring config first.** `package.json` (`"type"`, test scripts), the test runner, import style, and existing validators/helpers — once, upfront, before writing any snippet. Grep for an existing helper before specifying a new one.
+
+**Line numbers drift; symbol names don't.** Treat every line reference as approximate and locate by symbol name.
+
+Worked example of all six failing at once: `docs/superpowers/plans/2026-07-16-qa-2026-07-15-remediation.md` (see its Global Constraints + the `CORRECTED`/`REVISED` boxes). See memory: feedback_plan_authoring_verification.md
