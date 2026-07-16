@@ -232,7 +232,7 @@ Notes:
 - Never claim a "win" as guaranteed by the single move unless it completes four-in-a-row; the
   \`_with_best_play\` outcomes mean "with correct continuation".`;
 
-const SPANISH_OUTPUT_DIRECTIVE = `
+export const SPANISH_OUTPUT_DIRECTIVE = `
 
 # Output language
 Write the \`mechanism\` field — the ONLY player-facing field — in **Argentinian Spanish
