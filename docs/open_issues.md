@@ -773,6 +773,25 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 **Do not fix as part of Task 23** — this is a write-path bug, independent of and out of scope for the read-path 401 fix, and deserves its own scoped change (likely: derive/require a real device_uuid client-side before this call, or reject the write with 400 when no identifier is available, rather than defaulting to a shared bucket).
 
+## OI-41 — `/pricing` is a bare static page; needs a real designed pricing page, and its prices are hardcoded
+
+**Status**: deferred / open (created 2026-07-16 while unblocking Paddle domain review)
+**Area**: `connect-four/server/pricing.html`, route registered in `connect-four/server/index.js` (symbol: the `app.get('/pricing', ...)` sendFile line beside `/terms` and `/privacy`)
+
+> **Where the code is**: `pricing.html` and its route are **not on this branch**. They ship to `main` separately via the `chore/legal-pages` PR (branched from `origin/main`, 4 files), because Paddle domain review blocks on them and this branch is ~496 commits from merging. This branch deliberately carries only the issue, not a second copy of the pages — one source of truth. If you are reading this and `connect-four/server/pricing.html` does not exist, pull `main`.
+
+`pricing.html` was written to satisfy a hard Paddle requirement — domain review demands publicly reachable pricing — not as a product surface. It is a plain unstyled table matching `terms.html`'s minimal CSS, with no design, no plan comparison beyond one row, no CTA into checkout, and no i18n (English only, while the app ships full es.json key parity per spec 049).
+
+**Two distinct pieces of work, do not conflate them:**
+
+1. **Design work** — a real pricing page: plan comparison, annual/monthly toggle, CTA into the existing checkout flow, Spanish copy (Rioplatense voseo per `project_spanish_is_argentinian_voseo`). This is what the issue is nominally about.
+
+2. **The drift bug, which is the more dangerous half.** `pricing.html` hardcodes `$2.99`/`$21.99`/`39%`/`$1.83` as literal HTML text. The app itself never hardcodes prices: `useStripePrices.js` fetches them live from `GET /api/stripe/config`, which reads the real Stripe price objects precisely so "the amounts shown in UpgradeModal never drift from what we charge". The static page reintroduces exactly the drift that endpoint exists to prevent — change a price in the processor dashboard and this page silently lies, on the page a payment provider's reviewer reads. The `20` Deep Reveals/week figure is likewise a literal, duplicating `quotaLimits.js:FREE_DEEP_REVEAL_WEEKLY_LIMIT` (which has its own history of drifting — see the QA 2026-07-15 / D4 comment there, where the constant was 5 while copy promised 20).
+
+**Compounding factor**: the Paddle migration will move the price source of truth off Stripe entirely. Whatever replaces this page should read prices from the live config endpoint (or its Paddle equivalent, e.g. Paddle.js `PricePreview`, which also gives country-localized prices), never from static text.
+
+**Also carried by this page** (must survive any redesign — they are Paddle domain-review requirements, not decoration): the verbatim Merchant of Record clause ("Our order process is conducted by our online reseller Paddle.com…"), the 14-day refund statement, and the link to `/terms`.
+
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
 **Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
