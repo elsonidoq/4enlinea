@@ -9,7 +9,7 @@
 // the user is necessarily authenticated).
 import { useEffect, useState } from 'react';
 
-const API = import.meta.env.VITE_API_BASE_URL || '';
+const API = import.meta.env?.VITE_API_BASE_URL || '';
 
 /**
  * @returns {{ monthly: PriceInfo|null, annual: PriceInfo|null } | null}
@@ -43,4 +43,26 @@ export function formatPrice(info, locale) {
   }).format(info.amount / 100);
   const suffix = info.interval === 'year' ? '/yr' : info.interval === 'month' ? '/mo' : '';
   return `${amount}${suffix}`;
+}
+
+// D3: derive the badge from live /api/stripe/config so it can never drift from Stripe.
+// Returns null (render nothing) rather than a misleading badge when prices are missing,
+// currencies mismatch, or annual isn't a saving — useStripePrices already degrades
+// silently by design.
+//
+// `monthly`/`annual` are PriceInfo objects ({amount, currency, interval}), NOT bare cent
+// integers — see the useStripePrices() return shape above and stripeProcessor.js's
+// getPrices()/describe(). `perMonth` is returned as a PriceInfo too, so the existing
+// formatPrice renders it without new formatting code.
+export function computeAnnualSavings(prices) {
+  if (!prices) return null;
+  const { monthly, annual } = prices;
+  if (!monthly || !annual) return null;
+  if (monthly.currency !== annual.currency) return null;
+  const yearlyAtMonthly = monthly.amount * 12;
+  if (annual.amount >= yearlyAtMonthly) return null;
+  return {
+    percent: Math.round((1 - annual.amount / yearlyAtMonthly) * 100),
+    perMonth: { amount: Math.round(annual.amount / 12), currency: annual.currency, interval: 'month' },
+  };
 }

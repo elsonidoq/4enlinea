@@ -103,6 +103,8 @@
     "dismiss": "Maybe later",
     "planMonthly": "Monthly",
     "planAnnual": "Annual",
+    "saveBadge": "Save {{percent}}%",
+    "perMonthEquivalent": "{{price}}/mo billed annually",
     "activating": "Activating your subscription…",
     "timeout": "Payment received — still activating.",
     "refresh": "Refresh"

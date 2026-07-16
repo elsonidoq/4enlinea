@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
-import { useStripePrices, formatPrice } from '../lib/useStripePrices.js';
+import { useStripePrices, formatPrice, computeAnnualSavings } from '../lib/useStripePrices.js';
 
 // Spec 045 US3 (contracts/upgrade-flow-frontend.md, T023) — additive: onUpgrade now
 // takes a plan ('monthly'|'annual') and two new uiState values exist
@@ -21,6 +21,11 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
   const uiState = controlledUiState ?? internalUiState;
   const setUiState = onUiStateChange ?? setInternalUiState;
   const [selectedPlan, setSelectedPlan] = useState('monthly');
+  // D3: derived from live prices — never hardcoded — so the badge can't drift
+  // from Stripe. null (renders nothing) when prices haven't loaded yet, only
+  // one plan is configured, currencies mismatch, or annual isn't actually a
+  // saving.
+  const savings = computeAnnualSavings(prices);
 
   async function handleUpgrade() {
     setUiState('loading');
@@ -144,13 +149,29 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                     }}
                   >
-                    <span>{plan === 'monthly' ? t('upgrade.planMonthly', 'Monthly') : t('upgrade.planAnnual', 'Annual')}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {plan === 'monthly' ? t('upgrade.planMonthly', 'Monthly') : t('upgrade.planAnnual', 'Annual')}
+                      {plan === 'annual' && savings && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: '#fff',
+                          background: 'var(--disc-green)', borderRadius: 6,
+                          padding: '1px 6px',
+                        }}>
+                          {t('upgrade.saveBadge', { percent: savings.percent })}
+                        </span>
+                      )}
+                    </span>
                     {priceLabel && (
                       <span style={{
                         fontSize: 12, fontWeight: 700,
                         color: selectedPlan === plan ? 'var(--disc-green)' : 'var(--ink-soft)',
                       }}>
                         {priceLabel}
+                      </span>
+                    )}
+                    {plan === 'annual' && savings && (
+                      <span style={{ fontSize: 11, color: selectedPlan === plan ? 'var(--ink-soft)' : 'var(--ink-faint)' }}>
+                        {t('upgrade.perMonthEquivalent', { price: formatPrice(savings.perMonth, i18n.language) })}
                       </span>
                     )}
                   </button>
