@@ -599,7 +599,9 @@
   },
   "setcard": {
     "progress": "Puzzle progress",
-    "cleared": "Cleared"
+    "cleared": "Cleared",
+    "positions_one": "{{count}} position",
+    "positions_other": "{{count}} positions"
   },
   "challenge": {
     "playing_gray": "You're playing Gray",

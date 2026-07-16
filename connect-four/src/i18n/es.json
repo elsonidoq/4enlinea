@@ -599,7 +599,9 @@
   },
   "setcard": {
     "progress": "Progreso del puzzle",
-    "cleared": "Completado"
+    "cleared": "Completado",
+    "positions_one": "{{count}} posición",
+    "positions_other": "{{count}} posiciones"
   },
   "challenge": {
     "playing_gray": "Estás jugando con Gris",

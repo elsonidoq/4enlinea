@@ -68,7 +68,7 @@ export function SetCard({ title, stars, positionCount, locked, onClick, progress
         </div>
         <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
           <Stars n={stars} />
-          {positionCount != null && <span>· {positionCount} positions</span>}
+          {positionCount != null && <span>· {t('setcard.positions', { count: positionCount })}</span>}
         </div>
         {showProgress && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
