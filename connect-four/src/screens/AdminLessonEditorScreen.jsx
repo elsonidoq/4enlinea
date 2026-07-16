@@ -23,6 +23,12 @@ const VALID_CATEGORIES = [
   'undercut', 'overcut', 'figure_7', 'j_shape', 'odd_even_threat',
 ];
 
+// Mirrors AdminAudioPage.jsx's language dropdown pattern.
+const EDITOR_LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+];
+
 function emptyLesson() {
   return {
     title: '',
@@ -81,6 +87,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
   const [audioState, setAudioState] = useState('idle'); // idle | saving | generating | error
   const [audioError, setAudioError] = useState('');
   const [audioResult, setAudioResult] = useState(null); // { generated, failed } from last run
+  const [lang, setLang] = useState('en'); // 'en' | 'es' — which sibling fields the editor shows/edits
   const isNew = !lessonId;
 
   useEffect(() => {
@@ -226,8 +233,25 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={onBack} style={{ padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>← Back</button>
-        <h1 style={{ margin: 0, fontSize: 20 }}>{isNew ? 'New lesson' : `Edit: ${lesson.title || lesson.id}`}</h1>
+        <h1 style={{ margin: 0, fontSize: 20, flex: 1 }}>{isNew ? 'New lesson' : `Edit: ${lesson.title || lesson.id}`}</h1>
+        <label style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+          Language
+        </label>
+        <select
+          value={lang}
+          onChange={e => setLang(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #444', background: '#111', color: '#fff', fontSize: 13, cursor: 'pointer' }}
+        >
+          {EDITOR_LANGUAGES.map(({ code, label }) => (
+            <option key={code} value={code}>{label}</option>
+          ))}
+        </select>
       </div>
+      {lang === 'es' && (
+        <div style={{ fontSize: 12, color: '#f59e0b' }}>
+          Editing Spanish (_es) fields. An empty field means no translation exists yet — it will NOT fall back to English.
+        </div>
+      )}
 
       {/* Metadata */}
       <section>
@@ -244,6 +268,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
               slide={slide}
               index={i}
               total={lesson.slides.length}
+              lang={lang}
               onChange={updated => updateSlide(i, updated)}
               onMoveUp={() => moveSlide(i, -1)}
               onMoveDown={() => moveSlide(i, 1)}
@@ -260,6 +285,7 @@ export default function AdminLessonEditorScreen({ lessonId, onBack }) {
         <SocraticEditor
           enabled={lesson.socratic !== null}
           socratic={lesson.socratic}
+          lang={lang}
           onChange={s => setLesson(l => ({ ...l, socratic: s }))}
         />
       </section>

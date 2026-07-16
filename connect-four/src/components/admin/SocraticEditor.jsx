@@ -6,11 +6,15 @@ const COL_LABELS = ['0', '1', '2', '3', '4', '5', '6'];
 /**
  * Props:
  *   enabled: boolean
- *   socratic: { movestring, overlays, correctCol } | null
+ *   socratic: { movestring, overlays, correctCol, goalPrompt? } | null
+ *   lang: 'en' | 'es' — which sibling field (goalPrompt/goalPrompt_es) to
+ *     display and edit. Non-translatable fields (movestring, overlays,
+ *     correctCol, _boardInstructions) are unaffected. Defaults to 'en'.
  *   onChange: (socratic | null) => void
  */
-export default function SocraticEditor({ enabled, socratic, onChange }) {
+export default function SocraticEditor({ enabled, socratic, lang = 'en', onChange }) {
   const [verifyState, setVerifyState] = useState(null); // null | 'checking' | 'ok' | 'bad'
+  const fk = (base) => lang === 'es' ? `${base}_es` : base;
 
   const empty = { movestring: '', overlays: [], correctCol: null };
 
@@ -82,6 +86,22 @@ export default function SocraticEditor({ enabled, socratic, onChange }) {
             onMovestringChange={ms => { updateField('movestring', ms); setVerifyState(null); }}
             onOverlaysChange={ov => updateField('overlays', ov)}
           />
+
+          <div>
+            <div style={label}>Goal prompt{lang === 'es' ? ' (Español)' : ''}</div>
+            <textarea
+              value={socratic[fk('goalPrompt')] ?? ''}
+              onChange={e => updateField(fk('goalPrompt'), e.target.value)}
+              rows={2}
+              style={{
+                width: '100%', marginTop: 6, padding: '8px 10px',
+                borderRadius: 6, border: '1px solid #444',
+                background: '#111', color: '#fff', resize: 'vertical', boxSizing: 'border-box',
+                fontSize: 13,
+              }}
+              placeholder={lang === 'es' ? '(no Spanish translation yet)' : 'Prompt shown to the student'}
+            />
+          </div>
 
           <div>
             <div style={label}>Correct column</div>
