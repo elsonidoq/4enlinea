@@ -10,9 +10,9 @@
   {
     "key": "coach.home.welcome.0",
     "slug": "coach--home--welcome--0",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-07-14T20:04:56.040Z",
+    "generated_at": "2026-07-16T17:29:16.712Z",
     "approved_at": "2026-07-14T20:11:37.663Z"
   },
   {
@@ -50,9 +50,9 @@
   {
     "key": "coach.startReview",
     "slug": "coach--startReview",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:03.259Z",
+    "generated_at": "2026-07-16T17:28:52.878Z",
     "approved_at": "2026-07-14T20:11:37.663Z"
   },
   {

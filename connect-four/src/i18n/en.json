@@ -907,6 +907,7 @@
     "title": "Review",
     "playedGreen": "You played Green",
     "playedGray": "You played Gray",
+    "cleanButLost": "No mistakes on the board — but the game was lost. Review how it ended.",
     "share": {
       "button": "Share",
       "copied": "Link copied!"

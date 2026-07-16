@@ -3547,7 +3547,7 @@ function writeTtsManifest(entries, lang = 'en') {
 
 // GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
 app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
-  res.json(readTtsConfig());
+  res.json(readTtsConfig(resolveAdminLang(req.query.lang)));
 });
 
 // POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice + model)
@@ -3565,7 +3565,7 @@ app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   if (!VALID_TTS_MODELS.includes(resolvedModel)) {
     return res.status(400).json({ error: `model must be one of: ${VALID_TTS_MODELS.join(', ')}` });
   }
-  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel);
+  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel, resolveAdminLang(req.body?.lang));
   res.json({ ok: true });
 });
 
@@ -3622,7 +3622,7 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
     const instructions = buildTtsInstructions(basePrompt, lang);
     console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
     const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
@@ -3653,7 +3653,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
     const instructions = buildTtsInstructions(basePrompt, lang);
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
@@ -3845,7 +3845,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     }
 
     const { synthesizeStream } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(locale);
     const instructions = buildTtsInstructions(basePrompt, locale);
 
     let ttsResponse;

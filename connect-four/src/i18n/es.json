@@ -907,6 +907,7 @@
     "title": "Análisis",
     "playedGreen": "Jugaste con Verde",
     "playedGray": "Jugaste con Gris",
+    "cleanButLost": "No hubo errores en el tablero, pero perdiste la partida. Mirá cómo terminó.",
     "share": {
       "button": "Compartir",
       "copied": "¡Enlace copiado!"

@@ -66,7 +66,7 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   const textField = lang === 'es' ? 'text_es' : 'text';
   const audioField = lang === 'es' ? 'audio_es' : 'audio';
 
-  const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+  const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
   const instructions = buildTtsInstructions(basePrompt, lang);
 
   const slides = Array.isArray(lesson.slides) ? lesson.slides : [];

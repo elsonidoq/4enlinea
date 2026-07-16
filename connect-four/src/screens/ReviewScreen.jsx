@@ -51,7 +51,7 @@ function getQualityColor(quality) {
 }
 
 
-export function ReviewScreen({ go, goBack, id, onboarding }) {
+export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   const { t } = useTranslation();
   const { session, store } = useStore();
 
@@ -264,6 +264,12 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
     frozenBoard = board;
   }
 
+  // T18 (finding 15): known only when GameScreen (result='loss') or PastGamesListScreen
+  // (outcome='lost') passed it as a nav param — a cold-boot deep link (/game/:id) carries
+  // neither, so the "clean but lost" copy only fires within the same session. Acceptable
+  // per brief: no server change needed to source the game's outcome.
+  const isLoss = result === 'loss' || outcome === 'lost';
+
   // Coach messages
   let coachMessages = [];
   if (loading) {
@@ -273,7 +279,11 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
   } else if (analysis) {
     const disc = analysis.side === 'first' ? 'green' : 'gray';
     const discLabel = analysis.side === 'first' ? t('review.playedGreen') : t('review.playedGray');
-    coachMessages = [{ text: t(analysis.summaryPhraseKey), mood: 'happy', disc, discLabel }];
+    const isCleanPhrase = analysis.summaryPhraseKey.startsWith('coach.sparring.review.clean');
+    const summaryText = (isCleanPhrase && isLoss)
+      ? t('review.cleanButLost')
+      : t(analysis.summaryPhraseKey);
+    coachMessages = [{ text: summaryText, mood: 'happy', disc, discLabel }];
   }
 
   // Accuracy display

@@ -98,7 +98,7 @@ export function AdminAudioPage() {
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   useEffect(() => {
-    fetch(`${API}/api/admin/audio/prompt`)
+    fetch(`${API}/api/admin/audio/prompt?lang=${lang}`)
       .then(r => r.json())
       .then(j => {
         setPrompt(j.prompt || '');
@@ -107,7 +107,7 @@ export function AdminAudioPage() {
         setModel(j.model || 'gpt-4o-mini-tts');
       })
       .catch(() => {});
-  }, []);
+  }, [lang]);
 
   function handleSpeedChange(val) {
     setSpeed(val);
@@ -127,7 +127,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice, model }),
+        body: JSON.stringify({ prompt, speed: parseFloat(speed), voice, model, lang }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setPromptSaved(true);

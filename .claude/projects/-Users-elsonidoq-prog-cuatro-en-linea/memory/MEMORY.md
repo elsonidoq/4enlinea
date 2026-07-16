@@ -131,6 +131,7 @@
 - [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; rg/fd/sg; don't pkill shared server; commit WIP before SDD
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; handoff + AskUserQuestion gate patterns; never preview for prose/code options
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md) — preserve existing component API unless the change strictly requires otherwise (CLAUDE.md)
+- [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer of representation: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, the app's request NOT your curl, all-N NOT a sample, call sites NOT tests, working tree NOT file list
 - [callLLM error handling in scripts](feedback_calllm_error_handling.md) — wrap each callLLM call individually; uncaught error silently drops the entry
 - [LLM output root-cause](feedback_llm_output_root_cause.md) — goal-first, then RCA across render/context/generator; a missing signal is a question not a fact
 - [Occam + principled extrapolation](feedback_occam_principled_extrapolation.md) — one unifying mechanism over many special-case kinds; generalize, don't enumerate

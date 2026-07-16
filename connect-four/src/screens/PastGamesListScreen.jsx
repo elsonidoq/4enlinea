@@ -105,15 +105,17 @@ function GameCard({ game, t, onClick }) {
           </div>
         )}
 
-        {/* Row 3: blunder chip */}
+        {/* Row 3: blunder chip. T18 (finding 15): a lost 0-mistake game already shows "Lost"
+            above — "No mistakes" beside it reads as contradictory, so suppress the chip
+            rather than inventing a count (the outcome badge alone is not contradicted). */}
         {game.blunder_count > 0 ? (
           <span className="gc-blunder-chip" style={{ alignSelf: 'flex-start' }}>
             <Icon name="flag" size={11} />
             {t(game.blunder_count === 1 ? 'games.blunder_count_one' : 'games.blunder_count_other', { count: game.blunder_count })}
           </span>
-        ) : (
+        ) : game.outcome !== 'lost' ? (
           <span className="gc-no-blunder-chip" style={{ alignSelf: 'flex-start' }}>{t('games.no_blunders')}</span>
-        )}
+        ) : null}
       </div>
     </button>
   );
@@ -303,7 +305,7 @@ export function PastGamesListScreen({ go, goBack }) {
                 key={game.id}
                 game={game}
                 t={t}
-                onClick={() => go('review', { id: game.id })}
+                onClick={() => go('review', { id: game.id, outcome: game.outcome })}
               />
             ))}
 
