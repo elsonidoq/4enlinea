@@ -9,6 +9,7 @@ import { buildBoard } from '../lib/board.js';
 import { PAID_CATEGORIES } from '../lib/categories.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
+import { resolveChipQuality } from '../lib/reviewChipQuality.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -413,8 +414,14 @@ export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
                 minWidth: 'min-content',
               }}>
                 {analysis.moves.map((move) => {
-                  const isOptimal = move.quality === 'optimal';
-                  const color = getQualityColor(move.quality);
+                  // Task 17 (finding 14): color from the STORED row's quality when one
+                  // exists for this ply (the durable truth MistakeDetailScreen's title
+                  // reads) — a chip must never disagree with the detail it opens. Falls
+                  // back to the live scoreMove badge quality (move.quality) only for
+                  // plies the storage rule left unstored.
+                  const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
+                  const isOptimal = displayQuality === 'optimal';
+                  const color = getQualityColor(displayQuality);
                   return (
                     <button
                       key={move.moveIndex}
