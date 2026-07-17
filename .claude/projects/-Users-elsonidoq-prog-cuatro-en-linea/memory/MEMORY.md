@@ -24,7 +24,7 @@
 
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
 - [Lesson interactivity evaluation](project_lesson_interactivity_evaluation.md) — Socratic is client-side col===correctCol; inline confirmationChallenges 404
-- [Lesson progression + audio traps](project_lesson_progression_audio_traps.md) — order=filename prefix (JSON ignored; reorder=git mv); audio=ttsProvider.synthesize
+- [Lesson progression + audio traps](project_lesson_progression_audio_traps.md) — order=filename prefix (JSON ignored; reorder=git mv); audio=ttsProvider.synthesize; socratic text is i18n-keyed → silent (OI-43)
 - [New-category wiring + locked designs](project_new_category_wiring_checklist.md) — 8-file checklist (missing candidate-generator.js = silent failures)
 - [Removed categories](project_category_cleanup.md) — zugzwang≠forced_win; claimodd removed; don't reuse slugs; how to re-add
 - [Classifier architecture](project_classifier_architecture.md) — detection pipeline; highlight_metadata schemas + null-vs-non-null per category
@@ -69,7 +69,7 @@
 - [i18n switcher + es.json](reference_i18n_english_only.md) — es.json now FULL key-parity (spec 049) in Argentinian voseo; guarded by i18nKeyParity.test.js
 - [Spanish = Argentinian voseo](project_spanish_is_argentinian_voseo.md) — es.json MUST be Rioplatense voseo (encontrá/tenés/sos/vos), NOT tú-Spanish; keys unchanged
 - [Spanish output silent fallback](project_spanish_output_silent_fallback.md) — es = English-prompt→Spanish-output; NEW string/term/LLM-field ships English SILENTLY; graders English-only
-- [TTS audio cached by text](project_tts_audio_cached_by_text.md) — changing TTS model/voice/prompt does NOT regenerate existing clips (coach/lesson/deep-reveal keyed by text hash); regenerate manually
+- [TTS audio cached by text](project_tts_audio_cached_by_text.md) — voice/prompt change does NOT regenerate coach/deep-reveal (text-hash keyed); lessons now ALWAYS re-synthesize; audition via /admin/audio sandbox
 - [DEV board injector](project_dev_board_injector.md) — load any board into Challenge via panel/`?devBoard=`; seed sparring via `/game?devBoard=`; fixtures solver-verified non-terminal
 - [Valid blunder tags vs categories](reference_valid_blunder_tags.md) — VALID_BLUNDER_TAGS != VALID_CATEGORIES
 - [Highlight cell roles](project_highlight_cell_colors.md) — use userIsYellow for role assignment; claimeven always Yellow perspective; cooperativeAiMoves empty
@@ -115,6 +115,7 @@
 ## QA / app-qa
 
 - [app-qa setup gotchas](project_app_qa_setup_gotchas.md) — dev-skip-auth strands data; resize_page broken (use emulate); session drops → /api/auth/refresh; 3001 no hot-reload
+- [node --test silently skips missing files](project_node_test_silent_skip.md) — test:fast is an explicit file list; a stale registration = invisible coverage loss (exit 0); check exit code not "fail 0"
 
 ## Simulation, scripts, worktrees, epics & general workflow
 
@@ -128,7 +129,8 @@
 - [Polish epics pipeline](project_polish_epics_pipeline.md) — counts ALREADY include suboptimal; epic AND critique-agent premises both proved false
 - [Prework discipline](feedback_prework_discipline.md) — answer before editing; empirical-first; audit all code paths before an epic; Sonnet spec-review before plan
 - [Proportion process to change](feedback_proportion_process_to_change.md) — small additive skill/doc edit: skip full RED-baseline ceremony; validate by using it once
-- [Workflow hygiene](feedback_workflow_hygiene.md) — no destructive git for curiosity; quarantine before delete; rg/fd/sg; don't pkill shared server; commit WIP before SDD
+- [Workflow hygiene](feedback_workflow_hygiene.md) — commit ONLY when asked; no destructive git for curiosity; quarantine before delete; rg/fd/sg; don't pkill shared server; commit WIP before SDD
+- [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour; use isolation:'worktree'
 - [Agent & UI workflow](feedback_agent_and_ui_workflow.md) — Opus critique/Sonnet apply; handoff + AskUserQuestion gate patterns; never preview for prose/code options
 - [Audit existing APIs before speccing](feedback_spec_existing_apis.md) — preserve existing component API unless the change strictly requires otherwise (CLAUDE.md)
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer of representation: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, the app's request NOT your curl, all-N NOT a sample, call sites NOT tests, working tree NOT file list
