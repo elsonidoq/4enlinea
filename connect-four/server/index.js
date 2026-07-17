@@ -1,5 +1,5 @@
 import express from 'express';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join, basename } from 'path';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
@@ -56,6 +56,22 @@ import { buildCacheFilter } from './explainCacheKey.mjs';
 import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function resolveWorktreePortEnv() {
+  if (process.env.PORT && process.env.FRONTEND_URL) return;
+  try {
+    const scriptPath = join(__dirname, '..', '..', 'worktree-ports.sh');
+    const output = execSync(scriptPath, { encoding: 'utf8' });
+    for (const line of output.split('\n')) {
+      const match = line.match(/^export (\w+)=(.+)$/);
+      if (!match) continue;
+      if (!process.env[match[1]]) process.env[match[1]] = match[2];
+    }
+  } catch (err) {
+    console.warn('[worktree-ports] could not self-derive ports, using defaults:', err.message);
+  }
+}
+resolveWorktreePortEnv();
 
 // ── Boot-time fail-safe (spec 047 FR-006) ──────────────────────────────────────
 // If we're pointed at a real (non-local) Supabase project but NODE_ENV isn't
