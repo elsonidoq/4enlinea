@@ -31,4 +31,14 @@ In our own account, payout settings offer **Wire transfer** and **Payoneer**, Ba
 
 `GET /pricing` returned 200 while serving `index.html` (the SPA fallback) before the route was actually registered/deployed. Never trust the status code for a new static route — grep the response body for a content marker (e.g. `Merchant of Record`). `sendFile` routes re-read disk per request (so `/terms` content updates need only a redeploy, not a restart), but a NEW route is code and needs the process restarted/redeployed.
 
-Related: [[project_stripe_traps]] (the outgoing provider); `docs/payment_provider_research.md`; `docs/open_issues.md` OI-41.
+## 6. Paddle.js defaults to PRODUCTION on the client — the sandbox footgun
+
+Server-side sandbox discipline (sandbox API key) does NOT make the browser checkout use sandbox. Paddle.js defaults to **production**: you must call `Paddle.Environment.set('sandbox')` **before** `initializePaddle()`, AND use the **sandbox client-side token** (prefixed `test_`; the live token has no prefix). Miss either and the overlay silently loads production while every server-side sandbox test still passes — a split-brain that hides until a real card is charged. Gate both on a Vite `import.meta.env.MODE`/`VITE_*` dev/prod switch, default sandbox. (Captured in `polish_epic.md` Epic 10 US10.2.4, but it's a durable Paddle trap, so it lives here too.)
+
+## 7. Going live has TWO independent gates; a hosted payment link does NOT bypass domain review
+
+To process real money you need BOTH **domain review** (per checkout domain) AND **account/identity verification** (sole trader = you personally do a KYC/ID check) approved — either one still `Pending` blocks live transactions. **Correction to an easy wrong assumption:** a Paddle-hosted payment link does *not* sidestep domain review — for live accounts you cannot create transactions until a default payment link is set, and that requires domain verification. So there is NO no-code / no-domain shortcut to the first live payout test; sandbox is the only thing you can exercise before both gates clear. Domain review: most auto-approve, else 5–7 business days.
+
+Domain submission: submit **`decodec4.xyz` ONLY** — not `staging.decodec4.xyz` (internal) and not `quaddojo.com` (serves the same app under a name the terms don't claim → brand mismatch). **App name is undecided**: `decodec4.xyz` is temporary, `quaddojo.com` a tentative test; terms/brand currently say "DecodeC4". Don't invest in brand assets until the name is committed; renaming later = one new domain submission + a find/replace, cheap.
+
+Related: [[project_stripe_traps]] (the outgoing provider); `docs/payment_provider_research.md`; `docs/open_issues.md` OI-41; `polish_epic.md` Epic 10.

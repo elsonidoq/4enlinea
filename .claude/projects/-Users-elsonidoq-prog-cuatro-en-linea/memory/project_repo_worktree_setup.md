@@ -47,5 +47,10 @@ and the tool's base-ref is a harness setting, not something the repo can pin.
 **How to apply:** reset the new worktree to stagging HEAD, `npm install`, copy `server/.env`,
 then confirm a green `test:fast` baseline before treating any failure as your own.
 
+**3. Port collisions across concurrent worktrees are now handled — see
+`docs/architecture/worktree-conventions.md`.** Always `eval "$(./worktree-ports.sh)"`
+from the repo root before starting/killing any server in this or any worktree; it's an
+unconditional rule (in `CLAUDE.md`), not gated behind "am I in a worktree."
+
 Related: [[project_gamesampling_rng_determinism_trap]] (why gameSampling.js edits must be
 additive), [[reference_supabase_connection]] (the .env lives at `connect-four/server/.env`).

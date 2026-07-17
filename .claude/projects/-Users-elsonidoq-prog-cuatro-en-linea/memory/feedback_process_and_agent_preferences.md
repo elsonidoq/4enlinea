@@ -1,9 +1,10 @@
 ---
 name: feedback_process_and_agent_preferences
 description: "How heavy to make a process and how to dispatch agents — sizing bars (plan vs speckit vs manager), scope-is-a-diff, Opus-critique/Sonnet-apply, AskUserQuestion ≥2 options and never `preview` for text, ASCII diagrams, handoff runs ONE command"
-metadata:
+metadata: 
   node_type: memory
   type: feedback
+  originSessionId: 5a34af86-ae36-4059-aa61-20c2adf0e291
 ---
 
 Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half), `feedback_prework_discipline`, `feedback_proportion_process_to_change`, `feedback_agent_and_ui_workflow` (+ its merged `feedback_askuserquestion_preview_format` / `reference_multiagent_orchestration_patterns` halves), and the agent-dispatch rules of `feedback_workflow_hygiene`. These are the owner's non-default preferences — the defaults are usually the opposite.
@@ -47,6 +48,7 @@ Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half
 - **Handoff prompts run ONE command.** Never write "if X, run `/speckit-clarify`" — the agent executes one command and cannot branch. Pre-answer likely clarifications inline so the target command doesn't stall.
 - **Handoff context pattern:** each sub-agent ends with a `## Handoff context` section (decisions + reasoning, trade-offs, uncertainties to scrutinize, patterns to follow, non-obvious constraints); the orchestrator pastes it verbatim into the next prompt. Cold-start agents only see files on disk — without the "why", critique agents can't tell intentional decisions from defects.
 - **AskUserQuestion gate pattern:** sub-agents can't be interactive, so separate critique (non-interactive Opus) from decision collection (AskUserQuestion in the main turn). Batch ≤4 per call; tag the recommended option.
+- **Batched-implement / review / fix beats per-task dispatch when the owner asks for it explicitly.** For a small (≤8-task), low-coordination-risk plan, the owner directed: one Sonnet/general agent implements ALL tasks in one call (not `subagent-driven-development`'s one-agent-per-task default), then one Opus code-review agent, then one Sonnet fix agent — reserving the plan's own final manual-verification task for themselves. Confirmed working (worktree-port-isolation plan, 2026-07-17): the implementer ran every task's own verification steps and committed per-task inside its single call, and the review still caught a real cross-file gap (a doc file the plan's scope list omitted). Default to per-task dispatch for anything with real inter-task coordination risk or ambiguity; use this batched pattern only when the owner asks for it or the tasks are this mechanical.
 
 ## 5. Asking + showing
 

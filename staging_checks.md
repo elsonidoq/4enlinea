@@ -707,3 +707,25 @@ exercised locally at all.
 - **Source**: session 2026-07-16 (socratic → lesson content); plan
   `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` V7; OI-43, OI-46.
 - [ ] Signed off (tester / date):
+
+## Epic 10 — Paddle Checkout Migration (replace & remove Stripe)
+
+> Submitted/pending in the real world as of 2026-07-17 — these gate the first live payout test and cannot be exercised in sandbox. The rest of Epic 10's staging checks (deployed webhook delivery, live catalog) get appended when the epic is implemented; these three are already in flight.
+
+- **What** — Paddle domain review for `decodec4.xyz` reaches `approved` (dashboard → Checkout → Website approval; submit `decodec4.xyz` ONLY, not staging/quaddojo).
+  **Why staging** — Paddle reviews the live public HTTPS site; no local equivalent. Submitted 2026-07-17, status `Pending`.
+  **Expected** — status flips to approved (most auto-approve; else 5–7 business days).
+  **Source** — Epic 10 staging checks; memory `project_paddle_integration` §7.
+  - [ ] signed off (tester / date):
+
+- **What** — Complete Paddle account/identity verification (sole trader: Pablo Zivic's KYC/ID check, in-dashboard or emailed link).
+  **Why staging** — real KYC against Paddle; independent of domain review; both must clear before live transactions.
+  **Expected** — account verified; Paddle acts as Merchant of Record. DNI stays private (not on any public page).
+  **Source** — Epic 10 staging checks; memory `project_paddle_integration` §7.
+  - [ ] signed off (tester / date):
+
+- **What** — First real (live, non-sandbox) payout lands as **USD** in the Argentine caja de ahorro en dólares, via wire.
+  **Why staging** — needs both gates above + a real ≥~$106-gross charge (fee 5%+50¢, $15 SWIFT); sandbox produces no wire; monthly payout (by the 15th).
+  **Expected** — USD arrives as USD (not pesified); confirms `docs/payment_provider_research.md` open question and the net-vs-gross $100-threshold assumption. Mind the 20-business-day ingreso rule + Factura E.
+  **Source** — Epic 10 staging checks; `docs/payment_provider_research.md`.
+  - [ ] signed off (tester / date):
