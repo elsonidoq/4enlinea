@@ -4,6 +4,30 @@ This command is **epic-agnostic**: all product content lives in the epic file, n
 
 ---
 
+## Worktree setup (run once, before Epic resolution, on first invocation)
+
+Runs before anything else — before even parsing `$ARGUMENTS` for the epic file, if that's convenient — exactly once per state file. Guarded by `worktree_setup_done` in state (see State management below): once `true`, skip this section entirely on every later invocation of the same state file.
+
+1. Detect whether the current checkout is already a linked worktree or the main checkout, using the same check as `superpowers:using-git-worktrees`:
+   ```bash
+   GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
+   GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
+   ```
+   (If `git rev-parse --show-superproject-working-tree` returns a path, this is a submodule, not a worktree — treat it as the main checkout for this check, per the skill's submodule guard.)
+
+2. **Already in a linked worktree** (`GIT_DIR != GIT_COMMON`): do **not** silently proceed and do not silently create a nested worktree. Ask the user via `AskUserQuestion` what to do — this command must not assume a worktree it didn't create is the right place to drive this epic:
+   - **Continue in this worktree** — use it as-is for this epic's pipeline.
+   - **Exit to the main checkout and create a fresh worktree here** — for when the current worktree belongs to unrelated work.
+   - **Work in place anyway, skipping worktree isolation** — for a quick one-off where isolation isn't worth it.
+
+   If the user picks "exit and create fresh," return to the main checkout (`ExitWorktree` if available, else `cd` to the repo's main working directory) before continuing to step 3.
+
+3. **In the main checkout** (either because that's where invocation started, or because step 2 resolved to "create fresh"): invoke `superpowers:using-git-worktrees` to set up an isolated workspace for this epic, following that skill's own detection → native-tool-first → git-fallback → project-setup → clean-baseline flow. Name the worktree after the epic (its slug or heading), not a generic name, so it's identifiable later. If the user's answer in step 2 was "work in place anyway," skip this step entirely.
+
+4. Set `worktree_setup_done: true` in state and proceed to Epic resolution. If the resulting workspace is a git worktree of this repo, dev-server/test work inside it must follow `docs/architecture/worktree-conventions.md` (run `eval "$(./worktree-ports.sh)"` before starting or killing any server — never assume `3001`/`5173` are free or yours to touch).
+
+---
+
 ## Inputs
 
 `$ARGUMENTS` = `<epic-file> [epic-id]`
@@ -35,6 +59,7 @@ State file path: `.claude/epics-workflow/<state-slug>.json`, where `<state-slug>
 Schema:
 ```json
 {
+  "worktree_setup_done": false,
   "epic_file": null,
   "epic_heading": null,
   "spec_dir": null,
@@ -52,8 +77,9 @@ Schema:
 1. Resolve the epic (above) to compute the `<state-slug>`.
 2. Read the state file if it exists; otherwise initialize with the schema above and write it.
 3. After loading, merge the file contents with the full schema defaults — any key present in the schema but missing from the file gets its default value.
-4. Execute the current stage.
-5. Write updated state before ending your turn.
+4. If `worktree_setup_done` is `false`, run the **Worktree setup** section above before anything else, then continue.
+5. Execute the current stage.
+6. Write updated state before ending your turn.
 
 If the state file is corrupted, ask whether to restart or pick a stage manually. If the loaded `stage` is already `done`, tell the user the artifacts are complete and point them at `/coordinate-implementation <spec_dir>` rather than restarting.
 
