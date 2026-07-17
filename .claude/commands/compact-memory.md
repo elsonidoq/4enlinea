@@ -1,10 +1,14 @@
 You are compacting the project's auto-memory index. The `MEMORY.md` index has grown past the size that
-loads into context; your job is to shrink it to **150–175 lines and at most 20 KB** by migrating
+loads into context; your job is to shrink it to **150–175 lines and at most 20,480 bytes** by migrating
 architecture-grade knowledge OUT to `docs/architecture/` and pruning stale or redundant memories —
 proposing the full plan and getting confirmation BEFORE you change anything.
 
 Optional argument ($ARGUMENTS): a target line count or band (e.g. `160` or `150-175`). If empty, use
-**150–175 lines, ≤20 KB** (both must hold).
+**150–175 lines, ≤20,480 bytes** (both must hold).
+
+**The byte cap is the binding constraint, not the line band.** 20,480 bytes over 175 lines is an
+average of ~117 bytes per line, so the top of the line band is only reachable with short lines. Check
+bytes (`wc -c`) as the real target and treat the line band as a sanity range.
 
 **If triggered from `/finish-session`:** finish writing the session's new/updated memories FIRST, then
 run this compaction. Never compact before the pending memories are saved.
@@ -48,15 +52,20 @@ invisible. The reduction comes from three moves, in priority order: **(1) MIGRAT
 to the right doc and delete/merge the now-redundant memory; **(2) MERGE** overlapping same-topic
 memories into one; **(3) DROP** stale, resolved, or git-derivable entries.
 
-**Trimming hooks barely moves the byte count — do NOT rely on it.** (Learned the hard way across
-multiple sessions: rewriting every hook shorter cut <10% and never reached target.) Each index line
-carries a fixed, un-trimmable overhead — `- [Title](slug.md) — ` is ~70 bytes — so for ~115 entries
-roughly **8 KB is pure link syntax that no amount of hook-shortening can touch**. The byte total is
-therefore dominated by the NUMBER OF ENTRIES, not hook length. **Real reduction comes ONLY from
-removing whole entries** (MIGRATE→drop, MERGE, DROP). Measure the structural floor first
-(`grep -oE '^- \[[^]]*\]\([a-z0-9_]+\.md\) — ' MEMORY.md | wc -c`); if the target is below floor +
-minimal hooks, you MUST cut entries — trimming alone is mathematically incapable of getting there.
-Use hook-tightening only as a final polish AFTER entry count is right, never as the primary lever.
+**Removing entries is the primary lever — but know where the bytes actually are.** Measured at ~120
+entries / ~20 KB, the file splits roughly: **42% fixed link syntax** (`- [Title](slug.md) — ` is ~72
+bytes × entries ≈ 8.5 KB, un-trimmable while the entry exists), **54% hook text** (~91 bytes/hook), 4%
+headers. So hook length is NOT negligible — it is the larger half, and tightening hooks is a real
+lever worth several KB.
+
+Prefer MIGRATE→drop / MERGE / DROP anyway, for a reason that is not about bytes: every surviving entry
+competes for the ~200-line load cap, and a fact moved into `docs/architecture/` is *better placed*, not
+just smaller. Hook-tightening buys bytes without improving where knowledge lives.
+
+Measure the structural floor first
+(`grep -oE '^- \[[^]]*\]\([a-z0-9_]+\.md\) — ' MEMORY.md | wc -c`, minus one byte per match for grep's
+added newlines — and note this regex misses slugs containing dashes or capitals). If the target is
+below floor + minimal hooks, you MUST cut entries; trimming alone cannot get there.
 
 ---
 
@@ -137,7 +146,8 @@ Present the proposal organized around the OUTCOME, not a raw per-memory dump:
    content genuinely needs a trigger — "before doing X, read `docs/architecture/Y`"; never for plain
    reference migrations, or you re-inflate the index).
 
-4. The **projected final `MEMORY.md` line count** (must land in the target band).
+4. The **projected final `MEMORY.md` line count AND byte count** (both must land in the target; bytes
+   are the binding one).
 
 Then **STOP and ask for confirmation and feedback** (use the question tool; let the user approve, adjust
 per doc-addition or per deletion, or veto specific items). Do not proceed until they confirm. If
@@ -159,11 +169,14 @@ check.
   inbound links and fix or drop them so nothing dangles. Preserve each surviving file's frontmatter
   shape (`name`, `description`, `metadata.type`).
 - **Rewrite `MEMORY.md`:** keep it trigger-first; one line per surviving memory under the most specific
-  "When/Before…" section; entry format `- [Title](file.md) — hook`; **≤150 chars per line**; delete any
-  section header left with zero entries.
-- **Re-count.** If still over the band, do another MIGRATE/MERGE/DROP pass — prefer moving substance to
-  docs over truncating hooks. Never hit the number by gutting a hook until it no longer says WHEN it
-  applies — a trigger that lost its trigger is worthless.
+  "When/Before…" section; entry format `- [Title](file.md) — hook`; delete any section header left with
+  zero entries. **Aim for a ~117-byte AVERAGE line and treat 150 chars as a hard per-line ceiling** —
+  the average is what the byte cap actually enforces, so a few long lines are fine if short ones
+  offset them.
+- **Re-count** both lines and bytes (`wc -l -c MEMORY.md`). If still over, do another
+  MIGRATE/MERGE/DROP pass — prefer moving substance to docs over truncating hooks. Never hit the
+  number by gutting a hook until it no longer says WHEN it applies — a trigger that lost its trigger
+  is worthless.
 
 ## Phase 5 — Audit (critique subagent)
 
@@ -215,14 +228,14 @@ file. Instruct it to:
   links still all resolve; the findings' offending references are gone from the docs.
 - Report a per-finding changelog (file + exact text changed, or "skipped — reason") + verification.
 
-Then re-run the Phase-5 checks yourself (line count + link resolution) to confirm the fixes didn't
-regress the index or re-inflate it past the band.
+Then re-run the Phase-5 checks yourself (line count, byte count, link resolution) to confirm the fixes
+didn't regress the index or re-inflate it past the cap.
 
 ## Phase 7 — Report
 
 List: (1) MIGRATED — slug → arch doc + section that gained the fact; (2) MERGED — which slugs collapsed
 into which; (3) DROPPED — slug + why (stale / git-owned / superseded); (4) KEPT — count; (5) new pointer
-memories added, if any; (6) final `MEMORY.md` line count; (7) STALE facts found vs the code (dropped,
+memories added, if any; (6) final `MEMORY.md` line count and byte count; (7) STALE facts found vs the code (dropped,
 not migrated) so the owner knows where the code diverged; (8) the backup path from Phase 0; (9) the
 audit outcome — severity counts + how each finding was resolved (or why deferred).
 
