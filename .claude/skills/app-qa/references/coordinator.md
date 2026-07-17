@@ -41,8 +41,11 @@ that's where the tokens are and Sonnet is good enough.
 1. Do the shared setup **once** yourself (SKILL.md setup checklist): read the mindset seeds, **ask
    the user preserve-vs-reset**, launch the API server to `$LOG_PATH` + Vite in the background,
    open Chrome, log in via `🛠 Dev: skip auth`, stamp `$RUN_FILE = agentic_QA_$(date +%Y-%m-%d-%H%M).md`
-   and create it with the header + Summary block. You own the server — relaunch it (kill port 3001 +
-   truncate `$LOG_PATH`) if a subagent reports it crashed or you change server code.
+   and create it with the header + Summary block. You own the server — relaunch it (kill `$API_PORT`
+   + truncate `$LOG_PATH`) if a subagent reports it crashed or you change server code. Never kill by
+   a hardcoded/guessed port number (e.g. a literal `3001`) — that could kill a **different
+   worktree's** server; always use `$API_PORT` as derived for *your* checkout by `worktree-ports.sh`
+   (run `eval "$(./worktree-ports.sh)"` first if you haven't this session).
    **If `--focus "<text>"` was given:** parse it into (a) emphasis on the existing areas below and
    (b) any **derived focus-areas** not in the fixed list (e.g. dev-board-injector, spanish-audio-i18n,
    onboarding-mission-screen) → add those as extra subagent passes. Focused + derived areas run with
@@ -97,7 +100,7 @@ if you're in focus, append your ✅/❌/⚠️ checklist verdicts too. Tag each 
 `adjacent`. Use the bug-template.md format.
 
 Environment is already running:
-- Chrome is open at http://localhost:5173, logged in via "🛠 Dev: skip auth"
+- Chrome is open at http://localhost:$VITE_PORT, logged in via "🛠 Dev: skip auth"
   (anonymous, tier=<TIER>). Use the chrome-devtools MCP tools.
 - API server logs to the file <LOG_PATH>. When a request misbehaves, delta-read it:
   START=$(wc -l < <LOG_PATH>) BEFORE the action, then
