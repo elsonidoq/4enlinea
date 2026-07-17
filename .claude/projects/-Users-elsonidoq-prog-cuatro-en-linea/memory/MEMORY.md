@@ -27,7 +27,8 @@
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; GoTrue skips on_auth_user_created; NO route guard → CTA gate ≠ screen gate; deleteDatabase hangs sign-in
 - [Unapplied migration = silent 204](project_user_column_propagation.md) — PostgREST drops unknown columns from UPDATE → 204 persists nothing; no server hot-reload
 - [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl
-- [Stripe traps](project_stripe_traps.md) — mocks miss column/grant bugs; whsec is PER-ENDPOINT; account is a SANDBOX; prices immutable; unset key 503s all
+- [Stripe traps](project_stripe_traps.md) — mocks miss column/grant bugs; whsec PER-ENDPOINT; account is a SANDBOX; prices immutable; unset key 503s all; NOW migrating to Paddle
+- [Paddle integration](project_paddle_integration.md) — chosen MoR (Stripe unavailable in AR); MCP keys from CC env NOT server/.env (restart); Billing not Classic; legal pages via PR off main
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
 - [session-stats byPattern always empty](project_stats_architecture.md) — /api/user/session-stats/all reads stats.byPattern; stored shape is flat category keys (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run

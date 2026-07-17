@@ -34,6 +34,8 @@
 
 [cloud_provider_research.md](cloud_provider_research.md) — VPS vs PaaS vs Serverless trade-offs for a solver-heavy app — choosing a cloud provider
 
+[payment_provider_research.md](payment_provider_research.md) — **CANONICAL** — why Paddle (MoR) and not Stripe/PayPal/2Checkout/dLocal/Lemon Squeezy for charging global consumers from Argentina; fees, Argentine export/FX rules, refuted claims — touching payments, billing, or the checkout provider
+
 [launch_tactic.md](launch_tactic.md) — go-to-market plan for DecodeC4 MVP, retention metric gate (7-day unprompted return) — understanding launch success criteria
 
 [lean_app_development_to_profitability.md](lean_app_development_to_profitability.md) — stage-gated framework (ideation → validation → build → launch) for lean startup execution — product strategy and prioritisation decisions
