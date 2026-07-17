@@ -125,6 +125,8 @@ cd connect-four && npm test
 ```
 Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
 
+> **A stale registration fails nothing.** `node --test` given a *list* of files **silently skips** any path that doesn't exist: exit 0, no warning, and the summary still reads `fail 0`. (That same missing file passed *alone* exits 1 with `Could not find '<path>'` — the silence only happens in a list.) So a deleted/renamed test whose registration is left behind loses coverage with zero signal, and a newly-added file that was never registered simply never runs. When claiming a suite is green, check the **exit code** and `grep -c "Could not find"` — not the `ℹ fail 0` line. When adding a test, confirm its uniquely-named cases actually appear in the run output.
+
 **`npm test` includes**:
 - `server/test_explain_parity.js`
 - `server/annotationGate.test.js`

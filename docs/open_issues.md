@@ -380,9 +380,10 @@ signal when `playable.length === 0`, instead of `undefined`.
 
 ## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
 
-**Status**: deferred (large content task, scoped out of spec 049 Spanish localization; 2026-07-13)
-**Area**: `connect-four/lessons/*.json` (~13 files, ~50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
+**Status**: **mechanism RESOLVED, content still open** (updated 2026-07-16) — the "decide on a mechanism" half is done: sibling `text_es`/`audio_es` fields on each `coachMessages[]` entry, resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, with per-language generation via `generateLessonAudio(lesson, {lang})`. **Only lesson 1 (`immediate-threat`) is translated**: measured 2026-07-16, **46 of 50** `coachMessages` across the 13 lessons still have no `text_es`. The remaining work is pure content translation, no longer a design decision.
+**Area**: `connect-four/lessons/*.json` (13 files, 50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
 **Discovered**: spec 049 QA (browser walkthrough, 2026-07-13)
+**Silent-failure warning**: `pickLocalized` falls back to the English base value when `_es` is missing or empty, so an untranslated lesson renders English **without any error** — the gap is invisible from the UI. `generateLessonAudio` likewise skips a message with no `text_es`, so clicking "Generate audios" on an untranslated lesson is a legitimate no-op, not a bug. Socratic text is a separate gap: OI-43.
 
 Lesson *body* content — every slide's `coachMessages[].text` across all lesson JSON files — is raw
 hardcoded English data with **no i18n lookup at all**, unlike lesson *titles* (which do resolve via
@@ -809,3 +810,47 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 **Suggested shape if picked up**: add a Lessons section to `/admin/audio` that lists each lesson's `coachMessages` per language, with status **derived live from the lesson JSON** (not stored, to respect FR-013's registry-free decision), plus an inline player and a per-message generate action — mirroring the coach UX without introducing a second registry.
 
 **Motivation**: the repo owner wants a single place to manage and audition all TTS audio in the app, including judging whether the Argentinian-accent narration on lesson clips actually sounds right — something currently impossible without leaving the admin UI.
+
+## OI-43 — Socratic coach text is i18n-keyed, so it is never narrated (silent in every language)
+
+**Status**: deferred / open (surfaced 2026-07-16; a plan-writing prompt exists but nothing is implemented)
+**Area**: `connect-four/src/screens/SocraticScreen.jsx`, `connect-four/src/i18n/{en,es}.json` (`socratic.*`, `lesson.<id>.socratic.*`), `connect-four/server/lessonAudio.js`, `connect-four/server/lessonLoader.js`
+
+Arriving at a lesson's Socratic board shows a coach bubble (e.g. *"Voy a cometer un error aquí. Mirá si podés castigarlo."*) but **no speech plays**. This is not a Spanish bug — it is silent in English too.
+
+The text is **not lesson content**. It lives in i18n under a top-level `socratic.*` namespace (`ask`, `wrong1`, `wrong2`, `correct`, `hint`), rendered via ``t(`lesson.${lessonId}.socratic.ask`, { defaultValue: t('socratic.ask') })``. `SocraticScreen` contains **zero** `speakCoachMessage` / `speakLessonAudio` / `useCoachSpeech` calls.
+
+It falls between both TTS pipelines: the coach pipeline only sees `coach.spoken.*` (0 registry entries match socratic), and `generateLessonAudio` only walks `slides[].coachMessages`, never `lesson.socratic`.
+
+**Owner's ruling (2026-07-16)**: *lesson content is a thing in itself and must not be assembled from i18n keys.* So the fix is to move the text into the lesson JSON with the same `text`/`text_es`/`audio`/`audio_es` shape the slides already use.
+
+**Two facts that make it cheap**: (1) the Spanish is already written — all five generic strings and the three per-lesson overrides exist in `es.json` (unlike slide content, 46/50 untranslated), so this ships Spanish Socratic voice for all 13 lessons with no translation work; (2) audio is content-addressed by text hash, so the 12 lessons sharing an identical generic string share **one** mp3 — duplicating the text into each lesson costs ~14 files per language, not 13×.
+
+**The trap any implementation must respect**: `generateLessonAudio` and `collectReferencedAudio` walk the lesson tree **independently**. Add socratic audio to the first without the second and `pruneOrphanedLessonAudio` deletes the new clips as orphans. Extract one shared walker used by both rather than patching each.
+
+**Scope note**: only 3 lessons override socratic text in i18n (`opening-centre`, `opening-imitate`, `opening-sharp`), and only keys `ask`/`hint`/`correct` — never `wrong1`/`wrong2`. `lesson.node.*` and `lesson.confirmation.*` are UI chrome, not lesson content — leave them alone. Related: [[project_lesson_progression_audio_traps]], OI-18, OI-44.
+
+## OI-44 — More lesson content assembled from i18n keys: `lesson.<id>.title` duplicates the lesson JSON's own `title`, and `socratic.goalPrompt` is authored but rendered nowhere
+
+**Status**: deferred / open (surfaced 2026-07-16 while diagnosing OI-43; deliberately left out of that fix to avoid inflating it)
+**Area**: `connect-four/lessons/*.json`, `connect-four/src/i18n/{en,es}.json` (`lesson.<id>.title`), `connect-four/server/lessonLoader.js` (`localizeLesson`)
+
+Two more instances of the same "lesson content built from i18n keys" pattern OI-43 rejects:
+
+1. **`lesson.<id>.title`** resolves via `t()` with a `defaultValue`, while **every lesson JSON also carries its own `title` field**. Two homes for one string; unclear which is authoritative.
+2. **`socratic.goalPrompt`** is authored in **9 of 13** lesson JSONs (English only — no `goalPrompt_es` anywhere) and `localizeLesson` has a dedicated branch localizing it — but **nothing renders it**. The only `goalPrompt` hits in `src/` are the unrelated `GOAL_PROMPTS` map in `CandidateDashboard.jsx` (puzzle generation). It is authored dead data with live localization plumbing.
+
+**If picked up**: fold into the OI-43 mechanism once it lands — decide that lesson content lives in the lesson JSON, migrate `title`, and either wire up `goalPrompt` or delete it plus its `localizeLesson` branch. Verify `goalPrompt`'s deadness at source first; it is a negative claim.
+
+## OI-45 — Regenerating an approved coach clip puts the new take live, unapproved
+
+**Status**: deferred / open (pre-existing design wart, documented 2026-07-16; not a regression)
+**Area**: `connect-four/scripts/generate-tts.js`, `connect-four/server/index.js` (`/api/admin/audio/generate`), `connect-four/public/audio/coach/**`
+
+Approval controls **entry into the manifest**, and the manifest is the only thing the client consults (`enqueueIfApproved`). But regenerating a clip overwrites the mp3 **in place at the same path** and flips `status` to `awaiting_approval` **without touching the manifest**. So the slug stays published and the new, unreviewed recording goes live immediately — `awaiting_approval` does not gate playback once a slug has ever been approved. The previously approved recording is gone (recoverable only via `git checkout`).
+
+This is also the mechanism behind the benign registry/manifest drift documented in `docs/architecture/coach-audio-conventions.md`: `generated_at > approved_at` on a manifested slug means "a newer take is live that nobody re-approved".
+
+**Mitigation shipped 2026-07-16**: `generate-tts.js --key <k>` now prompts before overwriting an approved clip and spells this out; the admin UI's per-key generate does not.
+
+**If picked up**: decide whether approval should gate *playback* (remove the slug from the manifest on regenerate, so a regenerated clip goes silent until re-approved) or stay a pure publishing record (current behavior, now at least explicit). Note the first option means a regeneration can silently take a working clip offline — which is why this wasn't changed unilaterally.

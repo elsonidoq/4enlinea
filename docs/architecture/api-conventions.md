@@ -62,6 +62,12 @@ Registered by `registerStripeRoutes`. **Public / unauthenticated** — the upgra
 
 **Response**: `200 { prices: { monthly: PriceInfo|null, annual: PriceInfo|null } }` where `PriceInfo = { amount: <minor units, e.g. 299 = $2.99>, currency: 'usd', interval: 'month'|'year'|null }`. Returns `503 { error: 'Payments not configured' }` when `paymentProcessor` is null (no `STRIPE_SECRET_KEY`); the client degrades to plain plan labels with no price.
 
+### Changing a price: create-and-archive, never edit
+
+**Stripe price objects are immutable** — an amount cannot be edited in place. To change a price: create a **new** price on the same product, archive the old one (`active: false`), then update the corresponding env var (`STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID`, read in `index.js` and passed to `createStripeProcessor` as `monthlyPriceId`/`annualPriceId`). Forgetting the env-var update leaves checkout silently billing the archived price. Current prices ($2.99/mo, $21.99/yr) are the second generation on product `DecodeC4 Pro`; the original $7.99/$59.99 prices were archived this way.
+
+**The connected account is a Stripe SANDBOX (`acct_1TrxCXET4Rc2BDFf`) — test mode only.** It has no live mode to flip, and the in-session Stripe MCP is bound to it (writes land in test mode). Taking real payments requires a **separate, activated live account** with its own live product/prices and `sk_live_…` keys — none of it derivable from the sandbox. Production is `quaddojo.com`; staging is `staging.decodec4.xyz`.
+
 ## Stripe Checkout: `POST /api/stripe/create-checkout` (returnPath)
 
 **Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from; the processor builds Stripe's `success_url`/`cancel_url` as `<FRONTEND_URL><returnPath>?checkout=<outcome>` so the user returns to their originating screen instead of home. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`. Omitting it preserves the legacy `/?checkout=success` behavior.
@@ -112,6 +118,15 @@ Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-c
 **MUST**: `device_uuid` MUST be sourced from `req.user.device_uuid` (populated by `loadUser`). Client request bodies MUST NOT include `device_uuid` — the server derives it, never trusts it from the wire.
 
 Full endpoint contracts: `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
+
+### `session_stats` write asymmetry — do NOT unify
+
+`POST /api/user/session-stats` and `POST /api/user/challenge-session` both call the **same** `writeSessionStats(supabase, userId, date, …)` helper, but they pass **deliberately different** shapes as the final argument:
+
+- `/api/user/session-stats` passes **`req.body.stats`** — the *inner* object. Its caller sends `{ date, stats: next }`; storing the whole body here would double-nest and silently break two consumers.
+- `/api/user/challenge-session` passes **`req.body`** — the *entire* body. Its caller sends the session object directly.
+
+Both are correct. **Never "harmonize" them, and never merge the two shapes with a `||` jsonb merge** — the shapes are incompatible and a merge produces a corrupt hybrid blob. Both endpoints write the same `(user_id, date)` row of `session_stats` (exactly 3 columns: `user_id uuid`, `date date`, `stats jsonb` — no flat stats columns), via a full-replace upsert: last writer wins.
 
 ## Supabase Usage Pattern
 
@@ -845,6 +860,32 @@ Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, loca
 
 - `GET /api/admin/fv-suff/files` → `{ answers }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars).
 - `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
+
+## `POST /api/admin/audio/preview` — TTS sandbox (2026-07-16)
+
+`requireLocalhost`. The only TTS endpoint that synthesizes **arbitrary text** with **experimental**
+voice params, for auditioning a prompt/voice before committing to it.
+
+Body: `{ text, prompt, speed, voice, model, lang }`. Validation lives in
+`server/ttsPreviewValidation.mjs` (`validatePreviewRequest(body) → {ok, value} | {ok, error}` — pure,
+unit-tested): `text` must be a non-empty string; `voice` ∈ `VALID_TTS_VOICES`; `model` ∈
+`VALID_TTS_MODELS`; `speed` ∈ [0.25, 4.0] (bounds shared with `POST /api/admin/audio/prompt`). 400 on
+any violation. Responds with raw mp3 bytes (`res.type('audio/mpeg').send(audio)`), not JSON.
+
+Three properties are load-bearing — preserve them:
+- **It writes nothing.** No mp3 on disk, no registry entry, no manifest change, no config write. The
+  registry/manifest/file trio already drifts (see `coach-audio-conventions.md`); a sandbox that wrote
+  would be a fourth source of drift. The browser holds the bytes via a blob URL.
+- **Instructions route through `buildTtsInstructions(prompt, lang)`**, never the raw `prompt` — for
+  `es` that appends `SPANISH_ACCENT_DIRECTIVE`. Skipping it would tune against a different
+  instruction string than production uses, defeating the endpoint's purpose.
+- **Uncached by design** — one real API call per invocation. You cannot hear a change you did not
+  synthesize. Do not add caching.
+
+Client: a `<details>` sandbox in `src/pages/AdminAudioPage.jsx`, whose params are **separate state**
+(`sb*`) from the saved-config editor; promotion is explicit via "Load from saved config" / "Save to
+config" (the latter reuses `handleSavePrompt(cfg)`). The blob URL is revoked on regenerate and on
+unmount.
 
 ## Lesson Audio Generation & Pruning Endpoints (spec 046 US3/US4)
 

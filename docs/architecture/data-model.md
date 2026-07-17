@@ -123,7 +123,9 @@ writes go through `server/llmUsageLedger.js`'s `recordUsage(...)`, never a direc
 
 **Lifecycle — append-only, contrasted with `explanation_cache`**: `llm_usage` is **never truncated or
 purged by deploy** — this is the defining difference from `explanation_cache`, which the deploy
-pipeline `TRUNCATE`s before each release (memory `project_spec039_audio_interactive_coach`). No
+pipeline `TRUNCATE`s before each release (rows cached before a `deep_reveal_json` shape change — e.g.
+the addition of `terms` — error out on read, so the cache must be cleared as part of any deploy that
+changes that shape). No
 migration or deploy script may add a `TRUNCATE`/`DELETE` against `llm_usage`; it is a permanent,
 growing cost ledger, not a cache to be invalidated on redeploy.
 

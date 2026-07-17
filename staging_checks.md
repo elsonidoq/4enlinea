@@ -638,3 +638,42 @@ exercised locally at all.
 - [ ] **Paid user sees no deep-reveal quota counter and no upgrade CTA** (W4 Task 7's paid branch is
       unit-tested only — carried here for the same reason, listed previously under Epic 5's other
       staging checks; not new, cross-referenced).
+
+---
+
+## Coach audio namespace split — `coach.spoken.*` / `coach.ui.*` (added 2026-07-16)
+
+- **What**: On deployed staging, with speech enabled, confirm coach audio plays in each of: the
+  onboarding greeting, a Challenge attempt (any category), a sparring AI move, the Review-screen
+  summary, the **Home welcome** (new play site), and the **PostSetSummary perfect-set** line (new
+  play site). Check both `en` and `es`.
+- **Why staging**: the split renamed **434** mp3s and deleted **12**, and rewrote both
+  `coach-audio-manifest.json` files. Locally the app fetches those via **Vite serving `public/` on
+  :5173**, but production serves them from **`dist/` via Express** — a different path that only
+  `vite build` + a real deploy exercises (see `project_lesson_progression_audio_traps`: Express on
+  :3001 serves `../dist` and does *not* serve `public/`). A rename that is correct on disk can still
+  fail to ship. Additionally, `home.welcome.0` and `summary.perfect.{0,1}` were never spoken before
+  this change, so they have no deployment history at all.
+- **Expected**: every flow speaks; zero 404s for `/audio/coach/**.mp3` in the network log; no clip
+  requests a `coach--<name>` slug lacking the `spoken` segment (a leftover would mean a stale
+  manifest shipped).
+- **Source**: commit `5930b9f` (namespace split), `db28caf`-adjacent session 2026-07-16;
+  `docs/architecture/coach-audio-conventions.md`. Tripwire `coachSpokenNamespace.test.js` covers
+  registry/manifest/asset agreement at build time but cannot prove the assets are *served*.
+- [ ] Signed off (tester / date):
+
+## Epic 6 — Lessons: Progression, Audio & Polish (spec 046) — added 2026-07-16
+
+- **What**: On deployed staging in Spanish, open lesson 1 (`immediate-threat`) and confirm all four
+  concept-slide narrations play **in Spanish** (not English).
+- **Why staging**: `audio_es` for lesson 1 was generated and committed locally (`179eb7d`), but
+  lesson clips are committed static assets under `public/audio/lessons/` served from `dist/` in
+  production — the same dev-vs-prod serving-path gap as above. Also, `pickLocalized` **falls back to
+  the English value when `_es` is missing or empty**, so a Spanish clip that failed to ship
+  degrades to English **silently** rather than erroring — this cannot be distinguished from "working"
+  without listening in the deployed environment.
+- **Expected**: four Spanish clips play; no English narration in the `es` locale for lesson 1. (The
+  other 12 lessons are expected to narrate English — 46/50 `coachMessages` still lack `text_es`; see
+  OI-18. That is known, not a failure of this check.)
+- **Source**: session 2026-07-16 (lesson audio i18n / D1); OI-18.
+- [ ] Signed off (tester / date):

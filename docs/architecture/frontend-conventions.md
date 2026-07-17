@@ -432,6 +432,20 @@ The registry is **server-side only** — there is no `src/lib/challengeSets.js` 
 **MUST**: Frontend category constants are defined in `src/lib/categories.js` and MUST be kept in sync with `server/categories.js` whenever categories are added or renamed. Both files define `CATEGORY_ORDER`, `CATEGORY_NAMES`, and `PAID_CATEGORIES`.
 `CATEGORY_CHIPS` (styling) is frontend-only.
 
+## i18n: `en.json` / `es.json` (spec 049)
+
+**MUST**: Route all player-facing copy through `t('...')` keys, and add every new key to **both** `src/i18n/en.json` and `src/i18n/es.json`. `es.json` has full nested key-parity with `en.json`, enforced by `tests/unit/i18nKeyParity.test.js` (fails on any key divergence). `src/i18n/index.js` registers both bundles and reads the initial `lng` via `readStoredLang()` (`src/lib/useLanguage.js`, localStorage key `app_language`); the Settings language `<select>` is wired to `useLanguage().changeLanguage`.
+
+**Spanish MUST be Argentinian / Rioplatense (voseo)** — not neutral or Iberian *tú*-Spanish. The first `es.json` pass shipped in *tú*-Spanish and had to be corrected wholesale. Conversion rules:
+
+- **Affirmative imperatives** lose the diphthong, take final-syllable stress, and drop the esdrújula accent when a clitic attaches: `encuéntrala`→`encontrala`, `juega`→`jugá`, `mira`→`mirá`, `busca`→`buscá`, `elige`→`elegí`, `prueba`→`probá`, `piensa`→`pensá`, `fíjate`→`fijate`, `sigue`→`seguí`.
+- **Present indicative**: `tienes`→`tenés`, `puedes`→`podés`, `quieres`→`querés`, `sabes`→`sabés`, `eres`→`sos`.
+- **Pronoun**: `tú`→`vos` (`te`, `tu`, `ti` are unchanged — voseo keeps those).
+- Leave keys, `{{placeholders}}`, and disc-color terms (`verde`/`gris`) untouched — only string *values* change, so key-parity still passes.
+- Preserve the original punctuation/tone; do not add exclamation marks wholesale.
+
+Two Spanish gaps are backlogged and are **not** visible to the parity guard (they are not `es.json` keys): lesson-slide body content has no i18n mechanism (OI-18), and some hardcoded-English JSX strings were never wired to `t()` (OI-19).
+
 ## API Calls
 
 **MUST**: All fetch calls use `const API = import.meta.env.VITE_API_BASE_URL || ''` as the base.
@@ -628,6 +642,14 @@ order-lock is not a paywall; `'navigate'` proceeds normally.
 
 ## Upgrade / Checkout flow (Epic 5)
 
+**Reading the user's tier — profile, never session.** The `session` object exposed by `useStore()` is the **Supabase auth session** and has **no `tier` field**. Tier lives on the user profile and is read asynchronously:
+
+```js
+store.getProfile().then(p => setTier(p.tier))   // canonical precedent: PostSetSummaryScreen.jsx
+```
+
+Any screen or spec that gates on Pro/free (`locked` nodes, `UpgradeModal`, deep-reveal gates) MUST use this pattern. `session?.tier` is always `undefined`, so gating on it fails **silently and in the permissive direction** — every user reads as free tier.
+
 `UpgradeModal.jsx` is opened by all four paywall entry points (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane) — all reactive; there is no persistent/always-visible upgrade CTA. Shared pieces:
 
 - **`useUpgradeCheckout(returnPathOverride?)`** (`src/lib/useUpgradeCheckout.js`) — returns the `onUpgrade(plan)` handler: POSTs `/api/stripe/create-checkout` with `{ plan, returnPath }` and does a full-page redirect to the Stripe URL. `returnPath` defaults to `window.location.pathname` so the user returns to their originating screen (the app is URL-backed; pathname restores the screen). **SESSION_ONLY trap**: a screen in `SESSION_ONLY_SCREENS` (`summary`, `game`) cannot be cold-booted after the full-page Stripe round-trip — its ephemeral prop state (e.g. `PostSetSummaryScreen`'s `results`) is gone, so returning there redirects to `home`. Such call sites MUST pass a cold-bootable `returnPathOverride`; `PostSetSummaryScreen` passes `'/setpicker'`. Any new paywall entry point on a session-only screen must do the same.
@@ -743,6 +765,8 @@ The mistakes feature has three independent screen routes:
 **`ReviewScreen` navigation contract**: registered at `/game/:id`; navigate with `go('review', { id: game.id })` (game UUID) — do NOT pass `moveString`; it is not a prop and the URL mapping only knows `id`. The screen fetches `POST /api/games/analyze` with that id.
 
 **Timeline-to-blunder matching (`ReviewScreen`)**: `navigateToMistake(moveIndex)` takes a **number** (the user-move ordinal, 1-indexed). It routes ALL non-optimal moves to `blunderDetail` via the `gameBlunderList` DB match (no Explorer fallback since the 2026-06-21 unification; the list includes both suboptimal and blunder rows since migration 051). When no row matches (queue still loading, or anonymous user) it is a no-op. The global ply index is `globalPlyIndex = 2*(moveIndex-1)` for `side === 'first'`, `2*(moveIndex-1)+1` for `side === 'second'`; the blunder row is matched where `board_state.length === globalPlyIndex`. `displayMoveNumber = board_state.length + 1` (1-indexed, display only); raw `board_state.length` is the internal join key. These two formulas are the most common source of off-by-one bugs in review navigation.
+
+**Owner-only controls gate on `is_owner !== false`, never on `is_owner`** (`MistakeDetailScreen`'s "Mark as reviewed": `session && blunder.is_owner !== false`). The server sets `is_owner` only on the public permalink endpoint (`GET /api/blunders/:id` — see api-conventions.md); blunders reached by **in-app navigation** (coach queue / `gameBlunderList` items) carry **no `is_owner` field at all**, so it is `undefined` there. The `!== false` form deliberately treats `undefined` as owned and hides the control only on an explicit server `false`. Simplifying it to `blunder.is_owner` would silently hide "Mark as reviewed" from every owner navigating in-app.
 
 **Screen registry**: `src/lib/screenRegistry.js` is the canonical map of all 14 screen keys to their React components. Add new screen components here; never wire them directly in `App.jsx`.
 
