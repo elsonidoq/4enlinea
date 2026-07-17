@@ -375,7 +375,7 @@ import it and the catalog — and nothing re-implements the rules:
    `PROVISIONAL` (rare in self-play) — to *guarantee* they are evaluated, the sampler needs a
    **targeted harvest** for those links (directed search / higher budget), not only the diversity
    sweep. (Never hand-build boards — use `playGame` with a property filter; see memory
-   `feedback_reproduce_fv_case_from_coverage`, `feedback_no_random_boards`.)
+   `feedback_reproduce_fv_case_from_coverage` and `CLAUDE.md` §"When you need a concrete movestring".)
 
 **Auditability guarantee:** to change a rule, edit one entry in `causalLinks.mjs`; the composer,
 grader rubric, coverage universe, and the §6 completeness assertion all re-derive from it. A mistake
@@ -440,7 +440,7 @@ asserts (or reports the gaps in) that coverage.
 - **Maximize, don't just sample.** Keep the upfront-named closed `REASON_UNIVERSE` + the
   `discovered ⊆ REASON_UNIVERSE` guard (D22); `satisfied()` = every REQUIRED predicate met. Rare
   predicates that self-play won't reach get a **targeted harvest** (directed search / higher budget,
-  never hand-built boards — `playGame` with a property filter; `feedback_no_random_boards`): the
+  never hand-built boards — `playGame` with a property filter; see `CLAUDE.md` §"When you need a concrete movestring"): the
   flip-case (`win_to_lose`/`draw_to_lose` + `enabled_opponent` + pattern-present-on-after-best, absent
   from the frozen 29-record corpus per D28's I12 note), plus L3-figure_7, L9, `lost_fork_B`.
 - **The coverage test (the acceptance artifact, runnable after P4):** load the board set

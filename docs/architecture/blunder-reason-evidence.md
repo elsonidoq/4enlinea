@@ -217,8 +217,7 @@ denial, not a walked win, so it carries no `namedRule` (D7/D27 names only walked
 here that is the half-(b) `opponentPunishment` winning line). The occupation cell is the anchor; the
 parity language around half (a) is not canonicalized.
 
-See KB / memory: `reference_z_threat_detection`, `reference_claimeven_detection`,
-`reference_verified_tactical_movestrings`.
+See `docs/architecture/server-conventions.md` (`detectClaimeven` parity rule and simulation; z_threat generation guards) and memory `reference_verified_tactical_movestrings`.
 
 ## 8. Tooling map
 
@@ -418,7 +417,7 @@ board — see the table below.
 | `333331` | col 0 | 1 | `namedOpening` UNCHANGED (regression anchor — `defense` never displaces it on a P1 board) | `namedOpening{id:'allen-candlesticks-opening', family:'central-column opening', matchedPrefixLen:6, bookNextCol:1}` |
 | `305` | col 1 | 2 (off-book) | `centrality` NOT suppressed for a losing mover; carries `resistAndWait:true` | `centrality{bestCol:4, playedCol:1, betterHasMoreLines:true, text:'In the opening, the more central a column is, the more four-in-a-row lines run through it, so it can take part in more future threats and shapes. Column 5 sits in more of those lines than column 2, so playing there keeps more ways to build a winning connection open, while the less central choice gives some of them up.', resistAndWait:true}` |
 
-The `305` row is the same board Task 1 used to close `project_opening_defender_reason_gap`; its
+The `305` row is the same board Task 1 used to close the opening-defender reason gap (memory `project_reason_opening_traps`); its
 `route`/`tag`/`direction` (`realized_denied`/`double_threat`/`enabled_opponent`) also fire on this
 board, orthogonal to `openingContext`.
 

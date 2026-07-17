@@ -119,7 +119,7 @@ Always read memory `reference_supabase_connection.md` before writing any inline 
 Use `npm run test:fast` (inside `connect-four/`) for all regular development and CI checks. It omits `candidate-generator.test.js`, which calls the real c4solver up to 400 times per test and frequently hangs for 10+ minutes due to solver IPC deadlock. Only run `npm test` when explicitly testing candidate generation.
 
 ## When writing specs for existing components
-Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See memory: feedback_spec_existing_apis.md
+Before speccing props for any component that already exists in the codebase, read its current implementation and preserve the existing API wherever the change is not strictly required. See `docs/architecture/frontend-conventions.md` §"Specing an existing component — preserve its API" (includes the Board API worked example).
 
 ## Verifying any claim about this codebase
 

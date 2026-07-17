@@ -17,4 +17,4 @@ Three cross-path traps around serving blunder/mistake data, discovered during sp
 
 **Why:** each trap is invisible from any single file — the dual builders look like one endpoint from the frontend, and the cache bypass only bites on the (common) cache-hit path that tests rarely exercise.
 
-**How to apply:** when touching the blunder payload shape or explanation text handling, grep for BOTH builders and check the cache-hit path explicitly; a cache-hit test must seed a poisoned cache row (see spec 042 T041). Related: [[project_explain_system]], [[project-polish-epics-pipeline]].
+**How to apply:** when touching the blunder payload shape or explanation text handling, grep for BOTH builders and check the cache-hit path explicitly; a cache-hit test must seed a poisoned cache row (see spec 042 T041). Related: [[project_explain_system]], the polish-epics backlog (git history).

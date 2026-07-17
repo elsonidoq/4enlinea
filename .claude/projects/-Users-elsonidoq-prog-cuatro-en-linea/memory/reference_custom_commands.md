@@ -21,6 +21,9 @@ Project-level custom commands live at `/Users/elsonidoq/prog/cuatro_en_linea/.cl
 
 ## Non-obvious traps
 
+- **Gemini model id:** the correct model id for any `mcp__gemini__gemini-query` call is
+  `gemini-3.1-pro-preview` — `gemini-3.1-pro` and `gemini-2.0-flash` are wrong fallbacks
+  (user-confirmed). Not an env var, so it doesn't belong in an env-var table.
 - Critique stages use AskUserQuestion with ≥2 options — do not bypass this gate or auto-advance without user input.
 - Handoff context must be chained verbatim between batches; do not summarize or paraphrase it.
 - Model selection is behavioral, not a suggestion: Opus critiques, Sonnet implements — swapping them breaks the quality/cost balance the pipeline was tuned for.

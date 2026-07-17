@@ -15,7 +15,7 @@ Consistent guidance the user asserted repeatedly in the last sessions (`39d6b86e
 
 **Why:** terse, internals-laden explanations and ambiguous questions cost round-trips and stall the work.
 
-**How to apply:** before sending an explanation or a clarifying question, reread it as someone who has not seen the code. If it leans on internal symbol names or unstated assumptions, rewrite. See [[feedback_prework_discipline]], [[feedback_agent_and_ui_workflow]].
+**How to apply:** before sending an explanation or a clarifying question, reread it as someone who has not seen the code. If it leans on internal symbol names or unstated assumptions, rewrite. See [[feedback_process_and_agent_preferences]], [[feedback_process_and_agent_preferences]].
 
 
 ---
@@ -32,7 +32,7 @@ When writing or refining product docs in `docs/mvp/`, keep them **implementation
 - **Verify current-state claims against the actual code**, not against older docs — the user flagged a doc that read as a plan but whose Phase 1 was already shipped. Treat older docs as potentially stale.
 - Resolve genuine product decisions via AskUserQuestion (multiple choice), then fold answers in and empty the "Open product decisions" section.
 
-Related: [[project_explain_system]], [[feedback_prework_discipline]], [[feedback_prework_discipline]].
+Related: [[project_explain_system]], [[feedback_process_and_agent_preferences]], [[feedback_process_and_agent_preferences]].
 
 
 ---

@@ -513,7 +513,7 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Source:** Task briefs B1–B6 (2026-07-04/05); task reports `task-B1-report.md`…`task-B5-report.md`;
   `docs/knowledge-base/allen-*-opening.md` (the five source KB lines); memory
   `feedback_reason_case_requires_eval_and_grader`, `project_reason_render_layer`,
-  `project_select_boards_skips_openings`; I0/I2/I8/I9/I12.
+  `project_reason_opening_traps`; I0/I2/I8/I9/I12.
 
 ---
 
@@ -595,14 +595,14 @@ Format: **Decision** / **Rationale** / **Status** / **Source**.
 - **Source:** `docs/superpowers/specs/2026-07-05-opening-defender-reason-and-sampling-design.md`; owner
   correction (2026-07-05, dropping the spec's companion suppress-fix); D31 (guard-chain shape, render
   boundary); D24-F3 (parity-fabrication retraction, upheld not reversed); `docs/knowledge-base/allen-
-  parity.md` (even-row canon quote); memory `project_opening_defender_reason_gap` (the gap this closes);
+  parity.md` (even-row canon quote); memory `project_reason_opening_traps` (the opening-defender gap this closes);
   I0/I2/I8/I9/I12.
 
 ### D33 — `openingContext` renders in condition D: an additive **opening frame** is primary, the deep two halves demote to a horizon (no crisp deep cell)
 
 **Context.** D31/D32 made `computeReason` emit `openingContext`, but the condition-D grounded-render
 path was never wired for it (D31/D32 render-boundary note; memories
-`project_reason_render_layer`/`project_opening_defender_reason_gap`). The first run to feed opening
+`project_reason_render_layer`/`project_reason_opening_traps`). The first run to feed opening
 boards through condition D (`fv_suff_answers_boards_coverage_opening_2026-07-05*`) therefore crashed
 all 25 opening records with `UncoveredVectorFieldError` — the closed `fieldDisposition` tripwire firing
 as designed on the unregistered `openingContext.*` subtree.
@@ -650,7 +650,7 @@ the defect was purely render/prompt. Two triage buckets: **render_bug (12)** —
 defeatist bookends the model faithfully echoed on player-2 opening boards; **prompt_confusion (45)** —
 the model leaked internal jargon (`the vector`/`the solver`/`the gate`/`reply histogram`/`completing
 cell`/`window`/raw tactic slugs) and 3rd-person analyst voice. Closes the OPEN gap in memory
-`project_coach_voice_opening_defeatist_gap`.
+`project_reason_opening_traps` (the coach-voice opening-defeatist gap, RESOLVED D34).
 
 **Decision — three composer-layer changes, NO vector/schema change** (consistent with 0 `vector_error` /
 0 `missing_info`):

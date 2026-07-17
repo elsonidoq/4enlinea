@@ -21,8 +21,6 @@ The codebase has **two separate CSS custom property systems** defined in differe
 
 **Mockup-first rule:** When a mockup exists in `docs/mvp/mockup/`, check the background color in the mockup before choosing tokens. The mockup determines which token system to use.
 
-See also: [[project_dark_global_theme]]
-
 ## CSS Layout Gotchas
 
 **flex-basis percentages require definite heights.** Chrome does not resolve `flex-basis: N%` on children of flex containers whose height is determined algorithmically (e.g. `flex: 1` with no explicit height ancestor). Use a `ResizeObserver` to measure the container in pixels and pass explicit pixel values (`flex: 0 0 ${px}px`) instead of percentages.
@@ -118,7 +116,7 @@ The frontend has no Supabase SDK dependency. Auth is entirely server-mediated vi
    `migrateToSupabase` before calling `setSession`** — the React `session` state flips only after the
    migration completes. `migrateToSupabase` begins with `await this._db()` (the IndexedDB open), so if
    that open ever hangs, the whole sign-in silently stalls with a valid server cookie but a
-   still-signed-out UI (see memory `project_indexeddb_signin_hang`). The migration errors are caught,
+   still-signed-out UI (see memory `project_auth_flow_traps`). The migration errors are caught,
    but a *hang* is not — order any local-reset tooling accordingly (never `indexedDB.deleteDatabase`).
 
 ### `sessionChecked` + boot-gate render (Epic 8 — Onboarding Experience, spec 048, T016/T017, research.md R3)
@@ -239,6 +237,26 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 | `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
 
+### Specing an existing component — preserve its API
+
+When writing a spec that redesigns or replaces a component that already exists in the codebase,
+read its current implementation first and preserve its API wherever the change is not strictly
+required by the new design:
+
+1. Read the component's current file and note its prop names, data encoding, and handler signatures.
+2. In the spec, preserve every prop that doesn't *need* to change for the feature to work.
+3. Flag explicitly which props *are* changing and why they are strictly necessary.
+4. Mark preserved props in the spec with a note like "**Preserved from existing API — no caller migration required.**"
+
+**Worked example (Board):** an early epic-1a spec invented a new Board API — a column-major
+`cols[col]` array with `'g'`/`'d'` cell encoding and an `onColumn` handler — when the real
+`Board.jsx` (table above) uses the row-major `board[row][col]` with `'red'`/`'yellow'`/`'empty'`
+encoding and `onColumnClick`. Speccing the invented API would have forced every caller
+(`PuzzlesPage.jsx`, `HomePage.jsx`, etc.) to migrate as part of a component-library-only epic that
+had no product reason to touch them. The disc-encoding strings are just player-1/player-2 semantic
+labels (see the naming note above); the visual palette can change (as it did, red/yellow → green/gray)
+without touching the data model or prop names at all.
+
 ### Which boards are interactive (read this before touching Board interactivity)
 
 The primary click target is a **per-column wrapper `<div>`** — one per column, carrying
@@ -272,6 +290,16 @@ screen's name.
 | `good` | `--eval-good` (green) | ✓ |
 | `mid` | `--eval-mid` (amber) | ? |
 | `bad` | `--eval-bad` (red) | ✕ |
+
+### Z-threat badge visual spec (decided, do not reopen)
+
+Not yet reflected in the `OverlayType`/`BadgeType` enums above — this is a settled UI decision for the z-threat (zugzwang-parity) puzzle category, captured here so it isn't relitigated:
+
+- Vertical capsule/stadium-shaped border **outline** (semicircle top and bottom, straight vertical sides) spans all highlighted cells in the z-threat column. Outline only, not fill — pieces inside the capsule stay visible.
+- A count badge floats above the board frame, above that column.
+- Explanation text embeds the count, e.g. "Column X has N cells — an odd number forces your opponent's hand."
+
+The detection algorithm (odd/even empty-cell parity) is owned by `docs/knowledge-base/` and is out of scope here.
 
 ### Deprecated prop (curation shim — do not use in game surfaces)
 
@@ -649,6 +677,11 @@ store.getProfile().then(p => setTier(p.tier))   // canonical precedent: PostSetS
 ```
 
 Any screen or spec that gates on Pro/free (`locked` nodes, `UpgradeModal`, deep-reveal gates) MUST use this pattern. `session?.tier` is always `undefined`, so gating on it fails **silently and in the permissive direction** — every user reads as free tier.
+
+**"Tier" has three unrelated meanings in this codebase — don't conflate them:**
+1. **Subscription tier** (this section) — `free | paid`, read via `store.getProfile().tier`.
+2. **Position tier** — `getPositionTier(scores, board)` in `server/llmCoachHelpers.js`, returns `'WINNING' | 'DRAWING' | 'LOSING'` from solver scores (best legal score `> 0` / `=== 0` / `< 0`).
+3. **Pattern tier** — `TIER1_TAGS`/`TIER2_TAGS` in `server/explainContext.js`, a server-side grouping of `classifyPattern` tags used to build the deep-reveal `allowedSet` (Tier-1 = detectors with concrete `cells[]`; Tier-2 = `z_threat`; Tier-3 = position-global tags, not added to `allowedSet`). **Exception:** the three parity-aware threat detectors (`major_threat_parity`, `major_threat_nonparity`, `minor_threat`, added 2026-06-25) also emit concrete `cells[]` like a Tier-1 detector, but are deliberately **NOT** in `TIER1_TAGS` — "emits `cells[]`" is necessary but not sufficient for Tier-1 membership. They instead belong to a second, separate registry: `server/sparseLookahead.js`'s `THREAT_TAGS` (the three parity tags) and `LOOKAHEAD_TAGS` (`= [...TIER1_TAGS, ...THREAT_TAGS]`), which gates sparse-lookahead rendering, not the deep-reveal `allowedSet`. Don't assume a cell-emitting tag is in `TIER1_TAGS` — check which registry the call site actually reads.
 
 `UpgradeModal.jsx` is opened by all four paywall entry points (SetPickerScreen, SagaScreen, PostSetSummaryScreen, DeepRevealPane) — all reactive; there is no persistent/always-visible upgrade CTA. Shared pieces:
 

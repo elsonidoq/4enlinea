@@ -677,3 +677,22 @@ exercised locally at all.
   OI-18. That is known, not a failure of this check.)
 - **Source**: session 2026-07-16 (lesson audio i18n / D1); OI-18.
 - [ ] Signed off (tester / date):
+
+- **What**: On deployed staging, open the **Socratic board** of any lesson (e.g. lesson 1
+  `immediate-threat`, reached via Continue past the concept slides) in **both** `en` and `es`, and
+  confirm the coach bubble is **spoken**, not just rendered.
+- **Why staging**: Socratic copy moved out of i18n into lesson JSON (`socratic.messages`) and is now
+  voiced by the lesson-audio pipeline (OI-43). Its clips are committed static assets under
+  `public/audio/lessons/`, which **Express on :3001 does not serve in dev** (it serves `../dist`) —
+  only Vite :5173 does, and only `vite build` copies `public/`→`dist/` for production. So the dev
+  result cannot predict the deployed one. Compounding it: `getNarrationQueue` silently yields an
+  empty queue for a message whose `audio` is missing, and `pickLocalized` falls back to English text
+  without erroring — a clip that failed to ship is **indistinguishable from working** except by ear.
+- **Expected**: the `ask` bubble speaks on arrival in each locale; a wrong drop speaks `wrong1`, a
+  second speaks `wrong2`; the replay button re-speaks; navigating away cuts audio immediately. The
+  mp3 requests return **200** (`audio/mpeg`), not the SPA `index.html` fallback.
+- **Blocked on**: the plan's Task 8 (audio generation) has **not run** — until it does, no Socratic
+  mp3s exist and this check will fail by design. Generate and commit the clips first.
+- **Source**: session 2026-07-16 (socratic → lesson content); plan
+  `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` V7; OI-43, OI-46.
+- [ ] Signed off (tester / date):

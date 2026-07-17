@@ -34,4 +34,4 @@ This is stored as the `stats` jsonb column in `session_stats`.
 
 **How to apply:** When fixing, update the `byPattern` computation in `userRoutes.js` T009 to match the actual stored shape. The `byPattern` keys ARE the category slugs directly in the `stats` object. Weight per session row should use `sum(values.attempted)` or just `1` per row.
 
-See also: [[project_spec030_server_mediated_data_access]]
+See also: `docs/architecture/api-conventions.md` §`/api/user/*` ownership invariants + session_stats write asymmetry

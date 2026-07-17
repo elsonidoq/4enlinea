@@ -125,7 +125,18 @@ cd connect-four && npm test
 ```
 Tests are **explicitly listed** in the `test` and `test:fast` scripts in `package.json` — there is no automatic discovery.
 
-> **A stale registration fails nothing.** `node --test` given a *list* of files **silently skips** any path that doesn't exist: exit 0, no warning, and the summary still reads `fail 0`. (That same missing file passed *alone* exits 1 with `Could not find '<path>'` — the silence only happens in a list.) So a deleted/renamed test whose registration is left behind loses coverage with zero signal, and a newly-added file that was never registered simply never runs. When claiming a suite is green, check the **exit code** and `grep -c "Could not find"` — not the `ℹ fail 0` line. When adding a test, confirm its uniquely-named cases actually appear in the run output.
+> **A stale registration fails nothing.** `node --test` given a *list* of files **silently skips** any path that doesn't exist: exit 0, no warning, and the summary still reads `fail 0`. So a deleted/renamed test whose registration is left behind loses coverage with zero signal, and a newly-added file that was never registered simply never runs.
+>
+> **The exit code and a `Could not find` grep DO NOT catch this** — measured on Node v23.11.0, and this is the whole trap:
+>
+> | Invocation | exit | `grep -c "Could not find"` | summary |
+> |---|---|---|---|
+> | `node --test real.js missing.js` (**a list — the real case**) | **0** | **0** | `ℹ fail 0` |
+> | `node --test missing.js` (alone — not how `test:fast` runs) | 1 | 1 | — |
+>
+> Node emits `Could not find '<path>'` **only** when the missing file is the *sole* argument. `test:fast` is always a list, so both of those checks report clean on a silently-skipped file. Do not rely on them.
+>
+> **The only check that works: confirm the test's own uniquely-named cases appear in the run output** (`npm run test:fast 2>&1 | grep -c "<distinctive test name>"` → non-zero), and assert the path is actually present in `package.json`'s `test:fast` string. Verify registration by *name*, never by absence-of-error.
 
 **`npm test` includes**:
 - `server/test_explain_parity.js`

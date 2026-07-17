@@ -11,6 +11,6 @@ metadata:
 
 **Why:** the generator's supabase-js inserts (and solver calls) go over `fetch()`; the connection drops when the environment is under stress. Two triggers seen together:
 1. **Local Supabase/Docker just resumed** (containers not yet healthy) → refused/dropped inserts → "fetch failed".
-2. **Concurrent solver contention** — running generation *while* the dev API (:3001), Vite (:5173), and a live Chrome QA session are all touching the c4solver. Same root-cause family as the test-suite IPC issue in [[project_integration_test_slowness]] (concurrent solver harvest deadlocks/drops).
+2. **Concurrent solver contention** — running generation *while* the dev API (:3001), Vite (:5173), and a live Chrome QA session are all touching the c4solver. Same root-cause family as the test-suite IPC issue in `docs/architecture/testing-conventions.md` §`test:fast` vs `npm test` (concurrent solver harvest deadlocks/drops).
 
 **How to apply:** before concluding "generation is broken," re-run it **standalone with a healthy DB and idle servers** (no live QA session driving the solver). Only the standalone result is trustworthy. `forced_win` legitimately under-fills (rare — commonly ~1–5/10, hits the batch limit); that is expected, not a flake. Optional real hardening: add connection retry/backoff on the insert path so a transient drop retries instead of aborting the category. Cross-ref [[project_new_category_wiring_checklist]], [[project_gamesampling_rng_determinism_trap]].

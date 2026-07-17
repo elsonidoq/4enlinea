@@ -14,7 +14,7 @@ Each entry: what's wrong, why it's deferred, where it lives, and a concrete repr
 **Status**: 📋 SPEC-READY 2026-07-13 — full speckit artifacts authored at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, via `/epics-manager`); run `/coordinate-implementation` to build. Was: deferred out of spec 044 per FR-014/FR-015b.
 **Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`), `server/predicates.js`, `/api/evaluate-move` (+ `/inline`)
 **Discovered**: spec 044 QA (2026-07-11)
-**Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `project_puzzle_correctness_seams.md`); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
+**Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `docs/architecture/server-conventions.md` §Predicate Evaluator); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
 
 For the single-answer categories (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`,
 `j_shape`), the Challenge screen judges correctness purely by the solver-score verdict
@@ -38,7 +38,7 @@ than spec 044 took on. FR-014/FR-015b intentionally fenced it off.
 **If picked up**: extend the `evaluatePredicate`-gated `accepted` path (or an analogous
 pattern-membership check) to the single-answer categories, replacing the bare `scoreMove`
 `quality==='optimal'` judgment on `ChallengeScreen.jsx`. Related memory:
-`project_puzzle_correctness_seams.md` (ChallengeScreen bypasses via scoreMove).
+`docs/architecture/server-conventions.md` §Predicate Evaluator (ChallengeScreen bypasses via scoreMove).
 
 ---
 
@@ -85,7 +85,7 @@ of the subscription's actual status. Under the spec-045 requirement that `tier` 
 Stripe, this is wrong: an `.updated` carrying `past_due`/`canceled`/`unpaid` would keep a user wrongly
 paid. Fix (spec 045): derive tier from the subscription status — active/trialing→paid,
 canceled/unpaid→free, `past_due`→leave unchanged (downgrade only on final termination). Related
-memory: `reference_tier_source`, `project_auth_payments_state`.
+memory: `project_stripe_traps`; `docs/architecture/frontend-conventions.md` (tier source: `store.getProfile()`, never `session.tier`).
 
 ---
 
@@ -278,7 +278,7 @@ an unrelated component. Only reliably reproduces on a cold/uncached reasoning-mo
 **If picked up**: raise or remove the fixed 6s client timeout in `DeepRevealPane.jsx` (reasoning-model calls
 are legitimately slow on first load), or show a "still thinking…" state instead of a failure message when the
 timeout elapses while the request is still in flight. Verify against a cold call in staging (cache TRUNCATEd
-on deploy per `project_spec039_audio_interactive_coach`, so the first post-deploy call is always uncached).
+on deploy per `docs/architecture/coach-audio-conventions.md`, so the first post-deploy call is always uncached).
 
 ## OI-13 — Onboarding "import offer shown once" marker is per-browser (localStorage), not per-account
 
@@ -396,7 +396,7 @@ guard cannot catch it because these strings are not i18n keys.
 per-slide i18n keys wired into `ConceptScreen.jsx`/`SocraticScreen.jsx` — a distinct, large content
 task, not a translation-file edit. Sized as its own follow-up.
 **If picked up**: decide on a mechanism (parallel `lessons/es/*.json` vs per-slide keys), then
-translate to Argentinian voseo per memory [[project_spanish_is_argentinian_voseo]].
+translate to Argentinian voseo per `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo).
 
 ## OI-19 — Hardcoded-English UI strings bypass the i18n key-parity guard
 
@@ -416,12 +416,12 @@ TopBar titles; other screens were not exhaustively audited.
 (Home/Challenge/Coach/Settings/Onboarding); a full sweep is its own task.
 **If picked up**: grep the `src/screens`/`src/components` JSX for string literals in user-facing
 positions (`title=`, `aria-label=`, button/label children) not wrapped in `t()`; add keys to both
-`en.json`/`es.json` (Spanish = Argentinian voseo, [[project_spanish_is_argentinian_voseo]]).
+`en.json`/`es.json` (Spanish = Argentinian voseo, `docs/architecture/frontend-conventions.md`).
 Consider a lint/test that flags hardcoded JSX text to prevent regressions.
 
 ## OI-20 — Onboarding post-game value loop incomplete (coach silent, no analysis, game lost on signup)
 
-**Status**: ✅ RESOLVED 2026-07-13 (onboarding follow-ups, branch `feature/polish`, commits `ef24f17`/`4522e78`/`ffca704`/`a21bff8`). All three gaps fixed and verified end-to-end in a real browser + DB: (1) coach speaks the greeting from `coach.onboardingMission.greeting` via `useCoachSpeech` (mp3 generated + approved); (2) game-end routes onboarding → review → onboarding-only "Continue" CTA → import offer (`pickGameEndScreen` returns `'review'` for both); (3) anon games re-associate on migrate via `device_uuid` and appear in Past games after sign-up. Regression confirmed: `puzzle_attempts` + `lesson_progress` still migrate. See [[project_games_dont_migrate]] and `api-conventions.md` Migrate Endpoint. One residual staging item logged (real-browser autoplay of the greeting — see `staging_checks.md` Epic 8).
+**Status**: ✅ RESOLVED 2026-07-13 (onboarding follow-ups, branch `feature/polish`, commits `ef24f17`/`4522e78`/`ffca704`/`a21bff8`). All three gaps fixed and verified end-to-end in a real browser + DB: (1) coach speaks the greeting from `coach.onboardingMission.greeting` via `useCoachSpeech` (mp3 generated + approved); (2) game-end routes onboarding → review → onboarding-only "Continue" CTA → import offer (`pickGameEndScreen` returns `'review'` for both); (3) anon games re-associate on migrate via `device_uuid` and appear in Past games after sign-up. Regression confirmed: `puzzle_attempts` + `lesson_progress` still migrate. See `api-conventions.md` Migrate Endpoint. One residual staging item logged (real-browser autoplay of the greeting — see `staging_checks.md` Epic 8).
 **Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/onboardingGameEnd.js`, `GameScreen.jsx`, `src/screens/ReviewScreen.jsx`, `src/store/IndexedDBStore.js` + `server/userRoutes.js` (`/api/user/migrate`), `server/index.js` (`/api/games`)
 **Discovered**: onboarding polish review, 2026-07-13 (post mission-screen merge)
 
@@ -442,7 +442,7 @@ pre-existing Epic 8 behavior, not regressions from the mission screen:
    server `games` table with `user_id: null` and is never re-associated on signup, and Past games
    401s anon + filters by `user_id`. Fix options (server-side `device_uuid`→`user_id`
    re-association in `/api/user/migrate`, vs replicating games into IndexedDB). See
-   [[project_games_dont_migrate]] for full detail.
+   `docs/architecture/api-conventions.md` for full detail.
 
 ## OI-21 — Onboarding greeting cannot autoplay on a cold load; design a gesture-first entry so the coach can speak on arrival
 
@@ -493,7 +493,7 @@ fact that onboarding visits the review once.
 
 **If picked up**: generalize the cache-check owner filter — when `!req.user`, match
 `.eq('device_uuid', gameDeviceUuid).is('user_id', null)` (the `gameDeviceUuid` already captured for the
-write path), mirroring the authenticated branch. Cross-ref: [[project_anon_deep_reveal_gates]].
+write path), mirroring the authenticated branch. Cross-ref: `docs/architecture/api-conventions.md`.
 
 ## OI-23 — Deep-reveal TTS 400s on the opening move (empty movestring) for ALL users
 
@@ -511,7 +511,7 @@ onboarding reveal (whose first blunder is often the opening move) exposed it.
 
 **If picked up**: change the guard to `typeof moveString !== 'string' || !/^[0-6]{0,42}$/.test(moveString)`
 (accept the empty string), matching how `POST /api/explain-move-llm` already validates its `movestring`.
-Cross-ref: [[project_anon_deep_reveal_gates]].
+Cross-ref: `docs/architecture/api-conventions.md`.
 
 ## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
 
@@ -526,7 +526,7 @@ to subscribe. This is what prompted the user's "I don't see any call to action" 
 
 **If picked up**: add a persistent entry point (e.g. an "Upgrade" row in Settings/account, a home banner,
 or a nav item) that opens `UpgradeModal` via `useUpgradeCheckout()` — it should pass a real
-`returnPathOverride` if launched from a session-only screen. Cross-ref: [[project_auth_payments_state]].
+`returnPathOverride` if launched from a session-only screen. Cross-ref: memory `project_stripe_traps`.
 
 ## OI-25 — Paying from the /summary paywall cannot restore the summary (SESSION_ONLY state lost)
 
@@ -541,7 +541,7 @@ they have already seen the summary. A true restore would require persisting `res
 so `/summary` can rehydrate after the round-trip; judged not worth it for now.
 
 **If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
-returnPath, and rehydrate on cold boot. Cross-ref: [[project_auth_payments_state]], [[OI-24]].
+returnPath, and rehydrate on cold boot. Cross-ref: memory `project_stripe_traps`, [[OI-24]].
 
 ## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
 
@@ -606,7 +606,7 @@ container's available height is small.
 
 **If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
 container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
-Cross-ref: [[project_split_reveal_board_fit]].
+Cross-ref: `docs/architecture/frontend-conventions.md` (SplitReveal board fit).
 
 ## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
 
@@ -636,7 +636,7 @@ apply the **same absent→present transition-gating** the double-threat/forced-w
 (design: `docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md`). These are
 all persist-across-moves "creation" patterns, so without transition-gating they would exhibit the
 identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
-[[reference_tactical_pattern_definitions]].
+`docs/knowledge-base/` (tactical pattern predicates).
 
 ## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
 
@@ -690,7 +690,7 @@ Two low-severity residuals were deliberately left when the transition gate shipp
 
 **Why deferred**: the webhook is the primary path and is expected to deliver in staging/prod (a registered endpoint); the fallback firing *alone* (no webhook ever) is an operational-failure edge, not the steady state. Making the track idempotent-per-session (so either path could safely write it) would need a dedup key (e.g. a `stripe_events`-style ledger keyed on the checkout session id, or an upsert on `(user_id, session_id)`), which is more machinery than the analytics gap warrants today.
 
-**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory [[project_checkout_verify_session_fallback]]; server-conventions.md "Activation: webhook primary + verify-session fallback".
+**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory `project_stripe_traps`; server-conventions.md "Activation: webhook primary + verify-session fallback".
 
 ## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — unfixed at close
 
@@ -728,14 +728,14 @@ D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped f
 4. **After the text is committed**, generate narration audio for that lesson: `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally), then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`).
 5. Run `npm run test:fast` once per lesson (or batch) before committing.
 
-Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`, `project_spanish_is_argentinian_voseo`; OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
+Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`; `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo); OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
 
 ## OI-37 — Accuracy 100% still reads oddly next to a lost game (product question, not a bug)
 
 **Status**: deferred / open (surfaced during Batch B task 18, finding 15)
 **Area**: `connect-four/src/screens/ReviewScreen.jsx` (Accuracy card)
 
-Task 18 fixed the *copy* contradiction: a 0-mistake resigned/lost game now shows `review.cleanButLost` ("No mistakes on the board — but the game was lost. Review how it ended.") instead of the old "Clean game. Nothing to revisit." copy, and the Past Games card suppresses its "No mistakes" chip when `outcome === 'lost'`. **The Accuracy metric itself (100%) was deliberately left unchanged** — it measures board-move optimality (every scored move matched the solver's best line) and is correct on its own terms; resigning isn't a board move and is out of its denominator by design. Per memory `project_polish_epics_pipeline`, do not "fix" this by folding resignation into the accuracy calculation.
+Task 18 fixed the *copy* contradiction: a 0-mistake resigned/lost game now shows `review.cleanButLost` ("No mistakes on the board — but the game was lost. Review how it ended.") instead of the old "Clean game. Nothing to revisit." copy, and the Past Games card suppresses its "No mistakes" chip when `outcome === 'lost'`. **The Accuracy metric itself (100%) was deliberately left unchanged** — it measures board-move optimality (every scored move matched the solver's best line) and is correct on its own terms; resigning isn't a board move and is out of its denominator by design. Do not "fix" this by folding resignation into the accuracy calculation: doing so would conflate two different questions ("did every move I made match the solver's best line?" vs. "did I finish the game?") into one number, destroying the metric's ability to answer either one cleanly.
 
 Whether a 100%-accuracy badge should still be visually softened, annotated, or paired with an explicit "you resigned" note when the outcome is a loss is a product/UX call, not a mechanical fix — needs its own brainstorm if picked up. Not blocking; the copy fix already removes the "flawless" contradiction from the coach line.
 
@@ -785,7 +785,7 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 **Two distinct pieces of work, do not conflate them:**
 
-1. **Design work** — a real pricing page: plan comparison, annual/monthly toggle, CTA into the existing checkout flow, Spanish copy (Rioplatense voseo per `project_spanish_is_argentinian_voseo`). This is what the issue is nominally about.
+1. **Design work** — a real pricing page: plan comparison, annual/monthly toggle, CTA into the existing checkout flow, Spanish copy (Rioplatense voseo per `docs/architecture/frontend-conventions.md`). This is what the issue is nominally about.
 
 2. **The drift bug, which is the more dangerous half.** `pricing.html` hardcodes `$2.99`/`$21.99`/`39%`/`$1.83` as literal HTML text. The app itself never hardcodes prices: `useStripePrices.js` fetches them live from `GET /api/stripe/config`, which reads the real Stripe price objects precisely so "the amounts shown in UpgradeModal never drift from what we charge". The static page reintroduces exactly the drift that endpoint exists to prevent — change a price in the processor dashboard and this page silently lies, on the page a payment provider's reviewer reads. The `20` Deep Reveals/week figure is likewise a literal, duplicating `quotaLimits.js:FREE_DEEP_REVEAL_WEEKLY_LIMIT` (which has its own history of drifting — see the QA 2026-07-15 / D4 comment there, where the constant was 5 while copy promised 20).
 
@@ -813,8 +813,13 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 ## OI-43 — Socratic coach text is i18n-keyed, so it is never narrated (silent in every language)
 
-**Status**: deferred / open (surfaced 2026-07-16; a plan-writing prompt exists but nothing is implemented)
-**Area**: `connect-four/src/screens/SocraticScreen.jsx`, `connect-four/src/i18n/{en,es}.json` (`socratic.*`, `lesson.<id>.socratic.*`), `connect-four/server/lessonAudio.js`, `connect-four/server/lessonLoader.js`
+**Status**: **code landed 2026-07-16 — NOT yet audible; audio generation still outstanding.** Plan: `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` (Tasks 1–7 done, `test:fast` green at 1413 pass).
+**Remaining before this can be closed**: (1) run the plan's **Task 8** — `POST /api/admin/lessons/:id/generate-audio` per lesson with `{lang:'en'}` then `{lang:'es'}`, **after restarting the server** (see below); (2) the plan's **V7** browser check — bubble narrates in EN and ES, stops on navigate-away, mp3 returns 200. **Until Task 8 runs, every Socratic bubble renders text with no audio — i.e. the user-visible symptom of this issue is unchanged.**
+**Area**: `connect-four/src/screens/SocraticScreen.jsx`, `connect-four/server/lessonAudio.js`, `connect-four/server/lessonLoader.js`, `connect-four/scripts/translate-lessons.mjs`
+
+**What landed**: the text now lives in lesson JSON at `socratic.messages` (phase→array map, `text`/`text_es`/`audio`/`audio_es` shape); 12 lessons migrated (`lesson-04` has `socratic: null`); the i18n `socratic.*` and `lesson.<id>.socratic.*` keys are **deleted** from both locales; `SocraticScreen` narrates via `getNarrationQueue` + `speakLessonAudio` mirroring `ConceptScreen`, with a replay button; `collectMessages` now unifies the two audio walkers, and `translate-lessons.mjs` was extended to cover `socratic.messages[phase][].text`.
+
+**Task 8 prerequisite (silent data loss if skipped)**: the migration wrote the lesson files on disk; nothing watches `lessons/`. A server started before that migration holds a stale boot-time cache, and `generate-audio` reads that cache and `saveLessonFile`s it back — **reverting the migration while returning a normal-looking 200**. Restart the server first, then confirm with `curl -s localhost:3001/api/admin/lessons/immediate-threat | grep -c messages` (0 ⇒ stale). See [[project_lesson_disk_edit_cache_clobber]].
 
 Arriving at a lesson's Socratic board shows a coach bubble (e.g. *"Voy a cometer un error aquí. Mirá si podés castigarlo."*) but **no speech plays**. This is not a Spanish bug — it is silent in English too.
 
@@ -854,3 +859,47 @@ This is also the mechanism behind the benign registry/manifest drift documented 
 **Mitigation shipped 2026-07-16**: `generate-tts.js --key <k>` now prompts before overwriting an approved clip and spells this out; the admin UI's per-key generate does not.
 
 **If picked up**: decide whether approval should gate *playback* (remove the slug from the manifest on regenerate, so a regenerated clip goes silent until re-approved) or stay a pure publishing record (current behavior, now at least explicit). Note the first option means a regeneration can silently take a working clip offline — which is why this wasn't changed unilaterally.
+
+## OI-46 — `SocraticScreen`'s `showHint` is sticky, so the `correct` message can never render (and now, never narrates)
+
+**Status**: deferred / open (surfaced 2026-07-16 by the plan critique for OI-43; consciously not fixed there)
+**Area**: `connect-four/src/screens/SocraticScreen.jsx`
+
+`showHint` is `useState(false)`, set `true` by the Hint toolbar button, and **never reset** — not on a phase transition, not on a drop. The coach-message selector short-circuits the phase map entirely:
+
+```js
+const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
+```
+
+So once the student clicks Hint, the bubble is pinned to the hint text for the rest of the exercise: solving the puzzle never shows *"Exactly! You saw it."* — the reward message is unreachable. Since the Socratic narration effect keys off the same expression, that message is now also never **spoken**. The Continue button still appears (it keys off `phase`, not `showHint`), so the exercise is completable and the bug reads as "the coach just stopped reacting".
+
+**Why it wasn't fixed with OI-43**: that change was content plumbing — moving copy out of i18n into lesson JSON. Altering the phase/hint interaction is a behavior change with no test pinning it, and it would have inflated a diff whose whole value was being narrow and verifiable.
+
+**Testing consequence, already applied**: the OI-43 plan's V7 browser pass is deliberately split in two — a Hint-free run that verifies `correct` narration, then a separate Hint run — because a single linear pass that clicks Hint can never reach `correct`. Do not "simplify" it back into one pass.
+
+**If picked up**: the likely fix is one line — `useEffect(() => { setShowHint(false); }, [phase])` — so each phase narrates its own message. Confirm first that hint-then-wrong-move should really drop the hint; the alternative is to let hint and phase messages coexist in the bubble rather than one replacing the other. Related: OI-43, [[project_lesson_progression_audio_traps]].
+
+## OI-47 — `GET /api/games` predates the offset-pagination `id`-tiebreaker finding and is unaudited
+
+**Status**: deferred / open
+**Area**: `connect-four/server/index.js` (`GET /api/games`, offset/limit pagination)
+
+`/api/coach/queue` was fixed to append a unique `id ASC` tiebreaker after its semantic ordering, because `ORDER BY <non-unique columns>` + `OFFSET`/`LIMIT` is nondeterministic when rows share sort-key values (e.g. a batch import stamping many rows with the same `created_at`) — ties can shuffle between pages across separate queries, silently skipping some rows and duplicating others. That rule is documented in `docs/architecture/api-conventions.md`. `GET /api/games` predates the finding and has never been audited against it: it fetches from both `games` and `papergames_games`, sorts/paginates in JS rather than in SQL, so the failure mode may differ from the SQL `OFFSET`/`LIMIT` case — but the underlying risk (a non-unique sort key across a paginated result set) has not been checked.
+
+**If picked up**: verify whether the in-JS sort key used for `/api/games` pagination is unique per row (add an `id` tiebreaker if not), and confirm the two-table merge can't reorder rows across pages independently of the tiebreaker fix.
+
+## OI-48 — Reason engine "Fix 6": a win-forfeiting move is still tagged `drawing_move` upstream
+
+**Status**: deferred / open
+**Area**: blunder-tagging pipeline (upstream of `server/llmCoachHelpers.js`'s `drawing_move` grounding-rule branch)
+
+The `drawing_move` blunder tag is applied whenever the **played** move only draws, even when the **better** move was a forced win — conflating "best draws" with "best WINS". Repro: on an empty/near-empty board, center (col 4, 0-idx 3) is a first-player forced win while col 3/col 5 only draw; playing a drawing column gets tagged `drawing_move`. A text-level patch (Fix 4, 2026-06-25) reworded the grounding rule to stop asserting "not a win for either side," but the tag itself is still assigned by the upstream tagging pipeline without distinguishing "forfeited a win" from "played a genuine draw."
+
+**If picked up**: Fix 6 — categorize a move that forfeits a forced win as a missed-win / outcome-flip case in the upstream blunder-tagging pipeline, not `drawing_move`.
+
+## OI-49 — `/api/puzzles/draw` has no solved/revealed filter; `puzzle_attempts.outcome` enum is partly aspirational
+
+**Status**: deferred / open
+**Area**: puzzle serving (`server/index.js`'s `GET /api/puzzles/draw`) vs. `puzzle_attempts.outcome`
+
+`GET /api/puzzles/draw` filters only on `.eq('category', …)`, `.eq('is_active', true)`, `.not('position','is',null)`, `.order('position')` — it never reads `puzzle_attempts`, so there is no exclusion of already-solved or already-revealed puzzles from the serving pool at all. Meanwhile `puzzle_attempts.outcome` is constrained to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`, but only `'correct_first'` and `'abandoned'` are ever written by any code path (`ChallengeScreen.jsx`) — `'revealed'`, `'correct_retry'`, and `'tied'` are unused. Is the enum aspirational (a filter was planned but never built), or is the intent genuinely "never exclude anything from the pool" (in which case the unused outcomes and their CHECK-constraint entries are dead)?

@@ -87,7 +87,7 @@ Solver-verified example movestrings for the strategic rules. Coordinates in the 
 | `3333364101252113121524` | P2 (Gray) | `c5r3`, `c7r2` |
 - **TRAP — an open three is NOT necessarily a double_threat.** `33243432244` has Gray's open three `_OOO_` on row 2, but both end cells float above empty columns (not gravity-top) → `detectDoubleThreat` returns `matched:false` for BOTH players. Both production detectors (`classify` Case A/B and `detectDoubleThreat`) require gravity-top threats: Case A = ≥2 distinct columns with immediately-playable threats; Case B = stacked consecutive-row threats whose lower cell is gravity-top. Never eyeball "two threat cells" as a double threat — run the detector. (This bogus example+cell `c2r1` circulated in polish_epic.md Epic 2 until fixed 2026-07-08; spec 042 SC-008 uses the two verified boards above.)
 
-Related: [[reference_external_pdfs]].
+Related: `docs/external_references/`.
 
 
 ---

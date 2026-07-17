@@ -464,9 +464,10 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 `POST /api/scores` (**not** GET) — `server/index.js`.
 - **Request body**: `{ moves: string, depth?: number, difficulty?: 'easy'|'medium'|'hard'|'perfect' }` (the movestring so far, 0-indexed).
 - **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/constants.js`).
-- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver_scores` memory.
+- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver` memory.
 - **Sparring-move mode (`difficulty` present)**: the response is `{ scores, col }`, where `col` is the AI's chosen 0-indexed move computed **server-side** by `chooseSparringMove(board, difficulty, scores)` (`server/classifier.js`). An unknown `difficulty` value → 400. This is the single move-selection path for the sparring AI (`src/lib/useGameBoard.js` `makeAiMove` POSTs `{ moves, difficulty }` and plays `col`; on any error it falls back to a random legal column). The Hint overlay calls the same endpoint **without** `difficulty` and consumes `scores` only.
-- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns. See memory `project_sparring_move_algorithm`.
+- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns.
+- **Design consequence — difficulties differ only by mistake rate**: `SPARRING_MISTAKE_RATES` (`server/classifier.js`) is `{ easy: 1/2, medium: 1/4, hard: 1/8, perfect: 0 }`. Every "mistake" the roll produces is still a tactically sound, non-forbidden move (see roll logic above) — so even `easy` never falls for a one-move trap; `medium`/`hard`/`perfect` differ from `easy` only in how often the mistake roll fires, not in move quality. Deliberate design goal: never let the user win by just stacking discs.
 - **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
 
 ## Migrate Endpoint (POST /api/user/migrate)
@@ -849,7 +850,7 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 ## Admin Blunder-Reason Browser Endpoints
 
-Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons; see memory `project_admin_fv_suff_repurposed`). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
 
 **Evidence mode** — browses **blunder-reason evidence** (the `computeReason` output precomputed by `server/scripts/compute.mjs`). Evidence rows have shape `{id, evidence, groundTruth}`.
 

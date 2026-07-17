@@ -20,17 +20,26 @@ vector-named fork overlay), `reasonBoardSelect.mjs` (`selectBoards`/`renderBoard
 predicate universe, consumed by both `select_boards.mjs --strategy coverage` and the coverage test).
 **P1 + P2 (grounding) + P3 (causal frames) + P4 (grader + sampler integration) DONE** (see D28, D29).
 P3 landed: a `template(fv,ctx)` per L1–L9 (`classifyCausalLink` returns composed `text`),
-confidence-gated `covers` removal now LIVE (`assertCoverage`'s 2nd param), the render-time L2-vs-L3
-branch-invariance (`patternOnAfterBestBoard`, reusing `tagBoard` on the after-best board — NOT read
-off `direction`; eval-23 fix), and horizon-from-`register` framing (`pliesToEnd` is absent
-corpus-wide, so deep-vs-near comes from `register`; eval-3 fix).
+confidence-gated `covers` removal now LIVE (`assertCoverage`'s 2nd param), and
+horizon-from-`register` framing (`pliesToEnd` is absent corpus-wide, so deep-vs-near comes from
+`register`; eval-3 fix).
+
+**SUPERSEDED — do not restore (D30):** this memory used to say the L2-vs-L3 split was a *render-time
+branch-invariance* computed from `patternOnAfterBestBoard`. **D30 retired that** and removed the
+`branchInvariant` helper: the split now keys on the SIGN `case` in `causalLinks.mjs` — **L3** iff
+`route==='realized_denied' && direction==='enabled_opponent' && case==='lose_to_faster_lose'`, **L2**
+otherwise. The principle: L3 asserts an OUTCOME ("both moves lose"), while `patternOnAfterBestBoard`
+is only GEOMETRY and is NOT equivalent to "the best line loses" — D28 conflated the two, flipping real
+win/draw boards (eval-53 `win_to_lose`, eval-51 `draw_to_lose`) into false loss narration.
+`patternOnAfterBestBoard` survives as **informational** in `render_decision` and may soften L2's
+wording, but must never drive the outcome sentence.
 
 **P4 gotchas (D29):**
 - `render_decision` is **condition-D-only** — `compute.mjs` persists it (`renderDecisionForCondition`)
   on condition-D answers lines only, derived purely from `buildRenderDecision(nv)` in the render
   layer. It is NOT an engine/solver call; condition A/B/C rows never carry it.
 - The `grade-fv-sufficiency` grader consumes `render_decision` as **GROUND TRUTH** and must NOT
-  re-derive routing — never re-run `classifyCausalLink`, recompute `patternOnAfterBestBoard`, or
+  re-derive routing — never re-run `classifyCausalLink`, recompute board tags, or
   re-select boards inside the grader; that re-derivation is exactly the drift that produced the
   eval-1/16/3 mis-grades (G4: verify cells against the record's own `finalMovestring`, never an
   alternate solver PV).
@@ -103,4 +112,4 @@ non-obvious traps here:
   (copied from the design spec, NOT merged from `worktree-win-dist-grid`); used internally only to pick
   qualitative words, never a number in prose. `fieldDisposition` opening full-path checks run BEFORE the
   leaf fallbacks (else `bestCol`/`playedCol`/`text` leaf collisions win). See D33,
-  [[project_opening_defender_reason_gap]].
+  [[project_reason_opening_traps]].

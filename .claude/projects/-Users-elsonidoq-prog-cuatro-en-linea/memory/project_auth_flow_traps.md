@@ -30,6 +30,22 @@ anywhere else requires stashing the destination before the redirect and consumin
 signed-out visitor who arrives directly — the gate on the entry point tells you nothing.
 See `docs/architecture/frontend-conventions.md` § Auth Integration.
 
+## IndexedDB reset hangs sign-in silently (merged from `project_indexeddb_signin_hang`)
+
+`indexedDB.deleteDatabase(name)` is **blocked** as long as ANY connection holds the DB open —
+**including connections in other tabs**. A blocked delete stays pending, and any subsequent
+`indexedDB.open(name)` queues behind it and **hangs indefinitely**. **Never use `deleteDatabase`
+to reset local state — clear the object stores in place instead**: open the DB, then
+`tx.objectStore(n).clear()` for each name in `db.objectStoreNames`, all in one readwrite
+transaction (a clear needs no exclusive lock, so it never blocks).
+
+Sign-in silently depends on that open: `ProfileStore.switchToSupabase` does
+`await currentStore.migrateToSupabase(...)` **before** `setSession({ user })`, and
+`migrateToSupabase` starts with `await this._db()` (the IndexedDB open promise). If that open
+hangs, sign-in never completes client-side: the server session cookie is valid
+(`GET /api/auth/session` → 200), but React `session` stays null and the UI stays signed-out —
+with **NO console error** (the `try/catch` around migrate only catches rejections, not a hang).
+
 ## (merged from `bug_supabase_js_session_contamination` — supabase-js auth.getUser(userToken) on a shared client poisons subsequent DB inserts — fix: separate authClient for all auth.* calls)
 
 `auth.getUser(userToken)` in supabase-js v2 stores the user's JWT as the client's active session. Any subsequent `supabase.from(...).insert(...)` then runs with `Authorization: Bearer <userToken>`, causing PostgREST to execute as the `authenticated` postgres role instead of `service_role`. BYPASSRLS is skipped → RLS blocks the insert → error 42501.
@@ -70,45 +86,16 @@ The `on_auth_user_created` trigger on `auth.users` exists, is enabled, and has c
 
 ---
 
-## (merged from `project_magic_link_auth_race` — Auth magic link fails because Navigator mount useEffect clears)
+## The `replaceState` hash-preservation fix is LOAD-BEARING (still, for OAuth)
 
-## Root cause
-
-`App.jsx` Navigator's mount `useEffect` calls `window.history.replaceState(state, '', '/')` which strips the `#access_token=...` hash fragment before GoTrueClient's async `_initialize()` can process it.
-
-The race:
-1. Module-level `createClient()` → GoTrueClient constructor calls `initialize()` → yields at async lock acquisition
-2. React commits → `useEffect` runs synchronously → `replaceState(state, '', '/')` → hash destroyed
-3. GoTrueClient acquires lock → `parseParametersFromURL(window.location.href)` → no `access_token` → `callbackUrlType = 'none'` → skips session recovery
-
-**Why**: `_initialize()` is async and yields at `_acquireLock()`. React's commit phase runs before the lock is acquired, so the `useEffect` fires in between.
-
-## Fix
-
-Changed `replaceState` to preserve `window.location.hash`:
+`App.jsx`'s Navigator mount `useEffect` must preserve `window.location.hash`. It currently reads:
 ```js
-window.history.replaceState({...}, '', resolvedUrl + window.location.hash);
+window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '',
+  resolvedUrl + window.location.search + window.location.hash);   // App.jsx ~:56
 ```
+A bare `replaceState(state, '', '/')` **strips the `#access_token=…` fragment** before GoTrue's async `_initialize()` can read it: the constructor's `initialize()` yields at `_acquireLock()`, React's commit phase runs the `useEffect` in between, and by the time the lock is acquired `parseParametersFromURL` sees no token → `callbackUrlType='none'` → session recovery silently skipped. Originally found via magic-link; **magic-link is gone but the OAuth callback leg uses the same `#access_token=` hash**, so this still applies. `window.location.search` is preserved for the same reason (`CheckoutReturnBanner` reads `session_id`). Don't "simplify" that line.
 
-The GoTrueClient then finds the hash, processes it, and clears it with `window.location.hash = ''` (its normal post-processing behavior).
-
-## Related
-
-- `bug_service_worker_stale_cache` — the second bug that prevented auth from working (SW served stale index.html before the JS could even run)
-- File: `connect-four/src/App.jsx` line 29
-
-
----
-
-## (merged from `bug_auth_magic_link_redirect` — Magic link emails stopped arriving after adding emailRedirectTo — Supabase rejects unlisted redirect URLs silently)
-
-`AuthModal.jsx` passes `emailRedirectTo: window.location.origin` to `supabase.auth.signInWithOtp`. Supabase rejects requests where the redirect URL is not on the project's allowlist (Auth → URL Configuration → Redirect URLs), and returns an error — but the `handleSend` catch block silently swallows it, so no email is sent and the UI shows no feedback.
-
-**Why:** Added on 2026-05-31 to fix magic links always redirecting to localhost. The fix was correct in intent but broke sending because the URL wasn't allowlisted.
-
-**How to apply:** Before using `emailRedirectTo`, ensure the target URL is in the Supabase allowlist. Also consider surfacing auth errors to the user instead of swallowing them silently.
-
-**Status:** Will be closed by Spec 036 (Epic 7) FR-018 checklist item — adding `FRONTEND_URL` to the Supabase Auth redirect URL allowlist for both staging and production environments. This is a pre-deploy gate in that spec's infrastructure checklist.
+(Historical, now dead: the `signInWithOtp` + `emailRedirectTo` allowlist trap — `signInWithOtp`/`emailRedirectTo` no longer exist anywhere in `src/`.)
 
 ---
 

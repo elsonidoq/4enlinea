@@ -25,5 +25,5 @@ not exact strings — chiefly `move_string.length >= 14` (T017) and median `>= 1
 to `14 + Math.floor(rng()*21)` ∈ [14,34]. If you ever see a `length 12` failure, the
 minMoves floor was lowered (the pre-port code had a latent `8 + floor(rng()*10)` bug that
 passed T017 only by seed-luck). Verify with the real-solver integration test, run ONCE
-(IPC-hang trap — see [[project_integration_test_slowness]]); `npm run test:fast` excludes it.
-See [[reference_game_simulation_harness]].
+(IPC-hang trap — see `docs/architecture/testing-conventions.md` §`test:fast` vs `npm test`); `npm run test:fast` excludes it.
+See `docs/architecture/server-conventions.md` §Simulating games.

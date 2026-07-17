@@ -23,6 +23,9 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 | A helper's passing unit tests | **Its call sites.** A tested function nobody calls is dead code |
 | "Already satisfied / no task needed" | **The code that allegedly satisfies it.** Highest-risk claim there is |
 | A disjoint file list = "isolated" | **The shared working tree.** Isolation is about the write surface |
+| An empty result from a command you wrote | **The command.** `rg -rn "x" f` finds nothing because `-r` is `--replace`, not "recursive" — a malformed command's silence reads exactly like proof of absence |
+| A test summary saying `fail 0` | **The test's own case names in the output.** `node --test` silently skips a missing file *in a list*, and — measured on Node v23.11.0 — the **exit code is 0 and `grep -c "Could not find"` is 0** too, so neither of those catches it (they only fire when the missing file is the sole argument). `test:fast` is always a list. See `docs/architecture/testing-conventions.md` §`test:fast` |
+| An Opus critique agent's confident, specific premise | **The code it names.** Critique agents assert false premises as fluently as implementers ("StatsScreen reuses its existing AuthModal" → StatsScreen has no AuthModal). Give every fix agent a **stop-and-report** instruction instead of a fix-it mandate, so a false premise surfaces rather than getting built on |
 | A line number | **The symbol name.** Line refs drift; names don't |
 
 **Why (2026-07-16 QA-remediation session — 19 errors, one root cause):**
@@ -34,6 +37,8 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 - **Tests-in-isolation hid dead code.** Extracted `effectiveDeepRevealCount` as the "one rule"; **nothing called it** — both production sites inlined the rule, a third copy was inbound, and its tests validated a variant (truthy null-check) production never ran. I'd inspected the code and still missed it, because I asked "do the copies agree?" instead of "is it called?"
 - **A decision recorded as a no-op.** A shipped design doc said "blunders only — no task needed, `selectStep` already only navigates for blunder rows." `selectStep` gates on `quality !== 'optimal'`. The premise was false, so an unimplemented constraint was recorded as satisfied, contradicted a shipped spec, and survived for months until QA filed the *correct* behavior as a bug.
 - **File-disjoint ≠ isolated.** Ran a fix agent alongside a batch agent; files were disjoint, the **working tree** was not, so one agent's `git add` swept the other's uncommitted work into its commit.
+- **My own broken command almost became a fact.** `rg -rn "AdminLessonEditorScreen" src/lib/…` returned nothing, so I reported the editor screen "isn't routed" — `-r` is ripgrep's `--replace`. It was routed all along (`App.jsx` pathname checks, not `screenRegistry`). I noticed the empty output, mentioned it in passing, and *let it stand for a whole turn*. An empty result is a claim about your command before it's a claim about the code.
+- **A green suite I'd filtered.** Reported "1378 pass, 0 fail" by grepping the summary lines — never checking the exit code, while a registered-but-deleted test file was being silently skipped. I built the filter that hid the evidence.
 
 **The lesson that generalizes past all of it:** I first wrote these rules scoped to *plan authoring* — and then made three more of the same errors, in *verification*, *code review*, and *orchestration*. **A rule scoped to one costume does not transfer.** The principle is the deliverable, not the checklist.
 
@@ -48,4 +53,4 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 8. **Serialize write-capable agents**, or give one `isolation: "worktree"`. Never two in one tree.
 9. **Locate by symbol, not line.**
 
-Related: [[feedback-spec-existing-apis]], [[feedback-llm-output-root-cause]], [[feedback-engine-soundness-then-render]], [[feedback-occam-principled-extrapolation]].
+Related: `CLAUDE.md` §"When writing specs for existing components", [[feedback_llm_output_root_cause]], [[feedback_engine_soundness_then_render]], [[feedback_occam_principled_extrapolation]].
