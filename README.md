@@ -21,3 +21,4 @@ Each migration runs in its own transaction — if one fails, it rolls back and e
   node --env-file=.env scripts/set-tier.js elsonidoq@gmail.com paid
 
   To revert: replace paid with free.
+
