@@ -904,3 +904,16 @@ The `drawing_move` blunder tag is applied whenever the **played** move only draw
 **Area**: puzzle serving (`server/index.js`'s `GET /api/puzzles/draw`) vs. `puzzle_attempts.outcome`
 
 `GET /api/puzzles/draw` filters only on `.eq('category', …)`, `.eq('is_active', true)`, `.not('position','is',null)`, `.order('position')` — it never reads `puzzle_attempts`, so there is no exclusion of already-solved or already-revealed puzzles from the serving pool at all. Meanwhile `puzzle_attempts.outcome` is constrained to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`, but only `'correct_first'` and `'abandoned'` are ever written by any code path (`ChallengeScreen.jsx`) — `'revealed'`, `'correct_retry'`, and `'tied'` are unused. Is the enum aspirational (a filter was planned but never built), or is the intent genuinely "never exclude anything from the pool" (in which case the unused outcomes and their CHECK-constraint entries are dead)?
+
+## OI-50 — Candidate-insert retry can double-insert rows (no unique constraint)
+
+**Status**: deferred (flagged by the final whole-branch review, QA-remediation 2026-07-16; not fixed — low blast radius)
+**Area**: `connect-four/server/index.js` (the `supabase.from('candidates').insert(rows)` retry added by W11 Task 26); `connect-four/server/migrations/011_category_slugs.sql`
+
+Task 26 added bounded retry/backoff on the candidate-insert path so a transient dropped connection no longer aborts a whole category with 0 inserted. But the retry fires on **any** error, including a network blip that lands *after* Postgres has already committed the insert — precisely the failure it targets. On retry, the same `rows` are inserted again.
+
+`candidates` has **no unique constraint** to catch this — only the non-unique `idx_candidates_move_string` (see `011_category_slugs.sql`). So a mid-insert network hiccup can silently double a batch.
+
+**Why deferred**: admin/localhost-only surface, run manually, and duplicate candidates are self-correctable (re-run or dedupe). No user-facing impact.
+
+**If picked up**: the batch already carries `generation_run_id` + `move_string`, so a dedupe key exists — either add a unique index on `(generation_run_id, move_string)` and treat `23505` as success, or only retry on pre-commit error classes (connection-refused/timeout), never on an ambiguous post-send error.
