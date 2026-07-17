@@ -97,8 +97,13 @@
   },
   "upgrade": {
     "heading": "Become Pro",
-    "body": "Upgrade to Pro for unlimited deep reveals.",
-    "cta": "Continue to checkout",
+    "body": "Unlimited Deep Reveals — $2.99/month or $21.99/year.",
+    "price": "$2.99/month · $21.99/year",
+    "tax": "Taxes may apply and are calculated at checkout.",
+    "links_pricing": "Pricing",
+    "links_terms": "Terms",
+    "links_refunds": "Refunds",
+    "cta": "Become Pro",
     "success": "You're now a Pro member!",
     "dismiss": "Maybe later",
     "planMonthly": "Monthly",
@@ -120,6 +125,12 @@
     "error": "Something went wrong.",
     "hint": "Hint",
     "loading": "Loading…"
+  },
+  "footer": {
+    "pricing": "Pricing",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "refunds": "Refunds"
   },
   "games": {
     "title": "Past Games",
