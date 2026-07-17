@@ -5,7 +5,7 @@
   "steps": {
     "build": {
       "commands": [
-        "cd solver-src && make SERVER_DIR=../server",
+        "cd solver-src && make -B SERVER_DIR=../server && test -f ../server/c4solver",
         "npm run build"
       ]
     }

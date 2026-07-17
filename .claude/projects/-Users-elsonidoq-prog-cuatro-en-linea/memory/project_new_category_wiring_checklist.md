@@ -1,23 +1,17 @@
 ---
-name: new-category-wiring-checklist
-description: Every file that must be touched when adding a new puzzle category slug
-metadata: 
+name: project_new_category_wiring_checklist
+description: "Pointer — before adding/removing a puzzle category, read docs/architecture/server-conventions.md §Category Registry; the trap is that omitting candidate-generator.js fails SILENTLY (no error, just no candidates)"
+metadata:
   node_type: memory
   type: project
-  originSessionId: a06eb14d-fcf2-4f91-9f11-80ddc8bed5f4
 ---
 
-When adding a new puzzle category (e.g., `odd_even_threat`), the detector/slug must be registered in all of these files. Missing any one causes silent failures:
+**Trigger: adding, renaming, or removing a puzzle category slug.**
 
-1. **`server/categories.js`** — add to `VALID_CATEGORIES`, `CATEGORY_ORDER`, `PAID_CATEGORIES` (or note free)
-2. **`src/lib/categories.js`** — mirror the same arrays (frontend copy; must stay in sync)
-3. **`server/challengeSets.js`** — add the set entry with `stars`, `displayNameKey`, `descriptionKey`
-4. **`connect-four/src/i18n/en.json`** — add `coach.<slug>.prompt.*`, `coach.<slug>.hint.*`, `coach.<slug>.optimal.*`, `coach.<slug>.suboptimal.*`, `coach.<slug>.blunder.*` pooled-key groups
-5. **`server/classifier.js`** — register in `classify()` switch and add `detect<Category>` function
-6. **`server/predicates.js`** — add `eval<Category>` in the `evaluatePredicate()` switch
-7. **`server/candidate-generator.js`** — register in `checkPredicate()` switch AND add `computeHighlightCells` case AND add `isClean` case (this file is easily overlooked; the factory silently falls through to a generic fallback without it)
-8. **`PATTERN_KB`** — add a one-line entry (or note reuse of an existing key like `derived-parity-formula`)
+The full wiring checklist now lives in **`docs/architecture/server-conventions.md` §Category Registry** ("Wiring a new puzzle category", plus "Retired category slugs" and the generation-quality guards). Read it there — this file is only the trigger + the reason you cannot skip it.
 
-**Why:** Epic 6 plan review caught that only files 5 and 6 were in the plan — file 7 (`candidate-generator.js`) was completely omitted, which would have caused the factory to generate garbage `odd_even_threat` positions.
+**Why this needs a trigger at all:** the failure is **silent**. `candidate-generator.js` dispatches on the category slug through an if/else chain; a slug that isn't wired in falls through with **no error** — generation just yields zero candidates for it, which reads as "the pipeline is broken" or "this category is rare" rather than "I forgot a file". Every other file in the checklist fails loudly; this one doesn't. `PAID_CATEGORIES` has the same shape of trap (defined in **two** files — `server/categories.js` and `src/lib/categories.js` — which must stay in sync).
 
-**How to apply:** When writing a spec or plan for any new category, include an explicit checklist or task that touches every file in this list.
+Also non-obvious: **never reuse a retired slug** (`fork_setup`, `parity_control`, `zugzwang`, `claimodd`). Old rows, attempts, and stats keyed to the old slug silently resurface under the new meaning. The retired list + rationale is in the doc.
+
+Related: [[project_generate_candidates_fetch_failed_flake]] — many categories at 0 can also be an env flake, not a wiring bug; check that before re-wiring anything.

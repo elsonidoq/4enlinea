@@ -9,10 +9,16 @@ import { MistakesGate } from '../components/MistakesGate.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { buildBoard } from '../lib/board.js';
 import { track } from '../lib/track.js';
+import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
+import { resolveCategoryListBack } from './categoryListBack.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function MistakesListScreen({ go, goBack, category }) {
+// Page size used while paging the coach queue to completion (FR-003a). Uses the endpoint's
+// max (200) to minimize round trips for users with many blunders in one category.
+const QUEUE_PAGE_LIMIT = 200;
+
+export function MistakesListScreen({ go, goBack, category, navContext }) {
   const { t } = useTranslation();
   const { session } = useStore();
   const [blunders, setBlunders] = useState([]);
@@ -27,29 +33,47 @@ export function MistakesListScreen({ go, goBack, category }) {
     }
   }, [category]);
 
-  // Fetch blunders for the given category
-  const fetchBlunders = useCallback(() => {
+  // Fetch blunders for the given category, paging the coach queue to completion (FR-003a) —
+  // a single default-sized page must never be treated as the full category list.
+  const fetchBlunders = useCallback(async () => {
     if (!session || !category) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    fetch(`${API}/api/coach/queue?status=all&category=${encodeURIComponent(category)}`, {
-      credentials: 'include',
-    })
-      .then(r => {
+    try {
+      let offset = 0;
+      let accumulated = [];
+      let total = Infinity;
+      let keepGoing = true;
+
+      while (keepGoing) {
+        const r = await fetch(
+          `${API}/api/coach/queue?status=all&category=${encodeURIComponent(category)}&limit=${QUEUE_PAGE_LIMIT}&offset=${offset}`,
+          { credentials: 'include' }
+        );
         if (!r.ok) throw new Error('Failed to load');
-        return r.json();
-      })
-      .then(data => {
-        setBlunders(data.blunders || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
+        const data = await r.json();
+        const page = data.blunders || [];
+        accumulated = accumulated.concat(page);
+        total = data.total ?? accumulated.length;
+
+        keepGoing = shouldContinuePaging({
+          pageLength: page.length,
+          limit: QUEUE_PAGE_LIMIT,
+          accumulated: accumulated.length,
+          total,
+        });
+        offset += QUEUE_PAGE_LIMIT;
+      }
+
+      setBlunders(accumulated);
+      setLoading(false);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
   }, [session, category]);
 
   useEffect(() => {
@@ -73,7 +97,15 @@ export function MistakesListScreen({ go, goBack, category }) {
     <div style={{ background: 'var(--bg-home)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
       <TopBar
         title={t('mistakes.pattern.' + category)}
-        onBack={() => go('mistakes')}
+        onBack={() => {
+          // Task 1b: identical push-instead-of-pop bug as CategoryListScreen (see
+          // categoryListBack.js) — this screen was reached in-app by a `go('mistakeDetail', ...)`
+          // push from CategoryListScreen, so Back must pop, not push a fresh contextless
+          // '/mistakes'. Reuses the same decision function; do not duplicate it.
+          if (resolveCategoryListBack({ navContext }) === 'home') { go('home'); return; }
+          goBack();
+        }}
+        onLogoClick={() => go('home')}
         meta={
           blunders.length === 1
             ? t('mistakes.detail.meta_count', { count: blunders.length })
@@ -202,7 +234,7 @@ export function MistakesListScreen({ go, goBack, category }) {
               return (
                 <button
                   key={b.id}
-                  onClick={() => go('blunderDetail', { blunderNavList: filteredBlunders, index: i, mistakeContext: 'list', mistakeSource: null })}
+                  onClick={() => go('blunderDetail', { id: filteredBlunders[i].id, blunderNavList: filteredBlunders, index: i, mistakeContext: 'list', mistakeSource: null })}
                   style={{
                     display: 'flex',
                     gap: 12,
@@ -235,6 +267,28 @@ export function MistakesListScreen({ go, goBack, category }) {
                         </div>
                       )}
                       <SeverityMeter score={b.severity} />
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        borderRadius: 10,
+                        padding: '1px 8px',
+                        background: 'var(--card)',
+                        boxShadow: 'var(--shadow-sm)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: 'var(--ink-soft)',
+                        fontFamily: 'inherit',
+                      }}>
+                        <span style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: (b.board_state || '').length % 2 === 0 ? 'var(--disc-green)' : 'var(--disc-gray)',
+                          flexShrink: 0,
+                        }} />
+                        {(b.board_state || '').length % 2 === 0 ? 'Green' : 'Gray'}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
                       {new Date(b.created_at).toLocaleDateString()}

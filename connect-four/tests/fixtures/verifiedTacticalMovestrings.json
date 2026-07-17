@@ -1,0 +1,184 @@
+{
+  "_meta": {
+    "description": "Shared regression baseline of solver-verified tactical movestrings (Allen V1-V5, Allis 9 rules, Allen T4 Case A/B, verified double_threat boards). Consolidated per spec 044 (Epic 4) T002 from .claude/projects/-Users-elsonidoq-prog-cuatro-en-linea/memory/reference_verified_tactical_movestrings.md and docs/knowledge-base/README.md. Consumed by later batches (US3 FR-015 case-space validation, US5 SC-006 regression check).",
+    "coordinateConvention": "All movestring digits in this file are 0-indexed (0-6) per project convention (CLAUDE.md). Several source movestrings in the memory table were originally written 1-indexed (contain digit '7' or described using 1-indexed column prose) and have been converted here — see each entry's `sourceNote`.",
+    "verificationMethod": "Re-checked in this batch via `./visualize_board.sh <movestring>` and compared against the memory table's structural description (major-threat cells, parity row, solver scores). This is a visual/structural cross-check, not a fresh independent solver re-derivation via TOOLS/optimal_line.mjs — that deeper re-verification is reserved for spec 044 US5 tasks T031-T036, which run before any V1/V2/V4/V5/T4-Case-B *operator* is implemented.",
+    "doNotCopyUncritically": "Per research.md R4: entries flagged verified=false or status=PENDING must NOT be treated as ground truth without the US5 backfill/reconciliation tasks (T031-T036) running first."
+  },
+  "allenVRules": [
+    {
+      "id": "v1",
+      "movestring": "16213263616",
+      "winner": "Red (P1/green)",
+      "keyStructure": "Red major threats at col0row0, col4row0, col6row4 (0-indexed) — 3 Red / 0 Black uncancelled odd-row threats; Black to move; all columns score -15 (Red wins). No T7 needed.",
+      "kbEntry": "docs/knowledge-base/allen-v1.md",
+      "kbStatus": "RECONCILED: backfilled + solver-verified into the KB by spec 044 US5 T031 (Batch 3).",
+      "sourceNote": "SUPERSEDES the memory table's `44452556366`, which failed independent solver verification in T031 (visualize_board.sh shows only 2 Red + 1 Black threats, and its own prior keyStructure referenced an invalid 1-indexed `col7` — see reference_verified_tactical_movestrings.md's stale-flag UPDATE block). Replaced with this self-constructed, solver-confirmed board matching the V1 structural claim; now the KB's worked_example. verified via direct c4solver query + visualize_board.sh.",
+      "verified": true
+    },
+    {
+      "id": "v2",
+      "movestring": "616253",
+      "winner": "Black (P2/gray)",
+      "keyStructure": "col1r1(O) + col5r1(O) odd threats; Red 0 threats; all scr=-18",
+      "kbEntry": "docs/knowledge-base/allen-v2.md",
+      "kbStatus": "worked_examples.movestring is PENDING in the KB as of this batch (backfill is spec 044 US5 T032, not done in this batch)",
+      "sourceNote": "Memory table's movestring '727364' is 1-indexed (contains digit 7, invalid for this project's 0-6 column range) — CONVERTED by subtracting 1 from every digit to '616253'. Re-checked via visualize_board.sh: matches described col1r1(O)+col5r1(O), scr=-18 everywhere. Converted value used, NOT the memory table's raw string.",
+      "verified": true
+    },
+    {
+      "id": "v3",
+      "movestring": "333330211113120000012222",
+      "winner": "Red (P1/green)",
+      "keyStructure": "0-indexed movestring; 24 discs, Red (Green, first player) to move — see KB entry for full structure",
+      "kbEntry": "docs/knowledge-base/allen-v3.md",
+      "kbStatus": "solver_verified 2026-07-02, already backfilled in the KB — used the KB's own worked_examples movestring directly instead of the memory table's '77273746' (which is 1-indexed; its 0-indexed conversion '66162635' was independently cross-checked here too and also matches col1r1(X)/col5r1(X)/col7r5(O) with scr=[17,-17,-17,-17,17,-17,16], but the KB's already-backfilled example is treated as canonical per research.md R4 — KB over memory when both exist).",
+      "verified": true,
+      "alternateVerifiedMovestring": {
+        "movestring": "66162635",
+        "note": "0-indexed conversion of memory's '77273746'; visually re-confirmed but not the canonical KB entry"
+      }
+    },
+    {
+      "id": "v4",
+      "movestring": "1023013210206162",
+      "winner": "Black (P2/gray)",
+      "keyStructure": "col4r4(O) even threat; no odd threats anywhere; scr all negative",
+      "kbEntry": "docs/knowledge-base/allen-v4.md",
+      "kbStatus": "worked_examples.movestring is PENDING in the KB as of this batch (backfill is spec 044 US5 T034, not done in this batch)",
+      "sourceNote": "Memory table's movestring '2134124321317273' is 1-indexed (contains digit 7) — CONVERTED by subtracting 1 from every digit to '1023013210206162'. Re-checked via visualize_board.sh: matches described col4r4(O), all scr negative. Converted value used, NOT the memory table's raw string.",
+      "verified": true
+    },
+    {
+      "id": "v5",
+      "movestring": "31243532145314235244552",
+      "winner": "Draw",
+      "keyStructure": "col1r3(X) + col7r5(O) odd threats -> T7 cancels both; all scr=0",
+      "kbEntry": "docs/knowledge-base/allen-v5.md",
+      "kbStatus": "worked_examples.movestring is PENDING in the KB as of this batch (backfill is spec 044 US5 T035, not done in this batch)",
+      "sourceNote": "Memory table's movestring '42354643256425346355663' is 1-indexed (as-is it visualizes to a DIFFERENT, non-matching board with scr=-2 and major threat col2r3(X) only) — CONVERTED by subtracting 1 from every digit to '31243532145314235244552'. Re-checked via visualize_board.sh: matches described col1r3(X)+col7r5(O), all scr=0. Converted value used, NOT the memory table's raw string.",
+      "verified": true
+    }
+  ],
+  "allenT4": [
+    {
+      "id": "t4-case-a",
+      "movestring": "0004111444466662552525506",
+      "outcome": "Yellow (P2/gray) wins; all scr negative",
+      "keyStructure": "Red has two major threats at col4 row3 AND col4 row5 (both odd, SAME column); no cumulative V1/V3 bonus for same-parity threats in one column",
+      "kbEntry": "docs/knowledge-base/allen-t4.md",
+      "kbStatus": "solver_verified 2026-05-17, already in the KB",
+      "sourceNote": "Used the KB's own 0-indexed worked_examples movestring directly. Memory's own quoted movestring for this position ('1115222555577773663636617') is explicitly 1-indexed and invalid for this project's SEQUENCE_POSITION_RE — do not use it; see memory's own merged note on this trap.",
+      "verified": true
+    },
+    {
+      "id": "t4-case-b",
+      "movestring": "33104201250010221152",
+      "outcome": "Red (P1/green) wins; col4 (1-indexed, col3 0-indexed) scores +11 — Red claims the row-3 (Allen, 0-indexed row2) threat immediately, before Black can use its row-5 (Allen, 0-indexed row4) threat in the same column",
+      "kbEntry": "docs/knowledge-base/allen-t4.md",
+      "kbStatus": "RECONCILED 2026-07-11 (spec 044 US5 T036): KB was correct, memory was stale. Independently re-ran a direct solver query against this exact movestring — scores [-5,-10,-10,11,-5,-10,-10], mover=Red, matching the KB's own worked_examples description verbatim (col4 scores +11). The KB's solver_verified: 2026-05-17 stamp is confirmed accurate.",
+      "sourceNote": "Reconciliation complete. reference_verified_tactical_movestrings.md has been corrected to match (memory's stale 'still PENDING' label for T4 Case B removed) — the KB, not memory, was the correct source (research.md R4). The T4-Case-B operator (T044, Batch 4) may now proceed once its own backfill gate (T037) is otherwise satisfied.",
+      "verified": true,
+      "status": "RECONCILED"
+    }
+  ],
+  "allisRules": [
+    {
+      "id": "claimeven-boardwide",
+      "movestring": "2364354354354256",
+      "keyStructure": "all par=E, [X] col2/col6 row4, all scr=-13",
+      "kbEntry": "docs/knowledge-base/allis-claimeven.md",
+      "sourceNote": "Already 0-indexed in memory table (max digit 6). Re-checked via visualize_board.sh: scr=-13 across all columns, matches.",
+      "verified": true
+    },
+    {
+      "id": "claimeven-singlepair",
+      "movestring": "6001122",
+      "keyStructure": "Claimeven col4 rows1-2; [X] col4 row2",
+      "kbEntry": "docs/knowledge-base/allis-claimeven.md",
+      "sourceNote": "Memory table's movestring '7112233' is 1-indexed (contains digit 7) — CONVERTED to '6001122'. Re-checked via visualize_board.sh: major threat col4 row2 (X) present, matches description. Converted value used.",
+      "verified": true
+    },
+    {
+      "id": "baseinverse",
+      "movestring": "2233",
+      "keyStructure": "(col1,r1)+(col4,r1) in (x) window cols1-4 row1; structural (col4 scr=18)",
+      "kbEntry": "docs/knowledge-base/allis-baseinverse.md",
+      "sourceNote": "Already 0-indexed in memory table. Re-checked via visualize_board.sh: col4 scr=18 matches (note: this is a structural demo position, not Black-winning — per memory's own caveat).",
+      "verified": true
+    },
+    {
+      "id": "vertical",
+      "movestring": "41424",
+      "keyStructure": "Vertical col4 rows4-5 (upper=r5 odd); [X] col4 row4; scr<=0",
+      "kbEntry": "docs/knowledge-base/allis-vertical.md",
+      "sourceNote": "Already 0-indexed in memory table. Re-checked via visualize_board.sh: major threat col5 row4 (X) [GT], all other scr<=0, matches (memory's '1-indexed col4' prose maps to this project's col5 — a labeling-convention note, not a movestring error).",
+      "verified": true
+    },
+    {
+      "id": "aftereven",
+      "movestring": "60011",
+      "keyStructure": "Red cols1-2 row2; Claimeven col3/col4 rows1-2; structural (col2 scr=+2)",
+      "kbEntry": "docs/knowledge-base/allis-aftereven.md",
+      "sourceNote": "Memory table's movestring '71122' is 1-indexed (contains digit 7) — CONVERTED to '60011'. Re-checked via visualize_board.sh: col2 scr=+2 matches. Converted value used.",
+      "verified": true
+    },
+    {
+      "id": "lowinverse-highinverse",
+      "movestring": "34564061426",
+      "keyStructure": "col4+col6 Vertical pairs rows2-3 (upper=r3 odd); (x) cols4-7 row3; scr<=0. Shared position for both lowinverse and highinverse (col4+col6 triple rows2,3,4).",
+      "kbEntry": "docs/knowledge-base/allis-lowinverse.md, docs/knowledge-base/allis-highinverse.md",
+      "sourceNote": "Memory table's movestring '45675172537' is 1-indexed (contains digit 7) — CONVERTED to '34564061426'. Re-checked via visualize_board.sh: all scr<=0, matches. Converted value used.",
+      "verified": true
+    },
+    {
+      "id": "before",
+      "movestring": "36666",
+      "keyStructure": "\"/\" diag col3-6 rows1-4; Claimeven col4 rows1-2 + Vertical col5 rows2-3; scr<=0",
+      "kbEntry": "docs/knowledge-base/allis-before.md",
+      "sourceNote": "Already 0-indexed in memory table. Re-checked via visualize_board.sh: all scr<=0, matches.",
+      "verified": true
+    },
+    {
+      "id": "baseclaim",
+      "movestring": "263223362",
+      "keyStructure": "structural: horiz row1 cols1-4 has Red at col2r1+col3r1; diag col5-col2 rows1-4 has Red at col3r3+col2r4; scr<=0",
+      "kbEntry": "docs/knowledge-base/allis-baseclaim.md",
+      "sourceNote": "Already 0-indexed in memory table (max digit 6). Re-checked via visualize_board.sh: all scr<=0, matches.",
+      "verified": true
+    },
+    {
+      "id": "specialbefore",
+      "movestring": "2365555",
+      "keyStructure": "\"/\" diag Before group; col3r2 directly playable; col4r3 Vertical; scr<=0",
+      "kbEntry": "docs/knowledge-base/allis-specialbefore.md",
+      "sourceNote": "Already 0-indexed in memory table. Re-checked via visualize_board.sh: all scr<=0, matches.",
+      "verified": true
+    }
+  ],
+  "doubleThreatVerified": [
+    {
+      "id": "double-threat-1",
+      "movestring": "41442625312235115445550126400",
+      "player": "P1 (Green)",
+      "detectorCells": ["c1r4", "c4r3"],
+      "sourceNote": "detector-verified 2026-07-08 via detectDoubleThreat in classifier.js (already 0-indexed movestring, verified_source of truth is the production detector, not this table)",
+      "verified": true
+    },
+    {
+      "id": "double-threat-2",
+      "movestring": "3333364101252113121524",
+      "player": "P2 (Gray)",
+      "detectorCells": ["c5r3", "c7r2"],
+      "sourceNote": "detector-verified 2026-07-08 via detectDoubleThreat in classifier.js",
+      "verified": true
+    },
+    {
+      "id": "open-three-not-double-threat-trap",
+      "movestring": "33243432244",
+      "note": "Gray's open three on row 2 has both end cells floating above empty columns (not gravity-top) -> detectDoubleThreat returns matched:false for BOTH players. Negative fixture: never eyeball 'two threat cells' as a double threat.",
+      "expectedMatched": false,
+      "verified": true
+    }
+  ]
+}

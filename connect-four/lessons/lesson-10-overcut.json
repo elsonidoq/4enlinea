@@ -1,0 +1,196 @@
+{
+  "id": "overcut",
+  "title": "The Overcut",
+  "free": false,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Gray has a threat above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column should Gray play?",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a mid-game position where Gray has a horizontal major threat completing at col C row R (e.g., row 3) and Green has a horizontal major threat completing at col C row R-1 (e.g., row 2 — directly below Gray's threat). The column has an odd number of empty cells remaining and it is Gray's turn. Do NOT yet explain what happens — just show the structural pattern: Gray's threat above, Green's threat below, same column. Mark Gray's threat cell with 'tg' and Green's threat cell with 'td'. Legend: 'tg' = Gray's upper threat, 'td' = Green's lower threat (same column).</board instructions>\n\nThe overcut setup: Gray's major threat sits directly above Green's major threat in the same column, and it is Gray's turn. Before reading on — think about what happens when Gray plays that column."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Gray plays col C. The disc lands on Green's threat cell at row R-1 — blocking Green. The next empty cell in that column is now row R: Gray's threat fires immediately.",
+          "mood": "happy"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show the same position as slide 1 but now show the result AFTER Gray has played col C. Gray's disc lands at row R-1 (blocking Green's threat cell). Row R is now the top of the stack — Gray's threat is immediately live. Mark the Gray disc just placed at row R-1 with 'td' overlay ('Blocks Green's threat') and the now-live Gray threat cell at row R with 'tg' ('Gray's threat — now active'). Legend: 'td' = Gray's disc blocks Green, 'tg' = Gray's threat now fires (overcut).</board instructions>\n\nOne move does two things: (1) Gray's disc lands on Green's threat cell, physically blocking it; (2) row R is now the next available cell in the column, making Gray's threat immediately live. Green must now respond to Gray's threat — but Gray already forced the situation. This is the overcut: a single move that defends and attacks simultaneously.\n\nThe odd-column condition is what makes it work: Gray enters the column first, so Gray's disc lands at row R-1 rather than Gray's opponent reaching it first."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Same structural setup — but now the column has an even number of empty cells. Green enters first. What changes?",
+          "mood": "sad"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show the same structural position as slides 1–2 (Gray threat at row R, Green threat at row R-1, same column) but change the column to have an even number of empty cells and show it as Green's turn to enter the column first. Green plays col C, Green's disc lands at row R-1 — completing Green's own threat. Mark Green's disc at row R-1 with 'win' ('Green wins — completes their threat'). Gray's threat at row R is now irrelevant. Legend: 'win' = Green completes their threat (Gray's overcut failed).</board instructions>\n\nEven empty cells, Green's turn to enter: Green plays first into the column and lands on row R-1 — completing Green's own threat. Gray never gets to use the overcut. The mechanism is the same as Z-Threats: the parity of the column determines who gets the last word. For the overcut to work, you need an odd number of empty cells in the column AND it must be your turn to enter first."
+    },
+    {
+      "boardSpec": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "You land on row R-1 and block Green — but Green responds by playing col C again, this time at row R. That is Green's threat too. Double-check that row R belongs only to you.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [],
+      "legendItems": [],
+      "infoProse": "<board instructions>Show a position similar to slide 1 (Gray upper threat at row R, Green lower threat at row R-1, odd-height column, Gray's turn) BUT the cell at row R is marked as a [*] cell — both Gray AND Green have a major threat passing through it. Gray plays col C, blocks Green's row R-1 threat — but now Green plays col C again, landing at row R and completing Green's own threat through that cell. Mark the shared threat cell at row R with a special 'both players' overlay (or use two overlapping markers). Label it 'Shared threat cell — belongs to both!'. Legend: mixed overlay = Both players have a major threat through this cell (overcut backfires here).</board instructions>\n\nBefore committing to an overcut, verify that the cell at row R is exclusively your threat. If both players have a major threat passing through that cell, your opponent can respond by playing into col C themselves — landing at row R and completing their own threat through the same cell. The overcut only works cleanly when row R belongs to you alone."
+    }
+  ],
+  "socratic": {
+    "goalPrompt": "Gray's threat sits directly above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column wins?",
+    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat completing at col C at an odd-indexed row R, and Red has a horizontal major threat completing in the same col C at the even-indexed row R-1 directly below. Col C must have an odd number of empty cells and it must be Yellow's turn. Row R belongs exclusively to Yellow — Red has no threat through that cell. Mark Yellow's threat cell at row R with 'tg' and Red's threat cell at row R-1 with 'td'. Yellow wins by playing col C: the disc lands at R-1 (blocking Red's threat), and row R immediately becomes the next available cell, turning Yellow's threat into a direct check. No same-parity complications or shared-cell gotchas — keep the position clean so the active-forcing mechanic is the only thing at work.",
+    "boardSpec": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "correctCol": 3,
+    "messages": {
+      "ask": [
+        {
+          "text": "I'm going to make a mistake here. See if you can punish it.",
+          "mood": "think",
+          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! You saw it.",
+          "mood": "happy",
+          "text_es": "¡Exacto! Lo viste."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Look for an even square directly above one of my discs.",
+          "mood": "think",
+          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+        }
+      ]
+    }
+  },
+  "confirmationCategory": "overcut",
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "45c8f60d-14d6-4bc7-bff7-b63c4dd5e6ce",
+      "moveString": "322233353155505310161125",
+      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPredicateType": "overcut",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 2,
+            "role": "neutralised_threat",
+            "column": 4
+          },
+          {
+            "row": 3,
+            "role": "major_threat",
+            "column": 4
+          }
+        ]
+      },
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "b87536d6-5fca-4b06-b246-d3755d5c2702",
+      "moveString": "413520424420116155020",
+      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPredicateType": "overcut",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 3,
+            "role": "neutralised_threat",
+            "column": 3
+          },
+          {
+            "row": 4,
+            "role": "major_threat",
+            "column": 3
+          }
+        ]
+      },
+      "correctCol": null,
+      "userPlayer": 2
+    }
+  ],
+  "order": 7
+}

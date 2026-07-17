@@ -1,40 +1,78 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AnnotatedText } from './AnnotatedText.jsx';
-import { parseAnnotatedText, zoneToOverlays, regexFallbackParse, getZoneColor } from '../lib/annotatedText.js';
+import { KbTermPopup } from './KbTermPopup.jsx';
+import { parseAnnotatedText, zoneToOverlays, zoneToWindowGroups, regexFallbackParse, getZoneColor } from '../lib/annotatedText.js';
+import { KB_TERM_LESSON } from '../lib/kbTermLesson.js';
+import { useStore } from '../store/ProfileStore.jsx';
 
 /**
- * Full wrapper: parses zone-annotated text, manages activeZones state,
- * and emits zhZones for Board sync via onHighlightsChange.
+ * Full wrapper: parses zone- and term-annotated text, manages activeZones state,
+ * emits zhZones for Board sync via onHighlightsChange, and handles
+ * KB term taps with a KbTermPopup.
  *
  * Use this when a Board is in the render tree and zone highlights
  * should sync between the text and the board.
  *
  * Props:
- *   text                  — raw LLM explanation (may contain [zone:] tags)
+ *   text                  — raw LLM explanation (may contain [zone:] and [term:] tags)
+ *   termsMap              — { [kbId]: shortSummary } from the API response
  *   userMajorThreats      — Array<{c, r}>  for "tg" zone resolution
  *   opponentMajorThreats  — Array<{c, r}>  reserved for future "tg-opp"
  *   onHighlightsChange    — (zhZones: Array<{color, cells}>) => void  parent wires to Board.zhCells
  *   className             — optional CSS class
  *   children              — rendered after the explanation (best-line chips, flag button, etc.)
+ *   navigate              — (screenKey, params) => void  for CTA navigation from popup
  */
 export function AnnotatedExplanation({
   text,
+  termsMap,
   userMajorThreats = [],
   opponentMajorThreats = [],
   onHighlightsChange,
   className,
   children,
+  navigate,
 }) {
+  const store = useStore();
   const containerRef = useRef(null);
 
-  const { cleanText, zones } = useMemo(() => {
+  const { cleanText, zones, terms: parsedTerms } = useMemo(() => {
     const primary = parseAnnotatedText(text);
     // Fall back to regex-based detection for old cache entries without [zone:] tags.
-    if (primary.zones.length === 0 && text) {
+    if (primary.zones.length === 0 && primary.terms.length === 0 && text) {
       return regexFallbackParse(text);
     }
     return primary;
   }, [text]);
+
+  // ── KB term popup state ────────────────────────────────────────────────────
+  const [termPopup, setTermPopup] = useState(null); // { kbId, summary, rect } | null
+  const [lessonProgress, setLessonProgress] = useState({}); // { lessonId: status }
+
+  // Load lesson progress on mount so we can check completion on term tap.
+  useEffect(() => {
+    store?.getLessonProgress?.()
+      .then(rows => {
+        const map = {};
+        if (Array.isArray(rows)) {
+          for (const r of rows) {
+            if (r.lessonId) map[r.lessonId] = r.status;
+          }
+        }
+        setLessonProgress(map);
+      })
+      .catch(() => {});
+  }, [store]);
+
+  const handleTapTerm = useCallback((kbId, rect) => {
+    const summary = termsMap?.[kbId];
+    if (!summary) return;
+    setTermPopup({ kbId, summary, rect });
+  }, [termsMap]);
+
+  const handleClosePopup = useCallback(() => {
+    setTermPopup(null);
+  }, []);
 
   // zones is computed above (useMemo runs before useState in hook order),
   // so the lazy initializer can safely read it.
@@ -53,7 +91,8 @@ export function AnnotatedExplanation({
     for (const spec of specsToRender) {
       const color = getZoneColor(spec);
       const cells = zoneToOverlays(spec, userMajorThreats, opponentMajorThreats);
-      if (cells.length > 0) result.push({ color, cells });
+      const windows = zoneToWindowGroups(spec);
+      if (cells.length > 0 || (windows && windows.length > 0)) result.push({ color, cells, windows });
     }
     return result;
   }, [activeZones, hoveredSpec, zones, userMajorThreats, opponentMajorThreats]);
@@ -119,12 +158,36 @@ export function AnnotatedExplanation({
       <AnnotatedText
         cleanText={cleanText}
         zones={zones}
+        terms={parsedTerms}
         activeZones={activeZones}
         onToggleZone={toggleZone}
         onHoverZone={setHoveredSpec}
         onClearAll={clearAll}
+        onTapTerm={handleTapTerm}
       />
       {children}
+
+      {termPopup && (() => {
+        const entry = KB_TERM_LESSON[termPopup.kbId];
+        const lessonId = entry?.lessonId;
+        const practiceCategory = entry?.practiceCategory;
+        const lessonCompleted = lessonId
+          ? lessonProgress[lessonId] === 'completed'
+          : false;
+
+        return (
+          <KbTermPopup
+            kbId={termPopup.kbId}
+            summary={termPopup.summary}
+            lessonId={lessonId}
+            practiceCategory={practiceCategory}
+            lessonCompleted={lessonCompleted}
+            rect={termPopup.rect}
+            onClose={handleClosePopup}
+            navigate={navigate || (() => {})}
+          />
+        );
+      })()}
     </div>
   );
 }

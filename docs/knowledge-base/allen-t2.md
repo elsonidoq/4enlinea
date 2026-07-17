@@ -27,6 +27,11 @@ statement: |
   is the adjacent-row sub-case of cross-parity, complementary to T1 which covers
   same-player adjacent pairs).
 
+short_summary: |
+  When opposite-color major threats in the same column have opposite row parity, the
+  lower threat undercuts the upper one because gravity fills bottom-up, neutralizing
+  the higher threat.
+
 preconditions:
   - "Two major threats exist in the same column, belonging to opposite players."
   - "The two threats are at rows with opposite parity (one odd, one even)."

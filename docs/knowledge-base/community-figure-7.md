@@ -18,6 +18,16 @@ statement: |
   zugzwang, not a direct fork: at least one threat must be above gravity (not
   immediately playable) so the opponent cannot simply block both in sequence.
 
+short_summary: |
+  A five-disc "7"-shaped configuration that generates two major threats in the same
+  column; the opponent cannot block both because one is above gravity, making it a
+  zugzwang trap rather than a direct fork.
+short_summary_es: |
+  Figura 7: una configuración de cinco fichas con forma de "7" que genera dos amenazas
+  mayores en la misma columna; el rival no puede bloquear las dos porque una está por
+  encima de la gravedad (gravity-top), así que es una trampa de zugzwang y no una
+  bifurcación directa.
+
 preconditions:
   - "Player P owns all five cells: diagonal arm {(x,y), (x+1,y+1), (x+2,y+2)} and horizontal arm {(x,y+2), (x+1,y+2), (x+2,y+2)}, with (x+2,y+2) as the shared hinge."
   - "Threat cells (x+3,y+2) [horizontal extension] and (x+3,y+3) [diagonal extension] are both in column x+3 — the same-column property."
@@ -95,7 +105,7 @@ false_positives:
       Additionally, Yellow wins here (solver: col3 = +15 for Yellow), so the position
       is a Red loss, confirming the shape does not constitute a functional Figure-7.
     notes: |
-      From reference_tactical_pattern_definitions.md memory: "The far arm end (x+4,y+2)
+      Hard-derived invariant (see `known_limitations` below): "The far arm end (x+4,y+2)
       is NOT a valid completing cell — it creates a horizontal-extension above-gravity
       threat that passes the gravity check but is not a figure-7 trap." Documented
       2026-05-17 as the canonical far-arm-end false positive.
@@ -124,7 +134,7 @@ false_positives:
 
 known_limitations:
   - "Far-arm-end exclusion: (x+4,y+2) is not a valid completing cell for the Figure-7 predicate. Detectors that check 'any cell in col x+4' will fire false positives. Only (x+3,y+2) and (x+3,y+3) are the Figure-7 threat cells."
-  - "Gravity-top count must be ≤ 1. Two gravity-top threats = direct fork; the Figure-7 zugzwang mechanism does not apply. See hard-derived invariant in reference_tactical_pattern_definitions.md."
+  - "Gravity-top count must be ≤ 1. Two gravity-top threats = direct fork; the Figure-7 zugzwang mechanism does not apply. Empirically derived during detector implementation (see 'Hard-derived invariants' note below)."
   - "At least one above-gravity threat is required. If both threats are gravity-top (pure fork), classify as plain double-threat, not Figure-7."
   - "Hinge cell (x+2,y+2) must be owned by the player. If the hinge is empty (Incomplete-7) or opponent-owned (both arms broken), the Figure-7 predicate does not fire."
   - "Community term: not found in Allis, Tromp, or Allen. The geometry and forced-win logic are independently verified but no peer-reviewed source names this pattern 'Figure-7'."
@@ -150,5 +160,5 @@ From `docs/connect-four-strategy-reference.md` §7.2:
 ## Notes
 
 - **Why same-column matters:** The Figure-7's forced win relies on the two threats occupying adjacent rows in the same column. Blocking the lower immediately makes the upper a Major Direct threat (height increases by one). This is structurally distinct from a two-column fork, where the opponent can choose which threat to block first.
-- **Hard-derived invariants (from reference_tactical_pattern_definitions.md):** Three invariants were empirically derived during detector implementation and are not obvious from the shape alone: (1) far-arm-end exclusion, (2) gravity-top count ≤ 1, (3) above-gravity requirement. These belong in the detector's filter logic, not just in documentation.
+- **Hard-derived invariants:** Three invariants were empirically derived during detector implementation and are not obvious from the shape alone: (1) far-arm-end exclusion, (2) gravity-top count ≤ 1, (3) above-gravity requirement (all three listed under `known_limitations` above). These belong in the detector's filter logic, not just in documentation.
 - **Canonical shape variants:** Mirror-7, Inverted-7, and Incomplete-7 are documented in §7.2. Each requires a separate formal predicate instance.

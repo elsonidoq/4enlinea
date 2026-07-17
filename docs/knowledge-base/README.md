@@ -10,6 +10,8 @@ This KB documents **complete strategic patterns**: what a tactic looks like when
 
 Machine-checkable entries for Connect Four strategic concepts (transformation rules, victory rules, tactical patterns, strategic constructions, and project-local heuristics). The primary consumer is Claude Code during implementation work — when building a trap detector, a pattern recognizer, or any module that reasons about strategic concepts, this directory is the source of truth.
 
+> **Color terms:** entries mix Red/Yellow/Green/Gray/White/Black (faithful to Allen 2010 and Allis 1988). There are only **two** players — decode every color word via the canonical player-alias table in the project root `CLAUDE.md` ("Player color aliases"). Key traps: **Black = second player** (both authors); **White = first player** (Allis).
+
 Compared with `docs/connect-four-strategy-reference.md` (long-form prose reference), entries here are:
 
 - **Atomic.** One concept per file, identified by a stable slug.
@@ -28,7 +30,7 @@ Markdown with YAML frontmatter. Frontmatter holds structured fields; the body ho
 - `docs/connect-four-strategy-reference.md` — long-form prose. Each section that has a corresponding KB entry should link to it via `→ KB: [allen-t4](knowledge-base/allen-t4.md)`.
 - `docs/knowledge-base/scripts/` — (future) validation script that parses frontmatter, re-runs solver checks, and flags entries whose `last_verified` date is older than the source PDF mtime.
 
-## Current entries (as of 2026-05-17)
+## Current entries (as of 2026-07-03)
 
 **Allen transformation rules (T1–T7):** allen-t1, allen-t2, allen-t3, allen-t4, allen-t5, allen-t6, allen-t7
 
@@ -36,11 +38,17 @@ Markdown with YAML frontmatter. Frontmatter holds structured fields; the body ho
 
 **Allen tactical patterns:** allen-j-configuration
 
+**Allen opening theory (Ch. 9, 12, 13):** allen-opening-principles, allen-opening-tables, allen-5-4-opening, allen-3-4-opening, allen-d3-d4-opening, allen-candlesticks-opening, allen-third-row-gambit
+
 **Allis nine strategic rules:** allis-claimeven, allis-baseinverse, allis-vertical, allis-aftereven, allis-lowinverse, allis-highinverse, allis-baseclaim, allis-before, allis-specialbefore
 
-**Project-local heuristics (community- / derived-):** community-z-threat, community-ghost-threat, community-parity-trap, community-claimodd, community-figure-7, community-sextuple-threat, derived-parity-formula, derived-dead-space-parity, derived-lost-position
+**Project-local heuristics (community- / derived-):** community-z-threat, community-ghost-threat, community-parity-trap, community-figure-7, community-sextuple-threat, community-center-control, derived-parity-formula, derived-dead-space-parity, derived-lost-position, derived-parity-aligned-threat
 
-**Status:** T1–T7 and V1–V5 have verbatim quotes and formal predicates. All nine Allis rules have verbatim quotes and formal predicates. All 8 project-local entries created 2026-05-17 with formal predicates; figure-7 and claimodd have solver-verified worked examples; remaining entries have PENDING worked examples. T4 is the only template-quality entry (all fields complete, fully solver verified).
+**Status:** T1–T7 and V1–V5 have verbatim quotes and formal predicates. All nine Allis rules have verbatim quotes and formal predicates. All 7 project-local entries created 2026-05-17 with formal predicates; figure-7 has solver-verified worked examples; remaining entries have PENDING worked examples. T4 is the only template-quality entry (all fields complete, fully solver verified). (community-claimodd was removed 2026-06-17 — the implementation was based on an incorrect reading of the WeakC4 source.)
+
+The **Allen opening-theory** entries (seven as of 2026-07-04) were added 2026-07-03 (from Allen 2010 Ch. 9/12/13), with `allen-d3-d4-opening` and a round of corrections added 2026-07-04. Each carries verbatim quotes and formal predicates.
+
+**2026-07-04 corrections (all solver-verified):** (1) New entry `allen-d3-d4-opening` (Allen p.180-181) — the first player takes both central key cells D3+D4 (0-indexed col3 rows 2&3) early, a comparatively easy first-player win; primary example `3332223` (D4 as disk 7), premium "only one move to win" example `3332223362` (Diagram 231, unique move = 0-indexed col 1). (2) `allen-candlesticks-opening` — the previously-noted "full Diagram 236 line" is `333331111555515` (b5 then F5); the plausible-looking `333331111155555` (wrong fill order) is actually a SECOND-player win, now a false_positive — candlesticks is a family (2-column/3-column/mirror) and the winning silhouette is necessary but NOT sufficient (fill-order parity decides). (3) `allen-5-4-opening` — added the 5-1 stem `3333341` ("DdDdDeB", Allen p.177). (4) `allen-3-4-opening` — corrected a mislabeled false_positive: `3332223` (D4 as disk 7) is a WIN (the D3-D4 opening), not a blunder; the genuine late-D4 blunder is `333222266644203` (Diagram 225, playing D4 instead of the only winning move G4 -> draw). Worked examples verified against `c4solver` on 2026-07-03 via `visualize_board.sh` (single-position `scr` row) and `reason_engine/TOOLS/optimal_line.mjs` (plays both sides optimally to terminal and reports the winner). **All primary AND secondary examples are now solver-verified** — there are no remaining PENDING opening examples. Primary: allen-opening-principles (`333334444`, empty board), allen-opening-tables (empty board, `333334444`), allen-5-4-opening (`333334444`), allen-3-4-opening (`3332222`), allen-candlesticks-opening (`3333311115555`), allen-third-row-gambit (`3265533353553111` — solver confirms Allen's unique winning move E1/col 4 exactly). Secondary (variant/continuation) lines, verified via `optimal_line.mjs`: 5-1 opening (`333334140222212`), 3-4 Diagram 225 stem after 9.G2 (`333222266`), Candlesticks Diagram 237 (`33333111115`), Third-Row Gambit continuation after 17.E1 (`32655333535531114110`) — each solves to a First-Player win. allen-opening-tables intentionally does NOT transcribe the full Ch. 9 grid (OCR of the printed table is unreliable); it records solver-verified anchor results plus the cleanly-OCR'd Opening-Lottery sets and points to the book for the exhaustive grid. Not yet done: a per-ply *forced-line* checker (would confirm Allen's "N of M moves uniquely forced" prose by asserting move-uniqueness at each winner ply) — a ~40-line custom tool reusing the `optimal_line.mjs` scaffolding; the worked examples do not require it.
 
 ## Schema
 
@@ -56,7 +64,8 @@ Every entry MUST have every field. Use `null` (not omission) when a field genuin
 | `source.doc` | string | Document identifier (e.g., `allen_2010`, `allis_1988`, `tromp_c4_resources`, or `project:docs/...` for project-local). |
 | `source.location` | string | Chapter/section/page (e.g., `Ch. 4, p. 98`). |
 | `source.verbatim_quote` | string (multi-line) | **Exact** wording from the source, including any italics noted with `_..._`. Not paraphrased. If the source uses diagrams, describe them in a `notes:` field; do not summarize them into this field. |
-| `statement` | string | One-paragraph restatement for LLM consumption. Keep declarative and unambiguous. |
+| `short_summary` | string | 1-2 sentence plain-language definition of the concept. Shorter and simpler than `statement` — aimed at learners, not LLMs. Sent to the client in the `terms` map of `/api/explain-move-llm` responses. Only entries with a real `.md` file AND a populated `short_summary` are eligible to appear in KB term popups. `statement` is LLM-prompt-only (never sent to the client); `short_summary` is client-facing. Use YAML literal block scalar: `short_summary: \|`. |
+| `statement` | string | One-paragraph restatement for LLM consumption. Keep declarative and unambiguous. Never sent to the client — `short_summary` serves that role. |
 | `preconditions` | list[string] | Bulleted conditions that must hold for the rule to apply. Each bullet must be checkable from board state alone. |
 | `formal_predicate` | string (multi-line pseudocode) | Pseudocode that a competent engineer can translate to JavaScript/Python/C++ without further interpretation. Reference board coordinates as `(col, row)` with `col ∈ A..G` and `row ∈ 1..6`. |
 | `worked_examples` | list[object] | Each: `{movestring, description, expected_behavior, solver_verified: <date>, notes?}`. At least one entry required. `solver_verified` is the date the position was last cross-checked against `c4solver` output. |

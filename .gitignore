@@ -3,3 +3,6 @@ node_modules
 deepseek_activate.sh
 supabase
 .env*
+*jsonl
+win_distribution_data
+.DS_Store

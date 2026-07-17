@@ -74,6 +74,28 @@ test('parseUrl("/xyz/unknown") → { screenKey: "home", params: {} }', () => {
   assert.deepEqual(result, { screenKey: 'home', params: {} });
 });
 
+// Spec 042 T011 — /mistakeDetail/:category round-trips through parseUrl/buildUrl, and
+// 'mistakeDetail' is no longer session-only (reloading the mistakes-by-category screen
+// must not redirect home — FR-011).
+test('spec-042: buildUrl("mistakeDetail", { category: "immediate_threat" }) → "/mistakeDetail/immediate_threat"', () => {
+  assert.equal(buildUrl('mistakeDetail', { category: 'immediate_threat' }), '/mistakeDetail/immediate_threat');
+});
+
+test('spec-042: parseUrl("/mistakeDetail/immediate_threat") → { screenKey: "mistakeDetail", params: { category: "immediate_threat" } }', () => {
+  const result = parseUrl('/mistakeDetail/immediate_threat');
+  assert.deepEqual(result, { screenKey: 'mistakeDetail', params: { category: 'immediate_threat' } });
+});
+
+test('spec-042: /mistakeDetail/:category round-trips (buildUrl(parseUrl(url)) === url)', () => {
+  const url = '/mistakeDetail/double_threat';
+  const { screenKey, params } = parseUrl(url);
+  assert.equal(buildUrl(screenKey, params), url);
+});
+
+test('spec-042: SESSION_ONLY_SCREENS does not contain "mistakeDetail" (FR-011)', () => {
+  assert.equal(SESSION_ONLY_SCREENS.has('mistakeDetail'), false);
+});
+
 // Test 12 — buildUrl returns a non-null non-undefined string for every screen key
 test('buildUrl returns a valid string for every known screen key', () => {
   // Sample params for parameterised screens
@@ -87,6 +109,7 @@ test('buildUrl returns a valid string for every known screen key', () => {
     clchallenge: [{ lessonId: 'lesson-01' }],
     challenge: [{ category: 'immediate_threat' }],
     review: [{ id: 'abc123' }],
+    mistakeDetail: [{ category: 'immediate_threat' }],
   };
 
   for (const key of KNOWN_SCREEN_KEYS) {

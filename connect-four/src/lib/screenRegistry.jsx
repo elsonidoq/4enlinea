@@ -11,10 +11,13 @@ import { SagaScreen } from '../screens/SagaScreen.jsx';
 import { ConceptScreen } from '../screens/ConceptScreen.jsx';
 import { SocraticScreen } from '../screens/SocraticScreen.jsx';
 import { CLChallengeScreen } from '../screens/CLChallengeScreen.jsx';
-import { ExplorerScreen } from '../screens/ExplorerScreen.jsx';
 import { MistakesListScreen } from '../screens/MistakesListScreen.jsx';
 import { MistakeDetailScreen } from '../screens/MistakeDetailScreen.jsx';
 import { PastGamesListScreen } from '../screens/PastGamesListScreen.jsx';
+import { PlayOnlineScreen } from '../screens/PlayOnlineScreen.jsx';
+import { SettingsScreen } from '../screens/SettingsScreen.jsx';
+import { OnboardingImportOfferScreen } from '../screens/OnboardingImportOfferScreen.jsx';
+import { OnboardingMissionScreen } from '../screens/OnboardingMissionScreen.jsx';
 
 export const SCREENS = {
   home: HomeScreen,
@@ -29,9 +32,18 @@ export const SCREENS = {
   difficulty: DifficultyPickerScreen,
   game: GameScreen,
   review: ReviewScreen,
-  explorer: ExplorerScreen,
   mistakes: CategoryListScreen,
   mistakeDetail: (p) => <MistakesListScreen {...p} />,
   blunderDetail: MistakeDetailScreen,
   pastGames: PastGamesListScreen,
+  playOnline: PlayOnlineScreen,
+  settings: SettingsScreen,
+  // Epic 8 — Onboarding Experience, US3 (T033, research.md R4). Session-only: reached only via
+  // go()/goReplace() from GameScreen (game-end) or HomeScreen (early-exit fallback) — NOT in
+  // urlMapping.js/SESSION_ONLY_SCREENS, matching the existing game/summary pattern.
+  onboardingImportOffer: OnboardingImportOfferScreen,
+  // Onboarding mission screen — session-only: reached only via App.jsx's anonymous first-run
+  // auto-route (go('onboardingMission')). NOT in urlMapping.js/SESSION_ONLY_SCREENS, matching
+  // the onboardingImportOffer / game / summary session-only pattern.
+  onboardingMission: OnboardingMissionScreen,
 };

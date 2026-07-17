@@ -26,6 +26,11 @@ statement: |
   the current player plays into the column voluntarily with odd-column parity,
   blocking the opponent's lower threat and immediately threatening from R.
 
+short_summary: |
+  When a player's major threat at a higher row wins despite the opponent having a
+  lower threat in the same column, because the lower threat lacks the parity needed
+  to neutralize the upper one.
+
 preconditions:
   - "Current player has a major threat at (col C, row R)."
   - "Opponent has a threat at (col C, row R') with R' < R in same column C — the structural overcut pattern."

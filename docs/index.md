@@ -22,11 +22,19 @@
 
 [old_dont_read/connect_four_training_application_design.md](connect_four_training_application_design.md) — superseded by connect-four-implementation-guide.md and connect-four-curriculum-guide.md
 
+### LLM Coach
+
+[deep-reveal-eval.md](deep-reveal-eval.md) — 3-layer evaluation framework for deep reveal explanations: deterministic checks, LLM-as-judge, and golden set regression — implementing or running evals after prompt changes
+
 ### Other
+
+[open_issues.md](open_issues.md) — triageable backlog of known-but-deferred bugs and quality gaps (latent issues we've consciously scoped out) — checking or updating what's known-broken before starting related work
 
 [best_practices_spec_driven_development.md](best_practices_spec_driven_development.md) — spec-driven development methodology using SpecKit + Claude Code for solo founders — understanding the workflow that drives this project's spec → plan → tasks pipeline
 
 [cloud_provider_research.md](cloud_provider_research.md) — VPS vs PaaS vs Serverless trade-offs for a solver-heavy app — choosing a cloud provider
+
+[payment_provider_research.md](payment_provider_research.md) — **CANONICAL** — why Paddle (MoR) and not Stripe/PayPal/2Checkout/dLocal/Lemon Squeezy for charging global consumers from Argentina; fees, Argentine export/FX rules, refuted claims — touching payments, billing, or the checkout provider
 
 [launch_tactic.md](launch_tactic.md) — go-to-market plan for DecodeC4 MVP, retention metric gate (7-day unprompted return) — understanding launch success criteria
 
@@ -35,6 +43,8 @@
 [principal_engineer_roadmap_considerations.md](principal_engineer_roadmap_considerations.md) — constraints and heuristics for solo-founder AI-assisted engineering (ship fast, low complexity) — architectural trade-off decisions
 
 ## architecture
+
+[architecture/index.md](architecture/index.md) — grouped index of all architecture docs (conventions, LLM coach, reason engine) — start here to browse the directory
 
 [architecture/api-conventions.md](architecture/api-conventions.md) — MUST rules for route naming, HTTP status codes, error shape, and auth threading — adding or modifying any server route
 
@@ -46,9 +56,31 @@
 
 [architecture/server-conventions.md](architecture/server-conventions.md) — solver IPC modes (persistent vs one-shot), move string format, board representation — touching c4solver integration or board-level server code
 
+[architecture/coach-audio-conventions.md](architecture/coach-audio-conventions.md) — the `coach.spoken.*` (intent to voice, sole TTS-eligible namespace) vs `coach.ui.*` (screen chrome, never synthesized) split: the slug derivation's three copies, why the registry and audio manifest can drift, why `--scan-only` destroys approval state — adding any `coach.` i18n string or touching TTS generation
+
 [architecture/lesson-editor.md](architecture/lesson-editor.md) — in-app admin tool at `/admin/lessons` for visually authoring lesson JSON: movestring-driven boards, overlay placement, hot-reload preview, component map, and gotchas — adding lesson editor features or debugging the authoring workflow
 
 [architecture/llm-coach-endpoints.md](architecture/llm-coach-endpoints.md) — `explain_move` and `recommend_next_move` PoC architecture: shared infrastructure, data flows, prompt structures, flat table format, server endpoint conversion guide — adding LLM coaching features or converting CLI scripts to server routes
+
+[architecture/feature-vector-glossary.md](architecture/feature-vector-glossary.md) — field-by-field semantics of the **blunder-reason** feature vector (`computeReason`) for an LLM reader: the 5-case taxonomy, the two halves (`lostResource`/`opponentPunishment`), `tie`, denial/occupation local-vs-global, `register`/`line`, `parityAttribution`/`anchorCells`/`tacticTag`, `replyHistogram`/`gate`, pruning/absence + anti-fabrication rules — reading/extending the reason vector or building a prompt from it
+
+[architecture/feature-vector-sufficiency-experiment.md](architecture/feature-vector-sufficiency-experiment.md) — experiment design testing whether the reason vector + glossary is enough context to explain a blunder: isolated OpenAI answerer (`explain_from_vector.mjs`) + tools-enabled Claude grader (`grade-fv-sufficiency`), frozen set from the reason corpus, ablation, counterexample output — running or extending the sufficiency experiment
+
+[architecture/reason-render-grounded-prompt.md](architecture/reason-render-grounded-prompt.md) — proposal for restructuring how the reason vector is presented to the answerer LLM (esp. `gpt-5.4-mini`): move cell-grounding + board rendering from the LLM into the engine's render step, stage the prompt by altitude (situation frame / pre-rendered boards / status-tagged cells / headline+horizon / contrast / do-not guardrails). Grounded in the 2026-07-02 FV-sufficiency failures (altitude + false-causality) — read before redesigning the from-vector prompt
+
+[reason-render-opening-known-issues/README.md](reason-render-opening-known-issues/README.md) — **KNOWN-ISSUES BACKLOG** (unfixed) — frozen snapshot of the 2026-07-06 opening-cluster FV-sufficiency run (54/57 pass) with the 3 failing evals documented + root-caused: eval-50 (`causalLinks.mjs` L2 grounds an empty threat cell), eval-26 (`openingFrame.mjs:65` O1 guardrail mandates a parity lens with no `parityFavor.favorsMover===false` suppressor), eval-20 (model inverts "central file"). Includes the graded boards/compute-output/grades in `data/` — read before fixing opening-frame render or L2 realized_denied cell-grounding
+
+### Blunder-`reason` engine (read all four before touching it)
+
+[architecture/reason-INVARIANTS.md](architecture/reason-INVARIANTS.md) — **CONSTITUTION** — 12 non-negotiable principles for the blunder-`reason` engine (I0 = correctness over optimization; vector-is-the-artifact; no-fabrication; two-halves; bounded-by-depth; reuse classifier detectors) — before any reason-engine change
+
+[architecture/reason-DECISIONS.md](architecture/reason-DECISIONS.md) — **DECISION LOG** — append-only resolved decisions + rationale (restart/quarantine, gate, provisional thresholds, fixture strategy) — do not relitigate these
+
+[architecture/reason-case-taxonomy.md](architecture/reason-case-taxonomy.md) — **AUTHORITATIVE** — the `(bestScore, playedScore)` 5-case taxonomy keyed by sign comparison
+
+[architecture/blunder-reason-evidence.md](architecture/blunder-reason-evidence.md) — the two-halves evidence engine, register selection, the `lose_to_faster_lose` gate, validated boards, tooling + implementation map
+
+[architecture/reason-AGENT-PREAMBLE.md](architecture/reason-AGENT-PREAMBLE.md) — reusable prompt preamble for fresh-context reason-engine agents — paste verbatim instead of re-typing constraints
 
 [architecture/testing-conventions.md](architecture/testing-conventions.md) — test runner (node:test), fixture format, suite layout — writing or running tests
 

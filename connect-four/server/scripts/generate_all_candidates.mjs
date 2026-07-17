@@ -24,6 +24,42 @@ const CATEGORIES = [
 ];
 
 const args = process.argv.slice(2);
+
+// Task 27 (finding 25): --help was previously ignored, silently running a full 100/category
+// generation instead — an expensive (real solver calls per candidate), destructive (DB writes)
+// surprise for anyone just probing the script. Per memory feedback_scripts_meaningful_help,
+// this MUST be checked before any required-arg validation, env load, or file read — it exits 0
+// doing NO work, no matter what else is on the command line.
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(`
+generate_all_candidates.mjs — generate puzzle candidates for every category (or one category)
+by calling POST /api/admin/generate against a running local server.
+
+⚠️  COST WARNING: this calls the real c4solver once per candidate and WRITES rows to the
+    'candidates' table in the database the server is pointed at. Default count=100/category
+    across 12 categories can mean 1000+ solver calls and DB inserts. Use --count for a cheap
+    smoke test, and --dry-run to see what would run without calling anything.
+
+Usage:
+  node scripts/generate_all_candidates.mjs [options]
+
+Options:
+  --help, -h       Show this help and exit. Does NOT generate anything.
+  --dry-run        Log what would happen without calling the API (no DB writes).
+  --category CAT   Generate for a single category instead of all ${CATEGORIES.length}
+                    (${CATEGORIES.join(', ')}).
+  --count N        Target candidates per category (default: 100).
+  --port N         Server port to call (default: 3001). Server must already be running
+                    (cd connect-four/server && npm run server, or npm run dev).
+
+Examples:
+  node scripts/generate_all_candidates.mjs --help
+  node scripts/generate_all_candidates.mjs --dry-run
+  node scripts/generate_all_candidates.mjs --category undercut --count 10
+`);
+  process.exit(0);
+}
+
 const dryRun = args.includes('--dry-run');
 const catFlag = args.indexOf('--category');
 const countFlag = args.indexOf('--count');
@@ -35,7 +71,7 @@ const PORT = portFlag >= 0 ? parseInt(args[portFlag + 1], 10) : 3001;
 
 const BASE = `http://localhost:${PORT}`;
 
-const MAX_BATCHES = 10; // safety limit per category
+const MAX_BATCHES = 2; // safety limit per category
 
 const categories = targetCategory ? [targetCategory] : CATEGORIES;
 

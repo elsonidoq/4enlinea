@@ -51,6 +51,29 @@ worked_examples:
       prevent V3). V3 fires: Red wins.
     expected_behavior: "solver confirms Red wins; single Red odd-row threat controls zugzwang"
     solver_verified: PENDING
+  - movestring: "333330211113120000012222"
+    description: |
+      0-indexed movestring; 24 discs, Red (Green, first player) to move. Columns 1–4
+      (display) are full; Red holds a single odd-row major threat in column 5 at row 5
+      (cell c5r5), a Z-Threat with a height-relative count of 5 (odd). Black has only an
+      even-row threat above it (col5 row6) which, per V3, does not prevent the win. The
+      solver scores Red's three legal moves (cols 5,6,7) all +1 — Red wins. This is the
+      lock-in node of the reason engine's `namedRule: allen-v3` on the empty-board
+      blunder (`""`, played col 4): the production `detectZThreat` confirms the capsule
+      at column 5 / row 5 (badgeCount 5), the basis for the V3 name.
+    expected_behavior: "solver: Red wins (cols 5/6/7 = +1); detectZThreat confirms one odd-count (5) Z-Threat at c5r5; single uncontested odd-row threat controls zugzwang"
+    solver_verified: 2026-07-02
+    reverified: |
+      spec 044 / FR-020a / T033 (2026-07-11): independently re-ran a direct solver
+      query against this exact movestring — confirmed unchanged: cols 0-3 (0-indexed)
+      full (-1000, invalid), cols 4/5/6 score +1, matching this entry's description
+      verbatim. Note: tasks.md/research.md/memory referred to this entry's existing
+      movestring as `77273746`, but that string does not actually appear in this
+      file — the entry's real existing movestring is the one above
+      (`333330211113120000012222`), which is what was re-verified. (The `77273746`
+      string, once corrected from Allen's 1-indexed digits to 0-indexed, equals
+      `66162635` — which is a different, already-KB-verified position used as
+      allen-t7.md's own second worked example, not this entry's.)
 
 false_positives:
   - movestring: PENDING
@@ -80,7 +103,7 @@ related:
   - "[[allen-v4]] — Black's even-row win (checked after V3; only fires if V3 doesn't)"
   - "[[allen-v5]] — Draw when V3 doesn't fire and no other V rule applies"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-11
 ---
 
 ## Verbatim source

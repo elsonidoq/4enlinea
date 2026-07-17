@@ -4,7 +4,7 @@ description: In forced-win terminal positions, all opponent scores are equal so 
 type: reference
 originSessionId: fc1fb961-5695-4a98-a66a-009449178618
 ---
-## Key finding
+## Key trap
 
 In a true forced-win terminal (Case A in `traceForcedWin`), the initiator has **multiple immediate winning threats**. The opponent loses equally fast no matter which column they play — so all opponent scores are identical, and you **cannot use solver scores** to identify which column is the "forced block" to highlight.
 
@@ -33,8 +33,6 @@ This confirms col 5 is an immediate threat, but only via the error — not via s
 ## Correct approach
 
 Use direct board analysis: place the initiator's piece at each legal column height and call `checkWin`. The first column where this creates a win is the forced block. Return `[redCol, wc, wc]` — opponent plays `wc`, initiator wins `wc`.
-
-Implemented in `candidate-generator.js` `traceForcedWin` Case A branch:
 
 ```js
 const board1 = buildBoard(ms1);

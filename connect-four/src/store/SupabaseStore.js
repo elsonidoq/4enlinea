@@ -34,6 +34,22 @@ export class SupabaseStore {
     });
   }
 
+  // Epic 8 — Onboarding Experience: PUTs patch to /api/user/profile. Errors
+  // swallowed client-side (same posture as _fetchPost) — onboarding-status
+  // writes are best-effort and must never block or interrupt the user-facing
+  // flow that triggered them (Constitution V).
+  async updateProfile(patch) {
+    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+    await fetch(`${apiBase}/api/user/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+      credentials: 'include',
+    }).catch(() => {});
+    // Silent no-op on non-ok / network error, matching this class's existing
+    // _fetchPost posture.
+  }
+
   // ── Session stats ──────────────────────────────────────────────────────────
 
   async getSessionStats(date) {

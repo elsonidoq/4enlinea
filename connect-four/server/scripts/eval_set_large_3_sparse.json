@@ -1,0 +1,377 @@
+[
+  {
+    "id": "eval-0",
+    "board_state": "",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P33",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-8",
+    "board_state": "3",
+    "move_played": 5,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-16",
+    "board_state": "3",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-18",
+    "board_state": "4",
+    "move_played": 5,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-19",
+    "board_state": "33322",
+    "move_played": 5,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-21",
+    "board_state": "",
+    "move_played": 2,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-22",
+    "board_state": "2",
+    "move_played": 0,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-23",
+    "board_state": "203154135336554311",
+    "move_played": 0,
+    "correct_move": 1,
+    "threat_cells": [
+      {
+        "row": 2,
+        "col": 2
+      },
+      {
+        "row": 3,
+        "col": 6
+      }
+    ],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-24",
+    "board_state": "333332562100",
+    "move_played": 4,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P03",
+      "P08",
+      "P10",
+      "P30",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-25",
+    "board_state": "2",
+    "move_played": 1,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-26",
+    "board_state": "211",
+    "move_played": 5,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 1,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P03",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-30",
+    "board_state": "3",
+    "move_played": 4,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-33",
+    "board_state": "3",
+    "move_played": 1,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-34",
+    "board_state": "31133",
+    "move_played": 1,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-37",
+    "board_state": "33333025",
+    "move_played": 6,
+    "correct_move": 5,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P01",
+      "P08",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-40",
+    "board_state": "241",
+    "move_played": 2,
+    "correct_move": 1,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "drawing_move",
+    "predicates": [
+      "P02",
+      "P07",
+      "P10",
+      "P30",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-41",
+    "board_state": "4265",
+    "move_played": 3,
+    "correct_move": 2,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P05",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-44",
+    "board_state": "33333555505",
+    "move_played": 6,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-45",
+    "board_state": "33335655",
+    "move_played": 6,
+    "correct_move": 0,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P01",
+      "P06",
+      "P10",
+      "P31",
+      "P34"
+    ],
+    "is_sparse": true
+  },
+  {
+    "id": "eval-47",
+    "board_state": "33333006120",
+    "move_played": 5,
+    "correct_move": 3,
+    "threat_cells": [],
+    "severity": 0,
+    "blunder_severity": null,
+    "pattern_category": "suboptimal_move",
+    "predicates": [
+      "P02",
+      "P08",
+      "P10",
+      "P31",
+      "P35"
+    ],
+    "is_sparse": true
+  }
+]

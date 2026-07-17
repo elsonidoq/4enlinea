@@ -4,6 +4,7 @@ import { Board } from '../components/Board.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
 import { ToolButton } from '../components/ToolButton.jsx';
+import { Icon } from '../components/Icon.jsx';
 import { ProgressBar } from '../components/ProgressBar.jsx';
 import { TopBar } from '../components/TopBar.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
@@ -11,6 +12,13 @@ import { track } from '../lib/track.js';
 import { buildBoard, getMajorThreatCells } from '../lib/board.js';
 import { DeepRevealPane } from '../components/DeepRevealPane.jsx';
 import { pickRandomKey } from '../lib/coachUtils.js';
+import { COACH_PACING_MS } from '../lib/constants.js';
+import { useAudio } from '../lib/useAudio.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
+import { SINGLE_ANSWER_CATEGORIES, MULTI_SOLUTION_CATEGORIES } from '../lib/categories.js';
+import { DevBoardInjector } from '../components/DevBoardInjector.jsx';
+import { buildDevPuzzle } from '../lib/devFixtures.js';
+import { readDevBoardParam } from '../lib/devBoardParam.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -43,9 +51,12 @@ export function ChallengeScreen({
   confirmationCategory,
   confirmationCount,
   confirmationChallenges = null,
+  devPuzzles = undefined,
 }) {
   const { t } = useTranslation();
   const { store, session } = useStore();
+  const { playSfx, playMusic, pauseMusic, sfxEnabled, musicEnabled, speechEnabled, toggleSfx, toggleMusic, toggleSpeech } = useAudio();
+  const { speakCoachMessage } = useCoachSpeech();
 
   const [phase, setPhase] = useState('loading'); // 'loading' | 'pre-move' | 'post-move'
   const [puzzles, setPuzzles] = useState([]);
@@ -70,6 +81,7 @@ export function ChallengeScreen({
   const startTimeRef = useRef(null);
   const sessionIdRef = useRef(null);
   const usedPhraseKeysRef = useRef(new Set());
+  const lastCoachKeyRef = useRef(null); // T021: for coach speech
 
   // Stable reference — avoids AnnotatedExplanation re-render loop.
   const userMajorThreats = useMemo(() => {
@@ -101,9 +113,9 @@ export function ChallengeScreen({
     setHintUsed(false);
     setSeqPosition(puzzle.move_string ?? '');
 
-    // Pick a random prompt key from coach.<category>.prompt.*
+    // Pick a random prompt key from coach.spoken.<category>.prompt.*
     const effectiveCategory = lessonMode ? confirmationCategory : category;
-    const candidateKeys = [0, 1, 2].map(i => `coach.${effectiveCategory}.prompt.${i}`);
+    const candidateKeys = [0, 1, 2].map(i => `coach.spoken.${effectiveCategory}.prompt.${i}`);
     const validKeys = candidateKeys.filter(k => t(k) !== k);
     const pickedKey = validKeys.length > 0
       ? validKeys[Math.floor(Math.random() * validKeys.length)]
@@ -112,6 +124,7 @@ export function ChallengeScreen({
 
     const playerDisc = (puzzle.move_string || '').length % 2 === 0 ? 'green' : 'gray';
     const discLabel = t(playerDisc === 'gray' ? 'challenge.playing_gray' : 'challenge.playing_green');
+    lastCoachKeyRef.current = pickedKey;
     setCoachMessages([{ text: t(pickedKey), mood: 'happy', disc: playerDisc, discLabel }]);
     startTimeRef.current = Date.now();
   }
@@ -119,6 +132,24 @@ export function ChallengeScreen({
   useEffect(() => {
     async function loadPuzzles() {
       try {
+        // DEV board injector (dead-code-eliminated in prod): a `devPuzzles` prop (set by handleDevLoad's
+        // go('challenge', {devPuzzles})) or a ?devBoard= URL param takes priority over the normal draw.
+        if (import.meta.env.DEV) {
+          let injected = devPuzzles?.length ? devPuzzles : null;
+          if (!injected) {
+            const p = readDevBoardParam();
+            if (p) injected = [buildDevPuzzle({ ...p, category })];
+          }
+          if (injected?.length) {
+            sessionIdRef.current = null;
+            setPuzzles(injected);
+            setCurrentIdx(0);
+            initPuzzle(injected[0]);
+            setPhase('pre-move');
+            return;
+          }
+        }
+
         // Use embedded challenges when provided (lesson editor curation)
         if (lessonMode && confirmationChallenges?.length > 0) {
           const loaded = confirmationChallenges.map(ch => ({
@@ -165,7 +196,29 @@ export function ChallengeScreen({
     }
     loadPuzzles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges]);
+  }, [category, lessonMode, confirmationCategory, confirmationCount, confirmationChallenges, devPuzzles]);
+
+  // ── Audio: coach speech playback ─────────────────────────────────
+  useEffect(() => {
+    if (lastCoachKeyRef.current) {
+      speakCoachMessage(lastCoachKeyRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachMessages.length]);
+
+  // ── Audio: background music lifecycle ────────────────────────────
+  useEffect(() => {
+    playMusic();
+    return () => pauseMusic();
+  }, [playMusic, pauseMusic]);
+
+  function handleDevLoad(puzzleObj, cat) {
+    // Re-navigate so the `category` prop (hence effectiveCategory + the accepted-gate) matches the
+    // loaded board. `go()` to the same screen does NOT remount ChallengeScreen (no `key` prop in
+    // App.jsx); instead the new `devPuzzles` prop (a fresh array reference) re-runs the loadPuzzles
+    // effect in place, since devPuzzles is now listed in its dependency array.
+    go('challenge', { category: cat, devPuzzles: [puzzleObj] });
+  }
 
   function handleColumnClick(col) {
     if (phase !== 'pre-move') return;
@@ -199,45 +252,141 @@ export function ChallengeScreen({
     fetch(`${API}/api/evaluate-move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movestring: current.move_string, col, category: effectiveCategory }),
+      body: JSON.stringify({
+        movestring: current.move_string,
+        col,
+        category: effectiveCategory,
+        // Spec 049 (Epic 9) T010 — mandatory snake_case→camelCase remap. The client's local
+        // puzzle object (from GET /api/puzzles/draw) is snake_case; the server reads camelCase.
+        // Top-level rename only — the inner highlight_metadata JSON (.column, .cells[].role)
+        // passes through unmodified. Sent unconditionally; harmless no-op for categories that
+        // don't consume it.
+        correctCol: current.correct_col,
+        highlightMetadata: current.highlight_metadata,
+      }),
     })
-      .then(r => r.json())
+      // Guard against non-2xx responses (e.g. a solver/server error): without this, `r.json()`
+      // still parses an error body like `{ error: "internal error" }`, and the code below reads
+      // `data.quality`/`data.accepted` as undefined, which renders as a raw, untranslated
+      // `challenge.quality.undefined` i18n key on screen instead of failing gracefully like a
+      // network error does (see the existing `.catch` below).
+      .then(r => { if (!r.ok) throw new Error(`evaluate-move failed: ${r.status}`); return r.json(); })
       .then(data => {
-        setEvaluation(data);
+        // Spec 044 US3 / FR-015a: for the three multi-solution categories (immediate_threat,
+        // forced_block, double_threat), do NOT judge correctness by a bare
+        // `data.quality === 'optimal'` check — that's a pure solver-score comparison and can
+        // disagree with the puzzle's actual accepted-answer set (e.g. a fork column that isn't
+        // the single max-score column, or a winning/blocking column that isn't the stored
+        // canonical one). Read the additive `data.accepted` field instead, which the server
+        // computes via evaluatePredicate (FR-012's 'tied'-as-correct rule) for these categories.
+        // Spec 049 (Epic 9) T012 — the six SINGLE_ANSWER_CATEGORIES (z_threat, overcut,
+        // claimeven, undercut, figure_7, j_shape) have the same problem (a taught-pattern column
+        // can tie or trail the raw solver score) and now route through the same `accepted` gate
+        // (FR-008/FR-011/FR-012). Every other category keeps the original
+        // `data.quality === 'optimal'` check unchanged (FR-011).
+        const isMultiSolutionCategory = MULTI_SOLUTION_CATEGORIES.has(effectiveCategory);
+        const usesAcceptedGate = isMultiSolutionCategory || SINGLE_ANSWER_CATEGORIES.has(effectiveCategory);
+        const isCorrect = usesAcceptedGate ? data.accepted === true : data.quality === 'optimal';
 
-        // Update coach — fall back to quality-aware generic pool when no category-specific key exists
+        // True when the accepted-gate promotes a pattern-correct-but-slower move to "correct":
+        // the server's raw score-only `quality` is below 'optimal' but the taught/tied pattern was
+        // actually played (OI-1 repro board 2 shape).
+        const acceptedPromoted = usesAcceptedGate && isCorrect && data.quality !== 'optimal';
+
+        // Symmetric case (OI-1 repro board 1 shape): the played column ties the raw solver score
+        // (so the server's unchanged, score-only `quality`/`badge` read 'optimal'/'good' per
+        // FR-003 — those fields are additive-only and MUST NOT be mutated for other callers) but
+        // it is NOT the taught pattern, so `accepted` is false. Without this, the display would
+        // silently keep showing the server's score-only "correct" verdict even though `isCorrect`
+        // (derived from `accepted`) is false — a wrong-answer SFX/attempt-record alongside a
+        // "correct" badge/coach line (SC-002 contradiction).
+        const acceptedDemoted = usesAcceptedGate && !isCorrect && data.quality === 'optimal';
+
+        // Re-pick summaryLineKey from the corrected-tier pool, but only when that pool actually
+        // has content — several categories (overcut, undercut, figure_7, j_shape) have NO
+        // `eval.<category>.*.summary` keys at all in en.json, and pickRandomKey's fallback
+        // (`${prefix}.0`) returns a key that doesn't resolve, rendering the raw untranslated key
+        // string on screen. Feature-detect with t() before using the picked key.
+        function pickSummaryKeyOrNull(quality) {
+          const key = pickRandomKey(t, `eval.${effectiveCategory}.${quality}.summary`);
+          return t(key) !== key ? key : null;
+        }
+
+        // The rendered badge/glyph/summary must agree with `isCorrect`, not the server's raw
+        // score-only `quality` — a valid tied/taught answer (accepted:true) must visually read as
+        // correct, not "suboptimal", and a score-tied-but-non-taught answer (accepted:false) must
+        // visually read as wrong, not "correct". This overrides the display-driving `quality`/
+        // `badge` fields for the accepted-gated categories when they'd otherwise contradict
+        // `accepted`. `summaryLineKey` is ALSO re-picked from the corrected-tier pool above when
+        // available — otherwise the visible summary line (e.g. "Playable, but the Z-threat column
+        // gives stronger parity control.") would still read from the server's unmutated,
+        // score-only `quality` tier and contradict the corrected badge/coach line (SC-002); when no
+        // corrected-tier summary pool exists for the category, summaryLineKey falls back to
+        // whatever the server sent (null for these categories in practice, since the pool is empty
+        // across all tiers, so no contradiction). `patternTag` is left as the server sent them
+        // (FR-010).
+        const displayData = acceptedPromoted
+          ? { ...data, quality: 'optimal', badge: 'good', summaryLineKey: pickSummaryKeyOrNull('optimal') ?? data.summaryLineKey }
+          : acceptedDemoted
+          ? { ...data, quality: 'blunder', badge: 'bad', summaryLineKey: pickSummaryKeyOrNull('blunder') ?? data.summaryLineKey }
+          : data;
+        setEvaluation(displayData);
+
+        // SFX feedback
+        if (isCorrect) {
+          playSfx('correct_move');
+        } else {
+          playSfx('wrong_move');
+        }
+
+        // Update coach — fall back to quality-aware generic pool when no category-specific key exists.
+        // Spec 049 (Epic 9) Finding 1: when the accepted-gate promotes the move to "correct", the
+        // server's coachPhraseKey/coachMood were derived from the raw suboptimal quality and would
+        // contradict the corrected verdict (a "correct" badge/SFX alongside a hedging "think"-mood
+        // coach line — SC-002). Present a congruent optimal-voiced message instead: suppress the
+        // suboptimal category phrase (fall back to the optimal generic pool) and force the happy mood.
         const used = usedPhraseKeysRef.current;
-        let phraseKey = data.coachPhraseKey
-          ?? pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used);
+        // acceptedDemoted mirrors acceptedPromoted: suppress the server's optimal-voiced
+        // coachPhraseKey/coachMood (which would contradict the demoted "wrong" verdict) and fall
+        // back to the generic blunder-voiced pool, same mechanism as the promoted case.
+        const coachQuality = acceptedPromoted ? 'optimal' : acceptedDemoted ? 'blunder' : (data.quality ?? 'blunder');
+        let phraseKey = (acceptedPromoted || acceptedDemoted ? null : data.coachPhraseKey)
+          ?? pickRandomKey(t, `coach.spoken.generic.${coachQuality}`, used);
         used.add(phraseKey);
         const moodDefaults = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
+        lastCoachKeyRef.current = phraseKey;
         setCoachMessages(prev => [...prev, {
           text: t(phraseKey),
-          mood: data.coachMood ?? moodDefaults[data.quality] ?? 'think',
+          mood: acceptedPromoted ? 'happy' : acceptedDemoted ? 'oops' : (data.coachMood ?? moodDefaults[data.quality] ?? 'think'),
         }]);
 
         // Win overlay if optimal win
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           const winLine = getWinLine(newBoard, row, col, color);
           if (winLine.length >= 4) {
             setOverlays(winLine.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
           }
         }
 
-        // Record attempt
-        store?.recordPuzzleAttempt({
+        // Record attempt. Skip for DEV-injector synthetic puzzles (`dev-<movestring>` ids,
+        // src/lib/devFixtures.js) — these have no real DB row, so `puzzle_id` isn't a valid uuid
+        // and the write 500s (Postgres "invalid input syntax for type uuid"). This is a pre-existing
+        // dev-tooling-only gap (unrelated to the spec-049 accepted-gate fix) surfaced while QA-ing
+        // via the fixture dropdown/deep-link; guarding here avoids masking real regressions with
+        // benign console noise during QA.
+        if (!String(current.id).startsWith('dev-')) store?.recordPuzzleAttempt({
           puzzle_id: current.id,
           device_uuid: 'local',
           moves_tried: [col],
-          outcome: data.quality === 'optimal' ? 'correct_first' : 'abandoned',
-          first_attempt_correct: data.quality === 'optimal',
+          outcome: isCorrect ? 'correct_first' : 'abandoned',
+          first_attempt_correct: isCorrect,
           time_ms: Date.now() - startTimeRef.current,
           ...(sessionIdRef.current ? { session_id: sessionIdRef.current } : {}),
         });
         store?.recordActivityDay().catch(() => {});
 
         // Analytics
-        if (data.quality === 'optimal') {
+        if (isCorrect) {
           track('puzzle_solved_correct', { puzzleId: current.id, category });
         } else {
           track('puzzle_solved_wrong', { puzzleId: current.id, category });
@@ -249,10 +398,11 @@ export function ChallengeScreen({
   function handleHint() {
     if (hintUsed) return;
     const effectiveCategory = lessonMode ? confirmationCategory : category;
-    const keys = [`coach.${effectiveCategory}.hint.0`, `coach.${effectiveCategory}.hint.1`];
+    const keys = [`coach.spoken.${effectiveCategory}.hint.0`, `coach.spoken.${effectiveCategory}.hint.1`];
     const valid = keys.filter(k => t(k) !== k);
     if (valid.length === 0) return;
     const key = valid[Math.floor(Math.random() * valid.length)];
+    lastCoachKeyRef.current = key;
     setCoachMessages(prev => [...prev, { text: t(key), mood: 'think' }]);
     setHintUsed(true);
   }
@@ -296,9 +446,22 @@ export function ChallengeScreen({
       initPuzzle(puzzles[nextIdx]);
       setPhase('pre-move');
     } else if (lessonMode) {
-      store.saveLessonProgress(lessonId, 'complete');
-      track('lesson_completed', { lessonId });
-      go('saga');
+      // Task 19 fix (finding 16): SagaScreen refetches lesson-progress on every mount
+      // (its useEffect deps are empty besides `store`, and it genuinely remounts —
+      // SCREENS[key] returns the same stable component reference each time, but the
+      // Navigator swaps component *type* on every go(), which React always unmounts
+      // and remounts). The stale-map bug was a race: this save fired without being
+      // awaited, so go('saga') could land and re-fetch before the write committed —
+      // reproducing exactly as "server already agrees, but /saga still shows old
+      // state until a manual reload". Await the save (or let it fail loudly) before
+      // navigating so the refetch on the new mount always sees the fresh status.
+      store.saveLessonProgress(lessonId, 'complete')
+        .catch(err => console.error('[ChallengeScreen] saveLessonProgress failed:', err))
+        .finally(() => {
+          track('lesson_completed', { lessonId });
+          go('saga');
+        });
+      return;
     } else {
       go('summary', { results: newResults, category });
     }
@@ -375,8 +538,16 @@ export function ChallengeScreen({
 
     setEvaluation({ quality, badge, summaryLine });
 
+    // SFX feedback
+    if (quality === 'optimal') {
+      playSfx('correct_move');
+    } else {
+      playSfx('wrong_move');
+    }
+
     // Update coach
-    const coachKey = `coach.forbidden_columns.${quality}.0`;
+    const coachKey = `coach.spoken.forbidden_columns.${quality}.0`;
+    lastCoachKeyRef.current = coachKey;
     setCoachMessages(prev => [...prev, { text: t(coachKey, { missed: missedForbidden.length }), mood: quality === 'optimal' ? 'happy' : 'oops' }]);
 
     store?.recordPuzzleAttempt({
@@ -424,6 +595,9 @@ export function ChallengeScreen({
         // because setHeights hasn't fired yet (React state updates are batched).
         setLastDrop({ c: col, r: heights[col] });
 
+        // Coach pacing: wait before AI continuation (FR-015)
+        await new Promise(r => setTimeout(r, COACH_PACING_MS));
+
         // Step (b): render AI's disc with animation after user's drop animation has ~settled
         const aiRow = hUser[data.aiCol]; // captured from locally-returned hUser — avoids stale-closure trap
         const fullPos = userPos + String(data.aiCol);
@@ -437,14 +611,16 @@ export function ChallengeScreen({
         }, 300);
         return; // T006: skip synchronous isSubmitting=false for this branch
       } else if (data.outcome === 'success') {
+        playSfx('correct_move');
         const newPos = seqPosition + String(col);
         setSeqPosition(newPos);
         const { board: b, heights: h } = buildBoard(newPos);
         setBoard(b);
         setHeights(h);
         setLastDrop({ c: col, r: heights[col] });
-        setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.forced_win.optimal.0' });
-        setCoachMessages(prev => [...prev, { text: t('coach.forced_win.optimal.0'), mood: 'happy' }]);
+        setEvaluation({ quality: 'optimal', badge: 'good', summaryLineKey: 'coach.spoken.forced_win.optimal.0' });
+        lastCoachKeyRef.current = 'coach.spoken.forced_win.optimal.0';
+        setCoachMessages(prev => [...prev, { text: t('coach.spoken.forced_win.optimal.0'), mood: 'happy' }]);
         // Highlight both threat cells on double-threat success
         if (data.threatCells && data.threatCells.length > 0) {
           setOverlays(data.threatCells.map(cell => ({ c: cell.c, r: cell.r, type: 'win' })));
@@ -463,13 +639,17 @@ export function ChallengeScreen({
         setPhase('post-move');
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       } else {
+        playSfx('wrong_move');
+        lastCoachKeyRef.current = data.reason ? null : 'coach.spoken.forced_win.blunder.0';
         setCoachMessages(prev => [...prev, {
-          text: data.reason ?? t('coach.forced_win.blunder.0'),
+          text: data.reason ?? t('coach.spoken.forced_win.blunder.0'),
           mood: 'oops',
         }]);
         setIsSubmitting(false); // T006: explicit clear (option B, no finally)
       }
     } catch {
+      playSfx('wrong_move');
+      lastCoachKeyRef.current = 'error.generic';
       setCoachMessages(prev => [...prev, { text: t('error.generic'), mood: 'oops' }]);
       setIsSubmitting(false); // T006: explicit clear (option B, no finally)
     }
@@ -488,7 +668,7 @@ export function ChallengeScreen({
   if (lessonMode && puzzles.length === 0 && phase !== 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-lessons)' }}>
-        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} />
+        <TopBar onBack={handleBack} title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
           <p style={{ margin: 0, fontSize: 15 }}>{t('lesson.confirmation.empty', 'No practice puzzles available yet.')}</p>
           <button onClick={handleBack} style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--line)', color: 'var(--ink)', cursor: 'pointer', fontSize: 14 }}>
@@ -508,6 +688,7 @@ export function ChallengeScreen({
         <TopBar
           onBack={handleBack}
           title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
+          onLogoClick={() => go('home')}
         />
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -528,11 +709,14 @@ export function ChallengeScreen({
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
       background: 'var(--bg-chal)',
     }}>
+      {import.meta.env.DEV && <DevBoardInjector onLoad={handleDevLoad} />}
+
       {/* Top bar */}
       <TopBar
         onBack={handleBack}
         title={lessonMode ? t('lesson.confirmation.header', { title: lessonTitle }) : undefined}
         meta={puzzles.length > 0 ? t('challenge.progress', { current: currentIdx + 1, total: puzzles.length }) : undefined}
+        onLogoClick={() => go('home')}
       />
 
       {/* Progress bar */}
@@ -542,8 +726,12 @@ export function ChallengeScreen({
         </div>
       )}
 
-      {/* Coach dialog — always visible */}
-      <CoachDialog messages={coachMessages} size={58} />
+      {/* Coach dialog — always visible.
+          `fixed` reserves a stable height (140px) so appending the post-move
+          feedback bubble scrolls within the coach region instead of growing it
+          and pushing the board down (FR-022 board-stability fix — matches the
+          GameScreen/ReviewScreen accumulating-messages pattern). */}
+      <CoachDialog fixed messages={coachMessages} size={58} />
 
       {deepRevealOpen ? (
         <DeepRevealPane
@@ -553,6 +741,7 @@ export function ChallengeScreen({
           moveString={puzzles[currentIdx]?.move_string}
           col={lastDrop?.c}
           feature="challenges"
+          navigate={go}
           onReveal={d => track('deep_reveal_viewed', { puzzleId: puzzles[currentIdx]?.id, cached: d.cached ?? false })}
           onZhCellsChange={setZhCells}
           userMajorThreats={userMajorThreats}
@@ -764,6 +953,58 @@ export function ChallengeScreen({
             </button>
           )
         )}
+
+        {/* Audio toggle buttons */}
+        <button
+          type="button"
+          onClick={toggleSfx}
+          aria-label={sfxEnabled ? t('audio.muteSfx') : t('audio.unmuteSfx')}
+          title={sfxEnabled ? t('audio.sfxOn') : t('audio.sfxOff')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={sfxEnabled ? 'speaker' : 'speakerOff'} size={22} color={sfxEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleMusic}
+          aria-label={musicEnabled ? t('audio.muteMusic') : t('audio.unmuteMusic')}
+          title={musicEnabled ? t('audio.musicOn') : t('audio.musicOff')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={musicEnabled ? 'music' : 'musicOff'} size={22} color={musicEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleSpeech}
+          aria-label={speechEnabled ? t('audio.muteSpeech') : t('audio.unmuteSpeech')}
+          title={speechEnabled ? t('audio.speechOn') : t('audio.speechOff')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={speechEnabled ? 'speaker' : 'speakerOff'} size={22} color={speechEnabled ? 'var(--ink-soft)' : 'var(--ink-faint)'} />
+        </button>
       </Toolbar>
 
     </div>

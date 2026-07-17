@@ -40,22 +40,37 @@ export function createSolverProcess() {
   let pending = Promise.resolve();
 
   return {
-    query(moveString) {
+    query(moveString, timeoutMs = 30000) {
       let callerResolve, callerReject;
       const callerPromise = new Promise((res, rej) => { callerResolve = res; callerReject = rej; });
 
       pending = pending.then(() =>
         new Promise((chainResolve) => {
           const startTime = Date.now();
+          let settled = false;
+
+          const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            const err = new Error(`[solver.query] TIMEOUT after ${timeoutMs}ms — moveString="${moveString}"`);
+            console.error(err.message);
+            chainResolve();
+            callerReject(err);
+          }, timeoutMs);
+
           queue.push({
             moveString,
             resolve: (result) => {
-              const elapsed = Date.now() - startTime;
-              // console.log(`[solver.query] moveString="${moveString}" took ${elapsed}ms`);
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               chainResolve();
               callerResolve(result);
             },
             reject: (err) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
               chainResolve();
               callerReject(err);
             },

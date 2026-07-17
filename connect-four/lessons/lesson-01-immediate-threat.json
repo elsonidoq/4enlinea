@@ -9,8 +9,11 @@
       "movestring": "33201",
       "coachMessages": [
         {
-          "text": "Look at the board. Can you find a four-cell window that already has three Gray discs and one empty space?",
-          "mood": "think"
+          "text": "Look at the board. Can you find a four-cell window that already has three Green discs and one empty space?",
+          "mood": "think",
+          "audio": "/audio/lessons/d5e506badf62f7ec.mp3",
+          "text_es": "Mirá el tablero. ¿Podés encontrar una ventana de cuatro celdas que ya tenga tres fichas verdes y un espacio vacío?",
+          "audio_es": "/audio/lessons/1384dd411d263be3.mp3"
         }
       ],
       "boardSpec": [
@@ -47,21 +50,27 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Threat square (the winning move)"
+          "label": "Threat square (the winning move)",
+          "label_es": "Casilla de amenaza (la jugada ganadora)"
         },
         {
           "type": "win",
-          "label": "Three connected discs"
+          "label": "Three connected discs",
+          "label_es": "Tres fichas conectadas"
         }
       ],
-      "infoProse": "An immediate threat is any four-cell window that already contains three of your discs and one empty square. That empty square is your threat cell — play it and you win instantly."
+      "infoProse": "An immediate threat is any four-cell window that already contains three of your discs and one empty square. That empty square is your threat cell — play it and you win instantly.",
+      "infoProse_es": "Una amenaza inmediata es cualquier ventana de cuatro casillas que ya contiene tres de tus fichas y una casilla vacía. Esa casilla vacía es tu casilla de amenaza: jugala y ganás al instante."
     },
     {
       "movestring": "644565566",
       "coachMessages": [
         {
           "text": "Threats look the same in every direction — horizontal, vertical, diagonal. Train your eye to scan all four.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/41dcfb2a0d945146.mp3",
+          "text_es": "Las amenazas se ven igual en todas las direcciones — horizontal, vertical, diagonal. Entrená la vista para revisar las cuatro.",
+          "audio_es": "/audio/lessons/d323ea2517604d2d.mp3"
         }
       ],
       "boardSpec": [
@@ -98,21 +107,27 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "User threat"
+          "label": "User threat",
+          "label_es": "Amenaza del usuario"
         },
         {
           "type": "win",
-          "label": "Winning move"
+          "label": "Winning move",
+          "label_es": "Jugada ganadora"
         }
       ],
-      "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss."
+      "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss.",
+      "infoProse_es": "El patrón es idéntico en todas las direcciones. Tu mirada va a recorrer naturalmente en horizontal primero, pero entrenate para revisar también las columnas verticales y ambas diagonales. Una amenaza diagonal es tan decisiva como una horizontal, y es más fácil que se te pase por alto."
     },
     {
       "movestring": "3334243556566",
       "coachMessages": [
         {
           "text": "The empty square does not have to be at the end of the line — it can sit anywhere inside the four-cell window.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/4d377642248f22e2.mp3",
+          "text_es": "La casilla vacía no tiene que estar al final de la línea: puede estar en cualquier lugar dentro de la ventana de cuatro casillas.",
+          "audio_es": "/audio/lessons/7e6dacdc3113a2a9.mp3"
         }
       ],
       "boardSpec": [
@@ -149,21 +164,27 @@
       "legendItems": [
         {
           "type": "win",
-          "label": "Three connected discs"
+          "label": "Three connected discs",
+          "label_es": "Tres fichas conectadas"
         },
         {
           "type": "tg",
-          "label": "Winning move (interior gap)"
+          "label": "Winning move (interior gap)",
+          "label_es": "Jugada ganadora (hueco interior)"
         }
       ],
-      "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls."
+      "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls.",
+      "infoProse_es": "Cuando la celda vacía queda en el medio de la ventana de cuatro celdas en vez de en un extremo, la amenaza es más difícil de ver. La regla es la misma: cualquier ventana de cuatro con tres de tus fichas y una casilla vacía es una amenaza inmediata, sin importar dónde quede el hueco."
     },
     {
       "movestring": "3333334225224455",
       "coachMessages": [
         {
           "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/e378834b9957dba3.mp3",
+          "text_es": "Viste tu propia oportunidad de construir, pero tu oponente ya tiene tres en línea. ¿Qué pasa si primero extendés tu propia línea?",
+          "audio_es": "/audio/lessons/a5b50e8346bf658a.mp3"
         }
       ],
       "boardSpec": [
@@ -190,14 +211,17 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Tempting Gray build (wrong this turn)"
+          "label": "Tempting Green build (wrong this turn)",
+          "label_es": "Formación tentadora de verde (equivocada en este turno)"
         },
         {
           "type": "td",
-          "label": "Opponent's immediate threat (block this!)"
+          "label": "Opponent's immediate threat (block this!)",
+          "label_es": "Amenaza inmediata del oponente (¡bloqueá esto!)"
         }
       ],
-      "infoProse": "Immediate threats are urgent for both players. Before committing to your own move, always scan your opponent's board for the pattern: any four-cell window with three of their discs and one empty square. A missed block loses the game on the very next move — no matter how good your own plan looked."
+      "infoProse": "Immediate threats are urgent for both players. Before committing to your own move, always scan your opponent's board for the pattern: any four-cell window with three of their discs and one empty square. A missed block loses the game on the very next move — no matter how good your own plan looked.",
+      "infoProse_es": "Las amenazas inmediatas son urgentes para ambos jugadores. Antes de decidir tu propia jugada, revisá siempre el tablero de tu oponente buscando este patrón: cualquier ventana de cuatro casillas con tres de sus fichas y una casilla vacía. Si no bloqueás una, perdés la partida en la jugada siguiente, por más bueno que pareciera tu propio plan."
     }
   ],
   "socratic": {
@@ -213,7 +237,54 @@
       ""
     ],
     "overlays": [],
-    "correctCol": 0
+    "correctCol": 0,
+    "messages": {
+      "ask": [
+        {
+          "text": "I'm going to make a mistake here. See if you can punish it.",
+          "mood": "think",
+          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo.",
+          "audio": "/audio/lessons/a2230ed7085dda79.mp3",
+          "audio_es": "/audio/lessons/f770cd4ea25777eb.mp3"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! You saw it.",
+          "mood": "happy",
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
+        }
+      ],
+      "hint": [
+        {
+          "text": "Look for an even square directly above one of my discs.",
+          "mood": "think",
+          "text_es": "Buscá una casilla par justo encima de una de mis fichas.",
+          "audio": "/audio/lessons/1ab32125dd370e7d.mp3",
+          "audio_es": "/audio/lessons/ffbaa400e146d675.mp3"
+        }
+      ]
+    }
   },
   "confirmationCategory": "immediate_threat",
   "confirmationCount": 4,
@@ -228,7 +299,8 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPrompt_es": "Encontrá la jugada ganadora."
     },
     {
       "puzzleId": "b328e328-4ffd-4d2b-b287-461ade18d70d",
@@ -240,7 +312,8 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPrompt_es": "Encontrá la jugada ganadora."
     },
     {
       "puzzleId": "985e11e3-1a41-405d-ae89-ded3b0b5edff",
@@ -252,7 +325,8 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 1,
+      "goalPrompt_es": "Encontrá la jugada ganadora."
     },
     {
       "puzzleId": "de6f2e12-2be9-48b0-ae47-6df1fd31ed74",
@@ -264,7 +338,8 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 2
+      "userPlayer": 2,
+      "goalPrompt_es": "Encontrá la jugada ganadora."
     }
   ]
 }

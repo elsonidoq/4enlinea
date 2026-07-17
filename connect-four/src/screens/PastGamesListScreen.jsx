@@ -105,19 +105,27 @@ function GameCard({ game, t, onClick }) {
           </div>
         )}
 
-        {/* Row 3: blunder chip */}
+        {/* Row 3: blunder chip. T18 (finding 15): a lost 0-mistake game already shows "Lost"
+            above — "No mistakes" beside it reads as contradictory, so suppress the chip
+            rather than inventing a count (the outcome badge alone is not contradicted). */}
         {game.blunder_count > 0 ? (
           <span className="gc-blunder-chip" style={{ alignSelf: 'flex-start' }}>
             <Icon name="flag" size={11} />
             {t(game.blunder_count === 1 ? 'games.blunder_count_one' : 'games.blunder_count_other', { count: game.blunder_count })}
           </span>
-        ) : (
+        ) : game.outcome !== 'lost' ? (
           <span className="gc-no-blunder-chip" style={{ alignSelf: 'flex-start' }}>{t('games.no_blunders')}</span>
-        )}
+        ) : null}
       </div>
     </button>
   );
 }
+
+const SORTS = [
+  { key: 'recent',          label: 'games.sort_recent' },
+  { key: 'played_well',     label: 'games.sort_played_well' },
+  { key: 'worst_blunders',  label: 'games.sort_worst_mistakes' },
+];
 
 const FILTERS = [
   { key: 'all',         label: 'games.filter_all' },
@@ -136,13 +144,14 @@ export function PastGamesListScreen({ go, goBack }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('recent');
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     track('screen_view', { screen: 'pastGames' });
   }, []);
 
-  const fetchGames = useCallback(async (activeFilter, currentOffset, append = false) => {
+  const fetchGames = useCallback(async (activeFilter, activeSort, currentOffset, append = false) => {
     if (!session) return;
 
     const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentOffset });
@@ -150,6 +159,9 @@ export function PastGamesListScreen({ go, goBack }) {
       params.set('has_blunder', 'true');
     } else if (activeFilter !== 'all') {
       params.set('outcome', activeFilter);
+    }
+    if (activeSort !== 'recent') {
+      params.set('sort', activeSort);
     }
 
     try {
@@ -177,8 +189,8 @@ export function PastGamesListScreen({ go, goBack }) {
     setError(null);
     setGames([]);
     setOffset(0);
-    fetchGames(filter, 0, false);
-  }, [filter, session]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchGames(filter, sort, 0, false);
+  }, [filter, sort, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleFilterChange(key) {
     if (key === filter) return;
@@ -189,14 +201,14 @@ export function PastGamesListScreen({ go, goBack }) {
     const nextOffset = offset + PAGE_SIZE;
     setOffset(nextOffset);
     setLoadingMore(true);
-    fetchGames(filter, nextOffset, true);
+    fetchGames(filter, sort, nextOffset, true);
   }
 
   // Anonymous gate
   if (!session) {
     return (
       <div style={{ background: 'var(--bg-spar)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-        <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} />
+        <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 36px', textAlign: 'center', gap: 16 }}>
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(0,0,0,0.06)', display: 'grid', placeItems: 'center', color: 'var(--ink-soft)' }}>
             <Icon name="user" size={34} />
@@ -211,10 +223,40 @@ export function PastGamesListScreen({ go, goBack }) {
 
   return (
     <div style={{ background: 'var(--bg-spar)', minHeight: '100dvh', color: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} />
+      <TopBar title={t('games.title')} onBack={goBack ?? (() => go('home'))} onLogoClick={() => go('home')} />
+
+      {/* Sort picker */}
+      <div style={{ padding: '6px 16px 0', display: 'flex', gap: 6, flexShrink: 0 }}>
+        {SORTS.map(({ key, label }) => {
+          const active = sort === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { if (key !== sort) { setSort(key); setOffset(0); } }}
+              style={{
+                flex: 1,
+                padding: '7px 0',
+                borderRadius: 10,
+                border: active ? 'none' : '1.5px solid var(--line)',
+                background: active ? 'var(--disc-green)' : 'transparent',
+                color: active ? '#fff' : 'var(--ink-soft)',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+                transition: 'background .12s, color .12s',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {t(label)}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Filter pills */}
-      <div style={{ padding: '8px 16px 4px', display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
+      <div className="hide-scrollbar" style={{ padding: '8px 16px 10px', display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
         {FILTERS.map(({ key, label }) => {
           const active = filter === key;
           return (
@@ -263,7 +305,7 @@ export function PastGamesListScreen({ go, goBack }) {
                 key={game.id}
                 game={game}
                 t={t}
-                onClick={() => go('review', { id: game.id })}
+                onClick={() => go('review', { id: game.id, outcome: game.outcome })}
               />
             ))}
 

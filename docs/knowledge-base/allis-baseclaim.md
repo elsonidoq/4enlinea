@@ -25,6 +25,11 @@ statement: |
   the second playable square P2 participates in both a Claimeven (with E above it)
   and a Baseinverse (with P3). Either mechanism fires depending on White's first move.
 
+short_summary: |
+  A compound of one Claimeven and two Baseinverses covering three directly playable
+  squares plus the non-playable even square above the second, handling groups that
+  neither Claimeven nor Baseinverse alone can refute.
+
 preconditions:
   - "Three directly playable squares P1, P2, P3 (bottom-most empty in their columns) exist."
   - "The square E directly above P2 is empty and EVEN."

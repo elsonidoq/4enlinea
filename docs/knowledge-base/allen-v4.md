@@ -43,13 +43,19 @@ formal_predicate: |
       return no_v1 and no_v2 and no_v3 and black_even
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "1023013210206162"
     description: |
-      After T1–T7, neither player has any odd-row threats. Black holds a major even-row
-      threat at (col C, row 4). Red holds no threats. V4 fires: Black wins via the
-      even-row claimeven advantage.
-    expected_behavior: "solver confirms Black wins; V4 is the deciding rule"
-    solver_verified: PENDING
+      0-indexed movestring (spec 044 / FR-020a backfill from the memory-only table's
+      `2134124321317273`, which was 1-indexed — independently re-verified via a
+      direct solver query and `./visualize_board.sh` after 0-indexing conversion,
+      per I12, not copied uncritically). After 16 plies, neither player has any
+      odd-row major threat; Black holds exactly one major even-row threat at col3
+      row3 (0-indexed). Red holds no major threats. Red to move; the solver scores
+      every column negative (Red loses regardless: -4,-4,-5,-13,-11,-5,-4),
+      consistent with V4: Black wins via the even-row claimeven advantage since no
+      odd-row victory condition (V1/V2/V3) fired for either player.
+    expected_behavior: "solver: all 7 columns score negative for Red (mover); major threats list shows exactly col3 row3 (O), no other major threats"
+    solver_verified: 2026-07-11
 
 false_positives:
   - movestring: PENDING
@@ -75,7 +81,7 @@ related:
   - "[[allen-v5]] — Draw when even V4 does not fire"
   - "[[allis-claimeven]] — the strategic construction that guarantees Black achieves even rows and fires V4"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-11
 ---
 
 ## Verbatim source

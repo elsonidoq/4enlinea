@@ -4,10 +4,11 @@ import {
   hasActiveDoubleThreat, Board, hasWon,
   detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
   detectFigure7, detectJShape, detectOddEvenThreat,
-  detectDoubleThreat, detectForcedWin,
+  detectDoubleThreat, detectForcedWin, detectForcedBlock,
 } from './classifier.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { VALID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
+import { playGame } from './gameSampling.js';
 
 /** @import { HighlightCell, HighlightMetadata } from './classifier.js' */
 const ROWS = 6;
@@ -22,28 +23,6 @@ function mulberry32(a) {
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
-}
-
-export function softmaxSample(legalCols, scores, T, rng) {
-  const raw = legalCols.map(c => scores[c]);
-  const minS = Math.min(...raw);
-  const maxS = Math.max(...raw);
-  const range = maxS - minS;
-  const normalized = range === 0
-    ? raw.map(() => 0)
-    : raw.map(s => (s - minS) / range * 2 - 1);
-  const logits = normalized.map(n => n / T);
-  const maxLogit = Math.max(...logits);
-  const weights = logits.map(l => Math.exp(l - maxLogit));
-  const total = weights.reduce((a, b) => a + b, 0);
-  const probs = weights.map(w => w / total);
-
-  let r = rng(), cum = 0;
-  for (let j = 0; j < legalCols.length; j++) {
-    cum += probs[j];
-    if (r < cum) return legalCols[j];
-  }
-  return legalCols[legalCols.length - 1];
 }
 
 // Return true if the position is finished (someone won or board is full).
@@ -322,111 +301,6 @@ async function computeHighlightCells(category, moveString, scores, correctCols, 
   return [];
 }
 
-// Simulate a softmax-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
-// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
-async function solverWeightedPositionSoftmax(solver, maxMoves, rng, onPosition) {
-  const T1 = rng() * 4 + 0.1;
-  const T2 = rng() * 4 + 0.1;
-  const temps = [T1, T2];
-  let moveString = '';
-  const heights = Array(COLS).fill(0);
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  let player = 1;
-  const plies = [];
-
-  for (let i = 0; i < maxMoves; i++) {
-    const legal = [];
-    for (let c = 0; c < COLS; c++) {
-      if (heights[c] < ROWS) legal.push(c);
-    }
-    if (legal.length === 0) return null;
-
-    const scores = await solver.query(moveString);
-
-    if (await onPosition(moveString, scores)) {
-      return { moveString, scores, trace: { temperature_p1: T1, temperature_p2: T2, termination: 'predicate_match', plies } };
-    }
-
-    const T = temps[player - 1];
-    const rawWeights = legal.map(c => Math.exp(scores[c] / T));
-    const total = rawWeights.reduce((a, b) => a + b, 0);
-    const probs = Array(COLS).fill(0);
-    legal.forEach((c, j) => { probs[c] = rawWeights[j] / total; });
-
-    const col = softmaxSample(legal, scores, T, rng);
-    plies.push({ ply: i, player, scores: [...scores], weights: probs, sampled_col: col });
-
-    board[heights[col]][col] = player;
-    heights[col]++;
-    moveString += col.toString();
-    if (hasWon(board, player)) return null;
-    player = 3 - player;
-  }
-  return null;
-}
-
-// Simulate a mistake-probability-weighted game up to maxMoves plies, calling onPosition(moveString, scores)
-// after each solver query. Returns { moveString, scores, trace } on first match, null otherwise.
-// Each player gets a random mistake probability in [0, 0.5). On each move:
-//   - With probability mp: play the second-best column (deliberate mistake).
-//   - Otherwise: pick uniformly at random among the best columns.
-async function solverWeightedPosition(solver, maxMoves, rng, onPosition) {
-  const MP1 = rng() * 0.25;
-  const MP2 = rng() * 0.25;
-  const mistakeProbs = [MP1, MP2];
-  let moveString = '';
-  const heights = Array(COLS).fill(0);
-  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  let player = 1;
-  const plies = [];
-
-  for (let i = 0; i < maxMoves; i++) {
-    const legal = [];
-    for (let c = 0; c < COLS; c++) {
-      if (heights[c] < ROWS) legal.push(c);
-    }
-    if (legal.length === 0) return null;
-
-    const scores = await solver.query(moveString);
-
-    if (await onPosition(moveString, scores)) {
-      return { moveString, scores, trace: { mistake_prob_p1: MP1, mistake_prob_p2: MP2, termination: 'predicate_match', plies } };
-    }
-
-    const mp = mistakeProbs[player - 1];
-    let col;
-    let mistakeMade = false;
-
-    if (legal.length > 1 && rng() < mp) {
-      // Deliberate mistake: pick second-best column among legal columns.
-      const maxScore = Math.max(...legal.map(c => scores[c]));
-      const belowMax = legal.filter(c => scores[c] < maxScore);
-      if (belowMax.length > 0) {
-        const secondBestScore = Math.max(...belowMax.map(c => scores[c]));
-        const tiedSecond = belowMax.filter(c => scores[c] === secondBestScore);
-        col = tiedSecond[Math.floor(rng() * tiedSecond.length)];
-        mistakeMade = true;
-      }
-    }
-
-    if (!mistakeMade) {
-      // No mistake: pick uniformly at random among the best columns.
-      const maxScore = Math.max(...legal.map(c => scores[c]));
-      const tiedBest = legal.filter(c => scores[c] === maxScore);
-      col = tiedBest[Math.floor(rng() * tiedBest.length)];
-    }
-
-    plies.push({ ply: i, player, scores: [...scores], sampled_col: col, mistake: mistakeMade });
-
-    board[heights[col]][col] = player;
-    heights[col]++;
-    moveString += col.toString();
-    if (hasWon(board, player)) return null;
-    player = 3 - player;
-  }
-  return null;
-}
-
 // T011 — check* functions for the 6 new tactical categories
 
 export function checkZThreatPredicate(ms, scores) {
@@ -486,28 +360,56 @@ export function checkOvercutPredicate(ms, scores) {
   };
 }
 
-export function checkFigure7Predicate(ms, scores) {
-  const result = detectFigure7(new Board(ms), scores);
-  if (!result.matched) return { passes: false, correctCols: [] };
-  return {
-    passes: true,
-    correctCols: [result.correctCol],
-    correct_col: result.correctCol,
-    highlight_metadata: result.highlightMetadata,
-    category_evidence: result.categoryEvidence,
-  };
+export function checkFigure7Predicate(ms, _scores) {
+  const board = new Board(ms);
+
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] >= 6) continue;
+    const nextMs = ms + col.toString();
+    const nextBoard = new Board(nextMs);
+    // Pattern belongs to the player who just moved (last mover)
+    const patternOwner = 3 - nextBoard.currentPlayer;
+    const result = detectFigure7(nextBoard, null, patternOwner);
+    if (!result.matched) continue;
+
+    // Guard: pattern must NOT have been present before the completing move
+    const prevResult = detectFigure7(board, null, patternOwner);
+    if (prevResult.matched) continue;
+
+    return {
+      passes: true,
+      correctCols: [col],
+      correct_col: col,
+      highlight_metadata: result.highlightMetadata,
+      category_evidence: result.categoryEvidence,
+    };
+  }
+  return { passes: false, correctCols: [] };
 }
 
-export function checkJShapePredicate(ms, scores) {
-  const result = detectJShape(new Board(ms), scores);
-  if (!result.matched) return { passes: false, correctCols: [] };
-  return {
-    passes: true,
-    correctCols: [result.correctCol],
-    correct_col: result.correctCol,
-    highlight_metadata: result.highlightMetadata,
-    category_evidence: result.categoryEvidence,
-  };
+export function checkJShapePredicate(ms, _scores) {
+  const board = new Board(ms);
+
+  for (let col = 0; col < 7; col++) {
+    if (board.colHeights[col] >= 6) continue;
+    const nextMs = ms + col.toString();
+    const nextBoard = new Board(nextMs);
+    const patternOwner = 3 - nextBoard.currentPlayer;
+    const result = detectJShape(nextBoard, null, patternOwner);
+    if (!result.matched) continue;
+
+    const prevResult = detectJShape(board, null, patternOwner);
+    if (prevResult.matched) continue;
+
+    return {
+      passes: true,
+      correctCols: [col],
+      correct_col: col,
+      highlight_metadata: result.highlightMetadata,
+      category_evidence: result.categoryEvidence,
+    };
+  }
+  return { passes: false, correctCols: [] };
 }
 
 export function checkOddEvenThreatPredicate(ms, scores) {
@@ -515,7 +417,7 @@ export function checkOddEvenThreatPredicate(ms, scores) {
   if (!result.matched) return { passes: false, correctCols: [] };
   return {
     passes: true,
-    correctCols: [result.correctCol],
+    correctCols: result.correctCols ?? [result.correctCol],
     correct_col: result.correctCol,
     highlight_metadata: result.highlightMetadata, // null for odd_even_threat
     category_evidence: result.categoryEvidence,
@@ -524,7 +426,48 @@ export function checkOddEvenThreatPredicate(ms, scores) {
 
 // Check whether the current position satisfies the category predicate.
 // Returns { passes, correctCols, correct_col?, highlight_metadata?, category_evidence? }.
-async function checkPredicate(category, moveString, scores, solver) {
+// Wraps checkPredicateRaw with two cross-cutting generation-time rejection rules (spec 044 US1/US2):
+//   US1 (FR-001-003): immediate_threat/forced_block candidates that would cast the learner as the
+//     wrong color are rejected outright, not silently corrected.
+//   US2 (FR-006-009): any candidate outside forced_block that also contains an unrelated, live
+//     (gravity-top) forced-block situation is rejected, unless that forced-block's blocking column
+//     coincides with the puzzle's own answer column(s).
+export async function checkPredicate(category, moveString, scores, solver) {
+  const result = await checkPredicateRaw(category, moveString, scores, solver);
+  if (!result.passes) return result;
+
+  // US1: color-cast guard. The learner always plays as `Board(moveString).currentPlayer` — the
+  // player to move at the stored puzzle position. immediate_threat requires that player to be P1
+  // (green, the side with the winning move); forced_block requires P2 (gray, the side that must
+  // block). Empirically: currentPlayer = moveString.length % 2 === 0 ? 1 : 2 (see Board ctor and
+  // predicates.js's local currentPlayer() — both derive it the same way).
+  if (category === 'immediate_threat' || category === 'forced_block') {
+    const learnerPlayer = new Board(moveString).currentPlayer;
+    const requiredPlayer = category === 'immediate_threat' ? 1 : 2;
+    if (learnerPlayer !== requiredPlayer) {
+      return { passes: false, correctCols: [] };
+    }
+  }
+
+  // US2: stray forced-block distraction guard. detectForcedBlock's default perspective
+  // (board.currentPlayer) is exactly "the player about to move at this puzzle position" — the same
+  // player the learner plays as, regardless of category. Only gravity-top-reachable blocking
+  // columns are ever returned (getImmediateThreats/immediateThreats are gravity-top-only by
+  // construction), so a non-reachable forced-block never triggers this rejection.
+  if (category !== 'forced_block') {
+    const fb = detectForcedBlock(new Board(moveString), scores);
+    if (fb.matched) {
+      const blockCols = fb.cols ?? [];
+      const answerCols = result.correctCols ?? [];
+      const coincides = answerCols.some(c => blockCols.includes(c));
+      if (!coincides) return { passes: false, correctCols: [] };
+    }
+  }
+
+  return result;
+}
+
+async function checkPredicateRaw(category, moveString, scores, solver) {
   if (category === 'forced_win') return checkForcedWinPredicate(moveString);
   if (category === 'forbidden_columns') return checkForbiddenColumnsPredicate(moveString);
 
@@ -545,12 +488,16 @@ async function checkPredicate(category, moveString, scores, solver) {
   }
   if (legalCols.length === 0) return { passes: false, correctCols: [] };
 
-  // immediate_threat/forced_block/double_threat: exactly one legal column must return 'correct'
+  // immediate_threat/forced_block/double_threat (spec 044 US3 / FR-010, FR-011): one or more
+  // legal columns must independently satisfy the category's condition. evaluatePredicate returns
+  // 'correct' only when a column is the SOLE satisfying column, and 'tied' when 2+ columns satisfy
+  // it — so both outcomes must be accepted here, or a multi-solution board collects zero correctCols
+  // (every column evaluates to 'tied', none to 'correct') and is wrongly rejected.
   const correctCols = legalCols.filter(c => {
     const r = evaluatePredicate(puzzle, c, scores);
-    return r.result === 'correct';
+    return r.result === 'correct' || r.result === 'tied';
   });
-  return { passes: correctCols.length === 1, correctCols, correct_col: correctCols[0] ?? null };
+  return { passes: correctCols.length >= 1, correctCols, correct_col: correctCols[0] ?? null };
 }
 
 // Reject positions that violate per-category board-quality constraints.
@@ -621,32 +568,39 @@ export async function generateCandidates(category, count, seed) {
     while (candidates.length < count && attempts < MAX_ATTEMPTS) {
       attempts++;
 
-      const rawMinMoves = 8 + Math.floor(rng() * 10);
-      // const maxMoves = ['immediate_threat', 'forced_block'].includes(category) ? 20 : Math.max(rawMinMoves, 34);
+      // FR-011: draw the per-rollout minimum move count from randint(14, 34) (one rng()
+      // call). Positions shorter than minMoves are skipped; the rollout is abandoned once
+      // it reaches maxMoves without a match.
+      const rawMinMoves = 14 + Math.floor(rng() * 21);  // [14, 34] inclusive
       const maxMoves = Math.max(rawMinMoves, 34);
       const minMoves = Math.min(rawMinMoves, maxMoves);
 
-      let matchedCorrectCols = null;
+      // Play one mistake-weighted game via the canonical simulator (gameSampling.js),
+      // breaking the moment a position satisfies the category predicate. playGame yields
+      // each position BEFORE its move with the solver scores at that position — exactly the
+      // (moveString, scores) the former onPosition callback received.
+      let matched = null;
       let matchedHighlightMetadata = null;
       let matchedCategoryEvidence = null;
       let matchedCorrectCol = null;
-      const onPosition = async (ms, sc) => {
-        if (ms.length < minMoves) return false;
-        if (!isClean(category, ms)) return false;
-        const predicateResult = await checkPredicate(category, ms, sc, solver);
-        if (!predicateResult.passes) return false;
-        matchedCorrectCols = predicateResult.correctCols;
+      const plies = [];
+      for await (const pos of playGame(solver, rng, { maxMistakeProb: 0.25 })) {
+        plies.push({ ply: pos.plyIndex, player: pos.player, scores: [...pos.scores], sampled_col: pos.movePlayed });
+        if (pos.ms.length >= maxMoves) break;       // abandon this game, try another
+        if (pos.ms.length < minMoves) continue;
+        if (!isClean(category, pos.ms)) continue;
+        const predicateResult = await checkPredicate(category, pos.ms, pos.scores, solver);
+        if (!predicateResult.passes) continue;
+        matched = { moveString: pos.ms, scores: pos.scores, correctCols: predicateResult.correctCols };
         matchedHighlightMetadata = predicateResult.highlight_metadata ?? null;
         matchedCategoryEvidence = predicateResult.category_evidence ?? null;
         matchedCorrectCol = predicateResult.correct_col ?? null;
-        return true;
-      };
+        break;
+      }
+      if (!matched) { stats.noMatch++; continue; }
 
-      const result = await solverWeightedPosition(solver, maxMoves, rng, onPosition);
-      if (!result) { stats.noMatch++; continue; }
-
-      const { moveString, scores, trace } = result;
-      const correctCols = matchedCorrectCols;
+      const { moveString, scores, correctCols } = matched;
+      const trace = { termination: 'predicate_match', plies };
 
       const tags = [];
       if (correctCols.length > 0) {

@@ -147,31 +147,6 @@ category = 'z_threat'
 
 ---
 
-### Lesson 7: Claimodd — Red Takes the Center
-
-**Concept**
-When the board reaches an "all-even" state — every column has an even number of empty cells — Yellow's claimeven strategy would give Red even rows everywhere, which are the wrong rows for Red. Red's answer is "claimodd": play in the center column first to establish an odd-row anchor. This creates a Z-Threat in the center column that Yellow cannot replicate, giving Red control while Yellow controls all the even rows elsewhere.
-
-**KB entries used**
-- `community-claimodd` — definition, all-even precondition, center-column anchor, failure when col D is full
-- `community-z-threat` — the Z-Threat the center anchor creates (taught in Lesson 6)
-
-**Puzzle filter**
-No classifier category exists. Requires a new synchronous detector:
-```
-all columns have colHeight % 2 === 0 (all-even parity)
-AND it is Red's turn
-AND center column (col 3, 0-indexed) is not full
-AND scores[3] === max(legal_scores) and scores[3] > 0
-```
-
-**Explanation coverage**
-No `PATTERN_KB` entry exists for `claimodd`. The KB statement in `community-claimodd.md` provides the prose. Both a new `detectClaimodd` detector and a new `PATTERN_KB` entry are needed.
-
-**Implementation difficulty: Medium** — the detector is ~25 lines of synchronous code (O(7) parity check + scores comparison, no extra solver calls). Simpler than it sounds; originally labelled Hard in a previous draft.
-
----
-
 ### Lesson 8: The Undercut — When Your Threat Disappears
 
 **Concept**
@@ -303,6 +278,82 @@ AND a specific opponent Z-Threat column can be identified as the zugzwang domina
 ```
 
 **Implementation difficulty: Hard** — new async detector; good puzzle positions may be sparse in the DB.
+
+---
+
+## Opening Theory
+
+These three lessons cover fundamental opening principles from Allen's opening tables and documented openings. Together they form the gateway to understanding which early moves lead to advantage and which shapes win from the starting position. All are fully written with no new detector or solver work required.
+
+---
+
+### Lesson 12: Own the Centre
+
+**Concept**
+The centre column is worth more than edge columns. Because a disc in the centre sits inside more possible horizontal, vertical, and diagonal lines, it keeps the most winning paths alive. For the first player (Red/Green), the centre is the only opening move that, with perfect play, forces a win — every edge move gives the second player (Yellow/Gray) drawing chances or winning resources.
+
+**KB entries used**
+- `allen-opening-principles` — centre-column priority, edge-column weakness
+- `allen-opening-tables` — the 5-4 central opening, verified winning line
+
+**Puzzle filter**
+```
+Socratic board: empty board; correct move is centre column (col 3, 0-indexed)
+```
+
+**Explanation coverage**
+Reading lesson with Socratic interaction. The slides introduce the 5-4 opening, the Candlesticks pattern, and early-game strategic reasoning. The Socratic target (empty board → col 3) teaches the fundamental principle: "Which opening gives the most ways to win?"
+
+**Availability: Free**
+
+**Implementation difficulty: Easy** — fully written; no new detector or solver work required.
+
+---
+
+### Lesson 13: I Play Where You Play
+
+**Concept**
+Allen's principle of imitation: when no sharp threat is available, playing directly above the opponent's last disc is often good enough. This is not a winning strategy by itself, but a heuristic that simplifies early-game decision-making. The Candlesticks opening (three separated columns, each built by imitation) is a canonical example where pure imitation leads to a winning position.
+
+**KB entries used**
+- `allen-candlesticks-opening` — three-column imitation pattern, opening theory context
+- `allen-opening-principles` — imitation as a heuristic, not a rule
+
+**Puzzle filter**
+```
+Socratic board: 8 plies (movestring 33333111); correct move is col 1 (imitation on top of Gray's last move)
+```
+
+**Explanation coverage**
+Reading lesson with Socratic interaction. The slides show imitation in the 5-4 opening, the Candlesticks opening, and isolated columns. The Socratic target (movestring 33333111 → col 1) teaches: "After your opponent plays, what is the simplest good reply?"
+
+**Availability: Free**
+
+**Implementation difficulty: Easy** — fully written; no new detector or solver work required.
+
+---
+
+### Lesson 14: Sharp Openings
+
+**Concept**
+Beyond the canonical openings, Connect Four has specialized sharp lines where only one move wins or loses. The Third-Row Gambit, the D3-D4 opening, and the 5-4 line are Allen-verified positions where centre control is non-negotiable. Recognising these sharp positions trains pattern recognition for the endgame: when only one move wins, you must find it.
+
+**KB entries used**
+- `allen-third-row-gambit` — third-row sacrifice; risk and compensation calculation
+- `allen-d3-d4-opening` — control of centre cells D3 and D4 as a strategic pivot
+- `allen-5-4-opening` — the flagship central opening, fully analyzed
+
+**Puzzle filter**
+```
+Socratic board: 16 plies (movestring 3265533353553111 — Third-Row Gambit); correct move is col 4 (unique winning move)
+```
+
+**Explanation coverage**
+Reading lesson with Socratic interaction. The slides show the 5-4 opening, the D3-D4 position with sharp move selection, and the 3-4 opening as a contrasting case. The Socratic target (complex gambit position → col 4) teaches: "In sharp positions, only one move keeps the edge — find it."
+
+**Availability: Pro**
+
+**Implementation difficulty: Easy** — fully written; no new detector or solver work required.
 
 ---
 

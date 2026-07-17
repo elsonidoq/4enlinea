@@ -12,11 +12,11 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
+import { callOpenAIChat } from './llmChat.js';
+import { KB_DIR } from './kbDir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const KB_DIR = join(__dirname, '../../docs/knowledge-base');
 
 // Score tier ordering for table sort (lower index = better for current player)
 export const TIER_ORDER = {
@@ -38,7 +38,7 @@ export const IMMEDIATE_WIN_OUTCOMES = {
 // User-facing display names for internal pattern labels.
 // Internal names are used for KB lookups; display names appear in LLM prompts.
 const PATTERN_DISPLAY = {
-  forced_win: 'losing_position',
+  forced_win: 'forced win',
 };
 
 function displayName(name) {
@@ -49,20 +49,36 @@ function displayName(name) {
 // or to an inline string for patterns that have no dedicated KB entry.
 // Only entries for patterns with ratio > 0 in any column are loaded at runtime.
 export const PATTERN_KB = {
-  double_threat:  { inline: 'A double threat (or fork) occurs when a player creates two simultaneous winning threats in a single move that the opponent cannot both block. The two threats may be in different columns (the opponent can only play one column per turn) or in adjacent rows of the same column (T1: adjacent threats win unconditionally). The double-threat move is decisive because it guarantees a win on the very next move.' },
-  immediate_threat: { inline: 'An immediate threat is a move that creates four-in-a-row on the very next turn. When a player has three discs in a row with an open space at either end, that space is their winning cell. Immediate threats are decisive because they end the game before the opponent can respond.' },
-  j_shape:        { id: 'allen-j-configuration' },
-  figure_7:       { id: 'community-figure-7' },
-  forced_block: { inline: 'A forced block occurs when the opponent has an immediate winning threat and only a specific set of columns can neutralise it. All other legal moves leave the threat unanswered and lose immediately. Blocking a forced threat is the only legal good move.' },
-  claimeven:      { id: 'allis-claimeven' },
-  baseclaim:      { id: 'allis-baseclaim' },
-  before:         { id: 'allis-before' },
-  specialbefore:  { id: 'allis-specialbefore' },
-  undercut:       { id: 'allen-t2' },
-  overcut:        { id: 'community-overcut' },
-  z_threat:       { id: 'community-z-threat' },
-  forced_win:     { id: 'derived-lost-position' },
-  odd_even_threat: { inline: 'An odd-even threat position occurs when Red has two candidate moves each creating an immediate threat, but one lands on an odd row (rows 0, 2, or 4 — Red\'s natural parity) and the other on an even row. The odd-row threat is strategically superior because Yellow\'s claimeven strategy cannot neutralise threats on odd rows. Red must always prefer the odd-row threat move.' },
+  double_threat:   { id: 'community-double-threat' },
+  immediate_threat: { id: 'community-immediate-threat' },
+  j_shape:         { id: 'allen-j-configuration' },
+  figure_7:        { id: 'community-figure-7' },
+  forced_block:    { id: 'community-forced-block' },
+  claimeven:       { id: 'allis-claimeven' },
+  baseclaim:       { id: 'allis-baseclaim' },
+  before:          { id: 'allis-before' },
+  specialbefore:   { id: 'allis-specialbefore' },
+  undercut:        { id: 'allen-t2' },
+  overcut:         { id: 'community-overcut' },
+  z_threat:        { id: 'community-z-threat' },
+  forced_win:      { id: 'community-forced-win' },
+  // odd_even_threat de-listed from the coach 2026-06-25: its detector + puzzle category
+  // stay, but it is never injected as a [term:...] in the explain prompt. The parity-aware
+  // threat tags below replace its coaching role.
+  major_threat_parity:    { id: 'derived-parity-aligned-threat' },
+  major_threat_nonparity: { id: 'allen-major-threat' },
+  // KB terms are injected into a prompt ONLY when their pattern actually fires on the
+  // board (relevantPatternKeys in explainContext.js). The former `always_include`
+  // glossary path was removed: injecting a term with no instance — even parity /
+  // gravity_top, which were thought to be safe "legend" terms — led the LLM to
+  // fabricate or misapply it on sparse boards (deep-reveal eval, 2026-06-25). This is
+  // the same remedy already applied to major_threat / minor_threat.
+  major_threat:    { id: 'allen-major-threat' },
+  minor_threat:    { id: 'allen-minor-threat' },
+  gravity_top:     { id: 'community-gravity-top' },
+  parity:          { id: 'allen-parity' },
+  // Alias: fork is a synonym for double_threat; shares the same KB article.
+  fork:            { id: 'community-double-threat' },
 };
 
 /**
@@ -93,6 +109,53 @@ export function loadKBStatement(id) {
 }
 
 /**
+ * Extracts a block-scalar frontmatter field (e.g. `short_summary` or
+ * `short_summary_es`) from a KB article's YAML frontmatter.
+ * Returns null if the file cannot be read or the field is missing.
+ */
+function _loadKBFieldRaw(id, field) {
+  try {
+    const text = readFileSync(join(KB_DIR, `${id}.md`), 'utf8');
+    const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return null;
+    const fm = fmMatch[1];
+    const lines = fm.split('\n');
+    let inField = false;
+    const out = [];
+    const re = new RegExp(`^${field}:\\s*\\|`);
+    for (const line of lines) {
+      if (!inField) { if (re.test(line)) inField = true; continue; }
+      if (line.length > 0 && !/^\s/.test(line)) break;
+      out.push(line.replace(/^  /, ''));
+    }
+    return out.join('\n').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extracts the `short_summary` field from a KB article's YAML frontmatter,
+ * localized when `locale === 'es'` and a `short_summary_es` field is present.
+ * Falls back to English `short_summary` (same id, then alias resolution)
+ * when the localized field is missing. Returns null only when no English
+ * summary is available either.
+ */
+export function loadKBShortSummary(id, locale = 'en') {
+  // Resolve the alias (e.g. 'claimeven' -> 'allis-claimeven') once; PATTERN_KB keys are
+  // caller-facing pattern names, but the localized field lives on the resolved KB file,
+  // so both the localized and English lookups below must go through the same resolved
+  // slug, not just the caller's raw id.
+  const kb = PATTERN_KB[id];
+  const resolvedId = kb ? kb.id : id;
+  if (locale === 'es') {
+    const localized = _loadKBFieldRaw(resolvedId, 'short_summary_es');
+    if (localized !== null) return localized;
+  }
+  return _loadKBFieldRaw(resolvedId, 'short_summary');
+}
+
+/**
  * Builds a "## Pattern definitions" section for the given pattern names.
  * Only loads KB content for patterns that have a KB entry.
  */
@@ -101,13 +164,8 @@ export function buildKBSection(patternNames) {
   for (const name of patternNames) {
     const kb = PATTERN_KB[name];
     if (!kb) continue;
-    let statement;
-    if (kb.inline) {
-      statement = kb.inline;
-    } else {
-      statement = loadKBStatement(kb.id);
-      if (!statement) continue;
-    }
+    const statement = loadKBStatement(kb.id);
+    if (!statement) continue;
     entries.push(`### ${displayName(name)}\n${statement}`);
   }
   if (entries.length === 0) return '';
@@ -141,25 +199,15 @@ export async function callLLM(prompt) {
   if (!apiKey) throw new Error('OPENAI_API_KEY not set in environment');
   if (!model)  throw new Error('OPENAI_MODEL not set in environment');
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 400,
-    }),
+  return callOpenAIChat(prompt, {
+    model,
+    apiKey,
+    endpoint: 'run-eval',
+    userId: null,
+    purpose: 'offline-eval',
+    maxCompletionTokens: 400,
+    useJsonFormat: false,
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${body}`);
-  }
-  const data = await res.json();
-  return data.choices[0].message.content;
 }
 
 /**
@@ -542,13 +590,21 @@ export function buildBlunderExplainPrompt({
   positiveReason,
   correctMovePatterns,
   boardViz,
+  bestMoveBoardViz,   // board after the correct move (blunder path only)
   postBoardViz,
   playerName,
   gap,
   gapBucket,
   allowedSet,
-  playedCol,          // 0-indexed; undefined = not provided
-  contrastCol,        // 0-indexed best column on blunder path; undefined = not provided
+  playedCol,              // 0-indexed; undefined = not provided
+  contrastCol,            // 0-indexed best column on blunder path; undefined = not provided
+  playedCell,             // 1-indexed cNrM where the played disc landed; undefined = not provided
+  bestCell,               // 1-indexed cNrM where the better move lands; undefined = not provided
+  kbTermsSection,         // pre-formatted KB term definitions section (from buildExplainContext)
+  threatComparisonSection, // pre-formatted threat count diff (from buildExplainContext)
+  lookaheadSection,       // pre-formatted sparse-board forward look-ahead section
+  openingSection,         // pre-formatted opening-provenance reason (named book-line deviation)
+  centerDominanceSection, // pre-formatted opening center-dominance reason (no-structure path)
 }) {
   const opponentName = playerName === 'Green' ? 'Gray' : 'Green';
   const perspective = playerName === 'Green' ? 1 : 2;
@@ -558,7 +614,7 @@ export function buildBlunderExplainPrompt({
 
   const isBlunder = tag !== null && direction !== null && humanReason !== null;
 
-  const LANGUAGE_RULE = `**Language rule:** Use only Connect Four terminology in your response. Never use these internal technical terms: forced_win, losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Explain everything using board concepts: threats, columns, rows, diagonals, blocking, winning line, fork, etc. The players are called **${playerName}** and **${opponentName}** — use no other names.`;
+  const LANGUAGE_RULE = `**Language rule:** Never use these internal technical terms: forced_win (the internal slug — writing "forced win" in plain language is fine), losing_position, leaf, leaf position, leaf board, simulation, pattern data, pattern comparison, solver, score, terse_reason, matched_direction, tag, direction. Describe only what you can see on the boards above. Address the player as "you" / "your". Refer to the other player as "your opponent". Do not use any player names such as "Gray" or "Green".`;
 
   const sections = [];
 
@@ -575,35 +631,77 @@ You are a Connect Four coach explaining why a move was a strong choice.`);
 
   // ── Players ───────────────────────────────────────────────────────────────
   sections.push(`## Players
-${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${winningParity} rows (${winningRows}); ${opponentName}'s on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows}). Use only Connect Four terms.`);
+You win by completing a line on ${winningParity} rows (${winningRows}).
+Your opponent wins on ${perspective === 1 ? 'EVEN' : 'ODD'} rows (${losingRows}).`);
 
   // ── Boards ────────────────────────────────────────────────────────────────
   const boardLines = ['## Boards'];
   boardLines.push('### Before the move');
   boardLines.push(boardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('### After the move');
+  if (isBlunder && bestMoveBoardViz) {
+    boardLines.push('### After the best move');
+    boardLines.push(bestMoveBoardViz);
+    boardLines.push('');
+  }
+  boardLines.push('### After the move played');
   boardLines.push(postBoardViz || '[unavailable]');
   boardLines.push('');
-  boardLines.push('Note: In the board, Gn = Green discs, Gy = Gray discs.');
+  const yourGlyph = playerName === 'Green' ? 'Gn' : 'Gy';
+  const oppGlyph  = playerName === 'Green' ? 'Gy' : 'Gn';
+  boardLines.push(`Note: In the board, ${yourGlyph} = your discs, ${oppGlyph} = your opponent's discs.`);
   sections.push(boardLines.join('\n'));
 
   // ── Move context ──────────────────────────────────────────────────────────
   const contextLines = ['## Move context'];
-  contextLines.push(`- Player: ${playerName} (winning parity = ${winningParity} rows ${winningRows})`);
+  contextLines.push(`- Your winning rows: ${winningParity} (${winningRows})`);
   contextLines.push(`- Eval gap: ${gapBucket}`);
   if (playedCol !== undefined) {
     contextLines.push(`- Move played: column ${playedCol + 1}`);
   }
+  if (playedCell) {
+    contextLines.push(`- Your move placed a disc on ${playedCell}.`);
+  }
   if (isBlunder && contrastCol !== undefined) {
     contextLines.push(`- Better move: column ${contrastCol + 1}`);
   }
+  if (isBlunder && bestCell) {
+    contextLines.push(`- The better move places a disc on ${bestCell}.`);
+  }
   if (isBlunder) {
     contextLines.push(`- Key insight: ${humanReason}`);
+    if (tag === 'forced_win' && contrastCol !== undefined) {
+      const mechanism = direction === 'missed_own'
+        ? `Column ${contrastCol + 1} would have started a forced win — a sequence of moves that guarantees a win regardless of your opponent's defense.`
+        : `Your move gave your opponent a forced win — a sequence of forcing moves that guarantees their win regardless of your defense. Column ${contrastCol + 1} would have kept this sequence unavailable.`;
+      contextLines.push(`- Pattern mechanism: ${mechanism}`);
+    }
   } else {
     contextLines.push(`- Key insight: ${positiveReason ?? 'This was the strongest move available.'}`);
   }
   sections.push(contextLines.join('\n'));
+
+  // ── Opening theory (named book-line deviation) ────────────────────────────
+  // Provenance frame: it states the book line + the deviation and DEFERS the why-it-loses to the
+  // tactical sections below. Placed early so it frames the position; it never asserts a tactic.
+  if (openingSection) {
+    sections.push(openingSection);
+  }
+
+  // ── Threat comparison ─────────────────────────────────────────────────────
+  if (threatComparisonSection) {
+    sections.push(threatComparisonSection);
+  }
+
+  // ── What the better move leads to (sparse-board forward look-ahead) ────────
+  if (lookaheadSection) {
+    sections.push(lookaheadSection);
+  }
+
+  // ── Why the better move is stronger (opening center-dominance reason) ──────
+  if (centerDominanceSection) {
+    sections.push(centerDominanceSection);
+  }
 
   // ── Best-move patterns (grounding evidence) ───────────────────────────────
   if (correctMovePatterns && correctMovePatterns.size > 0) {
@@ -621,6 +719,10 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
 
   // ── Hard grounding rules ──────────────────────────────────────────────────
   const groundingLines = ['## Hard grounding rules'];
+  groundingLines.push('Threat ownership: a threat or winning line is YOURS only if its cells carry your disc glyph on the boards, it is listed under a "Your …" threat row, or it appears under "YOUR threat cells" below. It is your OPPONENT\'s only if marked with their glyph, listed under an "Opponent …" row, or under "YOUR OPPONENT\'s threat cells" below. Never infer or guess ownership — if the boards above do not show whose threat a cell is, describe the cell without claiming an owner.');
+  if (tag === 'drawing_move') {
+    groundingLines.push('The move you played results in a draw, but a stronger move was available — explain what that better move would have secured. Do NOT claim the position AFTER your move is winning for you or for your opponent; describe only what the better move would have held or built. (A better move may itself have been stronger than a draw — do not deny that a better option existed.)');
+  }
   // Collect allowed columns for the prompt
   const allowedCols = [];
   if (playedCol !== undefined) allowedCols.push(playedCol);
@@ -636,18 +738,32 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
     groundingLines.push('You may reference these columns using zone tags:');
     groundingLines.push(allowedCols.map(c => `[zone:col${c + 1}]column ${c + 1}[/zone:col${c + 1}]`).join(', '));
     groundingLines.push('');
-    // Build strategic cells list (non-validationOnly, cell-type entries only)
-    const strategicCells = [];
+    // Build strategic cells list, grouped by owner so the LLM never guesses whose
+    // threat a cell belongs to (non-validationOnly, cell-type entries only).
+    const yourCells = [];
+    const oppCells = [];
+    const unlabeledCells = [];
     for (const entry of allowedSet) {
       if (entry.validationOnly) continue;
       if (entry.cells && entry.cells.length > 0) {
-        strategicCells.push(...entry.cells);
+        const bucket = entry.owner === 'you' ? yourCells
+                     : entry.owner === 'opponent' ? oppCells
+                     : unlabeledCells;
+        bucket.push(...entry.cells);
       }
     }
-    if (strategicCells.length > 0) {
+    if (yourCells.length + oppCells.length + unlabeledCells.length > 0) {
       groundingLines.push('### Strategic reference cells');
-      groundingLines.push('These cells are tactical reference points for your explanation.');
-      groundingLines.push(`- Concrete cells: [${strategicCells.join(', ')}]`);
+      groundingLines.push('These cells are tactical reference points for your explanation. Each group is labeled with who owns the threat on those cells — attribute them exactly as labeled and never flip ownership.');
+      if (yourCells.length > 0)      groundingLines.push(`- YOUR threat cells: [${yourCells.join(', ')}]`);
+      if (oppCells.length > 0)       groundingLines.push(`- YOUR OPPONENT's threat cells: [${oppCells.join(', ')}]`);
+      if (unlabeledCells.length > 0) groundingLines.push(`- Other reference cells (ownership not determined — do not assert who owns these): [${unlabeledCells.join(', ')}]`);
+    } else if (lookaheadSection) {
+      // Sparse look-ahead fired: the future cells are validation-only (so they don't
+      // appear as Strategic reference cells), but the model MUST still point at the
+      // structure via the zone tag(s) in the look-ahead section. Do NOT tell it to stay
+      // vague here — that instruction directly defeated the feature.
+      groundingLines.push('Specific present-board cells are not pre-listed here. To point at the future follow-up, use the zone tag(s) provided in the "What the better move leads to" section above — they mark the exact square(s) where it would form.');
     } else {
       groundingLines.push('(no specific cell references — use the allowed columns above and describe patterns in general terms)');
     }
@@ -678,30 +794,56 @@ ${playerName} and ${opponentName}. ${playerName}'s winning lines complete on ${w
     sections.push(`## Tone\n${toneText}`);
   }
 
+  // ── KB term definitions (pre-formatted by buildExplainContext) ─────────────
+  if (kbTermsSection) {
+    sections.push(kbTermsSection);
+  }
+
   // ── Output format ─────────────────────────────────────────────────────────
   const formatLines = ['## Output format'];
   formatLines.push('When referencing specific board locations, wrap each reference in zone tags with opening and closing brackets.');
   formatLines.push('The display text inside the tags MUST use natural language — never raw coordinates like c4r3 or col5 (those belong ONLY in the opening tag\'s spec).');
   formatLines.push('');
-  formatLines.push('Syntax (use EXACTLY these patterns — the closing tag MUST repeat the same spec as the opening tag):');
+  formatLines.push('Syntax (use EXACTLY these patterns):');
   formatLines.push('  [zone:colN]column N[/zone:colN] — for a column (N = column number 1–7). Example: [zone:col3]column 3[/zone:col3]');
   formatLines.push('  [zone:cNrM]that cell[/zone:cNrM] — for a single cell. Example: [zone:c5r2]that cell[/zone:c5r2]');
-  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells:c1r2,c2r3] — for multiple cells');
+  formatLines.push('  [zone:cells:c1r2,c2r3]the threat cluster[/zone:cells] — for multiple cells (closing tag is ALWAYS [/zone:cells], no cell list)');
   formatLines.push('  [zone:rowN]row N[/zone:rowN] — for an entire row. Example: [zone:row3]row 3[/zone:row3]');
   formatLines.push('');
   formatLines.push('IMPORTANT: Use "col" (3 letters), NOT "column". Write [zone:col3], never [zone:column 3].');
-  formatLines.push('IMPORTANT: The closing tag must repeat the EXACT spec: [zone:col3]...[/zone:col3], NOT [/zone:column] or [/zone:col].');
+  formatLines.push('IMPORTANT: For colN/cNrM/rowN tags the closing tag MUST repeat the spec: [zone:col3]...[/zone:col3].');
+  formatLines.push('IMPORTANT: For cells tags the closing tag is ALWAYS [/zone:cells] — never repeat the cell list in the closing tag.');
   formatLines.push('');
+  if (kbTermsSection) {
+    formatLines.push('When mentioning a tactical concept that appears in the KB term definitions above, wrap it in term tags:');
+    formatLines.push('  [term:CONCEPT_ID]concept name[/term:CONCEPT_ID] — for a KB-defined term. Replace CONCEPT_ID with the exact kbId from the KB term definitions.');
+    formatLines.push('  CRITICAL: Only use [term:ID] when the ID appears VERBATIM in the KB term definitions section above. Never invent a [term:ID] tag for any slug (underscored or hyphenated) not listed there — write those concepts in plain text instead.');
+    formatLines.push('  Use the MOST SPECIFIC term that applies: e.g. if a move wins in one play, prefer [term:immediate_threat] over the more general [term:major_threat].');
+    formatLines.push('');
+  }
+  formatLines.push('When you write an actual major or minor threat count, do not write a bare number — copy the opening zone tag exactly as it appears on that line in the threat comparison section (e.g. [zone:player-major-pre] or [zone:player-minor-pre]), write the count, then write the matching closing tag (e.g. [/zone:player-major-pre] or [/zone:player-minor-pre]). Exception: if a line shows "none", describe it in plain words (e.g. "left you with no minor threats") — do NOT write a count and do NOT add any zone tag, and never use [zone:tg] or any other invented tag.');
   formatLines.push('Only tag EXPLICIT spatial references. Do not tag abstract concepts.');
   formatLines.push('Use column numbers as they appear in the boards above (1-indexed, row 1 = bottom).');
   sections.push(formatLines.join('\n'));
 
   // ── Task ──────────────────────────────────────────────────────────────────
   if (isBlunder) {
+    // Only ask the model to NAME a tactical pattern when one is actually grounded in
+    // the prompt: a KB term fired, a threat row is shown, the forward look-ahead fired,
+    // or pattern cells are whitelisted (allowedSet). Otherwise telling it to "name the
+    // pattern" with no instance present makes it fabricate one (deep-reveal eval).
+    const hasGroundedPattern = Boolean(kbTermsSection) || Boolean(threatComparisonSection)
+      || Boolean(lookaheadSection) || allowedSet !== null;
+    const patternInstruction = hasGroundedPattern
+      ? 'Name the tactical pattern that was missed or given away (use only concepts defined in KB term definitions above).'
+      : 'Do not invent tactical concept names — describe only what you can see changing between the two boards.';
     sections.push(`## Task
 In 2–3 sentences: explain the mistake using the key insight above as your starting point.
-Name the tactical pattern that was missed or given away. Say what the better move would have
-accomplished. Do not use the internal tag names or direction labels — explain using board concepts only.`);
+${patternInstruction} Say what the better move would have accomplished.
+When describing the better move, always frame it as what YOU could have played — never describe it as an easy reply or opportunity for your opponent.
+If the threat comparison section includes major or minor threat rows, include a comparison in your explanation using those counts — replace every threat count with its zone tag token from the threat comparison. The rows show three parallel states (pre-move, after the better move, after your move); read them in whichever direction the position calls for. The better move is not always the one with MORE threats — sometimes YOUR move is the one that created a threat, and the point is that it was still the weaker choice. Examples: "the best move would have cut your opponent's major threats from [zone:opponent-major-pre]3[/zone:opponent-major-pre] to [zone:opponent-major-best]1[/zone:opponent-major-best]; your move left them at [zone:opponent-major-played]2[/zone:opponent-major-played]"; or "even though your move created a minor threat ([zone:player-minor-played]1[/zone:player-minor-played]), the better move left you with no minor threats and was still stronger because …". A line that shows "none" carries no tag — say "no minor threats" in plain words, never wrap a zero. If no major or minor threat rows appear, do not write a threat comparison.
+If no threat comparison rows are shown and no tactical pattern is named above, give the concrete STRATEGIC reason the better move is preferable — for example it keeps more of the board open and creates more future possibilities, takes more central control, or loses more slowly under best play.${openingSection ? ' An "## Opening theory" section above frames this position on a known book line — either you (the first player) left a winning plan and it names the column that keeps the win, OR you are the second player on a first-player-win line and your job is to hold the toughest defense and wait for a slip. Lead with whichever frame that section states; name the opening only as given, do not invent a name, and for the defender do NOT claim you are building a win.' : ''}${centerDominanceSection ? ' A "## Why the better move is stronger" section above gives the concrete reason for THIS position — build your explanation on it (centrality / number of winning lines), do not substitute a vaguer one.' : ''} Do NOT pad the explanation by merely restating where each disc landed ("would have put your disc on that cell"): naming a landing square is not a reason. Do not invent a tactical pattern or claim a threat the boards do not show.
+Do not use internal tag names or direction labels.`);
   } else {
     sections.push(`## Task
 In 2–3 sentences: explain why this was a strong move, using the key insight as your starting point.
@@ -709,7 +851,19 @@ Name the tactical pattern or strategic benefit it creates. Scaled to the eval ga
 acknowledge both moves have merit; for a large gap, highlight what this move uniquely achieves.`);
   }
 
-  return sections.join('\n\n');
+  // No section may be rendered with an empty body. A section is "informationally
+  // empty" when everything after its `## Heading` line (ignoring blank lines) is
+  // whitespace — such a section conveys nothing and primes the LLM to invent content.
+  // This is a structural property of the whole prompt, not a per-section special case.
+  const nonEmptySections = sections.filter((s) => {
+    if (s == null) return false;
+    const text = String(s);
+    // Strip a single leading `## Heading` line, then check for any real content.
+    const body = text.replace(/^\s*#{1,6}[^\n]*\n?/, '');
+    return body.trim().length > 0;
+  });
+
+  return nonEmptySections.join('\n\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

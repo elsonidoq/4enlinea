@@ -1,36 +1,84 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { readFileSync } from 'node:fs';
+import { dirname, join, basename } from 'path';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'crypto';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import { assignHeatmaps } from './heatmap.js';
-import { classify, checkWin, Board, getImmediateThreats, tagBlunder, classifyPattern } from './classifier.js';
-import { classifyAiMove } from './classifyAiMove.js';
-import { buildExplainContext } from './explainContext.js';
+import { classify, checkWin, Board, getImmediateThreats, tagBlunder, NotABlunderError, classifyPattern, chooseSparringMove, SPARRING_MISTAKE_RATES } from './classifier.js';
+import { loadKBShortSummary } from './llmCoachHelpers.js';
+import { computeMechanism } from './mechanismExplainer.mjs';
 import { VALID_BLUNDER_TAGS } from './blunderTags.js';
+import { parseQueuePaginationParams } from './coachQueuePagination.js';
+import { computeStatsAggregate } from './statsAggregate.js';
+import { computeBlunderCountsForGames } from './blunderCountsForGames.js';
+import { computeWeaknessMapFallback } from './weaknessMapFallback.js';
 import { insertGameBlunder } from './insertGameBlunder.js';
-import { callLLM } from './llmCoachHelpers.js';
-import { evaluatePredicate } from './predicates.js';
+import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from './anonBlunderAccess.js';
+import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
+import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
+import { registerStripeRoutes } from './stripeRoutes.js';
+import { createStripeProcessor } from './stripeProcessor.js';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
 import { CHALLENGE_SETS } from './challengeSets.js';
 import { scoreMove, computeBlunderSeverity } from './moveQualityScorer.js';
+import { classifyStoredMistake } from './mistakeStorageRule.js';
 import { ForcedWinStrategy, getAiResponseCol, countThreatsAfterMove, parseBoardState } from './completionStrategies.js';
+import { createAttemptRefresh } from './authRefresh.js';
+import { USER_PROFILE_SELECT_COLUMNS, defaultUserProfile } from './userHelpers.js';
 import i18nTranslations from '../src/i18n/en.json' with { type: 'json' };
+import i18nTranslationsEs from '../src/i18n/es.json' with { type: 'json' };
 import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, validateLesson } from './lessonLoader.js';
 import { requireAdmin } from './adminAuth.js';
+import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
-import { validateAnnotation } from './annotationGate.js';
+import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
-import { buildGoogleAuthorizeUrl } from './authUtils.js';
+import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
+import { logError } from './logger.js';
+import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
+import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
+import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
+import { resolveAdminLang } from './adminAudioLang.mjs';
+import { buildTtsInstructions } from './ttsInstructions.mjs';
+import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFAULT_TTS_MODEL } from './ttsConfig.mjs';
+import { validatePreviewRequest } from './ttsPreviewValidation.mjs';
+import { SUPPORTED_LOCALES } from './locale.mjs';
+import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
+import { buildCacheFilter } from './explainCacheKey.mjs';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Boot-time fail-safe (spec 047 FR-006) ──────────────────────────────────────
+// If we're pointed at a real (non-local) Supabase project but NODE_ENV isn't
+// 'production', cookies would silently ship without the `secure` flag (see
+// cookieOpts() below). Refuse to boot rather than risk a silent downgrade.
+// Inspects process.env only — never reads a file (avoids the boot-path .env
+// read crash trap; env-file loading via `node --env-file` has already resolved
+// by the time this module starts executing).
+{
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const isLocalSupabase = supabaseUrl && (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost'));
+  if (process.env.NODE_ENV !== 'production' && supabaseUrl && !isLocalSupabase) {
+    console.error('\n' + '!'.repeat(78));
+    console.error('FATAL: SUPABASE_URL points at a non-local project but NODE_ENV != "production".');
+    console.error(`  SUPABASE_URL=${supabaseUrl}`);
+    console.error(`  NODE_ENV=${process.env.NODE_ENV}`);
+    console.error('Refusing to boot: this would silently ship session cookies without the');
+    console.error('`secure` flag against a real backend. Set NODE_ENV=production, or point');
+    console.error('SUPABASE_URL at a local instance (127.0.0.1/localhost) for dev.');
+    console.error('!'.repeat(78) + '\n');
+    process.exit(1);
+  }
+}
 
 // ── Sentry (T004) ─────────────────────────────────────────────────────────────
 if (process.env.SENTRY_DSN) {
@@ -42,7 +90,58 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 app.set('trust proxy', 1); // Railway is a reverse proxy; needed for express-rate-limit
+
+// ── Security headers (spec 047 FR-003/FR-004) ──────────────────────────────────
+// `<supabase-host>` for media-src is derived from SUPABASE_URL at startup — works
+// for both the production Supabase host and local 127.0.0.1:54321 with no env
+// branch. Falls back to omitting the extra media-src origin if SUPABASE_URL is
+// unset (e.g. Supabase not configured at all in this environment).
+//
+// FR-004: the CSP MUST permit the app's REAL external dependencies. Beyond the
+// Supabase media host, the Play-Online / Past-Games features talk to papergames.io
+// directly from the browser (spec 047 code-review, not caught in research.md §2):
+//   • PlayOnlineScreen.jsx opens `wss://papergames.io/socket.io/...` → needs
+//     connect-src (governs WebSocket) to allow papergames.io.
+//   • PastGamesListScreen.jsx renders avatar <img> from https://papergames.io →
+//     needs img-src to allow papergames.io.
+// A bare `connect-src/img-src 'self'` would silently break online play and avatars
+// in production (Express serves dist/ with this header; Vite dev does not, which is
+// why the local smoke test can't surface it). The inline service-worker <script>
+// that used to live in index.html was moved into src/main.jsx so `script-src 'self'`
+// can stay strict (no 'unsafe-inline'/nonce needed).
+const SUPABASE_HOST = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).host : null;
+const PAPERGAMES_ORIGIN = 'https://papergames.io';
+const PAPERGAMES_WS = 'wss://papergames.io';
+// Frontend Sentry (OI-10): browser SDK POSTs error events to the ingest host below.
+// Env-derived (not hardcoded to one Sentry project); defaults to the wildcard ingest
+// domain used by all Sentry SaaS projects.
+const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io';
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
+      mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+}));
+
+// Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
+// bytes. It MUST be parsed before the global express.json() below consumes the
+// request stream — otherwise by the time the route's own express.raw() middleware
+// runs (registerStripeRoutes is called much later in this file), the body stream has
+// already been read and parsed into an object, leaving nothing for raw() to read.
+// Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
+app.use(localeMiddleware);
 app.use(cookieParser());
 app.use((req, res, next) => {
   console.log('[req]', req.method, req.originalUrl, 'ip=', req.ip);
@@ -96,15 +195,16 @@ app.use('/api/', makeLimit(120));
 // Center-favoring, symmetric, approximate.
 const EMPTY_BOARD_SCORES = [0, 0, 1, 2, 1, 0, 0];
 
+// Shared UUID regex for blunder permalink endpoint + OG injection
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// computeThreatCells is imported from ./blunderDetailResponse.js (spec 042, T003) —
+// hoisted there so the blunder permalink endpoint's response shape is unit-testable
+// without booting the full app/solver.
+
 // ── Input validation ──────────────────────────────────────────────────────────
 
-const MOVES_RE = /^[0-6]{0,42}$/;
-
-function validateMoves(moves) {
-  if (typeof moves !== 'string') return 'moves must be a string';
-  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 0–6';
-  return null;
-}
+import { MOVES_RE, validateMoves } from './validateMoves.mjs';
 
 // ── Solver process ────────────────────────────────────────────────────────────
 
@@ -131,15 +231,27 @@ function queryDepth(moves, depth) {
 
 const solver = createSolverProcess();
 
-// ── Supabase client ───────────────────────────────────────────────────────────
+// ── Supabase clients ──────────────────────────────────────────────────────────
+// supabase     — DB operations only (from(), rpc()); never call auth.* on this
+// authClient   — auth operations only (getUser, refreshSession, signInAnonymously)
+// Keeping them separate avoids supabase-js session contamination: auth.getUser(userJwt)
+// internally stores the user's JWT on the client, which would cause subsequent
+// DB inserts to run as 'authenticated' instead of 'service_role', triggering RLS 42501.
 
 let supabase = null;
+let authClient = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
   const { createClient } = await import('@supabase/supabase-js');
+  const clientOpts = { auth: { persistSession: false, autoRefreshToken: false } };
   supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false } }
+    clientOpts
+  );
+  authClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    clientOpts
   );
 }
 
@@ -162,6 +274,12 @@ try {
 
 // ── Auth proxy endpoints ──────────────────────────────────────────────────────
 
+// attemptRefresh(refreshToken) → { accessToken, refreshToken } | null — shared by
+// POST /api/auth/refresh and GET /api/auth/session (auto-refresh, see authRefresh.js).
+// authClient may be null if Supabase isn't configured; every call site below already
+// guards on `!supabase` (created alongside authClient) before reaching this.
+const attemptRefresh = createAttemptRefresh({ authClient });
+
 function cookieOpts() {
   return {
     httpOnly: true,
@@ -172,7 +290,7 @@ function cookieOpts() {
 }
 
 const ACCESS_TOKEN_MAX_AGE = 3600_000; // 1 hour
-const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 3600_000; // 7 days
+const REFRESH_TOKEN_MAX_AGE = 60 * 24 * 3600_000; // 60 days
 
 // GET /api/auth/oauth/google — redirect to Supabase Google OAuth
 app.get('/api/auth/oauth/google', (req, res) => {
@@ -190,7 +308,7 @@ app.post('/api/auth/callback', async (req, res) => {
 
   try {
     console.log('[auth/callback] verifying access_token, length=', access_token?.length);
-    const { data, error } = await supabase.auth.getUser(access_token);
+    const { data, error } = await authClient.auth.getUser(access_token);
     if (error || !data?.user) {
       console.error('[auth/callback] token invalid:', error?.message);
       return res.status(401).json({ error: 'Invalid token' });
@@ -216,7 +334,8 @@ app.post('/api/auth/callback', async (req, res) => {
 
     res.json({ user: { id: data.user.id, tier } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[auth/callback]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -227,21 +346,22 @@ app.post('/api/auth/refresh', async (req, res) => {
   if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
   try {
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-    if (error || !data?.session) {
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Refresh failed' });
     }
 
-    res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
-    if (data.session.refresh_token) {
-      res.cookie('sb_refresh_token', data.session.refresh_token, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
     }
 
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[auth/refresh]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -252,31 +372,61 @@ app.post('/api/auth/signout', (_req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/auth/session — return current user from cookie token
+// GET /api/auth/session — return current user from cookie token, transparently
+// refreshing via the refresh-token cookie when the access token is missing/invalid
+// (spec 045 US2 / FR-004, FR-005: no surprise sign-out mid-session).
 app.get('/api/auth/session', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
-  const token = req.cookies?.sb_access_token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const accessToken = req.cookies?.sb_access_token;
+  const refreshToken = req.cookies?.sb_refresh_token;
+
+  if (!accessToken && !refreshToken) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) {
+    async function fetchProfileResponse(userId) {
+      let tier = 'free';
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tier')
+        .eq('id', userId)
+        .single();
+      if (profile) tier = profile.tier;
+      return res.json({ user: { id: userId, tier } });
+    }
+
+    if (accessToken) {
+      const { data, error } = await authClient.auth.getUser(accessToken);
+      if (!error && data?.user) {
+        return await fetchProfileResponse(data.user.id);
+      }
+    }
+
+    // Access token absent/invalid/expired — fall through to a silent refresh.
+    const result = await attemptRefresh(refreshToken);
+    if (!result) {
       res.clearCookie('sb_access_token', cookieOpts());
       res.clearCookie('sb_refresh_token', cookieOpts());
       return res.status(401).json({ error: 'Token invalid' });
     }
 
-    let tier = 'free';
-    const { data: profile } = await supabase
-      .from('users')
-      .select('tier')
-      .eq('id', data.user.id)
-      .single();
-    if (profile) tier = profile.tier;
+    res.cookie('sb_access_token', result.accessToken, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
+    if (result.refreshToken) {
+      res.cookie('sb_refresh_token', result.refreshToken, { ...cookieOpts(), maxAge: REFRESH_TOKEN_MAX_AGE });
+    }
 
-    res.json({ user: { id: data.user.id, tier } });
+    const { data: refreshedUser, error: refreshedUserError } = await authClient.auth.getUser(result.accessToken);
+    if (refreshedUserError || !refreshedUser?.user) {
+      res.clearCookie('sb_access_token', cookieOpts());
+      res.clearCookie('sb_refresh_token', cookieOpts());
+      return res.status(401).json({ error: 'Token invalid' });
+    }
+
+    return await fetchProfileResponse(refreshedUser.user.id);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[auth/session]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -284,7 +434,7 @@ app.get('/api/auth/session', async (req, res) => {
 app.post('/api/auth/anonymous', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Auth not configured' });
   try {
-    const { data, error } = await supabase.auth.signInAnonymously();
+    const { data, error } = await authClient.auth.signInAnonymously();
     if (error || !data?.session) return res.status(400).json({ error: error?.message || 'Anonymous sign-in failed' });
 
     res.cookie('sb_access_token', data.session.access_token, { ...cookieOpts(), maxAge: ACCESS_TOKEN_MAX_AGE });
@@ -294,7 +444,8 @@ app.post('/api/auth/anonymous', async (req, res) => {
 
     res.json({ user: { id: data.user.id, tier: 'free' } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[auth/anonymous]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -302,30 +453,27 @@ app.post('/api/auth/anonymous', async (req, res) => {
 
 async function loadUser(req, _res, next) {
   req.user = null;
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : req.cookies?.sb_access_token;
+  const token = resolveAuthToken(req.headers.authorization, req.cookies);
 
   if (!token || !supabase) return next();
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await authClient.auth.getUser(token);
     if (error || !data?.user) return next();
 
     let { data: profile } = await supabase
       .from('users')
-      .select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid')
+      .select(USER_PROFILE_SELECT_COLUMNS)
       .eq('id', data.user.id)
       .single();
 
     if (!profile) {
       // Trigger on auth.users may not have fired — create the row now.
-      await supabase.from('users').insert({ id: data.user.id }).select('tier, deep_reveal_count, deep_reveal_reset_at, device_uuid').single()
+      await supabase.from('users').insert({ id: data.user.id }).select(USER_PROFILE_SELECT_COLUMNS).single()
         .then(({ data: created }) => { if (created) profile = created; });
     }
 
-    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, tier: 'free', deep_reveal_count: 0, deep_reveal_reset_at: new Date().toISOString() };
+    req.user = profile ? { id: data.user.id, ...profile } : { id: data.user.id, ...defaultUserProfile() };
   } catch {
     // Non-fatal: treat as anonymous
   }
@@ -357,15 +505,15 @@ async function checkAndDecrementQuota(user) {
 
   const now = new Date();
 
-  // Treat null deep_reveal_reset_at as already expired
+  // Treat null deep_reveal_reset_at as already expired — shared with peekQuota
+  // via quotaLimits.js so the reset/normalize rule exists in exactly one place.
   const resetAtRaw = user.deep_reveal_reset_at;
-  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+  const resetAt = resolveResetAt({ resetAt: resetAtRaw });
 
   // Reset quota if past the weekly reset time (or null)
-  let count = user.deep_reveal_count ?? 0;
+  let count = effectiveDeepRevealCount({ count: user.deep_reveal_count, resetAt: resetAtRaw, now });
   let resetsAt;
-  if (now > resetAt) {
-    count = 0;
+  if (isPastReset({ resetAt: resetAtRaw, now })) {
     const nextMonday = nextMondayUtcMidnight(now);
     resetsAt = nextMonday.toISOString();
     await supabase
@@ -376,7 +524,7 @@ async function checkAndDecrementQuota(user) {
     resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 20) return { allowed: false, resetsAt };
+  if (count >= FREE_DEEP_REVEAL_WEEKLY_LIMIT) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
@@ -385,6 +533,10 @@ async function checkAndDecrementQuota(user) {
 
   return { allowed: true, resetsAt };
 }
+
+// peekQuota (read-only quota check, no write) now lives in quotaLimits.js —
+// imported above — so index.js and quotaLimits.js's tests exercise the exact
+// same function instead of two independently-maintained copies of the rule.
 
 // ── LLM explanation composer ──────────────────────────────────────────────────
 
@@ -435,28 +587,249 @@ FULL_TEXT: <text>`;
 
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
 
+// ── Papergames proxy (PoC — no auth required) ───────────────────────────────
+
+const PAPERGAMES_API = 'https://papergames.io';
+
+app.post('/api/papergames/guest-registration', async (req, res) => {
+  try {
+    const pgRes = await fetch(`${PAPERGAMES_API}/api/authentication/guest-registration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-app-platform': 'web' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await pgRes.json();
+    res.status(pgRes.status).json(data);
+  } catch (err) {
+    logError('[papergames/guest-registration]', err);
+    res.status(502).json({ error: 'Papergames unavailable' });
+  }
+});
+
+app.get('/api/papergames/tournament/open', async (req, res) => {
+  try {
+    const pgRes = await fetch(`${PAPERGAMES_API}/api/tournament/open?type=Connect4&_t=${Date.now()}`, {
+      headers: { 'x-app-platform': 'web', ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}) },
+    });
+    const data = await pgRes.json();
+    res.status(pgRes.status).json(data);
+  } catch (err) {
+    logError('[papergames/tournament/open]', err);
+    res.status(502).json({ error: 'Papergames unavailable' });
+  }
+});
+
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
 app.get('/api/lessons', (req, res) => res.json(getLessons()));
 app.get('/api/lessons/:id', (req, res) => {
-  const lesson = getLesson(req.params.id);
+  const locale = req.locale ?? 'en';
+  const lesson = getLesson(req.params.id, locale);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
 
+// ── Admin eval-set endpoints ───────────────────────────────────────────────────
+
+app.get('/api/admin/eval-sets', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir).filter(isValidEvalSetFilename).sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/eval-set', requireLocalhost, requireAdmin, (req, res) => {
+  const evalPath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', 'eval_set.json');
+  try {
+    res.json(JSON.parse(readFileSync(evalPath, 'utf-8')));
+  } catch {
+    res.status(404).json({ error: 'eval_set.json not found — run server/scripts/generate_eval_set.mjs first' });
+  }
+});
+
+app.get('/api/admin/eval-set/:name', requireLocalhost, requireAdmin, (req, res) => {
+  const { name } = req.params;
+  if (!isValidEvalSetFilename(`${name}.json`)) {
+    return res.status(400).json({ error: 'invalid eval set name' });
+  }
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', `${name}.json`);
+  try {
+    res.json(JSON.parse(readFileSync(filePath, 'utf-8')));
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'eval set not found' });
+    logError('[admin/eval-set]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.get('/api/admin/eval-results', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir)
+      .filter(isValidEvalFilename)
+      .sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/eval-results/:filename', requireLocalhost, requireAdmin, (req, res) => {
+  const { filename } = req.params;
+  if (!isValidEvalFilename(filename)) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+  const safe = basename(filename);
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', safe);
+  try {
+    const lines = readFileSync(filePath, 'utf-8').trim().split('\n').filter(Boolean);
+    const rows = lines.map(line => {
+      const obj = JSON.parse(line);
+      return {
+        id: obj.id,
+        board_state: obj.board_state,
+        final_response: obj.final_response,
+        prompt: obj.prompt ?? null,
+        prompt_data: obj.prompt_data ?? null,
+        feature_vector: obj.feature_vector ?? null,
+        filtered_prompt_data: obj.filtered_prompt_data ?? null, // legacy result files
+        attempt1_failures: obj.attempt1_failures ?? [],
+        attempt2_failures: obj.attempt2_failures ?? [],
+      };
+    });
+    res.json({ rows });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'file not found' });
+    logError('[admin/eval-results/:filename]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/eval-feedback — append a human flag for one eval entry to a
+// sidecar JSONL file alongside the results file (left-joined by `id` by the
+// judge-deep-reveals skill). Body: { filename, id, human_note }.
+app.post('/api/admin/eval-feedback', requireLocalhost, requireAdmin, (req, res) => {
+  const { filename, id, human_note } = req.body;
+
+  if (!isValidEvalFilename(filename)) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+  if (id === undefined || id === null || id === '') {
+    return res.status(400).json({ error: 'id is required' });
+  }
+
+  const feedbackName = feedbackFilenameFor(basename(filename));
+  if (!feedbackName) {
+    return res.status(400).json({ error: 'invalid filename' });
+  }
+
+  const filePath = join(dirname(fileURLToPath(import.meta.url)), 'scripts', feedbackName);
+  const record = {
+    id,
+    human_note: typeof human_note === 'string' ? human_note : '',
+    flagged_at: new Date().toISOString(),
+  };
+  try {
+    appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf-8');
+    res.status(201).json({ ok: true, feedback_file: feedbackName });
+  } catch (err) {
+    logError('[admin/eval-feedback]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// ── Reason-vector LLM-eval browser ("Eval answers" mode of /admin/fv-suff) ──────
+// Joins, by id, an eval SET ({id, pattern_category, feature_vector} from
+// build_fv_eval_set.mjs / build_reason_eval_set.mjs), an ANSWERS jsonl
+// (explain_from_vector.mjs), and an optional GRADES jsonl (grade-fv-sufficiency's
+// <stem>_grades.jsonl side-output). Lets you read board + vector + LLM answer +
+// grade together to spot reason-engine / glossary defects. Read-only, localhost-admin.
+// (Validators/derivers are in evalResultsHelpers.js, unit-tested.)
+
+app.get('/api/admin/fv-suff/files', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const all = readdirSync(scriptsDir);
+    res.json({ answers: all.filter((f) => isFvSuffAnswersFile(f) && !f.endsWith('_grades.jsonl')).sort() });
+  } catch {
+    res.json({ answers: [] });
+  }
+});
+
+app.get('/api/admin/fv-suff', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  const answersName = req.query.answers || 'fv_suff_answers_all.jsonl';
+  if (!isFvSuffAnswersFile(answersName)) return res.status(400).json({ error: 'invalid answers filename' });
+  const parseJsonl = (path) => readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  try {
+    const answers = parseJsonl(join(scriptsDir, basename(answersName)));
+    const set = deriveSetFromAnswers(answers);
+    let grades = [];
+    const gradesName = gradesFilenameFor(basename(answersName));
+    if (gradesName) {
+      try { grades = parseJsonl(join(scriptsDir, gradesName)); }
+      catch (e) { if (e.code !== 'ENOENT') throw e; }
+    }
+    res.json({ set, answers, grades });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'answers file not found' });
+    logError('[admin/fv-suff]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// ── Blunder-reason evidence browser ────────────────────────────────────────────
+// Serves precomputed reasonEngine evidence (one object per line, produced by
+// server/scripts/reason_engine/build_evidence.mjs). Read-only, localhost-admin only.
+// No solver runs in the web server. See docs/architecture/blunder-reason-evidence.md.
+
+function isReasonEvidenceFile(name) {
+  return typeof name === 'string' && /^reason_evidence_[\w.-]*\.jsonl$/.test(name);
+}
+
+app.get('/api/admin/reason/files', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  try {
+    const files = readdirSync(scriptsDir).filter(isReasonEvidenceFile).sort();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/admin/reason', requireLocalhost, requireAdmin, (req, res) => {
+  const scriptsDir = join(dirname(fileURLToPath(import.meta.url)), 'scripts');
+  const fileName = req.query.file || 'reason_evidence_all.jsonl';
+  if (!isReasonEvidenceFile(fileName)) {
+    return res.status(400).json({ error: 'invalid reason evidence filename' });
+  }
+  try {
+    const rows = readFileSync(join(scriptsDir, basename(fileName)), 'utf-8')
+      .trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    res.json({ rows });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'reason evidence file not found' });
+    logError('[admin/reason]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
 // ── Admin lesson endpoints ─────────────────────────────────────────────────────
 
-app.get('/api/admin/lessons', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   res.json(getLessonsAll());
 });
 
-app.get('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.get('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const all = getLessonsAll();
   const lesson = all.find(l => l.id === req.params.id);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
 
-app.post('/api/admin/lessons', requireAdmin, (req, res) => {
+app.post('/api/admin/lessons', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -465,11 +838,12 @@ app.post('/api/admin/lessons', requireAdmin, (req, res) => {
     reloadLessons();
     res.status(201).json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logError('[admin/lessons/create]', e);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
-app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.put('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   const lesson = req.body;
   const err = validateLesson(lesson);
   if (err) return res.status(400).json({ error: err });
@@ -479,23 +853,60 @@ app.put('/api/admin/lessons/:id', requireAdmin, (req, res) => {
     reloadLessons();
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logError('[admin/lessons/update]', e);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
-app.delete('/api/admin/lessons/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) => {
   try {
     deleteLessonFile(LESSONS_DIR, req.params.id);
     reloadLessons();
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logError('[admin/lessons/delete]', e);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// Requires requireLocalhost — the function declaration below (~:2795 in this file)
+// is hoisted, so it is safe to reference here at module init time.
+app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
+  const rawLang = req.body?.lang;
+  if (rawLang !== undefined && !SUPPORTED_LOCALES.includes(rawLang)) {
+    return res.status(400).json({ error: `lang must be one of: ${SUPPORTED_LOCALES.join(', ')}` });
+  }
+  const lang = rawLang ?? 'en';
+
+  // D1: getLesson() applies localizeLesson, which STRIPS all `_es` fields — using it
+  // here would both feed generateLessonAudio(lang='es') empty text_es AND destroy
+  // every _es field on save. This endpoint must read/write the RAW lesson object.
+  const lesson = getLessonsAll().find(l => l.id === req.params.id) ?? null;
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+  try {
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson, { lang });
+    saveLessonFile(LESSONS_DIR, updatedLesson);
+    reloadLessons();
+    res.json({ lesson: updatedLesson, generated, failed });
+  } catch (e) {
+    logError('[admin/lessons/generate-audio]', e);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/api/admin/lessons/prune-audio', requireLocalhost, requireAdmin, (req, res) => {
+  try {
+    const deleted = pruneOrphanedLessonAudio(getLessonsAll());
+    res.json({ deleted });
+  } catch (e) {
+    logError('[admin/lessons/prune-audio]', e);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin puzzle picker ──────────────────────────────────────────────────────────
 
-app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
+app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) => {
   const { category } = req.query;
   if (!category || typeof category !== 'string') {
     return res.status(400).json({ error: 'category query parameter is required' });
@@ -510,31 +921,38 @@ app.get('/api/admin/puzzles', requireAdmin, async (req, res) => {
       .eq('is_active', true)
       .eq('category', category)
       .order('created_at', { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[admin/puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
     res.json({ puzzles: puzzles || [] });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logError('[admin/puzzles]', e);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 app.post('/api/scores', async (req, res) => {
-  const { moves, depth } = req.body;
-  if (typeof moves !== 'string') {
-    return res.status(400).json({ error: 'moves must be a string' });
-  }
-
-  if (moves === '' && !depth) {
-    return res.json({ scores: EMPTY_BOARD_SCORES });
+  const { moves, depth, difficulty } = req.body;
+  const movesErr = validateMoves(moves);
+  if (movesErr) return res.status(400).json({ error: movesErr });
+  // When `difficulty` is present the caller is the sparring AI: we return the
+  // chosen column (see chooseSparringMove) alongside the scores. The hint path
+  // omits `difficulty` and gets scores only.
+  if (difficulty !== undefined && !(difficulty in SPARRING_MISTAKE_RATES)) {
+    return res.status(400).json({ error: 'difficulty must be easy, medium, hard, or perfect' });
   }
 
   try {
-    console.log(`[api] /api/scores moves="${moves}" depth=${depth ?? 'unlimited'}`);
-    const t0 = Date.now();
-    const scores = depth ? await queryDepth(moves, depth) : await solver.query(moves);
-    console.log(`[api] done in ${Date.now()-t0}ms → ${scores}`);
+    const scores = (moves === '' && !depth)
+      ? EMPTY_BOARD_SCORES
+      : (depth ? await queryDepth(moves, depth) : await solver.query(moves));
+
+    if (difficulty !== undefined) {
+      const col = chooseSparringMove(new Board(moves), difficulty, scores);
+      return res.json({ scores, col });
+    }
     res.json({ scores });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[scores]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -584,8 +1002,8 @@ app.post('/api/explain', async (req, res) => {
     const { human, ai } = assignHeatmaps(current, opponent, moves.length, humanFirst);
     res.json({ human, ai });
   } catch (err) {
-    console.error('[explain]', err.message);
-    res.status(500).json({ error: err.message });
+    logError('[explain]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -628,6 +1046,7 @@ app.post('/api/explain-move', async (req, res) => {
   const positionHash = createHash('sha256')
     .update(`${moves}:${candidateCol}`)
     .digest('hex');
+  const locale = req.locale ?? 'en';
 
   // Check explanation cache first
   let cachedEntry = null;
@@ -635,8 +1054,8 @@ app.post('/api/explain-move', async (req, res) => {
     const { data } = await supabase
       .from('explanation_cache')
       .select('one_liner, deep_reveal_json')
-      .eq('position_hash', positionHash)
-      .single();
+      .match(buildCacheFilter(positionHash, locale))
+      .maybeSingle();
     cachedEntry = data;
   }
 
@@ -674,6 +1093,7 @@ app.post('/api/explain-move', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: oneLiner,
         deep_reveal_json: deepRevealData,
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
@@ -687,79 +1107,19 @@ app.post('/api/explain-move', async (req, res) => {
     deepReveal = deepRevealData;
   }
 
-  res.json({ oneLiner, patternTag, deepReveal });
+  // Response-boundary guard (spec 042 US5, FR-019): strip internal community-/allen- label
+  // prefixes and raw cXrY coordinate tokens from every player-facing text field, regardless of
+  // whether it came from the cache or was just generated (research.md §5).
+  res.json(guardExplainMovePayload({ oneLiner, patternTag, deepReveal }));
 });
 
 // ── LLM coaching endpoints ─────────────────────────────────────────────────────
 
-// Delegates to the unified explainContext.js flow (Epic 3).
-// The module-level solver is injected here; tests pass their own solver via explainContext.js.
-async function buildExplainContextActive(movestring, col, rounds = 1) {
-  return buildExplainContext(movestring, col, rounds, solver);
-}
-
 // POST /api/explain-move-llm — LLM explanation of a specific user move.
 // Returns { explanation: string, cached?: boolean }.
-// Auth required (401 for unauthenticated). Free-tier: weekly quota of 20 (429 when exceeded).
+// Anon allowed (rate-capped by the per-IP prefix limiter below; no quota). Free-tier: weekly quota of 5 (429 when exceeded).
 // Cache hits do not decrement quota. Rate-limited to 5 req/min (LLM cost guard).
-/**
- * Normalize common LLM malformations in zone tags before validation.
- *
- * Common mistakes:
- *   [zone:column 2]...[/zone:column]  → [zone:col2]...[/zone:col2]
- *   [zone:col 2]...[/zone:col]        → [zone:col2]...[/zone:col2]
- *   [zone:column 6]...[/zone:col6]    → [zone:col6]...[/zone:col6] (already ok)
- *
- * Strategy: first normalize all opening tags to [zone:colN], then pair each
- * opening tag with the following closing tag and fix the closing tag to match.
- *
- * @param {string} text  Raw LLM output
- * @returns {string}  Normalized text
- */
-function normalizeZoneTags(text) {
-  // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
-  text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
-
-  // Step 2: Pair each opening [zone:colN] with the nearest following closing tag
-  // and fix the closing tag to be [/zone:colN].
-  // Matches any closing tag: [/zone:col], [/zone:column], [/zone:colN], [/zone:column N]
-  const CLOSE_RE = /\[\/zone:col(?:umn)?(?:\s+\d+)?\]/gi;
-
-  // We need to pair correctly: find [zone:colN], then find the next [/zone:...]
-  // and replace it with [/zone:colN].
-  const OPEN_RE = /\[zone:col(\d+)\]/gi;
-  const resultParts = [];
-  let lastIndex = 0;
-  let openMatch;
-
-  while ((openMatch = OPEN_RE.exec(text)) !== null) {
-    // Text before this opening tag
-    resultParts.push(text.slice(lastIndex, openMatch.index + openMatch[0].length));
-    const colNum = openMatch[1];
-
-    // Find the next closing tag after this opening tag
-    CLOSE_RE.lastIndex = openMatch.index + openMatch[0].length;
-    const closeMatch = CLOSE_RE.exec(text);
-    if (closeMatch) {
-      // Text between opening and closing
-      resultParts.push(text.slice(openMatch.index + openMatch[0].length, closeMatch.index));
-      // Fixed closing tag
-      resultParts.push(`[/zone:col${colNum}]`);
-      lastIndex = closeMatch.index + closeMatch[0].length;
-    } else {
-      // No closing tag found — leave remaining text as-is
-      lastIndex = openMatch.index + openMatch[0].length;
-    }
-  }
-  // Remaining text after the last processed zone
-  resultParts.push(text.slice(lastIndex));
-
-  return resultParts.join('');
-}
-
 app.post('/api/explain-move-llm', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-
   const { movestring, col, rounds } = req.body;
 
   if (typeof movestring !== 'string' || !/^[0-6]{0,42}$/.test(movestring))
@@ -782,114 +1142,104 @@ app.post('/api/explain-move-llm', async (req, res) => {
   if (board.colHeights[col] >= 6)
     return res.status(400).json({ error: 'column is full' });
 
+  const locale = req.locale ?? 'en';
+
   // ── 1. Cache check (before quota decrement) ──────────────────────────────
   const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
   if (supabase) {
     const { data: cached } = await supabase
       .from('explanation_cache')
       .select('deep_reveal_json')
-      .eq('position_hash', positionHash)
+      .match(buildCacheFilter(positionHash, locale))
       .single();
     if (cached?.deep_reveal_json) {
-      return res.json({
+      // Response-boundary guard (spec 042 US5, FR-019): a cache hit bypasses every producer
+      // module (computeMechanism/explainContext/llmCoachHelpers), so this is the ONLY seam that
+      // can catch a leak in a previously-cached row (research.md §5).
+      return res.json(guardExplainMoveLlmPayload({
         explanation: cached.deep_reveal_json.explanation,
         prompt: cached.deep_reveal_json.prompt ?? '',
+        terms: cached.deep_reveal_json.terms ?? {},
         cached: true,
-      });
+        locale,
+      }));
     }
   }
 
-  // ── 2. LLM call + annotation gate + retry ────────────────────────────────
+  // ── 1b. Quota gate BEFORE the expensive LLM compute ──────────────────────
+  // Cache misses for over-quota free users must 429 up front — not after the
+  // reveal has visibly "computed" (the actual decrement still happens post-
+  // compute, and only for real blunders, via checkAndDecrementQuota below).
+  if (resolveExplainQuota(req.user) && supabase) {
+    const gate = peekQuota(req.user);
+    if (!gate.allowed) {
+      return res.status(429).json({ error: 'quota_exceeded', resetsAt: gate.resetsAt });
+    }
+  }
+
+  // ── 2. Reason-engine mechanism pipeline (computeMechanism owns the single LLM retry) ──────
   try {
-    const context = await buildExplainContextActive(movestring, col, r);
-    if (!context) {
-      // No quota consumed for the "all-moves-equal" early exit path
-      return res.json({
-        explanation: 'All legal moves are equally scored — no tactical comparison is available for this position.',
+    const result = await computeMechanism(movestring, col, {
+      solver,
+      model: process.env.OPENAI_MODEL, // mini model (gpt-5.4-mini); EXPLAIN_MODEL is the eval-only full model
+      userId: req.user?.id ?? null,
+      locale,
+    });
+
+    if (result.notABlunder) {
+      // The played move is not a blunder — nothing to punish. No LLM call, no quota consumed.
+      return res.json(guardExplainMoveLlmPayload({
+        explanation: serverT(locale, 'notABlunder'),
         prompt: '',
-      });
+        terms: {},
+        locale,
+      }));
     }
 
-    if (context.allMovesEqual) {
-      // All moves genuinely settled (all scores zero). FR-007 frozen string.
-      return res.json({
-        explanation: 'All moves are roughly equivalent here — no single best move stands out.',
-        prompt: '',
-      });
-    }
-
-    if (context.trivial) {
-      // optimal move + small gap: all alternatives are negligibly different.
-      // No LLM call — canned message prevents fabricated nuance.
-      return res.json({
-        explanation: context.trivialExplanation,
-        prompt: '',
-      });
-    }
-
-    const { prompt, allowedSet } = context;
-
-    // First attempt
-    console.log('[DEBUG explain-move-llm] allowedSet passed to validateAnnotation:', JSON.stringify(allowedSet));
-    const rawExplanation = await callLLM(prompt);
-    let explanation = normalizeZoneTags(rawExplanation);
-    console.log('[DEBUG explain-move-llm] rawExplanation:', rawExplanation);
-    let result = validateAnnotation(explanation, board, allowedSet);
-    console.log('[DEBUG explain-move-llm] validateAnnotation result (attempt 1):', JSON.stringify(result));
-
-    if (!result.valid) {
-      // ── Retry (same prompt, bypasses cache and quota) ──────────────────
-      const retryRaw = await callLLM(prompt);
-      const retryExplanation = normalizeZoneTags(retryRaw);
-      console.log('[DEBUG explain-move-llm] retryExplanation:', retryExplanation);
-      const retryResult = validateAnnotation(retryExplanation, board, allowedSet);
-      console.log('[DEBUG explain-move-llm] validateAnnotation result (retry):', JSON.stringify(retryResult));
-
-      if (retryResult.valid) {
-        explanation = retryExplanation;
-        result = retryResult;
-      } else {
-        // ── Fallback path: double failure ──────────────────────────────
-        // Read Tier-1 fallback from explanation_cache
-        let fallbackText = 'Detailed explanation unavailable.';
-        if (supabase) {
-          const { data: fallbackRow } = await supabase
-            .from('explanation_cache')
-            .select('deep_reveal_json')
-            .eq('position_hash', positionHash)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          if (fallbackRow?.deep_reveal_json?.fullText) {
-            fallbackText = fallbackRow.deep_reveal_json.fullText;
-          }
+    // No fallback (by design): after one LLM retry, a persisting LLM error or an empty mechanism
+    // is terminal. Log to deep_reveal_failures and surface a 500 — never fabricate a substitute.
+    if (result.callError || result.parseError || !result.mechanism) {
+      if (supabase) {
+        try {
+          await supabase.from('deep_reveal_failures').insert({
+            position_hash: positionHash,
+            movestring,
+            col,
+            endpoint: '/api/explain-move-llm',
+            llm_prompt: result.prompt,
+            raw_llm_output: result.raw,
+            failure_reason: result.callError ?? result.parseError ?? 'empty mechanism',
+            created_at: new Date().toISOString(),
+          });
+        } catch (insertErr) {
+          console.error('[deep_reveal_failures insert]', insertErr.message);
         }
-
-        // Log failure to deep_reveal_failures
-        if (supabase) {
-          try {
-            await supabase.from('deep_reveal_failures').insert({
-              position_hash: positionHash,
-              movestring,
-              col,
-              endpoint: '/api/explain-move-llm',
-              llm_prompt: prompt,
-              raw_llm_output: retryExplanation,
-              failure_reason: JSON.stringify(retryResult.failures),
-              created_at: new Date().toISOString(),
-            });
-          } catch (insertErr) {
-            console.error('[deep_reveal_failures insert]', insertErr.message);
-          }
-        }
-
-        // No quota consumed for fallback
-        return res.json({ explanation: fallbackText, prompt: null, cached: false });
       }
+      return res.status(500).json({ error: 'Internal server error' });
     }
 
-    // ── Valid path: decrement quota (if free-tier), cache, and respond ──
-    if (req.user.tier === 'free' && supabase) {
+    // `mechanism` is coach-voice text carrying inline [zone:…] tags (→ board highlights via
+    // <AnnotatedExplanation>) and [term:kbId] tags (→ KB-term tap popups). It drops straight into
+    // the response as `explanation`.
+    const explanation = result.mechanism;
+    const prompt = result.prompt;
+
+    // Scan explanation for [term:kbId] tags and build a terms map with short KB summaries for the
+    // tap popups (same contract as the response `terms` field the frontend already consumes).
+    const termTagRegex = /\[term:([^\]]+)\]/g;
+    const termsMap = {};
+    const seenTermIds = new Set();
+    let termMatch;
+    while ((termMatch = termTagRegex.exec(explanation)) !== null) {
+      const kbId = termMatch[1];
+      if (seenTermIds.has(kbId)) continue;
+      seenTermIds.add(kbId);
+      const shortSummary = loadKBShortSummary(kbId, locale);
+      if (shortSummary) termsMap[kbId] = shortSummary;
+    }
+
+    // ── Decrement quota (if free-tier), cache, and respond ──
+    if (resolveExplainQuota(req.user) && supabase) {
       const quota = await checkAndDecrementQuota(req.user);
       if (!quota.allowed) {
         return res.status(429).json({ error: 'quota_exceeded', resetsAt: quota.resetsAt });
@@ -899,13 +1249,19 @@ app.post('/api/explain-move-llm', async (req, res) => {
     if (supabase) {
       supabase.from('explanation_cache').insert({
         position_hash: positionHash,
+        locale,
         one_liner: '',
-        deep_reveal_json: { explanation, prompt },
-        template_version: 'v2',
+        deep_reveal_json: { explanation, prompt, terms: termsMap },
+        template_version: 'v3',
       }).then(() => {}).catch(err => console.error('[cache write]', err.message));
     }
 
-    res.json({ explanation, prompt });
+    // Response-boundary guard (spec 042 US5, FR-019): applied here too (not just the cache-hit
+    // branch above) so a freshly-generated leak — e.g. an LLM non-compliance emitting
+    // `[term:community-z-threat]` instead of the instructed `[term:z_threat]` — is caught before
+    // it ever reaches a client, in addition to what gets written into `explanation_cache` for a
+    // future cache hit.
+    res.json(guardExplainMoveLlmPayload({ explanation, prompt, terms: termsMap, locale }));
 
   } catch (err) {
     console.error('[explain-move-llm] error:', err.message);
@@ -929,36 +1285,23 @@ app.post('/api/llm-feedback', async (req, res) => {
     }
   }
 
-  // Resolve prompt: use what the client sent; if empty and col is available, rebuild it.
+  // Resolve prompt: use what the client sent; if empty and col is available, recover the prompt
+  // that was actually stored alongside the flagged response. Feedback recording is deliberately
+  // decoupled from any explanation-generation algorithm — we only READ the stored prompt, never
+  // regenerate it. A missing prompt is fine (the response + note are the load-bearing feedback).
   let resolvedPrompt = typeof llm_prompt === 'string' ? llm_prompt : '';
   if (!resolvedPrompt && typeof col === 'number' && Number.isInteger(col) && col >= 0 && col <= 6) {
     try {
-      // Check cache first (fast path — entry must exist since the user just saw the explanation)
       const positionHash = createHash('sha256').update(`${movestring}:${col}`).digest('hex');
       const { data: cached } = await supabase
         .from('explanation_cache')
         .select('deep_reveal_json')
         .eq('position_hash', positionHash)
-        .single();
-
-      if (cached?.deep_reveal_json?.prompt) {
-        resolvedPrompt = cached.deep_reveal_json.prompt;
-      } else {
-        // Cache entry predates prompt storage — rebuild from simulation pipeline
-        const context = await buildExplainContextActive(movestring, col);
-        if (context?.prompt) {
-          resolvedPrompt = context.prompt;
-          // Backfill cache entry with prompt so future flags don't need to rebuild
-          if (cached?.deep_reveal_json) {
-            supabase.from('explanation_cache')
-              .update({ deep_reveal_json: { ...cached.deep_reveal_json, prompt: resolvedPrompt } })
-              .eq('position_hash', positionHash)
-              .then(() => {}).catch(() => {});
-          }
-        }
-      }
+        .limit(1)
+        .maybeSingle();
+      if (cached?.deep_reveal_json?.prompt) resolvedPrompt = cached.deep_reveal_json.prompt;
     } catch {
-      // Non-fatal — proceed with whatever prompt we have
+      // Non-fatal — proceed with whatever prompt we have (possibly empty).
     }
   }
 
@@ -969,10 +1312,11 @@ app.post('/api/llm-feedback', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[llm-feedback]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[llm-feedback]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1025,10 +1369,15 @@ app.post('/api/blunders', async (req, res) => {
   // Auth required
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Blunders from losing positions are no longer skipped — the blunder_severity
-  // field provides the graduated measure of how much the move worsens the position.
-  // A move that drops from -2 to -15 is a meaningful blunder even if the position
-  // was already theoretically lost (as all second-player positions are).
+  // Storage rule (mistakeStorageRule.js, 2026-07): slower wins and faster losses
+  // from DEAD positions (no potential four-in-a-row left for the mover) are not
+  // stored; theoretically-lost-but-alive positions still are — this is NOT the
+  // old `bestScore < 0` skip (see data-model.md migration 029 note). Requires
+  // numeric score/best_score to classify; without them the move is not stored.
+  const storedMistake = classifyStoredMistake(best_score, score, board_state);
+  if (!storedMistake) {
+    return res.status(200).json({ stored: false, reason: 'not_a_stored_mistake' });
+  }
 
   try {
     // Guard against stale clients sending unrecognized tags (e.g., 'unknown')
@@ -1052,6 +1401,7 @@ app.post('/api/blunders', async (req, res) => {
         move_played,
         correct_move,
         pattern_category: safeCategory,
+        quality: storedMistake.quality,
         severity: computeSeverity(best_score, score),
         blunder_severity: req.body.blunder_severity ?? null,
       })
@@ -1059,11 +1409,13 @@ app.post('/api/blunders', async (req, res) => {
 
     if (error) {
       if (error.code === '23505') return res.status(200).json({ deduplicated: true });
-      return res.status(500).json({ error: error.message });
+      logError('[blunders]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     res.status(201).json({ id: data[0].id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[blunders]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1075,44 +1427,19 @@ function userCanAccessCategory(user, categoryId) {
 }
 
 // GET /api/stats — per-user accuracy stats aggregated from puzzle_attempts
+// Scale-correct via computeStatsAggregate (spec 041 US3): DB-side grouped count() through the
+// puzzles!inner(category) join, not an unbounded per-row select — see server/statsAggregate.js.
 app.get('/api/stats', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Database not configured' });
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { data, error } = await supabase
-    .from('puzzle_attempts')
-    .select('first_attempt_correct, puzzles!inner(category)')
-    .eq('user_id', req.user.id);
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  const byPattern = {};
-  let totalCorrect = 0;
-  for (const row of data) {
-    const category = row.puzzles?.category;
-    if (!category) continue;
-    if (!byPattern[category]) byPattern[category] = { correct: 0, attempted: 0 };
-    byPattern[category].attempted++;
-    if (row.first_attempt_correct) {
-      byPattern[category].correct++;
-      totalCorrect++;
-    }
+  try {
+    const result = await computeStatsAggregate(supabase, req.user.id);
+    res.json(result);
+  } catch (err) {
+    logError('[stats]', err);
+    res.status(500).json({ error: 'internal error' });
   }
-
-  const totalPuzzles = data.length;
-  for (const cat of Object.keys(byPattern)) {
-    const e = byPattern[cat];
-    byPattern[cat] = {
-      accuracy: e.attempted > 0 ? Math.round((e.correct / e.attempted) * 100) : 0,
-      attempted: e.attempted,
-    };
-  }
-
-  res.json({
-    accuracy: totalPuzzles > 0 ? Math.round((totalCorrect / totalPuzzles) * 100) : 0,
-    totalPuzzles,
-    byPattern,
-  });
 });
 
 // GET /api/puzzles — return category list with lock flags and optional puzzles per category
@@ -1138,7 +1465,7 @@ app.get('/api/puzzles', async (req, res) => {
     if (categoryId) query = query.eq('category', categoryId);
 
     const { data: puzzles, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles]', error); return res.status(500).json({ error: 'internal error' }); }
 
     // Group by category
     const byCategory = {};
@@ -1156,7 +1483,8 @@ app.get('/api/puzzles', async (req, res) => {
 
     res.json({ categories });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[puzzles/admin]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1174,7 +1502,7 @@ app.get('/api/puzzles/counts', async (req, res) => {
       .select('category, count()')
       .eq('is_active', true);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[puzzles/counts]', error); return res.status(500).json({ error: 'internal error' }); }
 
     const counts = {};
     for (const slug of CATEGORY_ORDER) {
@@ -1188,7 +1516,8 @@ app.get('/api/puzzles/counts', async (req, res) => {
 
     res.json({ counts, sets: CHALLENGE_SETS });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[puzzles/counts]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1251,7 +1580,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
         .eq('is_active', true)
         .not('position', 'is', null);
 
-      if (countErr) return res.status(500).json({ error: countErr.message });
+      if (countErr) { logError('[puzzles/draw]', countErr); return res.status(500).json({ error: 'internal error' }); }
 
       if (totalIndexed === 0) {
         puzzles = [];
@@ -1266,7 +1595,7 @@ app.get('/api/puzzles/draw', async (req, res) => {
           .order('position', { ascending: true })
           .range(offset, offset + n - 1);
 
-        if (resultErr) return res.status(500).json({ error: resultErr.message });
+        if (resultErr) { logError('[puzzles/draw]', resultErr); return res.status(500).json({ error: 'internal error' }); }
 
         puzzles = result || [];
 
@@ -1325,7 +1654,8 @@ app.get('/api/puzzles/draw', async (req, res) => {
     // Anonymous — unchanged
     res.json({ puzzles });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[puzzles/draw]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1351,7 +1681,8 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
     }).eq('id', id);
     res.status(204).send();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[challenge-sessions/advance]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1359,7 +1690,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
 
 /**
  * Navigate a nested translations object by dot-separated prefix and return
- * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * a randomly chosen full key string (e.g. 'coach.spoken.immediate_threat.optimal.0').
  * Returns null if the prefix resolves to a non-object or empty object.
  */
 /**
@@ -1393,62 +1724,11 @@ function pickFromPool(translations, prefix) {
 }
 
 // POST /api/evaluate-move — score a played move and return coach phrase keys
-app.post('/api/evaluate-move', async (req, res) => {
-  const { movestring, col, category } = req.body;
-
-  // Validate movestring
-  if (typeof movestring !== 'string' || !MOVES_RE.test(movestring)) {
-    return res.status(400).json({ error: 'invalid movestring' });
-  }
-
-  // Validate col
-  const colInt = typeof col === 'number' ? col : parseInt(col, 10);
-  if (!isValidCol0(colInt)) {
-    return res.status(400).json({ error: 'invalid col' });
-  }
-
-  try {
-    // Get solver scores
-    let scores;
-    if (movestring === '' || movestring.length === 0) {
-      scores = EMPTY_BOARD_SCORES;
-    } else {
-      scores = await solver.query(movestring);
-    }
-
-    // Score the move
-    const { badge, quality, bestCol } = scoreMove(scores, colInt);
-
-    // Classify for pattern tag
-    let patternTag;
-    if (req.body.aiMove === true) {
-      patternTag = await classifyAiMove(movestring, colInt, solver);
-    } else {
-      const classifyResult = classify(movestring, colInt, scores);
-      patternTag = classifyResult?.tag ?? null;
-    }
-
-    // Determine phrase pool key (request category takes priority)
-    const phrasePoolKey = category || patternTag;
-
-    // Pick i18n keys from pools
-    const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
-      : null;
-
-    const summaryLineKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `eval.${phrasePoolKey}.${quality}.summary`)
-      : null;
-
-    // Determine coach mood
-    const coachMoodMap = { optimal: 'happy', suboptimal: 'think', blunder: 'oops' };
-    const coachMood = coachMoodMap[quality] ?? 'think';
-
-    res.json({ badge, quality, coachPhraseKey, coachMood, summaryLineKey, patternTag });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Spec 049 (Epic 9) T007a: the handler body itself now lives in server/evaluateMoveHandler.js,
+// as an importable, side-effect-free factory — this makes it mountable in integration tests
+// without booting the whole production server (see that module's header comment). No behavior
+// change here: this is a pure delegation, not a second implementation.
+app.post('/api/evaluate-move', createEvaluateMoveHandler({ solver, i18nTranslations }));
 
 // POST /api/evaluate-move/inline — evaluate a move with inline puzzle data
 // Returns richer results (correctCol, threatCells) than /api/evaluate-move.
@@ -1466,7 +1746,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     return res.status(400).json({ error: 'puzzle object is required' });
   }
   const category = puzzle.category || puzzle.goalPredicateType;
-  if (!category || !VALID_CATEGORIES.includes(category)) {
+  if (!category || !VALID_CATEGORIES.has(category)) {
     return res.status(400).json({ error: `invalid puzzle category: ${category}` });
   }
 
@@ -1486,22 +1766,16 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     const classifyResult = classify(movestring, colInt, scores);
     const patternTag = classifyResult?.tag ?? null;
 
-    // Run predicate evaluation for richer results
-    const predicatePuzzle = {
-      moveString: puzzle.moveString || movestring,
-      category,
-      goalPredicateType: puzzle.goalPredicateType || category,
-      goalPredicateParams: puzzle.goalPredicateParams ?? null,
-      highlightMetadata: puzzle.highlightMetadata ?? null,
-      correctCol: puzzle.correctCol,
-    };
+    // Run predicate evaluation for richer results — built via the shared T005 helper so this
+    // handler and POST /api/evaluate-move construct the predicate object identically (FR-006).
+    const predicatePuzzle = buildPredicatePuzzle(category, movestring, { puzzle });
     const predicateResult = evaluatePredicate(predicatePuzzle, colInt, scores);
 
     // Determine phrase pool key
     const phrasePoolKey = category || patternTag;
 
     const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
       : null;
 
     const summaryLineKey = phrasePoolKey
@@ -1518,7 +1792,8 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
       forbiddenCols: predicateResult.forbiddenCols ?? null,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[evaluate-move/inline]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1577,10 +1852,11 @@ app.post('/api/games', async (req, res) => {
       .select('id')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) { logError('[games/create]', error); return res.status(500).json({ error: 'internal error' }); }
     res.status(201).json({ id: data.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[games/create]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1626,7 +1902,8 @@ app.post('/api/games/from-position', async (req, res) => {
     const truncated = moves.slice(0, N);
     res.json({ moves: truncated, side, difficulty });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[games/from-position]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1693,33 +1970,29 @@ app.get('/api/games', async (req, res) => {
       pgQuery,
     ]);
 
-    if (aiError) return res.status(500).json({ error: aiError.message });
-    if (pgError) return res.status(500).json({ error: pgError.message });
+    if (aiError) { logError('[games]', aiError); return res.status(500).json({ error: 'internal error' }); }
+    if (pgError) { logError('[games]', pgError); return res.status(500).json({ error: 'internal error' }); }
 
-    // Fetch blunder counts for both game sets in parallel
+    // Fetch blunder counts for both game sets in parallel, via DB-side grouped count() —
+    // scale-correct past 1000 blunder rows and never uses `.in()` (see
+    // server/blunderCountsForGames.js for why `.in(gameIds)` is NOT safe here: aiIds/pgIds can
+    // be the user's FULL game set, not just the current page, since sorting happens before
+    // pagination below). computeBlunderCountsForGames applies no `quality` filter (spec 042
+    // T034/FR-005/FR-006) — the returned `blunder_count` (wire name unchanged, FR-007) already
+    // includes both blunder- and suboptimal-severity rows; a 0-blunder/≥1-suboptimal game is
+    // never miscounted as zero here.
     const aiIds = (aiGames || []).map(g => g.id);
     const pgIds = (pgGames || []).map(g => g.id);
 
-    // Use not-null filter instead of .in() to avoid URL-length limits (>~200 IDs causes 400 Bad Request)
-    const [aiBlundersRes, pgBlundersRes] = await Promise.all([
-      aiIds.length > 0
-        ? supabase.from('blunders').select('game_id').not('game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-      pgIds.length > 0
-        ? supabase.from('blunders').select('papergames_game_id').not('papergames_game_id', 'is', null).eq('user_id', userId)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    if (aiBlundersRes.error) return res.status(500).json({ error: aiBlundersRes.error.message });
-    if (pgBlundersRes.error) return res.status(500).json({ error: pgBlundersRes.error.message });
-
-    const aiBlunderMap = {};
-    for (const b of (aiBlundersRes.data || [])) {
-      aiBlunderMap[b.game_id] = (aiBlunderMap[b.game_id] || 0) + 1;
-    }
-    const pgBlunderMap = {};
-    for (const b of (pgBlundersRes.data || [])) {
-      pgBlunderMap[b.papergames_game_id] = (pgBlunderMap[b.papergames_game_id] || 0) + 1;
+    let aiBlunderMap, pgBlunderMap;
+    try {
+      [aiBlunderMap, pgBlunderMap] = await Promise.all([
+        computeBlunderCountsForGames(supabase, userId, aiIds, 'game_id'),
+        computeBlunderCountsForGames(supabase, userId, pgIds, 'papergames_game_id'),
+      ]);
+    } catch (err) {
+      logError('[games]', err);
+      return res.status(500).json({ error: 'internal error' });
     }
 
     // Normalise both sets to a unified shape
@@ -1736,6 +2009,7 @@ app.get('/api/games', async (req, res) => {
         difficulty: g.difficulty,
         accuracy: g.accuracy ?? null,
         blunder_count: blunderCount,
+        side: g.side ?? null,
         cols: movesToCols(g.moves),
       });
     }
@@ -1752,18 +2026,44 @@ app.get('/api/games', async (req, res) => {
         opponent_avatar: g.opponent_avatar ?? null,
         accuracy: g.accuracy ?? null,
         blunder_count: blunderCount,
+        side: g.side ?? null,
         cols: movesToCols(g.moves),
       });
     }
 
-    // Sort by date descending, paginate
-    unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    // Sort
+    const VALID_SORTS = new Set(['recent', 'played_well', 'worst_blunders']);
+    let sortBy = 'recent';
+    if (req.query.sort !== undefined) {
+      if (!VALID_SORTS.has(req.query.sort)) {
+        return res.status(400).json({ error: 'invalid sort' });
+      }
+      sortBy = req.query.sort;
+    }
+
+    if (sortBy === 'played_well') {
+      unified.sort((a, b) => {
+        const aAcc = a.accuracy ?? -Infinity;
+        const bAcc = b.accuracy ?? -Infinity;
+        if (bAcc !== aAcc) return bAcc - aAcc;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    } else if (sortBy === 'worst_blunders') {
+      unified.sort((a, b) => {
+        if (b.blunder_count !== a.blunder_count) return b.blunder_count - a.blunder_count;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    } else {
+      unified.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
     const total = unified.length;
     const page = unified.slice(offset, offset + limit);
 
     res.json({ games: page, total });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    logError('[games]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
@@ -1781,27 +2081,134 @@ app.post('/api/games/analyze', async (req, res) => {
 
   // Fetch game row — check AI sparring games first, then papergames imports
   let moves, side, difficulty, created_at, isPapergames = false;
+  let gameDeviceUuid = null;
   {
     const { data: aiGame } = await supabase
       .from('games')
-      .select('id, moves, side, difficulty, created_at')
+      .select('id, user_id, device_uuid, moves, side, difficulty, created_at')
       .eq('id', gameId)
       .single();
 
     if (aiGame) {
+      // Ownership check: a game with a user_id is private to that user. Without
+      // this, any signed-in user could pass another user's game id and both
+      // (a) read a full move-by-move analysis of a game they don't own, and
+      // (b) trigger the blunder INSERT below tied to their own user_id but
+      // referencing the foreign game_id — polluting that game's sibling-mistake
+      // data for its actual owner.
+      //
+      // Anonymous, device-scoped sparring games (user_id null) stay open per this
+      // endpoint's documented no-auth contract: the request body carries only
+      // gameId (no device_uuid to authorize against), and there is no account to
+      // pollute — a logged-out caller writes no blunders (the INSERT below is
+      // gated on req.user). Do NOT compare device_uuid to req.user.id — they are
+      // different id namespaces and never match, which 404'd every logged-out
+      // review of a just-played anonymous game.
+      if (aiGame.user_id && !(req.user && aiGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       ({ moves, side, difficulty, created_at } = aiGame);
+      gameDeviceUuid = aiGame.device_uuid ?? null;
     } else {
       const { data: pgGame } = await supabase
         .from('papergames_games')
-        .select('id, moves, side, played_at')
+        .select('id, user_id, moves, side, played_at')
         .eq('id', gameId)
         .single();
       if (!pgGame) return res.status(404).json({ error: 'game not found' });
+      if (!(req.user && pgGame.user_id === req.user.id)) {
+        return res.status(404).json({ error: 'game not found' });
+      }
       moves = pgGame.moves;
       side = pgGame.side;
       difficulty = null;
       created_at = pgGame.played_at;
       isPapergames = true;
+    }
+  }
+
+  // Cache check: if user is logged in and blunders already exist for this game,
+  // reconstruct the analysis from stored data instead of re-running the solver.
+  if (req.user) {
+    const gameFilter = isPapergames
+      ? { papergames_game_id: gameId }
+      : { game_id: gameId };
+
+    const { data: existingBlunders } = await supabase
+      .from('blunders')
+      .select('move_index, move_played, quality, pattern_category, reason, direction, blunder_severity')
+      .eq('user_id', req.user.id)
+      .match(gameFilter)
+      .order('move_index', { ascending: true });
+
+    if (existingBlunders && existingBlunders.length > 0) {
+      const blunderMap = new Map(existingBlunders.map(b => [b.move_index, b]));
+      const cachedMoves = [];
+      let cScored = 0, cOptimal = 0, cSuboptimal = 0, cBlunder = 0;
+      let cOrdinal = 0;
+
+      for (let i = 0; i < moves.length; i++) {
+        const isUserPly = side === 'first' ? (i % 2 === 0) : (i % 2 === 1);
+        if (!isUserPly) continue;
+        cOrdinal++;
+        cScored++;
+
+        const blunder = blunderMap.get(i);
+        if (blunder) {
+          cachedMoves.push({
+            moveIndex: cOrdinal,
+            col: blunder.move_played,
+            quality: blunder.quality,
+            score: null,
+            bestScore: null,
+            bestCol: null,
+            patternTag: blunder.pattern_category,
+            reason: blunder.reason,
+            direction: blunder.direction,
+            blunderSeverity: blunder.blunder_severity,
+          });
+          if (blunder.quality === 'suboptimal') cSuboptimal++;
+          else cBlunder++;
+        } else {
+          cachedMoves.push({
+            moveIndex: cOrdinal,
+            col: parseInt(moves[i], 10),
+            quality: 'optimal',
+            score: null,
+            bestScore: null,
+            bestCol: null,
+            patternTag: null,
+            reason: null,
+            direction: null,
+            blunderSeverity: null,
+          });
+          cOptimal++;
+        }
+      }
+
+      const cAccuracy = cScored > 0 ? Math.round(cOptimal / cScored * 100) : 0;
+      // FR-006: "no mistakes"/"clean game" phrasing must not fire when suboptimal
+      // mistakes exist even if there are zero blunders — a game with 0 blunders and
+      // >=1 suboptimal move is still a game with mistakes.
+      const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
+        ? 'coach.spoken.sparring.review.clean'
+        : 'coach.spoken.sparring.review.mistakes';
+      const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
+
+      return res.json({
+        moves: cachedMoves,
+        accuracy: cAccuracy,
+        optimalCount: cOptimal,
+        suboptimalCount: cSuboptimal,
+        blunderCount: cBlunder,
+        scored: cScored,
+        summaryPhraseKey: cSummaryKey,
+        fullMovestring: moves,
+        difficulty,
+        side,
+        gameDate: created_at,
+        source: isPapergames ? 'papergames' : 'ai',
+      });
     }
   }
 
@@ -1837,36 +2244,45 @@ app.post('/api/games/analyze', async (req, res) => {
       const score = scores[col];
       const bestScore = scores[bestCol];
 
-      // Classify the position
-      // tagBlunder replaces the old classify() call for blunder tagging.
-      // It may issue 60+ solver queries per blunder ply — acceptable because
-      // this endpoint is called post-game, not during interactive play.
+      // Storage rule (mistakeStorageRule.js): slower wins and dead-position
+      // faster losses are not stored; `quality` from scoreMove is kept as-is
+      // for the per-move badges/counters in the response.
+      const storedMistake = classifyStoredMistake(bestScore, score, movesBeforeThisPly);
+      const isMistake = storedMistake !== null;
+
+      // Classify the position — tagBlunder may issue 60+ solver queries per ply;
+      // acceptable here because this endpoint is called post-game, not during play.
       let patternTag = null;
       let reason = null;
       let direction = null;
-      if (quality === 'blunder') {
+      if (isMistake) {
         try {
           const tagResult = await tagBlunder(movesBeforeThisPly, col, bestCol, solver);
           patternTag = tagResult.tag;
           reason = tagResult.reason;
           direction = tagResult.direction;
         } catch (_e) {
-          patternTag = 'suboptimal_move';
-          reason = 'solver error: tagBlunder threw';
-          direction = 'missed_own';
+          if (_e instanceof NotABlunderError) {
+            // Precondition violation: scoreMove flagged a mistake on a terminal
+            // position. This must never happen — surface loudly, and do NOT
+            // fabricate a pattern tag (leave null) rather than mislabel a non-blunder.
+            console.error(`[analyze] NotABlunderError at ply "${movesBeforeThisPly}": ${_e.message}`);
+          } else {
+            patternTag = 'suboptimal_move';
+            reason = 'solver error: tagBlunder threw';
+            direction = 'missed_own';
+          }
         }
       }
 
-      // Scan 3 plies of the post-blunder tree to compute what fraction of
-      // continuations end in an opponent win. Run for ALL blunders (including
-      // losing positions) — blunder_severity is the graduated measure that
-      // distinguishes minor mistakes from catastrophic ones regardless of
-      // whether the position was already theoretically lost.
+      // Scan 3 plies of the post-mistake tree to compute what fraction of
+      // continuations end in an opponent win. blunder_severity is the graduated
+      // measure that distinguishes minor mistakes from catastrophic ones.
       let blunderSeverity = null;
-      if (quality === 'blunder') {
-        const postBlunderMs = movesBeforeThisPly + String(col);
+      if (isMistake) {
+        const postMistakeMs = movesBeforeThisPly + String(col);
         try {
-          const sv = await computeBlunderSeverity(solver, postBlunderMs, 3);
+          const sv = await computeBlunderSeverity(solver, postMistakeMs, 3);
           blunderSeverity = sv.severity;
         } catch (_e) {
           // non-fatal: leave null
@@ -1886,15 +2302,20 @@ app.post('/api/games/analyze', async (req, res) => {
         blunderSeverity,
       });
 
-      // Server-side blunder INSERT — fire-and-forget relative to the HTTP response.
-      // Anonymous users skip the INSERT (user_id would be NULL).
-      if (req.user && quality === 'blunder') {
+      // Server-side mistake INSERT. Authenticated → user-scoped (unchanged).
+      // Anonymous AI-sparring → device-scoped (user_id NULL, device_uuid from the
+      // game row), re-associated to user_id on /api/user/migrate. resolveGameBlunderOwner
+      // NEVER compares device_uuid to a user id.
+      const blunderOwner = resolveGameBlunderOwner(req.user, { device_uuid: gameDeviceUuid });
+      if (blunderOwner && isMistake) {
         await insertGameBlunder(supabase, {
-          user_id: req.user.id,
+          user_id: blunderOwner.user_id,
+          device_uuid: blunderOwner.device_uuid,
           board_state: movesBeforeThisPly,
           move_played: col,
           correct_move: bestCol,
           pattern_category: patternTag,
+          quality: storedMistake.quality,
           reason,
           direction,
           severity: computeSeverity(bestScore, score),
@@ -1913,15 +2334,18 @@ app.post('/api/games/analyze', async (req, res) => {
       }
     }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    logError('[games/analyze]', err);
+    return res.status(500).json({ error: 'internal error' });
   }
 
   const accuracy = scored > 0 ? Math.round(optimalCount / scored * 100) : 0;
 
   // Pick summary phrase key
-  const phrasePool = blunderCount === 0
-    ? 'coach.sparring.review.clean'
-    : 'coach.sparring.review.mistakes';
+  // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
+  // still a game with mistakes, never "clean"/"no mistakes to review."
+  const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
+    ? 'coach.spoken.sparring.review.clean'
+    : 'coach.spoken.sparring.review.mistakes';
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
   res.json({
@@ -1936,6 +2360,7 @@ app.post('/api/games/analyze', async (req, res) => {
     difficulty,
     side,
     gameDate: created_at,
+    source: isPapergames ? 'papergames' : 'ai',
   });
 });
 
@@ -2009,6 +2434,7 @@ app.post('/api/puzzles/:id/check', async (req, res) => {
   try {
     scores = puzzle.move_string.length > 0 ? await solver.query(puzzle.move_string) : EMPTY_BOARD_SCORES;
   } catch (err) {
+    logError('[puzzles/check/solver]', err);
     return res.status(500).json({ error: 'Solver unavailable' });
   }
 
@@ -2150,46 +2576,76 @@ function requirePaid(req, res, next) {
 }
 
 // GET /api/coach/weakness-map
+// spec 042 T034/FR-005/FR-007: neither the `coach_weakness_map` RPC call nor the
+// computeWeaknessMapFallback path below filters on `quality='blunder'` — both severities
+// contribute to the weakness map, and the RPC's underlying query is not modified here.
 app.get('/api/coach/weakness-map', requirePaid, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { data, error } = await supabase.rpc('coach_weakness_map', { user_id_param: req.user.id });
   if (error) {
-    // Fallback: compute in JS
-    const { data: attempts } = await supabase
-      .from('puzzle_attempts')
-      .select('puzzle_id, first_attempt_correct, puzzles(category)')
-      .eq('user_id', req.user.id);
-
-    const map = {};
-    for (const attempt of (attempts || [])) {
-      const cat = attempt.puzzles?.category;
-      if (!cat) continue;
-      if (!map[cat]) map[cat] = { category: cat, attempted: 0, missed: 0 };
-      map[cat].attempted++;
-      if (!attempt.first_attempt_correct) map[cat].missed++;
+    // Dormant fallback (only reached on RPC error): computeWeaknessMapFallback uses DB-side
+    // grouped count() instead of an unbounded per-row select — scale-correct past 1000 rows.
+    // See server/weaknessMapFallback.js (spec 041 US3 / research.md Decision 4 — mechanical
+    // fix only, no RPC-reliability investigation).
+    try {
+      const result = await computeWeaknessMapFallback(supabase, req.user.id);
+      return res.json(result);
+    } catch (fallbackErr) {
+      logError('[coach/weakness-map]', fallbackErr);
+      return res.status(500).json({ error: 'internal error' });
     }
-
-    const weaknessMap = Object.values(map)
-      .map(({ category, attempted, missed }) => ({
-        category,
-        attempted,
-        missRate: attempted > 0 ? missed / attempted : 0,
-      }))
-      .sort((a, b) => b.missRate - a.missRate);
-
-    return res.json({ weaknessMap });
   }
 
   res.json({ weaknessMap: data ?? [] });
 });
 
-// GET /api/coach/queue
-app.get('/api/coach/queue', async (req, res) => {
+// GET /api/coach/category-counts
+// spec 041 (Past Games & Mistakes: Server Data Integrity), User Story 2 / FR-004-006 / FR-009.
+// True per-category blunder counts via a DB-side grouped count() — independent of any single
+// page of /api/coach/queue, and scale-correct beyond 1000 rows since it never materializes
+// individual rows into Node (see contracts/coach-category-counts.md). Same `.eq('user_id', ...)`
+// filter as /api/coach/queue; no `quality` filter added (FR-008) — blunder- and
+// suboptimal-quality rows are both counted.
+app.get('/api/coach/category-counts', async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
   if (!req.user) return res.status(401).json({ error: 'unauthorized' });
 
-  console.log('[DEBUG coach/queue] raw query:', JSON.stringify(req.query));
+  try {
+    const { data, error } = await supabase
+      .from('blunders')
+      .select('pattern_category, count()')
+      .eq('user_id', req.user.id);
+
+    if (error) { logError('[coach/category-counts]', error); return res.status(500).json({ error: 'internal error' }); }
+
+    const categories = (data || [])
+      .map(row => ({ category: row.pattern_category, count: Number(row.count) }))
+      .filter(row => row.count >= 1);
+
+    categories.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a.category);
+      const bi = CATEGORY_ORDER.indexOf(b.category);
+      if (ai === -1 && bi === -1) return a.category.localeCompare(b.category);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+
+    res.json({ categories });
+  } catch (err) {
+    logError('[coach/category-counts]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// GET /api/coach/queue
+app.get('/api/coach/queue', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'database unavailable' });
+  // Authenticated → user-scoped. Anonymous → device-scoped via ?device_uuid
+  // (onboarding free deep reveal). Missing/invalid device for an anon caller → 401.
+  const queueOwner = resolveQueueOwner(req.user, req.query.device_uuid || null);
+  if (!queueOwner.ok) return res.status(401).json({ error: 'unauthorized' });
 
   const status = req.query.status || 'all';
   if (!['all', 'unreviewed', 'reviewed'].includes(status)) {
@@ -2206,65 +2662,100 @@ app.get('/api/coach/queue', async (req, res) => {
     return res.status(400).json({ error: 'invalid game_id' });
   }
 
-  let query = supabase
-    .from('blunders')
-    .select('id, board_state, move_played, correct_move, pattern_category, created_at, resolved_at, severity, blunder_severity, game_id')
-    .eq('user_id', req.user.id)
+  const papergamesGameId = req.query.papergames_game_id || null;
+  if (papergamesGameId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(papergamesGameId)) {
+    return res.status(400).json({ error: 'invalid papergames_game_id' });
+  }
+
+  const pagination = parseQueuePaginationParams(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+  const { limit, offset } = pagination;
+
+  // Shared filter chain — applied identically to the page query and the count query below
+  // (count query omits .order()/.range() per contracts/coach-queue-pagination.md).
+  // spec 042 T034/FR-005/FR-007: no `.eq('quality', 'blunder')` filter here — both
+  // blunder- and suboptimal-severity rows are returned/counted (`total`, wire name
+  // unchanged) to the coach queue.
+  const applyFilters = (q) => {
+    let filtered = queueOwner.scope === 'device'
+      ? q.eq('device_uuid', queueOwner.deviceUuid).is('user_id', null)
+      : q.eq('user_id', queueOwner.userId);
+    if (status === 'unreviewed') {
+      filtered = filtered.is('resolved_at', null);
+    } else if (status === 'reviewed') {
+      filtered = filtered.not('resolved_at', 'is', null);
+    }
+    if (category) {
+      filtered = filtered.eq('pattern_category', category);
+    }
+    if (gameId) {
+      filtered = filtered.eq('game_id', gameId);
+    }
+    if (papergamesGameId) {
+      filtered = filtered.eq('papergames_game_id', papergamesGameId);
+    }
+    return filtered;
+  };
+
+  const pageQuery = applyFilters(
+    supabase
+      .from('blunders')
+      .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id')
+  )
     // Worst mistakes first; created_at ASC breaks ties (oldest unresolved blunder wins).
+    // `id` is a final deterministic tiebreaker: without it, rows sharing the same
+    // (severity, created_at) — e.g. a batch import inserting many blunders in one
+    // statement, all stamped with the same created_at — can be ordered differently
+    // across separate paginated queries, causing OFFSET/LIMIT to skip some rows and
+    // duplicate others across pages (found via QA: 8/137 blunders unreachable).
     .order('severity', { ascending: false })
     .order('created_at', { ascending: true })
-    .limit(50);
+    .order('id', { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  if (status === 'unreviewed') {
-    query = query.is('resolved_at', null);
-  } else if (status === 'reviewed') {
-    query = query.not('resolved_at', 'is', null);
-  }
+  const countQuery = applyFilters(
+    supabase.from('blunders').select('id', { count: 'exact', head: true })
+  );
 
-  if (category) {
-    query = query.eq('pattern_category', category);
-  }
+  const [{ data: blunders, error }, { count: total, error: countError }] = await Promise.all([
+    pageQuery,
+    countQuery,
+  ]);
+  if (error) { logError('[coach/queue]', error); return res.status(500).json({ error: 'internal error' }); }
+  if (countError) { logError('[coach/queue]', countError); return res.status(500).json({ error: 'internal error' }); }
 
-  if (gameId) {
-    query = query.eq('game_id', gameId);
-  }
+  // FR-008/FR-009 (spec 042 US2): this endpoint independently constructs its own
+  // blunder shape (does not delegate to the GET /api/blunders/:id handler above),
+  // so totalMoves/siblingMistakes must be applied here too, unconditionally —
+  // otherwise a mistake reached in-app via this list loses the correct "Move N / M"
+  // / "X of Y" figures that the cold-boot permalink path already has.
+  const contexts = await Promise.all(
+    (blunders || []).map(b => fetchBlunderDetailContext(supabase, b))
+  );
 
-  const { data: blunders, error } = await query;
-  if (error) return res.status(500).json({ error: error.message });
-  console.log('[DEBUG coach/queue] category param:', JSON.stringify(req.query.category), '| rows returned:', blunders?.length, '| categories in result:', [...new Set((blunders||[]).map(b=>b.pattern_category))]);
-
-  function computeThreatCells(board_state, move_played) {
-    try {
-      const postBoard = new Board(board_state + String(move_played));
-      const opponent = postBoard.currentPlayer;
-      const threatMap = postBoard.majorThreatCells();
-      return Object.entries(threatMap)
-        .filter(([, flags]) => opponent === 1 ? flags.rm : flags.ym)
-        .map(([key]) => {
-          const [row, col] = key.split(',').map(Number);
-          return { col, row };
-        });
-    } catch {
-      return [];
-    }
-  }
-
-  const enriched = (blunders || []).map(b => ({
+  const enriched = (blunders || []).map((b, i) => ({
     id: b.id,
     board_state: b.board_state,
     move_played: b.move_played,
     correct_move: b.correct_move,
     pattern_category: b.pattern_category,
+    quality: b.quality ?? 'blunder',
     created_at: b.created_at,
     resolved_at: b.resolved_at,
     severity: b.severity,
     blunder_severity: b.blunder_severity ?? null,
     threat_cells: computeThreatCells(b.board_state || '', b.move_played),
+    patternCells: computePatternCells(b),
     game_id: b.game_id ?? null,
+    papergames_game_id: b.papergames_game_id ?? null,
     moveIndex: (b.board_state || '').length,
+    totalMoves: contexts[i].totalMoves,
+    siblingMistakes: contexts[i].siblingMistakes,
   }));
 
-  res.json({ blunders: enriched, total: enriched.length });
+  res.json({ blunders: enriched, total: total ?? 0 });
 });
 
 // POST /api/coach/queue/:blunderId/resolve
@@ -2280,131 +2771,70 @@ app.post('/api/coach/queue/:blunderId/resolve', async (req, res) => {
     .eq('id', blunderId)
     .eq('user_id', req.user.id); // ownership check
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[coach/queue/resolve]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
-// ── Stripe endpoints (T051-T053) ───────────────────────────────────────────────
+// GET /api/blunders/:id — public blunder permalink (no auth required)
+app.get('/api/blunders/:id', async (req, res) => {
+  const { id } = req.params;
 
-let stripe = null;
+  // FR-018: validate UUID format
+  if (!UUID_REGEX.test(id)) return res.status(400).json({ error: 'invalid id' });
+
+  if (!supabase) return res.status(503).json({ error: 'Database not configured' });
+
+  // FR-017: no user_id filter — public endpoint
+  const { data, error } = await supabase
+    .from('blunders')
+    .select('id, board_state, move_played, correct_move, pattern_category, quality, created_at, resolved_at, severity, blunder_severity, game_id, papergames_game_id, user_id')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    if (error && error.code === 'PGRST116') return res.status(404).json({ error: 'not found' });
+    if (error) {
+      logError('[blunders/:id]', error);
+      return res.status(500).json({ error: 'internal error' });
+    }
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  // FR-008/FR-009 (spec 042 US2): parent-game total move count + sibling mistakes,
+  // needed so a cold-opened permalink shows "Move N / M" and "X of Y" correctly
+  // instead of defaulting to a single-item array. Two bounded, indexed reads —
+  // see contracts/api-blunders-id.md steps 2-3.
+  const context = await fetchBlunderDetailContext(supabase, data);
+
+  // FR-020/FR-029/FR-003: shared pure builder (server/blunderDetailResponse.js) —
+  // computes moveIndex/threat_cells, ownership, and strips user_id. Both
+  // 'blunder' and 'suboptimal' quality rows go through this identical path.
+  res.json(buildBlunderDetailResponse(data, req.user?.id, context));
+});
+
+// ── Stripe endpoints (T051-T053; extracted to stripeProcessor.js/stripeRoutes.js — spec 045 US3) ──
+
+let paymentProcessor = null;
 if (process.env.STRIPE_SECRET_KEY) {
   const { default: Stripe } = await import('stripe');
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  paymentProcessor = createStripeProcessor({
+    stripeClient,
+    supabase,
+    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID,
+    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  });
 }
-
-// POST /api/stripe/create-checkout
-app.post('/api/stripe/create-checkout', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-
-  const { plan } = req.body;
-  if (!['monthly', 'annual'].includes(plan)) {
-    return res.status(400).json({ error: 'plan must be monthly or annual' });
-  }
-
-  const priceId = plan === 'monthly'
-    ? process.env.STRIPE_MONTHLY_PRICE_ID
-    : process.env.STRIPE_ANNUAL_PRICE_ID;
-
-  if (!priceId) return res.status(503).json({ error: 'Price not configured' });
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      customer_email: req.user.email,
-      metadata: { user_id: req.user.id },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/?checkout=cancelled`,
-    });
-    res.json({ checkoutUrl: session.url });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/stripe/webhook
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe) return res.status(503).end();
-
-  const sig = req.headers['stripe-signature'];
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).json({ error: err.message });
-  }
-
-  // Store event record first
-  if (supabase) {
-    await supabase.from('stripe_events').insert({
-      stripe_event_id: event.id,
-      event_type: event.type,
-      payload: event,
-    }).catch(err => console.error('[stripe_event]', err.message));
-  }
-
-  if (supabase) {
-    const session = event.data.object;
-    if (event.type === 'checkout.session.completed') {
-      const userId = session.metadata?.user_id;
-      if (userId) {
-        const { error: tierErr } = await supabase.from('users').update({
-          tier: 'paid',
-          stripe_customer_id: session.customer,
-        }).eq('id', userId);
-        if (!tierErr) {
-          supabase.from('tracks').insert({
-            uid: userId,
-            user_id: userId,
-            path: '/stripe/webhook',
-            event: 'upgrade_completed',
-            event_data: { plan: session.metadata?.plan ?? 'unknown' },
-          }).then(() => {}).catch(err => console.error('[track upgrade]', err.message));
-        }
-      }
-    } else if (event.type === 'customer.subscription.deleted') {
-      const customerId = session.customer;
-      await supabase.from('users').update({ tier: 'free' })
-        .eq('stripe_customer_id', customerId);
-    } else if (event.type === 'customer.subscription.updated') {
-      const status = session.status;
-      const customerId = session.customer;
-      if (status === 'active') {
-        await supabase.from('users').update({ tier: 'paid' })
-          .eq('stripe_customer_id', customerId);
-      }
-    }
-  }
-
-  res.json({ received: true });
-});
-
-// POST /api/stripe/portal
-app.post('/api/stripe/portal', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
-  if (!req.user.stripe_customer_id) return res.status(400).json({ error: 'No active subscription' });
-
-  try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: req.user.stripe_customer_id,
-      return_url: process.env.FRONTEND_URL || 'http://localhost:5173',
-    });
-    res.json({ portalUrl: session.url });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+registerStripeRoutes(app, paymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 
-app.post('/api/debug/classify-all', async (req, res) => {
-  const ip = req.ip || req.socket?.remoteAddress || '';
-  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
-    return res.status(403).json({ error: 'Debug endpoints are localhost-only' });
-  }
+app.post('/api/debug/classify-all', requireLocalhost, async (req, res) => {
   const { moves: ms = '' } = req.body;
+  if (!MOVES_RE.test(ms)) {
+    return res.status(400).json({ error: 'moves must be 0–42 characters of digits 0–6' });
+  }
   try {
     const scores = ms.length > 0 ? await solver.query(ms) : EMPTY_BOARD_SCORES;
     const redResult = await classifyPattern(ms, 1, solver);
@@ -2435,15 +2865,23 @@ app.post('/api/debug/classify-all', async (req, res) => {
 
     res.json({ red, yellow, boardState, scores });
   } catch (err) {
-    console.error('[debug/classify-all]', err);
-    res.status(500).json({ error: err.message });
+    logError('[debug/classify-all]', err);
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
 // ── Admin endpoints (localhost-only) ──────────────────────────────────────────
 
+// FR-009 (spec 047 US3/AC1): MUST NOT use `req.ip` here. With `trust proxy: 1` set (needed for
+// express-rate-limit to see real client IPs behind Railway's proxy), Express's `req.ip` resolves
+// from the client-controlled `X-Forwarded-For` header for exactly one hop — so any direct,
+// non-proxied caller can spoof it with `X-Forwarded-For: 127.0.0.1` and pass the check. Verified
+// locally: a request from a real non-loopback interface with a forged header reached this gate's
+// `next()` when checked against `req.ip`. `req.socket.remoteAddress` is the raw TCP peer address —
+// it is not influenced by any header, so it cannot be spoofed by a caller that isn't genuinely
+// connecting from loopback (e.g. an operator shell on the same host/container).
 function requireLocalhost(req, res, next) {
-  const ip = req.ip || req.socket?.remoteAddress || '';
+  const ip = req.socket?.remoteAddress || '';
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
   console.warn('[requireLocalhost] blocked request from', ip, 'for', req.method, req.originalUrl);
   return res.status(403).json({ error: 'Admin endpoints are localhost-only' });
@@ -2485,8 +2923,24 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       category_evidence: c.category_evidence ?? null,
       correct_col: c.correct_col ?? null,
     }));
-    const { error } = await supabase.from('candidates').insert(rows);
-    if (error) return res.status(500).json({ error: error.message });
+    // Task 26 (finding 23): a transient dropped DB connection previously aborted the whole
+    // category with 0 inserted after an expensive generateCandidates() run. Bounded retry with
+    // exponential backoff (3 attempts, 500ms/1000ms) survives a blip instead of losing the
+    // batch. Do NOT retry solver calls (generateCandidates() above) — that's a different
+    // failure (IPC deadlock under concurrent load, memory project_integration_test_slowness)
+    // with a different fix; only this insert is retried.
+    const MAX_INSERT_ATTEMPTS = 3;
+    let insertError = null;
+    for (let attempt = 1; attempt <= MAX_INSERT_ATTEMPTS; attempt++) {
+      const { error } = await supabase.from('candidates').insert(rows);
+      if (!error) { insertError = null; break; }
+      insertError = error;
+      logError(`[admin/generate] insert attempt ${attempt}/${MAX_INSERT_ATTEMPTS} failed`, error);
+      if (attempt < MAX_INSERT_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 500 * attempt));
+      }
+    }
+    if (insertError) { logError('[admin/generate]', insertError); return res.status(500).json({ error: 'internal error' }); }
   }
 
   res.json({
@@ -2502,7 +2956,7 @@ app.get('/api/admin/candidates/stats', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'database unavailable' });
 
   const { data, error } = await supabase.from('candidates').select('category, status, count()');
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/stats]', error); return res.status(500).json({ error: 'internal error' }); }
 
   const stats = {};
   for (const slug of CATEGORY_ORDER) stats[slug] = { category: slug, pending: 0, approved: 0, rejected: 0, unindexed_count: 0 };
@@ -2544,7 +2998,7 @@ app.post('/api/admin/puzzles/reindex', requireLocalhost, async (req, res) => {
     .eq('category', category)
     .eq('is_active', true);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/reindex]', error); return res.status(500).json({ error: 'internal error' }); }
 
   if (!puzzles || puzzles.length === 0) {
     return res.json({ category, indexed: 0, shapeGroups: 0 });
@@ -2621,7 +3075,7 @@ app.get('/api/admin/candidates', requireLocalhost, async (req, res) => {
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates]', error); return res.status(500).json({ error: 'internal error' }); }
 
   res.set('Cache-Control', 'no-store');
   let candidates = data || [];
@@ -2666,7 +3120,7 @@ app.post('/api/admin/candidates/reject-batch', requireLocalhost, async (req, res
     .eq('status', 'pending')
     .select('id');
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/candidates/reject-batch]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ rejected: data?.length ?? 0 });
 });
 
@@ -2692,6 +3146,7 @@ app.get('/api/admin/scores', requireLocalhost, async (req, res) => {
   try {
     scores = preClickMoves === '' ? EMPTY_BOARD_SCORES : await solver.query(preClickMoves);
   } catch (err) {
+    logError('[admin/scores/solver]', err);
     return res.status(500).json({ error: 'Solver unavailable' });
   }
 
@@ -2776,14 +3231,14 @@ app.post('/api/admin/candidates/:id/approve', requireLocalhost, async (req, res)
     .select('id')
     .single();
 
-  if (insertErr) return res.status(500).json({ error: insertErr.message });
+  if (insertErr) { logError('[admin/candidates/approve]', insertErr); return res.status(500).json({ error: 'internal error' }); }
 
   const { error: updateErr } = await supabase
     .from('candidates')
     .update({ status: 'approved', reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/approve]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   res.status(201).json({ puzzle_id: puzzle.id, candidate_id: id });
 });
@@ -2803,7 +3258,7 @@ app.post('/api/admin/candidates/approve-batch', requireLocalhost, async (req, re
     .eq('category', category)
     .eq('status', 'pending');
 
-  if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+  if (fetchErr) { logError('[admin/candidates/approve-batch]', fetchErr); return res.status(500).json({ error: 'internal error' }); }
   if (!candidates || candidates.length === 0) return res.json({ approved: 0, skipped: 0, errors: [] });
 
   let approved = 0;
@@ -2882,7 +3337,7 @@ app.post('/api/admin/candidates/:id/reject', requireLocalhost, async (req, res) 
     .update({ status: 'rejected', rejection_reason: reason, reviewed_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { logError('[admin/candidates/reject]', updateErr); return res.status(500).json({ error: 'internal error' }); }
 
   let falsePositiveId = undefined;
   if (reason === 'false_positive') {
@@ -2925,7 +3380,7 @@ app.delete('/api/admin/candidates/:id', requireLocalhost, async (req, res) => {
   }
 
   const { error: deleteErr } = await supabase.from('candidates').delete().eq('id', id);
-  if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+  if (deleteErr) { logError('[admin/candidates/delete]', deleteErr); return res.status(500).json({ error: 'internal error' }); }
   res.status(204).end();
 });
 
@@ -2942,7 +3397,7 @@ app.get('/api/admin/false-positives', requireLocalhost, async (req, res) => {
   if (category && VALID_CATEGORIES.has(category)) query = query.eq('category', category);
 
   const { data, error, count } = await query;
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/false-positives]', error); return res.status(500).json({ error: 'internal error' }); }
   res.json({ false_positives: data || [], total: count ?? 0 });
 });
 
@@ -2956,7 +3411,8 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
   try {
     puzzles = JSON.parse(await readFile(dataPath, 'utf8'));
   } catch (err) {
-    return res.status(500).json({ error: `Could not read placeholder_puzzles.json: ${err.message}` });
+    logError('[admin/seed-puzzles]', err);
+    return res.status(500).json({ error: 'internal error' });
   }
 
   let inserted = 0, skipped = 0;
@@ -2971,7 +3427,8 @@ app.post('/api/admin/seed-puzzles', requireLocalhost, async (req, res) => {
     if (existing) { skipped++; continue; }
     const { error } = await supabase.from('puzzles').insert(p);
     if (error) {
-      return res.status(500).json({ error: `Insert failed for category ${p.category}: ${error.message}` });
+      logError('[admin/seed-puzzles/insert]', error);
+      return res.status(500).json({ error: 'internal error' });
     }
     inserted++;
   }
@@ -3015,8 +3472,565 @@ app.post('/api/admin/puzzles', requireLocalhost, async (req, res) => {
     .select('id')
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { logError('[admin/puzzles/create]', error); return res.status(500).json({ error: 'internal error' }); }
   res.status(201).json({ id: data.id, verified: false });
+});
+
+// ── Admin Audio (TTS management — localhost only) ─────────────────────────────
+
+/** Derive a slug from an i18n key (same logic as generate-tts.js). */
+function keyToAudioSlug(key) {
+  return key.replace(/[._]/g, '--');
+}
+
+// Coach text source per language, keyed by the same `lang` values threaded
+// through the admin audio endpoints below.
+const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
+
+/**
+ * Resolve a dot-path i18n key ("coach.foo.bar") to its string value for a
+ * given language. Returns '' if the key is missing, non-string, or lang is
+ * unsupported (never throws).
+ * @param {string} key
+ * @param {string} lang
+ * @returns {string}
+ */
+function resolveCoachText(key, lang) {
+  const source = COACH_SOURCES[lang] || COACH_SOURCES.en;
+  try {
+    const parts = key.split('.');
+    let node = source;
+    for (const p of parts) node = node[p];
+    return typeof node === 'string' ? node : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Strip annotation markers from LLM explanation text for TTS speech.
+ * Removes [zone:X]...[/zone:X] and [term:X]...[/term:X] tag wrappers,
+ * keeping only the inner text. Also strips any leftover unmatched bracket tokens.
+ *
+ * @param {string} raw - Raw LLM explanation from deep_reveal_json.explanation
+ * @returns {string} Clean prose suitable for TTS synthesis
+ */
+function stripAnnotationsForTTS(raw) {
+  if (!raw) return '';
+  return raw
+    // Remove opening zone/term tags: [zone:col3], [zone:tg], [term:kbId], etc.
+    .replace(/\[zone:[^\]]+\]/gi, '')
+    .replace(/\[term:[^\]]+\]/gi, '')
+    // Remove closing tags: [/zone:col3], [/term:kbId], etc.
+    .replace(/\[\/zone:[^\]]+\]/gi, '')
+    .replace(/\[\/term:[^\]]+\]/gi, '')
+    // Collapse multiple spaces and trim
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function readTtsRegistry(lang = 'en') {
+  try {
+    return JSON.parse(readFileSync(registryPathForLang(lang), 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function writeTtsRegistry(entries, lang = 'en') {
+  const registryPath = registryPathForLang(lang);
+  mkdirSync(dirname(registryPath), { recursive: true });
+  writeFileSync(registryPath, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+}
+
+function writeTtsManifest(entries, lang = 'en') {
+  const slugs = entries
+    .filter(e => e.status === 'approved')
+    .map(e => e.slug)
+    .sort();
+  mkdirSync(audioDirForLang(lang), { recursive: true });
+  writeFileSync(manifestPathForLang(lang), JSON.stringify(slugs, null, 2) + '\n', 'utf8');
+}
+
+// GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
+app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
+  res.json(readTtsConfig(resolveAdminLang(req.query.lang)));
+});
+
+// POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice + model)
+app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
+  const { prompt, speed, voice, model } = req.body;
+  if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt must be a string' });
+  const parsedSpeed = parseFloat(speed);
+  if (isNaN(parsedSpeed) || parsedSpeed < 0.25 || parsedSpeed > 4.0) {
+    return res.status(400).json({ error: 'speed must be a number between 0.25 and 4.0' });
+  }
+  if (!VALID_TTS_VOICES.includes(voice)) {
+    return res.status(400).json({ error: `voice must be one of: ${VALID_TTS_VOICES.join(', ')}` });
+  }
+  const resolvedModel = model === undefined ? DEFAULT_TTS_MODEL : model;
+  if (!VALID_TTS_MODELS.includes(resolvedModel)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_TTS_MODELS.join(', ')}` });
+  }
+  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel, resolveAdminLang(req.body?.lang));
+  res.json({ ok: true });
+});
+
+// GET /api/admin/audio/status — grouped key list for the admin page
+app.get('/api/admin/audio/status', requireLocalhost, (req, res) => {
+  try {
+    const lang = resolveAdminLang(req.query.lang);
+    const registry = readTtsRegistry(lang);
+    const approved = [];
+    const awaiting = [];
+    const needs = [];
+    const ineligible = [];
+
+    for (const entry of registry) {
+      // Resolve the i18n key to its language-specific text for preview
+      const text = resolveCoachText(entry.key, lang);
+
+      const item = { key: entry.key, slug: entry.slug, text, status: entry.status, reason: entry.reason || null, generated_at: entry.generated_at || null, approved_at: entry.approved_at || null };
+
+      switch (entry.status) {
+        case 'approved': approved.push(item); break;
+        case 'awaiting_approval': awaiting.push(item); break;
+        case 'needs_audio': needs.push(item); break;
+        case 'ineligible': ineligible.push(item); break;
+        default: needs.push(item); break;
+      }
+    }
+
+    res.json({ approved, awaiting_approval: awaiting, needs_audio: needs, ineligible, counts: { approved: approved.length, awaiting_approval: awaiting.length, needs_audio: needs.length, ineligible: ineligible.length, total: registry.length } });
+  } catch (err) {
+    logError('[admin/audio/status]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/generate — synthesize audio for a single key
+app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
+  const { key } = req.body;
+  if (!key || typeof key !== 'string') {
+    return res.status(400).json({ error: 'key is required' });
+  }
+  const lang = resolveAdminLang(req.body?.lang);
+
+  try {
+    const registry = readTtsRegistry(lang);
+    const entry = registry.find(e => e.key === key);
+    if (!entry) return res.status(404).json({ error: 'key not found in registry' });
+    if (entry.status === 'ineligible') return res.status(400).json({ error: `key is ineligible: ${entry.reason}` });
+
+    // Resolve text from the language's i18n source
+    const text = resolveCoachText(key, lang) || null;
+    if (!text || text.includes('{{')) {
+      return res.status(400).json({ error: 'key has interpolated text or is missing' });
+    }
+
+    const { synthesize } = await import('./ttsProvider.js');
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
+    const instructions = buildTtsInstructions(basePrompt, lang);
+    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
+    writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
+
+    entry.status = 'awaiting_approval';
+    entry.generated_at = new Date().toISOString();
+    writeTtsRegistry(registry, lang);
+
+    res.json({ key, slug: entry.slug, status: 'awaiting_approval', size: audio.length });
+  } catch (err) {
+    logError('[admin/audio/generate]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/preview — TTS sandbox: synthesize arbitrary text with
+// experimental voice params and stream the mp3 straight back.
+//
+// Deliberately WRITES NOTHING — no mp3 on disk, no registry entry, no manifest
+// change, no config write. The registry/manifest/file trio already drifts; a
+// sandbox that wrote would be a fourth drift source. Instructions are routed
+// through buildTtsInstructions(prompt, lang) so the owner tunes against the
+// exact instruction string production uses (for `es` that appends
+// SPANISH_ACCENT_DIRECTIVE). Uncached by design: one real API call per click is
+// the point — you cannot hear a change you did not synthesize.
+app.post('/api/admin/audio/preview', requireLocalhost, async (req, res) => {
+  const validation = validatePreviewRequest(req.body);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const { text, prompt, speed, voice, model } = validation.value;
+  const lang = resolveAdminLang(req.body?.lang);
+
+  try {
+    const { synthesize } = await import('./ttsProvider.js');
+    const instructions = buildTtsInstructions(prompt, lang);
+    console.log(`[admin/audio/preview] lang=${lang} voice=${voice} speed=${speed} model=${model} chars=${text.length}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    res.type('audio/mpeg').send(audio);
+  } catch (err) {
+    logError('[admin/audio/preview]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/generate-all — synthesize keys in bulk.
+//
+// scope: 'new' (default) synthesizes only needs_audio keys — the cheap, additive
+// pass. scope: 'all' re-synthesizes every eligible key, including ones already
+// approved, and is the only way to roll a voice/prompt/speed change out to
+// existing clips: audio is cached by slug, so a config change alone never
+// re-renders anything. It is a full-cost pass — one paid TTS call per key.
+app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
+  const scope = req.body?.scope === undefined ? 'new' : req.body.scope;
+  if (scope !== 'new' && scope !== 'all') {
+    return res.status(400).json({ error: "scope must be 'new' or 'all'" });
+  }
+  try {
+    const registry = readTtsRegistry(lang);
+    const needsAudio = scope === 'all'
+      ? registry.filter(e => e.status !== 'ineligible')
+      : registry.filter(e => e.status === 'needs_audio');
+
+    if (needsAudio.length === 0) {
+      return res.json({ generated: 0, failed: 0, message: 'No keys need audio generation' });
+    }
+
+    const { synthesize } = await import('./ttsProvider.js');
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
+    const instructions = buildTtsInstructions(basePrompt, lang);
+    const audioDir = audioDirForLang(lang);
+    mkdirSync(audioDir, { recursive: true });
+    let generated = 0;
+    const failed = [];
+    const total = needsAudio.length;
+
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (scope=${scope} lang=${lang} voice=${voice} speed=${speed} model=${model})`);
+
+    for (const entry of needsAudio) {
+      try {
+        const text = resolveCoachText(entry.key, lang) || null;
+        if (!text || text.includes('{{')) {
+          failed.push({ key: entry.key, error: 'interpolated or missing text' });
+          continue;
+        }
+
+        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+        writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
+        entry.status = 'awaiting_approval';
+        entry.generated_at = new Date().toISOString();
+        // Persist after each success so the audio is immediately visible/playable in
+        // /admin/audio and progress survives a mid-batch crash (files already on disk).
+        writeTtsRegistry(registry, lang);
+        generated++;
+        const remaining = total - generated - failed.length;
+        console.log(`[admin/audio/generate-all] generated ${generated}/${total} — ${remaining} remaining | key=${entry.key}`);
+      } catch (err) {
+        failed.push({ key: entry.key, error: err.message });
+        console.error(`[admin/audio/generate-all] failed key=${entry.key}: ${err.message}`);
+      }
+    }
+
+    res.json({ generated, failed: failed.length, failedKeys: failed.length > 0 ? failed : undefined });
+  } catch (err) {
+    logError('[admin/audio/generate-all]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/approve — approve a single key and regenerate manifest
+app.post('/api/admin/audio/approve', requireLocalhost, (req, res) => {
+  const { key } = req.body;
+  if (!key || typeof key !== 'string') {
+    return res.status(400).json({ error: 'key is required' });
+  }
+  const lang = resolveAdminLang(req.body?.lang);
+
+  try {
+    const registry = readTtsRegistry(lang);
+    const entry = registry.find(e => e.key === key);
+    if (!entry) return res.status(404).json({ error: 'key not found in registry' });
+    if (entry.status === 'ineligible') return res.status(400).json({ error: 'ineligible keys cannot be approved' });
+    if (entry.status === 'needs_audio') return res.status(400).json({ error: 'key has no generated audio — generate first' });
+
+    entry.status = 'approved';
+    entry.approved_at = new Date().toISOString();
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
+
+    res.json({ key, slug: entry.slug, status: 'approved' });
+  } catch (err) {
+    logError('[admin/audio/approve]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/approve-all — approve all awaiting_approval keys
+app.post('/api/admin/audio/approve-all', requireLocalhost, (req, res) => {
+  const lang = resolveAdminLang(req.body?.lang);
+  try {
+    const registry = readTtsRegistry(lang);
+    const awaiting = registry.filter(e => e.status === 'awaiting_approval');
+
+    if (awaiting.length === 0) {
+      return res.json({ approved: 0, message: 'No keys awaiting approval' });
+    }
+
+    for (const entry of awaiting) {
+      entry.status = 'approved';
+      entry.approved_at = new Date().toISOString();
+    }
+
+    writeTtsRegistry(registry, lang);
+    writeTtsManifest(registry, lang);
+
+    res.json({ approved: awaiting.length, slugs: awaiting.map(e => e.slug) });
+  } catch (err) {
+    logError('[admin/audio/approve-all]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// GET /api/admin/audio/play/:slug — serve a generated audio file for preview
+app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
+  const slug = req.params.slug;
+  // Sanitize: only allow alphanumeric + hyphens
+  if (!/^[a-zA-Z0-9--]+$/.test(slug)) {
+    return res.status(400).json({ error: 'invalid slug' });
+  }
+  const lang = resolveAdminLang(req.query.lang);
+  const filePath = join(audioDirForLang(lang), `${slug}.mp3`);
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: 'audio file not found' });
+  }
+  res.set('Content-Type', 'audio/mpeg');
+  res.sendFile(filePath);
+});
+
+// ── Deep Reveal TTS ─────────────────────────────────────────────────────────────
+
+// GET /api/user/tts/deep-reveal — speak a deep-reveal explanation via TTS.
+// Cache hit: 302 redirect to signed Supabase Storage URL.
+// Cache miss: streams OpenAI TTS directly to client, buffers for background upload.
+app.get('/api/user/tts/deep-reveal', async (req, res) => {
+  // Anonymous allowed: the anon onboarding user's ONE free deep reveal should have
+  // a coach voice too. This endpoint is keyed purely by the position hash
+  // (moveString:col) and requires an already-cached explanation (404 otherwise),
+  // so it exposes no user data and is bounded by the /api/ rate limiter. It never
+  // dereferences req.user.
+
+  // Validate query params
+  const { moveString, col: colStr, lang } = req.query;
+  if (!moveString || !/^[0-6]{0,42}$/.test(moveString)) {
+    return res.status(400).json({ error: 'invalid moveString' });
+  }
+  const col = parseInt(colStr, 10);
+  if (isNaN(col) || col < 0 || col > 6) {
+    return res.status(400).json({ error: 'invalid col' });
+  }
+
+  // Require Supabase
+  if (!supabase || !process.env.SUPABASE_URL) {
+    return res.status(503).json({ error: 'internal error' });
+  }
+
+  // `Audio(url)` cannot set a custom Accept-Language header — it sends the browser's
+  // language, which may differ from the app's selected language. So the caller passes
+  // the in-app locale explicitly via ?lang=; whitelist it and fall back to req.locale
+  // (derived from Accept-Language) otherwise.
+  const locale = resolveTtsLocale(lang, req.locale);
+
+  try {
+    // Look up explanation_cache
+    const positionHash = createHash('sha256').update(`${moveString}:${col}`).digest('hex');
+    const { data: cacheEntry, error: cacheErr } = await supabase
+      .from('explanation_cache')
+      .select('deep_reveal_json, audio_path')
+      .match(buildCacheFilter(positionHash, locale))
+      .maybeSingle();
+
+    if (cacheErr) {
+      console.error('[tts/deep-reveal] cache lookup error:', cacheErr.message);
+      return res.status(500).json({ error: 'internal error' });
+    }
+    if (!cacheEntry?.deep_reveal_json) {
+      return res.status(404).json({ error: 'no explanation cached for this position' });
+    }
+
+    // Extract raw explanation text (handle both post-Epic 3 "explanation" and pre-Epic 3 "fullText")
+    const rawText = cacheEntry.deep_reveal_json.explanation
+      || cacheEntry.deep_reveal_json.fullText
+      || '';
+    if (!rawText) return res.status(404).json({ error: 'no explanation text available' });
+
+    // Strip annotations for clean TTS speech
+    const cleanText = stripAnnotationsForTTS(rawText);
+    if (!cleanText) return res.status(404).json({ error: 'explanation text is empty after stripping annotations' });
+
+    // Compute deterministic audio path from the cleaned text
+    const textHash = createHash('sha256').update(cleanText).digest('hex');
+    const audioPath = `tts/deep-reveal/${textHash}.mp3`;
+
+    // Cache hit — redirect to signed URL
+    if (cacheEntry.audio_path === audioPath) {
+      const { data: signed, error: signedErr } = await supabase.storage
+        .from('coach-tts')
+        .createSignedUrl(audioPath, 60 * 60 * 24 * 7); // 1 week
+      if (signedErr || !signed?.signedUrl) {
+        console.error('[tts/deep-reveal] signed URL error:', signedErr?.message);
+        return res.status(500).json({ error: 'failed to generate signed URL' });
+      }
+      return res.redirect(302, signed.signedUrl);
+    }
+
+    // Cache miss — requires OpenAI TTS
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'TTS not configured — OPENAI_API_KEY missing' });
+    }
+
+    const { synthesizeStream } = await import('./ttsProvider.js');
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(locale);
+    const instructions = buildTtsInstructions(basePrompt, locale);
+
+    let ttsResponse;
+    try {
+      ttsResponse = await synthesizeStream(cleanText, {
+        instructions: instructions || undefined,
+        speed,
+        voice,
+        model,
+      });
+    } catch (ttsErr) {
+      console.error('[tts/deep-reveal] OpenAI TTS error:', ttsErr.message);
+      // If the body was already partially consumed, the header might be sent
+      if (!res.headersSent) {
+        return res.status(502).json({ error: 'TTS service error' });
+      }
+      return; // headers already sent — nothing we can do
+    }
+
+    // Stream to client while collecting chunks for background upload
+    res.set('Content-Type', 'audio/mpeg');
+    const chunks = [];
+    const reader = ttsResponse.body.getReader();
+    let streamComplete = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          streamComplete = true;
+          break;
+        }
+        chunks.push(value);
+        res.write(value);
+      }
+      res.end();
+    } catch (streamErr) {
+      console.error('[tts/deep-reveal] stream error:', streamErr.message);
+      if (!res.headersSent) {
+        return res.status(500).json({ error: 'stream error' });
+      }
+      return;
+    } finally {
+      // Only upload if the full stream completed (not truncated by client disconnect)
+      if (streamComplete && chunks.length > 0) {
+        const buffer = Buffer.concat(chunks);
+        supabase.storage
+          .from('coach-tts')
+          .upload(audioPath, buffer, {
+            contentType: 'audio/mpeg',
+            upsert: true,
+          })
+          .then(({ error: upErr }) => {
+            if (upErr) {
+              console.error('[tts/deep-reveal] storage upload error:', upErr.message);
+              return;
+            }
+            // Update explanation_cache row with the audio path
+            return supabase
+              .from('explanation_cache')
+              .update({ audio_path: audioPath, audio_generated_at: new Date().toISOString() })
+              .match(buildCacheFilter(positionHash, locale))
+              .then(({ error: updateErr }) => {
+                if (updateErr) {
+                  console.error('[tts/deep-reveal] cache update error:', updateErr.message);
+                }
+              });
+          })
+          .catch(err => console.error('[tts/deep-reveal] bg upload error:', err.message));
+      }
+    }
+  } catch (err) {
+    console.error('[tts/deep-reveal] unexpected error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'internal error' });
+    }
+  }
+});
+
+// POST /api/admin/tts/cleanup — delete TTS audio older than 30 days (localhost only)
+app.post('/api/admin/tts/cleanup', requireLocalhost, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'internal error' });
+
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Find rows with expired audio
+    const { data: expired, error: queryErr } = await supabase
+      .from('explanation_cache')
+      .select('position_hash, audio_path')
+      .lt('audio_generated_at', cutoff)
+      .not('audio_path', 'is', null);
+
+    if (queryErr) {
+      console.error('[tts/cleanup] query error:', queryErr.message);
+      return res.status(500).json({ error: 'query failed' });
+    }
+
+    if (!expired || expired.length === 0) {
+      return res.json({ cleaned: 0 });
+    }
+
+    // Delete Storage objects and null out the columns
+    let cleaned = 0;
+    const paths = expired.map(e => e.audio_path).filter(Boolean);
+    const hashes = expired.map(e => e.position_hash);
+
+    // Delete from Storage (batch — one call per path since Supabase Storage doesn't support bulk deletes)
+    for (const path of paths) {
+      const { error: delErr } = await supabase.storage
+        .from('coach-tts')
+        .remove([path]);
+      if (delErr) {
+        console.error(`[tts/cleanup] storage delete error for ${path}:`, delErr.message);
+        // Continue with DB cleanup anyway — orphaned storage objects are harmless
+      }
+    }
+
+    // Null out audio columns in DB
+    const { error: updateErr } = await supabase
+      .from('explanation_cache')
+      .update({ audio_path: null, audio_generated_at: null })
+      .in('position_hash', hashes);
+
+    if (updateErr) {
+      console.error('[tts/cleanup] update error:', updateErr.message);
+      return res.status(500).json({ error: 'update failed' });
+    }
+
+    cleaned = hashes.length;
+    console.log(`[tts/cleanup] cleaned ${cleaned} rows`);
+    res.json({ cleaned });
+  } catch (err) {
+    console.error('[tts/cleanup] unexpected error:', err.message);
+    res.status(500).json({ error: 'internal error' });
+  }
 });
 
 // ── Legal pages (required by Google OAuth consent screen) ────────────────────
@@ -3055,11 +4069,67 @@ app.get('/{*path}', async (req, res) => {
         return res.type('html').send(patched);
       }
     } catch (e) {
+      logError('[html-serve/game-og]', e);
       // fall through to serve plain index.html
     }
   }
 
+  // FR-021, FR-022: inject OG meta tags + noindex for /blunder/:id paths
+  const blunderMatch = req.path.match(/^\/blunder\/([^/]+)$/);
+  if (blunderMatch) {
+    const blunderId = blunderMatch[1];
+    const noindexTag = '<meta name="robots" content="noindex, nofollow">';
+
+    if (supabase && UUID_REGEX.test(blunderId)) {
+      try {
+        const { data } = await supabase
+          .from('blunders')
+          .select('id, pattern_category')
+          .eq('id', blunderId)
+          .single();
+
+        if (data) {
+          const CATEGORY_LABELS = {
+            immediate_threat: 'Immediate Threat',
+            forced_win: 'Forced Win',
+            missed_win: 'Missed Win',
+            zugzwang: 'Zugzwang',
+            claimeven: 'Claimeven',
+            figure_7: 'Figure 7',
+            j_shape: 'J-Shape',
+            undercut: 'Undercut',
+            overcut: 'Overcut',
+          };
+          const humanCategory = CATEGORY_LABELS[data.pattern_category]
+            ?? data.pattern_category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const ogTitle = `Connect Four blunder — ${humanCategory}`;
+          const ogDesc = 'See this Connect Four mistake on DecodeC4.';
+          const ogTags = `<meta property="og:title" content="${ogTitle}">
+<meta property="og:description" content="${ogDesc}">
+${noindexTag}`;
+          const patched = indexHtml.replace('</head>', `${ogTags}\n</head>`);
+          return res.type('html').send(patched);
+        }
+      } catch (e) {
+        logError('[html-serve/blunder-og]', e);
+        // fall through to noindex-only
+      }
+    }
+    // Always inject noindex for /blunder/* even on error/404/non-UUID — FR-022
+    const patched = indexHtml.replace('</head>', `${noindexTag}\n</head>`);
+    return res.type('html').send(patched);
+  }
+
   res.type('html').send(indexHtml);
+});
+
+// ── Global error handler ───────────────────────────────────────────────────────
+// Safety net for any error passed via next(err) or thrown in async routes.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  logError('[unhandled]', err, { method: req.method, url: req.originalUrl });
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ── Server start ───────────────────────────────────────────────────────────────

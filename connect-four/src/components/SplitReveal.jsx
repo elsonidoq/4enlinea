@@ -1,4 +1,5 @@
-import { useDragSplit } from '../lib/useDragSplit.js';
+import { useMemo } from 'react';
+import { useDragSplit, computeFrozenBoardWidth } from '../lib/useDragSplit.js';
 
 /**
  * Wraps board content and reveal content in a vertical split-pane layout.
@@ -36,20 +37,41 @@ export function SplitReveal({
   maxTopPct = 75,
   initialSplitPct = 40,
 }) {
-  const { splitPct, topPx, containerRef, dividerRef, dividerProps, isDragging } = useDragSplit({
+  const {
+    splitPct, topPx, containerH,
+    containerRef, dividerRef, dividerProps, isDragging,
+  } = useDragSplit({
     minTopPct,
     maxTopPct,
     initialSplitPct,
   });
 
-  // Compute the max board width so the board fits the top pane height.
-  // Margin of 32px: 8px padding + 20px badge pad + 4px breathing room.
-  // Only constrain when boardW is sensible (>=200px, < container natural width).
-  const targetH = topPx ? topPx - 32 : 0;
-  const boardW = targetH > 57
-    ? (7 * (targetH - 57)) / 6 + 64
-    : 0;
-  const constrain = boardW >= 200;
+  // Board fit: derive the board's max-width from the CURRENT top-pane height
+  // (live splitPct) so the board always fits fully inside the pane. It shrinks
+  // as the divider is dragged up (giving the explanation more room) and grows
+  // back as it is dragged down — never overflowing/clipping and never spilling
+  // to full viewport width. computeFrozenBoardWidth stays a pure function of
+  // (containerH, splitPct); we just feed it the live split instead of freezing
+  // it to the open-time split.
+  //
+  // Supersedes spec 042 US6 (FR-022, SC-009,
+  // contracts/split-reveal-zoom-contract.md §2), which FROZE boardW to the
+  // open-time split to stop the board zooming during a drag. That freeze is the
+  // root cause of the reported bug: once the pane got short (short device, a
+  // tall coach dialog, or the old `boardW >= 200` gate), the frozen
+  // height-derived cap either clipped a fixed-size square or was dropped
+  // entirely (`constrain === false`), leaving `width: 100%` to blow the board
+  // up to full screen width.
+  const boardW = useMemo(() => {
+    if (!containerH) return 0;
+    // MIN_BOARD_W keeps the cap strictly positive so it is NEVER dropped —
+    // dropping it falls back to width:100% (= full-bleed). In a pane too short
+    // to fit even this, the board stays small and centered instead of
+    // spilling to the full viewport width.
+    const MIN_BOARD_W = 120;
+    return Math.max(computeFrozenBoardWidth(containerH, splitPct), MIN_BOARD_W);
+  }, [containerH, splitPct]);
+  const constrain = boardW > 0;
 
   if (!isOpen) {
     return boardContent;

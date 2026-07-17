@@ -516,7 +516,7 @@ closed allowed-location set that upgrades Epic A's P5 gate to its strong form.
   the simulation layer; no HTTP contract change.
 - `explanation_cache.deep_reveal_json` = `{ explanation, prompt }`: shape unchanged.
 - KB: read-only consumer of `allen-v1`–`v4`, `derived-parity-formula`,
-  `community-claimodd`, `allis-claimeven`, `community-z-threat`, and (Type 2)
+  `allis-claimeven`, `community-z-threat`, and (Type 2)
   `allen-j-configuration` / `community-figure-7`. Respect the **explicit non-use** list
   (`t1`–`t7`, `parity-trap`, `ghost-threat`, `overcut`, `sextuple-threat`, `baseclaim`,
   `before`, `specialbefore` must not be invoked on sparse boards).

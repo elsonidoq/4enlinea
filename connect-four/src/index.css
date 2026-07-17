@@ -77,8 +77,25 @@ p {
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: 0 6px 0 #228245; }
 .btn-ghost { background: rgba(0,0,0,0.05); color: var(--ink); }
 .btn-ghost:hover { background: rgba(0,0,0,0.08); }
+.btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; background: rgba(0,0,0,0.05); transform: none; }
 .btn-dark { background: var(--ink); color: #fff; box-shadow: 0 6px 0 #100f0e; }
 .btn-dark:active { box-shadow: 0 2px 0 #100f0e; transform: translateY(4px); }
+
+/* Compact secondary CTA (spec 043 US2, FR-008/FR-009): "review past mistakes" and the
+   signed-out stats.signup_prompt. Reuses .btn-ghost's affordance (bg + hover) but at a
+   smaller inline scale, plus a distinct pressed state and a visible keyboard-focus ring. */
+.btn-ghost-compact {
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+  border: none; cursor: pointer; border-radius: 12px; padding: 10px 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.05); color: var(--ink-soft);
+  text-align: left; width: 100%;
+  transition: background .15s, transform .08s;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.btn-ghost-compact:hover { background: rgba(0,0,0,0.08); }
+.btn-ghost-compact:active { background: rgba(0,0,0,0.12); transform: translateY(1px) scale(0.995); }
+.btn-ghost-compact:focus-visible { outline: 3px solid var(--disc-green); outline-offset: 2px; }
 
 /* ===================== MODAL / SHEET ===================== */
 .sheet-backdrop {
@@ -131,3 +148,25 @@ p {
 .outcome-chip.won  { background: var(--eval-good-bg); color: #1c8a4a; }
 .outcome-chip.lost { background: var(--eval-bad-bg);  color: #b03030; }
 .outcome-chip.draw { background: #e9eaec;              color: var(--ink-soft); }
+
+/* Board per-column control (spec 043 US1, FR-005, contracts/board-a11y-contract.md I4).
+   Focus ring must be visually distinct from the existing hover background/box-shadow
+   (Board.jsx's isHovered state) — outline is a separate visual channel from background/box-shadow,
+   so the two never collide even when a column is simultaneously hovered and focused. */
+.board-col:focus-visible {
+  outline: 3px solid var(--green, #22c55e);
+  outline-offset: 2px;
+}
+
+/* Horizontally-scrollable pill rows (e.g. Past Games filter chips, spec 043 FR-020).
+   These rows intentionally overflow-x:auto for touch-swipe access to off-screen pills, but the
+   native scrollbar rendered at the bottom of the row visually collapsed the row/content gap on
+   mobile (390px viewport), reading as a cramped gray line squeezed against the content below.
+   Hiding the scrollbar (scrolling still works via touch/trackpad) restores the intended spacing. */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+}

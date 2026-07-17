@@ -32,6 +32,11 @@ statement: |
   AND the extra playable square. Named "Specialbefore" because it is a special variant
   of Before for positions where a Baseclaim-like conflict makes plain Before insufficient.
 
+short_summary: |
+  A Before with an additional directly playable square in a different column; one
+  empty square of the Before group must be directly playable, enabling a Baseinverse-like
+  response that refutes groups plain Before cannot handle.
+
 preconditions:
   - "A Before group G without opponent discs exists, with at least one empty square that is directly playable."
   - "An additional directly playable square exists in a column not used by the Before group."

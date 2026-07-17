@@ -15,6 +15,7 @@ export function isValidSpec(spec) {
   return /^col\d+$/.test(spec)
     || /^c\d+r\d+$/.test(spec)
     || /^cells:/.test(spec)
+    || /^windows:/.test(spec)
     || /^row\d+$/.test(spec)
     || spec === 'tg';
 }
@@ -103,6 +104,25 @@ export function expandSpec(spec) {
     const row = parseInt(rowMatch[1], 10) - 1;
     if (row < 0 || row >= ROWS) return [];
     return Array.from({ length: COLS }, (_, col) => ({ col, row }));
+  }
+
+  // windows:c2r4,c3r4,c4r4,c5r4|c3r5,... → all cells (flat, deduplicated)
+  const windowsMatch = spec.match(/^windows:(.*)$/);
+  if (windowsMatch) {
+    const seen = new Set();
+    const results = [];
+    for (const windowStr of windowsMatch[1].split('|')) {
+      for (const part of windowStr.split(',')) {
+        const cm = part.trim().match(/^c(\d+)r(\d+)$/);
+        if (!cm) continue;
+        const col = parseInt(cm[1], 10) - 1;
+        const row = parseInt(cm[2], 10) - 1;
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+        const key = `${col},${row}`;
+        if (!seen.has(key)) { seen.add(key); results.push({ col, row }); }
+      }
+    }
+    return results;
   }
 
   // Unknown spec

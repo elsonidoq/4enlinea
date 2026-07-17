@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -7,10 +7,17 @@ import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function PostSetSummaryScreen({ go, results = [], category }) {
   const { t } = useTranslation();
+  const { speakCoachMessage } = useCoachSpeech();
   const { store, session } = useStore();
+  // /summary is a SESSION_ONLY screen (its `results` prop can't survive the
+  // full-page Stripe redirect), so return the user to Challenges instead — the
+  // same place this screen's back/ghost buttons go.
+  const handleUpgrade = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [isFreeUser, setIsFreeUser] = useState(true);
 
@@ -71,17 +78,30 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
     ? t('summary.cta_back', 'Back to Challenges')
     : t('summary.cta_lesson', 'Go to {{lessonName}} lesson', { lessonName });
 
-  // Coach message
+  // Coach message. The perfect-set key is frozen on first render (useState initializer) so the
+  // rendered text and the spoken clip below are the same line — a bare Math.random() in the render
+  // body re-rolls on every re-render and could not be matched by a play call.
+  const [perfectKey] = useState(() => `coach.spoken.summary.perfect.${Math.floor(Math.random() * 2)}`);
   const coachText = isPerfect
-    ? t(`coach.summary.perfect.${Math.floor(Math.random() * 2)}`, 'Perfect set.')
+    ? t(perfectKey, 'Perfect set.')
     : t('summary.coach_recommend', 'Work on {{pattern}} next.', { pattern: lessonName });
+
+  // `coach.spoken.summary.perfect.*` declares intent to be voiced but had no play site (see
+  // docs/architecture/coach-audio-conventions.md). StrictMode-guarded, mirroring HomeScreen.
+  const spokeRef = useRef(false);
+  useEffect(() => {
+    if (!isPerfect || spokeRef.current) return;
+    spokeRef.current = true;
+    speakCoachMessage(perfectKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPerfect]);
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
       background: 'var(--bg-chal)',
     }}>
-      <TopBar onBack={() => go('setpicker')} />
+      <TopBar onBack={() => go('setpicker')} onLogoClick={() => go('home')} />
 
       <div style={{ padding: '0 22px 24px', flex: 1, overflowY: 'auto' }}>
         {/* Hero — always shows green check + "Set complete!" */}
@@ -195,7 +215,7 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       </div>
 
       {upgradeOpen && (
-        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onNotify={() => setUpgradeOpen(false)} />
+        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
       )}
     </div>
   );

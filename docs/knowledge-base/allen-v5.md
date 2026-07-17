@@ -43,13 +43,23 @@ formal_predicate: |
   #   coexist with V4
 
 worked_examples:
-  - movestring: PENDING
+  - movestring: "31243532145314235244552"
     description: |
-      After T1–T7, Red has one odd-row threat and Black has one odd-row threat in a
-      different column. T7 cancels both. Remaining: no threats. V1/V2/V3/V4 all fail.
-      V5: Draw.
-    expected_behavior: "solver confirms Draw; T7 cancellation leaves no winning threats for either player"
-    solver_verified: PENDING
+      0-indexed movestring (spec 044 / FR-020a backfill — the memory-only table's
+      V5 movestring `42354643256425346355663` was independently re-verified and
+      found NOT to reproduce a Draw for this rule on re-verification (its actual
+      solver-queried scores were -2 across all columns, i.e. a Red win, not a
+      Draw, and its board did not contain the described threat structure at all),
+      so it was not carried into the KB. This replacement example is
+      allen-t7.md's own already-`solver_verified` worked example, which
+      independently demonstrates exactly this V5 scenario and was re-confirmed
+      today via a direct solver query). Red has exactly one major odd-row threat
+      (col0 row2) and Black has exactly one major odd-row threat (col6 row4) in a
+      different column. T7 cancels both. Remaining: no odd-row threats for either
+      player, and V4 does not apply (Black has no even-row threat either). V1/V2/
+      V3/V4 all fail. Solver confirms all 7 columns score 0.
+    expected_behavior: "solver: all 7 columns score 0 (Draw); major threats list shows exactly col0 row2 (X) and col6 row4 (O), the T7-cancelling pair"
+    solver_verified: 2026-07-11
   - movestring: PENDING
     description: |
       After T1–T7, neither player has any remaining major threats. Position will play
@@ -75,7 +85,7 @@ related:
   - "[[allen-v4]] — Black even-row win (checked before V5)"
   - "[[allen-t7]] — the most common cause of V5: T7 cancels all remaining odd-row threats"
 
-last_verified: 2026-05-17
+last_verified: 2026-07-11
 ---
 
 ## Verbatim source

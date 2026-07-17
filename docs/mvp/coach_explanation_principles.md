@@ -280,7 +280,7 @@ Deterministic. Given a position, the played move A, and the solver's best move B
 
    Then: `gap = score_coached(B) − score_coached(A)`. A positive gap means B is
    better for the coached player. The JS off-by-1 on odd `moveCount` (see
-   `reference_c4solver_behavior.md`) is handled inside `c4solver-wrapper.js`;
+   memory `reference_c4solver`) is handled inside `c4solver-wrapper.js`;
    callers receive the off-by-1-corrected raw score; the sign flip above (step 2) is the caller's responsibility.
    All subsequent gap references in this document use `gap = score_coached(B) − score_coached(A)` (coached-player perspective).
    Initial thresholds: small = gap ≤ 3 | moderate = 4–9 | large = ≥ 10.
@@ -367,7 +367,7 @@ softening for Types 1–2, where the crime scene is explicit.
 | Stage | Load-bearing KB entries | Role in the prompt |
 |---|---|---|
 | Early (Type 4) | `derived-parity-formula`, `allen-v1`, `allen-v3` (Red), `allen-v2`, `allen-v4` (Yellow) | Parity label on each group's key cell — the "why" for sparse groups |
-| Early (Type 4) | `community-claimodd`, `allis-claimeven` | Center-column / odd-even race; why central groups matter early |
+| Early (Type 4) | `allis-claimeven` | Odd-even race; why central groups matter early |
 | Early→mid | `community-z-threat` | The buildable parity-aware unit bridging empty group → winning group |
 | Mid (Type 2) | `allen-j-configuration`, `community-figure-7` | Named scaffolds the better move builds toward; same-column double threat |
 | Late (Type 2/3) | `allen-t1`–`t7`, `community-parity-trap`, `community-ghost-threat` | Threat simplification & zugzwang — **only** when threats already exist |

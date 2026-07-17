@@ -1,0 +1,21 @@
+#!/bin/sh
+# Keep the vendored KB copy (connect-four/server/kb/) in sync with the authored
+# source (docs/knowledge-base/) on every commit.
+#
+# Railway ships only the connect-four/ subtree, so the KB must be committed
+# inside it — see connect-four/scripts/sync-kb.mjs and connect-four/server/kbDir.js.
+# This hook re-mirrors the KB and stages any resulting changes so a docs/ edit
+# and its vendored copy always land in the same commit. If nothing changed, it
+# is a no-op.
+#
+# Enabled via `git config core.hooksPath .githooks` (auto-set by the `prepare`
+# script in connect-four/package.json on `npm install`).
+
+repo_root=$(git rev-parse --show-toplevel)
+
+node "$repo_root/connect-four/scripts/sync-kb.mjs" || {
+  echo "pre-commit: sync-kb failed" >&2
+  exit 1
+}
+
+git add -- "$repo_root/connect-four/server/kb"

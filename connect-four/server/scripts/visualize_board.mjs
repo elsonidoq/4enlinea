@@ -10,33 +10,33 @@ const moves = process.argv[2] ?? '';
 
 // Raw board: 3-char cell (space-padded symbol).
 function rawCell(v) {
-  if (v === 1) return 'Gn ';
-  if (v === 2) return 'Gy ';
+  if (v === 1) return ' X ';  // Green (player 1)
+  if (v === 2) return ' O ';  // Gray  (player 2)
   return '   ';
 }
 
 // Annotated board: 4-char inner value, rendered as ' VALUE ' (6-char cell).
-// Discs: "Gn 1" / "Gy42"  (player(2) + padStart(2) move number)
-// Major threat gravity-top: "<Gn>" / "<Gy>" / "<*> "  ← immediately playable
-// Major threat non-gravity:  "[Gn]" / "[Gy]" / "[*] "
-// Minor threat: "(gn)" / "(gy)" / "(*) " (both)
+// Discs: "X  1" / "O 42"  (player symbol + padStart(3) move number)
+// Major threat gravity-top: "<X> " / "<O> " / "<*> "  ← immediately playable
+// Major threat non-gravity:  "[X] " / "[O] " / "[*] "
+// Minor threat: "(x) " / "(o) " / "(*) " (both)
 // Empty: "    "
 function annotatedValue(r, c, board, moveGrid, threatMap, colHeights) {
   const v = board[r][c];
   if (v !== 0) {
-    const player = v === 1 ? 'Gn' : 'Gy';
-    return player + String(moveGrid[r][c]).padStart(2);
+    const player = v === 1 ? 'X' : 'O';
+    return player + String(moveGrid[r][c]).padStart(3);
   }
   const t = threatMap[`${r},${c}`];
   if (!t) return '    ';
   if (t.rm || t.ym) {
     const isGT = r === colHeights[c];
     if (t.rm && t.ym) return isGT ? '<*> ' : '[*] ';
-    if (t.rm)         return isGT ? '<Gn>' : '[Gn]';
-    return                   isGT ? '<Gy>' : '[Gy]';
+    if (t.rm)         return isGT ? '<X> ' : '[X] ';
+    return                   isGT ? '<O> ' : '[O] ';
   }
   if (t.rn && t.yn) return '(*) ';
-  return t.rn ? '(gn)' : '(gy)';
+  return t.rn ? '(x) ' : '(o) ';
 }
 
 async function main() {
@@ -134,7 +134,7 @@ async function main() {
   for (const [key, t] of Object.entries(threatMap)) {
     if (!t.rm && !t.ym) continue;
     const [r, c] = key.split(',').map(Number);
-    const who = (t.rm && t.ym) ? 'Gn+Gy' : t.rm ? 'Gn' : 'Gy';
+    const who = (t.rm && t.ym) ? 'X+O' : t.rm ? 'X' : 'O';
     majorThreats.push({ col: c + 1, row: r + 1, who });
   }
   if (majorThreats.length > 0) {
@@ -149,8 +149,8 @@ async function main() {
   }
 
   console.log('');
-  console.log('  Legend: Gn=Green  Gy=Gray   Gn/Gy = disc(move#)   <Gn>/<Gy> = major threat gravity-top (immediately playable)');
-  console.log('          [Gn]/[Gy] = major threat non-gravity   (gn)/(gy) = minor threat   [GT] = gravity-top in threats list');
+  console.log('  Legend: X=Green(P1)  O=Gray(P2)   X17 = disc(move#)   <X>/<O> = major threat gravity-top (immediately playable)');
+  console.log('          [X]/[O] = major threat non-gravity   (x)/(o) = minor threat   [GT] = gravity-top in threats list');
   console.log('          [*]/(*) = both players   ht: disc count   par: O=odd E=even   scr: solver score per column');
 }
 

@@ -1,0 +1,10 @@
+{
+  "spec_dir": "specs/040-fv-grounding",
+  "stage": "done",
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": [
+    {"item": "edgeType fine-grained K/D threshold branch", "target": "future iteration after Story A lands + frozen vectors regenerated", "rationale": "thresholds must be empirically derived post-regen; coarse total-ordered branch ships in iteration 1"}
+  ]
+}

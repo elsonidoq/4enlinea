@@ -15,6 +15,10 @@ statement: |
   threat" in Allen's framework; the count formulation generalises across mid-game
   positions where the column is partially filled.
 
+short_summary: |
+  A Z-Threat is a major threat where the count of empty cells from column height to
+  the threat row is odd, letting the owner toggle zugzwang control.
+
 preconditions:
   - "A major threat exists at (c, r) for player P."
   - "Column c is not full: height(c) < r."

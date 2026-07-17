@@ -26,6 +26,11 @@ routes `/admin/lessons*` to `AdminLessonsPage` before checking the generic
 `/admin` prefix. This is the same pattern used for the existing `/admin`
 curation page (`AdminCuratePage`).
 
+`AdminLessonsPage` is intentionally wrapped in `.dark-surface`, overriding spec
+033 FR-015 (which said light by default) — an explicit owner decision after
+visual inspection. Sub-components inherit from the wrapper and use no CSS token
+references; do not remove the wrapper to "match the spec."
+
 ---
 
 ## Files

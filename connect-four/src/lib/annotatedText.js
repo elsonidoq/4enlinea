@@ -39,67 +39,91 @@ function isValidSpec(spec) {
   return /^col\d+$/.test(spec)
     || /^c\d+r\d+$/.test(spec)
     || /^cells:/.test(spec)
+    || /^windows:/.test(spec)
     || /^row\d+$/.test(spec)
     || spec === 'tg';
 }
 
 /**
- * Parse text with [zone:<spec>]text[/zone:<spec>] annotations.
- * Strips tags and returns cleaned text plus an array of zone objects
- * with character offsets into the cleaned text.
+ * Parse text with [zone:<spec>]text[/zone:<spec>] and [term:<kbId>]text[/term:<kbId>]
+ * annotations.
  *
- * @param {string} text  Raw text potentially containing zone tags.
- * @returns {{ cleanText: string, zones: Array<{index: number, spec: string, startChar: number, endChar: number, text: string}> }}
+ * Strips all tags and returns cleaned text plus arrays of zone and term objects
+ * with character offsets into the cleaned text. Both tag types are handled in a
+ * single pass so their offsets are correct relative to the same cleanText.
+ *
+ * @param {string} text  Raw text potentially containing zone and/or term tags.
+ * @returns {{ cleanText: string, zones: Array<{index: number, spec: string, startChar: number, endChar: number, text: string}>, terms: Array<{index: number, kbId: string, startChar: number, endChar: number, text: string}> }}
  */
 export function parseAnnotatedText(text) {
-  const zones = [];
-  // Group 1: spec (without !), group 2: ! in opening tag (or ''), group 3: inner text,
-  // group 4: ! in closing tag (or ''). Accepts ! in either, both, or neither tag.
-  const tagRegex = /\[zone:([^\]!]+)(!?)\](.*?)\[\/zone:\1!?\]/gs;
+  // Match both [zone:spec]...[/zone:spec] and [term:kbId]...[/term:kbId] tags.
+  // Group 1: tag type (zone or term)
+  // Group 2: spec/kbId value
+  // Group 3: inner text
+  const combinedRegex = /\[(zone|term):([^\]!]+)(!?)\](.*?)\[\/\1:\2!?\]/gs;
 
-  // Collect all matches with their original positions.
-  const matches = [];
+  // Collect all matches (both zone and term) with their original positions.
+  const allMatches = [];
   let match;
-  while ((match = tagRegex.exec(text)) !== null) {
-    matches.push({
-      spec: match[1],
-      defaultActive: match[2] === '!',
-      innerText: match[3],
+  while ((match = combinedRegex.exec(text)) !== null) {
+    allMatches.push({
+      type: match[1],          // 'zone' or 'term'
+      specOrKbId: match[2],
+      defaultActive: match[3] === '!',
+      innerText: match[4],
       originalStart: match.index,
       fullLength: match[0].length,
     });
   }
 
+  // Sort by position for single-pass cleanText construction.
+  allMatches.sort((a, b) => a.originalStart - b.originalStart);
+
   // Build clean text and compute character offsets in the cleaned output.
+  const zones = [];
+  const terms = [];
   let cleanText = '';
   let lastEnd = 0;
 
-  for (const m of matches) {
+  for (const m of allMatches) {
     // Plain text before this match.
     cleanText += text.slice(lastEnd, m.originalStart);
 
-    const { spec, defaultActive } = m;
+    if (m.type === 'term') {
+      const { specOrKbId: kbId, innerText: termText } = m;
+      const cleanOffset = cleanText.length;
+      cleanText += termText;
 
-    if (!isValidSpec(spec)) {
-      // Unknown spec — include inner text as plain (non-interactive) text.
-      cleanText += m.innerText;
-      lastEnd = m.originalStart + m.fullLength;
-      continue;
+      terms.push({
+        index: terms.length,
+        kbId,
+        startChar: cleanOffset,
+        endChar: cleanOffset + termText.length,
+        text: termText,
+      });
+    } else {
+      // zone type
+      const { specOrKbId: spec, defaultActive, innerText: zoneText } = m;
+
+      if (!isValidSpec(spec)) {
+        // Unknown spec — include inner text as plain (non-interactive) text.
+        cleanText += zoneText;
+        lastEnd = m.originalStart + m.fullLength;
+        continue;
+      }
+
+      const cleanOffset = cleanText.length;
+      cleanText += zoneText;
+
+      zones.push({
+        index: zones.length,
+        spec,
+        defaultActive,
+        startChar: cleanOffset,
+        endChar: cleanOffset + zoneText.length,
+        text: zoneText,
+      });
     }
-
-    const cleanOffset = cleanText.length;
-
-    // The zone's inner text (display text).
-    cleanText += m.innerText;
-
-    zones.push({
-      index: zones.length,
-      spec,
-      defaultActive,
-      startChar: cleanOffset,
-      endChar: cleanOffset + m.innerText.length,
-      text: m.innerText,
-    });
 
     lastEnd = m.originalStart + m.fullLength;
   }
@@ -107,7 +131,7 @@ export function parseAnnotatedText(text) {
   // Remaining text after the last match.
   cleanText += text.slice(lastEnd);
 
-  return { cleanText, zones };
+  return { cleanText, zones, terms };
 }
 
 /**
@@ -182,6 +206,25 @@ export function zoneToOverlays(spec, userMajorThreats = [], opponentMajorThreats
     return Array.from({ length: COLS }, (_, c) => ({ c, r: row }));
   }
 
+  // windows:c2r4,c3r4,c4r4,c5r4|c3r5,... → flat deduplicated cell list
+  const windowsMatch = spec.match(/^windows:(.*)$/);
+  if (windowsMatch) {
+    const seen = new Set();
+    const results = [];
+    for (const windowStr of windowsMatch[1].split('|')) {
+      for (const part of windowStr.split(',')) {
+        const cm = part.trim().match(/^c(\d+)r(\d+)$/);
+        if (!cm) continue;
+        const col = parseInt(cm[1], 10) - 1;
+        const row = parseInt(cm[2], 10) - 1;
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+        const key = `${col},${row}`;
+        if (!seen.has(key)) { seen.add(key); results.push({ c: col, r: row }); }
+      }
+    }
+    return results;
+  }
+
   // tg → userMajorThreats
   if (spec === 'tg') {
     return userMajorThreats.map(t => ({ c: t.c, r: t.r }));
@@ -190,6 +233,29 @@ export function zoneToOverlays(spec, userMajorThreats = [], opponentMajorThreats
   // Unknown spec
   console.warn(`[zoneToOverlays] Unknown zone spec: "${spec}"`);
   return [];
+}
+
+/**
+ * For a windows: spec, return the window groups as Array<Array<{c,r}>> (0-indexed).
+ * Each inner array is one 4-cell threat window — used by Board to draw one capsule per window.
+ * Returns null for any other spec type.
+ *
+ * @param {string} spec
+ * @returns {Array<Array<{c,r}>>|null}
+ */
+export function zoneToWindowGroups(spec) {
+  const windowsMatch = spec.match(/^windows:(.+)$/);
+  if (!windowsMatch) return null;
+  return windowsMatch[1].split('|').map(windowStr =>
+    windowStr.split(',').flatMap(part => {
+      const cm = part.trim().match(/^c(\d+)r(\d+)$/);
+      if (!cm) return [];
+      const col = parseInt(cm[1], 10) - 1;
+      const row = parseInt(cm[2], 10) - 1;
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return [];
+      return [{ c: col, r: row }];
+    })
+  ).filter(w => w.length >= 2);
 }
 
 /**
@@ -289,5 +355,5 @@ export function regexFallbackParse(text) {
   zones.sort((a, b) => a.startChar - b.startChar);
   zones.forEach((z, i) => { z.index = i; });
 
-  return { cleanText: text, zones };
+  return { cleanText: text, zones, terms: [] };
 }

@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Icon } from './Icon.jsx';
+import { getColumnA11yProps } from './boardA11y.js';
+import { boardPropsAreEqual } from '../lib/board.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -40,6 +42,7 @@ function shimStyle(color, role) {
 
 /**
  * Group a flat list of {c, r} cells into collinear runs and isolated dots.
+ * Used for zone types that don't carry window structure (col, row, cNrM, cells:).
  * Runs are tried in order: horizontal → vertical → diagonal↗ → diagonal↘.
  * Each cell is assigned to the first run of ≥2 it starts; leftover cells become dots.
  */
@@ -77,7 +80,7 @@ function groupCellsByCapsules(cells) {
   return { runs, dots };
 }
 
-export function Board({
+function BoardImpl({
   board = EMPTY_BOARD,
   onColumnClick,
   onCellClick,
@@ -92,6 +95,9 @@ export function Board({
   interactionMode = 'single_move',
   // Deprecated shim — CurationWorkspace.jsx only. [row, col, role, step?] tuples.
   highlightedCells = [],
+  // Numbered move labels keyed "row,col" -> label. Rendered ON TOP of the green/gray disc without
+  // recoloring it (unlike the red/yellow shim above). Used by the fv-suff lookahead numbering.
+  stepLabels = {},
   // Coach-mention zone highlights — Array<{color: string, cells: Array<{c,r}>}> (0-indexed).
   zhCells = [],
 }) {
@@ -133,8 +139,16 @@ export function Board({
 
     const elements = [];
     let ki = 0;
-    for (const { color, cells } of zhCells) {
-      const { runs, dots } = groupCellsByCapsules(cells);
+    for (const { color, cells, windows } of zhCells) {
+      let runs, dots;
+      if (windows && windows.length > 0) {
+        // windows: spec — each window is already a structurally correct threat window;
+        // draw one capsule per window (first cell → last cell), no dots.
+        runs = windows.map(w => ({ start: w[0], end: w[w.length - 1] }));
+        dots = [];
+      } else {
+        ({ runs, dots } = groupCellsByCapsules(cells));
+      }
       for (const { start, end } of runs) {
         const S = center(start.c, start.r);
         const E = center(end.c, end.r);
@@ -190,6 +204,19 @@ export function Board({
           }
         };
 
+        // Spec 043 US1 (FR-001..FR-006): a11y attributes for the per-column wrapper, derived
+        // purely from canPlay/colFull — see contracts/board-a11y-contract.md.
+        const a11y = getColumnA11yProps({ col, canPlay, colFull });
+
+        const handleKeyDown = (e) => {
+          if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+          // Prevent the page from scrolling on Space; call the exact same handleClick reference
+          // used by onClick so the multiSelectMode/onColToggle branch is never reimplemented
+          // (contract Invariant I2, FR-004).
+          e.preventDefault();
+          handleClick();
+        };
+
         const badgeColor =
           badge?.col === col
             ? (badge.type === 'good' ? 'var(--eval-good)' : badge.type === 'mid' ? 'var(--eval-mid)' : 'var(--eval-bad)')
@@ -198,6 +225,11 @@ export function Board({
         return (
           <div
             key={col}
+            className="board-col"
+            role={a11y.role}
+            aria-label={a11y.ariaLabel}
+            tabIndex={a11y.tabIndex}
+            aria-disabled={a11y.ariaDisabled}
             style={{
               flex: '1 1 0',
               display: 'flex',
@@ -215,6 +247,7 @@ export function Board({
               userSelect: 'none',
             }}
             onClick={handleClick}
+            onKeyDown={handleKeyDown}
             onMouseEnter={() => setHoverCol(col)}
           >
             {/* Hover arrow (chevD) above interactive column */}
@@ -259,6 +292,7 @@ export function Board({
             {[5, 4, 3, 2, 1, 0].map(r => {
               const value = board[r]?.[col] ?? 'empty';
               const ovType = ovMap[`${col},${r}`];
+              const stepLabel = stepLabels[`${r},${col}`];
               // Deprecated shim lookup
               const shimEntry = highlightedCells.find(([hr, hc]) => hr === r && hc === col);
               const shimRole = shimEntry?.[2] ?? null;
@@ -283,7 +317,10 @@ export function Board({
                     cursor: onCellClick ? 'crosshair' : undefined,
                   }}
                 >
-                  {/* New-API disc (green/gray) — skipped when shim overrides this cell */}
+                  {/* New-API disc (green/gray) — skipped when shim overrides this cell.
+                      The 'red'/'yellow' cell values are kept for historical reasons:
+                      they are player-1/player-2 identity tokens, not display colors.
+                      'red' → GREEN disc (--disc-green), 'yellow' → GRAY disc (--disc-gray). */}
                   {value !== 'empty' && !shimRole && (
                     <div style={{
                       width: '84%', height: '84%', borderRadius: '50%', position: 'relative',
@@ -297,6 +334,18 @@ export function Board({
                     }}>
                       {/* Specular highlight */}
                       <span style={{ position: 'absolute', inset: '22% 22% auto 22%', height: '26%', borderRadius: '50%', background: 'rgba(255,255,255,0.22)' }} />
+                    </div>
+                  )}
+
+                  {/* Numbered lookahead label — keeps the green/gray disc, adds a teal ring + number */}
+                  {stepLabel != null && value !== 'empty' && (
+                    <div style={{
+                      position: 'absolute', inset: 0, borderRadius: '50%',
+                      boxShadow: '0 0 0 2px #14b8a6, 0 0 8px rgba(20,184,166,.6)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      pointerEvents: 'none', userSelect: 'none',
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,.6)' }}>{stepLabel}</span>
                     </div>
                   )}
 
@@ -349,3 +398,9 @@ export function Board({
     </div>
   );
 }
+
+// Memoized with a value-based comparator (boardPropsAreEqual, above) so a
+// parent re-render triggered by unrelated state (e.g. coach-narration state)
+// does not force Board to rebuild every already-placed-disc cell when the
+// board/overlays/etc. are value-unchanged. See spec 046 US5 (FR-022).
+export const Board = memo(BoardImpl, boardPropsAreEqual);

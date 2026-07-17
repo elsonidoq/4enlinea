@@ -1,20 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildBoard, checkWin } from './board.js';
-import {
-  INVALID_MOVE,
-  DIFFICULTY_TEMPERATURES,
-  MISTAKE_RATES,
-  sampleColumnFromScores,
-  secondBestColumn,
-} from './aiDifficulty.js';
+import { buildBoard } from './board.js';
+import { useBoardState } from './useBoardState.js';
 import { pickRandomKey } from './coachUtils.js';
+import { delay, COACH_PACING_MS, INVALID_MOVE } from './constants.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
-
-function delay(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 /**
  * @param {{
@@ -24,38 +15,51 @@ function delay(ms) {
  *   onGameEnd?: (result: string, finalMoves: number[]) => void
  * }} opts
  */
-export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, introKey = 'coach.sparring.intro' }) {
+export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, introKey = 'coach.spoken.sparring.intro' }) {
   const { t } = useTranslation();
 
-  // ── State ──────────────────────────────────────────────────────
-  const [moveHistory, setMoveHistory] = useState(
-    () => initialMoves ? initialMoves.split('').map(Number) : []
-  );
+  // ── Board state (pure mechanics, extracted to useBoardState) ───
+  const {
+    moveHistory,
+    board,
+    heights,
+    fullCols,
+    lastDrop,
+    gameOver: boardGameOver,
+    userTurn,
+    userColor,
+    commitMove,
+  } = useBoardState({ initialMoves, side });
+
+  // ── Additional state ───────────────────────────────────────────
   const [coachMessages, setCoachMessages] = useState([]); // {text, mood}[]
   const [hintOverlays, setHintOverlays] = useState([]);   // {c, r, type}[]
-  const [gameOver, setGameOver] = useState(null);         // {result, winnerColor} | null
   const [aiThinking, setAiThinking] = useState(false);
-  const [lastDrop, setLastDrop] = useState(null);         // {c, r} | null
   const [hintActive, setHintActive] = useState(false);
   const [preHintCoach, setPreHintCoach] = useState(null); // snapshot before hint toggle
+  // Resign sets gameOver externally (useBoardState only sets it on win/draw)
+  const [resignedOver, setResignedOver] = useState(null);
+
+  // Effective gameOver: resign layered on top of board-detected win/draw
+  const gameOver = resignedOver ?? boardGameOver;
 
   // ── Derived values ─────────────────────────────────────────────
-  const userColor = side === 'first' ? 'red' : 'yellow';
   const aiColor = side === 'first' ? 'yellow' : 'red';
-  const userTurn =
-    moveHistory.length % 2 === (side === 'first' ? 0 : 1);
 
-  const { board, heights } = buildBoard(moveHistory.join(''));
-  const fullCols = heights
-    .map((h, i) => (h >= 6 ? i : -1))
-    .filter((i) => i !== -1);
+  // Mirrors live move count so commitAiMove can guard against concurrent calls.
+  const moveCountRef = useRef(moveHistory.length);
+  moveCountRef.current = moveHistory.length;
 
   // Tracks phrase keys used in this game to avoid repetition within a session.
   const usedPhraseKeysRef = useRef(new Set());
   const trackPhrase = (key) => { usedPhraseKeysRef.current.add(key); return key; };
 
+  // Last i18n key pushed as a coach message — consumed by useCoachSpeech.
+  const lastCoachKeyRef = useRef(null);
+
   // ── Helpers ────────────────────────────────────────────────────
-  function updateCoach(text, mood, replace = false) {
+  function updateCoach(text, mood, replace = false, key = null) {
+    if (key) lastCoachKeyRef.current = key;
     setCoachMessages((prev) =>
       replace ? [{ text, mood }] : [...prev, { text, mood }],
     );
@@ -99,8 +103,8 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       setHintOverlays(bestCols);
 
       // Show generic hint phrase
-      const key = trackPhrase(pickRandomKey(t, 'coach.sparring.hint.generic', usedPhraseKeysRef.current));
-      updateCoach(t(key), 'think');
+      const key = trackPhrase(pickRandomKey(t, 'coach.spoken.sparring.hint.generic', usedPhraseKeysRef.current));
+      updateCoach(t(key), 'think', false, key);
     } catch (e) {
       // Silently handle network errors
     }
@@ -110,6 +114,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   // Show intro phrase on mount
   useEffect(() => {
     const key = pickRandomKey(t, introKey);
+    lastCoachKeyRef.current = key;
     setCoachMessages([{ text: t(key), mood: 'happy' }]);
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -124,16 +129,17 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   }, []);
 
   // ── AI move logic ──────────────────────────────────────────────
+  // commitAiMove uses commitMove which is STABLE (reads via internal refs),
+  // so calling it with any currentMoves is safe from async closures.
   async function commitAiMove(currentMoves, aiCol, classificationPromise) {
-    const newHistory = [...currentMoves, aiCol];
-    const { board: newBoard, heights: newHeights } = buildBoard(
-      newHistory.join(''),
-    );
-    const row = newHeights[aiCol] - 1;
+    // Idempotency guard: if the board has already advanced beyond the position
+    // we were called for, a concurrent invocation already committed — bail out.
+    if (moveCountRef.current !== currentMoves.length) return;
 
-    // Board state mutations run BEFORE awaiting classification (FR-006)
-    setMoveHistory(newHistory);
-    setLastDrop({ c: aiCol, r: row });
+    // commitMove reads live state via internal refs in useBoardState —
+    // no stale-closure risk even though this runs after an async await.
+    const { won, draw, row } = commitMove(aiCol);
+    const newHistory = [...currentMoves, aiCol];
 
     // Await classification result (null on network error / HTTP error / auto-play skip)
     const classification = await classificationPromise;
@@ -141,17 +147,17 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     // Quality-gated coach phrase selection (FR-007)
     let phraseKey, mood;
     const patternPool = classification?.patternTag
-      ? `coach.ai_move.${classification.patternTag}`
+      ? `coach.spoken.ai_move.${classification.patternTag}`
       : null;
 
     const used = usedPhraseKeysRef.current;
     if (!classification) {
       // Null classification (network error, HTTP error, missing quality, or auto-play skip)
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
       mood = 'think';
     } else if (classification.quality !== 'optimal') {
       // Suboptimal or blunder AI move → suboptimal pool
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.suboptimal', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.suboptimal', used));
       mood = 'oops';
     } else if (patternPool) {
       // Quality is optimal, patternTag is non-null — probe pool existence
@@ -160,31 +166,29 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
         phraseKey = trackPhrase(pickRandomKey(t, patternPool, used));
         mood = 'think';
       } else {
-        phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+        phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
         mood = 'think';
       }
     } else {
       // Optimal quality but no patternTag → neutral fallback
-      phraseKey = trackPhrase(pickRandomKey(t, 'coach.ai_move.neutral', used));
+      phraseKey = trackPhrase(pickRandomKey(t, 'coach.spoken.ai_move.neutral', used));
       mood = 'think';
     }
 
     // FR-008: preserve intro-replacement when side='second' and empty board
     const replace = currentMoves.length === 0 && side === 'second';
-    updateCoach(t(phraseKey), mood, replace);
+    updateCoach(t(phraseKey), mood, replace, phraseKey);
 
-    // Check AI win
-    if (checkWin(newBoard, row, aiCol, aiColor)) {
-      setGameOver({ result: 'loss', winnerColor: aiColor });
-      updateCoach(t('sparring.aiWon'), 'oops');
+    // Check AI win — from commitMove return value
+    if (won) {
+      updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
       onGameEnd?.('loss', newHistory);
       return;
     }
 
     // Check draw
-    if (newHistory.length === 42) {
-      setGameOver({ result: 'draw' });
-      updateCoach(t('sparring.draw'), 'think');
+    if (draw) {
+      updateCoach(t('sparring.draw'), 'think', false, 'coach.spoken.sparring.outcome.draw');
       onGameEnd?.('draw', newHistory);
       return;
     }
@@ -194,37 +198,15 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     const movesStr = currentMoves.join('');
     const { heights: curHeights } = buildBoard(movesStr);
 
-    const shouldMistake =
-      Math.random() < MISTAKE_RATES[difficulty];
-    let aiCol = null;
-    let isDeliberate = false;
-
-    // 1. Get solver scores
-    let scores;
-    try {
-      const res = await fetch(`${API}/api/scores`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moves: movesStr }),
-      });
-      const data = await res.json();
-      scores = data.scores;
-    } catch (e) {
-      // Network/API error — pick a random legal column as fallback
-      const legalCols = [];
-      for (let c = 0; c < 7; c++) {
-        if (curHeights[c] < 6) legalCols.push(c);
-      }
-      aiCol =
-        legalCols.length > 0
-          ? legalCols[Math.floor(Math.random() * legalCols.length)]
-          : 3;
-      const classifyPromise = (currentMoves.length === 0 && side === 'second')
+    // Coach commentary for the AI's move — classify the chosen column just before
+    // committing. Skipped on the opening auto-play; null on any error → neutral phrase.
+    const classifyFor = (aiCol) =>
+      (currentMoves.length === 0 && side === 'second')
         ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
         : fetch(`${API}/api/evaluate-move`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
+            body: JSON.stringify({ movestring: movesStr, col: aiCol, aiMove: true }),
           })
           .then(async r => {
             if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
@@ -232,51 +214,31 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
             return data.quality !== undefined ? data : null; // missing quality → neutral fallback
           })
           .catch(() => null);     // network error → neutral fallback (SC-006)
-      await commitAiMove(currentMoves, aiCol, classifyPromise);
-      return;
-    }
 
-    // 2. Guard: one legal column only
-    const legalCount = scores.filter((s) => s > INVALID_MOVE).length;
-
-    // Dev log: trace deliberate mistake triggers
-    if (import.meta.env.DEV && shouldMistake) {
-      console.log('[deliberate_mistake] trigger fired', { difficulty, legalCount, secondBest: secondBestColumn(scores) });
-    }
-
-    // 3. Deliberate mistake
-    if (shouldMistake && legalCount > 1) {
-      const secondBest = secondBestColumn(scores);
-      if (secondBest !== null) {
-        aiCol = secondBest;
-        isDeliberate = true;
+    // Move selection is server-side (chooseSparringMove): POST the difficulty and
+    // play the column it returns.
+    let aiCol;
+    try {
+      const res = await fetch(`${API}/api/scores`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moves: movesStr, difficulty }),
+      });
+      const data = await res.json();
+      if (typeof data.col !== 'number') throw new Error('missing col in /api/scores response');
+      aiCol = data.col;
+    } catch (e) {
+      // Network/API error — pick a random legal column as fallback.
+      const legalCols = [];
+      for (let c = 0; c < 7; c++) {
+        if (curHeights[c] < 6) legalCols.push(c);
       }
+      aiCol = legalCols.length > 0
+        ? legalCols[Math.floor(Math.random() * legalCols.length)]
+        : 3;
     }
 
-    // 4. Normal move (temperature-based sampling)
-    if (aiCol === null) {
-      const temp = DIFFICULTY_TEMPERATURES[difficulty];
-      aiCol = sampleColumnFromScores(scores, temp);
-    }
-
-    if (import.meta.env.DEV && isDeliberate) {
-      console.log('[deliberate_mistake] applied', { aiCol });
-    }
-
-    const classifyPromise = (currentMoves.length === 0 && side === 'second')
-      ? Promise.resolve(null)   // opening auto-play: skip (FR-005 exception / FR-009)
-      : fetch(`${API}/api/evaluate-move`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ movestring: currentMoves.join(''), col: aiCol, aiMove: true }),
-        })
-        .then(async r => {
-          if (!r.ok) return null;          // HTTP 4xx/5xx → neutral fallback (SC-006)
-          const data = await r.json();
-          return data.quality !== undefined ? data : null; // missing quality → neutral fallback
-        })
-        .catch(() => null);     // network error → neutral fallback (SC-006)
-    await commitAiMove(currentMoves, aiCol, classifyPromise);
+    await commitAiMove(currentMoves, aiCol, classifyFor(aiCol));
   }
 
   // ── User move handler ──────────────────────────────────────────
@@ -289,17 +251,14 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     setHintActive(false);
     setPreHintCoach(null);
 
-    // 2. Compute pre-move movestring and commit the move
+    // 2. Capture pre-move state for coach feedback and AI
     const preMoveString = moveHistory.join('');
     const newHistory = [...moveHistory, col];
-    const row = heights[col]; // landing row before disc is placed
 
-    // 3. Commit-first — show disc immediately
-    setMoveHistory(newHistory);
-    setLastDrop({ c: col, r: row });
+    // 3. Commit via useBoardState — sets moveHistory, lastDrop, gameOver atomically
+    const { won, draw } = commitMove(col);
 
     // 4. Call evaluate-move for Coach feedback
-    const { board: newBoard } = buildBoard(newHistory.join(''));
     try {
       const res = await fetch(`${API}/api/evaluate-move`, {
         method: 'POST',
@@ -308,48 +267,47 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
       });
       const data = await res.json();
 
+      let coachKey = null;
       let coachText;
       let coachMood = 'happy';
       const used = usedPhraseKeysRef.current;
       if (data.coachPhraseKey) {
-        trackPhrase(data.coachPhraseKey);
-        coachText = t(data.coachPhraseKey);
+        coachKey = trackPhrase(data.coachPhraseKey);
+        coachText = t(coachKey);
         coachMood = data.coachMood || 'happy';
       } else if (data.quality === 'blunder') {
         // Fallback for blunders without category-specific keys:
         // use the generic blunder pool so the coach signals the mistake
-        const key = trackPhrase(pickRandomKey(t, 'coach.generic.blunder', used));
-        coachText = t(key);
+        coachKey = trackPhrase(pickRandomKey(t, 'coach.spoken.generic.blunder', used));
+        coachText = t(coachKey);
         coachMood = data.coachMood || 'oops';
       } else {
         // Fallback: random generic phrase for non-blunder moves (FR-011)
-        const key = trackPhrase(pickRandomKey(t, `coach.generic.${data.quality ?? 'blunder'}`, used));
-        coachText = t(key);
+        coachKey = trackPhrase(pickRandomKey(t, `coach.spoken.generic.${data.quality ?? 'blunder'}`, used));
+        coachText = t(coachKey);
       }
-      updateCoach(coachText, coachMood);
+      updateCoach(coachText, coachMood, false, coachKey);
     } catch (_e) {
       // Silently handle network errors
     }
 
-    // 5. Check win
-    if (checkWin(newBoard, row, col, userColor)) {
-      setGameOver({ result: 'win', winnerColor: userColor });
-      updateCoach(t('sparring.youWon'), 'happy');
+    // 5. Check win (from commitMove return value)
+    if (won) {
+      updateCoach(t('sparring.youWon'), 'happy', false, 'coach.spoken.sparring.outcome.win');
       onGameEnd?.('win', newHistory);
       return;
     }
 
     // 6. Check draw
-    if (newHistory.length === 42) {
-      setGameOver({ result: 'draw' });
-      updateCoach(t('sparring.draw'), 'think');
+    if (draw) {
+      updateCoach(t('sparring.draw'), 'think', false, 'sparring.draw');
       onGameEnd?.('draw', newHistory);
       return;
     }
 
     // 7. AI's turn
     setAiThinking(true);
-    await delay(400);
+    await delay(COACH_PACING_MS);
     await makeAiMove(newHistory);
     setAiThinking(false);
   }
@@ -358,8 +316,9 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
   function handleResign() {
     if (gameOver) return;
     setAiThinking(false);
-    setGameOver({ result: 'loss' });
-    updateCoach(t('sparring.aiWon'), 'oops');
+    // useBoardState only sets gameOver on win/draw — resign uses local override
+    setResignedOver({ result: 'loss' });
+    updateCoach(t('sparring.aiWon'), 'oops', false, 'coach.spoken.sparring.outcome.loss');
     onGameEnd?.('loss', moveHistory);
   }
 
@@ -374,6 +333,7 @@ export function useGameBoard({ initialMoves = '', side, difficulty, onGameEnd, i
     hintOverlays,
     hintActive,
     coachMessages,
+    lastCoachKeyRef,
     handleColumnClick,
     handleHintToggle,
     handleResign,

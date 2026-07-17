@@ -172,9 +172,17 @@ export function checkP3(fullText) {
     failures.push('P3:player_name');
   }
 
-  // Sub-check 3: engine jargon — phrase list (case-insensitive)
+  // Sub-check 3: engine jargon — phrase list (case-insensitive).
+  // 'forced win' is intentionally absent: the language rule allows plain-English
+  // "forced win"; only the internal slug 'forced_win' is banned.
+  // [zone:tg] is checked on the raw text before stripping — it is an internal
+  // placeholder that must never appear in LLM output.
+  if (/\[zone:tg\]/i.test(fullText)) {
+    failures.push('P3:engine_jargon');
+  }
+  // Strip [zone:...] and [term:...] markup tags before scanning so that tag specs
+  // like [term:forced_win] don't trigger the check when the visible text is fine.
   const jargonPhrases = [
-    'forced win',
     'leaf position',
     'the solver',
     'forced_win',
@@ -183,7 +191,8 @@ export function checkP3(fullText) {
     'the score is',
     'patterns in data',
   ];
-  const lowerText = fullText.toLowerCase();
+  const visibleText = fullText.replace(/\[\/?(zone|term):[^\]]*\]/gi, '');
+  const lowerText = visibleText.toLowerCase();
   for (const phrase of jargonPhrases) {
     if (lowerText.includes(phrase.toLowerCase())) {
       failures.push('P3:engine_jargon');
@@ -204,16 +213,33 @@ export function checkP3(fullText) {
  * `tg` zones are vacuously valid (skip).
  * Out-of-bounds / unresolvable specs fail with a dedicated code.
  *
+ * Columns that are explicitly whitelisted in `allowedSet` (played column,
+ * contrast column) are exempt — they are already validated by P5Strong and may
+ * legitimately be full (no live windows) while still being valid references.
+ *
  * @param {Board} board
  * @param {Array<{ spec: string, innerText: string }>} zoneSpecs
+ * @param {Array|null} [allowedSet=null]
  * @returns {string[]}  failure codes
  */
-export function checkP5(board, zoneSpecs) {
+export function checkP5(board, zoneSpecs, allowedSet = null) {
+  // Build set of 1-indexed column numbers exempt from blocked-window check.
+  const exemptCols = new Set();
+  if (allowedSet) {
+    for (const entry of allowedSet) {
+      if (entry.col !== undefined) exemptCols.add(entry.col + 1);
+    }
+  }
+
   const failures = [];
 
   for (const { spec } of zoneSpecs) {
     // tg is vacuously valid
     if (spec === 'tg') continue;
+
+    // Whitelisted columns skip P5 — P5Strong covers them.
+    const colMatch = spec.match(/^col(\d+)$/);
+    if (colMatch && exemptCols.has(parseInt(colMatch[1], 10))) continue;
 
     const cells = expandSpec(spec);
     if (cells.length === 0) {
@@ -363,6 +389,73 @@ export function checkP5Strong(zones, allowedSet) {
 }
 
 // ---------------------------------------------------------------------------
+// Zone tag normalization
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize zone tags in raw LLM output before annotation validation.
+ * - [zone:column N] / [zone:col N] → [zone:colN]
+ * - Pairs each [zone:colN] with the nearest following closing tag → [/zone:colN]
+ * - Expands [/zone:cells] short closers to [/zone:cells:SPEC]
+ */
+export function normalizeZoneTags(text) {
+  // Step 0: Strip the internal [zone:tg] zero-count sentinel, keeping its inner text.
+  // The prompt tells the model to write a bare "0" for zero counts, but it sometimes
+  // wraps it as [zone:tg]0[/zone:tg]. 'tg' is a vacuous spec (P1/P5 already skip it and
+  // it highlights nothing), so removing the wrapper and keeping the inner text is safe
+  // and turns an otherwise-correct annotation from a P3:engine_jargon rejection into an
+  // accepted one.
+  text = text.replace(/\[zone:tg\]([\s\S]*?)\[\/zone:tg\]/gi, (_, inner) => inner);
+
+  // Step 1: Normalize opening tags: [zone:column N] or [zone:col N] → [zone:colN]
+  text = text.replace(/\[zone:col(?:umn)?\s+(\d+)\]/gi, (_, n) => `[zone:col${n}]`);
+
+  // Step 2: Pair each opening [zone:colN] with the nearest following closing tag
+  const CLOSE_RE = /\[\/zone:col(?:umn)?(?:\s+\d+)?\]/gi;
+  const OPEN_RE = /\[zone:col(\d+)\]/gi;
+  const resultParts = [];
+  let lastIndex = 0;
+  let openMatch;
+
+  while ((openMatch = OPEN_RE.exec(text)) !== null) {
+    resultParts.push(text.slice(lastIndex, openMatch.index + openMatch[0].length));
+    const colNum = openMatch[1];
+    CLOSE_RE.lastIndex = openMatch.index + openMatch[0].length;
+    const closeMatch = CLOSE_RE.exec(text);
+    if (closeMatch) {
+      resultParts.push(text.slice(openMatch.index + openMatch[0].length, closeMatch.index));
+      resultParts.push(`[/zone:col${colNum}]`);
+      lastIndex = closeMatch.index + closeMatch[0].length;
+    } else {
+      lastIndex = openMatch.index + openMatch[0].length;
+    }
+  }
+  resultParts.push(text.slice(lastIndex));
+  text = resultParts.join('');
+
+  // Step 3: Expand short [zone:cells:SPEC]...[/zone:cells] closing tags
+  const CELLS_OPEN_RE = /\[zone:cells:([^\]]+)\]/g;
+  const cellsParts = [];
+  let cellsLastIndex = 0;
+  let cellsMatch;
+  while ((cellsMatch = CELLS_OPEN_RE.exec(text)) !== null) {
+    cellsParts.push(text.slice(cellsLastIndex, cellsMatch.index + cellsMatch[0].length));
+    const spec = cellsMatch[1];
+    const afterOpen = cellsMatch.index + cellsMatch[0].length;
+    const closeIdx = text.indexOf('[/zone:cells]', afterOpen);
+    if (closeIdx !== -1) {
+      cellsParts.push(text.slice(afterOpen, closeIdx));
+      cellsParts.push(`[/zone:cells:${spec}]`);
+      cellsLastIndex = closeIdx + '[/zone:cells]'.length;
+    } else {
+      cellsLastIndex = afterOpen;
+    }
+  }
+  cellsParts.push(text.slice(cellsLastIndex));
+  return cellsParts.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -393,7 +486,7 @@ export function validateAnnotation(explanation, board, allowedSet = null) {
     ...checkP1(zones),
     ...checkP2(zones, expandedCellsMap),
     ...checkP3(explanation),
-    ...checkP5(board, zones),
+    ...checkP5(board, zones, allowedSet),
     ...checkP6(zones),
   ];
 

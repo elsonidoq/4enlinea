@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
+import { AuthModal } from '../components/AuthModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
+import { stashReturnTo } from '../lib/postLoginReturn.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -15,6 +17,7 @@ export function StatsScreen({ go, goBack }) {
   const { t } = useTranslation();
   const { store, session, signOut } = useStore();
   const isAuthenticated = !!session;
+  const [authOpen, setAuthOpen] = useState(false);
 
   const [accuracy, setAccuracy] = useState('--');
   const [lessonsCount, setLessonsCount] = useState(0);
@@ -84,6 +87,7 @@ export function StatsScreen({ go, goBack }) {
       <TopBar
         title={t('stats.title')}
         onBack={goBack}
+        onLogoClick={() => go('home')}
       />
 
       <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
@@ -130,8 +134,8 @@ export function StatsScreen({ go, goBack }) {
             )}
 
             <button
-              onClick={() => go('mistakes')}
-              style={{ background: 'transparent', border: 'none', padding: '6px 0', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', textAlign: 'left', WebkitTapHighlightColor: 'transparent' }}
+              onClick={() => go('mistakes', { navContext: 'stats' })}
+              className="btn-ghost-compact"
             >
               {t('stats.review_mistakes')}
             </button>
@@ -139,9 +143,15 @@ export function StatsScreen({ go, goBack }) {
         )}
 
         {!isAuthenticated && (
-          <div style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 600, padding: '10px 0' }}>
+          <button
+            onClick={() => {
+              stashReturnTo('stats');
+              setAuthOpen(true);
+            }}
+            className="btn-ghost-compact"
+          >
             {t('stats.signup_prompt')}
-          </div>
+          </button>
         )}
 
         {isAuthenticated && (
@@ -149,10 +159,12 @@ export function StatsScreen({ go, goBack }) {
             onClick={() => signOut()}
             style={{ background: 'transparent', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'var(--ink-soft)', marginTop: 8, WebkitTapHighlightColor: 'transparent' }}
           >
-            Log out
+            {t('auth.signOut')}
           </button>
         )}
       </div>
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </div>
   );
 }

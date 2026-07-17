@@ -373,7 +373,7 @@ Redesigns `HomePage.jsx` (560 lines). Saves game record on completion.
 - `CoachDialog` with `fixed` prop
 - Interactive `Board`: no overlays during play
 - Optional Hint (toggle; dismissed on next move — Gap 10): the Coach **highlights the best move(s)** on the board — every column whose solver score ties the maximum — and names the reason from `classify()`; **no numeric scores shown** (see cross-cutting *Hints*). When `classify()` detects no named pattern, show a phrase from the `coach.sparring.hint.generic.*` i18n key pool instead. **Mockup divergence:** `screens_sparring.jsx` renders a numeric column-score row on Hint; the build does not.
-- When the user plays as **Gray** (`side='second'`), the AI auto-plays move 1 on game start. **Verify move-perspective correctness when the AI opens** (`project_parity_bug_ai_first`: human/AI evaluation was historically swapped in AI-first games).
+- When the user plays as **Gray** (`side='second'`), the AI auto-plays move 1 on game start. **Verify move-perspective correctness when the AI opens** (human/AI evaluation was historically swapped in AI-first games — fixed; the affected code path is gone, but re-verify on any change to opening/first-move logic).
 - Toolbar: Hint + Resign (→ Post-Game Review, records Loss — Gap 17)
 - Game end: 4-in-a-row detection (win/loss) or board full (draw) → save game → Post-Game Review
 - `track('game_ended', { result, moveCount, difficulty })`

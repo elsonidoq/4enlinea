@@ -16,7 +16,11 @@ export const VALID_BLUNDER_TAGS = new Set([
   'figure_7',
   'j_shape',
   'z_threat',
-  'odd_even_threat',
+  // odd_even_threat removed as a blunder tag 2026-06-25 (still a puzzle category). The
+  // parity-aware threat tags below replace its blunder role.
+  'major_threat_parity',
+  'major_threat_nonparity',
+  'minor_threat',
   'claimeven',
   'drawing_move',
   'suboptimal_move',

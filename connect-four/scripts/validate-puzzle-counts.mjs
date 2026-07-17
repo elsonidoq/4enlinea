@@ -14,7 +14,7 @@
  */
 
 // Categories deferred to Epic 5 — excluded from the count gate.
-const DEFERRED_CATEGORIES = ['claimodd', 'undercut'];
+const DEFERRED_CATEGORIES = ['undercut'];
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -1,16 +1,40 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
+import { useStripePrices, formatPrice, computeAnnualSavings } from '../lib/useStripePrices.js';
 
-export function UpgradeModal({ onDismiss, onUpgrade }) {
-  const { t } = useTranslation();
-  const [uiState, setUiState] = useState('idle'); // idle | loading | success
+// Spec 045 US3 (contracts/upgrade-flow-frontend.md, T023) — additive: onUpgrade now
+// takes a plan ('monthly'|'annual') and two new uiState values exist
+// ('activating'/'timeout'). The real post-payment return-flow poll (bounded-wait,
+// [0,2,4,7,10]s) lives OUTSIDE this component in CheckoutReturnBanner.jsx — a full
+// Stripe Checkout redirect is a full-page navigation, so any UpgradeModal instance
+// that was open pre-checkout is gone by the time the user returns; that flow can't
+// rely on this modal's local state surviving. `uiState`/`onUiStateChange` below are
+// an optional controlled-mode escape hatch for a caller that DOES want to drive
+// activating/timeout into a still-mounted modal (e.g. a resumed session) — no
+// existing call site uses it today, so nothing here is a breaking change.
+export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {
+  const { t, i18n } = useTranslation();
+  const prices = useStripePrices();
+  // idle | loading | success | activating | timeout
+  const [internalUiState, setInternalUiState] = useState('idle');
+  const uiState = controlledUiState ?? internalUiState;
+  const setUiState = onUiStateChange ?? setInternalUiState;
+  const [selectedPlan, setSelectedPlan] = useState('monthly');
+  // D3: derived from live prices — never hardcoded — so the badge can't drift
+  // from Stripe. null (renders nothing) when prices haven't loaded yet, only
+  // one plan is configured, currencies mismatch, or annual isn't actually a
+  // saving.
+  const savings = computeAnnualSavings(prices);
 
   async function handleUpgrade() {
     setUiState('loading');
     try {
-      await onUpgrade?.();
-      setUiState('success');
+      await onUpgrade?.(selectedPlan);
+      // onUpgrade performs a full-page redirect to Stripe Checkout, so stay in
+      // 'loading' until the browser navigates away — never flash "You're now Pro"
+      // before the user has actually paid. The real post-payment 'success'/paid
+      // state is driven by CheckoutReturnBanner after the return redirect.
     } catch {
       setUiState('idle');
     }
@@ -78,23 +102,107 @@ export function UpgradeModal({ onDismiss, onUpgrade }) {
           }}>
             {t('upgrade.success')}
           </div>
+        ) : uiState === 'activating' ? (
+          <div style={{
+            background: '#fdf0d9', borderRadius: 14, padding: '16px 18px',
+            textAlign: 'center', color: '#8a5a1c',
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15,
+          }}>
+            {t('upgrade.activating', 'Activating your subscription…')}
+          </div>
+        ) : uiState === 'timeout' ? (
+          <div style={{
+            background: '#fdf0d9', borderRadius: 14, padding: '16px 18px',
+            textAlign: 'center', color: '#8a5a1c',
+          }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, marginBottom: 10 }}>
+              {t('upgrade.timeout', 'Payment received — still activating.')}
+            </div>
+            <button
+              onClick={handleUpgrade}
+              style={{
+                padding: '8px 16px', borderRadius: 10, border: 'none',
+                background: 'var(--disc-green)', color: '#fff',
+                fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {t('upgrade.refresh', 'Refresh')}
+            </button>
+          </div>
         ) : (
-          <button
-            onClick={handleUpgrade}
-            disabled={uiState === 'loading'}
-            style={{
-              width: '100%', padding: '15px 22px', borderRadius: 16, border: 'none',
-              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
-              cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
-              background: uiState === 'loading' ? '#c7c2b8' : 'var(--disc-green)',
-              color: '#fff',
-              boxShadow: uiState === 'loading' ? 'none' : '0 6px 0 #228245',
-              transition: 'background .15s',
-              marginBottom: 8,
-            }}
-          >
-            {t('upgrade.cta')}
-          </button>
+          <>
+            {/* Monthly / annual segmented toggle */}
+            <div style={{
+              display: 'flex', background: 'rgba(0,0,0,0.05)', borderRadius: 14,
+              padding: 4, marginBottom: 14, gap: 4,
+            }}>
+              {['monthly', 'annual'].map((plan) => {
+                const priceLabel = prices ? formatPrice(prices[plan], i18n.language) : '';
+                return (
+                  <button
+                    key={plan}
+                    onClick={() => setSelectedPlan(plan)}
+                    disabled={uiState === 'loading'}
+                    aria-pressed={selectedPlan === plan}
+                    style={{
+                      flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 14,
+                      cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
+                      background: selectedPlan === plan ? '#fff' : 'transparent',
+                      color: selectedPlan === plan ? 'var(--ink)' : 'var(--ink-soft)',
+                      boxShadow: selectedPlan === plan ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                      transition: 'background .15s',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {plan === 'monthly' ? t('upgrade.planMonthly', 'Monthly') : t('upgrade.planAnnual', 'Annual')}
+                      {plan === 'annual' && savings && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: '#fff',
+                          background: 'var(--disc-green)', borderRadius: 6,
+                          padding: '1px 6px',
+                        }}>
+                          {t('upgrade.saveBadge', { percent: savings.percent })}
+                        </span>
+                      )}
+                    </span>
+                    {priceLabel && (
+                      <span style={{
+                        fontSize: 12, fontWeight: 700,
+                        color: selectedPlan === plan ? 'var(--disc-green)' : 'var(--ink-soft)',
+                      }}>
+                        {priceLabel}
+                      </span>
+                    )}
+                    {plan === 'annual' && savings && (
+                      <span style={{ fontSize: 11, color: selectedPlan === plan ? 'var(--ink-soft)' : 'var(--ink-faint)' }}>
+                        {t('upgrade.perMonthEquivalent', { price: formatPrice(savings.perMonth, i18n.language) })}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={handleUpgrade}
+              disabled={uiState === 'loading'}
+              style={{
+                width: '100%', padding: '15px 22px', borderRadius: 16, border: 'none',
+                fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
+                cursor: uiState === 'loading' ? 'not-allowed' : 'pointer',
+                background: uiState === 'loading' ? '#c7c2b8' : 'var(--disc-green)',
+                color: '#fff',
+                boxShadow: uiState === 'loading' ? 'none' : '0 6px 0 #228245',
+                transition: 'background .15s',
+                marginBottom: 8,
+              }}
+            >
+              {t('upgrade.cta')}
+            </button>
+          </>
         )}
 
         <button

@@ -6,13 +6,22 @@
 // All DB-accessing routes also require supabase to be initialized.
 
 import { CHALLENGE_SETS } from './challengeSets.js';
+import { importForUser, saveLiveGame, extractAndSaveBlunders } from './papergamesImporter.js';
+import { randomUUID } from 'node:crypto';
+import { logError } from './logger.js';
 import {
   writeSessionStats,
   writeLessonProgress,
   writePuzzleAttempts,
   writeSparringRecord,
   writeStreak,
+  isValidOnboardingStatus,
 } from './userHelpers.js';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT } from './quotaLimits.js';
+
+// ── Import job tracking (in-memory, not persisted; restarts clear all) ──────
+const jobMap = new Map();
+const IMPORT_GAME_LIMIT = 50;
 
 /** Returns false (already sent 401) if !req.user, true otherwise. */
 function requireUser(req, res) {
@@ -90,7 +99,51 @@ export function registerUserRoutes(app, supabase) {
       tier: req.user.tier,
       deep_reveal_count: req.user.deep_reveal_count,
       deep_reveal_reset_at: req.user.deep_reveal_reset_at,
+      deep_reveal_limit: FREE_DEEP_REVEAL_WEEKLY_LIMIT,
+      papergames_id: req.user.papergames_id ?? null,
+      last_import_at: req.user.last_import_at ?? null,
+      onboarding_status: req.user.onboarding_status,
     });
+  });
+
+  // T010b/Epic 8 T009: Update profile — papergames_id and/or onboarding_status,
+  // at least one field required. Enum validated via the single shared
+  // isValidOnboardingStatus (userHelpers.js) — do not duplicate the check here.
+  app.put('/api/user/profile', async (req, res) => {
+    if (!requireUser(req, res)) return;
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+
+    const { papergames_id, onboarding_status } = req.body;
+    const update = {};
+
+    if (papergames_id !== undefined) {
+      if (typeof papergames_id !== 'string' || !papergames_id || papergames_id.length > 64) {
+        return res.status(400).json({ error: 'papergames_id must be a non-empty string (max 64 chars)' });
+      }
+      update.papergames_id = papergames_id;
+    }
+
+    if (onboarding_status !== undefined) {
+      if (!isValidOnboardingStatus(onboarding_status)) {
+        return res.status(400).json({ error: 'invalid onboarding_status' });
+      }
+      update.onboarding_status = onboarding_status;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ error: 'no valid fields provided' });
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update(update)
+      .eq('id', req.user.id);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+
+    res.status(204).send();
   });
 
   // T011: Single-date session stats (registered AFTER /all — Express ordering)
@@ -228,6 +281,7 @@ export function registerUserRoutes(app, supabase) {
 
       res.json({ progress });
     } catch (err) {
+      logError('[user/challenge-progress]', err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -472,12 +526,224 @@ export function registerUserRoutes(app, supabase) {
         );
       }
 
+      // Feature 3 — re-associate anonymous sparring games. The anon game rows were
+      // written to `games` with user_id=null, keyed by the CLIENT's device_uuid. Claim
+      // them for this account. Key on body.device_uuid (the client's), NOT the derived
+      // `deviceUuid` above (which for a new user is freshly generated and won't match).
+      // Absent/empty device_uuid is a silent no-op. Trust model matches the rest of migrate.
+      if (typeof body.device_uuid === 'string' && body.device_uuid.length > 0) {
+        operations.push(
+          supabase
+            .from('games')
+            .update({ user_id: req.user.id })
+            .eq('device_uuid', body.device_uuid)
+            .is('user_id', null)
+            .then(({ error }) => (error ? { error: error.message } : undefined)),
+        );
+      }
+
+      // Anon free deep reveal — re-associate anonymous blunder rows, same
+      // device_uuid trick as the games block above. Anon blunders were written
+      // with user_id=null, device_uuid=<client's>. Key on body.device_uuid (the
+      // client's), NOT the derived deviceUuid. Absent/empty is a silent no-op.
+      if (typeof body.device_uuid === 'string' && body.device_uuid.length > 0) {
+        operations.push(
+          supabase
+            .from('blunders')
+            .update({ user_id: req.user.id })
+            .eq('device_uuid', body.device_uuid)
+            .is('user_id', null)
+            .then(({ error }) => (error ? { error: error.message } : undefined)),
+        );
+      }
+
+      // onboarding_status (T021, FR-012): conditional write — only backfills an
+      // account still at 'not_encountered', never clobbers a real prior seen/skipped
+      // status recorded by a different device's earlier migration. Absent or invalid
+      // values are a silent no-op and must NOT fail the rest of the migration.
+      if (body.onboarding_status !== undefined && isValidOnboardingStatus(body.onboarding_status)) {
+        operations.push(
+          supabase
+            .from('users')
+            .update({ onboarding_status: body.onboarding_status })
+            .eq('id', req.user.id)
+            .eq('onboarding_status', 'not_encountered')
+            .then(({ error }) => (error ? { error: error.message } : undefined)),
+        );
+      }
+
       const results = await Promise.all(operations);
       const failed = results.find(r => r?.error);
       if (failed) return res.status(500).json({ error: failed.error });
       res.status(204).send();
     } catch (err) {
+      logError('[user/migrate]', err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Papergames import endpoints (spec 038) ────────────────────────────────
+
+  // POST /api/user/papergames/import — start an async import job
+  app.post('/api/user/papergames/import', async (req, res) => {
+    if (!requireUser(req, res)) return;
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+
+    // C2a: papergames_id is required (FIRST check)
+    const papergamesId = req.user.papergames_id;
+    if (!papergamesId || typeof papergamesId !== 'string' || papergamesId.length === 0) {
+      return res.status(400).json({ error: 'no papergames_id configured' });
+    }
+
+    // C2b: Cap check — count existing imported games for this user
+    const { count, error: countErr } = await supabase
+      .from('papergames_games')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', req.user.id);
+
+    if (countErr) return res.status(500).json({ error: countErr.message });
+
+    const gameLimit = req.user.tier === 'paid'
+      ? IMPORT_GAME_LIMIT
+      : Math.max(0, 15 - (count ?? 0));
+
+    console.log('[import] C2b — userId:', req.user.id,
+      'tier:', req.user.tier,
+      'existingGames:', count ?? 0,
+      'gameLimit:', gameLimit);
+
+    // Short-circuit when cap is reached
+    if (gameLimit === 0) {
+      const jobId = randomUUID();
+      jobMap.set(jobId, {
+        jobId,
+        userId: req.user.id,
+        status: 'done',
+        imported: 0,
+        skipped: 0,
+        blunderErrors: 0,
+        capReached: true,
+        error: null,
+      });
+      return res.status(202).json({ jobId });
+    }
+
+    // C2c: One-in-flight guard — reuse existing pending/running job
+    for (const entry of jobMap.values()) {
+      if (entry.userId === req.user.id && (entry.status === 'pending' || entry.status === 'running')) {
+        return res.status(202).json({ jobId: entry.jobId });
+      }
+    }
+
+    // C2d: Spawn new job
+    const jobId = randomUUID();
+    const jobEntry = {
+      jobId,
+      userId: req.user.id,
+      status: 'pending',
+      imported: 0,
+      skipped: 0,
+      blunderErrors: 0,
+      capReached: false,
+      error: null,
+    };
+    jobMap.set(jobId, jobEntry);
+
+    res.status(202).json({ jobId });
+
+    // Async: run the import in the background
+    Promise.resolve().then(async () => {
+      jobEntry.status = 'running';
+
+      try {
+        console.log('[import] Starting importForUser — papergamesId:', papergamesId,
+          'gameLimit:', gameLimit,
+          'lastImportAt:', req.user.last_import_at);
+
+        const { imported, skipped, blunderErrors } = await importForUser(
+          supabase,
+          req.user.id,
+          papergamesId,
+          gameLimit,
+          req.user.last_import_at,
+        );
+
+        console.log('[import] importForUser returned — imported:', imported, 'skipped:', skipped,
+          'blunderErrors:', blunderErrors);
+
+        jobEntry.status = 'done';
+        jobEntry.imported = imported;
+        jobEntry.skipped = skipped;
+        jobEntry.blunderErrors = blunderErrors;
+
+        // Write last_import_at after successful import (endpoint's responsibility)
+        try {
+          await supabase
+            .from('users')
+            .update({ last_import_at: new Date().toISOString() })
+            .eq('id', req.user.id);
+        } catch {
+          // Non-fatal — import succeeded, just the timestamp write failed
+        }
+      } catch (err) {
+        logError('[papergames-import-job]', err);
+        jobEntry.status = 'error';
+        jobEntry.error = err.message;
+        // Do NOT update last_import_at on error
+      }
+    });
+  });
+
+  // GET /api/user/papergames/import/status — poll job status
+  app.get('/api/user/papergames/import/status', (req, res) => {
+    if (!requireUser(req, res)) return;
+
+    const { jobId } = req.query;
+    if (!jobId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
+      return res.status(400).json({ error: 'invalid jobId' });
+    }
+
+    const job = jobMap.get(jobId);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+
+    // Ownership check — treat foreign jobId as not-found (privacy-preserving)
+    if (job.userId !== req.user.id) return res.status(404).json({ error: 'job not found' });
+
+    res.json({
+      status: job.status,
+      imported: job.imported,
+      skipped: job.skipped,
+      blunderErrors: job.blunderErrors ?? 0,
+      capReached: job.capReached ?? false,
+      ...(job.error ? { error: job.error } : {}),
+    });
+  });
+
+  // POST /api/user/papergames/save-live-game — save a single live game that
+  // just finished, then run blunder extraction fire-and-forget.
+  app.post('/api/user/papergames/save-live-game', async (req, res) => {
+    if (!requireUser(req, res)) return;
+    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+
+    const { roomUid, papergamesAccountId } = req.body || {};
+    if (!roomUid || typeof roomUid !== 'string') {
+      return res.status(400).json({ error: 'roomUid is required' });
+    }
+    if (!papergamesAccountId || typeof papergamesAccountId !== 'string') {
+      return res.status(400).json({ error: 'papergamesAccountId is required' });
+    }
+
+    try {
+      const { id } = await saveLiveGame(supabase, req.user.id, papergamesAccountId, roomUid);
+
+      // Fire-and-forget blunder extraction — does not block the response.
+      extractAndSaveBlunders(supabase, id, req.user.id, roomUid, papergamesAccountId)
+        .catch(err => console.error('[extract-blunders]', err.message));
+
+      return res.status(201).json({ id });
+    } catch (err) {
+      console.error('[save-live-game]', err.message);
+      return res.status(500).json({ error: err.message });
     }
   });
 }
