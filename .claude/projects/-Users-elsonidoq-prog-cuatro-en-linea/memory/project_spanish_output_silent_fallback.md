@@ -1,6 +1,6 @@
 ---
 name: project_spanish_output_silent_fallback
-description: Deep-reveal/audio Spanish = English-prompt→Spanish-output + fallbacks; NEW player-facing surfaces ship English silently
+description: "Deep-reveal/audio Spanish = English-prompt→Spanish-output + fallbacks; NEW player-facing surfaces ship English silently. Spanish MUST be Argentinian voseo (rules in frontend-conventions.md)"
 metadata: 
   node_type: memory
   type: project
@@ -17,4 +17,8 @@ Spanish (`es`) deep-reveal + coach audio shipped via an **isolated final-layer**
 
 **How to apply:** when touching deep-reveal/coach/audio output, ask "does this add a player-facing string/term/field?" If yes, add its Spanish coverage in the same change. Don't trust that "es works" — the fallback hides gaps.
 
-**Why:** correctness/grounding is validated in English only; the graders (`judge-deep-reveals`, `grade-fv-sufficiency`) never see Spanish, and cache invalidation is per-locale. Content/grounding fixes transfer to Spanish automatically; surface additions do not. Related: [[project_explain_system]], [[project_pattern_kb_architecture]], [[project_spanish_is_argentinian_voseo]].
+**Why:** correctness/grounding is validated in English only; the graders (`judge-deep-reveals`, `grade-fv-sufficiency`) never see Spanish, and cache invalidation is per-locale. Content/grounding fixes transfer to Spanish automatically; surface additions do not.
+
+**Register — Spanish MUST be Argentinian/Rioplatense voseo** (`encontrá`/`tenés`/`sos`/`vos`), never neutral or Iberian *tú*-Spanish: the first `es.json` pass shipped in *tú*-Spanish and had to be corrected wholesale. This applies to every Spanish string you add — `es.json` copy, KB `short_summary_es`, and Spanish LLM/TTS output alike. The full conversion table + the key-parity rule live in **`docs/architecture/frontend-conventions.md` §i18n** (`tests/unit/i18nKeyParity.test.js` enforces key parity, but it **cannot see register** — voseo is reviewer-enforced only, and it cannot see the two backlogged gaps either: lesson-slide bodies have no i18n mechanism (OI-18) and some hardcoded-English JSX was never wired to `t()` (OI-19)).
+
+Related: [[project_explain_system]], `docs/architecture/server-conventions.md` §Explain Context.

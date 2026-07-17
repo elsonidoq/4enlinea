@@ -22,8 +22,8 @@ that ambush an agent editing the relevant code. `docs/open_issues.md` = the brow
 - Does NOT qualify: ephemeral notes (test flakes, one-off env quirks, "re-run X to seed data") →
   those go in a QA/setup memory or nowhere. A stub the next batch already finished is not open.
 - The `/coordinate-implementation` command now auto-persists Step-4 "Open items" and Step-5 QA
-  "Remaining issues" into this file (see [[reference_custom_commands]]).
+  "Remaining issues" into this file (see `.claude/commands/`).
 - A pre-existing issue flagged "out of scope / not a regression" during QA still belongs here if
   it's a real latent bug — that's exactly what the backlog is for. First entry OI-1 = single-answer
   puzzle categories score by solver-score not pattern (score-tie ≠ pattern-tie); see
-  [[project_puzzle_correctness_seams]].
+  `docs/architecture/server-conventions.md` §Predicate Evaluator.

@@ -11,6 +11,7 @@ import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 import { langHeaders } from '../lib/apiLang.js';
+import { describeQuota } from '../lib/deepRevealQuota.js';
 import i18n from '../i18n/index.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -54,7 +55,7 @@ export function DeepRevealPane({
   noSpeech = false,
 }) {
   const { t } = useTranslation();
-  const { session } = useStore();
+  const { store, session } = useStore();
   const { speechEnabled } = useCoachSpeech();
   const handleUpgrade = useUpgradeCheckout();
 
@@ -68,6 +69,22 @@ export function DeepRevealPane({
   const [flagged, setFlagged] = useState(false);
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagNote, setFlagNote] = useState('');
+  // Deep-reveal quota counter (Decision 1): count comes from a plain profile
+  // refetch after each successful, non-cached reveal — never from the
+  // /api/explain-move-llm response body itself (that would make the server's
+  // D4 normalization dead code for this display).
+  const [profile, setProfile] = useState(null);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [quotaResetsAt, setQuotaResetsAt] = useState(null);
+
+  async function refreshProfile() {
+    try {
+      const p = await store.getProfile();
+      setProfile(p);
+    } catch (_) {
+      // Ignore — counter just won't render this time.
+    }
+  }
 
   // Track TTS Audio element for cleanup
   const ttsAudioRef = useRef(null);
@@ -81,6 +98,8 @@ export function DeepRevealPane({
       setFlagOpen(false);
       setFlagNote('');
       setLoadingTts(false);
+      setQuotaExceeded(false);
+      setQuotaResetsAt(null);
       stopSpeech();
       if (ttsAudioRef.current) {
         ttsAudioRef.current.src = '';
@@ -109,6 +128,9 @@ export function DeepRevealPane({
     setFlagged(false);
     setFlagOpen(false);
     setFlagNote('');
+    setQuotaExceeded(false);
+    setQuotaResetsAt(null);
+    refreshProfile();
 
     const controller = new AbortController();
     setSlow(false);
@@ -130,13 +152,25 @@ export function DeepRevealPane({
       .then(res => {
         clearTimeout(softId); clearTimeout(hardId);
         if (res.status === 401) { setLoading(false); setAuthOpen(true); return null; }
-        if (res.status === 429) { setLoading(false); setUpgradeOpen(true); return null; }
+        if (res.status === 429) {
+          setLoading(false);
+          setQuotaExceeded(true);
+          setUpgradeOpen(true);
+          return res.json()
+            .then(body => { setQuotaResetsAt(body?.resetsAt ?? null); return null; })
+            .catch(() => null);
+        }
         return res.json();
       })
       .then(async d => {
         if (!d) return;
         if (d && !session?.user) markRevealedAnon(`${moveString}:${col}`);
         setData(d);
+        // Decision 1: refetch the profile after a successful reveal so the
+        // counter reflects the server's authoritative post-decrement count.
+        // A cache hit (d.cached) returns before the quota peek and does NOT
+        // decrement — refetching still shows the correct, unchanged count.
+        refreshProfile();
 
         // Phase 2: fetch TTS audio if speech is enabled
         if (speechEnabled && !noSpeech) {
@@ -216,6 +250,14 @@ export function DeepRevealPane({
     }).catch(() => {});
   }
 
+  const quota = describeQuota({
+    signedIn: !!session?.user,
+    tier: profile?.tier,
+    count: profile?.deep_reveal_count,
+    resetAt: profile?.deep_reveal_reset_at,
+    limit: profile?.deep_reveal_limit,
+  });
+
   const revealContent = (
     <>
       {(loading || loadingTts) && (
@@ -244,6 +286,19 @@ export function DeepRevealPane({
         </div>
       )}
 
+      {!loading && !loadingTts && !timedOut && !data && quotaExceeded && (
+        <div style={{ padding: '8px 0', textAlign: 'center' }}>
+          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-soft)' }}>
+            {t('deepReveal.quotaUpgradeCta')}
+          </p>
+          {quotaResetsAt && (
+            <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)' }}>
+              {t('deepReveal.quotaResetsAt', { date: new Date(quotaResetsAt).toLocaleDateString(i18n.language) })}
+            </p>
+          )}
+        </div>
+      )}
+
       {!loading && !loadingTts && !timedOut && data && (
         <div>
           {headerContent}
@@ -257,6 +312,24 @@ export function DeepRevealPane({
               navigate={navigate}
             />
           </div>
+
+          {quota.show && (
+            <div style={{ margin: '0 0 14px', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-soft)' }}>
+                {t('deepReveal.quotaRemaining', { count: quota.remaining, limit: profile?.deep_reveal_limit ?? 20 })}
+              </p>
+              <button
+                onClick={() => setUpgradeOpen(true)}
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 700,
+                  color: 'var(--accent)', textDecoration: 'underline',
+                }}
+              >
+                {t('deepReveal.quotaUpgradeCta')}
+              </button>
+            </div>
+          )}
 
           <div style={{ marginTop: 6 }}>
             {flagged ? (

@@ -1,5 +1,5 @@
 /**
- * Pick a random i18n key from a prefixed pool (e.g. 'coach.generic.blunder').
+ * Pick a random i18n key from a prefixed pool (e.g. 'coach.spoken.generic.blunder').
  * Probes sequential indices until t() returns the key itself (not found).
  * Pass usedKeys to prefer keys not yet used; falls back to the full pool when all are used.
  */

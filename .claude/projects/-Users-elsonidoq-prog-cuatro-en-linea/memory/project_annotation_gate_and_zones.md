@@ -15,7 +15,7 @@ Everything about the production coach's **annotation gate** (`server/annotationG
 - **`allowedSet = null` vs `[]`:** `null` → `validateAnnotation` SKIPS P5strong entirely (use when all matched patterns are Tier 3 / position-global); `[]` → FAILS every `tg` zone on P5strong (use the real array when ≥1 Tier-1/2 entry exists). Rule lives in `explainContext.js` allowedSet derivation.
 - `findMajorThreatWindows` is the canonical group-level threat scanner — never `getMajorThreatCells` for group ops.
 - `classifyExplanationType` must run BEFORE simulation; Type 1 bypasses simulation entirely.
-- **`inverted` semantic:** `getGapAndFraming.inverted` is TRUE when the user played **SUBOPTIMALLY** (FR-008's "inverted==true → optimal" was WRONG). Use `contrast.isOptimal` from `selectContrastMove`; never rely on `inverted` to mean optimal.
+- **`inverted` semantic (this memory was BACKWARDS until 2026-07-16 — re-verified at source):** `getGapAndFraming` (`server/llmCoachHelpers.js`) computes `scoreA = -preScores[col]` (played, user perspective), `scoreB = -preScores[contrastCol]`, `const inverted = scoreA >= scoreB;` → `inverted` is TRUE when the user's move is **at least as good as the contrast, i.e. OPTIMAL**. `docs/architecture/server-conventions.md` is correct. Prefer `contrast.isOptimal` from `selectContrastMove` for intent-revealing code, but do not "fix" `inverted` to the opposite meaning.
 - `classifyPattern` returns a **Map**; pick one tag via `PRIORITY.find(t => map.has(t))` — NOT `[...map.keys()]` (Promise.all insertion order is non-deterministic). Its inline detector list must stay in sync with the old DETECTOR_REGISTRY (circular-dep avoidance; marked by a comment).
 
 ## Zone-validation traps

@@ -18,5 +18,5 @@ server has the key) or `node --env-file=server/.env <script>`.
 fact fully testable on localhost — the owner wants real end-to-end verification done, not punted.
 
 **How to apply:** before writing "requires a real key, deferred," first try it against `server/.env`. Lesson
-audio generation was verified this way (real MP3s synthesized + served). Related: [[reference_llm_model_env_vars]],
+audio generation was verified this way (real MP3s synthesized + served). Related: `docs/architecture/server-conventions.md` §Environment Variables,
 [[reference_supabase_connection]] (same `.env` file location trap), [[project_lesson_progression_audio_traps]].

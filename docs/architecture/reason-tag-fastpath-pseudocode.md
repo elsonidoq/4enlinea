@@ -290,7 +290,7 @@ over that board set. `generate_eval_set.mjs` (the old-explain board generator) i
 - `/admin/fv-suff` (`src/pages/AdminFvSuffPage.jsx`) does not yet render the `realized_pattern` /
   `denial` half kinds or the new `route` / `tag` / `direction` fields in its Evidence or
   Eval-answers views — it still assumes the older sign-shape half kinds. See memory
-  `project_admin_fv_suff_repurposed` for the current 2-mode browser design this must extend.
+  `docs/architecture/api-conventions.md` §Admin Blunder-Reason Browser Endpoints for the current 2-mode browser design this must extend.
 - The explain prompt (`explainContext.js` / the LLM narrator, i.e. `compute.mjs`'s
   `buildPrompt`/`TASK` and `reasonNarratorVector.mjs`'s `toNarratorVector`/`pruneVector`) does not
   yet teach the model how to read `realized_pattern`/`denial` halves or `route`/`tag`/`direction`

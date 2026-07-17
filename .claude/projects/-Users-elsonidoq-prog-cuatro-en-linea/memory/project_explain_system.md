@@ -134,4 +134,4 @@ Four docs in `docs/mvp/` govern the coach-explanation / Deep Reveal work:
 
 Key invariants: The `opponentResponseMovestring` for Type 2 critical-position check is already computed in `buildExplainContext` — no new solver calls needed. The pre-built pattern narrations (`claimevenNarration`, `zThreatNarration`, etc.) in `buildExplainContext` are **replaced**, not extended, by Epic B.
 
-Related: [[project-blunder-tagging-design]] — the pattern→blunder→challenge system that feeds blunder statistics into the coach. Its authoritative doc is `docs/mvp/patterns_blunders_challenges.md`.
+Related: `docs/architecture/server-conventions.md` §`tagBlunder` — the pattern→blunder→challenge system that feeds blunder statistics into the coach. Its authoritative doc is `docs/mvp/patterns_blunders_challenges.md`.

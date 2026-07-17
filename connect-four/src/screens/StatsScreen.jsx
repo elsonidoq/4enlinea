@@ -134,7 +134,7 @@ export function StatsScreen({ go, goBack }) {
             )}
 
             <button
-              onClick={() => go('mistakes')}
+              onClick={() => go('mistakes', { navContext: 'stats' })}
               className="btn-ghost-compact"
             >
               {t('stats.review_mistakes')}

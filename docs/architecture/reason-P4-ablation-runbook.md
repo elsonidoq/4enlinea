@@ -21,7 +21,7 @@ Read `docs/architecture/reason-render-grounded-prompt.md` (condition-D design) a
 - **Run this ALONE.** Never run it concurrently with a solver harvest (`select_boards.mjs`,
   `build_evidence.mjs`, any `gameSampling`-backed script) or `npm run test:fast` — both this script
   and the solver harness spin up c4solver subprocesses over IPC, and concurrent solver-IPC use has
-  caused hangs/deadlocks before (see memory `project_integration_test_slowness.md`). Run it as the
+  caused hangs/deadlocks before (see `docs/architecture/testing-conventions.md`). Run it as the
   only thing touching the solver in that window.
 
 ## Step 1 — generate the answers file

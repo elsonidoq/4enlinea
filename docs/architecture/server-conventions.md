@@ -10,7 +10,7 @@ import { logError } from './logger.js';
 // Route handler
 } catch (err) {
   logError('[endpoint-name]', err);
-  res.status(500).json({ error: err.message });
+  res.status(500).json({ error: 'Internal server error' });  // generic body — never err.message
 }
 
 // Helper / background job
@@ -20,6 +20,13 @@ import { logError } from './logger.js';
   continue;
 }
 ```
+
+**Audit heuristic for 500-body leakage:** grepping `err.message` in catch blocks alone misses the
+`{ error }`-destructure shape, where the body is built from a destructured result rather than a
+caught error — e.g. `res.status(error ? 500 : 404).json({ error: error?.message || 'not found' })`.
+When auditing for raw error-text leakage, also grep for `error?.message` / `error.message` inside
+`.json(...)` calls, not just `err.message` in `catch` blocks. This shape is still live at
+`connect-four/server/index.js` (~:438): `res.status(400).json({ error: error?.message || 'Anonymous sign-in failed' })`.
 
 `logError(tag, err, extra?)` in `server/logger.js`:
 - Always calls `console.error` with tag, message, stack, and optional extra object.
@@ -75,16 +82,58 @@ validateMove(position, col) → { valid: boolean, reason?: string }
 1. The learner had no immediate win before the move (forces them to play through the sequence).
 2. The move creates at least one new immediate threat.
 
-`getAiResponseCol(positionAfterLearnerMove)` returns the column where the learner has an immediate threat (the opponent must block there). Returns `-1` if no such column exists.
+`getAiResponseCol(positionAfterLearnerMove)` returns the column where the learner has an immediate threat (the opponent must block there). Returns `-1` if no such column exists. The AI's response is bitboard-only by design — `ForcedWinStrategy` never calls the solver for it; solver-guided AI response was considered and explicitly deferred.
 
 ## Category Registry
 
 **MUST**: All valid category slugs are defined once in `server/categories.js` as `VALID_CATEGORIES`, `PAID_CATEGORIES`, `CATEGORY_ORDER`, and `CATEGORY_NAMES`.
 
-Current slugs (as of Epic 6): `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `claimodd`, `undercut`, `overcut`, `figure_7`, `j_shape`.
+Current slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape` (`claimodd` was fully removed 2026-06-17 — see "Retired category slugs" below).
 
 `odd_even_threat` was added in Epic 6 as a free 2-star category. It is Red-only, `single_move` interaction mode, and has no `highlight_metadata`. Detection uses `immediateThreats` not `getMajorThreatCells`.
 **MUST NOT**: Hard-code category slug lists anywhere else in server code — always import from `categories.js`.
+
+`PAID_CATEGORIES` is duplicated (not cross-imported) in two files that must be kept in sync by hand: `server/categories.js` (gates `GET /api/puzzles/draw` — 403 for a paid category when tier ≠ `'paid'`) and `src/lib/categories.js` (gates the SetPicker lock icon and the Post-Set Summary Pro-lesson check). Updating only one leaves the other gate half-fixed (server 403 with an unlocked UI icon, or vice versa).
+
+### Wiring a new puzzle category
+
+Registering a new category slug touches all of these files; omitting any one causes a **silent** failure (most commonly, `candidate-generator.js` — the generator factory falls through to a generic fallback with no error, and simply never produces candidates for the category):
+
+1. `server/categories.js` — add to `VALID_CATEGORIES`, `CATEGORY_ORDER`, `PAID_CATEGORIES` (or note free)
+2. `src/lib/categories.js` — mirror the same arrays (frontend copy; must stay in sync)
+3. `server/challengeSets.js` — add the set entry with `stars`, `displayNameKey`, `descriptionKey`
+4. `connect-four/src/i18n/en.json` — add `coach.<slug>.prompt.*`, `coach.<slug>.hint.*`, `coach.<slug>.optimal.*`, `coach.<slug>.suboptimal.*`, `coach.<slug>.blunder.*` pooled-key groups
+5. `server/classifier.js` — register in the `classify()` switch and add a `detect<Category>` function
+6. `server/predicates.js` — add `eval<Category>` in the `evaluatePredicate()` switch
+7. `server/candidate-generator.js` — register in `checkPredicateRaw`'s dispatch AND add a `computeHighlightCells` case AND add an `isClean` case (see below)
+8. `PATTERN_KB` (`server/llmCoachHelpers.js`) — add a one-line entry (or note reuse of an existing key)
+
+### Retired category slugs
+
+Never reuse a retired category slug — reintroduce the concept under a new name if needed:
+- `fork_setup`, `parity_control` — removed (no puzzles were ever generated).
+- `zugzwang` — renamed to `forced_win`; do not reuse `zugzwang` for `forced_win` logic. "Zugzwang" has a specific game-theory meaning that does not match this category's implementation; a correctly-defined `zugzwang` category is expected later and would collide with a reused slug.
+- `claimodd` — removed entirely 2026-06-17 (category, detector, blunder tag, challenge-set entry, i18n key). The formal WeakC4 definition treats claimodd as a per-cell annotation across all columns, not center-column-specific; both the KB entry and the old `detectClaimodd` incorrectly assumed center-column specificity, and even a correct implementation yielded ~2 candidates per 400 generation attempts (solver-weighted simulation fills the center column early). Do not re-add without reading the WeakC4 source and building a Steady-State-diagram-aware detector plus a specialized generator.
+
+### Generation-quality guards (`isClean`, forced-win trace floor, stacked double threat)
+
+`isClean(category, ms)` in `candidate-generator.js` enforces per-category acceptance invariants on top of the raw predicate:
+- `immediate_threat`: exactly one immediate winning column AND no active double-threat structure (see below).
+- `forced_block`: current player has no immediate win AND the opponent has exactly one immediate winning column AND no active double-threat structure for the opponent.
+- `forced_win`: current player has no immediate win AND the opponent has zero immediate threats (otherwise the opponent would just win instead of being forced).
+- `forbidden_columns`: current player has no immediate win AND the opponent has no active double-threat structure.
+- All other categories: current player must have zero immediate winning threats.
+
+When adding a new category, add its guard to `isClean`.
+
+`checkForcedWinPredicate` rejects any forced-win trace shorter than 3 plies (`[I1, O1, I2]` — initiator move, opponent forced block, initiator terminal win/double-threat); a shorter trace means the first move already wins or creates a double threat outright, which belongs to a different category.
+
+**Stacked double threat**: a position with exactly one immediately-playable winning column still counts as an active double threat if the same player also has a major threat directly above that winning cell (same column, row+1) — the opponent cannot stop the win by blocking the lower cell. `hasActiveDoubleThreat(board, colHeights, player)` in `classifier.js` (built on `getImmediateThreats` and `getMajorThreatCells`) returns true for either ≥2 immediate winning columns or exactly one plus a stacked major threat above it. These positions must be excluded from `immediate_threat`, `forced_block`, and `forbidden_columns` puzzles. Regression movestring `03630015223512113` (Yellow stacked double threat at col 5, rows 1+2) must return `true`.
+
+**`z_threat` generation guards** (parity/zugzwang detection — geometry owned by `docs/knowledge-base/`, not repeated here):
+- If Count (empty cells from current column height up to and including the threat row, inclusive) is even → 0-threat: neutral, does not shift zugzwang, and is not a valid z-threat.
+- The solver must confirm the candidate Z-threat column is actually a winning move — parity alone is not sufficient.
+- Exactly one Z-threat column should be winning, for puzzle uniqueness — filter out candidates with more than one during generation.
 
 ## Blunder Tag Registry
 
@@ -214,6 +263,12 @@ of a hand-copied reimplementation.
 
 `classifier.js` exposes two functions beyond the category-level `classify()`:
 
+### `classify(moves, candidateCol, scores)`
+
+Synchronous. Returns exactly one `{ tag }` from the 8-tag set: `immediate_threat`, `double_threat`, `forced_win`, `forced_block`, `forbidden_columns`, `best_move`, `drawing_move`, `suboptimal_move` (the last three are score-based fallbacks when no structural pattern matches). No `perspective` parameter — always evaluates from the mover's own point of view. Used by `POST /api/evaluate-move` (via `evaluateMoveHandler.js`), `POST /api/evaluate-move/inline`, `POST /api/explain-move`, and `candidate-generator.js`.
+
+This is a much narrower scope than `classifyPattern` below (8 tags, sync, one winner) vs. `classifyPattern` (15 detectors, async, all matches).
+
 ### `classifyPattern(ms, perspective, solver)`
 
 ```js
@@ -231,6 +286,10 @@ The 15 detectors include three **parity-aware threat** detectors added 2026-06-2
 **Inline detector list**: `classifyPattern` maintains its own inline list of 13 detectors. This list is the sole registry of pattern detectors. `classifyPattern` must NOT import any external registry to avoid circular dependencies.
 
 **Detector perspective parameter**: Every `detect*` function accepts a `perspective` parameter defaulting to `board.currentPlayer`. When `classifyPattern` calls detectors, it passes the explicit `perspective` — never relying on the default.
+
+**Picking one tag from the Map**: `classifyPattern` fills its returned `Map` via `Promise.all`, so insertion order is non-deterministic — `[...tagMap.keys()][0]` is a bug. Always pick with a priority list: `PRIORITY.find(tag => tagMap.has(tag))`. Reference implementation: `classifyAiMove.js`'s `AI_PATTERN_PRIORITY.find(tag => tagMap.has(tag))` (priority order: `double_threat > immediate_threat > forced_win > forced_block > forbidden_columns > z_threat > odd_even_threat > claimeven > figure_7 > j_shape > overcut > undercut`).
+
+**`_scores` signature trap**: `detectFigure7(board, _scores, perspective)` and `detectJShape(board, _scores, perspective)` accept a `_scores` argument and ignore it (both are pure board-geometry convolution detectors) — but `classifyPattern` still passes `scores` at the call site. Do not infer from the parameter that scores are used, and do not remove it — some callers pass `null` there (e.g. `tagBlunder`'s post-correct-move check), which only works because the parameter is genuinely unused.
 
 ### `tagBlunder(moves, playedCol, correctCol, solver)`
 
@@ -276,6 +335,12 @@ When `perspective !== board.currentPlayer && solver !== null`, each detector rec
 This IIFE (`(async () => { ... })()`) returns a Promise, so these five detectors become async when the perspective changes. The IIFE shields against terminal child positions (where the solver rejects) by returning `{ matched: false }` — a terminal game cannot exhibit tactical patterns.
 
 Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectUndercut`, `detectOvercut`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
+
+### `detectClaimeven` — parity rule and simulation
+
+**Parity rule:** odd columns are identified by `board.colHeights[col] % 2 === 1` — the odd **empty-space count** remaining in the column, NOT `col % 2` (column index parity). Confusing the two is a common bug: a column's index parity has no bearing on claimeven eligibility, only how many empty cells remain above the current stack.
+
+**Simulation (ground truth, no static structural check):** run a full-game simulation from the candidate position: Red (player 1) plays the solver-optimal move; Black (player 2) responds in the same column, one row above (the claimeven response); repeat until game over. **Termination rule:** if Red plays the last cell of a column (Black cannot respond there), the position is NOT claimeven — the pairing was broken. If Black wins the simulated game, the position IS claimeven. This is exact because it tests the actual strategy against optimal opposition; ~20 solver queries for a mid-game position.
 
 ## Simulating games
 
@@ -382,7 +447,7 @@ buildExplainContext(movestring, col, rounds = 1, solver)
 ## Solver Score Semantics (Critical Invariant)
 
 At forced-win terminal positions, all opponent columns score identically — the solver cannot identify which column blocks. Use direct `checkWin` board detection instead.
-Reference: `reference_c4solver_behavior.md` and `reference_cat5_forced_block_detection.md` in memory.
+Reference: memory `reference_c4solver.md` and `reference_cat5_forced_block_detection.md`.
 
 ## Threat-Counting Invariant
 
@@ -423,6 +488,12 @@ The gravity-top restriction (only `row === colHeights[col]`) applies exclusively
 
 `PATTERN_KB` maps pattern keys to `{ id: '<kb-slug>' }` entries. No `inline` entries exist (all migrated to files 2026-06-20). A KB term is injected into an explain-move prompt **only when its pattern fires** (added to `relevantPatternKeys` in `explainContext.js`); the gate is `if (!relevantPatternKeys.has(patternKey)) continue;`. There is **no** `always_include` glossary path — it was removed 2026-06-25 because injecting a term with no on-board instance (even `parity`/`gravity_top`) caused the LLM to fabricate/misapply it (see memory `project_explain_system`). Special shape:
 - Alias entries share a `kbId` with another pattern key (e.g. `fork` → same file as `double_threat`); `explainContext.js` deduplicates by `kbId`. Every entry must have a corresponding `docs/knowledge-base/<id>.md` with `short_summary` and an entry in `src/lib/kbTermLesson.js` for the popup display name.
+
+**Why `short_summary` is required, not optional:** `loadKBShortSummary` (`llmCoachHelpers.js:144`) is what the server calls to build `termsMap`. A missing `short_summary` means the term is **silently dropped** from the map — no error — and the popup never opens for that term. On the client, `KbTermPopup` then falls back to rendering the raw `kbId` (an ugly slug) instead of a summary. Checklist when adding a new KB term:
+1. Add `docs/knowledge-base/<id>.md` with a `short_summary` field.
+2. Add the `PATTERN_KB` entry (`llmCoachHelpers.js`) mapping the pattern key to `{ id: '<id>' }`.
+3. Add a display-name entry in `src/lib/kbTermLesson.js`.
+4. Smoke-test: `loadKBShortSummary('<id>')` should return a non-empty string, not `undefined`.
 
 ### Shared utilities
 
@@ -583,9 +654,20 @@ package needed.
 server transitively imports them (`index.js` → `mechanismExplainer.mjs` → `compute.mjs`
 → `reasonEngine.mjs`), any `.env` read that runs as an import side-effect executes during
 server boot — and in prod there is **no `.env` file** (env comes from the platform). Such
-reads MUST go through `boardUtils.loadEnv`, which treats a missing file as a no-op. Never
-add a bare top-level `readFileSync` of `.env` to a module reachable from `index.js`; it
-will crash-loop the server. See memory `project_boot_path_env_read_crash.md`.
+reads MUST go through `boardUtils.loadEnv` (`server/scripts/reason_engine/lib/boardUtils.mjs`),
+which treats a missing file as a no-op. Never add a bare top-level `readFileSync` of `.env` to a
+module reachable from `index.js`; it will crash-loop the server. Fixing one offender is not
+sufficient — statically walk the whole boot import graph (`index.js` → `mechanismExplainer.mjs`
+→ `compute.mjs` → `reasonEngine.mjs`) for top-level `.env` reads, since fixing only the first one
+found just moves the crash to the next module in the chain.
+
+**Batch/offline scripts must wrap each `callLLM` call individually** in its own try/catch, not one
+outer try/catch around the loop — an uncaught error (timeout, rate limit, API error) otherwise
+propagates out of the loop and silently drops the current entry with no record written (see
+`server/scripts/run_eval.mjs` for the reference pattern: each `callLLM` call is caught separately
+and the error message is recorded on the entry before continuing). The production endpoint's
+single outer try/catch (`mechanismExplainer.mjs`) is fine there only because a failed call falls
+back to cached text; batch scripts have no such fallback.
 
 **LLM prompt structure contract** for move explanations (`/api/explain-move-llm`, Epic B):
 
@@ -678,20 +760,57 @@ directly `node --test`-able without an Express app or a real TTS provider.
   distinct file. There is no separate manifest/registry/approval file — the lesson JSON's own `audio`
   field is the sole source of truth (contrast with spec 039's i18n-key-driven, manifest-gated coach TTS
   pipeline, which this module deliberately does NOT reuse or extend).
-- **`generateLessonAudio(lesson, { synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR } = {})`** —
+- **`collectMessages(lesson)`** → `[{ message, locator }]` — **the single walker over every narratable
+  message in a lesson.** Yields `slides[si].coachMessages[mi]` (locator `slides[${si}].coachMessages[${mi}]`)
+  **first**, then `socratic.messages[phase][mi]` (locator `socratic.messages.${phase}[${mi}]`) in the fixed
+  `SOCRATIC_PHASES` order (`ask`, `wrong1`, `wrong2`, `correct`, `hint`) — never `Object.keys`, so locators
+  and logs are deterministic. Tolerates `socratic: null` (lesson 4) and an absent/malformed `messages`.
+  **Both `generateLessonAudio` and `collectReferencedAudio` MUST consume it.** This is not a tidiness
+  refactor: `collectReferencedAudio` feeds `pruneOrphanedLessonAudio`, which *deletes* unreferenced mp3s,
+  so any message the generator can see but the collector cannot has its clip deleted as an orphan on the
+  next prune. That divergence shipped **twice** (`audio_es`, then socratic) before the walker existed. Add
+  a new message location here and both pipelines get it. The slide locator string is asserted verbatim by
+  `tests/unit/lessonAudio.test.js` (whole-array `deepEqual` at several sites) — do not reformat it, and do
+  not move socratic before slides.
+  **Not covered:** `scripts/translate-lessons.mjs` walks messages *independently* (its locators carry a
+  `.text` suffix and it runs on raw pre-localization lessons) and keeps a hand-synced `SOCRATIC_PHASES`
+  copy. Adding a message location means editing **both** — see "Lesson translation script" below.
+- **`generateLessonAudio(lesson, { lang = 'en', synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR } = {})`** —
   dependency-injected `synthesize` and `dir` params are the test seam (a test passes a stub synthesize
   function and a temp dir; production code omits both and gets the real `server/ttsProvider.js`
-  `synthesize` + the real `public/audio/lessons/` dir). Iterates only `lesson.slides[].coachMessages[]`
-  (concept slides) — never `lesson.socratic`, which carries no `coachMessages`. Skips a message whose
-  current `audio` already matches `hashMessageText(text) + '.mp3'` (no wasted TTS call). Each message's
+  `synthesize` + the real `public/audio/lessons/` dir). Walks via `collectMessages`, so it covers concept
+  slides **and** `socratic.messages`. `lang='es'` reads `text_es`/writes `audio_es`. **Regenerates
+  unconditionally**: the text hash keys the *filename*, but the voice/prompt/speed/model live in
+  `tts-prompt.<lang>.json` and are not in that hash, so a hash match says nothing about whether the clip
+  still sounds right. It used to skip on a hash match, which made the admin "Generate audios" button
+  unable to re-voice a lesson after a prompt change and left a lesson whose mp3 went missing
+  permanently silent (the check never touched the filesystem). Same text → same hash → same path, so
+  regeneration overwrites in place and orphans nothing; the cost is one TTS call per message per click.
+  Empty/whitespace text is still skipped — that is "nothing to say", not a cache hit. Each message's
   synthesis is isolated in its own try/catch — one failure doesn't abort the batch; that message's
   `audio` is left unset/unchanged and recorded in the `failed` array. Returns `{ lesson, generated,
   failed }`, mutating (and returning) the same lesson object passed in.
-- **`pruneOrphanedLessonAudio(allLessons, dir = LESSON_AUDIO_DIR)`** — synchronous; computes the set of
-  every `audio` basename referenced across all lessons, deletes any `.mp3` under `dir` not in that set,
-  returns the list of deleted filenames.
+- **`collectReferencedAudio(allLessons)`** — walks via `collectMessages` and collects the `path.basename`
+  of **both** `audio` and `audio_es` across every message. Feeds `pruneOrphanedLessonAudio`.
+- **`pruneOrphanedLessonAudio(allLessons, dir = LESSON_AUDIO_DIR)`** — synchronous; deletes any `.mp3`
+  under `dir` not in `collectReferencedAudio`'s set, returns the list of deleted filenames.
+- **`SOCRATIC_PHASES`** — exported `['ask','wrong1','wrong2','correct','hint']`. The canonical phase order.
+  `scripts/translate-lessons.mjs` keeps its own copy that must stay in this exact order.
 - **`LESSON_AUDIO_DIR`** — exported constant (`public/audio/lessons/`), overridable per-call via the
   `dir` param for tests.
+
+### Lesson translation script (`scripts/translate-lessons.mjs`)
+
+Drafts `_es` sibling fields via the LLM. It is the **third** walk over lesson content and deliberately does
+**not** consume `collectMessages` (different locator convention — every path ends in `.text` — and it
+operates on raw, pre-`localizeLesson` objects). It translates exactly six field paths:
+`slides[].coachMessages[].text`, `slides[].legendItems[].label`, `slides[].infoProse`,
+`socratic.goalPrompt`, `socratic.messages[phase][].text`, `confirmationChallenges[].goalPrompt`.
+
+`handleField(obj, key, pathLabel)` skips when `obj[key_es]` already exists unless `--force`, so
+pre-seeded translations are preserved. **When you add a narratable field to lesson JSON, update this
+script as well as `collectMessages`** — miss it and that copy silently never gets Spanish, which
+`pickLocalized`'s English fallback then hides at render time.
 
 **Pattern to reuse for the next admin batch-generation feature**: export pure functions taking their
 side-effecting dependencies (an API client, a filesystem root, etc.) as an optional `deps` object with
@@ -928,6 +1047,16 @@ const jobMap = new Map();
 **`order` derivation**: Extracted from the filename numeric prefix (e.g., `lesson-05-claimeven.json` → `order: 5`). Lessons are sorted ascending by `order` before caching.
 
 **Directory**: `connect-four/lessons/`. Ships empty in Epic 4; content added in Epic 5.
+
+**The cache is boot-once and nothing watches the directory.** `reloadLessons()` is called only from inside the admin create/update/delete/generate-audio handlers. Any out-of-band edit to `lessons/*.json` while a server is running (migration script, hand edit, branch switch) leaves the cache stale — and because those handlers read the cache and then `saveLessonFile` it back, **the next admin write silently overwrites your disk edits with the pre-edit object**. Restart the server after editing lesson files on disk, before touching any admin lesson endpoint.
+
+**Raw vs. localized reads — do not conflate.** `getLessonsAll()` returns the **raw** cached objects, `_es` fields intact. `getLesson(id, locale)` applies `localizeLesson`, which **strips every `_es` key**. Admin write paths (`GET/POST /api/admin/lessons/:id`, `generate-audio`) must use `getLessonsAll()`: `getLesson()` would both starve `generateLessonAudio(lang:'es')` of `text_es` and destroy every translation on save.
+
+### `socratic.messages` — Socratic coach copy is lesson content
+
+`lesson.socratic.messages` is a **phase→array map** (`ask`, `wrong1`, `wrong2`, `correct`, `hint`); each array holds objects with the *same* shape as `slides[].coachMessages` — `text` / `text_es` / `audio` / `audio_es` / `mood`. This copy used to live in i18n under a top-level `socratic.*` namespace; it was moved here deliberately, and those i18n keys were deleted. **Lesson content is a thing in itself and must not be assembled from i18n keys** — do not reintroduce `socratic.*` or `lesson.<id>.socratic.*`. `socratic` itself may be `null` (a lesson with no Socratic board), so 12 of the 13 lessons carry `messages`. `validateLesson` checks the shape but stays permissive about absent phases: an invalid file is `console.error`'d and **excluded**, so an over-strict rule silently removes a lesson from the app rather than failing loudly.
+
+**`localizeLesson` must never mutate its input.** `stripEsKeys` is **shallow**, so `stripEsKeys(lesson.socratic).messages` is the *same reference* as the raw cache entry's. Assigning into it (`s.messages[phase] = …`) deletes `text_es` from the module cache for every later request, which then starves the Spanish generator and persists the loss to disk on the next save. Rebuild nested containers into fresh objects instead. `tests/unit/lessonLoader.test.js` pins this with a non-mutation test; a "no `_es` survives in the response" assertion **cannot** catch it, because the corrupted case satisfies it too.
 
 ---
 

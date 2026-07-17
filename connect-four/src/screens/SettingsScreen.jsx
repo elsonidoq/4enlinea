@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/ProfileStore.jsx';
 import { TopBar } from '../components/TopBar.jsx';
-import { track } from '../lib/track.js';
-import { ONBOARDING_GAME_PARAMS } from '../lib/onboardingRouting.js';
+import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useLanguage } from '../lib/useLanguage.js';
+import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { fetchWithAuthRetry } from '../lib/fetchWithAuthRetry.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -16,14 +17,18 @@ export function SettingsScreen({ go, goBack }) {
 
   // Epic 8 — Onboarding Experience, US4 (T043/FR-010, research.md R6): "Replay intro" —
   // visible for ANY onboarding state, reaches Settings from Home in <=2 nav actions (SC-004).
-  // Calls go('game', {...onboarding:true}) DIRECTLY, bypassing the Navigator auto-detect effect
-  // (T018) entirely — this is an explicit user action, not the anonymous-only auto-route.
-  // Fires onboarding_started here because the auto-route effect (App.jsx) early-returns on the
-  // replay path, so this is the ONLY start signal for a manual replay (contracts/onboarding-api.md
-  // event table: "first-run redirect fires (or manual Settings replay starts)").
+  //
+  // Task 20 (finding 17): the 2026-07-13 mission-screen spec put a mission screen in front of
+  // first-run onboarding, but only retargeted the App.jsx auto-route — this control still
+  // dropped straight into the game, bypassing the mission screen the control's own name
+  // promises ("Replay intro" should replay the intro, and the mission screen now IS the
+  // intro). Route through onboardingMission instead; its CTA still launches the game with
+  // ONBOARDING_GAME_PARAMS. `onboarding_started` is fired ONCE from the mission screen's own
+  // mount effect (not here) — pass the source through as a param so the single call still
+  // carries `{source: 'settings_replay'}` instead of double-firing (mission screen mount +
+  // this handler).
   function handleReplayIntro() {
-    track('onboarding_started', { source: 'settings_replay' });
-    go('game', ONBOARDING_GAME_PARAMS);
+    go('onboardingMission', { onboardingSource: 'settings_replay' });
   }
 
   const [papergamesId, setPapergamesId] = useState('');
@@ -31,6 +36,29 @@ export function SettingsScreen({ go, goBack }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // ── Subscription section (D3) ───────────────────────────────────────────
+  const [tier, setTier] = useState('free');
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [portalError, setPortalError] = useState(false);
+  const handleUpgrade = useUpgradeCheckout('/settings');
+
+  async function openPortal() {
+    setPortalError(false);
+    try {
+      const res = await fetch(`${API}/api/stripe/portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ returnPath: '/settings' }),
+      });
+      if (!res.ok) { setPortalError(true); return; }
+      const { portalUrl } = await res.json();
+      window.location.href = portalUrl;
+    } catch (_) {
+      setPortalError(true);
+    }
+  }
 
   // ── Import state ───────────────────────────────────────────────────────────
   const [importing, setImporting] = useState(false);
@@ -50,6 +78,7 @@ export function SettingsScreen({ go, goBack }) {
         const id = profile.papergames_id || '';
         setPapergamesId(id);
         setSavedValue(id);
+        setTier(profile.tier === 'paid' ? 'paid' : 'free');
       } catch (_) {
         // Ignore — user can still type
       }
@@ -69,12 +98,18 @@ export function SettingsScreen({ go, goBack }) {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API}/api/user/profile`, {
+      // Task 22 (finding 19): landing on /settings and saving immediately can race the
+      // session-refresh (memory project_app_qa_setup_gotchas), 401ing on the very first
+      // attempt even though the session is valid a moment later — it then self-recovers on
+      // manual retry. Transparently refresh-and-retry ONCE so that race never reaches the
+      // user as a "Failed to save" flash; a second 401 is a genuine auth failure and still
+      // surfaces as an error below.
+      const res = await fetchWithAuthRetry(`${API}/api/user/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ papergames_id: trimmed }),
-      });
+      }, { apiBase: API });
 
       if (res.status === 204) {
         setSavedValue(trimmed);
@@ -407,6 +442,28 @@ export function SettingsScreen({ go, goBack }) {
           </button>
         </section>
 
+        {/* D3: tier-aware Subscription section — free -> UpgradeModal (5th call
+            site, identical props to the other four); paid -> Stripe billing
+            portal, which had zero frontend callers before this. */}
+        <section>
+          <h3>{t('settings.subscriptionHeading')}</h3>
+          <p>{tier === 'paid' ? t('settings.planPaid') : t('settings.planFree')}</p>
+          {tier === 'paid' ? (
+            <button className="btn btn-ghost" onClick={openPortal} style={{ width: '100%', fontSize: 14, padding: '10px 0' }}>
+              {t('settings.manageSubscription')}
+            </button>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => setUpgradeOpen(true)} style={{ width: '100%', fontSize: 14, padding: '10px 0' }}>
+              {t('settings.upgradeCta')}
+            </button>
+          )}
+          {portalError && (
+            <p role="alert" style={{ fontSize: 13, color: 'var(--eval-bad)', margin: '10px 0 0' }}>
+              {t('settings.portalError')}
+            </p>
+          )}
+        </section>
+
         {/* OI-15: language switcher machinery — es.json is a partial bundle
             (2 of 24 sections) until the separate translation effort lands. */}
         <section>
@@ -426,6 +483,10 @@ export function SettingsScreen({ go, goBack }) {
 
         {devReset}
       </div>
+
+      {upgradeOpen && (
+        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
+      )}
     </div>
   );
 }

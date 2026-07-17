@@ -50,4 +50,4 @@ was required to observe the corrected response. When manually verifying any `exp
 change, always confirm no matching cache row exists first (or delete it) — a clean `classify()`
 result is not sufficient proof the endpoint is fixed.
 
-Cross-ref: [[reference_classify_vs_classifyPattern]], [[project_classifier_architecture]].
+Cross-ref: `docs/architecture/server-conventions.md` §Classifier API, `docs/architecture/server-conventions.md` §Classifier API.

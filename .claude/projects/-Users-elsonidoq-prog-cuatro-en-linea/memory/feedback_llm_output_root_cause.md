@@ -18,4 +18,4 @@ When judging/debugging LLM-generated output quality (deep-reveal coach explanati
 4. **Treat a missing/null upstream signal as a question, not a fact** — establish ground truth independently (here: solver scores) and ask "should this signal have fired?" If ground truth says the point is decisively arguable but the signal is absent, the bug is in the generator's *logic*, not "an unavoidable sparse case."
 5. **You are an agent — observe with tools, don't infer from text.** Run `./visualize_board.sh`, query the solver, or RUN the generator on the failing input rather than reasoning about code in your head.
 
-This thinking is now baked into the `judge-deep-reveals` SKILL.md. See [[project_lookahead_shared_seam]], the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[feedback_prework_discipline]], [[feedback_deep_reveal_product_mindset]].
+This thinking is now baked into the `judge-deep-reveals` SKILL.md. See [[project_lookahead_shared_seam]], the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[feedback_process_and_agent_preferences]], [[feedback_deep_reveal_product_mindset]].

@@ -14,7 +14,7 @@ Each entry: what's wrong, why it's deferred, where it lives, and a concrete repr
 **Status**: 📋 SPEC-READY 2026-07-13 — full speckit artifacts authored at `specs/049-puzzle-scoring-spanish-localization/` (Epic 9, via `/epics-manager`); run `/coordinate-implementation` to build. Was: deferred out of spec 044 per FR-014/FR-015b.
 **Area**: client-side puzzle scoring — `src/screens/ChallengeScreen.jsx`, `server/moveQualityScorer.js` (`scoreMove`), `server/predicates.js`, `/api/evaluate-move` (+ `/inline`)
 **Discovered**: spec 044 QA (2026-07-11)
-**Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `project_puzzle_correctness_seams.md`); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
+**Spec 049 approach**: extend the `evaluatePredicate`-gated `accepted` path to the six single-answer categories at the Challenge seam; client sends camelCase `correctCol`/`highlightMetadata` (remap from snake_case — see `docs/architecture/server-conventions.md` §Predicate Evaluator); read stored metadata (no detector recompute); converge the plain + `/inline` handlers (extracted to `server/evaluateMoveHandler.js`) and fix the live `VALID_CATEGORIES.includes`-on-a-`Set` 500 in `/inline` as part of that convergence.
 
 For the single-answer categories (`z_threat`, `overcut`, `claimeven`, `undercut`, `figure_7`,
 `j_shape`), the Challenge screen judges correctness purely by the solver-score verdict
@@ -38,7 +38,7 @@ than spec 044 took on. FR-014/FR-015b intentionally fenced it off.
 **If picked up**: extend the `evaluatePredicate`-gated `accepted` path (or an analogous
 pattern-membership check) to the single-answer categories, replacing the bare `scoreMove`
 `quality==='optimal'` judgment on `ChallengeScreen.jsx`. Related memory:
-`project_puzzle_correctness_seams.md` (ChallengeScreen bypasses via scoreMove).
+`docs/architecture/server-conventions.md` §Predicate Evaluator (ChallengeScreen bypasses via scoreMove).
 
 ---
 
@@ -85,7 +85,7 @@ of the subscription's actual status. Under the spec-045 requirement that `tier` 
 Stripe, this is wrong: an `.updated` carrying `past_due`/`canceled`/`unpaid` would keep a user wrongly
 paid. Fix (spec 045): derive tier from the subscription status — active/trialing→paid,
 canceled/unpaid→free, `past_due`→leave unchanged (downgrade only on final termination). Related
-memory: `reference_tier_source`, `project_auth_payments_state`.
+memory: `project_stripe_traps`; `docs/architecture/frontend-conventions.md` (tier source: `store.getProfile()`, never `session.tier`).
 
 ---
 
@@ -278,7 +278,7 @@ an unrelated component. Only reliably reproduces on a cold/uncached reasoning-mo
 **If picked up**: raise or remove the fixed 6s client timeout in `DeepRevealPane.jsx` (reasoning-model calls
 are legitimately slow on first load), or show a "still thinking…" state instead of a failure message when the
 timeout elapses while the request is still in flight. Verify against a cold call in staging (cache TRUNCATEd
-on deploy per `project_spec039_audio_interactive_coach`, so the first post-deploy call is always uncached).
+on deploy per `docs/architecture/coach-audio-conventions.md`, so the first post-deploy call is always uncached).
 
 ## OI-13 — Onboarding "import offer shown once" marker is per-browser (localStorage), not per-account
 
@@ -380,9 +380,10 @@ signal when `playable.length === 0`, instead of `undefined`.
 
 ## OI-18 — Lesson slide content is hardcoded English, no i18n mechanism (Spanish gap)
 
-**Status**: deferred (large content task, scoped out of spec 049 Spanish localization; 2026-07-13)
-**Area**: `connect-four/lessons/*.json` (~13 files, ~50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
+**Status**: **mechanism RESOLVED, content still open** (updated 2026-07-16) — the "decide on a mechanism" half is done: sibling `text_es`/`audio_es` fields on each `coachMessages[]` entry, resolved server-side by `localizeLesson`/`pickLocalized` in `lessonLoader.js`, with per-language generation via `generateLessonAudio(lesson, {lang})`. **Only lesson 1 (`immediate-threat`) is translated**: measured 2026-07-16, **46 of 50** `coachMessages` across the 13 lessons still have no `text_es`. The remaining work is pure content translation, no longer a design decision.
+**Area**: `connect-four/lessons/*.json` (13 files, 50 `coachMessages[].text` strings) consumed by `ConceptScreen.jsx` / `SocraticScreen.jsx`
 **Discovered**: spec 049 QA (browser walkthrough, 2026-07-13)
+**Silent-failure warning**: `pickLocalized` falls back to the English base value when `_es` is missing or empty, so an untranslated lesson renders English **without any error** — the gap is invisible from the UI. `generateLessonAudio` likewise skips a message with no `text_es`, so clicking "Generate audios" on an untranslated lesson is a legitimate no-op, not a bug. Socratic text is a separate gap: OI-43.
 
 Lesson *body* content — every slide's `coachMessages[].text` across all lesson JSON files — is raw
 hardcoded English data with **no i18n lookup at all**, unlike lesson *titles* (which do resolve via
@@ -395,7 +396,7 @@ guard cannot catch it because these strings are not i18n keys.
 per-slide i18n keys wired into `ConceptScreen.jsx`/`SocraticScreen.jsx` — a distinct, large content
 task, not a translation-file edit. Sized as its own follow-up.
 **If picked up**: decide on a mechanism (parallel `lessons/es/*.json` vs per-slide keys), then
-translate to Argentinian voseo per memory [[project_spanish_is_argentinian_voseo]].
+translate to Argentinian voseo per `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo).
 
 ## OI-19 — Hardcoded-English UI strings bypass the i18n key-parity guard
 
@@ -415,12 +416,12 @@ TopBar titles; other screens were not exhaustively audited.
 (Home/Challenge/Coach/Settings/Onboarding); a full sweep is its own task.
 **If picked up**: grep the `src/screens`/`src/components` JSX for string literals in user-facing
 positions (`title=`, `aria-label=`, button/label children) not wrapped in `t()`; add keys to both
-`en.json`/`es.json` (Spanish = Argentinian voseo, [[project_spanish_is_argentinian_voseo]]).
+`en.json`/`es.json` (Spanish = Argentinian voseo, `docs/architecture/frontend-conventions.md`).
 Consider a lint/test that flags hardcoded JSX text to prevent regressions.
 
 ## OI-20 — Onboarding post-game value loop incomplete (coach silent, no analysis, game lost on signup)
 
-**Status**: ✅ RESOLVED 2026-07-13 (onboarding follow-ups, branch `feature/polish`, commits `ef24f17`/`4522e78`/`ffca704`/`a21bff8`). All three gaps fixed and verified end-to-end in a real browser + DB: (1) coach speaks the greeting from `coach.onboardingMission.greeting` via `useCoachSpeech` (mp3 generated + approved); (2) game-end routes onboarding → review → onboarding-only "Continue" CTA → import offer (`pickGameEndScreen` returns `'review'` for both); (3) anon games re-associate on migrate via `device_uuid` and appear in Past games after sign-up. Regression confirmed: `puzzle_attempts` + `lesson_progress` still migrate. See [[project_games_dont_migrate]] and `api-conventions.md` Migrate Endpoint. One residual staging item logged (real-browser autoplay of the greeting — see `staging_checks.md` Epic 8).
+**Status**: ✅ RESOLVED 2026-07-13 (onboarding follow-ups, branch `feature/polish`, commits `ef24f17`/`4522e78`/`ffca704`/`a21bff8`). All three gaps fixed and verified end-to-end in a real browser + DB: (1) coach speaks the greeting from `coach.onboardingMission.greeting` via `useCoachSpeech` (mp3 generated + approved); (2) game-end routes onboarding → review → onboarding-only "Continue" CTA → import offer (`pickGameEndScreen` returns `'review'` for both); (3) anon games re-associate on migrate via `device_uuid` and appear in Past games after sign-up. Regression confirmed: `puzzle_attempts` + `lesson_progress` still migrate. See `api-conventions.md` Migrate Endpoint. One residual staging item logged (real-browser autoplay of the greeting — see `staging_checks.md` Epic 8).
 **Area**: `src/screens/OnboardingMissionScreen.jsx`, `src/lib/onboardingGameEnd.js`, `GameScreen.jsx`, `src/screens/ReviewScreen.jsx`, `src/store/IndexedDBStore.js` + `server/userRoutes.js` (`/api/user/migrate`), `server/index.js` (`/api/games`)
 **Discovered**: onboarding polish review, 2026-07-13 (post mission-screen merge)
 
@@ -441,7 +442,7 @@ pre-existing Epic 8 behavior, not regressions from the mission screen:
    server `games` table with `user_id: null` and is never re-associated on signup, and Past games
    401s anon + filters by `user_id`. Fix options (server-side `device_uuid`→`user_id`
    re-association in `/api/user/migrate`, vs replicating games into IndexedDB). See
-   [[project_games_dont_migrate]] for full detail.
+   `docs/architecture/api-conventions.md` for full detail.
 
 ## OI-21 — Onboarding greeting cannot autoplay on a cold load; design a gesture-first entry so the coach can speak on arrival
 
@@ -492,7 +493,7 @@ fact that onboarding visits the review once.
 
 **If picked up**: generalize the cache-check owner filter — when `!req.user`, match
 `.eq('device_uuid', gameDeviceUuid).is('user_id', null)` (the `gameDeviceUuid` already captured for the
-write path), mirroring the authenticated branch. Cross-ref: [[project_anon_deep_reveal_gates]].
+write path), mirroring the authenticated branch. Cross-ref: `docs/architecture/api-conventions.md`.
 
 ## OI-23 — Deep-reveal TTS 400s on the opening move (empty movestring) for ALL users
 
@@ -510,7 +511,7 @@ onboarding reveal (whose first blunder is often the opening move) exposed it.
 
 **If picked up**: change the guard to `typeof moveString !== 'string' || !/^[0-6]{0,42}$/.test(moveString)`
 (accept the empty string), matching how `POST /api/explain-move-llm` already validates its `movestring`.
-Cross-ref: [[project_anon_deep_reveal_gates]].
+Cross-ref: `docs/architecture/api-conventions.md`.
 
 ## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
 
@@ -525,7 +526,7 @@ to subscribe. This is what prompted the user's "I don't see any call to action" 
 
 **If picked up**: add a persistent entry point (e.g. an "Upgrade" row in Settings/account, a home banner,
 or a nav item) that opens `UpgradeModal` via `useUpgradeCheckout()` — it should pass a real
-`returnPathOverride` if launched from a session-only screen. Cross-ref: [[project_auth_payments_state]].
+`returnPathOverride` if launched from a session-only screen. Cross-ref: memory `project_stripe_traps`.
 
 ## OI-25 — Paying from the /summary paywall cannot restore the summary (SESSION_ONLY state lost)
 
@@ -540,7 +541,7 @@ they have already seen the summary. A true restore would require persisting `res
 so `/summary` can rehydrate after the round-trip; judged not worth it for now.
 
 **If picked up**: persist the set `results` to sessionStorage keyed by a nonce, include the nonce in the
-returnPath, and rehydrate on cold boot. Cross-ref: [[project_auth_payments_state]], [[OI-24]].
+returnPath, and rehydrate on cold boot. Cross-ref: memory `project_stripe_traps`, [[OI-24]].
 
 ## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
 
@@ -605,7 +606,7 @@ container's available height is small.
 
 **If picked up**: update the contract doc; add a DOM/jsdom test that mounts `SplitReveal` with a short
 container and asserts `board rendered width <= pane width` and `constrain`/maxWidth stays applied.
-Cross-ref: [[project_split_reveal_board_fit]].
+Cross-ref: `docs/architecture/frontend-conventions.md` (SplitReveal board fit).
 
 ## OI-30 — `figure_7` (and other multi-tag patterns) never praised on live user moves; would need transition-gating if added
 
@@ -635,7 +636,7 @@ apply the **same absent→present transition-gating** the double-threat/forced-w
 (design: `docs/superpowers/specs/2026-07-14-coach-creation-pattern-transition-design.md`). These are
 all persist-across-moves "creation" patterns, so without transition-gating they would exhibit the
 identical repeat bug from day one. Cross-ref: the creation-pattern transition design; memory
-[[reference_tactical_pattern_definitions]].
+`docs/knowledge-base/` (tactical pattern predicates).
 
 ## OI-31 — Staging `.env.staging` DATABASE_URL uses the transaction pooler (6543); `migrate.js` needs the session pooler (5432)
 
@@ -689,7 +690,7 @@ Two low-severity residuals were deliberately left when the transition gate shipp
 
 **Why deferred**: the webhook is the primary path and is expected to deliver in staging/prod (a registered endpoint); the fallback firing *alone* (no webhook ever) is an operational-failure edge, not the steady state. Making the track idempotent-per-session (so either path could safely write it) would need a dedup key (e.g. a `stripe_events`-style ledger keyed on the checkout session id, or an upsert on `(user_id, session_id)`), which is more machinery than the analytics gap warrants today.
 
-**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory [[project_checkout_verify_session_fallback]]; server-conventions.md "Activation: webhook primary + verify-session fallback".
+**If picked up**: give `syncCheckoutSession` the same `upgrade_completed` insert guarded by an idempotency key on the checkout session id so exactly one track is written whichever path wins. Cross-ref: memory `project_stripe_traps`; server-conventions.md "Activation: webhook primary + verify-session fallback".
 
 ## OI-35 — QA run 2026-07-15 findings backlog (agentic_QA_2026-07-15-1321.md) — unfixed at close
 
@@ -706,3 +707,199 @@ Headline items still unfixed at session close (see the file for the rest — sev
 **Reclassified during the session (NOT a bug)**: the candidate-generation "fetch failed" finding was downgraded [major]→[minor] as an environmental flake — see memory [[project_generate_candidates_fetch_failed_flake]]. The paid-puzzle-category paywall it left unexercised is now positively testable (generate→approve→reindex a paid category, then confirm a free user hits the paywall).
 
 **Why deferred**: this was a QA + planning session, not an implementation one; fixes are being routed through a plan. **If picked up**: consume `agentic_QA_2026-07-15-1321.md` as the work-list and `staging_checks.md` for the deploy-only verification residue.
+
+## OI-36 — Spanish lesson content: only lesson 1 of 13 translated; lessons 2–13 (~6,000 words) remain English-only
+
+**Status**: deferred / open (scoped down by explicit user decision 2026-07-16 — see Task 4 in `.superpowers/sdd/`; NOT an oversight)
+**Area**: `connect-four/lessons/lesson-02-*.json` through `lesson-13-*.json`; `connect-four/scripts/translate-lessons.mjs` (script, validated); `server/lessonLoader.js#localizeLesson` (plumbing, already shipped and unaffected by this gap)
+
+D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped for **lesson 1 (`immediate-threat`) only**. The drafting script (`connect-four/scripts/translate-lessons.mjs`) is written, has a real `--help`/`-h` that exits 0 doing no work, supports `--lesson <id>` / `--dry-run` / `--force`, and was validated end-to-end on lesson 1 (dry-run reviewed for voseo + verde/gris correctness, real run diffed line-by-line, `npm run test:fast` green). Lessons 2–13 were deliberately **not** run: translating ~6,860 words across 12 lessons on a still-unvalidated prompt in one shot would let a systematic voseo or green/gray-perspective error land in all of them before a human ever reviewed one. Lesson 1 was the calibration sample; the user reviews it before authorizing the rest.
+
+**Non-breaking in the meantime**: `localizeLesson`'s per-field English fallback means every untranslated lesson (2–13) simply renders English text in Spanish mode — the same behavior as before this task, not a regression. No code changes are needed to "support" the gap; it self-resolves as each lesson gets translated.
+
+**If picked up**, per lesson id:
+1. `cd connect-four && node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id> --dry-run` — read the printed Spanish first.
+2. Review checklist on the dry-run output before running for real:
+   - **Voseo**: `usá/tenés/podés/jugá/encontrá/sos/vos` — never tú-Spanish (`usa/tienes/puedes/juega/encuentra/eres/tú`).
+   - **verde/gris**, never rojo/amarillo or the raw English words green/gray. Remember `userPerspective: 'red'` → player 1 = **verde**; `'yellow'` → player 2 = **gris**. This is the internal-token trap that inverts a lesson's meaning if mistranslated.
+   - `[term:...]`/`[zone:...]` tags and `columna N` references preserved verbatim.
+   - Diff contains **only** added `_es` keys — no reformatting/reordering churn.
+3. `node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id>` (real run), then `git diff` line-by-line before committing.
+4. **After the text is committed**, generate narration audio for that lesson: `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally), then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`).
+5. Run `npm run test:fast` once per lesson (or batch) before committing.
+
+Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`; `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo); OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
+
+## OI-37 — Accuracy 100% still reads oddly next to a lost game (product question, not a bug)
+
+**Status**: deferred / open (surfaced during Batch B task 18, finding 15)
+**Area**: `connect-four/src/screens/ReviewScreen.jsx` (Accuracy card)
+
+Task 18 fixed the *copy* contradiction: a 0-mistake resigned/lost game now shows `review.cleanButLost` ("No mistakes on the board — but the game was lost. Review how it ended.") instead of the old "Clean game. Nothing to revisit." copy, and the Past Games card suppresses its "No mistakes" chip when `outcome === 'lost'`. **The Accuracy metric itself (100%) was deliberately left unchanged** — it measures board-move optimality (every scored move matched the solver's best line) and is correct on its own terms; resigning isn't a board move and is out of its denominator by design. Do not "fix" this by folding resignation into the accuracy calculation: doing so would conflate two different questions ("did every move I made match the solver's best line?" vs. "did I finish the game?") into one number, destroying the metric's ability to answer either one cleanly.
+
+Whether a 100%-accuracy badge should still be visually softened, annotated, or paired with an explicit "you resigned" note when the outcome is a loss is a product/UX call, not a mechanical fix — needs its own brainstorm if picked up. Not blocking; the copy fix already removes the "flawless" contradiction from the coach line.
+
+## OI-38 — KB term popup summary body has no Spanish fallback for entries missing `short_summary_es`
+
+**Status**: deferred / open (surfaced during Batch B task 13, finding 10 — explicitly out of scope for that task)
+**Area**: `docs/knowledge-base/*.md` (KB content); wherever `/api/explain-move-llm`'s `terms` map is built server-side
+
+Task 13 fixed the KbTermPopup UI leaks: the popup header no longer shows a raw KB slug (now `kb.term.<kbId>` i18n-driven, humanized fallback for anything not yet keyed) and the CTA buttons ("Go to lesson"/"Go to practice") are now localized. The popup **body** (the 1-2 sentence summary) is a different, non-UI gap: it is sourced directly from each KB entry's `short_summary` (English) or `short_summary_es` (Spanish) field in `docs/knowledge-base/<id>.md`. Entries without a populated `short_summary_es` silently render the English `short_summary` in Spanish mode — this is KB *content* coverage, not a UI hardcoding bug (compare OI-36, the same shape of gap for lesson content). Batch D item 34 confirmed the ones that do have `short_summary_es` render correctly.
+
+If picked up: audit which of the 45 KB entries have `short_summary_es` populated vs falling back to English, and extend the same reviewed-translation-batch approach used for OI-36 (voseo, verde/gris, no silent fabrication).
+
+## OI-39 — `getSubscriptionStatus` (paymentProcessor.js) has no production call site; three (soon four) tier-gate sites read the client-cached tier directly
+
+**Status**: logged for traceability, not a bug — an explicit spec-intent-vs-implementation gap, not a runtime defect that breaks any flow. See Batch B task 16 (finding 13).
+**Area**: `connect-four/server/paymentProcessor.js:31-46`; `connect-four/src/screens/sagaLock.js:13`; `connect-four/src/screens/PostSetSummaryScreen.jsx:55`; `connect-four/src/store/CheckoutReturnBanner.jsx:72`
+
+Spec-045 item 12 called for tier gates to be checked through a single server-authoritative interface. `paymentProcessor.js:31-46` deliberately documents `getSubscriptionStatus` as "test-only in production wiring: no production call site is wired through it today" — an existence proof that the function exists and is exercised by tests, but nothing in the running app actually calls it. In practice, all three current paywall gate sites (`sagaLock.js:13`, `PostSetSummaryScreen.jsx:55`, `CheckoutReturnBanner.jsx:72`) instead read the client-cached tier value directly (`store.getProfile()`/session tier), never a fresh server check.
+
+**Do not refactor the three call sites to close this issue.** Routing them through a server-side interface from the frontend is an architecture decision needing its own brainstorm — it would touch every paywall in the app for zero user-visible benefit today, since nothing currently exploits the gap (the client-cached tier is refreshed through the normal auth/profile flow).
+
+**Strengthens the case for future consolidation**: W4 Task 9 adds a **fourth** independent tier read, in `SettingsScreen`, for its new Subscription section — meaning there are now four places that each independently decide "is this user paid," none of them going through `getSubscriptionStatus`. If/when this is picked up, design a single tier-check interface first, then migrate all four (not three) call sites together.
+
+## OI-40 — Anonymous puzzle-attempt writes fall back to a shared literal `device_uuid: 'anonymous'`, cross-contaminating unrelated anon users
+
+**Status**: deferred / open (surfaced during Task 23 while verifying the puzzle-attempts write path ahead of fixing the `challenge-progress` read-path 401)
+**Area**: `connect-four/server/index.js` (~2458), the `POST /api/user/puzzle-attempts` write path (symbol: the handler computing `deviceUuid`)
+
+The write path already supports anonymous callers by design (`user_id: req.user?.id ?? null`, schema nullable since migration 003), but its device_uuid derivation is:
+
+```js
+const deviceUuid = req.user?.device_uuid || req.body.deviceUuid || 'anonymous';
+```
+
+The final fallback, `'anonymous'`, is a **string literal**, not a per-device identifier. Any anonymous client that omits `deviceUuid` in its request body (e.g. a stale client build, a client whose local profile hasn't generated a `device_uuid` yet, or a bug in a future caller) has its attempt rows written under that same shared literal — silently merging its puzzle-attempt history with every other anonymous caller that also fell through to the fallback. This is an access-control/data-integrity smell: the now-fixed `GET /api/user/challenge-progress` read path (Task 23) would faithfully **serve back** this cross-contaminated pool to whichever anon device happens to pass `device_uuid=anonymous` (it wouldn't, since that fails UUID validation — but any two real clients that both hit the fallback would still share one one bucket keyed by the literal, invisible to either).
+
+**Do not fix as part of Task 23** — this is a write-path bug, independent of and out of scope for the read-path 401 fix, and deserves its own scoped change (likely: derive/require a real device_uuid client-side before this call, or reject the write with 400 when no identifier is available, rather than defaulting to a shared bucket).
+
+## OI-41 — `/pricing` is a bare static page; needs a real designed pricing page, and its prices are hardcoded
+
+**Status**: deferred / open (created 2026-07-16 while unblocking Paddle domain review)
+**Area**: `connect-four/server/pricing.html`, route registered in `connect-four/server/index.js` (symbol: the `app.get('/pricing', ...)` sendFile line beside `/terms` and `/privacy`)
+
+> **Where the code is**: `pricing.html` and its route are **not on this branch**. They ship to `main` separately via the `chore/legal-pages` PR (branched from `origin/main`, 4 files), because Paddle domain review blocks on them and this branch is ~496 commits from merging. This branch deliberately carries only the issue, not a second copy of the pages — one source of truth. If you are reading this and `connect-four/server/pricing.html` does not exist, pull `main`.
+
+`pricing.html` was written to satisfy a hard Paddle requirement — domain review demands publicly reachable pricing — not as a product surface. It is a plain unstyled table matching `terms.html`'s minimal CSS, with no design, no plan comparison beyond one row, no CTA into checkout, and no i18n (English only, while the app ships full es.json key parity per spec 049).
+
+**Two distinct pieces of work, do not conflate them:**
+
+1. **Design work** — a real pricing page: plan comparison, annual/monthly toggle, CTA into the existing checkout flow, Spanish copy (Rioplatense voseo per `docs/architecture/frontend-conventions.md`). This is what the issue is nominally about.
+
+2. **The drift bug, which is the more dangerous half.** `pricing.html` hardcodes `$2.99`/`$21.99`/`39%`/`$1.83` as literal HTML text. The app itself never hardcodes prices: `useStripePrices.js` fetches them live from `GET /api/stripe/config`, which reads the real Stripe price objects precisely so "the amounts shown in UpgradeModal never drift from what we charge". The static page reintroduces exactly the drift that endpoint exists to prevent — change a price in the processor dashboard and this page silently lies, on the page a payment provider's reviewer reads. The `20` Deep Reveals/week figure is likewise a literal, duplicating `quotaLimits.js:FREE_DEEP_REVEAL_WEEKLY_LIMIT` (which has its own history of drifting — see the QA 2026-07-15 / D4 comment there, where the constant was 5 while copy promised 20).
+
+**Compounding factor**: the Paddle migration will move the price source of truth off Stripe entirely. Whatever replaces this page should read prices from the live config endpoint (or its Paddle equivalent, e.g. Paddle.js `PricePreview`, which also gives country-localized prices), never from static text.
+
+**Also carried by this page** (must survive any redesign — they are Paddle domain-review requirements, not decoration): the verbatim Merchant of Record clause ("Our order process is conducted by our online reseller Paddle.com…"), the 14-day refund statement, and the link to `/terms`.
+
+## OI-42 — Lesson audio is not manageable from `/admin/audio`
+
+**Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
+**Area**: `connect-four/src/pages/AdminAudioPage.jsx` (coach audio admin UI) vs. `connect-four/src/screens/AdminLessonEditorScreen.jsx` + `connect-four/server/index.js` (lesson audio endpoints)
+
+`/admin/audio` manages **coach** clips only, and does it well: a grouped status list (`awaiting_approval` / `needs_audio` / `approved` / `ineligible`) via `GET /api/admin/audio/status?lang=`, per-key generation (`POST /api/admin/audio/generate`), an inline player (`GET /api/admin/audio/play/:slug?lang=`), an en/es dropdown, and a TTS prompt/speed/voice/model editor.
+
+**Lesson** narration has none of that. The lesson editor only exposes a whole-lesson `POST /api/admin/lessons/:id/generate-audio` and a separate `POST /api/admin/lessons/prune-audio`. There is no way to audition a lesson clip in-app — the filename is `sha256(text).slice(0,16) + '.mp3'`, so auditing one today means hand-resolving the hash and finding the file on disk.
+
+**Why this isn't a trivial merge into the existing coach admin UI** — the two systems differ on every axis:
+- **Keying**: lesson clips are keyed by `sha256` of the narration text; coach clips are keyed by an i18n key/slug.
+- **Source of truth**: lesson audio paths live on the lesson JSON's own `audio`/`audio_es` fields, which FR-013 deliberately keeps registry-free (no separate DB/JSON index to drift from the lesson content); coach audio has an explicit registry (`tts-registry.json` / `tts-registry.es.json`) with an approval workflow (`awaiting_approval` etc.) that lesson audio has no equivalent of.
+- **Storage layout**: lesson clips sit flat in `public/audio/lessons/`; coach clips are nested `public/audio/coach/<lang>/`.
+
+**Suggested shape if picked up**: add a Lessons section to `/admin/audio` that lists each lesson's `coachMessages` per language, with status **derived live from the lesson JSON** (not stored, to respect FR-013's registry-free decision), plus an inline player and a per-message generate action — mirroring the coach UX without introducing a second registry.
+
+**Motivation**: the repo owner wants a single place to manage and audition all TTS audio in the app, including judging whether the Argentinian-accent narration on lesson clips actually sounds right — something currently impossible without leaving the admin UI.
+
+## OI-43 — Socratic coach text is i18n-keyed, so it is never narrated (silent in every language)
+
+**Status**: **code landed 2026-07-16 — NOT yet audible; audio generation still outstanding.** Plan: `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` (Tasks 1–7 done, `test:fast` green at 1413 pass).
+**Remaining before this can be closed**: (1) run the plan's **Task 8** — `POST /api/admin/lessons/:id/generate-audio` per lesson with `{lang:'en'}` then `{lang:'es'}`, **after restarting the server** (see below); (2) the plan's **V7** browser check — bubble narrates in EN and ES, stops on navigate-away, mp3 returns 200. **Until Task 8 runs, every Socratic bubble renders text with no audio — i.e. the user-visible symptom of this issue is unchanged.**
+**Area**: `connect-four/src/screens/SocraticScreen.jsx`, `connect-four/server/lessonAudio.js`, `connect-four/server/lessonLoader.js`, `connect-four/scripts/translate-lessons.mjs`
+
+**What landed**: the text now lives in lesson JSON at `socratic.messages` (phase→array map, `text`/`text_es`/`audio`/`audio_es` shape); 12 lessons migrated (`lesson-04` has `socratic: null`); the i18n `socratic.*` and `lesson.<id>.socratic.*` keys are **deleted** from both locales; `SocraticScreen` narrates via `getNarrationQueue` + `speakLessonAudio` mirroring `ConceptScreen`, with a replay button; `collectMessages` now unifies the two audio walkers, and `translate-lessons.mjs` was extended to cover `socratic.messages[phase][].text`.
+
+**Task 8 prerequisite (silent data loss if skipped)**: the migration wrote the lesson files on disk; nothing watches `lessons/`. A server started before that migration holds a stale boot-time cache, and `generate-audio` reads that cache and `saveLessonFile`s it back — **reverting the migration while returning a normal-looking 200**. Restart the server first, then confirm with `curl -s localhost:3001/api/admin/lessons/immediate-threat | grep -c messages` (0 ⇒ stale). See [[project_lesson_disk_edit_cache_clobber]].
+
+Arriving at a lesson's Socratic board shows a coach bubble (e.g. *"Voy a cometer un error aquí. Mirá si podés castigarlo."*) but **no speech plays**. This is not a Spanish bug — it is silent in English too.
+
+The text is **not lesson content**. It lives in i18n under a top-level `socratic.*` namespace (`ask`, `wrong1`, `wrong2`, `correct`, `hint`), rendered via ``t(`lesson.${lessonId}.socratic.ask`, { defaultValue: t('socratic.ask') })``. `SocraticScreen` contains **zero** `speakCoachMessage` / `speakLessonAudio` / `useCoachSpeech` calls.
+
+It falls between both TTS pipelines: the coach pipeline only sees `coach.spoken.*` (0 registry entries match socratic), and `generateLessonAudio` only walks `slides[].coachMessages`, never `lesson.socratic`.
+
+**Owner's ruling (2026-07-16)**: *lesson content is a thing in itself and must not be assembled from i18n keys.* So the fix is to move the text into the lesson JSON with the same `text`/`text_es`/`audio`/`audio_es` shape the slides already use.
+
+**Two facts that make it cheap**: (1) the Spanish is already written — all five generic strings and the three per-lesson overrides exist in `es.json` (unlike slide content, 46/50 untranslated), so this ships Spanish Socratic voice for all 13 lessons with no translation work; (2) audio is content-addressed by text hash, so the 12 lessons sharing an identical generic string share **one** mp3 — duplicating the text into each lesson costs ~14 files per language, not 13×.
+
+**The trap any implementation must respect**: `generateLessonAudio` and `collectReferencedAudio` walk the lesson tree **independently**. Add socratic audio to the first without the second and `pruneOrphanedLessonAudio` deletes the new clips as orphans. Extract one shared walker used by both rather than patching each.
+
+**Scope note**: only 3 lessons override socratic text in i18n (`opening-centre`, `opening-imitate`, `opening-sharp`), and only keys `ask`/`hint`/`correct` — never `wrong1`/`wrong2`. `lesson.node.*` and `lesson.confirmation.*` are UI chrome, not lesson content — leave them alone. Related: [[project_lesson_progression_audio_traps]], OI-18, OI-44.
+
+## OI-44 — More lesson content assembled from i18n keys: `lesson.<id>.title` duplicates the lesson JSON's own `title`, and `socratic.goalPrompt` is authored but rendered nowhere
+
+**Status**: deferred / open (surfaced 2026-07-16 while diagnosing OI-43; deliberately left out of that fix to avoid inflating it)
+**Area**: `connect-four/lessons/*.json`, `connect-four/src/i18n/{en,es}.json` (`lesson.<id>.title`), `connect-four/server/lessonLoader.js` (`localizeLesson`)
+
+Two more instances of the same "lesson content built from i18n keys" pattern OI-43 rejects:
+
+1. **`lesson.<id>.title`** resolves via `t()` with a `defaultValue`, while **every lesson JSON also carries its own `title` field**. Two homes for one string; unclear which is authoritative.
+2. **`socratic.goalPrompt`** is authored in **9 of 13** lesson JSONs (English only — no `goalPrompt_es` anywhere) and `localizeLesson` has a dedicated branch localizing it — but **nothing renders it**. The only `goalPrompt` hits in `src/` are the unrelated `GOAL_PROMPTS` map in `CandidateDashboard.jsx` (puzzle generation). It is authored dead data with live localization plumbing.
+
+**If picked up**: fold into the OI-43 mechanism once it lands — decide that lesson content lives in the lesson JSON, migrate `title`, and either wire up `goalPrompt` or delete it plus its `localizeLesson` branch. Verify `goalPrompt`'s deadness at source first; it is a negative claim.
+
+## OI-45 — Regenerating an approved coach clip puts the new take live, unapproved
+
+**Status**: deferred / open (pre-existing design wart, documented 2026-07-16; not a regression)
+**Area**: `connect-four/scripts/generate-tts.js`, `connect-four/server/index.js` (`/api/admin/audio/generate`), `connect-four/public/audio/coach/**`
+
+Approval controls **entry into the manifest**, and the manifest is the only thing the client consults (`enqueueIfApproved`). But regenerating a clip overwrites the mp3 **in place at the same path** and flips `status` to `awaiting_approval` **without touching the manifest**. So the slug stays published and the new, unreviewed recording goes live immediately — `awaiting_approval` does not gate playback once a slug has ever been approved. The previously approved recording is gone (recoverable only via `git checkout`).
+
+This is also the mechanism behind the benign registry/manifest drift documented in `docs/architecture/coach-audio-conventions.md`: `generated_at > approved_at` on a manifested slug means "a newer take is live that nobody re-approved".
+
+**Mitigation shipped 2026-07-16**: `generate-tts.js --key <k>` now prompts before overwriting an approved clip and spells this out; the admin UI's per-key generate does not.
+
+**If picked up**: decide whether approval should gate *playback* (remove the slug from the manifest on regenerate, so a regenerated clip goes silent until re-approved) or stay a pure publishing record (current behavior, now at least explicit). Note the first option means a regeneration can silently take a working clip offline — which is why this wasn't changed unilaterally.
+
+## OI-46 — `SocraticScreen`'s `showHint` is sticky, so the `correct` message can never render (and now, never narrates)
+
+**Status**: deferred / open (surfaced 2026-07-16 by the plan critique for OI-43; consciously not fixed there)
+**Area**: `connect-four/src/screens/SocraticScreen.jsx`
+
+`showHint` is `useState(false)`, set `true` by the Hint toolbar button, and **never reset** — not on a phase transition, not on a drop. The coach-message selector short-circuits the phase map entirely:
+
+```js
+const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
+```
+
+So once the student clicks Hint, the bubble is pinned to the hint text for the rest of the exercise: solving the puzzle never shows *"Exactly! You saw it."* — the reward message is unreachable. Since the Socratic narration effect keys off the same expression, that message is now also never **spoken**. The Continue button still appears (it keys off `phase`, not `showHint`), so the exercise is completable and the bug reads as "the coach just stopped reacting".
+
+**Why it wasn't fixed with OI-43**: that change was content plumbing — moving copy out of i18n into lesson JSON. Altering the phase/hint interaction is a behavior change with no test pinning it, and it would have inflated a diff whose whole value was being narrow and verifiable.
+
+**Testing consequence, already applied**: the OI-43 plan's V7 browser pass is deliberately split in two — a Hint-free run that verifies `correct` narration, then a separate Hint run — because a single linear pass that clicks Hint can never reach `correct`. Do not "simplify" it back into one pass.
+
+**If picked up**: the likely fix is one line — `useEffect(() => { setShowHint(false); }, [phase])` — so each phase narrates its own message. Confirm first that hint-then-wrong-move should really drop the hint; the alternative is to let hint and phase messages coexist in the bubble rather than one replacing the other. Related: OI-43, [[project_lesson_progression_audio_traps]].
+
+## OI-47 — `GET /api/games` predates the offset-pagination `id`-tiebreaker finding and is unaudited
+
+**Status**: deferred / open
+**Area**: `connect-four/server/index.js` (`GET /api/games`, offset/limit pagination)
+
+`/api/coach/queue` was fixed to append a unique `id ASC` tiebreaker after its semantic ordering, because `ORDER BY <non-unique columns>` + `OFFSET`/`LIMIT` is nondeterministic when rows share sort-key values (e.g. a batch import stamping many rows with the same `created_at`) — ties can shuffle between pages across separate queries, silently skipping some rows and duplicating others. That rule is documented in `docs/architecture/api-conventions.md`. `GET /api/games` predates the finding and has never been audited against it: it fetches from both `games` and `papergames_games`, sorts/paginates in JS rather than in SQL, so the failure mode may differ from the SQL `OFFSET`/`LIMIT` case — but the underlying risk (a non-unique sort key across a paginated result set) has not been checked.
+
+**If picked up**: verify whether the in-JS sort key used for `/api/games` pagination is unique per row (add an `id` tiebreaker if not), and confirm the two-table merge can't reorder rows across pages independently of the tiebreaker fix.
+
+## OI-48 — Reason engine "Fix 6": a win-forfeiting move is still tagged `drawing_move` upstream
+
+**Status**: deferred / open
+**Area**: blunder-tagging pipeline (upstream of `server/llmCoachHelpers.js`'s `drawing_move` grounding-rule branch)
+
+The `drawing_move` blunder tag is applied whenever the **played** move only draws, even when the **better** move was a forced win — conflating "best draws" with "best WINS". Repro: on an empty/near-empty board, center (col 4, 0-idx 3) is a first-player forced win while col 3/col 5 only draw; playing a drawing column gets tagged `drawing_move`. A text-level patch (Fix 4, 2026-06-25) reworded the grounding rule to stop asserting "not a win for either side," but the tag itself is still assigned by the upstream tagging pipeline without distinguishing "forfeited a win" from "played a genuine draw."
+
+**If picked up**: Fix 6 — categorize a move that forfeits a forced win as a missed-win / outcome-flip case in the upstream blunder-tagging pipeline, not `drawing_move`.
+
+## OI-49 — `/api/puzzles/draw` has no solved/revealed filter; `puzzle_attempts.outcome` enum is partly aspirational
+
+**Status**: deferred / open
+**Area**: puzzle serving (`server/index.js`'s `GET /api/puzzles/draw`) vs. `puzzle_attempts.outcome`
+
+`GET /api/puzzles/draw` filters only on `.eq('category', …)`, `.eq('is_active', true)`, `.not('position','is',null)`, `.order('position')` — it never reads `puzzle_attempts`, so there is no exclusion of already-solved or already-revealed puzzles from the serving pool at all. Meanwhile `puzzle_attempts.outcome` is constrained to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`, but only `'correct_first'` and `'abandoned'` are ever written by any code path (`ChallengeScreen.jsx`) — `'revealed'`, `'correct_retry'`, and `'tied'` are unused. Is the enum aspirational (a filter was planned but never built), or is the intent genuinely "never exclude anything from the pool" (in which case the unused outcomes and their CHECK-constraint entries are dead)?

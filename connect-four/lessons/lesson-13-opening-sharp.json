@@ -82,7 +82,44 @@
     "overlays": [],
     "correctCol": 4,
     "goalPrompt": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
-    "_boardInstructions": "16 plies (3265533353553111): a Third-Row Gambit — Green (first player) has a major third-row threat on the right flank (cols 4-6), Gray has fifth-row compensation on the left flank (cols 1-2). Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified (Allen Diagram 301): col 4 (0-indexed) is the unique positive-scoring column (+2); every other playable column is negative for Green."
+    "_boardInstructions": "16 plies (3265533353553111): a Third-Row Gambit — Green (first player) has a major third-row threat on the right flank (cols 4-6), Gray has fifth-row compensation on the left flank (cols 1-2). Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified (Allen Diagram 301): col 4 (0-indexed) is the unique positive-scoring column (+2); every other playable column is negative for Green.",
+    "messages": {
+      "ask": [
+        {
+          "text": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
+          "mood": "think",
+          "text_es": "Verde domina la tercera fila a la derecha, Gris tiene compensación en la quinta fila a la izquierda. Verde mueve — solo una columna gana. ¿Cuál es?"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly — that column completes Green's third-row threat right now. Every other column throws the win away; this is Allen's 'only one move to win' Third-Row Gambit.",
+          "mood": "happy",
+          "text_es": "Exacto — esa columna completa la amenaza de tercera fila de Verde ahora mismo. Cualquier otra columna desperdicia la victoria; este es el 'Third-Row Gambit' de Allen, la única jugada que gana."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Look at Green's threats on the right flank. Which column completes them right now?",
+          "mood": "think",
+          "text_es": "Mirá las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?"
+        }
+      ]
+    }
   },
   "confirmationCategory": null,
   "confirmationCount": 0,

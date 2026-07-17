@@ -23,4 +23,4 @@ also make select_boards cover those conditions... and the grader skill must be a
 field that isn't in the coverage universe or the glossary/grader is invisible to the eval loop.
 
 **How to apply:** treat "engine field → select_boards predicate → glossary → grader skill" as one
-atomic unit of work in the plan. See [[project_admin_fv_suff_repurposed]], [[project_reason_render_layer]].
+atomic unit of work in the plan. See `docs/architecture/api-conventions.md` §Admin Blunder-Reason Browser Endpoints, [[project_reason_render_layer]].

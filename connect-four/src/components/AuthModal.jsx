@@ -56,7 +56,11 @@ export function AuthModal({ onClose, reason }) {
           <button
             type="button"
             onClick={async () => {
-              clearReturnTo();
+              // Task 21 fix (finding 18): this button COMPLETES sign-in (dev-only stand-in for
+              // Google OAuth) — it must NOT clear a stashed post-login destination the way
+              // handleDismiss does. Doing so silently discarded the import-offer accept's
+              // stashReturnTo('settings') before App.jsx's session-effect could consume it,
+              // stranding the user back on this screen after "signing in".
               try {
                 await fetch(`${API}/api/auth/anonymous`, { method: 'POST', credentials: 'include' });
               } catch { /* ignore */ }

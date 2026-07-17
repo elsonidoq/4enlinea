@@ -28,5 +28,5 @@ There is **no single choke-point**; these are independent implementations. Spec 
 **OpenAI chat** paths (`defaultCallLLM` + `callLLM` + `compute.mjs`) through one helper returning
 `{content, usage}`; Anthropic + TTS are deliberately out of scope. Also: `/api/recommend-move` appears in the
 endpoint doc but is **not a registered route** in index.js — it is CLI-only (`recommend_next_move.mjs`); don't
-treat it as a live prod endpoint. See [[project_explain_system]], [[reference_llm_model_env_vars]],
-[[feedback_calllm_error_handling]].
+treat it as a live prod endpoint. See [[project_explain_system]], `docs/architecture/server-conventions.md` §Environment Variables,
+`docs/architecture/server-conventions.md` §LLM Explanation Scripts.

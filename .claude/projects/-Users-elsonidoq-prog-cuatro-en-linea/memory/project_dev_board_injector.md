@@ -32,4 +32,4 @@ static predicate functions, which never call the solver — several of those boa
 `challenge.quality.undefined`. Any board destined for a solver-backed endpoint (fixtures, deep-links)
 must be a real, non-terminal, solver-verified position — harvest via `gameSampling.js playGame` +
 the production detector (`checkUndercutPredicate` etc.), not hand-copied from a predicate unit test.
-See also [[feedback_no_random_boards]] and CLAUDE.md "When you need a concrete movestring".
+See also `CLAUDE.md` §"When you need a concrete movestring" and CLAUDE.md "When you need a concrete movestring".

@@ -8,11 +8,12 @@
       "mcp__chrome-devtools__list_pages"
     ]
   },
-  "enabledPlugins": {
-    "frontend-design@claude-plugins-official": false,
-    "superpowers@claude-plugins-official": true
-  },
   "worktree": {
     "baseRef": "head"
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": true,
+    "paddle@claude-community": true
   }
 }

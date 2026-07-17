@@ -17,8 +17,9 @@ Exception: `tracks` uses `bigserial` because it is append-only and never referen
 
 **MUST**: Categories are stored as `text` slugs, not integers (first established by migration 011, which replaced integer category columns; extended to the current 11 slugs by migration 015).
 Valid slugs: `immediate_threat`, `forced_block`, `double_threat`, `forced_win`, `forbidden_columns`, `odd_even_threat`, `z_threat`, `claimeven`, `undercut`, `overcut`, `figure_7`, `j_shape`.
-Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_category_check` constraint. `'unknown'` is used when the post-game review classifier returns no pattern. The full valid set for the `blunders` table is:
-`'immediate_threat'`, `'forced_block'`, `'double_threat'`, `'forced_win'`, `'forbidden_columns'`, `'z_threat'`, `'claimeven'`, `'undercut'`, `'overcut'`, `'figure_7'`, `'j_shape'`, `'unknown'`.
+Migration 027 added `'unknown'` as a valid slug in the `blunders_pattern_category_check` constraint, used when the post-game review classifier returned no pattern. Migration `052_blunders_parity_threat_tags.sql` (the latest migration touching this constraint) **dropped `'unknown'`** and widened the set for the three parity-aware threat tags. The current valid set for the `blunders` table is:
+`'immediate_threat'`, `'forced_block'`, `'forced_win'`, `'double_threat'`, `'undercut'`, `'overcut'`, `'figure_7'`, `'j_shape'`, `'z_threat'`, `'odd_even_threat'`, `'claimeven'`, `'claimodd'`, `'major_threat_parity'`, `'major_threat_nonparity'`, `'minor_threat'`, `'drawing_move'`, `'suboptimal_move'`, `'forbidden_columns'`.
+The catch-all for unclassified blunders is `'suboptimal_move'` — `'unknown'` is never written. This CHECK-constraint set is broader than (and a superset of) `server-conventions.md`'s Blunder Tag Registry (`VALID_BLUNDER_TAGS`, exactly 16 tags): it also allows `'claimodd'` and `'odd_even_threat'`, retained here only so historical rows stay valid, per migration 052's comment ("Existing allowed values (odd_even_threat, claimodd) are retained so historical rows stay valid"). Neither is written by current code.
 
 Migration 028 added `severity INTEGER NOT NULL DEFAULT 0` to the `blunders` table. Value is `round((best_score − score) / 36 * 10)`, normalized to [0, 10]: 36 is the maximum possible spread on a 7×6 board (from +18 to −18), and the result is scaled to 10. Computed at insert time from the solver scores that are already in scope. Legacy rows default to 0. Never recompute on read — the solver may be unavailable for positions past a winning move. An index on `(user_id, severity DESC) WHERE resolved_at IS NULL` supports the queue endpoint's `ORDER BY severity DESC` without a full table scan.
 
@@ -123,7 +124,9 @@ writes go through `server/llmUsageLedger.js`'s `recordUsage(...)`, never a direc
 
 **Lifecycle — append-only, contrasted with `explanation_cache`**: `llm_usage` is **never truncated or
 purged by deploy** — this is the defining difference from `explanation_cache`, which the deploy
-pipeline `TRUNCATE`s before each release (memory `project_spec039_audio_interactive_coach`). No
+pipeline `TRUNCATE`s before each release (rows cached before a `deep_reveal_json` shape change — e.g.
+the addition of `terms` — error out on read, so the cache must be cleared as part of any deploy that
+changes that shape). No
 migration or deploy script may add a `TRUNCATE`/`DELETE` against `llm_usage`; it is a permanent,
 growing cost ledger, not a cache to be invalidated on redeploy.
 
@@ -325,7 +328,17 @@ The `explorer` screen was removed. `ReviewScreen` now routes all non-optimal mov
 
 **MUST**: `puzzles.interaction_mode` is `'single_move'` or `'sequence'`. Currently, `forced_win` is the only `sequence`-mode category. All others are `single_move`.
 
+`interaction_mode` is set automatically by the approve endpoint (`connect-four/server/index.js:3224,3290`: `interaction_mode: candidate.category === 'forced_win' ? 'sequence' : 'single_move'`). Do not set it manually in puzzle data — it is always derived from `category` at approval time, not authored.
+
 ## Correct Column Storage
 
 `puzzles.correct_col` and `candidates.correct_col` store the 0-indexed correct column for categories where it is computed at generation time (`claimeven`, `figure_7`, `j_shape`).
 `z_threat` and `undercut`/`overcut` store their answer inside `highlight_metadata` (column or cells array with role annotations).
+
+**`claimeven` puzzle format:** single-move, Black (player 2) to move. The correct answer is the column Red (player 1) played in on the previous move — the UI highlights Red's last-played cell with the `trigger` highlight role so the learner sees why that column is the answer. **No uniqueness enforcement**: positions where multiple columns are independently valid claimeven responses are acceptable (unlike `z_threat`/`overcut`, which require exactly one correct column — see `server-conventions.md` §Generation-quality guards).
+
+## Puzzle Attempts — `outcome` values and the serving pool
+
+`puzzle_attempts.outcome` is constrained (migration `003_puzzles.sql`) to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`.
+
+See `docs/open_issues.md` OI-49 for the open question of whether the serving pool should filter on this column — currently it does not.

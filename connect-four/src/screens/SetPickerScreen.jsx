@@ -8,9 +8,40 @@ import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
+// Anonymous progress is derived entirely from the LOCAL store — anon puzzle
+// attempts are written to IndexedDB (IndexedDBStore#recordPuzzleAttempt) and
+// never reach the server, so a server-side read for an anon caller always
+// returns empty. `/api/puzzles` is public static puzzle metadata (id →
+// category), not per-user state, so consulting it to bucket the local
+// attempts by category is not a "server round trip for progress" in the
+// sense this fix removes.
+function buildLocalProgress(allCounts, puzzleCategoryMap, attempts) {
+  const attemptedByCategory = {};
+  const correctByCategory = {};
+  for (const a of attempts) {
+    const cat = puzzleCategoryMap[a.puzzle_id];
+    if (!cat) continue;
+    if (!attemptedByCategory[cat]) attemptedByCategory[cat] = new Set();
+    if (!correctByCategory[cat]) correctByCategory[cat] = new Set();
+    attemptedByCategory[cat].add(a.puzzle_id);
+    if (a.first_attempt_correct) correctByCategory[cat].add(a.puzzle_id);
+  }
+
+  const progress = {};
+  for (const slug of Object.keys(allCounts)) {
+    const total = allCounts[slug] ?? 0;
+    const attempted = attemptedByCategory[slug]?.size || 0;
+    const correct = correctByCategory[slug]?.size || 0;
+    const accuracy = attempted > 0 ? correct / attempted : 0;
+    const cleared = correct >= total && total > 0;
+    progress[slug] = { attempted, correct, total, accuracy, cleared };
+  }
+  return { progress };
+}
+
 export function SetPickerScreen({ go, goBack }) {
   const { t } = useTranslation();
-  const { session } = useStore();
+  const { session, store } = useStore();
   const handleUpgrade = useUpgradeCheckout();
   const isAuthenticated = !!session;
   const [sets, setSets] = useState([]);
@@ -25,11 +56,12 @@ export function SetPickerScreen({ go, goBack }) {
         const fetches = [
           fetch(`${API}/api/puzzles/counts`),
         ];
+        let progressFetchIndex = null;
         if (isAuthenticated) {
+          progressFetchIndex = fetches.length;
           fetches.push(
             fetch(`${API}/api/user/challenge-progress`, {
               credentials: 'include',
-              headers: { Authorization: `Bearer ${session.access_token}` },
             }),
           );
         }
@@ -43,12 +75,34 @@ export function SetPickerScreen({ go, goBack }) {
         setSets(allSets.filter(s => (allCounts[s.slug] ?? 0) > 0));
         setCounts(allCounts);
 
-        if (isAuthenticated && results[1]) {
+        if (isAuthenticated) {
+          if (progressFetchIndex !== null && results[progressFetchIndex]) {
+            try {
+              const progressData = await results[progressFetchIndex].json();
+              setProgressData(progressData);
+            } catch (err) {
+              console.error('Failed to fetch challenge progress', err);
+              setProgressData(null);
+            }
+          }
+        } else {
+          // Anonymous: read progress from the local store (see
+          // buildLocalProgress above) instead of the server.
           try {
-            const progressData = await results[1].json();
-            setProgressData(progressData);
+            const [puzzlesRes, attempts] = await Promise.all([
+              fetch(`${API}/api/puzzles`),
+              store.getAllPuzzleAttempts(),
+            ]);
+            const puzzlesData = await puzzlesRes.json();
+            const puzzleCategoryMap = {};
+            for (const cat of puzzlesData.categories || []) {
+              for (const p of cat.puzzles || []) {
+                puzzleCategoryMap[p.id] = cat.id;
+              }
+            }
+            setProgressData(buildLocalProgress(allCounts, puzzleCategoryMap, attempts));
           } catch (err) {
-            console.error('Failed to fetch challenge progress', err);
+            console.error('Failed to compute local challenge progress', err);
             setProgressData(null);
           }
         }
@@ -59,7 +113,7 @@ export function SetPickerScreen({ go, goBack }) {
       }
     }
     fetchData();
-  }, [isAuthenticated, session?.access_token]);
+  }, [isAuthenticated]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>

@@ -34,6 +34,8 @@
 
 [cloud_provider_research.md](cloud_provider_research.md) — VPS vs PaaS vs Serverless trade-offs for a solver-heavy app — choosing a cloud provider
 
+[payment_provider_research.md](payment_provider_research.md) — **CANONICAL** — why Paddle (MoR) and not Stripe/PayPal/2Checkout/dLocal/Lemon Squeezy for charging global consumers from Argentina; fees, Argentine export/FX rules, refuted claims — touching payments, billing, or the checkout provider
+
 [launch_tactic.md](launch_tactic.md) — go-to-market plan for DecodeC4 MVP, retention metric gate (7-day unprompted return) — understanding launch success criteria
 
 [lean_app_development_to_profitability.md](lean_app_development_to_profitability.md) — stage-gated framework (ideation → validation → build → launch) for lean startup execution — product strategy and prioritisation decisions
@@ -53,6 +55,8 @@
 [architecture/gap-report.md](architecture/gap-report.md) — unresolved architectural questions (goal_predicate_params, cooperative_ai_moves, user_player, classifier/predicate separation) — investigating unexplained columns or implicit design choices
 
 [architecture/server-conventions.md](architecture/server-conventions.md) — solver IPC modes (persistent vs one-shot), move string format, board representation — touching c4solver integration or board-level server code
+
+[architecture/coach-audio-conventions.md](architecture/coach-audio-conventions.md) — the `coach.spoken.*` (intent to voice, sole TTS-eligible namespace) vs `coach.ui.*` (screen chrome, never synthesized) split: the slug derivation's three copies, why the registry and audio manifest can drift, why `--scan-only` destroys approval state — adding any `coach.` i18n string or touching TTS generation
 
 [architecture/lesson-editor.md](architecture/lesson-editor.md) — in-app admin tool at `/admin/lessons` for visually authoring lesson JSON: movestring-driven boards, overlay placement, hot-reload preview, component map, and gotchas — adding lesson editor features or debugging the authoring workflow
 

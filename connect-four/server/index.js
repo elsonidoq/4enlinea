@@ -41,15 +41,19 @@ import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvS
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
 import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
-import { buildGoogleAuthorizeUrl } from './authUtils.js';
+import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
 import { logError } from './logger.js';
 import { computeThreatCells, computePatternCells, buildBlunderDetailResponse, fetchBlunderDetailContext } from './blunderDetailResponse.js';
 import { guardExplainMovePayload, guardExplainMoveLlmPayload } from './reasonRenderGuard.mjs';
 import { localeMiddleware, serverT, resolveTtsLocale } from './locale.mjs';
 import { resolveAdminLang } from './adminAudioLang.mjs';
 import { buildTtsInstructions } from './ttsInstructions.mjs';
+import { readTtsConfig, writeTtsConfig, VALID_TTS_VOICES, VALID_TTS_MODELS, DEFAULT_TTS_MODEL } from './ttsConfig.mjs';
+import { validatePreviewRequest } from './ttsPreviewValidation.mjs';
+import { SUPPORTED_LOCALES } from './locale.mjs';
 import { registryPathForLang, audioDirForLang, manifestPathForLang } from '../scripts/generate-tts.js';
 import { buildCacheFilter } from './explainCacheKey.mjs';
+import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -200,13 +204,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 // ── Input validation ──────────────────────────────────────────────────────────
 
-const MOVES_RE = /^[0-6]{0,42}$/;
-
-function validateMoves(moves) {
-  if (typeof moves !== 'string') return 'moves must be a string';
-  if (!MOVES_RE.test(moves)) return 'moves must be 0–42 characters of digits 0–6';
-  return null;
-}
+import { MOVES_RE, validateMoves } from './validateMoves.mjs';
 
 // ── Solver process ────────────────────────────────────────────────────────────
 
@@ -455,10 +453,7 @@ app.post('/api/auth/anonymous', async (req, res) => {
 
 async function loadUser(req, _res, next) {
   req.user = null;
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : req.cookies?.sb_access_token;
+  const token = resolveAuthToken(req.headers.authorization, req.cookies);
 
   if (!token || !supabase) return next();
 
@@ -510,15 +505,15 @@ async function checkAndDecrementQuota(user) {
 
   const now = new Date();
 
-  // Treat null deep_reveal_reset_at as already expired
+  // Treat null deep_reveal_reset_at as already expired — shared with peekQuota
+  // via quotaLimits.js so the reset/normalize rule exists in exactly one place.
   const resetAtRaw = user.deep_reveal_reset_at;
-  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
+  const resetAt = resolveResetAt({ resetAt: resetAtRaw });
 
   // Reset quota if past the weekly reset time (or null)
-  let count = user.deep_reveal_count ?? 0;
+  let count = effectiveDeepRevealCount({ count: user.deep_reveal_count, resetAt: resetAtRaw, now });
   let resetsAt;
-  if (now > resetAt) {
-    count = 0;
+  if (isPastReset({ resetAt: resetAtRaw, now })) {
     const nextMonday = nextMondayUtcMidnight(now);
     resetsAt = nextMonday.toISOString();
     await supabase
@@ -529,7 +524,7 @@ async function checkAndDecrementQuota(user) {
     resetsAt = resetAt.toISOString();
   }
 
-  if (count >= 5) return { allowed: false, resetsAt };
+  if (count >= FREE_DEEP_REVEAL_WEEKLY_LIMIT) return { allowed: false, resetsAt };
 
   await supabase
     .from('users')
@@ -539,24 +534,9 @@ async function checkAndDecrementQuota(user) {
   return { allowed: true, resetsAt };
 }
 
-// Read-only quota check — same logic as checkAndDecrementQuota but WITHOUT any
-// write. Used as an early gate (before the expensive LLM compute) so an
-// over-quota free user gets the paywall immediately instead of watching the
-// deep reveal "compute" first, then getting 429. checkAndDecrementQuota still
-// performs the real decrement afterwards (only on an actual blunder).
-function peekQuota(user) {
-  if (!user) return { allowed: false, reason: 'anonymous' };
-  if (user.tier === 'paid') return { allowed: true };
-  if (user.tier !== 'free') return { allowed: false, reason: 'anonymous' };
-
-  const now = new Date();
-  const resetAtRaw = user.deep_reveal_reset_at;
-  const resetAt = (resetAtRaw === null || resetAtRaw === undefined) ? new Date(0) : new Date(resetAtRaw);
-  // Past the weekly reset (or null) → the count would reset to 0, so it's allowed.
-  const count = now > resetAt ? 0 : (user.deep_reveal_count ?? 0);
-  if (count >= 5) return { allowed: false, resetsAt: resetAt.toISOString() };
-  return { allowed: true };
-}
+// peekQuota (read-only quota check, no write) now lives in quotaLimits.js —
+// imported above — so index.js and quotaLimits.js's tests exercise the exact
+// same function instead of two independently-maintained copies of the rule.
 
 // ── LLM explanation composer ──────────────────────────────────────────────────
 
@@ -642,7 +622,8 @@ app.get('/api/papergames/tournament/open', async (req, res) => {
 // ── Lesson routes (FR-033, FR-034, FR-035 — no auth required) ─────────────────
 app.get('/api/lessons', (req, res) => res.json(getLessons()));
 app.get('/api/lessons/:id', (req, res) => {
-  const lesson = getLesson(req.params.id);
+  const locale = req.locale ?? 'en';
+  const lesson = getLesson(req.params.id, locale);
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   res.json(lesson);
 });
@@ -891,10 +872,19 @@ app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) 
 // Requires requireLocalhost — the function declaration below (~:2795 in this file)
 // is hoisted, so it is safe to reference here at module init time.
 app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
-  const lesson = getLesson(req.params.id);
+  const rawLang = req.body?.lang;
+  if (rawLang !== undefined && !SUPPORTED_LOCALES.includes(rawLang)) {
+    return res.status(400).json({ error: `lang must be one of: ${SUPPORTED_LOCALES.join(', ')}` });
+  }
+  const lang = rawLang ?? 'en';
+
+  // D1: getLesson() applies localizeLesson, which STRIPS all `_es` fields — using it
+  // here would both feed generateLessonAudio(lang='es') empty text_es AND destroy
+  // every _es field on save. This endpoint must read/write the RAW lesson object.
+  const lesson = getLessonsAll().find(l => l.id === req.params.id) ?? null;
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   try {
-    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson);
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson, { lang });
     saveLessonFile(LESSONS_DIR, updatedLesson);
     reloadLessons();
     res.json({ lesson: updatedLesson, generated, failed });
@@ -941,9 +931,8 @@ app.get('/api/admin/puzzles', requireLocalhost, requireAdmin, async (req, res) =
 
 app.post('/api/scores', async (req, res) => {
   const { moves, depth, difficulty } = req.body;
-  if (typeof moves !== 'string') {
-    return res.status(400).json({ error: 'moves must be a string' });
-  }
+  const movesErr = validateMoves(moves);
+  if (movesErr) return res.status(400).json({ error: movesErr });
   // When `difficulty` is present the caller is the sparring AI: we return the
   // chosen column (see chooseSparringMove) alongside the scores. The hint path
   // omits `difficulty` and gets scores only.
@@ -1701,7 +1690,7 @@ app.patch('/api/challenge-sessions/:id/advance', async (req, res) => {
 
 /**
  * Navigate a nested translations object by dot-separated prefix and return
- * a randomly chosen full key string (e.g. 'coach.immediate_threat.optimal.0').
+ * a randomly chosen full key string (e.g. 'coach.spoken.immediate_threat.optimal.0').
  * Returns null if the prefix resolves to a non-object or empty object.
  */
 /**
@@ -1786,7 +1775,7 @@ app.post('/api/evaluate-move/inline', async (req, res) => {
     const phrasePoolKey = category || patternTag;
 
     const coachPhraseKey = phrasePoolKey
-      ? pickFromPool(i18nTranslations, `coach.${phrasePoolKey}.${quality}`)
+      ? pickFromPool(i18nTranslations, `coach.spoken.${phrasePoolKey}.${quality}`)
       : null;
 
     const summaryLineKey = phrasePoolKey
@@ -2202,8 +2191,8 @@ app.post('/api/games/analyze', async (req, res) => {
       // mistakes exist even if there are zero blunders — a game with 0 blunders and
       // >=1 suboptimal move is still a game with mistakes.
       const phrasePool = (cBlunder === 0 && cSuboptimal === 0)
-        ? 'coach.sparring.review.clean'
-        : 'coach.sparring.review.mistakes';
+        ? 'coach.spoken.sparring.review.clean'
+        : 'coach.spoken.sparring.review.mistakes';
       const cSummaryKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
       return res.json({
@@ -2355,8 +2344,8 @@ app.post('/api/games/analyze', async (req, res) => {
   // FR-006: same rule as the cached branch above — 0 blunders + >=1 suboptimal is
   // still a game with mistakes, never "clean"/"no mistakes to review."
   const phrasePool = (blunderCount === 0 && suboptimalCount === 0)
-    ? 'coach.sparring.review.clean'
-    : 'coach.sparring.review.mistakes';
+    ? 'coach.spoken.sparring.review.clean'
+    : 'coach.spoken.sparring.review.mistakes';
   const summaryPhraseKey = pickFromPool(i18nTranslations, phrasePool) ?? `${phrasePool}.0`;
 
   res.json({
@@ -2934,8 +2923,24 @@ app.post('/api/admin/generate', requireLocalhost, async (req, res) => {
       category_evidence: c.category_evidence ?? null,
       correct_col: c.correct_col ?? null,
     }));
-    const { error } = await supabase.from('candidates').insert(rows);
-    if (error) { logError('[admin/generate]', error); return res.status(500).json({ error: 'internal error' }); }
+    // Task 26 (finding 23): a transient dropped DB connection previously aborted the whole
+    // category with 0 inserted after an expensive generateCandidates() run. Bounded retry with
+    // exponential backoff (3 attempts, 500ms/1000ms) survives a blip instead of losing the
+    // batch. Do NOT retry solver calls (generateCandidates() above) — that's a different
+    // failure (IPC deadlock under concurrent load, memory project_integration_test_slowness)
+    // with a different fix; only this insert is retried.
+    const MAX_INSERT_ATTEMPTS = 3;
+    let insertError = null;
+    for (let attempt = 1; attempt <= MAX_INSERT_ATTEMPTS; attempt++) {
+      const { error } = await supabase.from('candidates').insert(rows);
+      if (!error) { insertError = null; break; }
+      insertError = error;
+      logError(`[admin/generate] insert attempt ${attempt}/${MAX_INSERT_ATTEMPTS} failed`, error);
+      if (attempt < MAX_INSERT_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 500 * attempt));
+      }
+    }
+    if (insertError) { logError('[admin/generate]', insertError); return res.status(500).json({ error: 'internal error' }); }
   }
 
   res.json({
@@ -3478,8 +3483,6 @@ function keyToAudioSlug(key) {
   return key.replace(/[._]/g, '--');
 }
 
-const TTS_PROMPT_PATH = join(__dirname, 'tts-prompt.json');
-
 // Coach text source per language, keyed by the same `lang` values threaded
 // through the admin audio endpoints below.
 const COACH_SOURCES = { en: i18nTranslations, es: i18nTranslationsEs };
@@ -3502,31 +3505,6 @@ function resolveCoachText(key, lang) {
   } catch {
     return '';
   }
-}
-
-const VALID_TTS_VOICES = ['alloy','ash','coral','echo','fable','nova','onyx','sage','shimmer'];
-// gpt-4o-mini-tts is the default: it's the only model that honors the `instructions`
-// field (tts-1/tts-1-hd ignore it and always speak with a baked-in American-English
-// accent, regardless of the input text's language).
-const VALID_TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
-const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
-
-function readTtsConfig() {
-  try {
-    const data = JSON.parse(readFileSync(TTS_PROMPT_PATH, 'utf8'));
-    return {
-      prompt: data.prompt || '',
-      speed: typeof data.speed === 'number' ? data.speed : 1.0,
-      voice: VALID_TTS_VOICES.includes(data.voice) ? data.voice : 'alloy',
-      model: VALID_TTS_MODELS.includes(data.model) ? data.model : DEFAULT_TTS_MODEL,
-    };
-  } catch {
-    return { prompt: '', speed: 1.0, voice: 'alloy', model: DEFAULT_TTS_MODEL };
-  }
-}
-
-function writeTtsConfig(prompt, speed, voice, model) {
-  writeFileSync(TTS_PROMPT_PATH, JSON.stringify({ prompt, speed, voice, model }, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -3576,7 +3554,7 @@ function writeTtsManifest(entries, lang = 'en') {
 
 // GET /api/admin/audio/prompt — returns the current TTS config (prompt + speed)
 app.get('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
-  res.json(readTtsConfig());
+  res.json(readTtsConfig(resolveAdminLang(req.query.lang)));
 });
 
 // POST /api/admin/audio/prompt — saves TTS config (prompt + speed + voice + model)
@@ -3594,7 +3572,7 @@ app.post('/api/admin/audio/prompt', requireLocalhost, (req, res) => {
   if (!VALID_TTS_MODELS.includes(resolvedModel)) {
     return res.status(400).json({ error: `model must be one of: ${VALID_TTS_MODELS.join(', ')}` });
   }
-  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel);
+  writeTtsConfig(prompt, parsedSpeed, voice, resolvedModel, resolveAdminLang(req.body?.lang));
   res.json({ ok: true });
 });
 
@@ -3651,7 +3629,7 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
     const instructions = buildTtsInstructions(basePrompt, lang);
     console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
     const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
@@ -3670,19 +3648,61 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
   }
 });
 
-// POST /api/admin/audio/generate-all — synthesize all needs_audio keys
+// POST /api/admin/audio/preview — TTS sandbox: synthesize arbitrary text with
+// experimental voice params and stream the mp3 straight back.
+//
+// Deliberately WRITES NOTHING — no mp3 on disk, no registry entry, no manifest
+// change, no config write. The registry/manifest/file trio already drifts; a
+// sandbox that wrote would be a fourth drift source. Instructions are routed
+// through buildTtsInstructions(prompt, lang) so the owner tunes against the
+// exact instruction string production uses (for `es` that appends
+// SPANISH_ACCENT_DIRECTIVE). Uncached by design: one real API call per click is
+// the point — you cannot hear a change you did not synthesize.
+app.post('/api/admin/audio/preview', requireLocalhost, async (req, res) => {
+  const validation = validatePreviewRequest(req.body);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const { text, prompt, speed, voice, model } = validation.value;
+  const lang = resolveAdminLang(req.body?.lang);
+
+  try {
+    const { synthesize } = await import('./ttsProvider.js');
+    const instructions = buildTtsInstructions(prompt, lang);
+    console.log(`[admin/audio/preview] lang=${lang} voice=${voice} speed=${speed} model=${model} chars=${text.length}`);
+    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    res.type('audio/mpeg').send(audio);
+  } catch (err) {
+    logError('[admin/audio/preview]', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+// POST /api/admin/audio/generate-all — synthesize keys in bulk.
+//
+// scope: 'new' (default) synthesizes only needs_audio keys — the cheap, additive
+// pass. scope: 'all' re-synthesizes every eligible key, including ones already
+// approved, and is the only way to roll a voice/prompt/speed change out to
+// existing clips: audio is cached by slug, so a config change alone never
+// re-renders anything. It is a full-cost pass — one paid TTS call per key.
 app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
   const lang = resolveAdminLang(req.body?.lang);
+  const scope = req.body?.scope === undefined ? 'new' : req.body.scope;
+  if (scope !== 'new' && scope !== 'all') {
+    return res.status(400).json({ error: "scope must be 'new' or 'all'" });
+  }
   try {
     const registry = readTtsRegistry(lang);
-    const needsAudio = registry.filter(e => e.status === 'needs_audio');
+    const needsAudio = scope === 'all'
+      ? registry.filter(e => e.status !== 'ineligible')
+      : registry.filter(e => e.status === 'needs_audio');
 
     if (needsAudio.length === 0) {
       return res.json({ generated: 0, failed: 0, message: 'No keys need audio generation' });
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
     const instructions = buildTtsInstructions(basePrompt, lang);
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
@@ -3690,7 +3710,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed} model=${model})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (scope=${scope} lang=${lang} voice=${voice} speed=${speed} model=${model})`);
 
     for (const entry of needsAudio) {
       try {
@@ -3874,7 +3894,7 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     }
 
     const { synthesizeStream } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig();
+    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(locale);
     const instructions = buildTtsInstructions(basePrompt, locale);
 
     let ttsResponse;

@@ -54,6 +54,6 @@ Cross-cutting principle (from the v2 sufficiency run): **a confidently-wrong fie
 absent one** — Condition B (fields stripped) abstains; Conditions A/C with misleading fields fabricate
 at high confidence. Prune/verify aggressively; absence is safer than a plausible-but-wrong value.
 
-Related: [[feedback_feature_vector_design]], [[project_explain_prompt_grounding_traps]],
-the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[reference_c4solver_scores]],
+Related: [[feedback_feature_vector_design]], `docs/architecture/server-conventions.md` §Explain Context,
+the retired old-explain eval (reason eval is now `compute.mjs`, D22), [[reference_c4solver]],
 [[reference_cat5_forced_block_detection]].

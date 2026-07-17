@@ -12,7 +12,7 @@ originSessionId: 5719c43c-8011-4e5d-a333-7894384b241b
 - Service role/secret key: `sb_secret_...` (used as SUPABASE_SERVICE_ROLE_KEY)
 - Old JWT format (`eyJ...`) is under "Legacy anon, service_role API keys" tab in Settings → API Keys
 
-**This project has a REMOTE Supabase instance only — no local Supabase.** There is no `supabase start` / local setup. All migrations must be applied via psql against the remote pooler.
+> **Correction (2026-07-16):** this file used to claim *"This project has a REMOTE Supabase instance only — no local Supabase. There is no `supabase start`"*. **That was FALSE and self-contradicted by the env table below**, which has always listed a `local` row. Local Supabase DOES exist (`supabase start`, `supabase db reset`) — see §Local Supabase.
 
 **There are THREE distinct environments — do not mix them up (easy way to hit the WRONG DB):**
 | Env | File | SUPABASE_URL host / project ref | DATABASE_URL pooler |
@@ -61,6 +61,21 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 "
 ```
 
+
+---
+
+## Local Supabase (merged from `project_local_supabase_setup`)
+
+Local Supabase runs at `http://127.0.0.1:54321` (DB on 54322, Studio 54323, Mailpit 54324).
+
+- **THE key trap — `SUPABASE_SERVICE_ROLE_KEY` must be the JWT-format key locally** (`eyJ...`, from `supabase status`), **NOT** the `sb_secret_*` key that the REMOTE envs use. PostgREST decodes the JWT to read `role: service_role`; `sb_secret_*` is an opaque token it cannot parse, so it silently falls back to the `anon` role → **42501 permission denied** on every insert. (This is why the key-format note at the top of this file applies to remote only.)
+- `SUPABASE_URL` must be `http://127.0.0.1:54321` — **not** the storage S3 URL (`/storage/v1/s3`).
+- `VITE_SUPABASE_ANON_KEY` = the `sb_publishable_...` key from `supabase status`.
+- Emails go to **Mailpit** at `http://127.0.0.1:54324` — never sent externally.
+- `supabase/config.toml` IS committed (so `supabase start` works without `supabase init`); `supabase/migrations/` is **NOT** — `connect-four/server/migrations/` is the source of truth.
+- **Workflow:** `supabase db reset` (wipes) → run the migration script → `npm run dev`. No migration tracking needed locally; reset starts from zero.
+- **Grants:** local Supabase does not auto-grant, and `040_service_role_grants.sql` is **NOT exhaustive** — the trail is `040` (main batch) + `046`/`048` (papergames) + `055` (`stripe_events`/`tracks`). A new table must include its own `GRANT ... TO anon, authenticated` / `service_role` in its creation migration; don't rely on a `040`-style catch-all. (Full list: `docs/architecture/db-schema.md`.) **Matchable symptom:** `GET /api/games` → `{"error":"permission denied for table papergames_games"}` is fixed by migration `046_papergames_games_grants.sql` (`GRANT SELECT ON public.papergames_games TO anon, authenticated`).
+- **Production/staging Supabase config IS modifiable** via the dashboard — do not assume it's off-limits and code a workaround. If a feature is disabled by default (aggregate functions, `max_rows`), propose enabling it.
 
 ---
 

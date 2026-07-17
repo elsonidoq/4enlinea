@@ -22,12 +22,18 @@ function syncLegend(overlays, legendItems) {
  *   slide: { movestring, overlays, coachMessages, legendItems, infoProse }
  *   index: number
  *   total: number
+ *   lang: 'en' | 'es' — which sibling fields (text/text_es, label/label_es,
+ *     infoProse/infoProse_es) to display and edit. Non-translatable fields
+ *     (movestring, overlays) are unaffected. Defaults to 'en'.
  *   onChange: (updatedSlide) => void
  *   onMoveUp: () => void
  *   onMoveDown: () => void
  *   onDelete: () => void
  */
-export default function SlideEditor({ slide, index, total, onChange, onMoveUp, onMoveDown, onDelete }) {
+export default function SlideEditor({ slide, index, total, lang = 'en', onChange, onMoveUp, onMoveDown, onDelete }) {
+  const suffix = lang === 'es' ? '_es' : '';
+  const fk = (base) => `${base}${suffix}`;
+
   // Auto-sync legend when overlays change
   useEffect(() => {
     const synced = syncLegend(slide.overlays, slide.legendItems);
@@ -54,7 +60,7 @@ export default function SlideEditor({ slide, index, total, onChange, onMoveUp, o
   }
 
   function updateLegendLabel(i, label) {
-    const items = slide.legendItems.map((li, j) => j === i ? { ...li, label } : li);
+    const items = slide.legendItems.map((li, j) => j === i ? { ...li, [fk('label')]: label } : li);
     onChange({ ...slide, legendItems: items });
   }
 
@@ -85,13 +91,13 @@ export default function SlideEditor({ slide, index, total, onChange, onMoveUp, o
 
       {/* Coach messages */}
       <div>
-        <div style={label}>Coach messages</div>
+        <div style={label}>Coach messages{lang === 'es' ? ' (Español)' : ''}</div>
         {slide.coachMessages.map((msg, i) => (
           <div key={i} style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
             <input
-              value={msg.text}
-              onChange={e => updateCoachMessage(i, 'text', e.target.value)}
-              placeholder="Coach message text"
+              value={msg[fk('text')] ?? ''}
+              onChange={e => updateCoachMessage(i, fk('text'), e.target.value)}
+              placeholder={lang === 'es' ? '(no Spanish translation yet)' : 'Coach message text'}
               style={{ ...input, flex: 1 }}
             />
             <select value={msg.mood} onChange={e => updateCoachMessage(i, 'mood', e.target.value)} style={{ padding: '6px', borderRadius: 6, border: '1px solid #444', background: '#111', color: '#fff' }}>
@@ -106,15 +112,15 @@ export default function SlideEditor({ slide, index, total, onChange, onMoveUp, o
       {/* Legend items (auto-synced, labels editable) */}
       {slide.legendItems.length > 0 && (
         <div>
-          <div style={label}>Legend</div>
+          <div style={label}>Legend{lang === 'es' ? ' (Español)' : ''}</div>
           {slide.legendItems.map((li, i) => (
             <div key={li.type} style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#aaa', width: 48 }}>{li.type}</span>
               <input
-                value={li.label}
+                value={li[fk('label')] ?? ''}
                 onChange={e => updateLegendLabel(i, e.target.value)}
                 style={{ ...input, flex: 1 }}
-                placeholder="Legend label"
+                placeholder={lang === 'es' ? '(no Spanish translation yet)' : 'Legend label'}
               />
             </div>
           ))}
@@ -123,13 +129,13 @@ export default function SlideEditor({ slide, index, total, onChange, onMoveUp, o
 
       {/* infoProse */}
       <div>
-        <div style={label}>Info prose</div>
+        <div style={label}>Info prose{lang === 'es' ? ' (Español)' : ''}</div>
         <textarea
-          value={slide.infoProse ?? ''}
-          onChange={e => updateField('infoProse', e.target.value)}
+          value={slide[fk('infoProse')] ?? ''}
+          onChange={e => updateField(fk('infoProse'), e.target.value)}
           rows={3}
           style={{ ...input, resize: 'vertical' }}
-          placeholder="Explanatory text shown below the board"
+          placeholder={lang === 'es' ? '(no Spanish translation yet)' : 'Explanatory text shown below the board'}
         />
       </div>
     </div>

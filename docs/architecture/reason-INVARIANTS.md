@@ -152,4 +152,4 @@ generalizes:
    test.
 
 This is the enforced, local form of `feedback_eval_design_methodology` (counterexamples, not
-averages) and `feedback_prework_discipline`.
+averages) and `feedback_process_and_agent_preferences` (prework discipline).

@@ -1,5 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { KB_TERM_LESSON } from '../lib/kbTermLesson.js';
+import { useTranslation } from 'react-i18next';
+
+// A raw KB slug ("community-z-threat", "immediate_threat", …) must never reach the
+// user (finding 10). humanize() is the LAST-RESORT fallback when a slug has no
+// kb.term.<kbId> i18n entry yet: strip the community- prefix, replace -/_ with
+// spaces, title-case what's left.
+function humanize(kbId) {
+  const stripped = kbId.replace(/^community-/, '');
+  return stripped
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
 
 /**
  * Position-fixed popup for KB term definitions.
@@ -28,6 +39,7 @@ export function KbTermPopup({
   onClose,
   navigate,
 }) {
+  const { t } = useTranslation();
   const popupRef = useRef(null);
 
   // Close on outside tap.
@@ -48,20 +60,22 @@ export function KbTermPopup({
     };
   }, [onClose]);
 
-  const entry = KB_TERM_LESSON[kbId];
-  const displayName = entry?.displayName ?? kbId;
+  // T13 (finding 10): displayName is i18n-driven so it also localizes in Spanish
+  // mode — KB_TERM_LESSON's own `displayName` field is English-only and is used
+  // here only as a source for lessonId/practiceCategory, not for the label.
+  const displayName = t(`kb.term.${kbId}`, { defaultValue: humanize(kbId) });
 
   // Determine CTA
   let ctaLabel = null;
   let ctaAction = null;
   if (lessonId && !lessonCompleted) {
-    ctaLabel = 'Go to lesson';
+    ctaLabel = t('kb.cta.lesson');
     ctaAction = () => {
       onClose();
       navigate('concept', { lessonId });
     };
   } else if (practiceCategory && lessonCompleted) {
-    ctaLabel = 'Go to practice';
+    ctaLabel = t('kb.cta.practice');
     ctaAction = () => {
       onClose();
       navigate('challenge', { category: practiceCategory });

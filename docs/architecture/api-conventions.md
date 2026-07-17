@@ -62,6 +62,12 @@ Registered by `registerStripeRoutes`. **Public / unauthenticated** — the upgra
 
 **Response**: `200 { prices: { monthly: PriceInfo|null, annual: PriceInfo|null } }` where `PriceInfo = { amount: <minor units, e.g. 299 = $2.99>, currency: 'usd', interval: 'month'|'year'|null }`. Returns `503 { error: 'Payments not configured' }` when `paymentProcessor` is null (no `STRIPE_SECRET_KEY`); the client degrades to plain plan labels with no price.
 
+### Changing a price: create-and-archive, never edit
+
+**Stripe price objects are immutable** — an amount cannot be edited in place. To change a price: create a **new** price on the same product, archive the old one (`active: false`), then update the corresponding env var (`STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID`, read in `index.js` and passed to `createStripeProcessor` as `monthlyPriceId`/`annualPriceId`). Forgetting the env-var update leaves checkout silently billing the archived price. Current prices ($2.99/mo, $21.99/yr) are the second generation on product `DecodeC4 Pro`; the original $7.99/$59.99 prices were archived this way.
+
+**The connected account is a Stripe SANDBOX (`acct_1TrxCXET4Rc2BDFf`) — test mode only.** It has no live mode to flip, and the in-session Stripe MCP is bound to it (writes land in test mode). Taking real payments requires a **separate, activated live account** with its own live product/prices and `sk_live_…` keys — none of it derivable from the sandbox. Production is `quaddojo.com`; staging is `staging.decodec4.xyz`.
+
 ## Stripe Checkout: `POST /api/stripe/create-checkout` (returnPath)
 
 **Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from; the processor builds Stripe's `success_url`/`cancel_url` as `<FRONTEND_URL><returnPath>?checkout=<outcome>` so the user returns to their originating screen instead of home. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`. Omitting it preserves the legacy `/?checkout=success` behavior.
@@ -112,6 +118,15 @@ Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-c
 **MUST**: `device_uuid` MUST be sourced from `req.user.device_uuid` (populated by `loadUser`). Client request bodies MUST NOT include `device_uuid` — the server derives it, never trusts it from the wire.
 
 Full endpoint contracts: `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
+
+### `session_stats` write asymmetry — do NOT unify
+
+`POST /api/user/session-stats` and `POST /api/user/challenge-session` both call the **same** `writeSessionStats(supabase, userId, date, …)` helper, but they pass **deliberately different** shapes as the final argument:
+
+- `/api/user/session-stats` passes **`req.body.stats`** — the *inner* object. Its caller sends `{ date, stats: next }`; storing the whole body here would double-nest and silently break two consumers.
+- `/api/user/challenge-session` passes **`req.body`** — the *entire* body. Its caller sends the session object directly.
+
+Both are correct. **Never "harmonize" them, and never merge the two shapes with a `||` jsonb merge** — the shapes are incompatible and a merge produces a corrupt hybrid blob. Both endpoints write the same `(user_id, date)` row of `session_stats` (exactly 3 columns: `user_id uuid`, `date date`, `stats jsonb` — no flat stats columns), via a full-replace upsert: last writer wins.
 
 ## Supabase Usage Pattern
 
@@ -440,7 +455,7 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 
 **Errors**: 400 (invalid params), 401 (unauthenticated), 404 (no explanation cached), 500 (internal), 502 (OpenAI TTS service error), 503 (Supabase not configured / `OPENAI_API_KEY` missing).
 
-**TTS config**: Uses the same voice, speed, model, and instructions as the existing admin TTS system, read via `readTtsConfig()` (from `server/tts-prompt.json`, which now also carries a `model` field, default `'gpt-4o-mini-tts'` — the only OpenAI TTS model that honors the `instructions` field; `tts-1`/`tts-1-hd` ignore it and always speak with an American-English accent). Per-language instructions are built via `buildTtsInstructions(basePrompt, lang)` (`server/ttsInstructions.mjs`), which appends a Spanish-accent directive for `lang === 'es'` so Spanish text isn't read with an English accent. `ttsProvider.js`'s own default `model` was also flipped to `gpt-4o-mini-tts`, so callers that don't read `tts-prompt.json` (notably **lesson audio** via `lessonAudio.js`) get the steerable model too; nothing relies on `tts-1` anymore (it remains selectable in the admin model dropdown). Note: all TTS audio is cached by a hash of the *text*, not the model/voice — changing the model/voice/prompt does NOT regenerate existing clips (see memory `project_tts_audio_cached_by_text`).
+**TTS config**: Uses the same voice, speed, model, and instructions as the existing admin TTS system, read via `readTtsConfig(lang)` (from `server/tts-prompt.<lang>.json` — one file per supported locale, since the prompt is written *in* the target language and describes a language-specific persona; every caller must pass its `lang`/`locale` or it silently reads the English config. It also carries a `model` field, default `'gpt-4o-mini-tts'` — the only OpenAI TTS model that honors the `instructions` field; `tts-1`/`tts-1-hd` ignore it and always speak with an American-English accent). Per-language instructions are built via `buildTtsInstructions(basePrompt, lang)` (`server/ttsInstructions.mjs`), which appends a Spanish-accent directive for `lang === 'es'` so Spanish text isn't read with an English accent. `ttsProvider.js`'s own default `model` was also flipped to `gpt-4o-mini-tts`, so callers that don't read `tts-prompt.<lang>.json` (notably **lesson audio** via `lessonAudio.js`) get the steerable model too; nothing relies on `tts-1` anymore (it remains selectable in the admin model dropdown). Note: all TTS audio is cached by a hash of the *text*, not the model/voice — changing the model/voice/prompt does NOT regenerate existing clips (see memory `project_tts_audio_cached_by_text`).
 
 **Rate limit**: 120 req/min (default `/api/` bucket). No additional rate limiting.
 
@@ -449,9 +464,10 @@ Returns spoken (TTS) audio for a cached deep-reveal explanation. The client poin
 `POST /api/scores` (**not** GET) — `server/index.js`.
 - **Request body**: `{ moves: string, depth?: number, difficulty?: 'easy'|'medium'|'hard'|'perfect' }` (the movestring so far, 0-indexed).
 - **Response**: `{ scores: number[7] }` — per-column solver scores from the current player's perspective. Invalid/full columns are masked with the sentinel `INVALID_MOVE = -1000` (exported from `src/lib/constants.js`).
-- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver_scores` memory.
+- **Filtering rule**: always filter `score > INVALID_MOVE` (strictly greater) before ranking columns — never treat a masked column as a candidate. Score semantics: see `reference_c4solver` memory.
 - **Sparring-move mode (`difficulty` present)**: the response is `{ scores, col }`, where `col` is the AI's chosen 0-indexed move computed **server-side** by `chooseSparringMove(board, difficulty, scores)` (`server/classifier.js`). An unknown `difficulty` value → 400. This is the single move-selection path for the sparring AI (`src/lib/useGameBoard.js` `makeAiMove` POSTs `{ moves, difficulty }` and plays `col`; on any error it falls back to a random legal column). The Hint overlay calls the same endpoint **without** `difficulty` and consumes `scores` only.
-- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns. See memory `project_sparring_move_algorithm`.
+- **Move selection is NOT softmax anymore**: the old client-side softmax/temperature + `secondBestColumn` mechanic (`src/lib/aiDifficulty.js`) was **deleted**. `chooseSparringMove` = own-win-first → `SPARRING_MISTAKE_RATES[difficulty]` roll → optimal (argmax) on no-mistake, else block an opponent win-in-1 / sample uniformly from strictly-worse-and-non-forbidden columns.
+- **Design consequence — difficulties differ only by mistake rate**: `SPARRING_MISTAKE_RATES` (`server/classifier.js`) is `{ easy: 1/2, medium: 1/4, hard: 1/8, perfect: 0 }`. Every "mistake" the roll produces is still a tactically sound, non-forbidden move (see roll logic above) — so even `easy` never falls for a one-move trap; `medium`/`hard`/`perfect` differ from `easy` only in how often the mistake roll fires, not in move quality. Deliberate design goal: never let the user win by just stacking discs.
 - **Do NOT revive depth-limited difficulty**: depth-limited negamax (`-d N`) produces all-zero early-game scores and was abandoned. Tech debt: the endpoint still accepts an optional `depth` body field and `queryDepth` infrastructure remains — both unused.
 
 ## Migrate Endpoint (POST /api/user/migrate)
@@ -834,7 +850,7 @@ Appends one human flag for an eval entry to a per-run sidecar JSONL file. Mirror
 
 ## Admin Blunder-Reason Browser Endpoints
 
-Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons; see memory `project_admin_fv_suff_repurposed`). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
+Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, localhost+admin tool with **two modes** (route still named `fv-suff` for historical reasons). Both read JSONL from `server/scripts/`. Guarded by `requireLocalhost + requireAdmin`. Responses are **not field-whitelisted** — records are returned whole.
 
 **Evidence mode** — browses **blunder-reason evidence** (the `computeReason` output precomputed by `server/scripts/compute.mjs`). Evidence rows have shape `{id, evidence, groundTruth}`.
 
@@ -845,6 +861,32 @@ Back the `admin/fv-suff` page (`src/pages/AdminFvSuffPage.jsx`), a desktop, loca
 
 - `GET /api/admin/fv-suff/files` → `{ answers }` — `answers` = `fv_suff_answers_*.jsonl` (excluding `*_grades.jsonl` sidecars).
 - `GET /api/admin/fv-suff?answers=<name>` → `{ set, answers, grades }`. `set` is DERIVED from the answers file via `deriveSetFromAnswers` (no separate eval-set file or `set` query param); `answers` (default `fv_suff_answers_all.jsonl`, validated `isFvSuffAnswersFile`) = `compute.mjs --llm` rows, each embedding its `feature_vector`; `grades` = the `gradesFilenameFor(answers)` sidecar (`<stem>_grades.jsonl` from `grade-fv-sufficiency`), `[]` if absent. Missing answers file is a 404; missing grades are non-fatal (empty). Validators live in `evalResultsHelpers.js` (unit-tested).
+
+## `POST /api/admin/audio/preview` — TTS sandbox (2026-07-16)
+
+`requireLocalhost`. The only TTS endpoint that synthesizes **arbitrary text** with **experimental**
+voice params, for auditioning a prompt/voice before committing to it.
+
+Body: `{ text, prompt, speed, voice, model, lang }`. Validation lives in
+`server/ttsPreviewValidation.mjs` (`validatePreviewRequest(body) → {ok, value} | {ok, error}` — pure,
+unit-tested): `text` must be a non-empty string; `voice` ∈ `VALID_TTS_VOICES`; `model` ∈
+`VALID_TTS_MODELS`; `speed` ∈ [0.25, 4.0] (bounds shared with `POST /api/admin/audio/prompt`). 400 on
+any violation. Responds with raw mp3 bytes (`res.type('audio/mpeg').send(audio)`), not JSON.
+
+Three properties are load-bearing — preserve them:
+- **It writes nothing.** No mp3 on disk, no registry entry, no manifest change, no config write. The
+  registry/manifest/file trio already drifts (see `coach-audio-conventions.md`); a sandbox that wrote
+  would be a fourth source of drift. The browser holds the bytes via a blob URL.
+- **Instructions route through `buildTtsInstructions(prompt, lang)`**, never the raw `prompt` — for
+  `es` that appends `SPANISH_ACCENT_DIRECTIVE`. Skipping it would tune against a different
+  instruction string than production uses, defeating the endpoint's purpose.
+- **Uncached by design** — one real API call per invocation. You cannot hear a change you did not
+  synthesize. Do not add caching.
+
+Client: a `<details>` sandbox in `src/pages/AdminAudioPage.jsx`, whose params are **separate state**
+(`sb*`) from the saved-config editor; promotion is explicit via "Load from saved config" / "Save to
+config" (the latter reuses `handleSavePrompt(cfg)`). The blob URL is revoked on regenerate and on
+unmount.
 
 ## Lesson Audio Generation & Pruning Endpoints (spec 046 US3/US4)
 

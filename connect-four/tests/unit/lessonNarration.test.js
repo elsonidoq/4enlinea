@@ -72,3 +72,15 @@ test('non-array coachMessages returns [] defensively', () => {
   assert.deepEqual(getNarrationQueue(undefined, true), []);
   assert.deepEqual(getNarrationQueue(null, true), []);
 });
+
+test('accepts a socratic message array unmodified (same shape as coachMessages)', () => {
+  // socratic.messages[phase] is structurally identical to slides[].coachMessages, so
+  // getNarrationQueue consumes it verbatim — no change to this helper was needed.
+  const socraticAsk = [
+    { text: 'Punish it', mood: 'think', audio: '/audio/lessons/soc1.mp3' },
+  ];
+  assert.deepEqual(getNarrationQueue(socraticAsk, true), ['/audio/lessons/soc1.mp3']);
+  assert.deepEqual(getNarrationQueue(socraticAsk, false), []);
+  // An unsynthesized phase (migration landed, audio not generated yet) narrates nothing.
+  assert.deepEqual(getNarrationQueue([{ text: 'Punish it', mood: 'think' }], true), []);
+});

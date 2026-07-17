@@ -229,7 +229,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             textUnderlineOffset: 2,
           }}
         >
-          {`Move ${displayMoveNumber} / ${mistakeSource.totalMoves} · ${mistakeSource.date} ›`}
+          {`${t('mistakes.detail.moveOf', { n: displayMoveNumber, total: mistakeSource.totalMoves })} · ${mistakeSource.date} ›`}
         </button>
       );
     } else {
@@ -240,7 +240,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
       // (defensive — should not happen for a real row per contracts/api-blunders-id.md).
       metaContent = (
         <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
-          {`Move ${displayMoveNumber} / ${blunder.totalMoves ?? blunders.length}`}
+          {t('mistakes.detail.moveOf', { n: displayMoveNumber, total: blunder.totalMoves ?? blunders.length })}
         </span>
       );
     }
@@ -304,7 +304,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
       mood: 'think',
       ...(isGreenPlayer != null ? {
         disc: isGreenPlayer ? 'green' : 'gray',
-        discLabel: isGreenPlayer ? 'You played Green' : 'You played Gray',
+        discLabel: isGreenPlayer ? t('review.playedGreen') : t('review.playedGray'),
       } : {}),
     },
     { text: t('mistakes.detail.coach.line2'), mood: 'think' },
@@ -629,7 +629,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           }}
         >
           <Icon name="chevL" size={20} />
-          Prev
+          {t('mistakes.detail.prev')}
         </button>
         <span style={{
           fontSize: 13,
@@ -638,7 +638,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
           padding: '0 12px',
           whiteSpace: 'nowrap',
         }}>
-          {`${index + 1} of ${blunders.length}`}
+          {t('mistakes.detail.ofTotal', { n: index + 1, total: blunders.length })}
         </span>
         <button
           onClick={handleNext}
@@ -661,7 +661,7 @@ export function MistakeDetailScreen({ go, goBack, blunderNavList: navListProp, i
             opacity: index === blunders.length - 1 ? 0.4 : 1,
           }}
         >
-          Next
+          {t('mistakes.detail.next')}
           <Icon name="chevR" size={20} />
         </button>
       </Toolbar>

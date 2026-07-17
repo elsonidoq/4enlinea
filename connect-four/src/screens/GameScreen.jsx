@@ -104,7 +104,7 @@ export function GameScreen({ go, goBack, goReplace, difficulty, side, initialMov
     // Continue CTA, so we pass the `onboarding` flag through as a nav param.
     const elapsed = Date.now() - soundStartedAt;
     await new Promise(resolve => setTimeout(resolve, Math.max(0, POST_GAME_SOUND_MS - elapsed)));
-    goReplace(pickGameEndScreen(onboarding), { id: gameId, onboarding });
+    goReplace(pickGameEndScreen(onboarding), { id: gameId, onboarding, result });
   }
 
   // ── Game board hook ─────────────────────────────────────────────

@@ -9,6 +9,7 @@ import { buildBoard } from '../lib/board.js';
 import { PAID_CATEGORIES } from '../lib/categories.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 import { shouldContinuePaging } from '../lib/coachQueuePagination.js';
+import { resolveChipQuality } from '../lib/reviewChipQuality.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -51,7 +52,7 @@ function getQualityColor(quality) {
 }
 
 
-export function ReviewScreen({ go, goBack, id, onboarding }) {
+export function ReviewScreen({ go, goBack, id, onboarding, result, outcome }) {
   const { t } = useTranslation();
   const { session, store } = useStore();
 
@@ -218,12 +219,20 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
   function selectStep(moveIndex) {
     const move = analysis.moves.find(m => m.moveIndex === moveIndex);
     if (!move) return;
+    // T17 remediation: gate on the SAME quality source the chip is colored
+    // with (resolveChipQuality — stored quality when a row exists, else the
+    // live badge), not the raw live badge alone. Display and dispatch must
+    // agree: badge quality != stored quality is a known divergence (memory
+    // project_mistake_storage_rule), and previously a chip could render as a
+    // colored mistake (stored quality) yet clicking it only previewed the
+    // board (live badge said 'optimal') instead of opening the detail.
+    const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
     // Navigate only when a stored mistake row exists for this ply. Non-optimal
     // moves the storage rule excludes (slower wins, dead-position faster
     // losses — see server/mistakeStorageRule.js) have no row, so they fall
     // back to the in-place board preview like optimal steps (FR-013: every
     // step control must change the board).
-    if (move.quality !== 'optimal') {
+    if (displayQuality !== 'optimal') {
       const globalPlyIndex = analysis.side === 'first'
         ? 2 * (moveIndex - 1)
         : 2 * (moveIndex - 1) + 1;
@@ -264,6 +273,12 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
     frozenBoard = board;
   }
 
+  // T18 (finding 15): known only when GameScreen (result='loss') or PastGamesListScreen
+  // (outcome='lost') passed it as a nav param — a cold-boot deep link (/game/:id) carries
+  // neither, so the "clean but lost" copy only fires within the same session. Acceptable
+  // per brief: no server change needed to source the game's outcome.
+  const isLoss = result === 'loss' || outcome === 'lost';
+
   // Coach messages
   let coachMessages = [];
   if (loading) {
@@ -272,8 +287,12 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
     coachMessages = [{ text: error, mood: 'sad' }];
   } else if (analysis) {
     const disc = analysis.side === 'first' ? 'green' : 'gray';
-    const discLabel = analysis.side === 'first' ? 'You played Green' : 'You played Gray';
-    coachMessages = [{ text: t(analysis.summaryPhraseKey), mood: 'happy', disc, discLabel }];
+    const discLabel = analysis.side === 'first' ? t('review.playedGreen') : t('review.playedGray');
+    const isCleanPhrase = analysis.summaryPhraseKey.startsWith('coach.spoken.sparring.review.clean');
+    const summaryText = (isCleanPhrase && isLoss)
+      ? t('review.cleanButLost')
+      : t(analysis.summaryPhraseKey);
+    coachMessages = [{ text: summaryText, mood: 'happy', disc, discLabel }];
   }
 
   // Accuracy display
@@ -283,7 +302,7 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopBar title="Review" onBack={goBack} onLogoClick={() => go('home')} />
+      <TopBar title={t('review.title')} onBack={goBack} onLogoClick={() => go('home')} />
 
       <CoachDialog fixed messages={coachMessages} />
 
@@ -403,8 +422,14 @@ export function ReviewScreen({ go, goBack, id, onboarding }) {
                 minWidth: 'min-content',
               }}>
                 {analysis.moves.map((move) => {
-                  const isOptimal = move.quality === 'optimal';
-                  const color = getQualityColor(move.quality);
+                  // Task 17 (finding 14): color from the STORED row's quality when one
+                  // exists for this ply (the durable truth MistakeDetailScreen's title
+                  // reads) — a chip must never disagree with the detail it opens. Falls
+                  // back to the live scoreMove badge quality (move.quality) only for
+                  // plies the storage rule left unstored.
+                  const displayQuality = resolveChipQuality(move, analysis.side, gameBlunderList);
+                  const isOptimal = displayQuality === 'optimal';
+                  const color = getQualityColor(displayQuality);
                   return (
                     <button
                       key={move.moveIndex}

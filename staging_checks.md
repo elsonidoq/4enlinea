@@ -616,3 +616,83 @@ second user, which local dev could not exercise. Confirm on staging with seeded 
     duplicates (not a generic error); B's first import of an already-imported room reports success with
     zero collision count.
   - **Source**: spec 041 (Batch C items 40–44).
+
+---
+
+## Epic 5 / Epic 4 — Paid puzzle category paywall (spec 045 / W11 Batch C Task 28)
+
+Task 28 generated, approved, and reindexed a real paid category (`undercut`) locally and confirmed
+the free-user paywall fires. The paid-user (unlocked-access) side of the same check could not be
+exercised locally at all.
+
+- [ ] **Paid user reaches a paid puzzle category without a paywall.**
+  - **What**: as a genuinely paid user, open Challenges, pick the `undercut` set (or any of
+    undercut/overcut/figure_7/j_shape/mixed), and confirm it opens straight into the puzzle set —
+    no `UpgradeModal`.
+  - **Why staging**: the auto-mode safety classifier blocks every `users`-table UPDATE locally,
+    including narrowly-scoped ones (Batches D and E both hit this same wall) — there is no way to
+    flip a local test account's `tier` to `'paid'` to exercise this branch.
+  - **Expected**: paid user's `tier==='paid'` gate (existing, documented-intentional per W6 Task 16)
+    lets the category load with no paywall interruption.
+  - **Source**: W11 Task 28 Step 4; spec 045.
+- [ ] **Paid user sees no deep-reveal quota counter and no upgrade CTA** (W4 Task 7's paid branch is
+      unit-tested only — carried here for the same reason, listed previously under Epic 5's other
+      staging checks; not new, cross-referenced).
+
+---
+
+## Coach audio namespace split — `coach.spoken.*` / `coach.ui.*` (added 2026-07-16)
+
+- **What**: On deployed staging, with speech enabled, confirm coach audio plays in each of: the
+  onboarding greeting, a Challenge attempt (any category), a sparring AI move, the Review-screen
+  summary, the **Home welcome** (new play site), and the **PostSetSummary perfect-set** line (new
+  play site). Check both `en` and `es`.
+- **Why staging**: the split renamed **434** mp3s and deleted **12**, and rewrote both
+  `coach-audio-manifest.json` files. Locally the app fetches those via **Vite serving `public/` on
+  :5173**, but production serves them from **`dist/` via Express** — a different path that only
+  `vite build` + a real deploy exercises (see `project_lesson_progression_audio_traps`: Express on
+  :3001 serves `../dist` and does *not* serve `public/`). A rename that is correct on disk can still
+  fail to ship. Additionally, `home.welcome.0` and `summary.perfect.{0,1}` were never spoken before
+  this change, so they have no deployment history at all.
+- **Expected**: every flow speaks; zero 404s for `/audio/coach/**.mp3` in the network log; no clip
+  requests a `coach--<name>` slug lacking the `spoken` segment (a leftover would mean a stale
+  manifest shipped).
+- **Source**: commit `5930b9f` (namespace split), `db28caf`-adjacent session 2026-07-16;
+  `docs/architecture/coach-audio-conventions.md`. Tripwire `coachSpokenNamespace.test.js` covers
+  registry/manifest/asset agreement at build time but cannot prove the assets are *served*.
+- [ ] Signed off (tester / date):
+
+## Epic 6 — Lessons: Progression, Audio & Polish (spec 046) — added 2026-07-16
+
+- **What**: On deployed staging in Spanish, open lesson 1 (`immediate-threat`) and confirm all four
+  concept-slide narrations play **in Spanish** (not English).
+- **Why staging**: `audio_es` for lesson 1 was generated and committed locally (`179eb7d`), but
+  lesson clips are committed static assets under `public/audio/lessons/` served from `dist/` in
+  production — the same dev-vs-prod serving-path gap as above. Also, `pickLocalized` **falls back to
+  the English value when `_es` is missing or empty**, so a Spanish clip that failed to ship
+  degrades to English **silently** rather than erroring — this cannot be distinguished from "working"
+  without listening in the deployed environment.
+- **Expected**: four Spanish clips play; no English narration in the `es` locale for lesson 1. (The
+  other 12 lessons are expected to narrate English — 46/50 `coachMessages` still lack `text_es`; see
+  OI-18. That is known, not a failure of this check.)
+- **Source**: session 2026-07-16 (lesson audio i18n / D1); OI-18.
+- [ ] Signed off (tester / date):
+
+- **What**: On deployed staging, open the **Socratic board** of any lesson (e.g. lesson 1
+  `immediate-threat`, reached via Continue past the concept slides) in **both** `en` and `es`, and
+  confirm the coach bubble is **spoken**, not just rendered.
+- **Why staging**: Socratic copy moved out of i18n into lesson JSON (`socratic.messages`) and is now
+  voiced by the lesson-audio pipeline (OI-43). Its clips are committed static assets under
+  `public/audio/lessons/`, which **Express on :3001 does not serve in dev** (it serves `../dist`) —
+  only Vite :5173 does, and only `vite build` copies `public/`→`dist/` for production. So the dev
+  result cannot predict the deployed one. Compounding it: `getNarrationQueue` silently yields an
+  empty queue for a message whose `audio` is missing, and `pickLocalized` falls back to English text
+  without erroring — a clip that failed to ship is **indistinguishable from working** except by ear.
+- **Expected**: the `ask` bubble speaks on arrival in each locale; a wrong drop speaks `wrong1`, a
+  second speaks `wrong2`; the replay button re-speaks; navigating away cuts audio immediately. The
+  mp3 requests return **200** (`audio/mpeg`), not the SPA `index.html` fallback.
+- **Blocked on**: the plan's Task 8 (audio generation) has **not run** — until it does, no Socratic
+  mp3s exist and this check will fail by design. Generate and commit the clips first.
+- **Source**: session 2026-07-16 (socratic → lesson content); plan
+  `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` V7; OI-43, OI-46.
+- [ ] Signed off (tester / date):
