@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { FeatureCard } from '../components/FeatureCard.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { AuthModal } from '../components/AuthModal.jsx';
+import { LegalFooter } from '../components/LegalFooter.jsx';
 import { Icon } from '../components/Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 
@@ -88,6 +89,8 @@ export function HomeScreen({ go }) {
           <Icon name="chart" size={18} /> {t('home.stats_button')}
         </button>
       </div>
+
+      <LegalFooter />
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </div>

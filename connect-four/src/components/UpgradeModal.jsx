@@ -58,9 +58,16 @@ export function UpgradeModal({ onDismiss, onUpgrade }) {
 
         <p style={{
           color: 'var(--ink-soft)', fontWeight: 600, fontSize: 14,
-          margin: '0 0 20px', lineHeight: 1.45, textAlign: 'center',
+          margin: '0 0 12px', lineHeight: 1.45, textAlign: 'center',
         }}>
           {t('upgrade.body')}
+        </p>
+
+        <p style={{
+          fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18,
+          color: 'var(--ink)', textAlign: 'center', margin: '0 0 20px',
+        }}>
+          {t('upgrade.price')}
         </p>
 
         {uiState === 'success' ? (
@@ -102,6 +109,23 @@ export function UpgradeModal({ onDismiss, onUpgrade }) {
         >
           {t('upgrade.dismiss')}
         </button>
+
+        <p style={{
+          color: 'var(--ink-soft)', fontWeight: 500, fontSize: 12,
+          textAlign: 'center', margin: '12px 0 0', lineHeight: 1.4,
+        }}>
+          {t('upgrade.tax')}
+        </p>
+
+        <p style={{
+          textAlign: 'center', margin: '8px 0 0', fontSize: 12, fontWeight: 600,
+        }}>
+          <a href="/pricing" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>{t('upgrade.links_pricing')}</a>
+          <span style={{ color: 'var(--ink-soft)', opacity: 0.5, margin: '0 8px' }}>·</span>
+          <a href="/terms" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>{t('upgrade.links_terms')}</a>
+          <span style={{ color: 'var(--ink-soft)', opacity: 0.5, margin: '0 8px' }}>·</span>
+          <a href="/refunds" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>{t('upgrade.links_refunds')}</a>
+        </p>
       </div>
     </>
   );
