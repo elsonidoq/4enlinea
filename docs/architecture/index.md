@@ -16,6 +16,7 @@ Authoritative, up-to-date source for project conventions, API contracts, data mo
 | [testing-conventions.md](./testing-conventions.md) | writing tests (`node:test` + `node:assert/strict`, no Jest/Mocha) |
 | [index-conventions.md](./index-conventions.md) | reasoning about 0- vs 1-based indexing across movestrings and coordinates |
 | [coach-audio-conventions.md](./coach-audio-conventions.md) | adding any string under `coach.` in i18n, or touching TTS generation / the audio registry & manifest (`coach.spoken.*` is the sole TTS-eligible namespace; `coach.ui.*` is never synthesized) |
+| [worktree-conventions.md](./worktree-conventions.md) | starting, restarting, or killing any dev server (Express API or Vite) from any checkout — main or a linked worktree |
 
 ## LLM coach & lessons
 
