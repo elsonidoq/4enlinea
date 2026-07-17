@@ -6,6 +6,20 @@
 
 Read the relevant index before starting any task that touches architecture, data model, API contracts, or product decisions.
 
+## Working in a git worktree — ports (always read, not gated behind a task type)
+
+This is a **standing rule**, not conditioned on "if I'm touching server code" — the
+trigger is any moment you're about to start, restart, or kill a dev server, or run
+anything (a test, a QA pass) that needs one running. Read
+`docs/architecture/worktree-conventions.md` for the full mechanics; the summary:
+
+Always run `eval "$(./worktree-ports.sh)"` from the repo root before starting or
+killing any server — every session, unconditionally. Do **not** first ask yourself "am
+I in a worktree?" and only source it if the answer is yes — the script detects that
+internally and returns the unchanged legacy `3001`/`5173` for the main checkout, so
+running it is always safe. Never kill a server by a bare port number or `pkill node` —
+only by the exact `$API_PORT`/`$VITE_PORT` the script gave you.
+
 ## Where information lives: memory vs. docs/architecture
 
 **`docs/architecture/`** is the authoritative, up-to-date source for project conventions, API contracts, data models, and architectural decisions. Read these docs before writing code; they reflect the current state of the system.
