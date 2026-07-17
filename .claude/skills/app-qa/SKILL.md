@@ -49,13 +49,17 @@ Create a todo per step.
    `./reset_local_supabase.sh && ./migrate.sh --env local` → create a user via first login
    → decide tier → import papergames id `69e773d36bf9938bffc1509a`.
 
-3. **Start the app + own the server lifecycle.** Launch the **API server as its own background
-   process redirected to a log FILE** (`$LOG_PATH`) and Vite separately — a background shell's
-   buffer isn't readable by subagents, but a file is. Vite serves **http://localhost:5173**, API
-   **:3001**. See `references/environment.md` for the exact launch, health-check, **relaunch**
-   (kill port 3001 + truncate log), and the **delta log-read** pattern (offset before an action,
+3. **Run `eval "$(./worktree-ports.sh)"` from the repo root first** (see
+   `docs/architecture/worktree-conventions.md`) — exports `$API_PORT`/`$VITE_PORT` for your
+   checkout. **Start the app + own the server lifecycle.** Launch the **API server as its own
+   background process redirected to a log FILE** (`$LOG_PATH`) and Vite separately — a background
+   shell's buffer isn't readable by subagents, but a file is. Vite serves
+   **http://localhost:$VITE_PORT**, API **:$API_PORT**. See `references/environment.md` for the
+   exact launch, health-check, **relaunch** (kill `$API_PORT` + truncate log — never a hardcoded
+   port, never `pkill node`), and the **delta log-read** pattern (offset before an action,
    `tail -n +$START` after — never re-`tail` the whole log). You own the server: relaunch it when
-   a health probe fails or server code changed. Pass `$LOG_PATH` to every subagent.
+   a health probe fails or server code changed. Pass `$LOG_PATH` **and** `$API_PORT`/`$VITE_PORT`
+   to every subagent.
 
 4. **Open Chrome via the chrome-devtools MCP** (`new_page` → `navigate_page` to
    http://localhost:5173). Use `take_snapshot` to inspect the a11y tree, `click`/`fill` to

@@ -4,8 +4,13 @@ All commands run from the repo root (`/Users/elsonidoq/prog/cuatro_en_linea`) un
 
 ## URLs / ports
 
-- Frontend (Vite dev): **http://localhost:5173** (`server.host: true`, so also on LAN IP).
-- API (Express): **http://localhost:3001**, proxied under `/api` by Vite.
+**Before anything else, run `eval "$(./worktree-ports.sh)"` from the repo root** (see
+`docs/architecture/worktree-conventions.md`) — this exports `$API_PORT`/`$VITE_PORT` for
+your checkout (main checkout: unchanged `3001`/`5173`; a linked worktree: its own stable
+derived pair). Every command below uses these variables — never the literal `3001`/`5173`.
+
+- Frontend (Vite dev): **http://localhost:$VITE_PORT** (`server.host: true`, so also on LAN IP).
+- API (Express): **http://localhost:$API_PORT**, proxied under `/api` by Vite.
 
 ## Start the app + own the server lifecycle
 
@@ -15,7 +20,8 @@ its own process, redirected to a log FILE** — a shared channel every subagent 
 that can be restarted independently of Vite. Pick a stable path and pass it to subagents as
 `LOG_PATH` (e.g. the session scratchpad).
 
-Launch (run each in the background):
+Launch (run each in the background — `$API_PORT`/`$VITE_PORT` already exported from the
+step above):
 
 ```
 # API server → log file. Own PID/port so it can be relaunched alone.
@@ -27,7 +33,8 @@ cd connect-four && npm run vite
 ```
 
 `server/.env` (NOT the repo-root `.env`) holds the local env for the dev server. Wait for
-`Connect4 server running on port 3001` in `$LOG_PATH` and for Vite to report :5173 before driving.
+`Connect4 server running on port $API_PORT` in `$LOG_PATH` and for Vite to report
+`:$VITE_PORT` before driving.
 
 ### Health check + relaunch (when to, how to)
 
@@ -39,14 +46,16 @@ HTTP status as "up" (even a 400/401 means the server is answering):
 
 ```
 # health probe: 000 = down (nothing listening); any other code = up
-test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/api/puzzles/counts)" != 000 \
+test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:$API_PORT/api/puzzles/counts)" != 000 \
   && echo up || echo down
-lsof -ti tcp:3001 | xargs kill                 # stop ONLY the API server (leaves Vite alone)
+lsof -ti tcp:$API_PORT | xargs kill            # stop ONLY the API server (leaves Vite alone)
 : > "$LOG_PATH"                                 # TRUNCATE so line offsets reset to 0
 cd connect-four && node --env-file=server/.env server/index.js > "$LOG_PATH" 2>&1   # restart (bg)
 ```
 
-Never `pkill node` — that can kill unrelated node processes (solver, tests).
+Never `lsof -ti tcp:3001` literally, and never `pkill node` — either can kill a
+**different worktree's** server. Always use `$API_PORT` as derived for *your*
+checkout by `worktree-ports.sh`.
 
 ### Read server logs efficiently — delta, not re-read
 
@@ -69,7 +78,11 @@ offsets stay valid within one server lifetime; reset your saved `START` after an
   → `signInAnonymously()` → sets `sb_access_token` / `sb_refresh_token` httpOnly cookies.
 - The resulting user is **anonymous, tier `free`, and has NO email**.
 - Magic-link login does not work locally (no email delivery). Google OAuth targets
-  `http://localhost:3001` directly (Vite proxy doesn't cover full-page nav).
+  `http://localhost:3001` directly (Vite proxy doesn't cover full-page nav) — this is
+  hardcoded both server-side (Supabase project config) and client-side
+  (`AuthModal.jsx:46`), so it is **not** derived-port-aware. Inside a worktree, do not
+  attempt Google OAuth login — it will issue its request to the **main checkout's**
+  server, not yours. See `docs/architecture/worktree-conventions.md`.
 
 ## Reset the DB to a clean slate (ONLY after the user confirms)
 
