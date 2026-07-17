@@ -3678,12 +3678,24 @@ app.post('/api/admin/audio/preview', requireLocalhost, async (req, res) => {
   }
 });
 
-// POST /api/admin/audio/generate-all — synthesize all needs_audio keys
+// POST /api/admin/audio/generate-all — synthesize keys in bulk.
+//
+// scope: 'new' (default) synthesizes only needs_audio keys — the cheap, additive
+// pass. scope: 'all' re-synthesizes every eligible key, including ones already
+// approved, and is the only way to roll a voice/prompt/speed change out to
+// existing clips: audio is cached by slug, so a config change alone never
+// re-renders anything. It is a full-cost pass — one paid TTS call per key.
 app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => {
   const lang = resolveAdminLang(req.body?.lang);
+  const scope = req.body?.scope === undefined ? 'new' : req.body.scope;
+  if (scope !== 'new' && scope !== 'all') {
+    return res.status(400).json({ error: "scope must be 'new' or 'all'" });
+  }
   try {
     const registry = readTtsRegistry(lang);
-    const needsAudio = registry.filter(e => e.status === 'needs_audio');
+    const needsAudio = scope === 'all'
+      ? registry.filter(e => e.status !== 'ineligible')
+      : registry.filter(e => e.status === 'needs_audio');
 
     if (needsAudio.length === 0) {
       return res.json({ generated: 0, failed: 0, message: 'No keys need audio generation' });
@@ -3698,7 +3710,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (lang=${lang} voice=${voice} speed=${speed} model=${model})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (scope=${scope} lang=${lang} voice=${voice} speed=${speed} model=${model})`);
 
     for (const entry of needsAudio) {
       try {

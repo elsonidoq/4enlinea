@@ -57,6 +57,31 @@ export function validateLesson(lesson) {
   if (lesson.socratic !== null && (typeof lesson.socratic !== 'object' || Array.isArray(lesson.socratic))) {
     return 'invalid field: socratic (must be object or null)';
   }
+  // socratic.messages: phase -> array of coachMessage-shaped objects. Deliberately
+  // permissive about ABSENT phases — the loader excludes an invalid file entirely
+  // (console.error + continue), so an over-strict rule silently removes a lesson
+  // from the app. Only shapes that are actually present are checked.
+  if (lesson.socratic && lesson.socratic.messages !== undefined) {
+    const msgs = lesson.socratic.messages;
+    if (typeof msgs !== 'object' || msgs === null || Array.isArray(msgs)) {
+      return 'invalid field: socratic.messages (must be an object)';
+    }
+    for (const phase of Object.keys(msgs)) {
+      const arr = msgs[phase];
+      if (!Array.isArray(arr)) {
+        return `socratic.messages.${phase} must be an array`;
+      }
+      for (let i = 0; i < arr.length; i++) {
+        const m = arr[i];
+        if (typeof m !== 'object' || m === null || Array.isArray(m)) {
+          return `socratic.messages.${phase}[${i}] must be an object`;
+        }
+        if (typeof m.text !== 'string') {
+          return `socratic.messages.${phase}[${i}].text must be a string`;
+        }
+      }
+    }
+  }
   if (lesson.confirmationCategory !== null && typeof lesson.confirmationCategory !== 'string') {
     return 'invalid field: confirmationCategory (must be string or null)';
   }
@@ -191,6 +216,18 @@ function stripEsKeys(obj) {
 }
 
 /**
+ * Localize one coachMessage-shaped object (`{text, text_es, audio, audio_es, mood}`).
+ * Returns a NEW object (via stripEsKeys) — never mutates `m`. Shared by concept-slide
+ * coachMessages and socratic.messages so the two cannot drift.
+ */
+function localizeMessage(m, locale) {
+  const nm = stripEsKeys(m);
+  if ('text' in m || 'text_es' in m) assignLocalized(nm, m, 'text', locale);
+  if ('audio' in m || 'audio_es' in m) assignLocalized(nm, m, 'audio', locale);
+  return nm;
+}
+
+/**
  * Merge `_es` sibling fields over their English base, per field, when locale === 'es'.
  * Falls back to English per field (so a partial translation never blanks a slide) and
  * strips all `_es` keys from the output regardless of locale. `title` is never touched.
@@ -205,12 +242,7 @@ export function localizeLesson(lesson, locale = 'en') {
       assignLocalized(next, slide, 'infoProse', locale);
     }
     if (Array.isArray(slide.coachMessages)) {
-      next.coachMessages = slide.coachMessages.map((m) => {
-        const nm = stripEsKeys(m);
-        if ('text' in m || 'text_es' in m) assignLocalized(nm, m, 'text', locale);
-        if ('audio' in m || 'audio_es' in m) assignLocalized(nm, m, 'audio', locale);
-        return nm;
-      });
+      next.coachMessages = slide.coachMessages.map((m) => localizeMessage(m, locale));
     }
     if (Array.isArray(slide.legendItems)) {
       next.legendItems = slide.legendItems.map((li) => {
@@ -229,6 +261,20 @@ export function localizeLesson(lesson, locale = 'en') {
     const s = stripEsKeys(lesson.socratic);
     if ('goalPrompt' in lesson.socratic || 'goalPrompt_es' in lesson.socratic) {
       assignLocalized(s, lesson.socratic, 'goalPrompt', locale);
+    }
+    // stripEsKeys is a SHALLOW copy, so `s.messages` is still the SAME object
+    // reference as the raw _lessons cache entry's socratic.messages. Assigning
+    // into it (s.messages[phase] = ...) would permanently delete text_es from the
+    // raw cache for every later request in every locale — starving
+    // generateLessonAudio(lang='es'), which reads the raw cache via
+    // getLessonsAll() on purpose, and persisting the loss on save. Rebuild a
+    // FRESH container instead; localizeMessage already returns a new leaf object.
+    if (lesson.socratic.messages && typeof lesson.socratic.messages === 'object') {
+      s.messages = {};
+      for (const phase of Object.keys(lesson.socratic.messages)) {
+        const arr = lesson.socratic.messages[phase];
+        s.messages[phase] = Array.isArray(arr) ? arr.map((m) => localizeMessage(m, locale)) : arr;
+      }
     }
     out.socratic = s;
   }

@@ -103,7 +103,44 @@
     "overlays": [],
     "correctCol": 3,
     "goalPrompt": "You move first — where is the strongest opening move?",
-    "_boardInstructions": "Empty board, Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Correct answer is the centre column (0-indexed col 3)."
+    "_boardInstructions": "Empty board, Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Correct answer is the centre column (0-indexed col 3).",
+    "messages": {
+      "ask": [
+        {
+          "text": "You move first — where is the strongest opening move?",
+          "mood": "think",
+          "text_es": "Movés primero — ¿dónde está la jugada de apertura más fuerte?"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly — the centre column. It keeps the most winning paths alive.",
+          "mood": "happy",
+          "text_es": "Exacto — la columna central. Mantiene vivas la mayor cantidad de caminos ganadores."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Which column sits on the most possible four-in-a-row lines?",
+          "mood": "think",
+          "text_es": "¿Qué columna se encuentra en la mayor cantidad de posibles líneas de cuatro en línea?"
+        }
+      ]
+    }
   },
   "confirmationCategory": null,
   "confirmationCount": 0,

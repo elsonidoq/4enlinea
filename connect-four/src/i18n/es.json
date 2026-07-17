@@ -888,13 +888,6 @@
       "new": "{{count}} nuevo"
     }
   },
-  "socratic": {
-    "ask": "Voy a cometer un error aquí. Mirá si podés castigarlo.",
-    "wrong1": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
-    "wrong2": "Dejame mostrarte.",
-    "correct": "¡Exacto! Lo viste.",
-    "hint": "Buscá una casilla par justo encima de una de mis fichas."
-  },
   "lesson": {
     "node": {
       "done": "Completada",
@@ -937,28 +930,13 @@
       "title": "Forma-J"
     },
     "opening-centre": {
-      "title": "Domina el Centro",
-      "socratic": {
-        "ask": "Movés primero — ¿dónde está la jugada de apertura más fuerte?",
-        "hint": "¿Qué columna se encuentra en la mayor cantidad de posibles líneas de cuatro en línea?",
-        "correct": "Exacto — la columna central. Mantiene vivas la mayor cantidad de caminos ganadores."
-      }
+      "title": "Domina el Centro"
     },
     "opening-imitate": {
-      "title": "Yo Juego Donde Vos Jugás",
-      "socratic": {
-        "ask": "Gris acaba de jugar la columna 2 otra vez. ¿Cuál es la mejor respuesta de Verde?",
-        "hint": "¿Qué columna está justo encima de la última ficha de Gris?",
-        "correct": "Exacto — jugá donde ellos juegan. Responder justo encima de la última ficha de Gris mantiene viva la imitación."
-      }
+      "title": "Yo Juego Donde Vos Jugás"
     },
     "opening-sharp": {
-      "title": "Aperturas Agudas",
-      "socratic": {
-        "ask": "Verde domina la tercera fila a la derecha, Gris tiene compensación en la quinta fila a la izquierda. Verde mueve — solo una columna gana. ¿Cuál es?",
-        "hint": "Mirá las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?",
-        "correct": "Exacto — esa columna completa la amenaza de tercera fila de Verde ahora mismo. Cualquier otra columna desperdicia la victoria; este es el 'Third-Row Gambit' de Allen, la única jugada que gana."
-      }
+      "title": "Aperturas Agudas"
     }
   },
   "kb": {

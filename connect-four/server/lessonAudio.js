@@ -10,8 +10,11 @@
  * changed text -> a new distinct file. The lesson JSON's `audio` field is the sole
  * source of truth — no manifest/registry/approval file (FR-013).
  *
- * Only *concept* slides (lesson.slides[]) carry coachMessages[]. lesson.socratic
- * never has coachMessages and must never be touched here.
+ * Two message sources carry narratable text: concept slides
+ * (lesson.slides[].coachMessages[]) and the Socratic board
+ * (lesson.socratic.messages[phase][]). BOTH are walked here, via the single
+ * shared collectMessages() walker — see the note on that function for why the
+ * walk must not be duplicated.
  */
 
 import fs from 'node:fs';
@@ -44,7 +47,57 @@ export function hashMessageText(text) {
 }
 
 /**
- * Generate audio for EVERY concept-slide coachMessage in `lesson` that has text.
+ * Socratic phases, in a FIXED order — never Object.keys(), so locators and log
+ * output are deterministic regardless of JSON key order. Task 1b's translator
+ * (scripts/translate-lessons.mjs) hand-mirrors this order; keep them in sync.
+ */
+export const SOCRATIC_PHASES = ['ask', 'wrong1', 'wrong2', 'correct', 'hint'];
+
+/**
+ * THE single walk over every narratable message in a lesson.
+ *
+ * generateLessonAudio (writes clips) and collectReferencedAudio (protects them
+ * from pruning) MUST consume this same walker. When they walked the tree
+ * independently they diverged — twice: once for `audio_es` (QA 2026-07-15 / D1,
+ * every Spanish clip became an orphan and was deleted) and once for
+ * `socratic.messages`. A message this walker does not yield is a message whose
+ * audio gets generated and then pruned as an orphan on the next prune run.
+ *
+ * Slides are yielded before socratic, and the slide locator string is
+ * byte-identical to the historical format — existing tests assert whole-array,
+ * exact-order equality on `generated`/`failed[].locator`.
+ *
+ * @param {object} lesson
+ * @returns {Array<{message: object, locator: string}>}
+ */
+export function collectMessages(lesson) {
+  const out = [];
+
+  const slides = Array.isArray(lesson?.slides) ? lesson.slides : [];
+  for (let si = 0; si < slides.length; si++) {
+    const messages = Array.isArray(slides[si]?.coachMessages) ? slides[si].coachMessages : [];
+    for (let mi = 0; mi < messages.length; mi++) {
+      out.push({ message: messages[mi], locator: `slides[${si}].coachMessages[${mi}]` });
+    }
+  }
+
+  // lesson.socratic is null on lessons with no Socratic board (lesson 4), and
+  // `messages` is absent on any lesson not yet migrated.
+  const socraticMessages = lesson?.socratic?.messages;
+  if (socraticMessages && typeof socraticMessages === 'object') {
+    for (const phase of SOCRATIC_PHASES) {
+      const arr = Array.isArray(socraticMessages[phase]) ? socraticMessages[phase] : [];
+      for (let mi = 0; mi < arr.length; mi++) {
+        out.push({ message: arr[mi], locator: `socratic.messages.${phase}[${mi}]` });
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Generate audio for EVERY narratable message in `lesson` that has text.
  * Mutates and returns a copy of the lesson (mutates slide message objects in
  * place on a shallow-cloned lesson so callers can inspect exactly what changed).
  *
@@ -59,8 +112,8 @@ export function hashMessageText(text) {
  * call per message per click, which is the point: you cannot hear a change you
  * did not synthesize.
  *
- * Never touches lesson.socratic (no coachMessages there). Skips empty/whitespace
- * text — that is "nothing to say", not a cache hit. Each message's synthesis is
+ * Covers both concept slides and socratic.messages, via collectMessages(). Skips
+ * empty/whitespace text — that is "nothing to say", not a cache hit. Each message's synthesis is
  * isolated in its own try/catch: one failure leaves that message's `audio`
  * unset/unchanged and does not abort the batch.
  *
@@ -72,7 +125,7 @@ export function hashMessageText(text) {
  * this, lesson clips were always synthesized with no `instructions`/`voice`/
  * `speed`/`model` opts at all and came out English-accented regardless of lang.
  *
- * @param {object} lesson - full lesson object (lesson.slides[].coachMessages[])
+ * @param {object} lesson - full lesson object (lesson.slides[].coachMessages[] + lesson.socratic.messages[phase][])
  * @param {{ lang?: 'en'|'es', synthesize?: (text: string, opts?: object) => Promise<Buffer>, dir?: string }} [deps]
  *   `dir` overrides LESSON_AUDIO_DIR — test-only seam, defaults to production dir.
  * @returns {Promise<{ lesson: object, generated: string[], failed: Array<{locator: string, error: string}> }>}
@@ -94,38 +147,29 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   log(`lesson=${lesson?.id ?? '?'} lang=${lang} field=${textField}->${audioField} ` +
       `voice=${voice} speed=${speed} model=${model} instructionsChars=${instructions?.length ?? 0}`);
 
-  const slides = Array.isArray(lesson.slides) ? lesson.slides : [];
+  for (const { message, locator } of collectMessages(lesson)) {
+    const text = message[textField];
 
-  for (let si = 0; si < slides.length; si++) {
-    const slide = slides[si];
-    const messages = Array.isArray(slide.coachMessages) ? slide.coachMessages : [];
+    if (typeof text !== 'string' || text.trim() === '') {
+      // Not a cache hit — there is genuinely nothing to say in this language.
+      log(`  ${locator} SKIP — no ${textField} (untranslated)`);
+      continue;
+    }
 
-    for (let mi = 0; mi < messages.length; mi++) {
-      const message = messages[mi];
-      const locator = `slides[${si}].coachMessages[${mi}]`;
-      const text = message[textField];
+    const hash = hashMessageText(text);
+    const expectedBasename = `${hash}.mp3`;
 
-      if (typeof text !== 'string' || text.trim() === '') {
-        // Not a cache hit — there is genuinely nothing to say in this language.
-        log(`  ${locator} SKIP — no ${textField} (untranslated)`);
-        continue;
-      }
-
-      const hash = hashMessageText(text);
-      const expectedBasename = `${hash}.mp3`;
-
-      try {
-        log(`  ${locator} synthesizing ${text.length} chars -> ${expectedBasename}`);
-        const buffer = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, expectedBasename), buffer);
-        message[audioField] = `/audio/lessons/${expectedBasename}`;
-        generated.push(locator);
-        log(`  ${locator} wrote ${expectedBasename} (${buffer.length} bytes)`);
-      } catch (e) {
-        failed.push({ locator, error: e.message });
-        log(`  ${locator} FAILED — ${e.message}`);
-      }
+    try {
+      log(`  ${locator} synthesizing ${text.length} chars -> ${expectedBasename}`);
+      const buffer = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, expectedBasename), buffer);
+      message[audioField] = `/audio/lessons/${expectedBasename}`;
+      generated.push(locator);
+      log(`  ${locator} wrote ${expectedBasename} (${buffer.length} bytes)`);
+    } catch (e) {
+      failed.push({ locator, error: e.message });
+      log(`  ${locator} FAILED — ${e.message}`);
     }
   }
 
@@ -135,12 +179,14 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 }
 
 /**
- * Collect the basenames of every audio clip referenced by any lesson/slide/
- * coachMessage across `allLessons` — BOTH `audio` (English) and `audio_es`
+ * Collect the basenames of every audio clip referenced by any message across
+ * `allLessons` — every message collectMessages() yields (concept slides AND
+ * socratic.messages), and for each, BOTH `audio` (English) and `audio_es`
  * (Spanish). Used by pruneOrphanedLessonAudio.
  *
  * QA 2026-07-15 / D1: this must see both fields, or every Spanish clip is an
- * orphan on the next prune-audio run and gets deleted.
+ * orphan on the next prune-audio run and gets deleted. It must likewise walk
+ * exactly what generateLessonAudio walks — hence the shared collectMessages().
  *
  * @param {object[]} allLessons - full lesson objects (e.g. getLessonsAll())
  * @returns {Set<string>} referenced mp3 basenames
@@ -148,13 +194,9 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 export function collectReferencedAudio(allLessons) {
   const referenced = new Set();
   for (const lesson of allLessons) {
-    const slides = Array.isArray(lesson.slides) ? lesson.slides : [];
-    for (const slide of slides) {
-      const messages = Array.isArray(slide.coachMessages) ? slide.coachMessages : [];
-      for (const message of messages) {
-        for (const p of [message.audio, message.audio_es]) {
-          if (typeof p === 'string' && p.length > 0) referenced.add(path.basename(p));
-        }
+    for (const { message } of collectMessages(lesson)) {
+      for (const p of [message.audio, message.audio_es]) {
+        if (typeof p === 'string' && p.length > 0) referenced.add(path.basename(p));
       }
     }
   }
@@ -162,8 +204,8 @@ export function collectReferencedAudio(allLessons) {
 }
 
 /**
- * Delete any *.mp3 under LESSON_AUDIO_DIR not referenced by any lesson/slide/
- * coachMessage across `allLessons`.
+ * Delete any *.mp3 under LESSON_AUDIO_DIR not referenced by any message across
+ * `allLessons` (see collectReferencedAudio).
  *
  * @param {object[]} allLessons - full lesson objects (e.g. getLessonsAll())
  * @param {string} [dir] - overrides LESSON_AUDIO_DIR — test-only seam.

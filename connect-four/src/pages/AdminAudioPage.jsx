@@ -266,8 +266,12 @@ export function AdminAudioPage() {
     }
   }
 
-  async function handleGenerateAll() {
-    if (!window.confirm(`Generate audio for all ${data?.counts?.needs_audio || 0} keys needing audio? This will call the OpenAI TTS API.`)) return;
+  async function handleGenerateAll(scope = 'new') {
+    const count = scope === 'all' ? eligibleCount : (data?.counts?.needs_audio || 0);
+    const message = scope === 'all'
+      ? `Re-synthesize ALL ${count} eligible keys for "${lang}" with the current voice, prompt and speed?\n\nThis overwrites every existing clip — including approved ones, which go live immediately since the manifest already lists them. It costs ${count} TTS API calls.`
+      : `Generate audio for all ${count} keys needing audio? This will call the OpenAI TTS API.`;
+    if (!window.confirm(message)) return;
     setBulkLoading(true);
     // Poll status while the batch runs — the server persists each audio as it is
     // generated, so keys flip to "awaiting_approval" and become playable mid-run.
@@ -276,7 +280,7 @@ export function AdminAudioPage() {
       const res = await fetch(`${API}/api/admin/audio/generate-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang }),
+        body: JSON.stringify({ lang, scope }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await fetchStatus();
@@ -306,6 +310,10 @@ export function AdminAudioPage() {
       setBulkLoading(false);
     }
   }
+
+  // Everything "Regenerate All" would touch: the whole registry minus keys that
+  // can never be synthesized (interpolated/missing text).
+  const eligibleCount = (data?.counts?.total ?? 0) - (data?.counts?.ineligible ?? 0);
 
   if (loading) {
     return (
@@ -550,7 +558,7 @@ export function AdminAudioPage() {
       {/* Bulk actions */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <button
-          onClick={handleGenerateAll}
+          onClick={() => handleGenerateAll('new')}
           disabled={bulkLoading || (data?.counts?.needs_audio ?? 0) === 0}
           style={{
             padding: '8px 16px',
@@ -585,6 +593,28 @@ export function AdminAudioPage() {
           }}
         >
           Approve All ({data?.counts?.awaiting_approval ?? 0})
+        </button>
+
+        {/* Full re-synthesis — the only way a voice/prompt/speed change reaches
+            clips that already exist, since audio is cached by slug. */}
+        <button
+          onClick={() => handleGenerateAll('all')}
+          disabled={bulkLoading || eligibleCount === 0}
+          title="Re-synthesize every eligible key with the current voice, prompt and speed. One paid TTS call per key."
+          style={{
+            padding: '8px 16px',
+            borderRadius: 8,
+            border: '1px solid var(--red)',
+            background: 'transparent',
+            color: 'var(--red)',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: eligibleCount > 0 && !bulkLoading ? 'pointer' : 'not-allowed',
+            opacity: eligibleCount > 0 && !bulkLoading ? 1 : 0.5,
+            fontFamily: 'var(--font-display)',
+          }}
+        >
+          {bulkLoading ? 'Working...' : `Regenerate All (${eligibleCount})`}
         </button>
       </div>
 

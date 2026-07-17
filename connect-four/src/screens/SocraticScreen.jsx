@@ -10,12 +10,16 @@ import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
 import { socraticReducer } from '../lib/socraticReducer.js';
 import { langHeaders } from '../lib/apiLang.js';
+import { useAudio } from '../lib/useAudio.js';
+import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
+import { getNarrationQueue } from '../lib/lessonNarration.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
 export function SocraticScreen({ go, goBack, lessonId }) {
   const { t } = useTranslation();
   const { store } = useStore();
+  const { speechEnabled } = useAudio();
   const [lesson, setLesson] = useState(null);
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [phase, dispatch] = useReducer(socraticReducer, 'ask');
@@ -99,6 +103,36 @@ export function SocraticScreen({ go, goBack, lessonId }) {
   const socratic = lesson?.socratic ?? null;
   const correctCol = socratic?.correctCol ?? null;
 
+  // Socratic coach copy is LESSON CONTENT, served (and localized) by the server from
+  // lesson.socratic.messages — no longer assembled client-side from i18n keys, which
+  // put it outside both TTS pipelines and left the bubble permanently silent. Shape is
+  // identical to slides[].coachMessages, so CoachDialog and getNarrationQueue consume
+  // it verbatim. `showHint` short-circuits the phase map (it is sticky by design — see
+  // the plan's D2), so it selects the message set alongside `phase`.
+  const currentMessages = socratic?.messages?.[showHint ? 'hint' : phase] ?? [];
+
+  // Narrate the current bubble, mirroring ConceptScreen's slide narration.
+  // `showHint` MUST be in the deps: it is separate state that changes the visible
+  // bubble without changing `phase`. Cleanup unconditionally calls stopSpeech() so
+  // navigating away mid-narration never leaves orphaned audio.
+  // Hoisted above the loading/error/no-board early returns — rules of hooks.
+  useEffect(() => {
+    if (!lesson) return undefined;
+    const queue = getNarrationQueue(currentMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+
+    return () => {
+      stopSpeech();
+    };
+  }, [lesson, phase, showHint, speechEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleReplayNarration() {
+    if (!lesson) return;
+    stopSpeech();
+    const queue = getNarrationQueue(currentMessages, speechEnabled);
+    queue.forEach((path) => speakLessonAudio(path));
+  }
+
   // Derive overlays — win overlay on correct or wrong2.
   // Memoized (spec 046 US5, FR-022) so the array reference is stable across
   // re-renders where these dependencies haven't changed — an IIFE recomputed
@@ -153,16 +187,6 @@ export function SocraticScreen({ go, goBack, lessonId }) {
     );
   }
 
-  // CoachDialog messages
-  const coachMessages = showHint
-    ? [{ text: t(`lesson.${lessonId}.socratic.hint`, { defaultValue: t('socratic.hint') }), mood: 'think' }]
-    : {
-        ask:     [{ text: t(`lesson.${lessonId}.socratic.ask`,     { defaultValue: t('socratic.ask') }),     mood: 'think' }],
-        wrong1:  [{ text: t('socratic.wrong1'),  mood: 'oops' }],
-        wrong2:  [{ text: t('socratic.wrong2'),  mood: 'oops' }],
-        correct: [{ text: t(`lesson.${lessonId}.socratic.correct`, { defaultValue: t('socratic.correct') }), mood: 'happy' }],
-      }[phase];
-
   const canPlay = phase === 'ask' || phase === 'wrong1';
 
   return (
@@ -173,7 +197,7 @@ export function SocraticScreen({ go, goBack, lessonId }) {
         onLogoClick={() => go('home')}
       />
 
-      <CoachDialog messages={coachMessages} />
+      <CoachDialog messages={currentMessages} onReplay={handleReplayNarration} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
         {/*

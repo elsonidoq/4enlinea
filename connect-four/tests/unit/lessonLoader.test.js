@@ -371,3 +371,107 @@ test('getLesson(id, "es"): merges locale after backward-compat transforms are ap
   assert.equal(result.confirmationCount, 2, 'derived confirmationCount transform must still apply');
   assert.equal(result.slides[0].text, 'Hello', 'slide.text has no _es-suffixed sibling here, not affected by transform ordering');
 });
+
+// ── socratic.messages (Socratic copy as lesson content) ──────────────────────
+
+/** Lesson with a Socratic board whose copy lives in socratic.messages. */
+function makeSocraticLesson(messages) {
+  return makeValidLesson({
+    socratic: { movestring: '123', boardSpec: ['', '', '', '', '', '', ''], correctCol: 3, messages },
+  });
+}
+
+test('locale=es merges socratic message text and its matching audio', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeSocraticLesson({
+    ask: [{
+      text: 'Punish it', text_es: 'Castigalo',
+      audio: '/audio/lessons/en.mp3', audio_es: '/audio/lessons/es.mp3',
+      mood: 'think',
+    }],
+  }));
+  loadLessons(dir);
+
+  const es = getLesson('test-lesson-1', 'es');
+  assert.equal(es.socratic.messages.ask[0].text, 'Castigalo');
+  assert.equal(es.socratic.messages.ask[0].audio, '/audio/lessons/es.mp3', 'audio_es must collapse onto audio for getNarrationQueue');
+  assert.equal(es.socratic.messages.ask[0].mood, 'think', 'non-localizable fields survive');
+  assert.equal(es.socratic.messages.ask[0].text_es, undefined, 'all _es keys are stripped from the response');
+  assert.equal(es.socratic.messages.ask[0].audio_es, undefined);
+
+  const en = getLesson('test-lesson-1', 'en');
+  assert.equal(en.socratic.messages.ask[0].text, 'Punish it');
+  assert.equal(en.socratic.messages.ask[0].audio, '/audio/lessons/en.mp3');
+});
+
+test('socratic message falls back per field: text_es present, audio_es absent', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeSocraticLesson({
+    ask: [{ text: 'Punish it', text_es: 'Castigalo', audio: '/audio/lessons/en.mp3' }],
+  }));
+  loadLessons(dir);
+
+  const es = getLesson('test-lesson-1', 'es');
+  assert.equal(es.socratic.messages.ask[0].text, 'Castigalo');
+  assert.equal(es.socratic.messages.ask[0].audio, '/audio/lessons/en.mp3', 'a missing audio_es falls back to English rather than blanking narration');
+});
+
+test('es-only socratic message text_es (no text) does not inject an undefined key for locale=en', () => {
+  // Mirrors the three es-only tests above: localizeLesson is exercised DIRECTLY on a bare
+  // fixture, not through loadLessons. validateLesson requires a string `text` on any
+  // socratic message it accepts from disk, so this shape cannot reach the loader — but
+  // localizeLesson's undefined-key guard is a separate unit concern and must still hold.
+  const fixture = {
+    id: 'demo-es-only-socratic-msg',
+    title: 'Es Only Socratic Message',
+    slides: [{ infoProse: 'Hi' }],
+    socratic: { messages: { ask: [{ text_es: 'Castigalo', mood: 'think' }] } },
+  };
+  const out = localizeLesson(fixture, 'en');
+  assert.ok(!('text' in out.socratic.messages.ask[0]), 'text must not appear as undefined when only text_es exists');
+  assert.ok(!('text_es' in out.socratic.messages.ask[0]));
+  assert.equal(out.socratic.messages.ask[0].mood, 'think');
+});
+
+test('socratic: null survives localization untouched', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeValidLesson({ socratic: null }));
+  loadLessons(dir);
+  assert.equal(getLesson('test-lesson-1', 'es').socratic, null);
+});
+
+test('getLesson(id, "es") does not mutate the raw cache read by getLessonsAll()', () => {
+  // localizeLesson must NEVER write into its input. stripEsKeys is a SHALLOW copy, so
+  // socratic.messages on the stripped object is the SAME reference as the raw _lessons
+  // entry's. An implementation that assigns s.messages[phase] = ... instead of rebuilding
+  // a fresh container permanently deletes text_es from the raw cache — starving
+  // generateLessonAudio(lang='es'), which reads getLessonsAll() on purpose, and persisting
+  // the loss to disk on save. This is the only check that catches that.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeSocraticLesson({
+    ask: [{ text: 'Punish it', text_es: 'Castigalo', mood: 'think' }],
+  }));
+  loadLessons(dir);
+
+  const before = getLessonsAll().find(l => l.id === 'test-lesson-1');
+  assert.equal(before.socratic.messages.ask[0].text_es, 'Castigalo', 'precondition');
+
+  getLesson('test-lesson-1', 'es');
+
+  const after = getLessonsAll().find(l => l.id === 'test-lesson-1');
+  assert.equal(after.socratic.messages.ask[0].text_es, 'Castigalo', 'text_es must survive an es-locale read of the raw cache');
+  assert.equal(after.socratic.messages.ask[0].text, 'Punish it', 'the English base must not be overwritten with Spanish');
+});
+
+test('validateLesson: socratic.messages shape', () => {
+  assert.equal(validateLesson(makeSocraticLesson({ ask: [{ text: 'x', mood: 'think' }] })), null);
+  // Permissive about ABSENT phases — an unmigrated/partial lesson must not vanish.
+  assert.equal(validateLesson(makeSocraticLesson({})), null);
+  assert.equal(validateLesson(makeValidLesson({ socratic: { movestring: '1', correctCol: 0 } })), null, 'messages may be absent entirely');
+  assert.equal(validateLesson(makeValidLesson({ socratic: null })), null);
+
+  assert.match(validateLesson(makeSocraticLesson([])), /socratic\.messages \(must be an object\)/);
+  assert.match(validateLesson(makeSocraticLesson({ ask: 'nope' })), /socratic\.messages\.ask must be an array/);
+  assert.match(validateLesson(makeSocraticLesson({ ask: ['nope'] })), /socratic\.messages\.ask\[0\] must be an object/);
+  assert.match(validateLesson(makeSocraticLesson({ ask: [{ mood: 'think' }] })), /socratic\.messages\.ask\[0\]\.text must be a string/);
+});

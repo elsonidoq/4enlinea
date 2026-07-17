@@ -5,12 +5,18 @@
 // script, committed to git, and HUMAN-REVIEWED before shipping. No LLM call happens at request
 // time — server/lessonLoader.js#localizeLesson merges `_es` over English per field at read time.
 //
-// Translates ONLY these 5 field paths, and nothing else:
+// Translates ONLY these 6 field paths, and nothing else:
 //   slides[].coachMessages[].text  -> text_es
 //   slides[].legendItems[].label   -> label_es
 //   slides[].infoProse             -> infoProse_es
 //   socratic.goalPrompt            -> goalPrompt_es           (absent in most lessons — skipped)
+//   socratic.messages[phase][].text -> text_es                (phase: ask|wrong1|wrong2|correct|hint)
 //   confirmationChallenges[].goalPrompt -> goalPrompt_es
+//
+// This list is hand-synchronized with server/lessonAudio.js#collectMessages (the audio pipeline's
+// shared walker). This script is a THIRD, independent walk: it drafts `_es` offline rather than
+// synthesizing or protecting audio, and its locators are field-specific (`....text`) where
+// collectMessages yields message objects. Adding a lesson copy field means updating BOTH.
 //
 // NEVER translated: `title` (i18n bundles own it via t(..., {defaultValue})), `_boardInstructions`
 // (an authoring note, never rendered), or any board data (movestring/boardSpec/overlays/correctCol/
@@ -57,8 +63,9 @@ Options:
   -h, --help      Show this help and exit 0. Does NO work.
 
 Translates ONLY: slides[].coachMessages[].text, slides[].legendItems[].label, slides[].infoProse,
-socratic.goalPrompt, confirmationChallenges[].goalPrompt. NEVER title, _boardInstructions, or any
-board data (movestring/boardSpec/overlays/correctCol/userPerspective).
+socratic.goalPrompt, socratic.messages[phase][].text, confirmationChallenges[].goalPrompt. NEVER
+title, _boardInstructions, or any board data (movestring/boardSpec/overlays/correctCol/
+userPerspective).
 
 Requires OPENAI_API_KEY, loaded from connect-four/server/.env.`;
 
@@ -138,8 +145,13 @@ async function translateField(englishText, stats) {
 }
 
 // ── Field-path walk ──────────────────────────────────────────────────────────
-// Visits exactly the 5 translatable field paths. Each entry is applied in place on `lesson`
+// Visits exactly the 6 translatable field paths. Each entry is applied in place on `lesson`
 // (mutating the parsed object) and reported for --dry-run printing.
+//
+// Kept in the SAME fixed order as server/lessonAudio.js#SOCRATIC_PHASES so locators are
+// deterministic and the two hand-synchronized walks read identically.
+const SOCRATIC_PHASES = ['ask', 'wrong1', 'wrong2', 'correct', 'hint'];
+
 async function processLesson(lesson, stats, { dryRun, force }) {
   const report = [];
 
@@ -177,6 +189,18 @@ async function processLesson(lesson, stats, { dryRun, force }) {
   if (lesson.socratic && typeof lesson.socratic === 'object') {
     if (typeof lesson.socratic.goalPrompt === 'string') {
       await handleField(lesson.socratic, 'goalPrompt', 'socratic.goalPrompt');
+    }
+    // lesson.socratic may be null (lesson 4), `messages` may be absent (unmigrated
+    // lesson), and a phase value may be a non-array — skip rather than throw.
+    const messages = lesson.socratic.messages;
+    if (messages && typeof messages === 'object') {
+      for (const phase of SOCRATIC_PHASES) {
+        const arr = messages[phase];
+        if (!Array.isArray(arr)) continue;
+        for (let i = 0; i < arr.length; i++) {
+          await handleField(arr[i], 'text', `socratic.messages.${phase}[${i}].text`);
+        }
+      }
     }
   }
 

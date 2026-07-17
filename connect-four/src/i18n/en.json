@@ -888,13 +888,6 @@
       "new": "{{count}} new"
     }
   },
-  "socratic": {
-    "ask": "I'm going to make a mistake here. See if you can punish it.",
-    "wrong1": "Not quite — look for the right square. Try again.",
-    "wrong2": "Let me show you.",
-    "correct": "Exactly! You saw it.",
-    "hint": "Look for an even square directly above one of my discs."
-  },
   "lesson": {
     "node": {
       "done": "Completed",
@@ -937,28 +930,13 @@
       "title": "J-Shape"
     },
     "opening-centre": {
-      "title": "Own the Centre",
-      "socratic": {
-        "ask": "You move first — where is the strongest opening move?",
-        "hint": "Which column sits on the most possible four-in-a-row lines?",
-        "correct": "Exactly — the centre column. It keeps the most winning paths alive."
-      }
+      "title": "Own the Centre"
     },
     "opening-imitate": {
-      "title": "I Play Where You Play",
-      "socratic": {
-        "ask": "Gray just played column 2 again. What is Green's best reply?",
-        "hint": "Which column sits directly above Gray's last disc?",
-        "correct": "Exactly — play where they play. Answering directly above Gray's last disc keeps the imitation going."
-      }
+      "title": "I Play Where You Play"
     },
     "opening-sharp": {
-      "title": "Sharp Openings",
-      "socratic": {
-        "ask": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
-        "hint": "Look at Green's threats on the right flank. Which column completes them right now?",
-        "correct": "Exactly — that column completes Green's third-row threat right now. Every other column throws the win away; this is Allen's 'only one move to win' Third-Row Gambit."
-      }
+      "title": "Sharp Openings"
     }
   },
   "kb": {

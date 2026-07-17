@@ -4,440 +4,440 @@
     "slug": "coach--spoken--home--welcome--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-16T17:29:16.712Z",
-    "approved_at": "2026-07-16T17:59:17.148Z"
+    "generated_at": "2026-07-17T01:46:04.653Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.onboardingMission.greeting",
     "slug": "coach--spoken--onboardingMission--greeting",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:04:46.194Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:06.340Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.prompt.0",
     "slug": "coach--spoken--immediate--threat--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:09.403Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:07.925Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.prompt.1",
     "slug": "coach--spoken--immediate--threat--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:11.217Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:09.628Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.prompt.2",
     "slug": "coach--spoken--immediate--threat--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:13.490Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:10.852Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.hint.0",
     "slug": "coach--spoken--immediate--threat--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:15.142Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:12.297Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.hint.1",
     "slug": "coach--spoken--immediate--threat--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:16.790Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:14.032Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.optimal.0",
     "slug": "coach--spoken--immediate--threat--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:18.118Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:15.372Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.suboptimal.0",
     "slug": "coach--spoken--immediate--threat--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:22.351Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:16.735Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.immediate_threat.blunder.0",
     "slug": "coach--spoken--immediate--threat--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:23.969Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:18.743Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.prompt.0",
     "slug": "coach--spoken--forced--block--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:25.638Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:20.021Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.prompt.1",
     "slug": "coach--spoken--forced--block--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:27.275Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:21.487Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.prompt.2",
     "slug": "coach--spoken--forced--block--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:29.017Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:22.911Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.hint.0",
     "slug": "coach--spoken--forced--block--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:30.638Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:24.485Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.hint.1",
     "slug": "coach--spoken--forced--block--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:32.616Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:26.350Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.optimal.0",
     "slug": "coach--spoken--forced--block--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:33.785Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:27.632Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.suboptimal.0",
     "slug": "coach--spoken--forced--block--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:35.402Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:29.001Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_block.blunder.0",
     "slug": "coach--spoken--forced--block--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:37.110Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:30.579Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.prompt.0",
     "slug": "coach--spoken--double--threat--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:39.101Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:32.382Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.prompt.1",
     "slug": "coach--spoken--double--threat--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:40.556Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:33.983Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.prompt.2",
     "slug": "coach--spoken--double--threat--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:42.246Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:35.527Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.hint.0",
     "slug": "coach--spoken--double--threat--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:43.670Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:37.085Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.hint.1",
     "slug": "coach--spoken--double--threat--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:45.295Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:38.656Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.optimal.0",
     "slug": "coach--spoken--double--threat--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:46.513Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:39.919Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.suboptimal.0",
     "slug": "coach--spoken--double--threat--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:48.027Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:41.434Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.double_threat.blunder.0",
     "slug": "coach--spoken--double--threat--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:49.917Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:44.826Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.prompt.0",
     "slug": "coach--spoken--claimeven--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:51.785Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:46.745Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.prompt.1",
     "slug": "coach--spoken--claimeven--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:53.591Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:48.149Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.prompt.2",
     "slug": "coach--spoken--claimeven--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:55.204Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:49.726Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.hint.0",
     "slug": "coach--spoken--claimeven--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:05:56.814Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:51.438Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.hint.1",
     "slug": "coach--spoken--claimeven--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:00.418Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:53.541Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.optimal.0",
     "slug": "coach--spoken--claimeven--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:02.233Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:55.048Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.suboptimal.0",
     "slug": "coach--spoken--claimeven--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:03.961Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:56.694Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.claimeven.blunder.0",
     "slug": "coach--spoken--claimeven--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:06.068Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:58.116Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.prompt.0",
     "slug": "coach--spoken--z--threat--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:07.628Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:46:59.505Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.prompt.1",
     "slug": "coach--spoken--z--threat--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:09.129Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:01.476Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.prompt.2",
     "slug": "coach--spoken--z--threat--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:10.672Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:03.061Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.hint.0",
     "slug": "coach--spoken--z--threat--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:13.913Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:04.629Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.hint.1",
     "slug": "coach--spoken--z--threat--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:17.180Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:06.470Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.optimal.0",
     "slug": "coach--spoken--z--threat--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:19.012Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:07.639Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.suboptimal.0",
     "slug": "coach--spoken--z--threat--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:20.661Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:09.307Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.z_threat.blunder.0",
     "slug": "coach--spoken--z--threat--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:22.824Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:10.932Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.prompt.0",
     "slug": "coach--spoken--odd--even--threat--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:25.377Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:14.552Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.prompt.1",
     "slug": "coach--spoken--odd--even--threat--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:27.668Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:16.970Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.hint.0",
     "slug": "coach--spoken--odd--even--threat--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:29.765Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:19.276Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.optimal.0",
     "slug": "coach--spoken--odd--even--threat--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:32.068Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:21.359Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.optimal.1",
     "slug": "coach--spoken--odd--even--threat--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:34.064Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:25.675Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.suboptimal.0",
     "slug": "coach--spoken--odd--even--threat--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:36.287Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:27.976Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.odd_even_threat.blunder.0",
     "slug": "coach--spoken--odd--even--threat--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:37.934Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:44.503Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.prompt.0",
     "slug": "coach--spoken--forbidden--columns--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:39.618Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:47.369Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.prompt.1",
     "slug": "coach--spoken--forbidden--columns--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:41.037Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:49.147Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.prompt.2",
     "slug": "coach--spoken--forbidden--columns--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:42.584Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:51.037Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.hint.0",
     "slug": "coach--spoken--forbidden--columns--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:44.470Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:52.850Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.hint.1",
     "slug": "coach--spoken--forbidden--columns--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:46.389Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:56.322Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.optimal.0",
     "slug": "coach--spoken--forbidden--columns--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:47.855Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:57.863Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.suboptimal.0",
@@ -452,1295 +452,1295 @@
     "slug": "coach--spoken--forbidden--columns--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:49.498Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:47:59.442Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forbidden_columns.blunder.1",
     "slug": "coach--spoken--forbidden--columns--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:51.111Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:01.059Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.prompt.0",
     "slug": "coach--spoken--forced--win--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:53.234Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:02.471Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.prompt.1",
     "slug": "coach--spoken--forced--win--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:55.538Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:05.903Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.prompt.2",
     "slug": "coach--spoken--forced--win--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:57.027Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:07.372Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.optimal.0",
     "slug": "coach--spoken--forced--win--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:06:58.710Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:09.390Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.optimal.1",
     "slug": "coach--spoken--forced--win--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:00.403Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:10.729Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.blunder.0",
     "slug": "coach--spoken--forced--win--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:01.595Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:12.009Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.forced_win.blunder.1",
     "slug": "coach--spoken--forced--win--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:03.561Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:13.379Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.prompt.0",
     "slug": "coach--spoken--figure--7--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:05.589Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:14.870Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.prompt.1",
     "slug": "coach--spoken--figure--7--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:07.164Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:16.465Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.prompt.2",
     "slug": "coach--spoken--figure--7--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:09.085Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:17.967Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.hint.0",
     "slug": "coach--spoken--figure--7--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:10.672Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:19.638Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.hint.1",
     "slug": "coach--spoken--figure--7--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:11.998Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:22.499Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.optimal.0",
     "slug": "coach--spoken--figure--7--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:13.902Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:34.562Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.optimal.1",
     "slug": "coach--spoken--figure--7--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:15.269Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:36.129Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.optimal.2",
     "slug": "coach--spoken--figure--7--optimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:21.977Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:37.488Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.optimal.3",
     "slug": "coach--spoken--figure--7--optimal--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:24.023Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:39.582Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.suboptimal.0",
     "slug": "coach--spoken--figure--7--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:25.510Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:45.055Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.suboptimal.1",
     "slug": "coach--spoken--figure--7--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:27.177Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:46.615Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.suboptimal.2",
     "slug": "coach--spoken--figure--7--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:28.776Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:48.083Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.blunder.0",
     "slug": "coach--spoken--figure--7--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:30.578Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:49.586Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.blunder.1",
     "slug": "coach--spoken--figure--7--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:32.459Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:56.053Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.blunder.2",
     "slug": "coach--spoken--figure--7--blunder--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:34.906Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:57.624Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.figure_7.blunder.3",
     "slug": "coach--spoken--figure--7--blunder--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:36.529Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:48:59.052Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.prompt.0",
     "slug": "coach--spoken--j--shape--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:38.137Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:00.556Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.prompt.1",
     "slug": "coach--spoken--j--shape--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:39.580Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:05.081Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.prompt.2",
     "slug": "coach--spoken--j--shape--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:41.336Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:06.909Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.hint.0",
     "slug": "coach--spoken--j--shape--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:43.178Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:08.954Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.hint.1",
     "slug": "coach--spoken--j--shape--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:45.603Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:10.733Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.optimal.0",
     "slug": "coach--spoken--j--shape--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:47.060Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:32.902Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.optimal.1",
     "slug": "coach--spoken--j--shape--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:48.811Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:34.851Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.optimal.2",
     "slug": "coach--spoken--j--shape--optimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:50.338Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:36.574Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.optimal.3",
     "slug": "coach--spoken--j--shape--optimal--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:51.838Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:38.078Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.suboptimal.0",
     "slug": "coach--spoken--j--shape--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:53.310Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:39.602Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.suboptimal.1",
     "slug": "coach--spoken--j--shape--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:55.222Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:42.286Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.suboptimal.2",
     "slug": "coach--spoken--j--shape--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:57.014Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:44.101Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.blunder.0",
     "slug": "coach--spoken--j--shape--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:07:58.658Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:45.549Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.blunder.1",
     "slug": "coach--spoken--j--shape--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:00.528Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:47.129Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.blunder.2",
     "slug": "coach--spoken--j--shape--blunder--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:02.241Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:48.678Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.j_shape.blunder.3",
     "slug": "coach--spoken--j--shape--blunder--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:04.251Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:50.326Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.prompt.0",
     "slug": "coach--spoken--overcut--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:05.873Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:51.705Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.prompt.1",
     "slug": "coach--spoken--overcut--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:07.399Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:53.205Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.prompt.2",
     "slug": "coach--spoken--overcut--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:08.997Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:54.775Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.hint.0",
     "slug": "coach--spoken--overcut--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:10.549Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:56.357Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.hint.1",
     "slug": "coach--spoken--overcut--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:12.079Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:57.920Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.optimal.0",
     "slug": "coach--spoken--overcut--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:13.642Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:49:59.356Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.optimal.1",
     "slug": "coach--spoken--overcut--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:15.668Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:00.943Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.optimal.2",
     "slug": "coach--spoken--overcut--optimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:17.809Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:02.490Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.optimal.3",
     "slug": "coach--spoken--overcut--optimal--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:19.340Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:03.829Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.suboptimal.0",
     "slug": "coach--spoken--overcut--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:20.912Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:05.262Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.suboptimal.1",
     "slug": "coach--spoken--overcut--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:22.612Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:06.734Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.suboptimal.2",
     "slug": "coach--spoken--overcut--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:24.057Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:08.408Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.blunder.0",
     "slug": "coach--spoken--overcut--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:25.505Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:09.857Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.blunder.1",
     "slug": "coach--spoken--overcut--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:27.212Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:11.550Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.blunder.2",
     "slug": "coach--spoken--overcut--blunder--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:28.842Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:13.547Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.overcut.blunder.3",
     "slug": "coach--spoken--overcut--blunder--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:30.574Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:15.471Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.prompt.0",
     "slug": "coach--spoken--undercut--prompt--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:32.130Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:16.934Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.prompt.1",
     "slug": "coach--spoken--undercut--prompt--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:33.913Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:18.561Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.prompt.2",
     "slug": "coach--spoken--undercut--prompt--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:35.261Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:20.655Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.hint.0",
     "slug": "coach--spoken--undercut--hint--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:36.689Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:24.953Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.hint.1",
     "slug": "coach--spoken--undercut--hint--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:38.252Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:26.914Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.optimal.0",
     "slug": "coach--spoken--undercut--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:39.680Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:28.371Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.optimal.1",
     "slug": "coach--spoken--undercut--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:41.186Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:33.862Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.optimal.2",
     "slug": "coach--spoken--undercut--optimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:42.668Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:35.199Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.optimal.3",
     "slug": "coach--spoken--undercut--optimal--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:44.198Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:36.769Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.suboptimal.0",
     "slug": "coach--spoken--undercut--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:45.856Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:38.323Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.suboptimal.1",
     "slug": "coach--spoken--undercut--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:47.412Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:39.890Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.suboptimal.2",
     "slug": "coach--spoken--undercut--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:48.806Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:41.436Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.blunder.0",
     "slug": "coach--spoken--undercut--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:50.325Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:43.074Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.blunder.1",
     "slug": "coach--spoken--undercut--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:51.843Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:44.427Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.blunder.2",
     "slug": "coach--spoken--undercut--blunder--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:53.447Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:46.154Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.undercut.blunder.3",
     "slug": "coach--spoken--undercut--blunder--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:54.991Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:47.813Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.0",
     "slug": "coach--spoken--generic--optimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:56.101Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:48.950Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.1",
     "slug": "coach--spoken--generic--optimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:57.169Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:49.991Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.2",
     "slug": "coach--spoken--generic--optimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:58.318Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:51.548Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.3",
     "slug": "coach--spoken--generic--optimal--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:08:59.590Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:52.643Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.4",
     "slug": "coach--spoken--generic--optimal--4",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:00.755Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:53.687Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.5",
     "slug": "coach--spoken--generic--optimal--5",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:02.004Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:55.066Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.6",
     "slug": "coach--spoken--generic--optimal--6",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:03.454Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:56.497Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.7",
     "slug": "coach--spoken--generic--optimal--7",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:04.844Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:57.482Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.8",
     "slug": "coach--spoken--generic--optimal--8",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:06.095Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:58.596Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.9",
     "slug": "coach--spoken--generic--optimal--9",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:07.191Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:50:59.840Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.10",
     "slug": "coach--spoken--generic--optimal--10",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:08.621Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:00.877Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.11",
     "slug": "coach--spoken--generic--optimal--11",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:10.541Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:02.149Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.12",
     "slug": "coach--spoken--generic--optimal--12",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:11.498Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:03.354Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.13",
     "slug": "coach--spoken--generic--optimal--13",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:12.936Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:04.889Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.14",
     "slug": "coach--spoken--generic--optimal--14",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:14.217Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:06.079Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.15",
     "slug": "coach--spoken--generic--optimal--15",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:15.552Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:07.916Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.16",
     "slug": "coach--spoken--generic--optimal--16",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:16.822Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:09.098Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.17",
     "slug": "coach--spoken--generic--optimal--17",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:18.143Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:10.458Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.18",
     "slug": "coach--spoken--generic--optimal--18",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:19.403Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:11.664Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.optimal.19",
     "slug": "coach--spoken--generic--optimal--19",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:20.685Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:15.929Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.suboptimal.0",
     "slug": "coach--spoken--generic--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:22.017Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:19.026Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.suboptimal.1",
     "slug": "coach--spoken--generic--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:23.674Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:20.759Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.suboptimal.2",
     "slug": "coach--spoken--generic--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:25.055Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:22.055Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.0",
     "slug": "coach--spoken--generic--blunder--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:26.457Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:23.285Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.1",
     "slug": "coach--spoken--generic--blunder--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:27.876Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:24.516Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.2",
     "slug": "coach--spoken--generic--blunder--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:29.343Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:26.254Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.3",
     "slug": "coach--spoken--generic--blunder--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:30.845Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:27.577Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.4",
     "slug": "coach--spoken--generic--blunder--4",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:32.044Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:42.064Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.generic.blunder.5",
     "slug": "coach--spoken--generic--blunder--5",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:33.474Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:44.351Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.summary.perfect.0",
     "slug": "coach--spoken--summary--perfect--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:34.893Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:45.724Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.summary.perfect.1",
     "slug": "coach--spoken--summary--perfect--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:36.148Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:51.170Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.intro.0",
     "slug": "coach--spoken--sparring--intro--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:37.676Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:52.747Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.intro.1",
     "slug": "coach--spoken--sparring--intro--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:38.893Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:54.028Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.hint.generic.0",
     "slug": "coach--spoken--sparring--hint--generic--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:40.336Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:51:55.442Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.hint.generic.1",
     "slug": "coach--spoken--sparring--hint--generic--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:41.775Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:00.121Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.clean.0",
     "slug": "coach--spoken--sparring--review--clean--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:43.074Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:01.273Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.clean.1",
     "slug": "coach--spoken--sparring--review--clean--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:44.524Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:02.388Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.mistakes.0",
     "slug": "coach--spoken--sparring--review--mistakes--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:46.369Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:03.750Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.mistakes.1",
     "slug": "coach--spoken--sparring--review--mistakes--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:47.940Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:05.049Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.mistakes.2",
     "slug": "coach--spoken--sparring--review--mistakes--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:49.187Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:06.246Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.review.mistakes.3",
     "slug": "coach--spoken--sparring--review--mistakes--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:50.647Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:07.609Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.outcome.win",
     "slug": "coach--spoken--sparring--outcome--win",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:51.792Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:08.745Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.outcome.loss",
     "slug": "coach--spoken--sparring--outcome--loss",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:53.184Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:10.043Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.sparring.outcome.draw",
     "slug": "coach--spoken--sparring--outcome--draw",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:54.474Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:11.190Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.immediate_threat.0",
     "slug": "coach--spoken--ai--move--immediate--threat--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:55.648Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:12.350Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.immediate_threat.1",
     "slug": "coach--spoken--ai--move--immediate--threat--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:56.855Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:13.606Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.forced_block.0",
     "slug": "coach--spoken--ai--move--forced--block--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:58.165Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:14.972Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.forced_block.1",
     "slug": "coach--spoken--ai--move--forced--block--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:09:59.545Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:16.334Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.double_threat.0",
     "slug": "coach--spoken--ai--move--double--threat--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:01.298Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:18.107Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.double_threat.1",
     "slug": "coach--spoken--ai--move--double--threat--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:02.996Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:19.327Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.claimeven.0",
     "slug": "coach--spoken--ai--move--claimeven--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:04.527Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:20.835Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.claimeven.1",
     "slug": "coach--spoken--ai--move--claimeven--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:06.098Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:22.646Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.z_threat.0",
     "slug": "coach--spoken--ai--move--z--threat--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:07.615Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:28.029Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.z_threat.1",
     "slug": "coach--spoken--ai--move--z--threat--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:09.245Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:32.645Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.odd_even_threat.0",
     "slug": "coach--spoken--ai--move--odd--even--threat--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:10.708Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:34.038Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.odd_even_threat.1",
     "slug": "coach--spoken--ai--move--odd--even--threat--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:12.583Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:35.468Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.forced_win.0",
     "slug": "coach--spoken--ai--move--forced--win--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:14.154Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:36.854Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.forced_win.1",
     "slug": "coach--spoken--ai--move--forced--win--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:17.613Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:39.404Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.figure_7.0",
     "slug": "coach--spoken--ai--move--figure--7--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:19.149Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:41.075Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.figure_7.1",
     "slug": "coach--spoken--ai--move--figure--7--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:20.970Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:42.675Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.j_shape.0",
     "slug": "coach--spoken--ai--move--j--shape--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:22.545Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:44.121Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.j_shape.1",
     "slug": "coach--spoken--ai--move--j--shape--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:24.119Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:49.366Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.overcut.0",
     "slug": "coach--spoken--ai--move--overcut--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:25.889Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:50.982Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.overcut.1",
     "slug": "coach--spoken--ai--move--overcut--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:27.590Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:52.351Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.undercut.0",
     "slug": "coach--spoken--ai--move--undercut--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:29.263Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:54.087Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.undercut.1",
     "slug": "coach--spoken--ai--move--undercut--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:30.933Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:55.461Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.suboptimal.0",
     "slug": "coach--spoken--ai--move--suboptimal--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:37.226Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:56.936Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.suboptimal.1",
     "slug": "coach--spoken--ai--move--suboptimal--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:38.929Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:58.421Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.suboptimal.2",
     "slug": "coach--spoken--ai--move--suboptimal--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:40.158Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:52:59.740Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.0",
     "slug": "coach--spoken--ai--move--neutral--0",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:41.433Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:01.010Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.1",
     "slug": "coach--spoken--ai--move--neutral--1",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:42.685Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:02.309Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.2",
     "slug": "coach--spoken--ai--move--neutral--2",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:44.044Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:04.079Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.3",
     "slug": "coach--spoken--ai--move--neutral--3",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:45.173Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:05.364Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.4",
     "slug": "coach--spoken--ai--move--neutral--4",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:46.290Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:06.561Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.5",
     "slug": "coach--spoken--ai--move--neutral--5",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:47.468Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:07.835Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.6",
     "slug": "coach--spoken--ai--move--neutral--6",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:49.097Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:09.312Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.7",
     "slug": "coach--spoken--ai--move--neutral--7",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:50.331Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:10.383Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.8",
     "slug": "coach--spoken--ai--move--neutral--8",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:51.610Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:11.671Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.9",
     "slug": "coach--spoken--ai--move--neutral--9",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:52.738Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:12.754Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.10",
     "slug": "coach--spoken--ai--move--neutral--10",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:54.224Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:14.053Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.11",
     "slug": "coach--spoken--ai--move--neutral--11",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:55.223Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:15.581Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.12",
     "slug": "coach--spoken--ai--move--neutral--12",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:56.431Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:16.649Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.13",
     "slug": "coach--spoken--ai--move--neutral--13",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:57.683Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:18.008Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.14",
     "slug": "coach--spoken--ai--move--neutral--14",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:10:59.448Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:19.357Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.15",
     "slug": "coach--spoken--ai--move--neutral--15",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:11:00.707Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:20.672Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.16",
     "slug": "coach--spoken--ai--move--neutral--16",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:11:01.865Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:22.106Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.17",
     "slug": "coach--spoken--ai--move--neutral--17",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:11:03.024Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:23.253Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.18",
     "slug": "coach--spoken--ai--move--neutral--18",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:11:04.302Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:24.494Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   },
   {
     "key": "coach.spoken.ai_move.neutral.19",
     "slug": "coach--spoken--ai--move--neutral--19",
     "status": "approved",
     "reason": null,
-    "generated_at": "2026-07-14T20:11:05.613Z",
-    "approved_at": "2026-07-14T20:11:37.663Z"
+    "generated_at": "2026-07-17T01:53:25.914Z",
+    "approved_at": "2026-07-17T02:03:25.867Z"
   }
 ]

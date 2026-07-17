@@ -97,7 +97,44 @@
       "",
       ""
     ],
-    "correctCol": 3
+    "correctCol": 3,
+    "messages": {
+      "ask": [
+        {
+          "text": "I'm going to make a mistake here. See if you can punish it.",
+          "mood": "think",
+          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! You saw it.",
+          "mood": "happy",
+          "text_es": "¡Exacto! Lo viste."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Look for an even square directly above one of my discs.",
+          "mood": "think",
+          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+        }
+      ]
+    }
   },
   "confirmationCategory": "overcut",
   "confirmationCount": 2,

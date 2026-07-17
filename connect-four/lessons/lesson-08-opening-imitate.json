@@ -82,7 +82,44 @@
     "overlays": [],
     "correctCol": 1,
     "goalPrompt": "Gray just played column 2 again. What is Green's best reply?",
-    "_boardInstructions": "8 plies (33333111): centre column 3 stacked five high (g d g d g), column 1 stacked three high (d g d) with Gray's disc on top. Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified: col 1 (0-indexed) is the unique positive-scoring column — 'play where you play' directly above Gray's last disc — matching Allen Diagram 237's continuation."
+    "_boardInstructions": "8 plies (33333111): centre column 3 stacked five high (g d g d g), column 1 stacked three high (d g d) with Gray's disc on top. Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Solver-verified: col 1 (0-indexed) is the unique positive-scoring column — 'play where you play' directly above Gray's last disc — matching Allen Diagram 237's continuation.",
+    "messages": {
+      "ask": [
+        {
+          "text": "Gray just played column 2 again. What is Green's best reply?",
+          "mood": "think",
+          "text_es": "Gris acaba de jugar la columna 2 otra vez. ¿Cuál es la mejor respuesta de Verde?"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly — play where they play. Answering directly above Gray's last disc keeps the imitation going.",
+          "mood": "happy",
+          "text_es": "Exacto — jugá donde ellos juegan. Responder justo encima de la última ficha de Gris mantiene viva la imitación."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Which column sits directly above Gray's last disc?",
+          "mood": "think",
+          "text_es": "¿Qué columna está justo encima de la última ficha de Gris?"
+        }
+      ]
+    }
   },
   "confirmationCategory": null,
   "confirmationCount": 0,

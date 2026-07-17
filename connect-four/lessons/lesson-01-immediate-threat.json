@@ -9,11 +9,11 @@
       "movestring": "33201",
       "coachMessages": [
         {
-          "text": "Look at the board. Can you find a four-cell window that already has three Gray discs and one empty space?",
+          "text": "Look at the board. Can you find a four-cell window that already has three Green discs and one empty space?",
           "mood": "think",
-          "audio": "/audio/lessons/a7bce21fb8387231.mp3",
-          "text_es": "Mirá el tablero. ¿Podés encontrar una ventana de cuatro celdas que ya tenga tres fichas grises y un espacio vacío?",
-          "audio_es": "/audio/lessons/322aa384a15af4ea.mp3"
+          "audio": "/audio/lessons/d5e506badf62f7ec.mp3",
+          "text_es": "Mirá el tablero. ¿Podés encontrar una ventana de cuatro celdas que ya tenga tres fichas verdes y un espacio vacío?",
+          "audio_es": "/audio/lessons/1384dd411d263be3.mp3"
         }
       ],
       "boardSpec": [
@@ -211,8 +211,8 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Tempting Gray build (wrong this turn)",
-          "label_es": "Formación tentadora de gris (equivocada en este turno)"
+          "label": "Tempting Green build (wrong this turn)",
+          "label_es": "Formación tentadora de verde (equivocada en este turno)"
         },
         {
           "type": "td",
@@ -237,7 +237,54 @@
       ""
     ],
     "overlays": [],
-    "correctCol": 0
+    "correctCol": 0,
+    "messages": {
+      "ask": [
+        {
+          "text": "I'm going to make a mistake here. See if you can punish it.",
+          "mood": "think",
+          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo.",
+          "audio": "/audio/lessons/a2230ed7085dda79.mp3",
+          "audio_es": "/audio/lessons/f770cd4ea25777eb.mp3"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! You saw it.",
+          "mood": "happy",
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
+        }
+      ],
+      "hint": [
+        {
+          "text": "Look for an even square directly above one of my discs.",
+          "mood": "think",
+          "text_es": "Buscá una casilla par justo encima de una de mis fichas.",
+          "audio": "/audio/lessons/1ab32125dd370e7d.mp3",
+          "audio_es": "/audio/lessons/ffbaa400e146d675.mp3"
+        }
+      ]
+    }
   },
   "confirmationCategory": "immediate_threat",
   "confirmationCount": 4,

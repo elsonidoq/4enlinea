@@ -17,6 +17,7 @@ import {
   generateLessonAudio,
   pruneOrphanedLessonAudio,
   collectReferencedAudio,
+  collectMessages,
 } from '../../server/lessonAudio.js';
 
 function makeStubSynthesize({ failFor = [] } = {}) {
@@ -188,14 +189,78 @@ describe('generateLessonAudio', () => {
     assert.deepEqual(result.failed, []);
   });
 
-  it('never touches lesson.socratic', async () => {
+  it('generates audio for socratic.messages', async () => {
+    // Inverts the old 'never touches lesson.socratic' lock: Socratic copy is now
+    // lesson content and must be voiced by the same pipeline as concept slides.
     const lesson = makeLesson({
-      socratic: { movestring: '123', correctCol: 3 },
+      socratic: {
+        movestring: '123',
+        correctCol: 3,
+        messages: {
+          ask: [{ text: 'Punish it', mood: 'think' }],
+          correct: [{ text: 'You saw it', mood: 'happy' }],
+        },
+      },
     });
     const synthesize = makeStubSynthesize();
     const result = await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
 
-    assert.deepEqual(result.lesson.socratic, { movestring: '123', correctCol: 3 });
+    const askHash = hashMessageText('Punish it');
+    assert.equal(result.lesson.socratic.messages.ask[0].audio, `/audio/lessons/${askHash}.mp3`);
+    assert.ok(fs.existsSync(path.join(tmpDir, `${askHash}.mp3`)));
+    // Slides first, then socratic in fixed phase order (ask before correct) — not Object.keys.
+    assert.deepEqual(result.generated, [
+      'slides[0].coachMessages[0]',
+      'socratic.messages.ask[0]',
+      'socratic.messages.correct[0]',
+    ]);
+    assert.deepEqual(result.failed, []);
+  });
+
+  it('socratic: null generates nothing and throws nothing (lesson 4 shape)', async () => {
+    const lesson = makeLesson({ socratic: null });
+    const synthesize = makeStubSynthesize();
+    const result = await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
+
+    assert.deepEqual(result.generated, ['slides[0].coachMessages[0]']);
+    assert.deepEqual(result.failed, []);
+    assert.equal(result.lesson.socratic, null);
+  });
+
+  it('tolerates socratic without messages, and a non-array phase value', async () => {
+    const lesson = makeLesson({
+      socratic: { movestring: '123', correctCol: 3 },
+    });
+    const synthesize = makeStubSynthesize();
+    await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
+
+    const lesson2 = makeLesson({
+      socratic: { movestring: '123', correctCol: 3, messages: { ask: 'not an array' } },
+    });
+    const result2 = await generateLessonAudio(lesson2, { synthesize, dir: tmpDir });
+    assert.deepEqual(result2.generated, ['slides[0].coachMessages[0]']);
+  });
+
+  it('lang=es reads text_es and writes audio_es for socratic messages', async () => {
+    const lesson = makeLesson({
+      slides: [{ movestring: '', coachMessages: [] }],
+      socratic: {
+        movestring: '123',
+        correctCol: 3,
+        messages: {
+          ask: [{ text: 'Punish it', text_es: 'Castigalo', mood: 'think' }],
+        },
+      },
+    });
+    const synthesize = makeStubSynthesize();
+    const result = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    const hash = hashMessageText('Castigalo');
+    const message = result.lesson.socratic.messages.ask[0];
+    assert.equal(message.audio_es, `/audio/lessons/${hash}.mp3`);
+    assert.equal(message.audio, undefined, 'an es pass must not write the en audio field');
+    assert.deepEqual(result.generated, ['socratic.messages.ask[0]']);
+    assert.equal(synthesize.calls[0].text, 'Castigalo');
   });
 
   it('lang=es reads text_es and writes audio_es, leaving audio/text untouched', async () => {
@@ -308,6 +373,34 @@ describe('pruneOrphanedLessonAudio', () => {
     assert.deepEqual(pruneOrphanedLessonAudio([], missingDir), []);
   });
 
+  it('does not delete a clip referenced only by socratic.messages', () => {
+    // The trap this plan exists to prevent: generateLessonAudio and
+    // collectReferencedAudio walking the lesson tree independently. A socratic
+    // clip that generate writes but collect never sees is an orphan on the next
+    // prune run and gets deleted. Same failure class as the audio_es scar above.
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'soc1.mp3'), 'a');
+    fs.writeFileSync(path.join(tmpDir, 'orphan.mp3'), 'b');
+
+    const lessons = [
+      makeLesson({
+        slides: [{ movestring: '', coachMessages: [] }],
+        socratic: {
+          movestring: '123',
+          correctCol: 3,
+          messages: {
+            ask: [{ text: 'I am going to make a mistake here.', mood: 'think', audio: '/audio/lessons/soc1.mp3' }],
+          },
+        },
+      }),
+    ];
+
+    const deleted = pruneOrphanedLessonAudio(lessons, tmpDir);
+
+    assert.deepEqual(deleted, ['orphan.mp3']);
+    assert.ok(fs.existsSync(path.join(tmpDir, 'soc1.mp3')), 'the socratic clip must survive the prune');
+  });
+
   it('treats a referenced audio_es clip as referenced, not orphaned', () => {
     fs.mkdirSync(tmpDir, { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'en1.mp3'), 'a');
@@ -352,5 +445,44 @@ describe('collectReferencedAudio', () => {
     const lessons = [{ slides: [{ coachMessages: [{ text: 'hi', audio: '/audio/lessons/aaa.mp3' }] }] }];
     const refs = collectReferencedAudio(lessons);
     assert.deepStrictEqual([...refs], ['aaa.mp3']);
+  });
+
+  it('collects a socratic-only clip (both en and es) as referenced', () => {
+    const lessons = [{
+      slides: [],
+      socratic: {
+        messages: {
+          ask: [{ text: 'hi', audio: '/audio/lessons/soc-en.mp3', text_es: 'hola', audio_es: '/audio/lessons/soc-es.mp3' }],
+        },
+      },
+    }];
+    const refs = collectReferencedAudio(lessons);
+    assert.ok(refs.has('soc-en.mp3'), 'socratic English clip must be referenced');
+    assert.ok(refs.has('soc-es.mp3'), 'socratic Spanish clip must be referenced');
+  });
+});
+
+describe('collectMessages', () => {
+  it('yields slides before socratic, with byte-identical slide locators', () => {
+    const lesson = makeLesson({
+      slides: [{ movestring: '', coachMessages: [{ text: 'a' }, { text: 'b' }] }],
+      socratic: { messages: { hint: [{ text: 'h' }], ask: [{ text: 'q' }] } },
+    });
+    // Fixed phase order (ask before hint) regardless of the JSON's key order.
+    assert.deepEqual(collectMessages(lesson).map((e) => e.locator), [
+      'slides[0].coachMessages[0]',
+      'slides[0].coachMessages[1]',
+      'socratic.messages.ask[0]',
+      'socratic.messages.hint[0]',
+    ]);
+  });
+
+  it('tolerates socratic: null, absent messages, and a non-array phase', () => {
+    assert.deepEqual(collectMessages(makeLesson({ socratic: null })).map((e) => e.locator), ['slides[0].coachMessages[0]']);
+    assert.deepEqual(collectMessages(makeLesson({ socratic: {} })).map((e) => e.locator), ['slides[0].coachMessages[0]']);
+    assert.deepEqual(
+      collectMessages(makeLesson({ socratic: { messages: { ask: null } } })).map((e) => e.locator),
+      ['slides[0].coachMessages[0]'],
+    );
   });
 });
