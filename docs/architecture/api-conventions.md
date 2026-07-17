@@ -898,15 +898,23 @@ requireAdmin` (same double-gate pattern as spec 039's `/api/admin/audio/generate
 
 **Path param**: `id` — lesson id; `404 { error: 'not_found' }` if it doesn't exist.
 
-**Request body**: none — the server loads the lesson from disk (`getLesson(id)`), not from the client,
-so a stale client-held copy can't overwrite a concurrent edit.
+**Request body**: `{ lang }` — optional, `'en'` (default) or `'es'`; anything else → `400`. The server
+loads the lesson from disk (`getLessonsAll().find(...)` — **raw**, not `getLesson()`, which would strip
+`_es` fields before the save-back and destroy Spanish content), not from the client, so a stale
+client-held copy can't overwrite a concurrent edit. The admin editor's "Generate audios" button
+sends `{ lang }` from its en/es toggle (`buildGenerateAudioRequest` in `AdminLessonEditorScreen.jsx`) —
+before that wiring existed the button sent no body, so toggling to Spanish silently produced English clips.
 
-**Behavior**: for every concept-slide `coachMessages[]` entry with non-empty `text` whose current
-`audio` doesn't already match `hashMessageText(text) + '.mp3'`, calls `synthesize(text)`
-(`server/ttsProvider.js`), writes `public/audio/lessons/<hash>.mp3`, and sets
-`coachMessages[i].audio = '/audio/lessons/<hash>.mp3'`. Per-message failures are caught individually
-(that message's `audio` is left unchanged) — one bad synth does not abort the batch. Persists via
-`saveLessonFile` + `reloadLessons()`.
+**Behavior**: for every concept-slide `coachMessages[]` entry whose text field for the target language
+(`text` for `en`, `text_es` for `es`) is non-empty and whose current audio field (`audio` / `audio_es`)
+doesn't already match `hashMessageText(<text>) + '.mp3'`, calls `synthesize(text, { instructions, speed,
+voice, model })` where config comes from `readTtsConfig(lang)` (per-language `server/tts-prompt.<lang>.json`
+— `es` carries the Argentinian-persona prompt) and `instructions = buildTtsInstructions(basePrompt, lang)`
+(appends the Spanish accent directive for `es`). Writes `public/audio/lessons/<hash>.mp3` and sets the
+matching audio field. Spanish text hashes to a **different** filename than English, so the two coexist in
+one flat dir. Per-message failures are caught individually — one bad synth does not abort the batch.
+Persists via `saveLessonFile` + `reloadLessons()`. **`prune-audio` must stay `audio_es`-aware**
+(`collectReferencedAudio` collects both `audio` and `audio_es`), or it deletes every Spanish clip as an orphan.
 
 **Response** (`200 OK`): `{ lesson, generated: [<locator>, ...], failed: [{ locator, error }, ...] }` —
 `generated` lists messages that got a *new* file this run (already-current messages are skipped
@@ -1068,7 +1076,7 @@ The `papergames_games` row UUID. The client navigates to `ReviewScreen` with thi
 
 The client's selected UI language reaches the server two ways — never assume one covers both:
 
-- **`Accept-Language` header → `req.locale`.** `localeMiddleware` (`server/locale.mjs`) resolves every request's `req.locale` to one of `SUPPORTED_LOCALES = ['en','es']` (default `'en'`, q-weighted parse, base-language match). The client sets `Accept-Language` from its i18next language via `langHeaders()` (`src/lib/apiLang.js`), attached to the deep-reveal `POST /api/explain-move-llm` fetch. Locale-scoped endpoints: `/api/explain-move-llm`, `/api/explain-move`, `/api/user/tts/deep-reveal`.
+- **`Accept-Language` header → `req.locale`.** `localeMiddleware` (`server/locale.mjs`) resolves every request's `req.locale` to one of `SUPPORTED_LOCALES = ['en','es']` (default `'en'`, q-weighted parse, base-language match). The client sets `Accept-Language` from its i18next language via `langHeaders()` (`src/lib/apiLang.js`). **`langHeaders()` must be attached to EVERY fetch whose response is locale-dependent** — a common trap is a correct server seam with a client that never sends the header (a bare `fetch(url)` sends the *browser's* `Accept-Language`, not the app's). Current call sites: the deep-reveal `POST /api/explain-move-llm` fetch, and the lesson-content fetches in `ConceptScreen.jsx`/`SocraticScreen.jsx` (added so `_es` lesson content actually renders — `GET /api/lessons` the *list* is NOT locale-scoped and correctly omits it). Locale-scoped endpoints: `/api/explain-move-llm`, `/api/explain-move`, `/api/user/tts/deep-reveal`, `GET /api/lessons/:id` (merges `_es` sibling fields per-field with English fallback via `lessonLoader.js#localizeLesson`; **`title` is deliberately NOT localized here — the `lesson.<id>.title` i18n key owns it**).
 - **Explicit `?lang=` query param on the TTS audio GET.** `GET /api/user/tts/deep-reveal` is fetched via `new Audio(url)`, which **cannot set a custom header**, so its language is passed as `&lang=<en|es>` on the URL (`DeepRevealPane.jsx`). The endpoint resolves locale via `resolveTtsLocale` = whitelisted `?lang=` **preferred over** `req.locale`. This keeps the audio row aligned with the text row regardless of the browser's own `Accept-Language`.
 
 Because the client i18n language is constrained to exactly `en`/`es` (no regional tags, no browser detector), the header's base-language match and the param's exact match never disagree.

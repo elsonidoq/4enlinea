@@ -152,6 +152,17 @@ For each check record:
   - **Expected**: The portal opens for the user's actual `stripe_customer_id`.
   - **Source**: Epic 5 / spec 045 T034 (OI-2 resolution).
 
+- [ ] **Settings Subscription section: paid-user branches (W4 D3).**
+  - **What**: As a real **paid** user on staging, open `/settings`: (a) the "Manage subscription" button
+    calls `POST /api/stripe/portal` with `{returnPath:'/settings'}` and the portal **returns to `/settings`**,
+    not `/`; (b) the deep-reveal quota counter and its upgrade CTA are **absent** for paid (they only render
+    for signed-in free users). And as a **free** user: the "Upgrade to Pro" button opens `UpgradeModal` →
+    real `checkout.stripe.com` session.
+  - **Why staging**: paid tier cannot be set locally — the auto-mode safety classifier blocks every
+    `users`-table UPDATE, so the paid branches (`Task 7` no-counter, `Task 9` portal) are unit-tested only.
+  - **Expected**: portal round-trips to `/settings`; paid users see no quota counter; free users reach checkout.
+  - **Source**: W4 Tasks 7/8/9 (QA-remediation 2026-07-16); `sanitizeReturnPath` in `stripeProcessor.js`.
+
 - [ ] **Deployed DB can write `stripe_events` and `tracks`.**
   - **What**: Confirm the deployed Supabase DB's `service_role` can INSERT into `stripe_events` and
     `tracks` (the webhook writes both). Locally these needed migration `055_stripe_events_tracks_grants.sql`

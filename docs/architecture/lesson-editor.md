@@ -10,6 +10,34 @@ and preview in the real lesson flow without a server restart.
 
 ---
 
+## Spanish localization (`_es` sibling fields)
+
+Spanish lesson content lives in `_es` **sibling fields** inside the same lesson JSON, not a separate
+file: `infoProse_es`, `coachMessages[].text_es`, `coachMessages[].audio_es`, `legendItems[].label_es`,
+`socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`. `getLesson(id, locale)` merges them
+**per field** with English fallback (`lessonLoader.js#localizeLesson`) and strips all `_es` keys from the
+client response — so a partial translation degrades gracefully instead of blanking a slide. `GET
+/api/admin/lessons/:id` deliberately reads **raw** (`getLessonsAll()`), keeping `_es` intact for editing.
+
+**Do NOT localize `title`.** The `lesson.<id>.title` i18n key (en/es.json) already owns titles via
+`t(..., {defaultValue})` and wins; a `title_es` would be a second, silently-losing source.
+
+The editor has an **en/es language toggle** (`lang` state) that swaps which sibling fields the
+translatable inputs show/edit; an absent `_es` field shows **empty** (not the English text) so a missing
+translation is visible. Non-translatable fields (`movestring`, `boardSpec`, `overlays`, `correctCol`,
+`userPerspective`, `_boardInstructions`) are language-independent and do not change with the toggle.
+
+**Traps:**
+- `lessonToJsonPayload` (the PUT body builder) rebuilds `slides`/`socratic` from whitelists — it must
+  spread the source object *then* override derived fields (`boardSpec`), or it silently drops `_es`
+  (and, historically, the un-suffixed `socratic.goalPrompt`) on every save.
+- A lesson **translated but not yet voiced** serves Spanish text with the **English** audio clip (the
+  per-field fallback backfills `audio` from English) — arguably worse than silence. Translate and run
+  generate-audio `{lang:'es'}` together. See `POST /api/admin/lessons/:id/generate-audio` in
+  `api-conventions.md` and the `prune-audio` `audio_es` invariant.
+
+---
+
 ## Architecture Overview
 
 ```

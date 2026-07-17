@@ -165,6 +165,18 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 
 Files in `tests/difficulty/` and `tests/scores/` exist but are **not included** in either script — add them explicitly when they are ready.
 
+### `test:dom` — JSX/component render tests
+
+`test` and `test:fast` run **plain `node --test` with no JSX capability** — a `.jsx` test registered in
+either fails to parse. Component/render tests live in the separate **`test:dom`** script, which loads
+the esbuild JSX loader + jsdom via `connect-four/tests/dom/setup.js`. Put any test that renders a
+component and asserts what the user sees (`tests/dom/*.dom.test.jsx`) here — see
+`tests/dom/SetCard.dom.test.jsx` for the pattern. This is the correct home for the class of bug this
+codebase keeps shipping (a producer function tested green while its rendered string is wrong): assert
+the **rendered output**, not the function that feeds it. Register new `.dom.test.jsx` files in `test:dom`
+(they are NOT auto-discovered, same rule as above), and run `npm run test:dom` alongside `test:fast`
+when you touch a component.
+
 ### i18n key-parity guard (spec 049, Epic 9, `tests/unit/i18nKeyParity.test.js`)
 
 A future maintainer adding new English UI copy without the matching Spanish key (or vice versa)
