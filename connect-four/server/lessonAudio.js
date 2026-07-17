@@ -24,6 +24,13 @@ import { buildTtsInstructions } from './ttsInstructions.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Info log with a stable tag — matches the console.log('[admin/audio/generate] …')
+ * idiom in index.js (server/logger.js only exports logError).
+ * @param {string} msg
+ */
+const log = (msg) => console.log(`[lessons/audio] ${msg}`);
+
 /** Directory audio files are written to / pruned from. */
 export const LESSON_AUDIO_DIR = path.join(__dirname, '../public/audio/lessons');
 
@@ -80,6 +87,13 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
   const instructions = buildTtsInstructions(basePrompt, lang);
 
+  // Logged so a no-op click is diagnosable from the server output alone: `lang`
+  // shows whether the admin selector actually sent 'es' (it defaults to 'en' on
+  // every load), and the voice/instructions show which tts-prompt.<lang>.json
+  // was picked up after a config edit.
+  log(`lesson=${lesson?.id ?? '?'} lang=${lang} field=${textField}->${audioField} ` +
+      `voice=${voice} speed=${speed} model=${model} instructionsChars=${instructions?.length ?? 0}`);
+
   const slides = Array.isArray(lesson.slides) ? lesson.slides : [];
 
   for (let si = 0; si < slides.length; si++) {
@@ -91,22 +105,31 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
       const locator = `slides[${si}].coachMessages[${mi}]`;
       const text = message[textField];
 
-      if (typeof text !== 'string' || text.trim() === '') continue; // empty/untranslated — generates nothing
+      if (typeof text !== 'string' || text.trim() === '') {
+        // Not a cache hit — there is genuinely nothing to say in this language.
+        log(`  ${locator} SKIP — no ${textField} (untranslated)`);
+        continue;
+      }
 
       const hash = hashMessageText(text);
       const expectedBasename = `${hash}.mp3`;
 
       try {
+        log(`  ${locator} synthesizing ${text.length} chars -> ${expectedBasename}`);
         const buffer = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, expectedBasename), buffer);
         message[audioField] = `/audio/lessons/${expectedBasename}`;
         generated.push(locator);
+        log(`  ${locator} wrote ${expectedBasename} (${buffer.length} bytes)`);
       } catch (e) {
         failed.push({ locator, error: e.message });
+        log(`  ${locator} FAILED — ${e.message}`);
       }
     }
   }
+
+  log(`lesson=${lesson?.id ?? '?'} lang=${lang} done: ${generated.length} generated, ${failed.length} failed`);
 
   return { lesson, generated, failed };
 }
