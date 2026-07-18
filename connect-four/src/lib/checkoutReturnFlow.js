@@ -32,19 +32,49 @@ export function getCheckoutReturnState() {
  */
 export function setCheckoutReturnState(next) {
   state = next;
-  listeners.forEach((fn) => fn(state));
+  // Snapshot before iterating: a listener may call resetCheckoutReturnState()
+  // synchronously (see subscribeCheckoutReturn's doc) while this forEach is
+  // still running — without the snapshot, later listeners in the same pass
+  // would read the already-reset `state` instead of the value just broadcast.
+  const snapshot = state;
+  listeners.forEach((fn) => fn(snapshot));
 }
 
 /**
- * Subscribes to state changes. Returns an unsubscribe function.
+ * Subscribes to state changes and immediately replays the CURRENT state to
+ * the new listener before returning. Found in QA (2026-07-18): a component's
+ * subscription effect can (re)mount after `checkout.completed` already fired
+ * — e.g. `UpgradeModal.jsx`'s 5 call sites subscribe once on mount with no
+ * dependency on whether a checkout is in flight — and without this replay,
+ * that listener silently misses the one-shot 'activated'/'failed' broadcast
+ * forever (the tier still flips server-side via the webhook/verifyTransaction
+ * call, which don't depend on any UI listener, so the account still ends up
+ * Pro — but the modal never learns about it and never auto-dismisses,
+ * matching the reported "stuck in idle" bug exactly). See docs/open_issues.md
+ * OI-59 (now resolved) for the failure this fixes.
+ *
+ * Note this WILL immediately invoke `fn('idle')` if nothing is in flight —
+ * harmless for every current consumer (they only act on 'activated'/'failed'),
+ * but worth knowing if a future consumer treats 'idle' as meaningful on
+ * receipt rather than as a no-op default.
+ *
+ * Returns an unsubscribe function.
  * @param {(state: CheckoutReturnState) => void} fn
  */
 export function subscribeCheckoutReturn(fn) {
   listeners.add(fn);
+  fn(state);
   return () => listeners.delete(fn);
 }
 
-/** Test-only: resets the singleton store to 'idle' between test cases. */
+/**
+ * Resets the store to 'idle'. Call this once a subscriber has consumed a
+ * terminal 'activated'/'failed' state (updated its own local UI) so the
+ * shared singleton doesn't keep replaying that same stale outcome to some
+ * later, unrelated subscriber (e.g. a completely different upgrade attempt
+ * opened much later) via subscribeCheckoutReturn's immediate-replay above.
+ * Also used directly by tests to reset the singleton between cases.
+ */
 export function resetCheckoutReturnState() {
   state = 'idle';
 }

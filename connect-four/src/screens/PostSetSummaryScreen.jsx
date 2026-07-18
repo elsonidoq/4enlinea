@@ -8,7 +8,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
-import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function PostSetSummaryScreen({ go, results = [], category }) {
@@ -35,8 +35,10 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       if (state === 'activated') {
         setIsFreeUser(false);
         setUpgradeUiState('success');
+        resetCheckoutReturnState();
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
       }
     });
   }, []);

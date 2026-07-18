@@ -5,7 +5,7 @@ import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
-import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { deriveLockReason, dispatchLockAction } from './sagaLock.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -162,8 +162,10 @@ export function SagaScreen({ go, goBack }) {
       if (state === 'activated') {
         setTier('paid');
         setUpgradeUiState('success');
+        resetCheckoutReturnState();
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
       }
     });
   }, []);

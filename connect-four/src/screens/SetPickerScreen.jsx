@@ -5,7 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { SetCard } from '../components/SetCard.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
-import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -63,8 +63,10 @@ export function SetPickerScreen({ go, goBack }) {
     return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         setUpgradeUiState('success');
+        resetCheckoutReturnState();
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
       }
     });
   }, []);
