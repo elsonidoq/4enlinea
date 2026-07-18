@@ -147,6 +147,13 @@ const PADDLE_ORIGINS = 'https://*.paddle.com';
 // sheet — both need explicit CSP allowances the same way Paddle's own
 // domains did above.
 const GOOGLE_PAY_ORIGINS = ['https://pay.google.com', 'https://www.google.com'];
+// index.html loads the Baloo 2 / Nunito webfonts from Google Fonts: the
+// stylesheet from fonts.googleapis.com, and the actual .woff2 files it
+// references (via @font-face src url()) from fonts.gstatic.com — a separate
+// origin, and a separate CSP directive (font-src, which had no entry at all
+// and so fell back to default-src 'self', blocking it).
+const GOOGLE_FONTS_STYLESHEET = 'https://fonts.googleapis.com';
+const GOOGLE_FONTS_FILES = 'https://fonts.gstatic.com';
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -160,7 +167,8 @@ app.use(helmet({
       // overlay checkout to render at all. It also loads an external
       // stylesheet from its own CDN (sandbox-cdn.paddle.com / cdn.paddle.com)
       // for the overlay, hence PADDLE_ORIGINS here too.
-      styleSrc: ["'self'", "'unsafe-inline'", PADDLE_ORIGINS],
+      styleSrc: ["'self'", "'unsafe-inline'", PADDLE_ORIGINS, GOOGLE_FONTS_STYLESHEET],
+      fontSrc: ["'self'", GOOGLE_FONTS_FILES],
       imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN, PADDLE_ORIGINS],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
       connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS, ...GOOGLE_PAY_ORIGINS],
