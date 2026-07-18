@@ -794,6 +794,8 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 **Also carried by this page** (must survive any redesign — they are Paddle domain-review requirements, not decoration): the verbatim Merchant of Record clause ("Our order process is conducted by our online reseller Paddle.com…"), the 14-day refund statement, and the link to `/terms`.
 
+**Update (2026-07-18, verified during a live domain-review resubmission)**: two premises above are now stale — `connect-four/server/pricing.html` **does** exist on this branch/checkout (the "not on this branch" note is outdated), and the price source of truth has finished moving off Stripe to Paddle (`usePaddlePrices.js` / `GET /api/paddle/config`, not the `useStripePrices`/`/api/stripe/config` referenced above). The drift bug (item 2) is **not currently manifesting**: `pricing.html`'s hardcoded `$2.99`/`$21.99`, `en.json`'s `upgrade.body`/`upgrade.price` strings, and the **live** Paddle catalog's actual price objects were all cross-checked and agree, and this was the pricing consistency Paddle's domain reviewer flagged and (pending resubmission) should now clear. The underlying risk itself is unchanged and unfixed — nothing prevents these three from drifting apart again the next time a price changes, since `pricing.html`/`en.json` are still hand-maintained literals, not derived from the live config endpoint. Item 1 (real designed pricing page) is still fully open.
+
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
 **Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
@@ -1015,5 +1017,15 @@ A code-review verification pass ruled out the session-load-race variant of this 
 
 **Why deferred**: adds avoidable but small startup latency on every boot/restart when `PADDLE_API_KEY` is set (dev restarts, CI, prod deploys); no correctness impact.
 **If picked up**: convert to a static `import { Paddle, Environment } from '@paddle/paddle-node-sdk'` at the top of `server/index.js`, then only construct the client conditionally inside the existing `if (process.env.PADDLE_API_KEY)` block (the SDK's presence in `node_modules` is guaranteed since it's now a hard dependency).
+
+## OI-58 — `main`/production `server/index.js` CSP is missing 5 fixes shipped to `stagging`
+
+**Status**: deferred / open (created 2026-07-18)
+**Area**: `connect-four/server/index.js`'s `helmet({ contentSecurityPolicy: { directives: {...} } })` block
+
+This session fixed five separate CSP gaps on the `stagging` branch (commits `2794793`, `811be2c`, `fb0ecc1`, `ae3c006`, plus the `frameSrc`/`connectSrc` additions in the earlier Paddle-checkout commit): `script-src`/`connect-src`/`frame-src` for Paddle.js + Google Pay, `style-src` for Paddle's inline styles + external stylesheet + Google Fonts' stylesheet, and a new `font-src` directive for Google Fonts' `.woff2` files. All five block real functionality (Paddle checkout, Google Pay, the app's own webfonts) when the CSP header is actually enforced (i.e., any deployed build, not `npm run dev`).
+
+**Why deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
+**If picked up**: diff `server/index.js`'s `helmet(...)` block between `stagging`'s current HEAD and `main`'s current HEAD; the `stagging`-side version (with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES` constants and their per-directive rationale comments) is the target state — see `docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative description of every directive and why.
 
 **Resolved (2026-07-18)**: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.

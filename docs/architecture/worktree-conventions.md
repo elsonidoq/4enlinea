@@ -99,10 +99,24 @@ The c4solver subprocess (`connect-four/server/index.js`, spawned via `child_proc
 communicates over stdio/IPC with its parent process, not a TCP port, so it needs no
 port allocation and is entirely unaffected by this scheme.
 
-## Production/Railway — unaffected
+## Production/Railway — mostly unaffected, but `vite.config.js` DOES run at build time
 
 Railway sets its own `PORT`/`FRONTEND_URL` environment variables in production, and
-both are already `process.env.X || <dev default>` in `server/index.js`. `vite.config.js`
-never runs in the production build/runtime (the build step runs `vite build`; the
-deployed process runs `node server/index.js` directly). This convention only changes
-local-dev fallback defaults.
+both are already `process.env.X || <dev default>` in `server/index.js`. The *deployed
+runtime* (`node server/index.js`) never touches `vite.config.js` — only `server/index.js`'s
+own `PORT`/`FRONTEND_URL` fallbacks matter there.
+
+**CORRECTION (2026-07-18): the claim that "`vite.config.js` never runs in the production
+build" was wrong and caused a real Railway deploy failure.** The build step's `npm run
+build` → `vite build` DOES load and execute `vite.config.js` — including its top-level
+`resolvePorts()` call — to construct the config object, even though the resulting
+`server.port`/`server.proxy` settings are irrelevant to a static `vite build` output.
+Railway's build container has no `worktree-ports.sh` (it's a local dev-worktree
+convenience requiring `git`/`lsof`) and doesn't set `API_PORT`/`VITE_PORT`, so
+`resolvePorts()`'s `execSync(scriptPath)` threw `ENOENT`, uncaught, and crashed the
+entire build with `/bin/sh: 1: /worktree-ports.sh: not found`. Fixed by wrapping that
+`execSync` call in try/catch, falling back to the existing hardcoded defaults
+(`3001`/`5173`) on any failure — see `connect-four/vite.config.js`'s `resolvePorts()`.
+**Lesson: any dev-convenience shell-out added to build-time code (a `vite.config.js`
+top-level call, not just runtime `server/index.js` code) must degrade gracefully — the
+Railway build container does not have this repo's dev tooling available.**

@@ -3,6 +3,7 @@ name: Supabase connection details — DecodeC4
 description: How to connect to the DecodeC4 Supabase project; new key format and pooler hostname
 type: reference
 originSessionId: 5719c43c-8011-4e5d-a333-7894384b241b
+modified: 2026-07-18T15:21:39.160Z
 ---
 **Project ref:** `kxtqwsumojtexokrtlfp`
 **Dashboard:** https://supabase.com (project: DecodeC4)
@@ -26,6 +27,8 @@ The prod ref `kxtqwsumojtexokrtlfp` is the one this memory's other sections desc
 **Staging DATABASE_URL trap:** `.env.staging` uses the **transaction pooler (port 6543)**, which per the session-vs-transaction rule below is FORBIDDEN for DDL / multi-statement transactions. A single-statement op (e.g. one `TRUNCATE ... CASCADE`) works fine; but `migrate.js` (wraps each migration in `BEGIN...COMMIT` DDL) needs port 5432 — swap the port before running migrations against staging. See [[OI-31]].
 
 **Wiping staging data:** `connect-four/server/scripts/reset-staging-db.js` TRUNCATEs all `public` tables except `schema_migrations` (keeps schema + migration history). Reads `.env.staging` only, hard-refuses the prod ref, requires typing `Yes` twice. `--dry-run` lists targets. Uses a single TRUNCATE statement so the 6543 pooler is OK.
+
+**Deleting one staging user (e.g. to re-test onboarding from scratch):** `connect-four/server/scripts/delete-staging-user-by-email.js --email <email> [--dry-run]` — same safety pattern as `reset-staging-db.js` (staging-ref-only guard, double `Yes` confirmation, `--dry-run` reports row counts first). Finds the auth user(s) by email via `supabase.auth.admin.listUsers()`, deletes dependent rows (`blunders`, `puzzle_attempts`, `session_stats`, `lesson_progress`, `tracks`, `games`, `papergames_games`, `challenge_sessions`) in a transaction, then `public.users`, then the `auth.users` record itself via the admin API (cascades identities/sessions). Not all of those FKs actually `CASCADE`/`SET NULL` on their own (`puzzle_attempts`/`tracks` are `SET NULL`, not delete) — the script deletes them explicitly so nothing survives, rather than relying on the DB's own FK actions.
 
 **Applying migrations:**
 ```

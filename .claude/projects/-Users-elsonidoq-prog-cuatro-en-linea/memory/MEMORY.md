@@ -26,9 +26,9 @@
 - [CSP invisible under Vite dev](project_csp_helmet_traps.md) — Express CSP never lands under npm run dev; test the Express-served dist; SW reg in main.jsx
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; GoTrue skips on_auth_user_created; NO route guard → CTA gate ≠ screen gate; deleteDatabase hangs sign-in
 - [Unapplied migration = silent 204](project_user_column_propagation.md) — PostgREST drops unknown columns from UPDATE → 204 persists nothing; no server hot-reload
-- [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl
+- [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl; delete-staging-user-by-email.js
 - [Stripe traps](project_stripe_traps.md) — OBSOLETE 2026-07-18 (Stripe fully removed); historical context only, do not use for current work
-- [Paddle integration](project_paddle_integration.md) — SHIPPED provider; MCP keys from CC env NOT server/.env; Billing not Classic; Paddle.js defaults to PROD (set sandbox+test_); successUrl/quantity/verifyTransaction fixes post-ship; domain review AND identity verify both gate live
+- [Paddle integration](project_paddle_integration.md) — sandbox/live from key prefix NOT NODE_ENV/MODE (both always prod here); CSP=5-round discovery; domain resubmit=remove+re-add; checkout_not_enabled≠domain gate
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
 - [session-stats byPattern always empty](project_stats_architecture.md) — /api/user/session-stats/all reads stats.byPattern; stored shape is flat category keys (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
@@ -91,6 +91,7 @@
 - [Occam + principled extrapolation](feedback_occam_principled_extrapolation.md) — one unifying mechanism over many special-case kinds; generalize, don't enumerate
 - [One-command pipeline](feedback_one_command_pipeline_extend_dont_add.md) — extend the existing command over a new script; keep cases solver-verified + both players
 - [Pedagogy preferences](feedback_pedagogy_preferences.md) — no lost-position lessons; no abstract Allis rules
+- [Never print secrets](feedback_never_print_secrets.md) — no exceptions for "low-risk sandbox"; verify via hash/length/prefix or point to the source instead; offer rotation if leaked
 
 ## Reference
 

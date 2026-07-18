@@ -605,10 +605,25 @@ future contributor scanning for a missing `connect-src`/`form-action` entry; the
   coach-audio URLs from Supabase Storage (the redirect target of `GET /api/user/tts/deep-reveal`) are
   fetched cross-origin by the `<audio>` element. This is the one directive in the set that legitimately
   needs a non-`'self'` origin.
-- **`style-src` stays `'self'`** with no `'unsafe-inline'` — there is no styled-components/emotion
-  dependency, and React's `style={{}}` prop sets element `.style` properties directly, which `style-src`
-  does not restrict. Add `'unsafe-inline'` only if a real CSP violation surfaces one (see the FR-005
-  smoke-test legs in `staging_checks.md`'s Epic 7 section), not preemptively.
+- **`style-src` no longer stays bare `'self'`** (superseded 2026-07-18 by the Paddle checkout migration —
+  the claim above was true at spec-047 time, but is not the current state). Paddle.js's overlay checkout
+  needed three separate additions, discovered one CSP violation at a time against the deployed (not
+  `npm run dev`) build: `'unsafe-inline'` (Paddle sets inline `style="..."` attributes directly on
+  elements it injects into the parent page — the loading spinner, before its iframe loads — and these are
+  dynamically generated, not a fixed hashable set), `PADDLE_ORIGINS` (`https://*.paddle.com`, for the
+  external `paddle.css` it loads from its own CDN), and `GOOGLE_FONTS_STYLESHEET`
+  (`https://fonts.googleapis.com`, unrelated to Paddle — `index.html`'s Baloo 2 / Nunito webfont link was
+  never actually CSP-clean, just never exercised until someone opened it in a hardened deploy). A new
+  `font-src` directive was also added (`'self'` + `https://fonts.gstatic.com`) — there was none before, so
+  it fell back to `default-src 'self'` and silently ate the actual `.woff2` files Google Fonts' stylesheet
+  references. **Pattern for next time**: integrating any third-party checkout/payment-widget SDK is a
+  CSP-directive discovery problem, not a one-shot fix — expect script-src, style-src, connect-src,
+  frame-src, img-src, and font-src to each need their own violation before you find them; a passing local
+  smoke test proves nothing (CSP is Express-`dist`-only, per the papergames caveat above) — test against a
+  deployed build. `PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS` (added the same way, for `Paddle.Checkout.open()`
+  and the Google Pay payment method respectively) also touch `script-src`, `connect-src`, and `frame-src`
+  — see the `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS` constants right above the `helmet(...)` call
+  in `index.js` for the full current set and per-directive rationale comments.
 - **`connect-src` and `img-src` include `https://papergames.io` (and `wss://papergames.io` for
   `connect-src`).** The Play-Online / Past-Games features talk to papergames.io directly from the browser:
   `PlayOnlineScreen.jsx` opens a `wss://papergames.io/socket.io/...` WebSocket (governed by `connect-src`),
@@ -913,6 +928,20 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 - **`paddleRoutes.js`** — `registerPaddleRoutes(app, paymentProcessor)` registers `GET /api/paddle/config`, `POST /api/paddle/create-checkout`, `POST /api/paddle/verify-transaction`, `POST /api/paddle/webhook`, and `POST /api/paddle/portal`. `index.js` constructs `paymentProcessor` once at boot (`PADDLE_API_KEY` present → `createPaddleProcessor(...)`, else `null`) and calls `registerPaddleRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`. Every route 503s ("Payments not configured") when `paymentProcessor` is null — so an unset `PADDLE_API_KEY` on a deploy makes the whole `/api/paddle/*` surface 503, not just checkout.
 
 **Why this seam matters (substitutability)**: because `registerPaddleRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope Paddle-client singleton, a test can call it against a fresh Express app with any object satisfying the `PaymentProcessor` shape and assert route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md` and `specs/050-paddle-checkout-migration/contracts/paddle-api.md`.
+
+**Sandbox vs. live environment is derived from the `PADDLE_API_KEY` prefix, not `NODE_ENV`.** `index.js`'s
+`paddleClient` construction does `process.env.PADDLE_API_KEY.includes('_sdbx_') ? Environment.sandbox :
+Environment.production` (and the frontend's `useUpgradeCheckout.js` mirrors this off
+`VITE_PADDLE_CLIENT_TOKEN.startsWith('test_')`). This was previously `NODE_ENV === 'production'`
+server-side and `import.meta.env.MODE === 'production'` client-side — both **always** evaluated true in
+this project's actual deploys (Railway sets `NODE_ENV=production` on every service including staging; a
+plain `vite build` with no `--mode` flag always defaults `MODE` to `'production'` regardless of deploy
+target), so a sandbox key/token on staging was silently paired with `Environment.production`, producing a
+403 (`forbidden` — "using a sandbox credential against the live API returns forbidden", per Paddle's own
+docs) that looked identical to a permissions problem. Deriving from the credential's own prefix instead
+means the environment flag can never disagree with the key/token actually in use — there is no second
+setting to keep in sync. If a future change ever needs a real staging-vs-production distinction for
+something Paddle-unrelated, do not reach for `NODE_ENV` in this codebase — it is not a reliable signal.
 
 **`getSubscriptionStatus` is deliberately test-only in production wiring.** No production call site is wired through it — real paid-gates read `req.user.tier` directly (populated by `loadUser`). It exists solely to prove the `PaymentProcessor` interface's substitutability. This is by design, not a gap — do not "fix" it by wiring a call site unless a new requirement actually needs a derived (non-`tier`) subscription status.
 
