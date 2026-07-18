@@ -133,15 +133,24 @@ const PAPERGAMES_WS = 'wss://papergames.io';
 // Env-derived (not hardcoded to one Sentry project); defaults to the wildcard ingest
 // domain used by all Sentry SaaS projects.
 const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io';
+// Paddle.js (spec 050): loads its script from cdn.paddle.com, opens the
+// overlay checkout in an iframe served from *.paddle.com (buy.paddle.com /
+// sandbox-buy.paddle.com), and the frame itself calls back to *.paddle.com.
+// A wildcard is used (rather than enumerating buy/sandbox-buy/checkout-service)
+// because Paddle doesn't document a fixed, exhaustive subdomain list and a
+// missed one would silently re-break checkout the same way this CSP gap did.
+const PADDLE_CDN = 'https://cdn.paddle.com';
+const PADDLE_ORIGINS = 'https://*.paddle.com';
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", PADDLE_CDN],
       styleSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
+      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN, PADDLE_ORIGINS],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
-      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS],
+      frameSrc: [PADDLE_ORIGINS],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
       objectSrc: ["'none'"],
