@@ -10,13 +10,20 @@ function resolvePorts() {
   let apiPort = process.env.API_PORT
   let vitePort = process.env.VITE_PORT
   if (!apiPort || !vitePort) {
-    const scriptPath = resolve(__dirname, '..', 'worktree-ports.sh')
-    const output = execSync(scriptPath, { encoding: 'utf8' })
-    for (const line of output.split('\n')) {
-      const match = line.match(/^export (\w+)=(.+)$/)
-      if (!match) continue
-      if (match[1] === 'API_PORT' && !apiPort) apiPort = match[2]
-      if (match[1] === 'VITE_PORT' && !vitePort) vitePort = match[2]
+    // worktree-ports.sh is a local dev convenience (git worktree + lsof) and
+    // is not present in the Railway build image — fall back to defaults
+    // rather than failing the production build.
+    try {
+      const scriptPath = resolve(__dirname, '..', 'worktree-ports.sh')
+      const output = execSync(scriptPath, { encoding: 'utf8' })
+      for (const line of output.split('\n')) {
+        const match = line.match(/^export (\w+)=(.+)$/)
+        if (!match) continue
+        if (match[1] === 'API_PORT' && !apiPort) apiPort = match[2]
+        if (match[1] === 'VITE_PORT' && !vitePort) vitePort = match[2]
+      }
+    } catch {
+      // fall through to defaults below
     }
   }
   return { apiPort: Number(apiPort) || 3001, vitePort: Number(vitePort) || 5173 }
