@@ -747,3 +747,15 @@ exercised locally at all.
   **Expected** — Withholding amounts (if any) match what `docs/payment_provider_research.md`'s tax research assumed; Factura E is issued correctly for the payout; no surprise retención that changes the net-USD assumption used in the product's pricing/margin decisions.
   **Source** — Epic 10 staging checks; `docs/payment_provider_research.md`; FR-017.
   - [ ] signed off (tester / date):
+
+- **What** — Live-catalog prices carry the same `quantity: { minimum: 1, maximum: 1 }` limit set on the sandbox prices (2026-07-18, via `client.prices.update` — Paddle's overlay checkout has no client-side setting to hide the quantity stepper, only a price-level quantity limit).
+  **Why staging** — The live catalog is a **separate** set of Paddle price objects from the sandbox ones this epic built against (see the live-catalog-provisioning check above); the quantity limit is a property of the price object itself and does not carry over automatically when new live prices are created.
+  **Expected** — The live checkout overlay shows a fixed "Qty: 1" (no +/- stepper) for both monthly and annual plans, matching sandbox behavior.
+  **Source** — Epic 10 staging checks; `docs/architecture/api-conventions.md` "Quantity is fixed at 1 per subscription".
+  - [ ] signed off (tester / date):
+
+- **What** — OI-55's identity-binding hardening (`handleWebhook`'s `transaction.completed` cross-check against an already-established `paddle_customer_id`) is exercised against a REAL second payment/renewal for the same Paddle customer, not just the 4 mocked-Paddle-client unit tests added when the hardening was implemented (2026-07-18).
+  **Why staging** — The hardening logic (trust first payment, cross-check every payment after) can only be meaningfully exercised with a real customer who has an established `paddle_customer_id` and then makes a second real charge (e.g. a subscription renewal) — sandbox unit tests mock the Paddle client and cannot prove the real `customerId` shape/matching behaves as the code assumes.
+  **Expected** — A renewal/second payment for a real paying customer correctly re-confirms `tier: 'paid'` with no `securityRejected` false-positive; the residual first-payment forgery gap (documented in `docs/architecture/server-conventions.md` "Identity binding on `transaction.completed`") is a known, accepted limitation, not something this check needs to close.
+  **Source** — Epic 10 staging checks; `docs/open_issues.md` OI-55; `docs/architecture/server-conventions.md` "Identity binding on `transaction.completed` (OI-55)".
+  - [ ] signed off (tester / date):
