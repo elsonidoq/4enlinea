@@ -35,10 +35,15 @@ async function getPaddle() {
       if (!token) return null; // Paddle not configured — createCheckout also 503s.
       const { initializePaddle } = await import('@paddle/paddle-js');
       // Paddle.js defaults to PRODUCTION (the footgun CLAUDE.md and research.md
-      // §9 both call out) — default to sandbox unless explicitly built for
-      // production, matching this codebase's only frontend env convention
-      // (import.meta.env.MODE / VITE_* — no NEXT_PUBLIC_*-style var exists).
-      const environment = import.meta.env.MODE === 'production' ? 'production' : 'sandbox';
+      // §9 both call out). Derived from the token's own prefix, NOT
+      // import.meta.env.MODE: a plain `vite build` (no --mode flag, this
+      // codebase's actual build command) always resolves MODE to
+      // 'production' regardless of deploy target, so MODE can't distinguish
+      // staging from live — confirmed 2026-07-18 via the server-side
+      // equivalent of this exact bug (NODE_ENV always 'production' on
+      // Railway). Paddle guarantees sandbox client-side tokens always start
+      // with `test_`, so deriving from the token can never disagree with it.
+      const environment = token.startsWith('test_') ? 'sandbox' : 'production';
       return initializePaddle({
         token,
         environment,

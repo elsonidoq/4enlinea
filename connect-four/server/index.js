@@ -2843,15 +2843,13 @@ app.get('/api/blunders/:id', async (req, res) => {
 
 let paddlePaymentProcessor = null;
 if (process.env.PADDLE_API_KEY) {
-  // Mirrors the frontend's NODE_ENV/MODE-driven sandbox-vs-production switch
-  // (src/lib/useUpgradeCheckout.js) — a hardcoded Environment.sandbox here
-  // would silently break every server-side Paddle call in production.
-  const paddleEnvironment = process.env.NODE_ENV === 'production' ? Environment.production : Environment.sandbox;
-  // TEMP DIAGNOSTIC (staging 403 investigation, remove once resolved): confirm
-  // what NODE_ENV/environment actually resolve to at runtime — Railway/railpack
-  // has a documented history of injecting env vars the user never configured
-  // (see project_spec031_staging_production_deploy.md).
-  console.log('[paddle/init] NODE_ENV=', JSON.stringify(process.env.NODE_ENV), 'environment=', paddleEnvironment, 'keyPrefix=', process.env.PADDLE_API_KEY?.slice(0, 12));
+  // Derived from the key's own prefix, NOT NODE_ENV: Railway sets
+  // NODE_ENV=production on every service (staging included, confirmed via a
+  // 2026-07-18 diagnostic log), so NODE_ENV can't distinguish staging from
+  // live. Paddle guarantees sandbox API keys always contain `_sdbx_` — that
+  // makes the key and the environment it targets impossible to disagree,
+  // unlike a second env var someone has to remember to keep in sync.
+  const paddleEnvironment = process.env.PADDLE_API_KEY.includes('_sdbx_') ? Environment.sandbox : Environment.production;
   const paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
     environment: paddleEnvironment,
   });
