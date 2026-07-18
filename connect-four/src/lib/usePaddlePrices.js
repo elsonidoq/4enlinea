@@ -1,11 +1,11 @@
-// Fetches live display prices for the upgrade UI from GET /api/stripe/config.
+// Fetches live display prices for the upgrade UI from GET /api/paddle/config.
 //
-// The endpoint reads the actual Stripe price objects, so the amounts shown in
-// UpgradeModal never drift from what we charge. On any failure (Stripe not
+// The endpoint reads the actual Paddle price objects, so the amounts shown in
+// UpgradeModal never drift from what we charge. On any failure (Paddle not
 // configured → 503, network error) this returns null and the modal degrades to
 // the plain "Monthly"/"Annual" labels — the toggle and checkout still work.
 //
-// No credentials needed: /api/stripe/config is public (the modal renders before
+// No credentials needed: /api/paddle/config is public (the modal renders before
 // the user is necessarily authenticated).
 import { useEffect, useState } from 'react';
 // Read the period suffix straight from the i18n bundles rather than the i18next
@@ -26,12 +26,12 @@ const API = import.meta.env?.VITE_API_BASE_URL || '';
  *   where PriceInfo = { amount: number (minor units), currency: string, interval: string|null }
  *   null while loading or when prices are unavailable.
  */
-export function useStripePrices() {
+export function usePaddlePrices() {
   const [prices, setPrices] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API}/api/stripe/config`)
+    fetch(`${API}/api/paddle/config`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => { if (!cancelled && data?.prices) setPrices(data.prices); })
       .catch(() => { /* degrade silently to plain labels */ });
@@ -61,13 +61,13 @@ export function formatPrice(info, locale) {
   return `${amount}${suffix}`;
 }
 
-// D3: derive the badge from live /api/stripe/config so it can never drift from Stripe.
+// D3: derive the badge from live /api/paddle/config so it can never drift from Paddle.
 // Returns null (render nothing) rather than a misleading badge when prices are missing,
-// currencies mismatch, or annual isn't a saving — useStripePrices already degrades
+// currencies mismatch, or annual isn't a saving — usePaddlePrices already degrades
 // silently by design.
 //
 // `monthly`/`annual` are PriceInfo objects ({amount, currency, interval}), NOT bare cent
-// integers — see the useStripePrices() return shape above and stripeProcessor.js's
+// integers — see the usePaddlePrices() return shape above and paddleProcessor.js's
 // getPrices()/describe(). `perMonth` is returned as a PriceInfo too, so the existing
 // formatPrice renders it without new formatting code.
 export function computeAnnualSavings(prices) {

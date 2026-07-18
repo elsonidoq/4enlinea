@@ -1,53 +1,50 @@
-// Spec 045 US3 (FR-015/R4, contracts/upgrade-flow-frontend.md) — bounded-wait poll
-// state machine for the post-Stripe-Checkout return flow (?checkout=success).
+// Spec 050 US2 (Research §4/§11, contracts/paddle-api.md) — pure state store for
+// the post-Paddle-Checkout confirmation flow.
 //
-// Pure logic, no DOM/React — kept importable by plain `node:test` (this repo's test
-// runner can't parse JSX; see postLoginReturn.js for the same split rationale).
-// The CheckoutReturnBanner component (src/store/CheckoutReturnBanner.jsx) supplies
-// the real checkPaid (ProfileStore.refetchSession + store.getProfile()) and sleepFn
-// (setTimeout); tests inject fakes.
+// Collapsed from the pre-migration bounded-wait poll state machine
+// ([0,2,4,7,10]s schedule, POLL_SCHEDULE_SECONDS) to single-check states: the
+// Paddle.js overlay model has no return-URL round-trip to poll against —
+// `checkout.completed` already tells the client synchronously that payment
+// succeeded, so the remaining job is exactly one `verify-transaction` call.
+//
+// Pure logic, no DOM/React, no fetch — kept importable by plain `node:test`
+// (this repo's test runner can't parse JSX; see postLoginReturn.js for the
+// same split rationale). `src/lib/useUpgradeCheckout.js`'s `checkout.completed`
+// event handler is the SOLE WRITER of this store (it owns `transactionId` and
+// is the sole caller of `POST /api/paddle/verify-transaction`, Research §11);
+// `src/store/CheckoutReturnBanner.jsx` is a pure reader/renderer — it must
+// never call `setCheckoutReturnState` itself.
 
-// Absolute offsets, in seconds, from poll start (FR-015/R4): 5 attempts, ~10s budget.
-export const POLL_SCHEDULE_SECONDS = [0, 2, 4, 7, 10];
+/** @typedef {'idle'|'confirming'|'activated'|'failed'} CheckoutReturnState */
 
-/** Convert absolute offsets into the wait BEFORE each attempt (first is always 0). */
-function deltasFromSchedule(schedule) {
-  return schedule.map((t, i) => (i === 0 ? t : t - schedule[i - 1]));
+let state = /** @type {CheckoutReturnState} */ ('idle');
+const listeners = new Set();
+
+/** Current state — 'idle' until a checkout.completed event starts a confirmation. */
+export function getCheckoutReturnState() {
+  return state;
 }
 
-const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Sets the shared state and notifies subscribers. Only
+ * `useUpgradeCheckout.js`'s `checkout.completed` handler should call this.
+ * @param {CheckoutReturnState} next
+ */
+export function setCheckoutReturnState(next) {
+  state = next;
+  listeners.forEach((fn) => fn(state));
+}
 
 /**
- * Runs the bounded-wait poll. Calls `onState` with one of:
- *   'polling'   — emitted once, immediately, before the first attempt
- *   'activated' — checkPaid() resolved truthy at some attempt
- *   'timeout'   — the schedule was exhausted without checkPaid() resolving truthy
- *
- * @param {Object} opts
- * @param {() => Promise<boolean>} opts.checkPaid - resolves true once tier === 'paid'
- * @param {(state: 'polling'|'activated'|'timeout') => void} [opts.onState]
- * @param {number[]} [opts.schedule] - absolute offsets in seconds (default POLL_SCHEDULE_SECONDS)
- * @param {(ms: number) => Promise<void>} [opts.sleepFn]
- * @returns {Promise<'activated'|'timeout'>}
+ * Subscribes to state changes. Returns an unsubscribe function.
+ * @param {(state: CheckoutReturnState) => void} fn
  */
-export async function runCheckoutPoll({
-  checkPaid,
-  onState,
-  schedule = POLL_SCHEDULE_SECONDS,
-  sleepFn = defaultSleep,
-}) {
-  onState?.('polling');
-  const deltas = deltasFromSchedule(schedule);
+export function subscribeCheckoutReturn(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
-  for (const deltaSec of deltas) {
-    if (deltaSec > 0) await sleepFn(deltaSec * 1000);
-    const paid = await checkPaid();
-    if (paid) {
-      onState?.('activated');
-      return 'activated';
-    }
-  }
-
-  onState?.('timeout');
-  return 'timeout';
+/** Test-only: resets the singleton store to 'idle' between test cases. */
+export function resetCheckoutReturnState() {
+  state = 'idle';
 }

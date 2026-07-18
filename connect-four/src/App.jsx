@@ -50,9 +50,12 @@ function Navigator() {
     setScreen(resolved);
     setParams(resolvedParams);
     // Preserve the hash (magic-link OAuth callback tokens, App.jsx's long-standing
-    // trap) AND the query string (spec 045: ?checkout=success|cancelled must survive
-    // this replaceState so CheckoutReturnBanner.jsx can still read/strip it,
-    // regardless of whether its own mount effect runs before or after this one).
+    // trap) AND the query string. Note: spec 050's Paddle.js overlay checkout no
+    // longer uses a ?checkout=success|cancelled return-URL param at all —
+    // CheckoutReturnBanner.jsx is a pure renderer of checkoutReturnFlow.js's
+    // in-memory store, not a query-string reader — but the query string is still
+    // preserved here for any other feature that may rely on it surviving this
+    // replaceState.
     window.history.replaceState({ screenKey: resolved, params: resolvedParams }, '', resolvedUrl + window.location.search + window.location.hash);
     track('session_start', { screen: resolved });
   }, []);

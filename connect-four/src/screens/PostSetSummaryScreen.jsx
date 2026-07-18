@@ -14,9 +14,10 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
   const { t } = useTranslation();
   const { speakCoachMessage } = useCoachSpeech();
   const { store, session } = useStore();
-  // /summary is a SESSION_ONLY screen (its `results` prop can't survive the
-  // full-page Stripe redirect), so return the user to Challenges instead — the
-  // same place this screen's back/ghost buttons go.
+  // /summary is a SESSION_ONLY screen (its `results` prop can't survive a cold
+  // boot/reload — e.g. via the successUrl passed to the Paddle.js overlay), so
+  // return the user to Challenges instead — the same place this screen's
+  // back/ghost buttons go.
   const handleUpgrade = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [isFreeUser, setIsFreeUser] = useState(true);
