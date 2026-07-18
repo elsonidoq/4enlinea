@@ -141,11 +141,17 @@ const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry
 // missed one would silently re-break checkout the same way this CSP gap did.
 const PADDLE_CDN = 'https://cdn.paddle.com';
 const PADDLE_ORIGINS = 'https://*.paddle.com';
+// Google Pay (enabled as a Paddle payment method): the browser's own
+// PaymentRequest API fetches a payment-method manifest directly from Google
+// (not proxied through Paddle) and, on selection, opens Google's payment
+// sheet — both need explicit CSP allowances the same way Paddle's own
+// domains did above.
+const GOOGLE_PAY_ORIGINS = ['https://pay.google.com', 'https://www.google.com'];
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", PADDLE_CDN],
+      scriptSrc: ["'self'", PADDLE_CDN, ...GOOGLE_PAY_ORIGINS],
       // Paddle.js sets inline style="..." attributes directly on elements it
       // injects into the parent page (its loading overlay, before the iframe
       // itself loads) — a fixed set of hashes isn't viable since Paddle
@@ -155,8 +161,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN, PADDLE_ORIGINS],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
-      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS],
-      frameSrc: [PADDLE_ORIGINS],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS, ...GOOGLE_PAY_ORIGINS],
+      frameSrc: [PADDLE_ORIGINS, ...GOOGLE_PAY_ORIGINS],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
       objectSrc: ["'none'"],
