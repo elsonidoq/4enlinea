@@ -2846,8 +2846,14 @@ if (process.env.PADDLE_API_KEY) {
   // Mirrors the frontend's NODE_ENV/MODE-driven sandbox-vs-production switch
   // (src/lib/useUpgradeCheckout.js) — a hardcoded Environment.sandbox here
   // would silently break every server-side Paddle call in production.
+  const paddleEnvironment = process.env.NODE_ENV === 'production' ? Environment.production : Environment.sandbox;
+  // TEMP DIAGNOSTIC (staging 403 investigation, remove once resolved): confirm
+  // what NODE_ENV/environment actually resolve to at runtime — Railway/railpack
+  // has a documented history of injecting env vars the user never configured
+  // (see project_spec031_staging_production_deploy.md).
+  console.log('[paddle/init] NODE_ENV=', JSON.stringify(process.env.NODE_ENV), 'environment=', paddleEnvironment, 'keyPrefix=', process.env.PADDLE_API_KEY?.slice(0, 12));
   const paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
-    environment: process.env.NODE_ENV === 'production' ? Environment.production : Environment.sandbox,
+    environment: paddleEnvironment,
   });
   paddlePaymentProcessor = createPaddleProcessor({
     paddleClient,
