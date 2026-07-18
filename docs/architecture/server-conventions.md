@@ -896,7 +896,7 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 - Calls `authClient.auth.refreshSession({ refresh_token })`; returns `null` on any failure (invalid/expired/revoked token, or thrown error) — the caller decides the HTTP response (typically 401 + clear both cookies).
 - `index.js` constructs one shared instance (`const attemptRefresh = createAttemptRefresh({ authClient })`) and both `POST /api/auth/refresh` and `GET /api/auth/session` import/call it.
 
-**`POST /api/auth/refresh` and `GET /api/auth/session` deliberately stay inline in `index.js`.** There is **no `authRoutes.js` module** — unlike the `registerUserRoutes`/`registerStripeRoutes` extraction pattern (see below), spec 045's plan.md reconciled this explicitly: only `attemptRefresh` (the exchange logic) was extracted to `authRefresh.js`; the two route handlers that call it were left in place in `index.js` alongside the other `/api/auth/*` routes (`callback`, `signout`, `anonymous`). Do not extract these two routes into a new module without re-reading that reconciliation note in `specs/045-account-session-checkout/plan.md`.
+**`POST /api/auth/refresh` and `GET /api/auth/session` deliberately stay inline in `index.js`.** There is **no `authRoutes.js` module** — unlike the `registerUserRoutes`/`registerPaddleRoutes` extraction pattern (see below), spec 045's plan.md reconciled this explicitly: only `attemptRefresh` (the exchange logic) was extracted to `authRefresh.js`; the two route handlers that call it were left in place in `index.js` alongside the other `/api/auth/*` routes (`callback`, `signout`, `anonymous`). Do not extract these two routes into a new module without re-reading that reconciliation note in `specs/045-account-session-checkout/plan.md`.
 
 **No de-dup Map — documented absence, not a gap.** `specs/045-account-session-checkout/research.md` (R1, 2026-07-11) empirically confirmed this project's Supabase/GoTrue instance does **not** enforce refresh-token rotation-with-reuse-detection: a refresh token that has already been exchanged for a newer one still works, and concurrent calls presenting the same refresh token both succeed independently rather than racing/conflicting. Because of this, `attemptRefresh` has **no** single-flight coordination (no Map keyed by refresh token, no in-flight promise cache) — the original contract draft (`contracts/api-auth-session.md`) called for one, but it was intentionally not built once the empirical finding came back. Coverage is 2 concurrency regression tests instead (`authRefresh.test.mjs`). **Caveat**: this was only tested against anonymous sessions — do not assume it generalizes to every auth provider config without re-verifying. If a future GoTrue upgrade or config change turns out to enforce rotation-with-reuse-detection, a de-dup Map would then become necessary — do not silently "re-add" one without first re-confirming the current behavior has actually changed.
 
@@ -904,49 +904,65 @@ authClient  = createClient(url, serviceKey, { auth: { persistSession: false, aut
 
 **FR-007 (in-flight sign-in guard)**: no client-side guard was needed. The OAuth hash-callback branch of `ProfileStore.checkSession` returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called — the two code paths are mutually exclusive by control flow, not by an added coordination check.
 
-## PaymentProcessor Seam (spec 045)
+## PaymentProcessor Seam (spec 045, migrated to Paddle by spec 050)
 
-`server/paymentProcessor.js`, `server/stripeProcessor.js`, and `server/stripeRoutes.js` extract the Stripe integration into a swappable interface, mirroring the `registerUserRoutes(app, supabase)` pattern below:
+`server/paymentProcessor.js`, `server/paddleProcessor.js`, and `server/paddleRoutes.js` extract the payment-provider integration into a swappable interface, mirroring the `registerUserRoutes(app, supabase)` pattern below:
 
-- **`paymentProcessor.js`** — interface-only module: the `PaymentProcessor` JSDoc typedef (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`), the `PaymentConfigError` class (carries `.status` so route code needn't know Stripe specifics), the pure `getSubscriptionStatus({ tier, stripeCustomerId })` function, and a generic `createPaymentProcessor({ createCheckout, handleWebhook, getSubscriptionStatus })` assembly helper.
-- **`stripeProcessor.js`** — `createStripeProcessor({ stripeClient, supabase, monthlyPriceId, annualPriceId, webhookSecret, frontendUrl })` implements the interface against the real Stripe SDK. Also exposes methods beyond the 3-method interface (on the same object for convenience): `createPortalSession` (used by `/api/stripe/portal`), `getPrices()` (retrieves the two configured Stripe price objects → `{ monthly, annual }` display info for `GET /api/stripe/config`; returns `null` for a plan whose price id is unset), and `syncCheckoutSession({ sessionId, userId })` (the synchronous activation fallback — see "Activation: webhook primary + verify-session fallback" below). `createCheckout({ userId, email, plan, returnPath })` sanitizes `returnPath` (same-origin relative only, else `/`) into the `success_url`/`cancel_url`, and appends a raw `&session_id={CHECKOUT_SESSION_ID}` to `success_url` so the client can call `syncCheckoutSession` on return — see api-conventions.md.
-- **`stripeRoutes.js`** — `registerStripeRoutes(app, paymentProcessor)` registers `GET /api/stripe/config`, `POST /api/stripe/create-checkout`, `POST /api/stripe/webhook`, `POST /api/stripe/verify-session`, and `POST /api/stripe/portal`. `index.js` constructs `paymentProcessor` once at boot (`STRIPE_SECRET_KEY` present → `createStripeProcessor(...)`, else `null`) and calls `registerStripeRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`. Every route 503s ("Payments not configured") when `paymentProcessor` is null — so an unset `STRIPE_SECRET_KEY` on a deploy makes the whole `/api/stripe/*` surface 503, not just checkout.
+- **`paymentProcessor.js`** — interface-only module: the `PaymentProcessor` JSDoc typedef (`createCheckout`, `handleWebhook`, `getSubscriptionStatus`), the `PaymentConfigError` class (carries `.status` so route code needn't know processor specifics), the pure `getSubscriptionStatus({ tier, customerId })` function, and a generic `createPaymentProcessor({ createCheckout, handleWebhook, getSubscriptionStatus })` assembly helper.
+- **`paddleProcessor.js`** — `createPaddleProcessor({ paddleClient, supabase, monthlyPriceId, annualPriceId, webhookSecret })` implements the interface against the real Paddle Node SDK (`@paddle/paddle-node-sdk`). Also exposes methods beyond the 3-method interface (on the same object for convenience): `createPortalSession` (used by `/api/paddle/portal`), `getPrices()` (retrieves the two configured Paddle price objects via `paddleClient.prices.get(priceId)` → `{ monthly, annual }` display info for `GET /api/paddle/config`; returns `null` for a plan whose price id is unset), and `verifyTransaction({ transactionId, userId })` (the synchronous activation fallback — see "Activation: webhook primary + verify-transaction fallback" below). `createCheckout({ userId, email, plan, returnPath })` sanitizes `returnPath` via the exported `sanitizeReturnPath` (same-origin relative only, else `/`) and returns `{ priceId, customerEmail, successUrl }` — there is no server-built hosted-checkout URL in the Paddle.js overlay model; the client opens the overlay itself, passing these values through verbatim — see api-conventions.md.
+- **`paddleRoutes.js`** — `registerPaddleRoutes(app, paymentProcessor)` registers `GET /api/paddle/config`, `POST /api/paddle/create-checkout`, `POST /api/paddle/verify-transaction`, `POST /api/paddle/webhook`, and `POST /api/paddle/portal`. `index.js` constructs `paymentProcessor` once at boot (`PADDLE_API_KEY` present → `createPaddleProcessor(...)`, else `null`) and calls `registerPaddleRoutes(app, paymentProcessor)` once, exactly as it calls `registerUserRoutes(app, supabase)`. Every route 503s ("Payments not configured") when `paymentProcessor` is null — so an unset `PADDLE_API_KEY` on a deploy makes the whole `/api/paddle/*` surface 503, not just checkout.
 
-**Why this seam matters (US4 substitutability)**: because `registerStripeRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope `stripe` singleton, a test can call it twice against two fresh Express apps — once with `StripeProcessor`, once with a `StubProcessor` — and assert identical route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md`.
+**Why this seam matters (substitutability)**: because `registerPaddleRoutes` takes `paymentProcessor` as a plain argument rather than closing over a module-scope Paddle-client singleton, a test can call it against a fresh Express app with any object satisfying the `PaymentProcessor` shape and assert route behavior with zero production code changes. See `specs/045-account-session-checkout/contracts/payment-processor-interface.md` and `specs/050-paddle-checkout-migration/contracts/paddle-api.md`.
 
-**`getSubscriptionStatus` is deliberately test-only in production wiring.** No production call site is wired through it — real paid-gates read `req.user.tier` directly (populated by `loadUser`). It exists solely to prove the `PaymentProcessor` interface's substitutability (the same three-method shape a `StubProcessor` implements). This is by design, not a gap — do not "fix" it by wiring a call site unless a new requirement actually needs a derived (non-`tier`) subscription status.
+**`getSubscriptionStatus` is deliberately test-only in production wiring.** No production call site is wired through it — real paid-gates read `req.user.tier` directly (populated by `loadUser`). It exists solely to prove the `PaymentProcessor` interface's substitutability. This is by design, not a gap — do not "fix" it by wiring a call site unless a new requirement actually needs a derived (non-`tier`) subscription status.
 
-### FR-025: status-based tier mirror
+### Tier mirror: `payment_events` ledger + tier-mapping table
 
-`stripeProcessor.js`'s `handleWebhook` makes `users.tier` a **live derivation of Stripe subscription status**, not a value set once at purchase:
-- `checkout.session.completed` → `tier: 'paid'` + `stripe_customer_id` write + fire-and-forget `tracks` insert (`event: 'upgrade_completed'`).
-- `customer.subscription.updated` with status `active` or `trialing` → `tier: 'paid'`.
-- `customer.subscription.updated` with status `past_due` → **no write** (Stripe's automatic retry window; a single transient card decline must not downgrade a paying user).
-- `customer.subscription.updated` with status `canceled` or `unpaid` → `tier: 'free'`.
-- `customer.subscription.deleted` → `tier: 'free'` unconditionally (explicit terminal cancellation).
+`paddleProcessor.js`'s `handleWebhook` makes `users.tier` a **live derivation of the Paddle subscription's current status**, not a value set once at purchase:
+- `transaction.completed` → `tier: 'paid'` + `paddle_customer_id` write + `tracks` insert (`event: 'upgrade_completed'`), exclusively this event's job — subject to the OI-55 identity cross-check below.
+- `subscription.created` → documented no-op (ledger insert only) — the first-payment tier grant belongs exclusively to `transaction.completed`; granting tier here would race with, or duplicate, that write.
+- `subscription.updated` with status `active` or `trialing` (no scheduled cancel) → `tier: 'paid'`.
+- `subscription.updated` with status `past_due` → **no write** (Paddle's automatic retry window; a single transient card decline must not downgrade a paying user).
+- `subscription.updated` with status `paused` → `tier: 'free'`.
+- `subscription.updated` with status `active` **and** a non-null `scheduled_change.action: 'cancel'` → no write (service continues until the effective date — not yet terminal).
+- `subscription.canceled` (or `subscription.updated` with status `canceled`) → `tier: 'free'` unconditionally (terminal).
 
-**Webhook idempotency**: before any tier write, `handleWebhook` inserts into `stripe_events` (`stripe_event_id` UNIQUE) and checks the result — a `23505` unique-violation means the event was already processed, so the handler returns `{ handled: false, eventType: 'duplicate' }` and skips the tier write and `tracks` insert entirely. This mirrors `insertGameBlunder`'s `23505`-as-success dedup pattern (see Game Blunder Writes above). A non-dedup insert error is logged and processing continues (matches prior fire-and-forget behavior for genuine DB errors).
+**Webhook idempotency (FR-008)**: before any tier write, `handleWebhook` inserts into `payment_events` (`event_id` UNIQUE, `event_type`, `payload`) and checks the result — a `23505` unique-violation means the event was already processed, so the handler returns `{ handled: false, eventType: 'duplicate' }` and skips the tier write and `tracks` insert entirely. This mirrors `insertGameBlunder`'s `23505`-as-success dedup pattern (see Game Blunder Writes above). Unlike a log-and-proceed policy, a NON-`23505` ledger-insert failure, or any downstream tier/`tracks` write failure, THROWS (FR-009) — surfaced by the route as non-2xx so Paddle retries; never weaken this back to fire-and-forget.
 
-### Activation: webhook primary + `verify-session` fallback
+### Identity binding on `transaction.completed` (OI-55)
+
+`customData.app_user_id` is plain client-supplied Paddle checkout metadata — `src/lib/useUpgradeCheckout.js` sets it from client-side React store state when opening the Paddle.js overlay, and Paddle echoes it back verbatim on the webhook with **no server-side re-validation of its own**. Taken alone, that means a user could edit `customData.app_user_id` via devtools before opening the overlay and have a real payment grant `tier: 'paid'` to an arbitrary account.
+
+**Resolved trust model (2026-07-18, judgment call — see the "If picked up" note below for the residual gap)**: `handleWebhook`'s `transaction.completed` branch cross-checks `data.customerId` against the target user's **already-established** `users.paddle_customer_id`, read via a `supabase.from('users').select('paddle_customer_id').eq('id', userId).maybeSingle()` lookup immediately before the tier write:
+- **No `paddle_customer_id` on file yet** (this is the userId's first-ever payment) → trusted as before. There is nothing to cross-check a first payment against — this is the one window OI-55 does **not** close (see below).
+- **An established `paddle_customer_id` exists and matches** `data.customerId` (the normal renewal/upgrade case) → tier write proceeds as before.
+- **An established `paddle_customer_id` exists and does NOT match** `data.customerId` → the tier write and `tracks` insert are both **skipped**; `logError` records the mismatch (`userId`, `establishedCustomerId`, `claimedCustomerId`, `eventId`); the function returns `{ handled: true, eventType: 'transaction.completed', securityRejected: true }` (an extra key beyond the normal `{ handled, eventType }` shape, present only on this path) rather than throwing — a mismatch is a security rejection, not an infra failure, so Paddle is not asked to retry a request that will keep failing the same way. The `payment_events` ledger insert still lands either way, so redelivery of the *same* event is still deduped by the `23505` guard.
+- A DB failure *during the lookup itself* (not a mismatch — the read genuinely erroring) still throws, consistent with FR-009: that is an infra failure, not a security verdict, so Paddle should retry.
+
+**Residual gap, called out explicitly, not fixed**: this closes the forgery window for every `transaction.completed` **after** a user's first payment, but a user's very first payment still has no established `paddle_customer_id` to check against, so a forged `customData.app_user_id` on a **first** payment for the *target* account is still possible in principle (the practical incentive remains unclear — the attacker spends real money to upgrade someone else's account, not their own). Closing that fully would require a different binding mechanism (e.g. minting a Paddle-side `customer_id` server-side at checkout-creation time and looking it up on the webhook, rather than trusting anything client-supplied) — a larger change than this hardening pass, deliberately out of scope here.
+
+**This was an unreviewed judgment call**: OI-55 originally documented this as an open product/architecture decision requiring either hardening or an explicit acceptance of the client-trust model — it was resolved by implementing the harden direction non-interactively per the issue's own "If picked up" note, without a human sign-off. Treat this section as a proposal to sanity-check, not settled policy.
+
+### Activation: webhook primary + `verify-transaction` fallback
 
 Tier activation after a successful checkout has **two independent paths that converge on the same state**:
 
-1. **Primary — the webhook** (`checkout.session.completed`, above). In production a registered webhook endpoint delivers it; **in local dev the only bridge from Stripe to `/api/stripe/webhook` is the `stripe listen --forward-to localhost:3001/api/stripe/webhook` CLI**. If nothing forwards the event, the tier never flips and the client's post-checkout poll (`CheckoutReturnBanner`) exhausts into the "still activating" banner — even though Stripe charged the card.
-2. **Fallback — `syncCheckoutSession`** (`POST /api/stripe/verify-session`). The client reads `session_id` off the `?checkout=success` return URL and posts it here; the processor retrieves the session from Stripe (source of truth), verifies `metadata.user_id === userId` and `payment_status === 'paid'`, and applies the **same** `tier: 'paid'` + `stripe_customer_id` write. This is a plain idempotent write (not guarded by the `stripe_events` ledger — it has no event id), so it is safe to run alongside the webhook: whichever lands first wins, the other is a no-op. It does **not** insert the `upgrade_completed` track (the webhook owns analytics); if only the fallback fires, that one analytics row is absent by design.
+1. **Primary — the webhook** (`transaction.completed`, above). In production a registered notification destination delivers it (see `staging_checks.md`'s Epic 10 section for the still-pending real-deployment verification); in local dev, use the `paddle:sandbox-testing` skill's webhook simulator or a locally-HMAC-signed synthetic payload posted directly at the dev server (OI-54: the sandbox account has no public tunnel configured, which also blocks the dashboard simulator from reaching localhost). If nothing delivers the event, the tier never flips and the client is left on the "still activating" banner — even though Paddle charged the card.
+2. **Fallback — `verifyTransaction`** (`POST /api/paddle/verify-transaction`). The client reads `transaction_id` off the Paddle.js `checkout.completed` event (no return-URL round-trip — the overlay never navigates away) and posts it here; the processor retrieves the transaction from Paddle (source of truth), verifies `customData?.app_user_id === userId` and `status === 'completed'`, and applies the **same** `tier: 'paid'` + `paddle_customer_id` write. This is a plain idempotent write (not guarded by the `payment_events` ledger — it has no event id), so it is safe to run alongside the webhook: whichever lands first wins, the other is a no-op. It does **not** insert the `upgrade_completed` track (the webhook owns analytics); if only the fallback fires, that one analytics row is absent by design.
 
-The frontend calls the fallback **before** starting its poll (`verifyCheckoutSession(sessionId).finally(startPoll)` in `CheckoutReturnBanner.jsx`), so the first poll attempt already observes `paid` when the webhook is down. The fallback is best-effort on the client (errors swallowed) — the webhook + poll remain the backstop.
+`useUpgradeCheckout.js`'s `checkout.completed` event handler is the **sole caller** of the fallback anywhere in the frontend — it owns `transactionId` and dispatches the resulting `confirming`/`activated`/`failed` state into `checkoutReturnFlow.js`'s shared store; `CheckoutReturnBanner.jsx` only renders that state and never calls the endpoint itself.
 
 ### Webhook raw-body middleware ordering
 
-`app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }))` is mounted in `index.js` **before** the global `app.use(express.json())`. This is load-bearing: Stripe signature verification (`stripeClient.webhooks.constructEvent`) needs the exact raw request bytes. If the global JSON parser ran first, it would consume and re-serialize the body, and signature verification would fail. Never reorder these two `app.use()` calls, and never add a new global body-parsing middleware ahead of the webhook route's raw parser.
+`app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }))` is mounted in `index.js` **before** the global `app.use(express.json())`. This is load-bearing: Paddle signature verification (`paddleClient.webhooks.unmarshal`, keyed on the `Paddle-Signature` header) needs the exact raw request bytes. If the global JSON parser ran first, it would consume and re-serialize the body, and signature verification would fail. Never reorder these two `app.use()` calls, and never add a new global body-parsing middleware ahead of the webhook route's raw parser.
 
-### `loadUser` — `stripe_customer_id` fix (R3)
+### `loadUser` — `paddle_customer_id` allowlist (R3, renamed by migration 060)
 
-`loadUser` now selects `stripe_customer_id` on all three of its code paths (existing row, freshly-inserted row, anonymous-fallback default), via a single shared source of truth in `server/userHelpers.js`:
-- `USER_PROFILE_SELECT_COLUMNS` — the `.select()` column list string: `'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id'`.
-- `defaultUserProfile()` — the default object `loadUser` attaches to `req.user` when no `users` row exists yet; field set mirrors `USER_PROFILE_SELECT_COLUMNS` (`stripe_customer_id: null`).
+`loadUser` selects `paddle_customer_id` on all three of its code paths (existing row, freshly-inserted row, anonymous-fallback default), via a single shared source of truth in `server/userHelpers.js`:
+- `USER_PROFILE_SELECT_COLUMNS` — the `.select()` column list string: `'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, paddle_customer_id, onboarding_status'`.
+- `defaultUserProfile()` — the default object `loadUser` attaches to `req.user` when no `users` row exists yet; field set mirrors `USER_PROFILE_SELECT_COLUMNS` (`paddle_customer_id: null`).
 
-Before this fix, `req.user.stripe_customer_id` was always `undefined`, which broke `POST /api/stripe/portal` (needs the Stripe customer id to open a billing portal session) and made `getSubscriptionStatus`'s `stripeCustomerId` argument meaningless. Any future addition to the `users` profile columns `loadUser` needs should extend `USER_PROFILE_SELECT_COLUMNS`/`defaultUserProfile()` together, not one in isolation.
+These two allowlists are a trap: any future addition to the `users` profile columns `loadUser` needs must extend `USER_PROFILE_SELECT_COLUMNS`/`defaultUserProfile()` together, not one in isolation — PostgREST silently drops unknown columns from an `UPDATE`, so a column present in one but not the other fails silently rather than erroring (see memory `project_user_column_propagation.md`). Before this column existed (as `stripe_customer_id`), `req.user.stripe_customer_id` was always `undefined`, which broke the customer-portal endpoint and made `getSubscriptionStatus`'s customer-id argument meaningless — the same class of bug this allowlist pairing guards against.
 
 ## Environment Variables
 
@@ -955,17 +971,18 @@ Before this fix, `req.user.stripe_customer_id` was always `undefined`, which bro
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key for server DB access |
 | `ANTHROPIC_API_KEY` | LLM annotation (optional; falls back to template text) |
-| `STRIPE_SECRET_KEY` | Stripe API (optional) |
-| `STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID` | Stripe price IDs |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification |
+| `PADDLE_API_KEY` | Paddle API (optional; sandbox keys contain `_sdbx`) |
+| `PADDLE_MONTHLY_PRICE_ID` / `PADDLE_ANNUAL_PRICE_ID` | Paddle price IDs |
+| `PADDLE_NOTIFICATION_WEBHOOK_SECRET` | Paddle webhook (`Paddle-Signature`) verification |
+| `VITE_PADDLE_CLIENT_TOKEN` | Frontend Paddle.js client-side token (sandbox tokens are `test_`-prefixed) |
 | `OPENAI_API_KEY` | OpenAI API key for LLM coaching endpoints (optional; affected endpoints return 503 if absent) |
 | `OPENAI_MODEL` | **Mini** production model (e.g. `gpt-5.4-mini`). Used by ALL production LLM endpoints, including `/api/explain-move-llm` (via `computeMechanism`) and `llmCoachHelpers.callLLM`. Required alongside `OPENAI_API_KEY`. |
 | `EXPLAIN_MODEL` | **Full** model (e.g. `gpt-5.4`). Eval-only — read solely by the offline eval CLI `scripts/compute.mjs --llm`. NOT used by any production endpoint despite the name. |
 | `SENTRY_DSN` | Error tracking (optional) |
-| `FRONTEND_URL` | Used in Stripe redirect URLs (default: `http://localhost:5173`; self-derived from `worktree-ports.sh` when unset inside a git worktree — see `docs/architecture/worktree-conventions.md`) |
+| `FRONTEND_URL` | Used to build the Paddle checkout's `successUrl` (default: `http://localhost:5173`; self-derived from `worktree-ports.sh` when unset inside a git worktree — see `docs/architecture/worktree-conventions.md`) |
 | `PORT` | Server port (default: 3001; self-derived from `worktree-ports.sh` when unset inside a git worktree — see `docs/architecture/worktree-conventions.md`) |
 
-All external clients (`supabase`, `anthropic`, `stripe`) are initialized conditionally — the server starts and serves requests even when these are absent, returning 503 for affected endpoints.
+All external clients (`supabase`, `anthropic`, the Paddle Node SDK) are initialized conditionally — the server starts and serves requests even when these are absent, returning 503 for affected endpoints.
 
 ## SPA Catch-all Route
 
@@ -1174,10 +1191,12 @@ of them. Any PR touching an area below should re-confirm the guard still holds:
    `Access-Control-Allow-Origin` headers without a documented reason re-litigating this.
 5. **No `dangerouslySetInnerHTML` / raw `innerHTML` / `eval` / `new Function`** may be introduced under
    `connect-four/src/`. All rendered strings go through normal JSX text interpolation.
-6. **`tier` stays writable only by the Stripe webhook path.** `users.tier` MUST NOT be set by any
-   client-writable endpoint or user-controlled request field — the sole write path is
-   `stripeProcessor.js`'s `handleWebhook` (see "PaymentProcessor Seam" above, FR-025 status mirror).
-7. **Stripe webhook signature verification stays on the raw body.** `stripe.webhooks.constructEvent` MUST
+6. **`tier` stays writable only by the Paddle webhook (+ its verify-transaction fallback).**
+   `users.tier` MUST NOT be set by any client-writable endpoint or user-controlled request field
+   — the two write paths are `paddleProcessor.js`'s `handleWebhook` and `verifyTransaction` (see
+   "PaymentProcessor Seam" above), both gated on server-verified identity (webhook signature /
+   `customData.app_user_id` match), never on a bare client-supplied value.
+7. **Paddle webhook signature verification stays on the raw body.** `paddle.webhooks.unmarshal` MUST
    continue to run against the raw (unparsed) request body — see "Webhook raw-body middleware ordering"
    above. Never let a global JSON body-parser run ahead of the webhook route.
 

@@ -22,8 +22,9 @@ import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from 
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
-import { registerStripeRoutes } from './stripeRoutes.js';
-import { createStripeProcessor } from './stripeProcessor.js';
+import { registerPaddleRoutes } from './paddleRoutes.js';
+import { createPaddleProcessor } from './paddleProcessor.js';
+import { Paddle, Environment } from '@paddle/paddle-node-sdk';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -149,13 +150,14 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true },
 }));
 
-// Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
-// bytes. It MUST be parsed before the global express.json() below consumes the
-// request stream — otherwise by the time the route's own express.raw() middleware
-// runs (registerStripeRoutes is called much later in this file), the body stream has
-// already been read and parsed into an object, leaving nothing for raw() to read.
-// Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+// Paddle webhook signature verification (paddleRoutes.js's handleWebhook ->
+// paddle.webhooks.unmarshal) needs the exact raw request bytes. It MUST be
+// parsed before the global express.json() below consumes the request stream —
+// otherwise by the time the route's own body handling runs (registerPaddleRoutes
+// is called much later in this file), the body stream has already been read and
+// parsed into an object, leaving nothing for raw() to read. Mounting the raw
+// parser here, scoped to this one path, guarantees it wins the race.
+app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(localeMiddleware);
 app.use(cookieParser());
@@ -204,7 +206,7 @@ app.use('/api/explain-move-llm', makeLimit(5));
 app.use('/api/llm-feedback', makeLimit(10));
 app.use('/api/scores', makeLimit(60));
 app.use('/api/explain', makeLimit(60));
-app.use('/api/stripe/create-checkout', makeLimit(10));
+app.use('/api/paddle/create-checkout', makeLimit(10));
 app.use('/api/', makeLimit(120));
 
 // Scores for the empty board (solver hangs on empty input).
@@ -2828,21 +2830,25 @@ app.get('/api/blunders/:id', async (req, res) => {
   res.json(buildBlunderDetailResponse(data, req.user?.id, context));
 });
 
-// ── Stripe endpoints (T051-T053; extracted to stripeProcessor.js/stripeRoutes.js — spec 045 US3) ──
+// ── Paddle endpoints (spec 050; extracted to paddleProcessor.js/paddleRoutes.js) ──
 
-let paymentProcessor = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  const { default: Stripe } = await import('stripe');
-  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
-  paymentProcessor = createStripeProcessor({
-    stripeClient,
+let paddlePaymentProcessor = null;
+if (process.env.PADDLE_API_KEY) {
+  // Mirrors the frontend's NODE_ENV/MODE-driven sandbox-vs-production switch
+  // (src/lib/useUpgradeCheckout.js) — a hardcoded Environment.sandbox here
+  // would silently break every server-side Paddle call in production.
+  const paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
+    environment: process.env.NODE_ENV === 'production' ? Environment.production : Environment.sandbox,
+  });
+  paddlePaymentProcessor = createPaddleProcessor({
+    paddleClient,
     supabase,
-    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID,
-    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    monthlyPriceId: process.env.PADDLE_MONTHLY_PRICE_ID,
+    annualPriceId: process.env.PADDLE_ANNUAL_PRICE_ID,
+    webhookSecret: process.env.PADDLE_NOTIFICATION_WEBHOOK_SECRET,
   });
 }
-registerStripeRoutes(app, paymentProcessor);
+registerPaddleRoutes(app, paddlePaymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 
@@ -4050,12 +4056,28 @@ app.post('/api/admin/tts/cleanup', requireLocalhost, async (req, res) => {
 });
 
 // ── Legal pages (required by Google OAuth consent screen) ────────────────────
-app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html')));
-app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html')));
+// { dotfiles: 'allow' } — Express's `send` module defaults dotfiles to
+// 'ignore' and 404s ("Not Found") when ANY path segment starts with a dot.
+// This repo's own worktree convention (worktree-conventions.md) nests
+// worktrees under `.claude/worktrees/...`, so __dirname routinely contains a
+// dotfile segment there — found in QA: every legal-page route 500'd
+// ("Internal server error") whenever the server ran from inside a worktree,
+// which is this project's normal way of running feature branches. These are
+// fixed, hardcoded filenames (no user input reaches sendFile here), so
+// allowing dotfiles carries no path-traversal risk.
+const LEGAL_PAGE_OPTS = { dotfiles: 'allow' };
+app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html'), LEGAL_PAGE_OPTS));
+app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html'), LEGAL_PAGE_OPTS));
 // Paddle domain review requires prices to be publicly reachable without signing in.
-app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html')));
-app.get('/refunds', (_, res) => res.sendFile(join(__dirname, 'refunds.html')));
-app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html')));
+app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));
+app.get('/refunds', (_, res) => res.sendFile(join(__dirname, 'refunds.html'), LEGAL_PAGE_OPTS));
+app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html'), LEGAL_PAGE_OPTS));
+// Shared stylesheet for the 4 legal pages above. Found in QA: their former
+// inline <style> blocks (and inline style="" link colors) were silently
+// stripped by helmet's global CSP (style-src 'self', no 'unsafe-inline') —
+// the pages rendered as unstyled plain text. An external same-origin
+// stylesheet satisfies style-src 'self' without loosening the CSP elsewhere.
+app.get('/legal.css', (_, res) => res.type('text/css').sendFile(join(__dirname, 'legal.css'), LEGAL_PAGE_OPTS));
 
 // ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
 

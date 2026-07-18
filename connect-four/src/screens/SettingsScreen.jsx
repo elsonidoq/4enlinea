@@ -46,7 +46,7 @@ export function SettingsScreen({ go, goBack }) {
   async function openPortal() {
     setPortalError(false);
     try {
-      const res = await fetch(`${API}/api/stripe/portal`, {
+      const res = await fetch(`${API}/api/paddle/portal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -443,7 +443,7 @@ export function SettingsScreen({ go, goBack }) {
         </section>
 
         {/* D3: tier-aware Subscription section — free -> UpgradeModal (5th call
-            site, identical props to the other four); paid -> Stripe billing
+            site, identical props to the other four); paid -> Paddle billing
             portal, which had zero frontend callers before this. */}
         <section>
           <h3>{t('settings.subscriptionHeading')}</h3>

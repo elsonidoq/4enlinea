@@ -36,6 +36,17 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': `http://localhost:${apiPort}`,
+      // Legal/pricing pages are server-served static HTML (server/index.js's
+      // "Legal pages" routes — LegalFooter.jsx uses plain <a href>, not SPA
+      // routes) — found in QA: without these, a full navigation to /pricing
+      // etc. under `npm run dev` hits Vite's own SPA fallback (index.html)
+      // instead of the API server, and the client router then redirects to
+      // Home since these paths aren't registered SPA routes.
+      '/pricing': `http://localhost:${apiPort}`,
+      '/terms': `http://localhost:${apiPort}`,
+      '/privacy': `http://localhost:${apiPort}`,
+      '/refunds': `http://localhost:${apiPort}`,
+      '/legal.css': `http://localhost:${apiPort}`,
     },
   },
 })

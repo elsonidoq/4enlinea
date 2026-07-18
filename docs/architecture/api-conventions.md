@@ -4,7 +4,7 @@
 
 **MUST**: Public puzzle/game routes use `/api/<resource>` (e.g., `/api/puzzles`, `/api/scores`).
 **MUST**: Curation and admin routes use `/api/admin/<resource>` (e.g., `/api/admin/candidates`).
-**MUST**: Stripe routes use `/api/stripe/<action>` (e.g., `/api/stripe/create-checkout`).
+**MUST**: Paddle payment routes use `/api/paddle/<action>` (e.g., `/api/paddle/create-checkout`).
 **MUST**: Coach routes use `/api/coach/<resource>` (e.g., `/api/coach/weakness-map`).
 **MUST**: Authenticated user-data routes use `/api/user/<resource>` (e.g., `/api/user/profile`, `/api/user/streak`). Established in spec 030; full endpoint contracts at `specs/030-server-mediated-data-access/contracts/api-user-endpoints.md`.
 
@@ -56,51 +56,67 @@ Response shape is unchanged either way: `{ user: { id, tier } }` on success, `{ 
 
 **FR-007 (in-flight sign-in guard)**: no interaction with the OAuth hash-callback branch — that branch returns early after `POST /api/auth/callback` succeeds, before `GET /api/auth/session` is ever called. The two paths are mutually exclusive by control flow.
 
-## Stripe Checkout Config: `GET /api/stripe/config`
+## Paddle Checkout Config: `GET /api/paddle/config`
 
-Registered by `registerStripeRoutes`. **Public / unauthenticated** — the upgrade modal renders it before the user is necessarily signed in. Returns the live display prices read off the actual Stripe price objects (`stripeProcessor.getPrices()`), so the UI never drifts from what is charged.
+Registered by `registerPaddleRoutes` (`server/paddleRoutes.js`). **Public / unauthenticated** — the upgrade modal renders it before the user is necessarily signed in. Returns the live display prices read off the actual Paddle price objects (`paddleProcessor.getPrices()`, `paddleClient.prices.get(priceId)`), so the UI never drifts from what is charged.
 
-**Response**: `200 { prices: { monthly: PriceInfo|null, annual: PriceInfo|null } }` where `PriceInfo = { amount: <minor units, e.g. 299 = $2.99>, currency: 'usd', interval: 'month'|'year'|null }`. Returns `503 { error: 'Payments not configured' }` when `paymentProcessor` is null (no `STRIPE_SECRET_KEY`); the client degrades to plain plan labels with no price.
+**Response**: `200 { prices: { monthly: PriceInfo|null, annual: PriceInfo|null } }` where `PriceInfo = { amount: <minor units, e.g. 299 = $2.99>, currency: 'usd', interval: 'month'|'year'|null }`. Returns `503 { error: 'Payments not configured' }` when `paddlePaymentProcessor` is null (no `PADDLE_API_KEY`); the client degrades to plain plan labels with no price.
 
 ### Changing a price: create-and-archive, never edit
 
-**Stripe price objects are immutable** — an amount cannot be edited in place. To change a price: create a **new** price on the same product, archive the old one (`active: false`), then update the corresponding env var (`STRIPE_MONTHLY_PRICE_ID` / `STRIPE_ANNUAL_PRICE_ID`, read in `index.js` and passed to `createStripeProcessor` as `monthlyPriceId`/`annualPriceId`). Forgetting the env-var update leaves checkout silently billing the archived price. Current prices ($2.99/mo, $21.99/yr) are the second generation on product `DecodeC4 Pro`; the original $7.99/$59.99 prices were archived this way.
+**Paddle price objects are immutable** — an amount cannot be edited in place. To change a price: create a **new** price on the same product, archive the old one, then update the corresponding env var (`PADDLE_MONTHLY_PRICE_ID` / `PADDLE_ANNUAL_PRICE_ID`, read in `index.js` and passed to `createPaddleProcessor` as `monthlyPriceId`/`annualPriceId`). Forgetting the env-var update leaves checkout silently billing the archived price. Current prices are $2.99/mo, $21.99/yr on product `DecodeC4 Pro` (see `paddle:catalog-setup` skill for provisioning).
 
-**The connected account is a Stripe SANDBOX (`acct_1TrxCXET4Rc2BDFf`) — test mode only.** It has no live mode to flip, and the in-session Stripe MCP is bound to it (writes land in test mode). Taking real payments requires a **separate, activated live account** with its own live product/prices and `sk_live_…` keys — none of it derivable from the sandbox. Production is `quaddojo.com`; staging is `staging.decodec4.xyz`.
+**All development uses the Paddle SANDBOX environment.** Sandbox API keys contain `_sdbx`; sandbox client-side Paddle.js tokens are `test_`-prefixed. Taking real payments requires the account's live catalog to be provisioned separately (own live product/prices, non-`test_` client token) — none of it derivable from the sandbox — plus production domain review approval (see `staging_checks.md`'s Epic 10 section for what's still pending). Production is `quaddojo.com`; staging is `staging.decodec4.xyz`.
 
-## Stripe Checkout: `POST /api/stripe/create-checkout` (returnPath)
+## Paddle Checkout: `POST /api/paddle/create-checkout` (returnPath)
 
-**Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from; the processor builds Stripe's `success_url`/`cancel_url` as `<FRONTEND_URL><returnPath>?checkout=<outcome>` so the user returns to their originating screen instead of home. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`. Omitting it preserves the legacy `/?checkout=success` behavior.
+**Auth required.** **Body**: `{ plan: 'monthly'|'annual', returnPath?: string }`. `returnPath` is the relative app path the user launched checkout from. **Open-redirect guard**: `returnPath` is accepted only if it matches `^/(?!/)` (same-origin relative path, via `sanitizeReturnPath` exported from `paddleProcessor.js`); anything else (absolute URL, `//host`, missing leading slash) falls back to `/`.
 
-The **`success_url` additionally carries a raw `&session_id={CHECKOUT_SESSION_ID}`** template (appended as a raw string, not via `URLSearchParams`, which would percent-encode the braces and break Stripe's substitution). Stripe replaces the template with the real Checkout Session id on redirect, and the client passes it to `/api/stripe/verify-session` (below). `cancel_url` gets no `session_id`.
+**Response `200`** (no server-built redirect URL, unlike a hosted-checkout model):
+```json
+{ "priceId": "pri_...", "customerEmail": "user@example.com", "successUrl": "/settings" }
+```
+There is no server-built hosted-checkout URL — the client opens the Paddle.js overlay itself via `Paddle.Checkout.open({ items: [{ priceId, quantity: 1 }], customer: { email: customerEmail }, customData: { app_user_id }, settings: { successUrl } })`, passing these three server-returned values through verbatim (never client-recomputed). `successUrl` is resolved to an absolute URL client-side (`new URL(successUrl, window.location.origin)`) since Paddle.js requires an absolute `http(s)://` value, but the path itself is decided server-side only.
 
-## Stripe Activation Fallback: `POST /api/stripe/verify-session`
+**Response `503`**: `{ error: 'Payments not configured' }`. **Response `401`**: `{ error: 'Authentication required' }`.
 
-**Auth required.** **Body**: `{ sessionId: string }` (the `session_id` the client read off the `?checkout=success` return URL). Registered by `registerStripeRoutes`.
+## Paddle Activation Fallback: `POST /api/paddle/verify-transaction`
 
-This is the **synchronous activation fallback** — the webhook (below) remains the primary tier-mirror, but a webhook that is dropped, delayed, or (in local dev) never forwarded would otherwise strand a paying user on the "still activating" banner forever. `syncCheckoutSession` retrieves the Checkout Session straight from Stripe, verifies `session.metadata.user_id === req.user.id` (security — the client's session id is never trusted to belong to the caller) and `payment_status === 'paid'`, then applies the **same idempotent** `tier: 'paid'` + `stripe_customer_id` write as `checkout.session.completed`.
+**Auth required.** **Body**: `{ transactionId: string }` — read off the Paddle.js `checkout.completed` event's `transaction_id` field client-side (`useUpgradeCheckout.js`'s event handler is the sole caller anywhere in the frontend). There is no return-URL round-trip to read a query param from — the Paddle.js overlay model never navigates away from the app.
 
-**Response**: `200 { activated: boolean, reason?: string }` — `{ activated: true }` on success; `{ activated: false, reason }` with `reason ∈ { 'no_session', 'user_mismatch', 'not_paid' }` otherwise. `503` when Stripe is not configured. Idempotent with the webhook: both converge on `tier='paid'` for the same user, so whichever lands first wins and the other is a no-op write. See server-conventions.md "PaymentProcessor Seam".
+This is the **synchronous activation fallback** — the webhook (below) remains the primary tier-mirror, but a webhook that is dropped, delayed, or (in local dev) never forwarded would otherwise strand a paying user on the "still activating" banner forever. `verifyTransaction` retrieves the transaction straight from Paddle (`paddle.transactions.get(transactionId)`), verifies `transaction.customData?.app_user_id === req.user.id` (security — the client's transaction id is never trusted to belong to the caller) and `transaction.status === 'completed'`, then applies the **same idempotent** `tier: 'paid'` + `paddle_customer_id` write the webhook applies — with no `tracks` insert (that analytics record is exclusively the webhook's to write).
 
-## Stripe Webhook Endpoint: `POST /api/stripe/webhook` (spec 045, FR-025)
+**Response**: `200 { activated: boolean, reason?: string }` — `{ activated: true }` on success; `{ activated: false, reason }` with `reason ∈ { 'no_transaction', 'user_mismatch', 'not_completed' }` otherwise. `503` when Paddle is not configured. Idempotent with the webhook: both converge on `tier='paid'` for the same user, so whichever lands first wins and the other is a no-op write. See server-conventions.md "PaymentProcessor Seam".
 
-Registered by `registerStripeRoutes` (`server/stripeRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Stripe signature verification — see server-conventions.md).
+## Paddle Webhook Endpoint: `POST /api/paddle/webhook` (spec 050, FR-006/FR-007/FR-008/FR-009)
 
-**Request**: raw Stripe event body + `stripe-signature` header. No auth (Stripe-signed, not user-authenticated).
+Registered by `registerPaddleRoutes` (`server/paddleRoutes.js`) — see server-conventions.md "PaymentProcessor Seam" for the module layout. Mounted behind a route-scoped `express.raw({ type: 'application/json' })` parser registered **before** the global `express.json()` (required for Paddle signature verification — see server-conventions.md).
 
-**Response**: `200 { received: true, handled: boolean, eventType: string }` on any recognized/processed event, including duplicates (`eventType: 'duplicate'`, `handled: false`) and passthrough event types the processor doesn't act on (`handled: false`). `400 { error }` if signature verification fails.
+**Request**: raw Paddle event body + a **`Paddle-Signature`** header (not `stripe-signature`). No auth (Paddle-signed, not user-authenticated).
 
-**Tier-mirror contract (FR-025)** — `users.tier` is written as a **live derivation of the Stripe subscription's current status**, not set once at purchase:
+**Verification**: `paddle.webhooks.unmarshal(rawBody, PADDLE_NOTIFICATION_WEBHOOK_SECRET, signatureHeader)` inside a single try/catch. Any failure (signature mismatch, malformed event, or a downstream processing failure after successful unmarshal — DB write, tier write, `tracks` insert) returns one non-2xx status; per the `paddle:webhooks` skill, this deliberately does not try to distinguish signature failures from processing failures via different status codes — Paddle's retry behavior doesn't branch on it.
 
-| Event | Status | Write |
+**Response**: `200 { received: true, handled: boolean, eventType: string }` on any recognized/processed event, including duplicates (`eventType: 'duplicate'`, `handled: false`) and passthrough event types the processor doesn't act on (`handled: false`). Non-2xx (no fixed status code) on any verification or processing failure.
+
+**Tier-mirror contract** — `users.tier` is written as a **live derivation of the Paddle subscription's current status**, not set once at purchase:
+
+| Paddle event | `status` (subscription events only) | Write |
 |---|---|---|
-| `checkout.session.completed` | — | `tier: 'paid'`, `stripe_customer_id` set, `tracks` insert (`upgrade_completed`) |
-| `customer.subscription.updated` | `active` / `trialing` | `tier: 'paid'` |
-| `customer.subscription.updated` | `past_due` | no write (retry window; does not downgrade) |
-| `customer.subscription.updated` | `canceled` / `unpaid` | `tier: 'free'` |
-| `customer.subscription.deleted` | — | `tier: 'free'` (unconditional, terminal) |
+| `transaction.completed` | — | `tier: 'paid'`, `paddle_customer_id` set, `tracks` insert (`upgrade_completed`) |
+| `subscription.created` | — | **no-op, documented** — `payment_events` ledger insert only. First-payment tier grant belongs exclusively to `transaction.completed`; granting tier here would race with, or duplicate, that write. |
+| `subscription.updated` | `active` / `trialing` (no scheduled cancel) | `tier: 'paid'` |
+| `subscription.updated` | `past_due` | no write (Paddle's automatic retry window; does not downgrade) |
+| `subscription.updated` | `paused` | `tier: 'free'` |
+| `subscription.updated` | `active` **with** non-null `scheduled_change.action: 'cancel'` | no write (service continues until the effective date — not yet terminal) |
+| `subscription.canceled` (or `subscription.updated` with `status: 'canceled'`) | — | `tier: 'free'` unconditionally (terminal) |
 
-**Idempotency**: every event is first inserted into `stripe_events` (`stripe_event_id` UNIQUE); a `23505` conflict short-circuits before any tier write or `tracks` insert, returning `{ handled: false, eventType: 'duplicate' }`. Webhook redelivery of the same event is therefore safe to re-send with no double side effects.
+**Idempotency**: every event is first inserted into `payment_events` (`event_id` UNIQUE, `event_type`, `payload`) BEFORE any tier/tracks write; a `23505` conflict short-circuits before any tier write or `tracks` insert, returning `{ handled: false, eventType: 'duplicate' }`. Webhook redelivery of the same event is therefore safe to re-send with no double side effects. Unlike a log-and-proceed policy, a NON-`23505` ledger-insert failure or any downstream tier/`tracks` write failure THROWS — surfaced as non-2xx so Paddle retries, never a silent partial write.
+
+## Paddle Customer Portal: `POST /api/paddle/portal`
+
+**Auth required.** **Precondition**: `req.user.paddle_customer_id` must be set (else `400 { error: 'No active subscription' }`). **Body**: `{ returnPath?: string }` — passed through `sanitizeReturnPath()` for parity with `create-checkout`'s guard, but note Paddle's `customerPortalSessions.create` has no return-URL parameter at all, so the sanitized value is validated only and never forwarded to Paddle.
+
+**Response `200`**: `{ portalUrl: string }` — a minted Paddle customer-portal session URL for `req.user.paddle_customer_id`, via `paddleClient.customerPortalSessions.create(paddleCustomerId, [])` → `session.urls.general.overview` (see `paddle:customer-portal` skill). **Response `503`** / **`401`**: same gates as the other Paddle routes above.
 
 ## Access Guards
 
@@ -202,7 +218,7 @@ Applied via `express-rate-limit` per route prefix, per-IP, 60-second windows:
 - `/api/recommend-move`, `/api/explain-move-llm`: 5 req/min
 - `/api/llm-feedback`: 10 req/min
 - `/api/scores`, `/api/explain`: 60 req/min
-- `/api/stripe/create-checkout`: 10 req/min
+- `/api/paddle/create-checkout`: 10 req/min
 - All other `/api/` routes: 120 req/min
 
 ## Explanation Engine Endpoint

@@ -729,3 +729,21 @@ exercised locally at all.
   **Expected** — USD arrives as USD (not pesified); confirms `docs/payment_provider_research.md` open question and the net-vs-gross $100-threshold assumption. Mind the 20-business-day ingreso rule + Factura E.
   **Source** — Epic 10 staging checks; `docs/payment_provider_research.md`.
   - [ ] signed off (tester / date):
+
+- **What** — Real deployed Paddle notification-destination delivery: with the app running on a real, publicly reachable deployment (not a locally-HMAC-signed synthetic payload posted directly at the dev server, which is what local/sandbox verification used), confirm a genuine Paddle-originated `transaction.completed`/`subscription.*` webhook reaches `POST /api/paddle/webhook` on the deployed server, passes `Paddle-Signature` verification, and flips `users.tier` for the purchasing account.
+  **Why staging** — OI-54: the Paddle sandbox account has no public tunnel configured, so Paddle cannot deliver to `localhost` at all (blocks both a real card-entry checkout and the dashboard's webhook simulator from reaching local dev). This batch's regression sweep (T055) exercised the same class of workaround prior batches used — Chrome DevTools MCP to confirm the modal opens/overlay initializes in sandbox mode, and a synthetic signed payload for webhook-shape verification — neither proves real Paddle-to-deployed-server delivery.
+  **Expected** — A webhook event delivered by Paddle directly to the deployed URL is received, verified, and processed exactly once (idempotency via `payment_events`), with `users.tier` reflecting the event outcome per the tier-mapping table in `docs/architecture/api-conventions.md`.
+  **Source** — Epic 10 staging checks; spec 050 FR-006/FR-007/FR-008/FR-009; `docs/open_issues.md` OI-54.
+  - [ ] signed off (tester / date):
+
+- **What** — Live (non-sandbox) catalog provisioning: the `DecodeC4 Pro` product/prices (monthly/annual) are re-created in Paddle's **live** catalog (not just the sandbox `pro_01kxsbjtcztnfrkz1xkknrhgjt` product), and the deployed server's env vars (`PADDLE_API_KEY`, `PADDLE_MONTHLY_PRICE_ID`, `PADDLE_ANNUAL_PRICE_ID`, `VITE_PADDLE_CLIENT_TOKEN`) point at the live ids/non-`test_` token, not the sandbox ones this epic built and tested against.
+  **Why staging** — All development and this epic's entire verification (T008–T055) used the sandbox environment (`_sdbx` API key, `test_`-prefixed client token) per CLAUDE.md's Paddle-integration convention; nothing in local dev or sandbox can provision or confirm the live catalog.
+  **Expected** — Live product/prices exist in the Paddle live dashboard with the same $2.99/mo, $21.99/yr amounts; `GET /api/paddle/config` on the live deploy returns them; a real checkout in production charges a real card.
+  **Source** — Epic 10 staging checks; `paddle:catalog-setup` skill; CLAUDE.md § "Paddle integration".
+  - [ ] signed off (tester / date):
+
+- **What** — The Argentine tax/retención withholding stack (Ingresos Brutos, ARBA/AGIP or provincial equivalent perception/retention regimes, and any AFIP retención on foreign-currency inflows) is confirmed to apply correctly to the real USD payouts once they begin landing, and the resulting **Factura E** issuance/accounting workflow is validated against a real payout, not a projection.
+  **Why staging** — This depends on a real payout actually landing (the payout check above) plus real accounting/tax-authority interaction — there is no sandbox or local equivalent for Argentine withholding-tax regimes or invoicing compliance.
+  **Expected** — Withholding amounts (if any) match what `docs/payment_provider_research.md`'s tax research assumed; Factura E is issued correctly for the payout; no surprise retención that changes the net-USD assumption used in the product's pricing/margin decisions.
+  **Source** — Epic 10 staging checks; `docs/payment_provider_research.md`; FR-017.
+  - [ ] signed off (tester / date):
