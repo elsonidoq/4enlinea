@@ -69,6 +69,16 @@ async function getPaddle() {
 // it. Never silently leaves the user on the free-tier UI while this resolves
 // (FR-005/SC-003) — the store starts at 'confirming' the instant the event
 // fires, before the network call even completes.
+//
+// Found in QA (2026-07-18): passing `settings.successUrl` to
+// `Paddle.Checkout.open()` makes Paddle.js navigate the PARENT window there
+// once checkout completes (documented Paddle behavior, not a bug in Paddle) —
+// that full-page reload violates FR-003/US2 AC1 ("no full-page redirect") and
+// raced with this very fetch, aborting it before the tier write landed. Fixed
+// by never passing successUrl to Paddle.Checkout.open() at all (see below) and
+// explicitly closing the overlay here instead, once our own confirmation
+// resolves — the overlay's built-in success screen is skipped, but the app
+// never leaves its own page.
 async function handleCheckoutCompleted(transactionId) {
   setCheckoutReturnState('confirming');
   try {
@@ -82,6 +92,9 @@ async function handleCheckoutCompleted(transactionId) {
     setCheckoutReturnState(result.activated ? 'activated' : 'failed');
   } catch {
     setCheckoutReturnState('failed');
+  } finally {
+    const paddle = await getPaddle();
+    paddle?.Checkout.close();
   }
 }
 
@@ -113,15 +126,13 @@ export function useUpgradeCheckout(returnPathOverride) {
     });
     if (!res.ok) throw new Error('checkout failed');
     // Server-returned values passed through verbatim — never client-recomputed
-    // (contracts/paddle-api.md). The server returns a sanitized same-origin
-    // RELATIVE path (open-redirect guard, sanitizeReturnPath); Paddle.js's
-    // settings.successUrl requires an ABSOLUTE http(s):// URL and throws a
-    // synchronous validation error otherwise ("[PADDLE BILLING] The value for
-    // successUrl is not valid" — verified against the real SDK, not assumed).
-    // Resolving against window.location.origin only makes it absolute — it
-    // does not re-decide *which* path is safe; that decision stays server-side.
-    const { priceId, customerEmail, successUrl } = await res.json();
-    const absoluteSuccessUrl = new URL(successUrl, window.location.origin).toString();
+    // (contracts/paddle-api.md). `successUrl` is still part of the
+    // create-checkout contract (server-side open-redirect guard via
+    // sanitizeReturnPath) but is deliberately NOT forwarded to
+    // Paddle.Checkout.open() below — see the note on handleCheckoutCompleted
+    // for why (FR-003/US2 AC1: passing it there makes Paddle.js navigate the
+    // parent window away on completion, which this app must never do).
+    const { priceId, customerEmail } = await res.json();
 
     const paddle = await getPaddle();
     if (!paddle) throw new Error('checkout unavailable');
@@ -138,7 +149,6 @@ export function useUpgradeCheckout(returnPathOverride) {
       // collects it instead — only include it when we actually have one.
       ...(customerEmail ? { customer: { email: customerEmail } } : {}),
       customData: { app_user_id: session?.user?.id },
-      settings: { successUrl: absoluteSuccessUrl },
     });
   };
 }

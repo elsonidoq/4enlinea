@@ -172,11 +172,29 @@ export function createPaddleProcessor({
   // `completed`, may flip tier -> paid. Safe to run alongside the (later-batch)
   // webhook: both converge on the same idempotent write, so whichever lands
   // first wins and the other is a no-op.
+  //
+  // Found in QA (2026-07-18): Paddle's own docs (build/checkout/upsell-checkout)
+  // document that a transaction moves `paid` -> `completed` asynchronously
+  // server-side AFTER the client-side `checkout.completed` event already fired
+  // — "this typically takes less than a second." Calling transactions.get()
+  // immediately (no delay) reproducibly returned a transaction still short of
+  // `completed`, silently defeating this entire fallback for every real
+  // checkout (confirmed live: same transaction re-queried a few seconds later
+  // was `completed`). One bounded retry after a short delay — not an
+  // open-ended poll, consistent with this feature's single-check design —
+  // covers Paddle's documented settle time without reintroducing the
+  // bounded-wait poll model spec 050 deliberately collapsed away.
   async function verifyTransaction({ transactionId, userId }) {
     if (!transactionId) return { activated: false, reason: 'no_transaction' };
 
-    const transaction = await paddleClient.transactions.get(transactionId);
+    let transaction = await paddleClient.transactions.get(transactionId);
     if (!transaction) return { activated: false, reason: 'no_transaction' };
+
+    if (transaction.status !== 'completed') {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      transaction = await paddleClient.transactions.get(transactionId);
+      if (!transaction) return { activated: false, reason: 'no_transaction' };
+    }
 
     // Security: only the user who started this checkout may activate from
     // it — never trust the client's transaction id to belong to the caller.
