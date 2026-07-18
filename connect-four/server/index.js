@@ -146,7 +146,13 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", PADDLE_CDN],
-      styleSrc: ["'self'"],
+      // Paddle.js sets inline style="..." attributes directly on elements it
+      // injects into the parent page (its loading overlay, before the iframe
+      // itself loads) — a fixed set of hashes isn't viable since Paddle
+      // generates these dynamically and doesn't document/version them, so
+      // 'unsafe-inline' is the documented-in-practice requirement for the
+      // overlay checkout to render at all.
+      styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN, PADDLE_ORIGINS],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
       connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS],
