@@ -1,6 +1,6 @@
 ---
 name: project_paddle_integration
-description: Paddle (MoR) is the chosen payment provider replacing Stripe for AR; the MCP plugin reads keys from Claude Code env NOT server/.env; account is Paddle Billing; legal pages ship via a separate PR off main
+description: Paddle (MoR) is the SHIPPED payment provider (Stripe fully removed 2026-07-18); MCP plugin reads keys from Claude Code env NOT server/.env; account is Paddle Billing; successUrl/quantity-stepper/verifyTransaction fixes made post-ship; legal pages ship via a separate PR off main
 metadata: 
   node_type: memory
   type: project
@@ -41,4 +41,13 @@ To process real money you need BOTH **domain review** (per checkout domain) AND 
 
 Domain submission: submit **`decodec4.xyz` ONLY** — not `staging.decodec4.xyz` (internal) and not `quaddojo.com` (serves the same app under a name the terms don't claim → brand mismatch). **App name is undecided**: `decodec4.xyz` is temporary, `quaddojo.com` a tentative test; terms/brand currently say "DecodeC4". Don't invest in brand assets until the name is committed; renaming later = one new domain submission + a find/replace, cheap.
 
-Related: [[project_stripe_traps]] (the outgoing provider); `docs/payment_provider_research.md`; `docs/open_issues.md` OI-41; `polish_epic.md` Epic 10.
+## 8. Epic 10 is SHIPPED (2026-07-18) — Stripe fully removed, Paddle live in sandbox
+
+`/coordinate-implementation` ran the full spec 050 build (4 batches + code review + QA) against `specs/050-paddle-checkout-migration/`; every Stripe file/dep/env-var/test is deleted, `docs/architecture/api-conventions.md` + `server-conventions.md` describe the shipped Paddle contract — read those for current truth, not this section. Two planning-era decisions below were **reversed** during implementation/QA — don't trust old plan docs or this memory's prior wording over the architecture docs:
+- **`successUrl` is NOT passed to `Paddle.Checkout.open()`** (reversed 2026-07-18, contra the original plan). Passing it there makes Paddle.js navigate the *parent window* on checkout completion (confirmed live: a real full-page reload), which broke the "never leaves the app" requirement and raced with the `verify-transaction` call, silently dropping the tier grant. `successUrl` is still returned by `createCheckout` (the open-redirect guard still applies server-side) but the client now calls `paddle.Checkout.close()` once its own confirmation resolves instead.
+- **`verifyTransaction`'s single check needs a bounded retry** — Paddle's transaction record settles to `status: 'completed'` asynchronously just after the client-side `checkout.completed` event fires ("typically less than a second" per Paddle's own docs); an immediate zero-delay check reproducibly saw a not-yet-`completed` transaction. One ~1.2s delayed re-fetch (not a poll) fixed it.
+- **Checkout overlay's quantity stepper has no client-side hide option** — Paddle's own docs say so explicitly. Fixed by setting `quantity: { minimum: 1, maximum: 1 }` on both prices via `client.prices.update` (sandbox and, per `staging_checks.md`, still needed on the live catalog when it's provisioned).
+- Ownership-check field (`custom_data.app_user_id`, not `customer_id`), the `useStripePrices→usePaddlePrices` rename, `subscription.created`'s no-op status, and the route/DB-identifier renames all shipped exactly as originally planned — no correction needed there.
+- OI-55 (client-supplied `customData.app_user_id` had no server-side binding on the webhook path) was hardened post-ship: `handleWebhook` now cross-checks `data.customerId` against an already-established `users.paddle_customer_id` for every payment after a user's first. The first-payment forgery window is a known, accepted residual gap — see `docs/architecture/server-conventions.md` "Identity binding on `transaction.completed` (OI-55)".
+
+Related: [[project_stripe_traps]] (obsolete now that Stripe is deleted — kept only for historical Stripe-era context, do not use for anything current); `docs/payment_provider_research.md`; `docs/open_issues.md` (OI-54/55/56/57, all resolved); `docs/architecture/api-conventions.md` + `server-conventions.md` (current Paddle contract — authoritative).
