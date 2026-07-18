@@ -57,24 +57,16 @@ export function SetPickerScreen({ go, goBack }) {
   // a real payment left the modal stuck on 'loading' with no way to close.
   // This screen has no per-user tier state (its "locked" sets come from the
   // static CHALLENGE_SETS constant, not the account's tier), so there's
-  // nothing else to refresh here — just dismiss the modal.
+  // nothing else to refresh here — the modal itself now owns auto-dismissing
+  // (with its slide-away animation) once 'success' renders.
   useEffect(() => {
-    let dismissTimer;
-    const unsubscribe = subscribeCheckoutReturn((state) => {
+    return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         setUpgradeUiState('success');
-        dismissTimer = setTimeout(() => {
-          setUpgradeOpen(false);
-          setUpgradeUiState('idle');
-        }, 1500);
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
       }
     });
-    return () => {
-      unsubscribe();
-      clearTimeout(dismissTimer);
-    };
   }, []);
 
   useEffect(() => {

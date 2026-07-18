@@ -93,29 +93,23 @@ export function DeepRevealPane({
   // a real payment left the modal stuck on 'loading'. Reuses refreshProfile
   // (already called after every successful reveal) so profile.tier/quota
   // reflect Pro immediately, and clears quotaExceeded so the paywall banner
-  // (line ~289) disappears. Scope note: this does NOT retry the deep-reveal
-  // fetch that originally 429'd — the user still needs to reopen this pane to
-  // see the actual reveal content, matching the existing anonRevealed/401
-  // gates' behavior of requiring a fresh open rather than auto-retrying.
+  // (line ~289) disappears. The modal itself now owns auto-dismissing (with
+  // its slide-away animation) once 'success' renders, via this screen's own
+  // onDismiss prop below — which also closes this whole pane (onClose?.()),
+  // same as a manual dismissal. Scope note: this does NOT retry the
+  // deep-reveal fetch that originally 429'd — re-opening shows the actual
+  // reveal content, matching the existing anonRevealed/401 gates' behavior
+  // of requiring a fresh open rather than auto-retrying.
   useEffect(() => {
-    let dismissTimer;
-    const unsubscribe = subscribeCheckoutReturn((state) => {
+    return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         refreshProfile();
         setQuotaExceeded(false);
         setUpgradeUiState('success');
-        dismissTimer = setTimeout(() => {
-          setUpgradeOpen(false);
-          setUpgradeUiState('idle');
-        }, 1500);
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
       }
     });
-    return () => {
-      unsubscribe();
-      clearTimeout(dismissTimer);
-    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track TTS Audio element for cleanup

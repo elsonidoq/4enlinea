@@ -154,25 +154,18 @@ export function SagaScreen({ go, goBack }) {
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
   // a real payment left the modal stuck on 'loading' and `tier` (fetched once
-  // below) never refreshed — lessons paying should unlock stayed locked.
+  // below) never refreshed — lessons paying should unlock stayed locked. The
+  // modal itself now owns auto-dismissing (with its slide-away animation)
+  // once 'success' renders.
   useEffect(() => {
-    let dismissTimer;
-    const unsubscribe = subscribeCheckoutReturn((state) => {
+    return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         setTier('paid');
         setUpgradeUiState('success');
-        dismissTimer = setTimeout(() => {
-          setUpgradeOpen(false);
-          setUpgradeUiState('idle');
-        }, 1500);
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
       }
     });
-    return () => {
-      unsubscribe();
-      clearTimeout(dismissTimer);
-    };
   }, []);
 
   useEffect(() => {

@@ -17,6 +17,15 @@ import { PADDLE_CHECKOUT_DISMISSED_EVENT } from '../lib/useUpgradeCheckout.js';
 // an optional controlled-mode escape hatch for a caller that DOES want to drive
 // activating/timeout into a still-mounted modal (e.g. a resumed session) — no
 // existing call site uses it today, so nothing here is a breaking change.
+// How long the success message stays visible before auto-dismissing, and how
+// long the exit (slideDown/fadeOut) animation takes — kept here as the SOLE
+// owner of this timing so every call site (5 screens) gets the same
+// slide-away behavior for free, instead of each one independently calling
+// onDismiss the instant it wants to close (which unmounts this component
+// immediately, with no chance for any exit animation to play).
+const AUTO_DISMISS_DELAY_MS = 1500;
+const EXIT_ANIMATION_MS = 300;
+
 export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {
   const { t, i18n } = useTranslation();
   const prices = usePaddlePrices();
@@ -25,11 +34,29 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
   const uiState = controlledUiState ?? internalUiState;
   const setUiState = onUiStateChange ?? setInternalUiState;
   const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [closing, setClosing] = useState(false);
   // D3: derived from live prices — never hardcoded — so the badge can't drift
   // from Paddle. null (renders nothing) when prices haven't loaded yet, only
   // one plan is configured, currencies mismatch, or annual isn't actually a
   // saving.
   const savings = computeAnnualSavings(prices);
+
+  // Plays the slideDown/fadeOut exit animation, THEN calls the caller's
+  // onDismiss (which is what actually unmounts this component in every call
+  // site's `{upgradeOpen && <UpgradeModal .../>}`). Used for both manual
+  // dismissal (backdrop/"Not now") and the auto-dismiss effect below.
+  function dismiss() {
+    setClosing(true);
+    setTimeout(() => onDismiss?.(), EXIT_ANIMATION_MS);
+  }
+
+  // Auto-dismiss once a payment is confirmed — give the user a moment to
+  // read "You're now Pro" first, then slide away on its own.
+  useEffect(() => {
+    if (uiState !== 'success') return;
+    const timer = setTimeout(dismiss, AUTO_DISMISS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [uiState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleUpgrade() {
     setUiState('loading');
@@ -62,11 +89,11 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
     <>
       {/* Backdrop */}
       <div
-        onClick={onDismiss}
+        onClick={dismiss}
         style={{
           position: 'fixed', inset: 0,
           background: 'rgba(30,26,20,0.34)', zIndex: 50,
-          animation: 'fade .25s',
+          animation: closing ? `fadeOut ${EXIT_ANIMATION_MS}ms forwards` : 'fade .25s',
         }}
       />
 
@@ -76,7 +103,9 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
         background: '#fff', colorScheme: 'light', borderRadius: '28px 28px 0 0',
         padding: '8px 20px 36px',
         boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
-        animation: 'slideUp .34s cubic-bezier(.2,.9,.3,1.05)',
+        animation: closing
+          ? `slideDown ${EXIT_ANIMATION_MS}ms cubic-bezier(.4,0,.7,.3) forwards`
+          : 'slideUp .34s cubic-bezier(.2,.9,.3,1.05)',
       }}>
         {/* Grab handle */}
         <div style={{ width: 40, height: 5, borderRadius: 3, background: '#e2ddd2', margin: '4px auto 18px' }} />
@@ -224,7 +253,7 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
         )}
 
         <button
-          onClick={onDismiss}
+          onClick={dismiss}
           style={{
             width: '100%', padding: '12px', borderRadius: 14, border: 'none',
             background: 'rgba(0,0,0,0.05)', cursor: 'pointer',

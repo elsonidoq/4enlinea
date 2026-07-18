@@ -52,27 +52,20 @@ export function SettingsScreen({ go, goBack }) {
   // payment, the modal stayed stuck on 'loading' forever and this screen's
   // `tier` (fetched once on mount) never refreshed. Subscribing here makes
   // this screen the modal's controller: a successful payment flips it to its
-  // existing 'success' state, updates the tier shown below, then dismisses
-  // it; a failed confirmation reuses the existing 'timeout' (retry) state
-  // instead of leaving the button disabled with no way out.
+  // existing 'success' state and updates the tier shown below — the modal
+  // itself now owns auto-dismissing (with its slide-away animation) once
+  // 'success' renders, so this effect doesn't need its own dismiss timer. A
+  // failed confirmation reuses the existing 'timeout' (retry) state instead
+  // of leaving the button disabled with no way out.
   useEffect(() => {
-    let dismissTimer;
-    const unsubscribe = subscribeCheckoutReturn((state) => {
+    return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         setTier('paid');
         setUpgradeUiState('success');
-        dismissTimer = setTimeout(() => {
-          setUpgradeOpen(false);
-          setUpgradeUiState('idle');
-        }, 1500);
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
       }
     });
-    return () => {
-      unsubscribe();
-      clearTimeout(dismissTimer);
-    };
   }, []);
 
   async function openPortal() {

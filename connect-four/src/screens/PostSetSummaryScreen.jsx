@@ -27,25 +27,18 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
   // a real payment left the modal stuck on 'loading' and this screen's
-  // isFreeUser (fetched once above) never refreshed.
+  // isFreeUser (fetched once above) never refreshed. The modal itself now
+  // owns auto-dismissing (with its slide-away animation) once 'success'
+  // renders.
   useEffect(() => {
-    let dismissTimer;
-    const unsubscribe = subscribeCheckoutReturn((state) => {
+    return subscribeCheckoutReturn((state) => {
       if (state === 'activated') {
         setIsFreeUser(false);
         setUpgradeUiState('success');
-        dismissTimer = setTimeout(() => {
-          setUpgradeOpen(false);
-          setUpgradeUiState('idle');
-        }, 1500);
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
       }
     });
-    return () => {
-      unsubscribe();
-      clearTimeout(dismissTimer);
-    };
   }, []);
 
   // Compute derived stats
