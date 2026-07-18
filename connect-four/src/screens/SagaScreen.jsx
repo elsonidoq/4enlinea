@@ -5,6 +5,7 @@ import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 import { deriveLockReason, dispatchLockAction } from './sagaLock.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -147,7 +148,32 @@ export function SagaScreen({ go, goBack }) {
   const [progress, setProgress] = useState([]);
   const [tier, setTier] = useState('free');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [orderLockOpen, setOrderLockOpen] = useState(false);
+
+  // See SettingsScreen.jsx's identical subscription for the full rationale:
+  // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
+  // a real payment left the modal stuck on 'loading' and `tier` (fetched once
+  // below) never refreshed — lessons paying should unlock stayed locked.
+  useEffect(() => {
+    let dismissTimer;
+    const unsubscribe = subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setTier('paid');
+        setUpgradeUiState('success');
+        dismissTimer = setTimeout(() => {
+          setUpgradeOpen(false);
+          setUpgradeUiState('idle');
+        }, 1500);
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(dismissTimer);
+    };
+  }, []);
 
   useEffect(() => {
     injectPulseStyle();
@@ -270,7 +296,14 @@ export function SagaScreen({ go, goBack }) {
         </div>
       )}
 
-      {upgradeOpen && <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />}
+      {upgradeOpen && (
+        <UpgradeModal
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
+          onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function PostSetSummaryScreen({ go, results = [], category }) {
@@ -20,7 +21,32 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
   // back/ghost buttons go.
   const handleUpgrade = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [isFreeUser, setIsFreeUser] = useState(true);
+
+  // See SettingsScreen.jsx's identical subscription for the full rationale:
+  // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
+  // a real payment left the modal stuck on 'loading' and this screen's
+  // isFreeUser (fetched once above) never refreshed.
+  useEffect(() => {
+    let dismissTimer;
+    const unsubscribe = subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setIsFreeUser(false);
+        setUpgradeUiState('success');
+        dismissTimer = setTimeout(() => {
+          setUpgradeOpen(false);
+          setUpgradeUiState('idle');
+        }, 1500);
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(dismissTimer);
+    };
+  }, []);
 
   // Compute derived stats
   const total = results.length;
@@ -216,7 +242,12 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       </div>
 
       {upgradeOpen && (
-        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
+        <UpgradeModal
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
+          onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
+        />
       )}
     </div>
   );
