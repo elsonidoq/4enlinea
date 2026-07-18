@@ -9,7 +9,7 @@ Connection: pooler at `aws-1-us-west-2.pooler.supabase.com:5432`, database `post
 ## `users`
 
 PK: `id` (uuid, FK → auth.users)  
-Unique: `device_uuid`, `stripe_customer_id`
+Unique: `device_uuid`, `paddle_customer_id`
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
@@ -18,7 +18,7 @@ Unique: `device_uuid`, `stripe_customer_id`
 | tier | text | NO | `'free'` |
 | deep_reveal_count | integer | NO | `0` |
 | deep_reveal_reset_at | timestamptz | YES | (nullable, no default — null treated as "already expired") |
-| stripe_customer_id | text | YES | |
+| paddle_customer_id | text | YES | (renamed from `stripe_customer_id` by migration 060, spec 050) |
 | papergames_id | text | YES | |
 | last_import_at | timestamptz | YES | |
 | streak_count | integer | NO | `0` |
@@ -338,16 +338,21 @@ PK: `id`
 
 ---
 
-## `stripe_events`
+## `payment_events`
+
+Renamed from `stripe_events` by migration 060 (spec 050) — `event_id`/`event_type` renamed
+from `stripe_event_id`/`type` at the same time. Same physical table (rename preserves RLS and
+grants), now the Paddle webhook's idempotency ledger (`server/paddleProcessor.js`'s
+`handleWebhook`).
 
 PK: `id`  
-Unique: `stripe_event_id`
+Unique: `event_id`
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
 | id | uuid | NO | `gen_random_uuid()` |
-| stripe_event_id | text | NO | |
-| type | text | NO | |
+| event_id | text | NO | |
+| event_type | text | NO | |
 | payload | jsonb | NO | |
 | processed_at | timestamptz | YES | |
 | created_at | timestamptz | NO | `now()` |
@@ -366,6 +371,6 @@ Unique: `stripe_event_id`
 
 **PostgREST schema cache**: After any migration that adds columns, the PostgREST schema cache must be reloaded before Supabase client queries on the new column will work. Symptom: `{ error: { message: "Bad Request" } }` on a column that `information_schema.columns` confirms exists. Fix: run `NOTIFY pgrst, 'reload schema';` in the SQL editor, or use the Supabase dashboard at Settings → API → Reload schema cache.
 
-**service_role table grants**: The service-role key bypasses RLS but still requires explicit table-level `GRANT` in Postgres. Every table the server reads or writes must include `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO service_role` in its migration. Without this, PostgREST returns "permission denied" even with a valid service-role key. `040_service_role_grants.sql` is the largest batch but is **not exhaustive** — tables added or first written after it were granted in follow-up migrations (e.g. `048` `papergames_games`, `055` `stripe_events` + `tracks`, both of which the Stripe webhook writes to). When adding a new table that the server accesses, always include this grant in the same migration rather than assuming the `040` catch-all covers it.
+**service_role table grants**: The service-role key bypasses RLS but still requires explicit table-level `GRANT` in Postgres. Every table the server reads or writes must include `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO service_role` in its migration. Without this, PostgREST returns "permission denied" even with a valid service-role key. `040_service_role_grants.sql` is the largest batch but is **not exhaustive** — tables added or first written after it were granted in follow-up migrations (e.g. `048` `papergames_games`, `055` the table now named `payment_events` (then `stripe_events`) + `tracks`, both of which the Paddle webhook writes to). When adding a new table that the server accesses, always include this grant in the same migration rather than assuming the `040` catch-all covers it.
 
 **Client-side posture**: Zero `.from(...)` or `.rpc(...)` Supabase calls remain in the browser JavaScript bundle outside of `supabase.auth.*`. The browser communicates with the database exclusively through `/api/user/*` server endpoints, each of which enforces authentication and ownership server-side.

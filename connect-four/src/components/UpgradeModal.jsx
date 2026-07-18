@@ -1,54 +1,99 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon.jsx';
-import { useStripePrices, formatPrice, computeAnnualSavings } from '../lib/useStripePrices.js';
+import { usePaddlePrices, formatPrice, computeAnnualSavings } from '../lib/usePaddlePrices.js';
+import { PADDLE_CHECKOUT_DISMISSED_EVENT } from '../lib/useUpgradeCheckout.js';
 
 // Spec 045 US3 (contracts/upgrade-flow-frontend.md, T023) — additive: onUpgrade now
 // takes a plan ('monthly'|'annual') and two new uiState values exist
-// ('activating'/'timeout'). The real post-payment return-flow poll (bounded-wait,
-// [0,2,4,7,10]s) lives OUTSIDE this component in CheckoutReturnBanner.jsx — a full
-// Stripe Checkout redirect is a full-page navigation, so any UpgradeModal instance
-// that was open pre-checkout is gone by the time the user returns; that flow can't
-// rely on this modal's local state surviving. `uiState`/`onUiStateChange` below are
+// ('activating'/'timeout'). The real post-payment confirmation lives OUTSIDE this
+// component in CheckoutReturnBanner.jsx, which is a pure renderer of
+// checkoutReturnFlow.js's single-check store (idle/confirming/activated/failed —
+// spec 050 collapsed the old bounded-wait poll model entirely). Even though the
+// Paddle.js overlay checkout (spec 050) never navigates away from the app,
+// `checkout.completed`'s verify-transaction call still resolves asynchronously
+// after this modal may already have been dismissed; that flow can't rely on this
+// modal's local state surviving. `uiState`/`onUiStateChange` below are
 // an optional controlled-mode escape hatch for a caller that DOES want to drive
 // activating/timeout into a still-mounted modal (e.g. a resumed session) — no
 // existing call site uses it today, so nothing here is a breaking change.
+// How long the success message stays visible before auto-dismissing, and how
+// long the exit (slideDown/fadeOut) animation takes — kept here as the SOLE
+// owner of this timing so every call site (5 screens) gets the same
+// slide-away behavior for free, instead of each one independently calling
+// onDismiss the instant it wants to close (which unmounts this component
+// immediately, with no chance for any exit animation to play).
+const AUTO_DISMISS_DELAY_MS = 1500;
+const EXIT_ANIMATION_MS = 300;
+
 export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange }) {
   const { t, i18n } = useTranslation();
-  const prices = useStripePrices();
+  const prices = usePaddlePrices();
   // idle | loading | success | activating | timeout
   const [internalUiState, setInternalUiState] = useState('idle');
   const uiState = controlledUiState ?? internalUiState;
   const setUiState = onUiStateChange ?? setInternalUiState;
   const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [closing, setClosing] = useState(false);
   // D3: derived from live prices — never hardcoded — so the badge can't drift
-  // from Stripe. null (renders nothing) when prices haven't loaded yet, only
+  // from Paddle. null (renders nothing) when prices haven't loaded yet, only
   // one plan is configured, currencies mismatch, or annual isn't actually a
   // saving.
   const savings = computeAnnualSavings(prices);
+
+  // Plays the slideDown/fadeOut exit animation, THEN calls the caller's
+  // onDismiss (which is what actually unmounts this component in every call
+  // site's `{upgradeOpen && <UpgradeModal .../>}`). Used for both manual
+  // dismissal (backdrop/"Not now") and the auto-dismiss effect below.
+  function dismiss() {
+    setClosing(true);
+    setTimeout(() => onDismiss?.(), EXIT_ANIMATION_MS);
+  }
+
+  // Auto-dismiss once a payment is confirmed — give the user a moment to
+  // read "You're now Pro" first, then slide away on its own.
+  useEffect(() => {
+    if (uiState !== 'success') return;
+    const timer = setTimeout(dismiss, AUTO_DISMISS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [uiState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleUpgrade() {
     setUiState('loading');
     try {
       await onUpgrade?.(selectedPlan);
-      // onUpgrade performs a full-page redirect to Stripe Checkout, so stay in
-      // 'loading' until the browser navigates away — never flash "You're now Pro"
-      // before the user has actually paid. The real post-payment 'success'/paid
-      // state is driven by CheckoutReturnBanner after the return redirect.
+      // onUpgrade opens the Paddle.js checkout overlay (no page navigation), so
+      // stay in 'loading' until the overlay's own flow resolves — never flash
+      // "You're now Pro" before the user has actually paid. The real post-payment
+      // 'success'/paid state is driven by CheckoutReturnBanner once
+      // checkout.completed's verify-transaction call resolves.
     } catch {
       setUiState('idle');
     }
   }
 
+  // Found in QA: closing the Paddle overlay (Edge Case, spec.md) or Paddle
+  // failing to open it at all (OI-54) never fires checkout.completed, so
+  // without this the 'loading' state set above never clears and "Become Pro"
+  // stays disabled for the rest of the session. useUpgradeCheckout.js's
+  // eventCallback dispatches this on checkout.closed/checkout.error.
+  useEffect(() => {
+    function handleDismissed() {
+      if (uiState === 'loading') setUiState('idle');
+    }
+    window.addEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
+    return () => window.removeEventListener(PADDLE_CHECKOUT_DISMISSED_EVENT, handleDismissed);
+  }, [uiState]);
+
   return (
     <>
       {/* Backdrop */}
       <div
-        onClick={onDismiss}
+        onClick={dismiss}
         style={{
           position: 'fixed', inset: 0,
           background: 'rgba(30,26,20,0.34)', zIndex: 50,
-          animation: 'fade .25s',
+          animation: closing ? `fadeOut ${EXIT_ANIMATION_MS}ms forwards` : 'fade .25s',
         }}
       />
 
@@ -58,7 +103,9 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
         background: '#fff', colorScheme: 'light', borderRadius: '28px 28px 0 0',
         padding: '8px 20px 36px',
         boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
-        animation: 'slideUp .34s cubic-bezier(.2,.9,.3,1.05)',
+        animation: closing
+          ? `slideDown ${EXIT_ANIMATION_MS}ms cubic-bezier(.4,0,.7,.3) forwards`
+          : 'slideUp .34s cubic-bezier(.2,.9,.3,1.05)',
       }}>
         {/* Grab handle */}
         <div style={{ width: 40, height: 5, borderRadius: 3, background: '#e2ddd2', margin: '4px auto 18px' }} />
@@ -206,7 +253,7 @@ export function UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState,
         )}
 
         <button
-          onClick={onDismiss}
+          onClick={dismiss}
           style={{
             width: '100%', padding: '12px', borderRadius: 14, border: 'none',
             background: 'rgba(0,0,0,0.05)', cursor: 'pointer',

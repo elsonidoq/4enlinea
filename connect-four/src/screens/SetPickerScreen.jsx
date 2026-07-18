@@ -5,6 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { SetCard } from '../components/SetCard.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -49,6 +50,24 @@ export function SetPickerScreen({ go, goBack }) {
   const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
+
+  // See SettingsScreen.jsx's identical subscription for the full rationale:
+  // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
+  // a real payment left the modal stuck on 'loading' with no way to close.
+  // This screen has no per-user tier state (its "locked" sets come from the
+  // static CHALLENGE_SETS constant, not the account's tier), so there's
+  // nothing else to refresh here — the modal itself now owns auto-dismissing
+  // (with its slide-away animation) once 'success' renders.
+  useEffect(() => {
+    return subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setUpgradeUiState('success');
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -161,8 +180,10 @@ export function SetPickerScreen({ go, goBack }) {
 
       {upgradeOpen && (
         <UpgradeModal
-          onDismiss={() => setUpgradeOpen(false)}
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
           onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
         />
       )}
     </div>

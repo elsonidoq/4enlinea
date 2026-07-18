@@ -5,13 +5,14 @@
 /**
  * Columns `loadUser` (server/index.js) selects from `users` for the profile object
  * attached to `req.user`, and that it re-selects after inserting a just-created row.
- * `stripe_customer_id` (spec 045 R3) is included so `getSubscriptionStatus` and
- * POST /api/stripe/portal have a real value instead of always-`undefined`.
+ * `paddle_customer_id` (spec 045 R3; renamed to this name by migration 060,
+ * spec 050's payment-provider migration) is included so `getSubscriptionStatus`
+ * and POST /api/paddle/portal have a real value instead of always-`undefined`.
  * Single source of truth shared with `defaultUserProfile` below so the two paths
  * (row found / row just created) and the anonymous-fallback shape never drift apart.
  */
 export const USER_PROFILE_SELECT_COLUMNS =
-  'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, stripe_customer_id, onboarding_status';
+  'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, paddle_customer_id, onboarding_status';
 
 /**
  * Default profile fields `loadUser` attaches to `req.user` when no `users` row
@@ -26,7 +27,7 @@ export function defaultUserProfile() {
     deep_reveal_reset_at: new Date().toISOString(),
     papergames_id: null,
     last_import_at: null,
-    stripe_customer_id: null,
+    paddle_customer_id: null,
     onboarding_status: 'not_encountered',
   };
 }

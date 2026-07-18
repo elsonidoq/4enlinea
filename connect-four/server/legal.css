@@ -1,0 +1,18 @@
+/* Shared stylesheet for the static legal/pricing pages (pricing.html,
+   terms.html, privacy.html, refunds.html — server/index.js's "Legal pages"
+   routes). Extracted from each page's former inline <style> block: helmet's
+   global CSP (style-src 'self') blocks inline <style>/style="" without a
+   nonce or hash, which silently stripped all styling from these pages
+   (found in QA — the content still rendered, completely unstyled). An
+   external same-origin stylesheet satisfies style-src 'self' without
+   loosening the CSP for the rest of the app. */
+body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #1a1a2e; line-height: 1.6; }
+h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+p, li { color: #444; }
+a { color: #3b5bdb; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e5ec; }
+th { font-size: 0.95rem; }
+.price { font-size: 1.2rem; font-weight: 600; color: #1a1a2e; }
+.note { color: #666; font-size: 0.9rem; }

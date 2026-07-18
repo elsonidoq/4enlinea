@@ -1,6 +1,12 @@
+// OI-56 (spec 050 review follow-up): the deleted tests/unit/stripePrices.test.js
+// covered computeAnnualSavings/formatPrice pure-function logic (discount math,
+// null-safety, es/en locale suffix behavior, and a named regression guard for
+// the "doubled /mo/mo" bug). These functions now live in
+// src/lib/usePaddlePrices.js — ported verbatim (same fixtures/assertions),
+// pointed at the new module, per docs/open_issues.md OI-56's "If picked up" note.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeAnnualSavings, formatPrice } from '../../src/lib/useStripePrices.js';
+import { computeAnnualSavings, formatPrice } from '../../src/lib/usePaddlePrices.js';
 
 const MONTHLY = { amount: 299, currency: 'usd', interval: 'month' };
 const ANNUAL = { amount: 2199, currency: 'usd', interval: 'year' };

@@ -1,5 +1,5 @@
 import express from 'express';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join, basename } from 'path';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
@@ -22,8 +22,9 @@ import { resolveGameBlunderOwner, resolveQueueOwner, resolveExplainQuota } from 
 import { evaluatePredicate, buildPredicatePuzzle } from './predicates.js';
 import { createEvaluateMoveHandler } from './evaluateMoveHandler.js';
 import { registerUserRoutes } from './userRoutes.js';
-import { registerStripeRoutes } from './stripeRoutes.js';
-import { createStripeProcessor } from './stripeProcessor.js';
+import { registerPaddleRoutes } from './paddleRoutes.js';
+import { createPaddleProcessor } from './paddleProcessor.js';
+import { Paddle, Environment } from '@paddle/paddle-node-sdk';
 import { createSolverProcess } from './c4solver-wrapper.js';
 import { checkForcedWinPredicate, checkForbiddenColumnsPredicate } from './candidate-generator.js';
 import { VALID_CATEGORIES, PAID_CATEGORIES, CATEGORY_ORDER } from './categories.js';
@@ -56,6 +57,22 @@ import { buildCacheFilter } from './explainCacheKey.mjs';
 import { FREE_DEEP_REVEAL_WEEKLY_LIMIT, resolveResetAt, isPastReset, effectiveDeepRevealCount, peekQuota } from './quotaLimits.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function resolveWorktreePortEnv() {
+  if (process.env.PORT && process.env.FRONTEND_URL) return;
+  try {
+    const scriptPath = join(__dirname, '..', '..', 'worktree-ports.sh');
+    const output = execSync(scriptPath, { encoding: 'utf8' });
+    for (const line of output.split('\n')) {
+      const match = line.match(/^export (\w+)=(.+)$/);
+      if (!match) continue;
+      if (!process.env[match[1]]) process.env[match[1]] = match[2];
+    }
+  } catch (err) {
+    console.warn('[worktree-ports] could not self-derive ports, using defaults:', err.message);
+  }
+}
+resolveWorktreePortEnv();
 
 // ── Boot-time fail-safe (spec 047 FR-006) ──────────────────────────────────────
 // If we're pointed at a real (non-local) Supabase project but NODE_ENV isn't
@@ -116,15 +133,38 @@ const PAPERGAMES_WS = 'wss://papergames.io';
 // Env-derived (not hardcoded to one Sentry project); defaults to the wildcard ingest
 // domain used by all Sentry SaaS projects.
 const SENTRY_INGEST = process.env.SENTRY_INGEST_HOST || 'https://*.ingest.sentry.io';
+// Paddle.js (spec 050): loads its script from cdn.paddle.com, opens the
+// overlay checkout in an iframe served from *.paddle.com (buy.paddle.com /
+// sandbox-buy.paddle.com), and the frame itself calls back to *.paddle.com.
+// A wildcard is used (rather than enumerating buy/sandbox-buy/checkout-service)
+// because Paddle doesn't document a fixed, exhaustive subdomain list and a
+// missed one would silently re-break checkout the same way this CSP gap did.
+const PADDLE_CDN = 'https://cdn.paddle.com';
+const PADDLE_ORIGINS = 'https://*.paddle.com';
+// Google Pay (enabled as a Paddle payment method): the browser's own
+// PaymentRequest API fetches a payment-method manifest directly from Google
+// (not proxied through Paddle) and, on selection, opens Google's payment
+// sheet — both need explicit CSP allowances the same way Paddle's own
+// domains did above.
+const GOOGLE_PAY_ORIGINS = ['https://pay.google.com', 'https://www.google.com'];
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN],
+      scriptSrc: ["'self'", PADDLE_CDN, ...GOOGLE_PAY_ORIGINS],
+      // Paddle.js sets inline style="..." attributes directly on elements it
+      // injects into the parent page (its loading overlay, before the iframe
+      // itself loads) — a fixed set of hashes isn't viable since Paddle
+      // generates these dynamically and doesn't document/version them, so
+      // 'unsafe-inline' is the documented-in-practice requirement for the
+      // overlay checkout to render at all. It also loads an external
+      // stylesheet from its own CDN (sandbox-cdn.paddle.com / cdn.paddle.com)
+      // for the overlay, hence PADDLE_ORIGINS here too.
+      styleSrc: ["'self'", "'unsafe-inline'", PADDLE_ORIGINS],
+      imgSrc: ["'self'", 'data:', PAPERGAMES_ORIGIN, PADDLE_ORIGINS],
       mediaSrc: SUPABASE_HOST ? ["'self'", `https://${SUPABASE_HOST}`] : ["'self'"],
-      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST],
+      connectSrc: ["'self'", PAPERGAMES_ORIGIN, PAPERGAMES_WS, SENTRY_INGEST, PADDLE_ORIGINS, ...GOOGLE_PAY_ORIGINS],
+      frameSrc: [PADDLE_ORIGINS, ...GOOGLE_PAY_ORIGINS],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
       objectSrc: ["'none'"],
@@ -133,13 +173,14 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true },
 }));
 
-// Stripe webhook signature verification (stripeRoutes.js) needs the exact raw request
-// bytes. It MUST be parsed before the global express.json() below consumes the
-// request stream — otherwise by the time the route's own express.raw() middleware
-// runs (registerStripeRoutes is called much later in this file), the body stream has
-// already been read and parsed into an object, leaving nothing for raw() to read.
-// Mounting the raw parser here, scoped to this one path, guarantees it wins the race.
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+// Paddle webhook signature verification (paddleRoutes.js's handleWebhook ->
+// paddle.webhooks.unmarshal) needs the exact raw request bytes. It MUST be
+// parsed before the global express.json() below consumes the request stream —
+// otherwise by the time the route's own body handling runs (registerPaddleRoutes
+// is called much later in this file), the body stream has already been read and
+// parsed into an object, leaving nothing for raw() to read. Mounting the raw
+// parser here, scoped to this one path, guarantees it wins the race.
+app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(localeMiddleware);
 app.use(cookieParser());
@@ -188,7 +229,7 @@ app.use('/api/explain-move-llm', makeLimit(5));
 app.use('/api/llm-feedback', makeLimit(10));
 app.use('/api/scores', makeLimit(60));
 app.use('/api/explain', makeLimit(60));
-app.use('/api/stripe/create-checkout', makeLimit(10));
+app.use('/api/paddle/create-checkout', makeLimit(10));
 app.use('/api/', makeLimit(120));
 
 // Scores for the empty board (solver hangs on empty input).
@@ -2812,21 +2853,29 @@ app.get('/api/blunders/:id', async (req, res) => {
   res.json(buildBlunderDetailResponse(data, req.user?.id, context));
 });
 
-// ── Stripe endpoints (T051-T053; extracted to stripeProcessor.js/stripeRoutes.js — spec 045 US3) ──
+// ── Paddle endpoints (spec 050; extracted to paddleProcessor.js/paddleRoutes.js) ──
 
-let paymentProcessor = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  const { default: Stripe } = await import('stripe');
-  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
-  paymentProcessor = createStripeProcessor({
-    stripeClient,
+let paddlePaymentProcessor = null;
+if (process.env.PADDLE_API_KEY) {
+  // Derived from the key's own prefix, NOT NODE_ENV: Railway sets
+  // NODE_ENV=production on every service (staging included, confirmed via a
+  // 2026-07-18 diagnostic log), so NODE_ENV can't distinguish staging from
+  // live. Paddle guarantees sandbox API keys always contain `_sdbx_` — that
+  // makes the key and the environment it targets impossible to disagree,
+  // unlike a second env var someone has to remember to keep in sync.
+  const paddleEnvironment = process.env.PADDLE_API_KEY.includes('_sdbx_') ? Environment.sandbox : Environment.production;
+  const paddleClient = new Paddle(process.env.PADDLE_API_KEY, {
+    environment: paddleEnvironment,
+  });
+  paddlePaymentProcessor = createPaddleProcessor({
+    paddleClient,
     supabase,
-    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID,
-    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    monthlyPriceId: process.env.PADDLE_MONTHLY_PRICE_ID,
+    annualPriceId: process.env.PADDLE_ANNUAL_PRICE_ID,
+    webhookSecret: process.env.PADDLE_NOTIFICATION_WEBHOOK_SECRET,
   });
 }
-registerStripeRoutes(app, paymentProcessor);
+registerPaddleRoutes(app, paddlePaymentProcessor);
 
 // ── Debug endpoints (localhost-only) ──────────────────────────────────────────
 
@@ -4034,12 +4083,28 @@ app.post('/api/admin/tts/cleanup', requireLocalhost, async (req, res) => {
 });
 
 // ── Legal pages (required by Google OAuth consent screen) ────────────────────
-app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html')));
-app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html')));
+// { dotfiles: 'allow' } — Express's `send` module defaults dotfiles to
+// 'ignore' and 404s ("Not Found") when ANY path segment starts with a dot.
+// This repo's own worktree convention (worktree-conventions.md) nests
+// worktrees under `.claude/worktrees/...`, so __dirname routinely contains a
+// dotfile segment there — found in QA: every legal-page route 500'd
+// ("Internal server error") whenever the server ran from inside a worktree,
+// which is this project's normal way of running feature branches. These are
+// fixed, hardcoded filenames (no user input reaches sendFile here), so
+// allowing dotfiles carries no path-traversal risk.
+const LEGAL_PAGE_OPTS = { dotfiles: 'allow' };
+app.get('/privacy', (_, res) => res.sendFile(join(__dirname, 'privacy.html'), LEGAL_PAGE_OPTS));
+app.get('/terms', (_, res) => res.sendFile(join(__dirname, 'terms.html'), LEGAL_PAGE_OPTS));
 // Paddle domain review requires prices to be publicly reachable without signing in.
-app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html')));
-app.get('/refunds', (_, res) => res.sendFile(join(__dirname, 'refunds.html')));
-app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html')));
+app.get('/pricing', (_, res) => res.sendFile(join(__dirname, 'pricing.html'), LEGAL_PAGE_OPTS));
+app.get('/refunds', (_, res) => res.sendFile(join(__dirname, 'refunds.html'), LEGAL_PAGE_OPTS));
+app.get('/googlefddb3b3c02590df4.html', (_, res) => res.sendFile(join(__dirname, 'googlefddb3b3c02590df4.html'), LEGAL_PAGE_OPTS));
+// Shared stylesheet for the 4 legal pages above. Found in QA: their former
+// inline <style> blocks (and inline style="" link colors) were silently
+// stripped by helmet's global CSP (style-src 'self', no 'unsafe-inline') —
+// the pages rendered as unstyled plain text. An external same-origin
+// stylesheet satisfies style-src 'self' without loosening the CSP elsewhere.
+app.get('/legal.css', (_, res) => res.type('text/css').sendFile(join(__dirname, 'legal.css'), LEGAL_PAGE_OPTS));
 
 // ── Static assets + SPA catch-all (FR-011, FR-012, FR-013) ───────────────────
 

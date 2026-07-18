@@ -48,7 +48,7 @@ Rationale: Puzzle deactivation must remain reversible; a boolean is simpler to q
 
 ## jsonb vs Normalized Columns
 
-**MUST** use `jsonb` for: solver scores per candidate (`solver_scores`), classifier tag lists (`classifier_tags`), goal predicate parameters (`goal_predicate_params`), highlight metadata (`highlight_metadata`), category evidence (`category_evidence`), simulation trace (`simulation_trace`), analytics event data (`event_data`), Stripe webhook payloads (`payload`), and explanation cache content (`deep_reveal_json`).
+**MUST** use `jsonb` for: solver scores per candidate (`solver_scores`), classifier tag lists (`classifier_tags`), goal predicate parameters (`goal_predicate_params`), highlight metadata (`highlight_metadata`), category evidence (`category_evidence`), simulation trace (`simulation_trace`), analytics event data (`event_data`), Paddle webhook payloads (`payment_events.payload`), and explanation cache content (`deep_reveal_json`).
 **MUST** use typed columns for: all scalar values (enums, integers, booleans, timestamps).
 Rationale: jsonb for variable-shape structured data; typed columns for values used in queries/indexes.
 
@@ -66,7 +66,7 @@ Rationale: jsonb for variable-shape structured data; typed columns for values us
 
 Two access tiers:
 
-**Backend-only tables** (`tracks`, `stripe_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`, `llm_usage`):
+**Backend-only tables** (`tracks`, `payment_events`, `explanation_cache`, `puzzles`, `candidates`, `false_positive_records`, `blunders`, `deep_reveal_failures`, `llm_usage`):
 - Enable RLS.
 - Define **no** public policies.
 - The Express server accesses these exclusively via the service role key, which bypasses RLS.

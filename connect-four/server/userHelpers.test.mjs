@@ -312,13 +312,14 @@ describe('writeStreak', () => {
 // index.js's loadUser middleware selects USER_PROFILE_SELECT_COLUMNS on both its
 // initial-fetch and just-created-row code paths, and falls back to
 // defaultUserProfile() when no `users` row exists yet at all. These tests pin
-// stripe_customer_id's presence on all three paths so POST /api/stripe/portal and
-// getSubscriptionStatus never regress to reading an always-undefined field.
+// paddle_customer_id's presence on all three paths so POST /api/paddle/portal
+// and getSubscriptionStatus never regress to reading an always-undefined field.
+// (Renamed to this name by migration 060, spec 050 T007.)
 
 describe('USER_PROFILE_SELECT_COLUMNS (loadUser initial-fetch and just-created-row paths)', () => {
-  it('includes stripe_customer_id alongside the other loadUser profile fields', () => {
+  it('includes paddle_customer_id alongside the other loadUser profile fields', () => {
     const columns = USER_PROFILE_SELECT_COLUMNS.split(',').map((c) => c.trim());
-    assert.ok(columns.includes('stripe_customer_id'), 'stripe_customer_id must be selected');
+    assert.ok(columns.includes('paddle_customer_id'), 'paddle_customer_id must be selected');
     assert.ok(columns.includes('tier'));
     assert.ok(columns.includes('deep_reveal_count'));
     assert.ok(columns.includes('deep_reveal_reset_at'));
@@ -330,9 +331,9 @@ describe('USER_PROFILE_SELECT_COLUMNS (loadUser initial-fetch and just-created-r
 });
 
 describe('defaultUserProfile (loadUser no-row-found fallback path)', () => {
-  it('includes stripe_customer_id: null alongside the other anonymous-fallback fields', () => {
+  it('includes paddle_customer_id: null alongside the other anonymous-fallback fields', () => {
     const profile = defaultUserProfile();
-    assert.equal(profile.stripe_customer_id, null);
+    assert.equal(profile.paddle_customer_id, null);
     assert.equal(profile.tier, 'free');
     assert.equal(profile.deep_reveal_count, 0);
     assert.equal(profile.papergames_id, null);

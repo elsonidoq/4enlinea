@@ -6,7 +6,8 @@ epic and cross-referenced.
 
 **Sizing floor:** every epic carries **≥ 4 user stories**, and every user story lists **≥ 5 concrete tasks**.
 Result: **8 epics**, each in the full-speckit sweet spot (20+ tasks, multi-subsystem, ≥1 open decision).
-(**Epic 9** was appended later, 2026-07-12, from the `docs/open_issues.md` backlog — see the Overview table.)
+(**Epic 9** was appended later, 2026-07-12, from the `docs/open_issues.md` backlog — see the Overview table.
+**Epic 10** was appended later still, 2026-07-17, superseding Epic 5's payment half — see the Overview table.)
 
 **Epic numbers ARE the execution order.** Epics are numbered so that running them 1 → 8 never hits an
 unbuilt dependency: the only hard dependency (mistake-review needs the unified counts + reachable queue) is
@@ -72,10 +73,18 @@ seeded this file with the persistent-logo/logged-out-CTA OAuth checks as the wor
 | **7** | Platform Hardening & Cost Observability | E8+E12 | #12,#19,#20 | `package.json`/audit, `index.js`/`adminAuth.js` deploy gates + headers, repo hygiene, `llmCoachHelpers.js` `callLLM`, `mechanismExplainer.mjs` — grounded in **`docs/security_audit_fable.md`** | 5 | Full speckit |
 | **8** | Onboarding Experience | E13 | #4 | new onboarding flow/screens, first-run routing, store flag | 4 | Full speckit |
 | **9** | Puzzle Scoring-by-Pattern & Spanish Localization | — (open_issues) | OI-1, OI-15 | `/api/evaluate-move`, `predicates.js`, ChallengeScreen; `src/i18n/{en,es}.json` | 4 | Full speckit |
+| **10** | Paddle Checkout Migration (replace & remove Stripe) | — (docs/payment_provider_research.md) | new_TODOs #24 (supersedes) | `server/paymentProcessor.js` (kept), new `paddlePaymentProcessor.js`/`paddleRoutes.js`, deleted `stripeProcessor.js`/`stripeRoutes.js`, `server/index.js` wiring, `UpgradeModal`/`useUpgradeCheckout.js`/`useStripePrices.js`/`checkoutReturnFlow.js`/`CheckoutReturnBanner.jsx`/`SettingsScreen.jsx`, `migrations/`, `package.json` | 5 | Full speckit |
 
 **Coverage:** every `new_TODOs.md` #1–#26 and every QA finding (A/blocker, C/D/E/I majors, B/F/G/H minors)
 maps to exactly one epic (traceability table in the Appendix). **Epic 9** was appended 2026-07-12 from the
 `docs/open_issues.md` backlog (OI-1, OI-15); it has **no dependency** on Epics 1–8 and may run at any time.
+**Epic 10** was appended 2026-07-17 from `docs/payment_provider_research.md` (Stripe is unavailable to
+Argentine sellers; Paddle is the replacement MoR). It **supersedes the payment half of Epic 5** (`new_TODOs
+#24`, Epic 5's US5.3–US5.5 + the Stripe scaffold they validated) — Epic 5's session-persistence half
+(US5.1–US5.2) is unaffected and stands as shipped/in-progress. Epic 10 has **no dependency** on Epics 1–9
+(the `PaymentProcessor` interface it builds behind is already merged) and may run at any time; it does not
+block or get blocked by Epic 6's lesson upgrade CTA or Epic 7's hardening, since both consume the interface
+(`UpgradeModal.onUpgrade`, tier-gate reads), not the vendor behind it.
 
 ---
 
@@ -1631,6 +1640,479 @@ convergence", "Answer source for `z_threat`/`undercut`/`overcut`"). `/clarify` s
 
 ---
 
+## Epic 10 — Paddle Checkout Migration (replace & remove Stripe)
+
+**Origin:** `docs/payment_provider_research.md` (decided 2026-07-16), not `new_TODOs.md`/`agentic_QA.md`.
+Appended 2026-07-17. **Supersedes the payment half of Epic 5** (`new_TODOs #24`; Epic 5 US5.3–US5.5 and the
+Stripe scaffold they validated) — Epic 5's session-persistence half (US5.1–US5.2) is untouched. **No
+execution dependency** on Epics 1–9; may run at any time.
+
+**Intent:** Replace Stripe with Paddle — a merchant-of-record that (unlike Stripe) accepts an Argentine
+sole-trader seller — as the app's payment provider. Implement a Paddle checkout behind the *existing*
+`PaymentProcessor` adapter (`server/paymentProcessor.js`, whose runtime shape/behavior is kept but whose
+Stripe-specific comments and the `stripeCustomerId` typedef param are edited, see Settled decisions), wire
+Paddle's webhook to the same `users.tier` grant, and delete every Stripe-specific file, dependency, env var,
+and test. End state: the app charges via Paddle; `rg -i stripe` over `connect-four/` returns nothing outside
+`docs/`, memory, and this backlog.
+
+**Issues covered**
+- `[new_TODOs #24]` "Setup Stripe checkout; code must allow a future payment processor" — Epic 5 satisfied the
+  *architecture* half (the `PaymentProcessor` seam); this epic satisfies the *provider* half, now that
+  `docs/payment_provider_research.md` has established Stripe is not viable from Argentina without foreign
+  incorporation and Paddle is the chosen replacement.
+- Not sourced from `agentic_QA.md` — this is a business-driven provider swap, not a defect.
+
+**Non-obvious facts** (confirmed code locations + traps — reflect verbatim, do not re-derive)
+- **The architecture already isolates the vendor — this is a swap, not a rip-out.**
+  `server/paymentProcessor.js` (`export class PaymentConfigError`, `export function getSubscriptionStatus`,
+  `export function createPaymentProcessor`) is the vendor-neutral interface — **it is NOT Stripe code, but it
+  is not left verbatim either: its runtime shape/behavior is kept, while its comments are de-Stripe'd and the
+  `getSubscriptionStatus` typedef's `stripeCustomerId` param is renamed to `customerId` (a safe pass-through
+  rename — see Settled decisions and US10.4's explicit edit task).** It defines `PaymentProcessor` as
+  `{ createCheckout, handleWebhook, getSubscriptionStatus }`. This epic's job is a new `createPaddleProcessor`
+  satisfying the identical shape, not a redesign of the seam.
+- **The only Stripe SDK call sites** are `connect-four/server/stripeProcessor.js`
+  (`export function createStripeProcessor({ stripeClient, supabase, monthlyPriceId, annualPriceId,
+  webhookSecret, frontendUrl })`, `server/stripeProcessor.js:54`) — `stripeClient.checkout.sessions.create`
+  (`:90`), `stripeClient.prices.retrieve` (`:108`), `stripeClient.webhooks.constructEvent` (`:125`),
+  `stripeClient.checkout.sessions.retrieve` (`:205`), `stripeClient.billingPortal.sessions.create` (`:229`),
+  plus the `users.tier` write and the `tracks` `upgrade_completed` insert inside `handleWebhook`. It also
+  exports `sanitizeReturnPath` (`:30`) — an open-redirect guard (`^/(?!/)` same-origin-relative check), which
+  is **not Stripe-specific and must be preserved**, just relocated into the Paddle impl (or a shared helper).
+- **Routes are thin HTTP adapters, not vendor logic**: `server/stripeRoutes.js:21`
+  `export function registerStripeRoutes(app, paymentProcessor)` registers exactly five routes — `GET
+  /api/stripe/config` (`:25`, public, returns `{ prices }` from `paymentProcessor.getPrices()`), `POST
+  /api/stripe/create-checkout` (`:39`, auth required, body `{ plan, returnPath }`, returns `{ checkoutUrl }`),
+  `POST /api/stripe/webhook` (`:59`, mounted behind route-scoped `express.raw({ type:
+  'application/json' })`), `POST /api/stripe/verify-session` (`:76`, the synchronous activation fallback —
+  see below), `POST /api/stripe/portal` (`:95`). Every route 503s ("Payments not configured") when
+  `paymentProcessor` is `null`.
+- **Wiring in `server/index.js`** (~`:2818-2829`): `if (process.env.STRIPE_SECRET_KEY) { const { default:
+  Stripe } = await import('stripe'); const stripeClient = new Stripe(...); paymentProcessor =
+  createStripeProcessor({...}); } registerStripeRoutes(app, paymentProcessor);` — the only two Stripe-isms
+  that leak into otherwise-neutral plumbing are (a) the raw-body middleware line
+  `app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }))` (`:142`, load-bearing ordering
+  — it must run **before** the global `express.json()`, confirmed in `docs/architecture/server-conventions.md`
+  §"Webhook raw-body middleware ordering") and (b) the rate-limit line `app.use('/api/stripe/create-checkout',
+  makeLimit(10))` (`:191`). Both must be re-pointed at the new Paddle path, not merely duplicated.
+- **Tier-mirror contract (FR-025, `docs/architecture/api-conventions.md:93-103` and
+  `server-conventions.md:919-928`) — `users.tier` is a LIVE derivation of subscription status, not a
+  set-once flag on purchase:**
+
+  | Stripe event (today) | Status | Write |
+  |---|---|---|
+  | `checkout.session.completed` | — | `tier:'paid'`, `stripe_customer_id` set, `tracks` insert (`upgrade_completed`) |
+  | `customer.subscription.updated` | `active`/`trialing` | `tier:'paid'` |
+  | `customer.subscription.updated` | `past_due` | no write (retry window; does not downgrade) |
+  | `customer.subscription.updated` | `canceled`/`unpaid` | `tier:'free'` |
+  | `customer.subscription.deleted` | — | `tier:'free'` (unconditional, terminal) |
+
+  Paddle's event vocabulary does **not** map 1:1** (confirmed via the `paddle:webhooks`/`paddle:subscription-
+  sync` skills): the nearest equivalents are `transaction.completed` (first payment; roughly
+  `checkout.session.completed`) and `subscription.created`/`subscription.updated`/`subscription.canceled`,
+  whose `status` field takes values `active`/`trialing`/`past_due`/`paused`/`canceled` — `canceled` is
+  Paddle's **terminal** state (a mid-period cancel keeps `status:'active'` with a non-null
+  `scheduled_change.action:'cancel'` until the effective date; do not downgrade on the schedule, only on the
+  terminal event, mirroring the existing `past_due`-does-not-downgrade rule). US10.3 must write this mapping
+  table explicitly before touching `handleWebhook`, and treat `paused` as a `free`-tier write (no Stripe
+  analogue) alongside terminal `canceled`.
+- **Idempotency ledger, already precedented**: `stripe_events` (`migrations/001_initial.sql:50-52`,
+  `UNIQUE (stripe_event_id)`) is the dedup ledger — `handleWebhook` inserts first and treats `23505` as
+  "already processed" (`server-conventions.md:928`, mirrors `insertGameBlunder`'s `23505`-as-success
+  pattern). Paddle's own `paddle.webhooks.unmarshal()` does **not** provide this — it only verifies the
+  signature and returns a typed event; the `event.eventId`-keyed ledger is application code the epic must
+  write (or, per the `paddle:webhooks` skill, dedupe via `UPSERT` keyed on the Paddle resource id — see
+  Settled decisions for which pattern to use here). Paddle retries non-2xx responses on its own schedule
+  (sandbox: 3 attempts/~15 min; live: up to 60 attempts/~3 days) — the endpoint must return a non-2xx (not
+  necessarily 401 vs 500 split — the `paddle:webhooks` skill explicitly says not to try) on any `unmarshal`
+  failure so a rotated secret or transient DB error self-heals via retry, and must return 2xx **only** after
+  the event is durably recorded.
+- **Activation fallback pattern to carry forward**: `POST /api/stripe/verify-session`
+  (`api-conventions.md:77-83`, `server-conventions.md:930-937`) is the synchronous backstop for a dropped/
+  delayed webhook — `CheckoutReturnBanner.jsx` calls it before starting its bounded poll
+  (`src/lib/checkoutReturnFlow.js`, `POLL_SCHEDULE_SECONDS = [0,2,4,7,10]`, ~10s budget) so a paying user is
+  never silently shown the free-tier UI. Paddle's checkout model changes what there is to "verify" (see the
+  checkout-model decision below) — if the chosen model is overlay/inline, the client already learns success
+  synchronously via the `checkout.completed` Paddle.js event and the fallback's role shrinks to "confirm the
+  transaction really completed server-side," not "poll for a session status."
+- **`GET /api/stripe/config` is public** (`stripeRoutes.js:25`) and feeds `useStripePrices.js`, which derives
+  the upgrade-modal badge/price display "so it can never drift from Stripe" (`useStripePrices.js:64`) — the
+  Paddle equivalent must keep this contract: live prices read off the actual Paddle catalog, not hardcoded
+  copies (this is also the OI-41 trap already logged for the static `pricing.html`, `docs/open_issues.md`).
+- **Frontend hardcodes `/api/stripe/*` at exactly 4 fetch call sites** (re-verified via `rg '/api/stripe'
+  src/`): `src/screens/SettingsScreen.jsx:49` (`POST /api/stripe/portal`), `src/lib/useUpgradeCheckout.js:31`
+  (`POST /api/stripe/create-checkout`), `src/lib/useStripePrices.js:34` (`GET /api/stripe/config`),
+  `src/store/CheckoutReturnBanner.jsx` (`POST /api/stripe/verify-session`). Three more files reference Stripe
+  conceptually but hardcode no URL: `src/lib/checkoutReturnFlow.js` (pure poll state machine, vendor-agnostic
+  logic, only its doc comment says "Stripe"), `src/components/UpgradeModal.jsx` (calls `onUpgrade`, vendor-
+  ignorant already), `src/screens/PostSetSummaryScreen.jsx` (one comment mentioning "full-page Stripe
+  redirect", no fetch). All 7 are in scope for US10.5, but only 4 need a URL/request-shape change.
+- **`UpgradeModal`'s existing API must be preserved** (`src/components/UpgradeModal.jsx:16`, `export function
+  UpgradeModal({ onDismiss, onUpgrade, uiState: controlledUiState, onUiStateChange })`) — per CLAUDE.md
+  "When writing specs for existing components" and memory `feedback_spec_existing_apis`: `onUpgrade` is
+  called with the selected plan and is expected to trigger checkout and manage idle/loading/success UI
+  states. A Paddle overlay checkout (opened client-side, no full-page redirect) is a **behavior** change
+  inside `onUpgrade`'s implementation, not a **signature** change — the modal's props/contract stay
+  identical.
+- **Dependency**: `package.json:34` `"stripe": "^22.1.0"` — no `@stripe/*` frontend package exists to remove.
+  `test`/`test:fast` (`package.json:16`/`:~17`) list Stripe test files **by explicit filename** in both
+  arrays — a deletion that doesn't also edit both lists leaves a dangling `node --test` arg that errors the
+  whole run.
+- **DB surface**: `migrations/001_initial.sql:13` `stripe_customer_id text UNIQUE` on `users`;
+  `migrations/001_initial.sql:50-52` `CREATE TABLE public.stripe_events (..., stripe_event_id text UNIQUE NOT
+  NULL, ...)`; `migrations/010_rls_backend_tables.sql:7` enables RLS on `stripe_events`;
+  `migrations/055_stripe_events_tracks_grants.sql` grants `service_role` on `stripe_events`+`tracks`;
+  `migrations/056_llm_usage.sql:28` cites `stripe_events` only as a design precedent in a comment (no schema
+  dependency). `server/userHelpers.js:14` `USER_PROFILE_SELECT_COLUMNS` includes `stripe_customer_id`, and
+  `:29` `defaultUserProfile()` sets `stripe_customer_id: null` — **both are explicit allowlists** (memory
+  `project_user_column_propagation`): renaming or dropping this column requires editing **both**, or a
+  renamed/dropped field silently reads as `undefined` on `req.user` (server-read path) with no error, exactly
+  the OI-2 trap that memory file documents for the original Stripe rollout.
+- **No live Stripe customers exist.** Stripe was validated only in test mode (memory `project_stripe_traps`
+  §4 — "the connected account is a SANDBOX... there is no live mode to flip"); no production charge has ever
+  gone through `/api/stripe/*`. **This epic requires no customer/data migration** — do not build one.
+- **`FRONTEND_URL` is shared, not Stripe-owned** (`server/index.js:298`, used for the OAuth `redirectTo`
+  fallback outside any Stripe code path) — do not delete or repurpose it; only the `STRIPE_*`-prefixed vars
+  (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`,
+  `.env.example:21,24,27,28`) are Stripe-specific and go.
+- **Paddle MCP reads keys from Claude Code's process env, not `server/.env`** (memory
+  `project_paddle_integration` §1) — `PADDLE_SANDBOX_API_KEY`/`PADDLE_LIVE_API_KEY` are already present as
+  Claude Code env vars for MCP tool use, but the **Express server** needs its own `server/.env` entries
+  (`PADDLE_API_KEY` sandbox value for local dev, per the `paddle:webhooks` skill) — these are two different
+  places for what looks like the same key; do not assume setting one sets the other.
+- **The account is Paddle Billing, not Classic** (memory `project_paddle_integration` §2, confirmed by the
+  `pdl_sdbx_apikey_...` key format) — use `@paddle/paddle-node-sdk` + `paddle.webhooks.unmarshal()`, matching
+  every `paddle:*` skill invoked for this epic.
+- **Header name changes**: Stripe's webhook route reads `stripe-signature`
+  (`stripeProcessor.js:125`, `stripeClient.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret)`
+  where `signatureHeader` is sourced from `req.headers['stripe-signature']` in `stripeRoutes.js:59`); Paddle
+  uses `Paddle-Signature` and `paddle.webhooks.unmarshal(rawBody, secret, signature)`. This is one of the two
+  concrete edits inside the "neutral" routes file the epic must make (the other is the raw-body middleware
+  path in `index.js`, above).
+
+**Authoritative sources of truth**
+- `docs/payment_provider_research.md` — the provider decision + evidence (Paddle chosen; Stripe unavailable
+  to AR sellers without foreign incorporation; observed USD-to-AR-bank payout; fee/payout mechanics).
+- CLAUDE.md § "Paddle integration" — SDK-per-language, sandbox key format (`pdl_sdbx_*`), mandatory
+  `paddle.webhooks.unmarshal()` verification, sandbox-default rule, no inline credentials.
+- Memory `project_paddle_integration` (MCP-env trap, Billing-not-Classic, observed payout reality, legal
+  pages ship via a separate PR off `main`), `project_stripe_traps` (mechanics being retired — read once for
+  context, then treat as historical), `project_user_column_propagation` (the two allowlists a
+  `stripe_customer_id` rename/drop must edit).
+- `docs/architecture/api-conventions.md` §"Stripe Checkout Config" / §"Stripe Checkout" / §"Stripe Activation
+  Fallback" / §"Stripe Webhook Endpoint" (`:59-103`) — the contract this epic's Paddle routes must replace
+  line-for-line (response shapes, idempotency, tier-mirror table).
+- `docs/architecture/server-conventions.md` §"PaymentProcessor Seam" (`:907-947`) — module layout, the FR-025
+  status mirror, the webhook-primary/`verify-session`-fallback pattern, raw-body ordering, `loadUser`'s
+  `stripe_customer_id` allowlist fix (R3) as the precedent for whatever the Paddle equivalent is named.
+- `docs/architecture/db-schema.md`, `data-model.md` — update for whichever DB-identifier decision is taken
+  (Settled decisions, below).
+- Epic 5 (`## Epic 5 — Account: Session Persistence & Paid Checkout`, this file) — the payment epic this one
+  supersedes; its `PaymentProcessor` decision, `UpgradeModal`-preserve rule, and monthly/annual toggle design
+  carry forward unchanged.
+- Paddle tooling grounded during authoring of this epic: `paddle-docs` MCP, `paddle:checkout-web` (overlay vs
+  inline, `Paddle.Checkout.open()`, `checkout.completed` event, "provisioning belongs in the webhook, not the
+  redirect"), `paddle:webhooks` (signature verification contract, retry/idempotency semantics, one-catch-one-
+  status-code rule), `paddle:subscription-sync` (status semantics table, `scheduled_change` handling,
+  email-keyed customer mapping). Re-invoke `paddle:catalog-setup` before US10.1 and `paddle:customer-portal`
+  before any portal-equivalent work, and `paddle:sandbox-testing` before US10.2's checkout validation.
+
+**Settled decisions**
+- **Adapter shape**: `server/paymentProcessor.js` keeps its runtime shape and behavior — the three-method
+  `PaymentProcessor` contract (`createCheckout`/`handleWebhook`/`getSubscriptionStatus`) and
+  `PaymentConfigError` are untouched — but it is **not** left verbatim: its comments are de-Stripe'd and the
+  `getSubscriptionStatus` typedef's `stripeCustomerId` param is renamed to `customerId` (a safe pass-through
+  rename with no behavior change). This is the **second** of two interface-touching changes the epic makes to
+  this file, after US10.2's `createCheckout` return-shape edit for the overlay model (see below) — both are
+  edits to the same seam file, not a redesign of it. A new `server/paddleProcessor.js` exports
+  `createPaddleProcessor(...)` satisfying the existing `PaymentProcessor` typedef, mirroring
+  `createStripeProcessor`'s shape (including the non-interface convenience methods `getPrices()` and a
+  portal-session-equivalent, per `paddle:customer-portal`).
+- **Route paths — rename `/api/stripe/*` → `/api/paddle/*`.** *Recommended default.* Honesty over
+  compatibility: keeping `/api/stripe/config` while serving Paddle prices would be actively misleading in
+  logs/network tabs/docs, and there are no external integrations depending on the path (this is a first-party
+  SPA). This touches the 4 hardcoded frontend fetch sites (US10.5) and the 2 Stripe-ism lines in `index.js`
+  (raw-body middleware path, rate-limit path). `/clarify` may override to keep-and-alias if a reason to
+  preserve the path surfaces during planning.
+- **DB identifiers — rename `stripe_customer_id`→`paddle_customer_id`, `stripe_events`→`payment_events` via a
+  new additive migration.** *Recommended default.* Since no live rows exist (Non-obvious facts), there is no
+  data-preservation cost to renaming, and keeping Stripe-named columns after Stripe is deleted is exactly the
+  kind of stale-naming trap this codebase's CLAUDE.md warns about elsewhere. Sites to update: `userHelpers.js`
+  (`USER_PROFILE_SELECT_COLUMNS`, `defaultUserProfile()`), the new `paddleProcessor.js`, and
+  `db-schema.md`/`data-model.md`. `/clarify` may override to keep-Stripe-named-columns if the rename is judged
+  to add migration risk disproportionate to the cosmetic benefit.
+- **Checkout model (CONFIRMED) — Paddle.js overlay checkout, replacing the server-created hosted-checkout-URL +
+  full-page-redirect model.** Today `createCheckout` returns `{ checkoutUrl }` and the frontend does a
+  full-page navigation (`useUpgradeCheckout.js:31`); Paddle Billing's idiomatic path (per `paddle:checkout-web`)
+  is client-side `Paddle.Checkout.open({ items: [{ priceId, quantity: 1 }] })`, which changes `createCheckout`'s
+  contract from "return a URL to redirect to" to "return the priceId(s) + a short-lived client token/customer
+  context to open with" — and removes the full-page redirect entirely (the user never leaves the app; `?checkout=
+  success` becomes a `checkout.completed` event instead of a query param). The alternative — a Paddle hosted
+  payment-link URL — would have kept the current redirect shape almost unchanged (smaller diff,
+  `CheckoutReturnBanner`'s return-URL-parsing logic surviving largely intact) but is not Paddle Billing's primary
+  supported flow and loses the richer in-app event stream (`checkout.loaded`/`checkout.items.updated`/
+  `checkout.error`) — this was the single largest design fork in the epic, and the overlay is the confirmed
+  direction, not an open question. US10.2 and US10.5 are written to it directly: the activation-confirmation
+  shape (US10.3.5, US10.5.3) is event-driven — the client learns success synchronously from the
+  `checkout.completed` Paddle.js event, and the server-side fallback's job is "confirm the transaction really
+  completed server-side" via a single check, not a bounded poll loop.
+- **Webhook idempotency mechanism**: use the `paddle:webhooks` skill's ledger pattern (an `event_id`-keyed
+  insert, mirroring the existing `stripe_events` table's `stripe_event_id UNIQUE` shape) rather than pure
+  UPSERT-only convergence, because the existing tier-write also fires a non-idempotent-by-nature side effect
+  (`tracks` `upgrade_completed` insert) that needs the same "first delivery only" guard `23505` gives today —
+  UPSERT alone would double-fire that analytics insert on every retried delivery.
+- **`sanitizeReturnPath` and the general open-redirect guard behavior are preserved as-is**, relocated into
+  `paddleProcessor.js` (or extracted to a small shared helper if both a Paddle hosted-link path and the
+  overlay's `successUrl` need it) — it is vendor-neutral logic, not Stripe-specific.
+- **Price values (CONFIRMED) — mirror the current live Stripe values, `$2.99/mo` and `$21.99/yr`, in the
+  Paddle catalog provisioned by US10.1.** This is a provider swap, not a repricing exercise; revisiting the
+  price points themselves is out of scope for this epic (see NOT included and `docs/open_issues.md` OI-41,
+  which is adjacent but separate).
+- **Deletion is unconditional, not feature-flagged.** No Stripe code path, dependency, env var, or test is
+  kept "just in case" behind a flag — Non-obvious facts confirms there is nothing live to fall back to
+  (sandbox-only, zero real customers), so a flag would be dead-weight complexity with no rollback value beyond
+  what `git revert` already gives.
+
+### User stories & tasks
+
+**US10.1 — Paddle catalog + config/prices endpoint.**
+*As the founder, I need Paddle products/prices provisioned and a live-prices endpoint before any checkout
+code can be written against real price ids.*
+1. Using the `paddle:catalog-setup` skill and the `paddle-sandbox` MCP (default; never `paddle-live` without
+   an explicit live/production instruction), create a product with monthly and annual recurring prices in the
+   Paddle **sandbox**, mirroring the confirmed price points (Settled decisions): `$2.99/mo` / `$21.99/yr`,
+   matching today's live Stripe values as-is — this task is a provider swap, not a repricing exercise.
+2. Record the resulting sandbox `pri_...` price ids as new env vars (naming per the Settled route-rename
+   decision, e.g. `PADDLE_MONTHLY_PRICE_ID`/`PADDLE_ANNUAL_PRICE_ID`), added to `.env.example` alongside
+   `PADDLE_API_KEY`/`PADDLE_SANDBOX_API_KEY` — do **not** assume the Stripe price ids or values carry over
+   (they don't; Paddle prices are a distinct catalog).
+3. Implement `GET /api/paddle/config` (or `/api/stripe/config`'s exact replacement per the route-rename
+   decision) returning `{ prices }` read live off the Paddle catalog (via the Node SDK), matching the current
+   contract's "never drift from what's charged" guarantee (`useStripePrices.js:64`) — no hardcoded price
+   copies, closing the door on an OI-41-style drift bug for the new provider too.
+4. Keep the endpoint public/unauthenticated (the upgrade modal renders before sign-in is guaranteed), matching
+   `stripeRoutes.js:25`'s existing gate.
+5. Test: the endpoint returns live monthly/annual price/currency data sourced from the actual Paddle sandbox
+   catalog (not a fixture), and 503s cleanly when Paddle env vars are absent (mirroring the current "unset key
+   503s the whole surface" behavior documented in memory `project_stripe_traps` §6, ported to the new
+   provider).
+6. Document the provisioned catalog (product id, both price ids) in this epic's staging_checks.md entry (see
+   Acceptance criteria) — the **live** Paddle product/prices are a separate, later provisioning step that
+   cannot happen until domain review passes (memory `project_paddle_integration` §4).
+
+**US10.2 — `createPaddleProcessor` behind the existing `PaymentProcessor` interface + checkout.**
+*As a free user, I want to upgrade via a Paddle checkout that lands me back in the app, paid.*
+1. **Install the Paddle SDKs, before any implementation work below**: `@paddle/paddle-node-sdk` (server) and
+   `@paddle/paddle-js` (frontend). Neither exists in `package.json`/`node_modules` today. This addition is
+   folded into US10.4.4's lockfile-update task (which already runs `npm install` after removing `"stripe"`)
+   rather than a separate `npm install` pass — add both packages to `package.json` here, and let US10.4.4's
+   `npm install` regenerate the lockfile in the same pass that drops `stripe`.
+2. Implement `server/paddleProcessor.js` exporting `createPaddleProcessor({ paddleClient, supabase,
+   monthlyPriceId, annualPriceId, webhookSecret })`, satisfying `PaymentProcessor`'s three methods exactly as
+   `createStripeProcessor` does today (`stripeProcessor.js:54` is the shape reference — read it before
+   writing this, it is the spec).
+3. Implement `createCheckout` per the Settled checkout-model decision (Paddle.js overlay): server side, this
+   becomes "return what the client needs to open an overlay" (priceId for the selected plan + the
+   authenticated user's email for pre-fill, per `paddle:checkout-web`'s customer pre-fill pattern) rather than
+   a server-built redirect URL — update the `PaymentProcessor` JSDoc typedef in `paymentProcessor.js` to
+   reflect the new `createCheckout` return shape. This is the **first** of two interface-touching changes this
+   epic makes to `paymentProcessor.js` (additive/replacing, not a breaking removal of the method); the second
+   is US10.4's de-Stripe-comments-and-rename-`stripeCustomerId` edit to the same file.
+4. Wire the client: `useUpgradeCheckout.js` calls `initializePaddle()` once (client token +
+   `NEXT_PUBLIC`-equivalent env var for this Vite app — confirm the actual env-var naming convention used
+   elsewhere in `src/` before introducing `NEXT_PUBLIC_*`, which is a Next.js convention this app does not
+   use) and `paddle.Checkout.open({ items: [{ priceId, quantity: 1 }], customer: { email } })` on `onUpgrade`,
+   preserving `UpgradeModal`'s existing idle/loading/success `onUpgrade` contract (`UpgradeModal.jsx:16`) —
+   the modal's own code does not change, only what `onUpgrade`'s caller does inside it.
+5. **Client-side sandbox switch (Paddle.js defaults to PRODUCTION — this is the sandbox footgun).** The client
+   token from task 4 must be the **sandbox client-side token** (prefixed `test_`, per CLAUDE.md § "Paddle
+   integration"; the live token has no prefix), and `Paddle.Environment.set('sandbox')` **must** be called
+   before `initializePaddle()` or the overlay silently loads production while every server-side sandbox test
+   still passes — a split-brain that hides until a real card is charged. Gate both the token value and the
+   `Environment.set(...)` call on a single dev/prod env switch (e.g. `import.meta.env.MODE`/`VITE_*`, using the
+   Vite convention confirmed in task 4), defaulting to sandbox for local dev; production build must set
+   `'production'` and the unprefixed live token. Document the switch so the prod cutover is one env change, not
+   a code edit.
+6. Handle the monthly/annual toggle (already added to `UpgradeModal` per Epic 5 Settled decisions) by mapping
+   the selected plan to the corresponding Paddle price id before calling `Checkout.open`.
+7. Preserve the open-redirect guard: even though the overlay model removes the server-built redirect URL,
+   confirm whether `sanitizeReturnPath`'s concern (an attacker-controlled return destination) still applies to
+   the overlay's `successUrl`/event-driven flow, and port the guard if so.
+8. Test, via `paddle:sandbox-testing` (test card `4242 4242 4242 4242`): a free user completes a sandbox
+   checkout on both monthly and annual plans, the `checkout.completed` Paddle.js event fires client-side, and
+   — pending US10.3's webhook wiring — the transaction appears under **Transactions** in the sandbox
+   dashboard. Confirm the checkout overlay is running against **sandbox** (the Paddle overlay shows a sandbox
+   banner; the transaction lands in the sandbox dashboard, not live) — this is the concrete check that task 5's
+   environment switch actually took effect.
+
+**US10.3 — Paddle webhook signature-verify → tier grant + idempotency ledger.**
+*As the founder, I want a paid Paddle transaction to reliably and idempotently flip `users.tier`, exactly as
+reliably as the Stripe webhook does today.*
+1. Register a Paddle notification destination (via `paddle:webhooks`, MCP `client.notificationSettings.create`
+   or the dashboard) subscribed to at minimum `transaction.completed`, `subscription.created`,
+   `subscription.updated`, `subscription.canceled`; record the destination secret as
+   `PADDLE_NOTIFICATION_WEBHOOK_SECRET` (or the route-rename-consistent env name) in `.env.example`.
+2. Implement the route (`server/paddleRoutes.js`, replacing `stripeRoutes.js:59`'s handler): read the raw body
+   via the same route-scoped-raw-body-before-global-json-parser pattern (`index.js:142`, re-pointed at the new
+   path), read the `Paddle-Signature` header (not `stripe-signature`), call
+   `paddle.webhooks.unmarshal(rawBody, secret, signature)` inside a single try/catch that returns one non-2xx
+   status for any failure (signature mismatch, expired timestamp, malformed event) — per `paddle:webhooks`,
+   do **not** split signature-failure vs handler-error into different status codes; that distinction is not
+   recoverable from the thrown error and Paddle's retry behavior doesn't care which non-2xx you send.
+3. Write the explicit event→tier mapping table (Non-obvious facts) into `handleWebhook`: `transaction.
+   completed` → `tier:'paid'` + `paddle_customer_id` set (per the DB-rename decision) + `tracks` insert
+   (`upgrade_completed`); `subscription.updated` with `status` `active`/`trialing` → `tier:'paid'`;
+   `status` `past_due` → no write; `status` `paused` → `tier:'free'`; `subscription.updated` with a non-null
+   `scheduled_change` and `status` still `active` → no write (service continues until the effective date, per
+   `paddle:subscription-sync`'s "canceled is terminal" rule); `subscription.canceled` (or `subscription.
+   updated` with `status:'canceled'`) → `tier:'free'` unconditionally.
+4. Build the idempotency ledger per the Settled decision: an `event_id`-keyed insert (new table, or the
+   renamed `payment_events` per the DB-rename decision) checked/inserted **before** any tier write or `tracks`
+   insert, treating a unique-violation as "already processed" — mirrors `stripe_events`'s exact
+   `23505`-as-success shape (`server-conventions.md:928`).
+5. Keep a synchronous activation-fallback endpoint (`POST /api/.../verify-session` equivalent), but shrink its
+   role for the confirmed overlay model: the client already learns success synchronously from the
+   `checkout.completed` Paddle.js event at `Checkout.open` completion time (US10.2), so the fallback's job is
+   "confirm server-side the transaction is real" via a **single** `GET /api/.../verify-transaction`-style check
+   fired once on `checkout.completed`, not the current bounded-poll dance in `checkoutReturnFlow.js`
+   (`POLL_SCHEDULE_SECONDS = [0,2,4,7,10]`). Preserve the never-show-a-silent-free-tier-to-a-payer guarantee
+   Epic 5 established, just event-driven instead of polled.
+6. Test end-to-end via the Paddle sandbox simulator (`paddle:sandbox-testing`): a simulated
+   `transaction.completed` flips `tier` to `'paid'`; a redelivery of the same event (same `event_id`) is a
+   no-op (ledger dedup verified); a `subscription.updated` with `status:'past_due'` does not downgrade; a
+   `subscription.canceled` flips `tier` to `'free'`; a tampered signature yields a non-2xx and no DB write.
+
+**US10.4 — Delete all Stripe code, dependency, env vars, and tests.**
+*As a maintainer, I never want to find a Stripe code path, a `STRIPE_*` env var, or a Stripe test in this
+codebase once Paddle ships.*
+1. Delete `server/stripeProcessor.js`, `server/stripeRoutes.js`; remove the `import { registerStripeRoutes }`
+   / `import { createStripeProcessor }` lines and the `if (process.env.STRIPE_SECRET_KEY) {...}` block in
+   `server/index.js` (~`:2818-2829`), replacing them with the Paddle equivalent from US10.2/US10.3 — not
+   leaving both wired side-by-side.
+2. **Edit `server/paymentProcessor.js`** (kept, not deleted, per the Settled Adapter-shape decision): de-Stripe
+   its comments/doc text (no remaining prose referencing Stripe) and rename the `getSubscriptionStatus`
+   typedef's `stripeCustomerId` param to `customerId` (safe pass-through rename, no behavior change). This is
+   the **second** of the epic's two interface-touching changes to this file — the first is US10.2.3's
+   `createCheckout` return-shape edit for the overlay checkout model.
+3. Remove the two Stripe-specific `index.js` plumbing lines and replace with their Paddle equivalents (already
+   done as part of US10.3.2's route work, not a second edit): the raw-body middleware path (`:142`) and the
+   rate-limit path (`:191`).
+4. Remove `"stripe": "^22.1.0"` from `package.json` dependencies (leaving the `@paddle/paddle-node-sdk` and
+   `@paddle/paddle-js` entries added in US10.2.1); run `npm install` to update the lockfile in the same pass
+   that adds the two Paddle packages and drops `stripe`; confirm `rg -i
+   "require\('stripe'\)|from 'stripe'|await import\('stripe'\)"` returns nothing under `connect-four/`.
+5. Delete `server/stripeProcessor.test.mjs`, `server/stripeRoutes.substitutability.test.mjs`,
+   `tests/fixtures/stubProcessor.js`, `tests/unit/stripePrices.test.js`, `tests/unit/stripePortalReturn.test.js`,
+   `tests/unit/checkoutReturnFlow.test.js` (or rewrite the last one in place if its poll-state-machine logic
+   is genuinely vendor-agnostic and worth keeping under a renamed test file — confirm by reading it first, per
+   the Non-obvious facts note that `checkoutReturnFlow.js` itself is pure/vendor-agnostic logic). Remove the
+   deleted filenames from **both** `test` and `test:fast` arrays in `package.json:16` (and whichever line
+   holds `test:fast`) — a stale filename in either array errors the whole `node --test` invocation. Add the
+   new Paddle-equivalent test files' names to both arrays in the same edit.
+6. Remove `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`
+   from `.env.example` (`:21,24,27,28`) and from any deploy-config equivalent (Railway env, per memory
+   `project_spec031_staging_production_deploy`); leave `FRONTEND_URL` untouched (Non-obvious facts — it is
+   shared, non-Stripe).
+7. **Decision-gated DB cleanup** (per the DB-identifier Settled decision): write the migration that
+   renames/drops `stripe_customer_id`/`stripe_events` (or, if `/clarify` overrides to keep-Stripe-named, skip
+   this task and record why in the spec). Update `USER_PROFILE_SELECT_COLUMNS` and `defaultUserProfile()` in
+   `server/userHelpers.js`, and `docs/architecture/db-schema.md`/`data-model.md`, in the same change (memory
+   `project_user_column_propagation` — both allowlists, not one).
+8. **Update architecture docs to describe Paddle, not a deleted provider**: `docs/architecture/api-
+   conventions.md` §"Stripe Checkout Config" / §"Stripe Checkout" / §"Stripe Activation Fallback" / §"Stripe
+   Webhook Endpoint" (`:59-103`) and `docs/architecture/server-conventions.md` §"PaymentProcessor Seam"
+   (`:907-947`) both describe the exact Stripe contract this epic replaces — rewrite both sections in place
+   (route paths, request/response shapes, header name, idempotency ledger name, tier-mirror table) to describe
+   the shipped Paddle contract, rather than leaving them as stale documentation of a deleted provider.
+9. Final verification: `rg -i stripe connect-four/` returns matches **only** inside `docs/`,
+   `.claude/projects/.../memory/`, and this `polish_epic.md` (historical/documentation references are
+   expected and fine) — zero matches inside `server/`, `src/`, `tests/`, `migrations/`, or `package.json`.
+   `npm run test:fast` is green with no dangling filename errors.
+
+**US10.5 — Frontend rewire (`/api/stripe/*` → Paddle equivalents; `UpgradeModal` preserved).**
+*As a free user on any of the paid-tier touchpoints, I want the same upgrade experience, now backed by
+Paddle.*
+1. `src/lib/useUpgradeCheckout.js:31` — replace the `POST /api/stripe/create-checkout` fetch + full-page
+   `window.location` redirect with the Paddle.js `initializePaddle()` + `Checkout.open()` call from US10.2.4,
+   **including US10.2.5's `Paddle.Environment.set('sandbox')` + `test_`-prefixed sandbox client token gated on
+   the dev/prod env switch** (Paddle.js defaults to production — this is where that switch lives in the
+   shipping code, not just the test); keep the hook's external return contract (whatever
+   `UpgradeModal.onUpgrade` currently expects) unchanged.
+2. `src/lib/useStripePrices.js:34` — repoint the `GET /api/stripe/config` fetch to the new
+   `/api/paddle/config`-equivalent endpoint (US10.1.3); rename the file/hook only if the route-rename decision
+   is confirmed (avoid a half-renamed hook calling a fully-renamed endpoint).
+3. `src/store/CheckoutReturnBanner.jsx` + `src/lib/checkoutReturnFlow.js` — adapt the post-checkout UX to the
+   event-driven confirm-once shape from US10.3.5 (fire a single confirm check on the `checkout.completed`
+   Paddle.js event, not the existing bounded poll); collapse `checkoutReturnFlow.js`'s poll-schedule state
+   machine down to whatever states the single-check flow actually needs (e.g. `confirming`/`activated`/`failed`,
+   or a renamed equivalent of the existing `polling`/`activated`/`timeout` states), preserving the "never
+   silently show the free-tier UI to someone who just paid" guarantee from Epic 5 US5.3.4.
+4. `src/screens/SettingsScreen.jsx:49` — repoint the `POST /api/stripe/portal` fetch to the Paddle
+   customer-portal equivalent, grounded against the `paddle:customer-portal` skill (mint a portal-session URL
+   server-side per that skill's auth/ownership pattern, mirroring `stripeProcessor.js:229`'s
+   `createPortalSession`).
+5. `src/screens/PostSetSummaryScreen.jsx` — update the stale "full-page Stripe redirect" comment to describe
+   the actual (overlay, non-redirecting) Paddle flow; confirm no behavior in this screen actually depended on
+   the redirect (per the comment's own context, it appears to be defensive framing, not load-bearing logic —
+   verify before assuming).
+6. `src/components/UpgradeModal.jsx` — **no prop/signature change**; confirm via a diff that `onDismiss`,
+   `onUpgrade`, `uiState`, `onUiStateChange` are untouched, and that the monthly/annual plan toggle (Epic 5)
+   still passes the selected plan through to the new `onUpgrade` implementation.
+7. Test: a free user opens `UpgradeModal` from every existing entry point (`SetPickerScreen.jsx`,
+   `SagaScreen.jsx`, `components/DeepRevealPane.jsx`), completes a sandbox checkout via the overlay, and lands
+   back on the originating screen already paid — no full-page navigation occurs anywhere in the flow.
+
+**Acceptance criteria**
+- `GET /api/{paddle-or-renamed}/config` returns live Paddle sandbox monthly/annual prices; the upgrade-modal
+  badge never hardcodes a price copy.
+- A free user completes a sandbox Paddle checkout (via the chosen checkout model) on both monthly and annual
+  plans and reaches the paid UI; a user who just paid never sees a silent free-tier fallback.
+- The Paddle webhook: verifies `Paddle-Signature` via `paddle.webhooks.unmarshal()`; applies the full
+  event→tier mapping table (US10.3.3); is idempotent under redelivery of the same `event_id`; a tampered
+  signature is rejected with a non-2xx and no DB write.
+- `rg -i stripe connect-four/{server,src,tests,migrations}` and `package.json` return **zero** matches;
+  `npm run test:fast` is green with the Stripe test files removed and their Paddle equivalents (if any)
+  registered in both `test` and `test:fast`.
+- `UpgradeModal`'s `onDismiss`/`onUpgrade`/`uiState`/`onUiStateChange` signature is byte-identical to before
+  this epic (diff-verified).
+- Every acceptance item that depends on a real deployed webhook endpoint, real domain-reviewed checkout, or a
+  real payout is recorded in `staging_checks.md` under `## Epic 10 —`, not marked done locally (see below).
+
+**NOT included:** a second/third payment processor; billing/invoice UI beyond what Paddle's own checkout/
+portal renders; proration/dunning UX beyond Paddle Retain's automatic retry (accept its default behavior);
+customer/data migration (none exists to migrate — Non-obvious facts); live Paddle account activation, domain
+review, or the first real (non-sandbox) payout — those are `staging_checks.md`/deploy-time items, not local
+deliverables; changing the monthly/annual price *values* (out of scope unless US10.1 finds the Stripe values
+were never actually live); Epic 5's session-persistence half (US5.1–US5.2, untouched).
+
+**Sizing verdict — Full speckit.** 5 stories × ≥5-7 tasks (30+); server (new processor + routes + webhook +
+migration) + frontend (7 files) + third-party sandbox provisioning + a genuine checkout-model architecture
+fork. Money + webhooks + a full vendor swap warrant the full pipeline, same bar as Epic 5.
+
+**Open questions (`/clarify`):** (1) **Route rename** — `/api/paddle/*` (recommended) vs. keeping
+`/api/stripe/*` paths. (2) **DB identifier rename** — `paddle_customer_id`/`payment_events` (recommended) vs.
+keeping the Stripe-named columns.
+
+### Staging checks (append to `staging_checks.md` under `## Epic 10 —`, per that file's convention)
+The following cannot be confirmed in local/sandbox dev and must be added as `staging_checks.md` items rather
+than marked silently done:
+- Real deployed Paddle notification-destination delivery (a reachable public staging/prod URL, not the
+  sandbox simulator or an `ngrok` tunnel) — confirm a live `transaction.completed` reaches the deployed
+  webhook and flips `tier`.
+- Domain review approval for the production domain under Paddle's Checkout settings (manual review, 5–7
+  business days per memory `project_paddle_integration`) — required before any live (non-sandbox) checkout
+  can render.
+- The first real (live, non-sandbox) payout landing as USD in the Argentine bank account, confirming the
+  `docs/payment_provider_research.md` open question ("does a USD wire from Paddle actually land as USD in an
+  Argentine bank?") and the net-vs-gross $100-threshold assumption.
+- Live product/price provisioning in the Paddle **live** account (separate from the sandbox catalog created in
+  US10.1) — cannot happen before domain review passes.
+- Any Argentine-side tax/retención stack triggered by an inbound Paddle payout (`docs/
+  payment_provider_research.md` Open question 2) — outside this epic's engineering scope, but a launch
+  blocker worth tracking here.
+
+---
+
 ## Appendix — issue → deliverable traceability
 
 | Source issue | Epic |
@@ -1658,7 +2140,7 @@ convergence", "Answer source for `z_threat`/`undercut`/`overcut`"). `/clarify` s
 | new_TODOs #21 (suboptimal/blunder unification) | 2 |
 | new_TODOs #22 (remember me) | 5 |
 | new_TODOs #23 (back-button toggle loop) | 2 |
-| new_TODOs #24 (Stripe checkout) | 5 |
+| new_TODOs #24 (Stripe checkout) | 5 (payment provider superseded by 10) |
 | new_TODOs #25 (DecodeC4 logo → home) | 3 |
 | new_TODOs #26 = QA:B (view imported games CTA) | 1 |
 | QA:A blocker (unique index omits user_id) | 1 |

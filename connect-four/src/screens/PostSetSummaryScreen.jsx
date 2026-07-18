@@ -8,18 +8,38 @@ import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { CATEGORY_ORDER, CATEGORY_NAMES, PAID_CATEGORIES } from '../lib/categories.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 import { useCoachSpeech } from '../lib/useCoachSpeech.js';
 
 export function PostSetSummaryScreen({ go, results = [], category }) {
   const { t } = useTranslation();
   const { speakCoachMessage } = useCoachSpeech();
   const { store, session } = useStore();
-  // /summary is a SESSION_ONLY screen (its `results` prop can't survive the
-  // full-page Stripe redirect), so return the user to Challenges instead — the
-  // same place this screen's back/ghost buttons go.
+  // /summary is a SESSION_ONLY screen (its `results` prop can't survive a cold
+  // boot/reload — e.g. via the successUrl passed to the Paddle.js overlay), so
+  // return the user to Challenges instead — the same place this screen's
+  // back/ghost buttons go.
   const handleUpgrade = useUpgradeCheckout('/setpicker');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [isFreeUser, setIsFreeUser] = useState(true);
+
+  // See SettingsScreen.jsx's identical subscription for the full rationale:
+  // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
+  // a real payment left the modal stuck on 'loading' and this screen's
+  // isFreeUser (fetched once above) never refreshed. The modal itself now
+  // owns auto-dismissing (with its slide-away animation) once 'success'
+  // renders.
+  useEffect(() => {
+    return subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setIsFreeUser(false);
+        setUpgradeUiState('success');
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+  }, []);
 
   // Compute derived stats
   const total = results.length;
@@ -215,7 +235,12 @@ export function PostSetSummaryScreen({ go, results = [], category }) {
       </div>
 
       {upgradeOpen && (
-        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
+        <UpgradeModal
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
+          onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
+        />
       )}
     </div>
   );

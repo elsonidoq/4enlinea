@@ -1,81 +1,65 @@
-// Spec 045 US3 (T030) — bounded-wait poll state machine for the post-Checkout
-// return flow. Verifies the idle/polling/activated/timeout transitions and the
-// [0,2,4,7,10]s schedule via an injected fake sleepFn (no real timers).
+// DISPOSITION (spec 050 T002/T025): kept, edited in place — this file tests
+// pure vendor-agnostic state-store logic (no payment-provider-specific types
+// or calls). Spec 050 US2 (Research §4/§11): the pre-migration bounded-wait
+// poll state machine ([0,2,4,7,10]s schedule) is collapsed to single-check
+// states, since the Paddle.js overlay model has no return-URL round-trip to
+// poll against — `checkout.completed` already tells the client synchronously
+// that payment succeeded.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runCheckoutPoll, POLL_SCHEDULE_SECONDS } from '../../src/lib/checkoutReturnFlow.js';
+import {
+  getCheckoutReturnState,
+  setCheckoutReturnState,
+  subscribeCheckoutReturn,
+  resetCheckoutReturnState,
+} from '../../src/lib/checkoutReturnFlow.js';
 
-function fakeSleep(calls) {
-  return async (ms) => { calls.push(ms); };
-}
-
-test('POLL_SCHEDULE_SECONDS is the spec-mandated [0,2,4,7,10]', () => {
-  assert.deepEqual(POLL_SCHEDULE_SECONDS, [0, 2, 4, 7, 10]);
+test('starts at "idle"', () => {
+  resetCheckoutReturnState();
+  assert.equal(getCheckoutReturnState(), 'idle');
 });
 
-test('resolves "activated" as soon as checkPaid() returns true, without exhausting the schedule', async () => {
-  const states = [];
-  const sleeps = [];
-  let calls = 0;
-  const checkPaid = async () => {
-    calls += 1;
-    return calls === 2; // paid on the 2nd attempt (after the first 2s wait)
-  };
-
-  const result = await runCheckoutPoll({ checkPaid, onState: (s) => states.push(s), sleepFn: fakeSleep(sleeps) });
-
-  assert.equal(result, 'activated');
-  assert.deepEqual(states, ['polling', 'activated']);
-  assert.equal(calls, 2);
-  // Only the wait before the 2nd attempt (2s) was consumed.
-  assert.deepEqual(sleeps, [2000]);
+test('setCheckoutReturnState updates the current state', () => {
+  resetCheckoutReturnState();
+  setCheckoutReturnState('confirming');
+  assert.equal(getCheckoutReturnState(), 'confirming');
+  setCheckoutReturnState('activated');
+  assert.equal(getCheckoutReturnState(), 'activated');
 });
 
-test('resolves "timeout" after exhausting all 5 attempts, sleeping the correct deltas', async () => {
-  const states = [];
-  const sleeps = [];
-  let calls = 0;
-  const checkPaid = async () => { calls += 1; return false; };
+test('subscribeCheckoutReturn notifies subscribers of every state change, in order', () => {
+  resetCheckoutReturnState();
+  const seen = [];
+  const unsubscribe = subscribeCheckoutReturn((s) => seen.push(s));
 
-  const result = await runCheckoutPoll({ checkPaid, onState: (s) => states.push(s), sleepFn: fakeSleep(sleeps) });
+  setCheckoutReturnState('confirming');
+  setCheckoutReturnState('activated');
 
-  assert.equal(result, 'timeout');
-  assert.deepEqual(states, ['polling', 'timeout']);
-  assert.equal(calls, 5);
-  // Deltas between [0,2,4,7,10] => wait 0 (no sleep call), then 2s, 2s, 3s, 3s.
-  assert.deepEqual(sleeps, [2000, 2000, 3000, 3000]);
+  assert.deepEqual(seen, ['confirming', 'activated']);
+  unsubscribe();
 });
 
-test('first attempt fires immediately with no sleep beforehand', async () => {
-  const sleeps = [];
-  let calls = 0;
-  const checkPaid = async () => { calls += 1; return true; };
+test('unsubscribe stops further notifications', () => {
+  resetCheckoutReturnState();
+  const seen = [];
+  const unsubscribe = subscribeCheckoutReturn((s) => seen.push(s));
+  setCheckoutReturnState('confirming');
+  unsubscribe();
+  setCheckoutReturnState('failed');
 
-  const result = await runCheckoutPoll({ checkPaid, sleepFn: fakeSleep(sleeps) });
-
-  assert.equal(result, 'activated');
-  assert.equal(calls, 1);
-  assert.deepEqual(sleeps, []);
+  assert.deepEqual(seen, ['confirming']);
 });
 
-test('a custom schedule is honored (manual-refresh re-run uses the same schedule shape)', async () => {
-  const sleeps = [];
-  let calls = 0;
-  const checkPaid = async () => { calls += 1; return false; };
-
-  const result = await runCheckoutPoll({
-    checkPaid,
-    schedule: [0, 1, 3],
-    sleepFn: fakeSleep(sleeps),
-  });
-
-  assert.equal(result, 'timeout');
-  assert.equal(calls, 3);
-  assert.deepEqual(sleeps, [1000, 2000]);
+test('a failed confirmation lands on "failed", not silently on "idle" (never a silent free-tier render)', () => {
+  resetCheckoutReturnState();
+  setCheckoutReturnState('confirming');
+  setCheckoutReturnState('failed');
+  assert.equal(getCheckoutReturnState(), 'failed');
 });
 
-test('onState is optional — runCheckoutPoll does not throw without it', async () => {
-  const checkPaid = async () => true;
-  await assert.doesNotReject(runCheckoutPoll({ checkPaid, sleepFn: fakeSleep([]) }));
+test('resetCheckoutReturnState returns the store to "idle"', () => {
+  setCheckoutReturnState('activated');
+  resetCheckoutReturnState();
+  assert.equal(getCheckoutReturnState(), 'idle');
 });

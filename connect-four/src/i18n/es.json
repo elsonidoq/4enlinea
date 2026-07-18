@@ -95,9 +95,20 @@
     "subtitle": "Guardá tu progreso, rachas y estadísticas en todos tus dispositivos.",
     "continueWithGoogle": "Iniciar sesión con Google"
   },
+  "footer": {
+    "pricing": "Precios",
+    "terms": "Términos",
+    "privacy": "Privacidad",
+    "refunds": "Reembolsos"
+  },
   "upgrade": {
     "heading": "Hacete Pro",
     "body": "Actualizá a Pro para revelaciones profundas ilimitadas.",
+    "price": "$2.99/mes · $21.99/año",
+    "tax": "Los impuestos pueden aplicarse y se calculan al finalizar la compra.",
+    "links_pricing": "Precios",
+    "links_terms": "Términos",
+    "links_refunds": "Reembolsos",
     "cta": "Continuar al pago",
     "success": "¡Ahora sos miembro Pro!",
     "dismiss": "Quizás más tarde",

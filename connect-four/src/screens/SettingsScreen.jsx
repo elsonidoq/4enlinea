@@ -5,6 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useLanguage } from '../lib/useLanguage.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 import { fetchWithAuthRetry } from '../lib/fetchWithAuthRetry.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -40,13 +41,37 @@ export function SettingsScreen({ go, goBack }) {
   // ── Subscription section (D3) ───────────────────────────────────────────
   const [tier, setTier] = useState('free');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [portalError, setPortalError] = useState(false);
   const handleUpgrade = useUpgradeCheckout('/settings');
+
+  // checkoutReturnFlow.js's 'activated'/'failed' states were only ever read by
+  // CheckoutReturnBanner (a top banner) — nothing wired them into UpgradeModal,
+  // so its uiState/onUiStateChange controlled-mode props existed but had "no
+  // existing call site" (see UpgradeModal.jsx's own comment): after a real
+  // payment, the modal stayed stuck on 'loading' forever and this screen's
+  // `tier` (fetched once on mount) never refreshed. Subscribing here makes
+  // this screen the modal's controller: a successful payment flips it to its
+  // existing 'success' state and updates the tier shown below — the modal
+  // itself now owns auto-dismissing (with its slide-away animation) once
+  // 'success' renders, so this effect doesn't need its own dismiss timer. A
+  // failed confirmation reuses the existing 'timeout' (retry) state instead
+  // of leaving the button disabled with no way out.
+  useEffect(() => {
+    return subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        setTier('paid');
+        setUpgradeUiState('success');
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+  }, []);
 
   async function openPortal() {
     setPortalError(false);
     try {
-      const res = await fetch(`${API}/api/stripe/portal`, {
+      const res = await fetch(`${API}/api/paddle/portal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -443,7 +468,7 @@ export function SettingsScreen({ go, goBack }) {
         </section>
 
         {/* D3: tier-aware Subscription section — free -> UpgradeModal (5th call
-            site, identical props to the other four); paid -> Stripe billing
+            site, identical props to the other four); paid -> Paddle billing
             portal, which had zero frontend callers before this. */}
         <section>
           <h3>{t('settings.subscriptionHeading')}</h3>
@@ -485,7 +510,12 @@ export function SettingsScreen({ go, goBack }) {
       </div>
 
       {upgradeOpen && (
-        <UpgradeModal onDismiss={() => setUpgradeOpen(false)} onUpgrade={handleUpgrade} />
+        <UpgradeModal
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); }}
+          onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
+        />
       )}
     </div>
   );

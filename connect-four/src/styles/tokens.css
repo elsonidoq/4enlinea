@@ -105,9 +105,19 @@
   to   { transform: none; }
 }
 
+@keyframes slideDown {
+  from { transform: none; }
+  to   { transform: translateY(60px); }
+}
+
 @keyframes fade {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 @keyframes ring {

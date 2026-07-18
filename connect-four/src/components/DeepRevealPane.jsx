@@ -8,6 +8,7 @@ import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
+import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 import { langHeaders } from '../lib/apiLang.js';
@@ -66,6 +67,7 @@ export function DeepRevealPane({
   const [slow, setSlow] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeUiState, setUpgradeUiState] = useState('idle');
   const [flagged, setFlagged] = useState(false);
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagNote, setFlagNote] = useState('');
@@ -85,6 +87,30 @@ export function DeepRevealPane({
       // Ignore — counter just won't render this time.
     }
   }
+
+  // See SettingsScreen.jsx's identical subscription for the full rationale:
+  // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
+  // a real payment left the modal stuck on 'loading'. Reuses refreshProfile
+  // (already called after every successful reveal) so profile.tier/quota
+  // reflect Pro immediately, and clears quotaExceeded so the paywall banner
+  // (line ~289) disappears. The modal itself now owns auto-dismissing (with
+  // its slide-away animation) once 'success' renders, via this screen's own
+  // onDismiss prop below — which also closes this whole pane (onClose?.()),
+  // same as a manual dismissal. Scope note: this does NOT retry the
+  // deep-reveal fetch that originally 429'd — re-opening shows the actual
+  // reveal content, matching the existing anonRevealed/401 gates' behavior
+  // of requiring a fresh open rather than auto-retrying.
+  useEffect(() => {
+    return subscribeCheckoutReturn((state) => {
+      if (state === 'activated') {
+        refreshProfile();
+        setQuotaExceeded(false);
+        setUpgradeUiState('success');
+      } else if (state === 'failed') {
+        setUpgradeUiState('timeout');
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track TTS Audio element for cleanup
   const ttsAudioRef = useRef(null);
@@ -417,8 +443,10 @@ export function DeepRevealPane({
       )}
       {upgradeOpen && (
         <UpgradeModal
-          onDismiss={() => { setUpgradeOpen(false); onClose?.(); }}
+          onDismiss={() => { setUpgradeOpen(false); setUpgradeUiState('idle'); onClose?.(); }}
           onUpgrade={handleUpgrade}
+          uiState={upgradeUiState}
+          onUiStateChange={setUpgradeUiState}
         />
       )}
     </>

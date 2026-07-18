@@ -1,13 +1,13 @@
 ---
 name: project_stripe_traps
-description: Stripe traps — mocked webhook tests hide real DB-write bugs; whsec is PER-ENDPOINT (stripe listen ≠ deploy); the account is a SANDBOX with no live mode; prices are immutable; an unset key 503s all of /api/stripe/*
+description: OBSOLETE 2026-07-18 — Stripe fully removed from the codebase (spec 050); historical-only record of Stripe traps (mocked webhook tests hid real DB-write bugs; per-endpoint whsec; sandbox-only account; immutable prices)
 metadata: 
   node_type: memory
   type: project
   originSessionId: b3651b10-6fef-44e8-8fb4-6381e4fda310
 ---
 
-> **Provider migration (2026-07):** Stripe is **unavailable to Argentine sellers** without foreign incorporation, so the project is moving payments to **Paddle** (merchant of record). Before extending Stripe, check whether the work should target Paddle instead — see [[project_paddle_integration]] and `docs/payment_provider_research.md`. The Stripe mechanics below remain accurate for the current running integration.
+> **OBSOLETE (2026-07-18): Stripe has been fully removed from this codebase** (spec 050, Epic 10) — `stripeProcessor.js`/`stripeRoutes.js` and every Stripe dependency/env-var/test are deleted; Paddle is the sole, shipped payment provider. Everything below describes a system that no longer exists — kept only for historical context. For current payment-integration work, read [[project_paddle_integration]] and `docs/architecture/server-conventions.md`/`api-conventions.md` instead.
 
 Merged from `project_stripe_webhook_live_testing` + `project_checkout_verify_session_fallback` + the surviving lines of `project_auth_payments_state`. Mechanics (raw-body ordering, idempotency, FR-025 tier mirror, `PaymentProcessor` seam, `GET /api/stripe/config`) live in `docs/architecture/server-conventions.md` + `api-conventions.md` §Stripe — this file is only what those docs will not tell you.
 
@@ -55,4 +55,8 @@ Prices were lowered to $2.99/mo + $21.99/yr by **archiving** the old $7.99/$59.9
 
 It makes `paymentProcessor` null, so the **entire** `/api/stripe/*` surface returns 503 "Payments not configured" — not just checkout. A deploy needs all five vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (per-endpoint — §3), `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`, `FRONTEND_URL`.
 
-Related: [[reference_supabase_connection]] (local service-role key + grants trail); [[project_app_qa_setup_gotchas]]; `docs/open_issues.md`.
+## 7. `handleWebhook` swallows non-`23505` DB-write errors and still returns 2xx — do NOT copy this into the Paddle handler
+
+Verified by reading `stripeProcessor.js:140-147`, `:159`, `:172-184` while planning Epic 10 (spec `050-paddle-checkout-migration`): on a **non**-`23505` `stripe_events` insert error, the code logs and **still processes the event**, returning 2xx. The `subscription.updated`/`deleted` tier writes don't check their `error` at all; `checkout.session.completed`'s tier-write error only skips the `tracks` insert but still returns 2xx. So a transient DB failure today is silently swallowed — Stripe never retries. An early Epic 10 plan draft claimed the new Paddle webhook's stricter contract ("2xx only after durable write; non-2xx on ANY processing failure so Paddle retries") "mirrors the existing Stripe pattern" — that claim is **false** and was corrected during planning; the Paddle behavior is a deliberate tightening, not a port. Also: `stripeProcessor.test.mjs`'s mock supabase client returns `{ error: {...} }` objects on failure — it never **rejects** a promise — so any injection test for the Paddle equivalent must stub `insert()`/`update()` to *resolve* with an error object, not throw/reject.
+
+Related: [[reference_supabase_connection]] (local service-role key + grants trail); [[project_app_qa_setup_gotchas]]; [[project_paddle_integration]] §8; `docs/open_issues.md`.

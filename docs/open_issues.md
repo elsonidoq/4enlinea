@@ -725,7 +725,8 @@ D1 (offline `_es` sibling fields, human-reviewed, no request-time LLM) shipped f
    - `[term:...]`/`[zone:...]` tags and `columna N` references preserved verbatim.
    - Diff contains **only** added `_es` keys — no reformatting/reordering churn.
 3. `node --env-file=server/.env scripts/translate-lessons.mjs --lesson <id>` (real run), then `git diff` line-by-line before committing.
-4. **After the text is committed**, generate narration audio for that lesson: `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally), then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`).
+4. **After the text is committed**, generate narration audio for that lesson — preferably via the admin editor's "Generate audios" button with the language toggle on **es** (now lang-wired, commit `2201894`); or `curl -sX POST localhost:3001/api/admin/lessons/<id>/generate-audio -H 'Content-Type: application/json' -d '{"lang":"es"}'` (server running locally). Then verify `prune-audio` reports `{deleted: 0}` before trusting it (Task 3's trap: `collectReferencedAudio` must already cover `audio_es`). **Translate and voice in the same pass**: a lesson translated but not yet voiced serves Spanish text with the **English** audio clip (the per-field fallback backfills `audio` from English), which reads worse than silence.
+5. **Terminology drift to fix before/during the bulk pass**: lesson 1 rendered "four-cell window" as both "ventana de cuatro **celdas**" and "ventana de cuatro **casillas**" (visible on one screen). Pin a glossary in the script's prompt so a consistent term is used across all ~6,000 words.
 5. Run `npm run test:fast` once per lesson (or batch) before committing.
 
 Heaviest remaining lessons by word count: `lesson-11-figure-7-trap.json` (~860 words), `lesson-10-overcut.json` (~825), `lesson-12-j-shape.json` (~789), `lesson-05-claimeven.json` (~787). Cross-ref: memory `project_spanish_output_silent_fallback`; `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo); OI-35 (this gap was originally flagged there as a QA finding); `docs/architecture/` D1 decision record for lesson localization.
@@ -903,3 +904,116 @@ The `drawing_move` blunder tag is applied whenever the **played** move only draw
 **Area**: puzzle serving (`server/index.js`'s `GET /api/puzzles/draw`) vs. `puzzle_attempts.outcome`
 
 `GET /api/puzzles/draw` filters only on `.eq('category', …)`, `.eq('is_active', true)`, `.not('position','is',null)`, `.order('position')` — it never reads `puzzle_attempts`, so there is no exclusion of already-solved or already-revealed puzzles from the serving pool at all. Meanwhile `puzzle_attempts.outcome` is constrained to `'correct_first' | 'correct_retry' | 'revealed' | 'tied' | 'abandoned'`, but only `'correct_first'` and `'abandoned'` are ever written by any code path (`ChallengeScreen.jsx`) — `'revealed'`, `'correct_retry'`, and `'tied'` are unused. Is the enum aspirational (a filter was planned but never built), or is the intent genuinely "never exclude anything from the pool" (in which case the unused outcomes and their CHECK-constraint entries are dead)?
+
+## OI-50 — Candidate-insert retry can double-insert rows (no unique constraint)
+
+**Status**: deferred (flagged by the final whole-branch review, QA-remediation 2026-07-16; not fixed — low blast radius)
+**Area**: `connect-four/server/index.js` (the `supabase.from('candidates').insert(rows)` retry added by W11 Task 26); `connect-four/server/migrations/011_category_slugs.sql`
+
+Task 26 added bounded retry/backoff on the candidate-insert path so a transient dropped connection no longer aborts a whole category with 0 inserted. But the retry fires on **any** error, including a network blip that lands *after* Postgres has already committed the insert — precisely the failure it targets. On retry, the same `rows` are inserted again.
+
+`candidates` has **no unique constraint** to catch this — only the non-unique `idx_candidates_move_string` (see `011_category_slugs.sql`). So a mid-insert network hiccup can silently double a batch.
+
+**Why deferred**: admin/localhost-only surface, run manually, and duplicate candidates are self-correctable (re-run or dedupe). No user-facing impact.
+
+**If picked up**: the batch already carries `generation_run_id` + `move_string`, so a dedupe key exists — either add a unique index on `(generation_run_id, move_string)` and treat `23505` as success, or only retry on pre-commit error classes (connection-refused/timeout), never on an ambiguous post-send error.
+
+## OI-51 — worktree-ports self-derive leaks `worktree-ports.sh`'s ownership-probe comments to the dev console
+
+**Status**: deferred (flagged by code review during worktree-port-isolation implementation, 2026-07-17; not fixed — cosmetic only)
+**Area**: `connect-four/vite.config.js` (`resolvePorts()`), `connect-four/server/index.js` (`resolveWorktreePortEnv()`)
+
+Both self-derive helpers call `execSync(scriptPath, { encoding: 'utf8' })` with no `stdio` override, so the child's stderr (the `# API_PORT=... is free/bound by pid(s): ...` ownership-probe lines `worktree-ports.sh` prints for humans running `eval "$(./worktree-ports.sh)"` interactively) is inherited by the parent and printed to the console on every raw, un-sourced `npm run dev`/`npm run vite`/`npm run server`/`node server/index.js` invocation. Harmless — stdout parsing (the actual port values) is unaffected — but it's unexpected noise the first time someone sees it.
+
+**Why deferred**: purely cosmetic; doesn't affect correctness or the port-isolation guarantee.
+
+**If picked up**: pass `stdio: ['ignore', 'pipe', 'ignore']` to both `execSync` calls so only stdout (the `export KEY=value` lines) is captured and stderr is suppressed during self-derive.
+
+## OI-52 — worktree-ports self-derive silently falls back to legacy `3001`/`5173` if `worktree-ports.sh` fails
+
+**Status**: deferred (flagged by code review during worktree-port-isolation implementation, 2026-07-17; not fixed — low probability)
+**Area**: `connect-four/vite.config.js` (`resolvePorts()`), `connect-four/server/index.js` (`resolveWorktreePortEnv()`)
+
+If `worktree-ports.sh` is missing, not executable, or throws (e.g. `git`/`cksum`/`lsof` unavailable, or the file was deleted) while running inside a **linked worktree** with `API_PORT`/`VITE_PORT`/`PORT`/`FRONTEND_URL` unset, both self-derive helpers fall back to the hardcoded legacy defaults (`vite.config.js`: `Number(apiPort) || 3001`, `Number(vitePort) || 5173`; `server/index.js`: `process.env.PORT || 3001` after `resolveWorktreePortEnv()`'s catch-and-warn). That silently rebinds the worktree's dev server into the main checkout's port range — the exact collision this whole feature exists to prevent — rather than failing loudly. `strictPort` only catches this if the main checkout's Vite happens to already be bound to `5173` at that moment; if the main checkout isn't running, the worktree would silently start on `5173`/`3001` with no error.
+
+**Why deferred**: `worktree-ports.sh` is a simple, already-tested bash script with no external dependencies beyond `git`/`cksum`/`lsof` (all present on any dev machine that can run this repo), so the failure mode is low-probability. Documented here rather than fixed immediately since it needs a deliberate design choice (fail loudly vs. warn-and-continue) rather than a one-line patch.
+
+**If picked up**: detect "this is a linked worktree" (the same `GIT_DIR`/`GIT_COMMON` check `worktree-ports.sh` uses) directly in `vite.config.js`/`server/index.js`, and if so, treat a self-derive failure as fatal (throw / refuse to start) instead of silently defaulting to the legacy ports.
+
+## OI-53 — `req.user.email` is always `undefined` server-side (Paddle/Stripe `customerEmail` never pre-fills)
+
+**Status**: deferred (found during spec 050 US2 manual T029 verification, 2026-07-18; not fixed — pre-existing, inherited from Stripe, not introduced by this batch)
+**Area**: `connect-four/server/index.js` (`loadUser()`), `connect-four/server/userHelpers.js` (`USER_PROFILE_SELECT_COLUMNS`), `connect-four/server/paddleRoutes.js`/`stripeRoutes.js` (`email: req.user.email`)
+
+`loadUser()` builds `req.user` as `{ id: data.user.id, ...profile }`, where `profile` is read via `USER_PROFILE_SELECT_COLUMNS` (`server/userHelpers.js:15`: `'tier, deep_reveal_count, deep_reveal_reset_at, device_uuid, papergames_id, last_import_at, paddle_customer_id, onboarding_status'`) — this list never includes `email`. The raw Supabase auth user's email lives on `data.user.email`, which `loadUser()` discards. Confirmed live: `POST /api/paddle/create-checkout`'s response was `{"priceId":"...","successUrl":"/settings"}` with `customerEmail` silently absent (JSON drops the `undefined` key) for both an anonymous test user and by code-reading `stripeRoutes.js:49`'s identical `email: req.user.email` pattern — so Stripe's checkout customer pre-fill has had this same gap since spec 045.
+
+**Impact**: `Paddle.Checkout.open({ customer: { email: undefined } })` — the checkout overlay's email field is never pre-filled for a signed-in user; they must type it manually. Does not block checkout from completing.
+
+**Why deferred**: cosmetic UX gap (one extra keystroke-field for the user), not a functional or security defect; pre-existing in the Stripe path this migration mirrors — fixing it is a `loadUser()`/`USER_PROFILE_SELECT_COLUMNS` change outside spec 050 US2's scope.
+
+**If picked up**: thread `data.user.email` into `req.user` in `loadUser()` (`server/index.js`) alongside the `profile` spread — no new DB column needed, the email is already on the Supabase auth user object returned by `authClient.auth.getUser(token)`.
+
+## OI-54 — Paddle sandbox account has no default payment link set (manual dashboard step blocks full T029 sandbox checkout)
+
+**Status**: resolved (2026-07-18) — user set the default payment link to `http://localhost:6397` in the sandbox dashboard. A full end-to-end sandbox checkout (test card `4242 4242 4242 4242`) was completed live and confirmed: `users.tier` flipped to `paid`, `paddle_customer_id` was set, Settings correctly rendered "DecodeC4 Pro" + "Manage subscription". Verification of this fix directly surfaced two further real bugs, both fixed in the same pass — see below.
+
+**Two bugs found and fixed during this verification** (2026-07-18, not filed as separate OI entries since both were fixed immediately, not deferred):
+1. **`Paddle.Checkout.open()`'s `settings.successUrl` caused a genuine full-page browser reload on checkout completion** — confirmed via Paddle's own docs ("Handle checkout success": passing `successUrl` navigates the parent window there) and via the network log (a hard `GET /settings` reloading every JS module). This violated FR-003/US2 AC1 ("no full-page redirect") and raced with the in-flight `verify-transaction` fetch, silently losing the tier grant. Fixed in `connect-four/src/lib/useUpgradeCheckout.js`: `successUrl` is no longer passed to `Paddle.Checkout.open()`; `handleCheckoutCompleted` now explicitly calls `paddle.Checkout.close()` once `verify-transaction` resolves, keeping the whole flow in-app with no navigation.
+2. **`verifyTransaction`'s single check ran before Paddle's own transaction record had settled to `completed`** — confirmed via Paddle's docs (`build/checkout/upsell-checkout`: "this typically takes less than a second") and live repro (the same transaction, re-queried via the Paddle API a few seconds later, showed `status: 'completed'` when the immediate check had returned an earlier status). This silently defeated the synchronous activation fallback for every real checkout. Fixed in `connect-four/server/paddleProcessor.js`: `verifyTransaction` now does one bounded retry after a 1200ms delay before concluding `not_completed` — not an open-ended poll, consistent with this feature's single-check design, but enough to cover Paddle's documented settle time.
+
+Also fixed in the same pass, per user request: the checkout's quantity stepper (nonsensical for a single-seat subscription) was removed by setting `quantity: { minimum: 1, maximum: 1 }` on both Paddle prices via the Paddle API (`client.prices.update`) — Paddle's overlay checkout has no client-side setting to hide it; the quantity-limit approach is Paddle's own documented workaround (`build/checkout/pass-update-checkout-items`).
+
+`npm run test:fast`: 1417/1417 passing after all fixes.
+
+---
+**Original entry (superseded by the above, kept for history):**
+
+~~**Status**: deferred (found during spec 050 US2 manual T029 verification, 2026-07-18; needs a one-time manual dashboard action, no code fix)~~
+**Area**: Paddle sandbox dashboard account settings (external to the repo) — affects `connect-four/src/lib/useUpgradeCheckout.js`'s manual verification only
+
+Opening the Paddle.js overlay checkout in this sandbox account (after fixing OI's sibling `successUrl` bug — see the `useUpgradeCheckout.js` fix landed in spec 050 US2 T023) renders a **"Something went wrong"** dialog instead of the checkout form. Root-caused via the `paddle-docs` MCP: every Paddle account (sandbox or live) requires a **default payment link** set under **Paddle > Checkout > Checkout settings > Default payment link** before `Paddle.Checkout.open()` will render anything; this sandbox account (verified via `checkoutDomains.list()` and the absence of any working checkout) has none configured, and no API method is exposed to a direct (non-partner-embedded) seller account to set it programmatically — `PATCH /settings/account` is documented only under the partner/embed-billing seller-API-key surface, not for a direct seller's own sandbox account.
+
+**Impact**: blocks the card-entry portion of T029's manual verification (completing a sandbox checkout with test card `4242 4242 4242 4242` on both plans, confirming the transaction appears in the sandbox Transactions dashboard). Everything upstream of this — `GET /api/paddle/config`, `POST /api/paddle/create-checkout`, Paddle.js `initializePaddle()`/`Checkout.open()` being invoked with correct sandbox-environment args, no full-page navigation (URL bar never changed host/path) — was verified working via Chrome DevTools MCP against the running dev server.
+
+**Why deferred**: requires a one-time manual action in the Paddle sandbox dashboard (`https://sandbox-vendors.paddle.com/checkout-settings`, set Default payment link to e.g. `http://localhost:5173/` or any placeholder — sandbox doesn't verify it), which no available tool (MCP or otherwise) can perform on this account's behalf.
+
+**If picked up**: sign in to `https://sandbox-vendors.paddle.com/checkout-settings`, set the Default payment link field to any URL (`http://localhost/` is Paddle's own suggested placeholder), save, then re-run T029's card-entry steps.
+
+## OI-55 — Paddle tier-grant identity (`customData.app_user_id`) is client-supplied with no server-side binding
+
+**Status**: partially resolved (2026-07-18, unreviewed judgment call — see below; not a rubber-stamped requirement, sanity-check before trusting it as settled)
+**Area**: `connect-four/server/paddleProcessor.js` (`createCheckout`, `handleWebhook`), `connect-four/src/lib/useUpgradeCheckout.js`
+
+`server/paddleRoutes.js` calls `createCheckout({ userId: req.user.id, ... })`, but `createCheckout` never uses `userId` — it's silently dropped. The frontend independently sets `customData: { app_user_id: session?.user?.id }` when opening the Paddle.js overlay, reading it from client-side React store state. `handleWebhook`'s `transaction.completed` branch trusts `data.customData?.app_user_id` unconditionally to decide which user's tier to flip to `'paid'`, with no server-side cross-check — unlike `verifyTransaction` (the sync fallback), which does check `customData.app_user_id` against the authenticated `req.user.id`.
+
+A code-review verification pass ruled out the session-load-race variant of this concern (the UI gates all screens on `sessionChecked`, so `session.user.id` is guaranteed populated by the time Upgrade is clickable). What remains is a forgery vector: since Paddle's `custom_data` is plain client-supplied checkout metadata that Paddle echoes back verbatim on the webhook with no re-validation, a user could edit `customData.app_user_id` via devtools before opening the overlay and have a real payment grant paid tier to an arbitrary account — though the practical incentive is unclear (the attacker spends real money to upgrade someone else's account, not their own).
+
+**Why deferred**: fixing this requires an architecture decision (e.g. binding checkout to a Paddle-side `customer_id` created server-side and looked up on `handleWebhook`, vs. accepting client-supplied `custom_data` as the standard/expected Paddle integration pattern) rather than a safe one-line patch. Paddle's own `checkout-web` skill docs don't offer a stronger built-in binding mechanism for this exact case.
+**If picked up**: decide whether to harden this (e.g. only trust `custom_data` on a user's *first* payment, and cross-check `data.customerId` against an already-established `users.paddle_customer_id` for every subsequent event) or explicitly accept the current trust model as adequate for this app's risk profile; document the decision in `docs/architecture/server-conventions.md`'s "PaymentProcessor Seam" section either way.
+
+**Resolved (2026-07-18, non-interactive judgment call, NOT human-reviewed)**: implemented the harden direction. `handleWebhook`'s `transaction.completed` branch now reads `users.paddle_customer_id` for the target userId before granting tier; a user's first-ever payment (no established `paddle_customer_id`) is still trusted as before (nothing to cross-check against), but every subsequent `transaction.completed` claiming that userId must match the already-established `paddle_customer_id` or the tier/`tracks` write is skipped (`{ handled: true, eventType, securityRejected: true }`, logged via `logError`) rather than granted. See `docs/architecture/server-conventions.md`'s new "Identity binding on `transaction.completed` (OI-55)" subsection (under "PaymentProcessor Seam") for the full behavior, and `server/paddleProcessor.test.mjs`'s 4 new `OI-55:` test cases. **This does NOT close the first-payment forgery window** (a forged `customData.app_user_id` on the TARGET account's own first payment is still possible in principle) — closing that fully needs a different binding mechanism (e.g. a server-minted Paddle customer id at checkout time) and was judged out of scope for this pass. Flagging explicitly: this direction was chosen unilaterally because no human was available to make the product-risk call the issue originally asked for — treat it as a proposal to sanity-check, not settled policy.
+
+## OI-56 — Paddle migration dropped two test-coverage areas with no replacement
+
+**Status**: resolved (2026-07-18)
+**Area**: `connect-four/tests/unit/paddlePrices.test.js`, `connect-four/server/paddleProcessor.test.mjs`
+
+1. The deleted `tests/unit/stripePrices.test.js` covered `computeAnnualSavings`/`formatPrice` pure-function logic (discount math, null-safety, es/en locale suffix behavior, and a named regression guard for a "doubled `/mo/mo`" bug). These functions now live in `src/lib/usePaddlePrices.js` and are still used in production (`src/components/UpgradeModal.jsx`), but no test file calls them post-migration — `paddlePrices.test.js` only covers `GET /api/paddle/config` route wiring.
+2. The deleted `server/stripeRoutes.substitutability.test.mjs` built a real Express app + `http.createServer` and sent real HTTP requests to `/api/stripe/webhook`, exercising the route's own raw-body middleware ordering end-to-end. `paddleProcessor.test.mjs` only calls `handleWebhook(...)` as a plain function — no test exercises `/api/paddle/webhook` over real HTTP, so a future accidental reordering of `express.raw()` ahead of the global JSON parser in `server/index.js` would go undetected by the suite.
+
+**Why deferred**: both are genuine regression-coverage gaps but require writing new test suites rather than a quick fix; the underlying production code is confirmed correct today (verified by manual/live checks during batch implementation and QA).
+**If picked up**: (1) port `stripePrices.test.js`'s pure-function cases to call `computeAnnualSavings`/`formatPrice` directly from `usePaddlePrices.js`; (2) add an HTTP-level test (real Express app + `http.createServer`, mirroring the deleted Stripe test's pattern) that POSTs a signed payload to `/api/paddle/webhook` and asserts the raw-body middleware ordering holds.
+
+**Resolved (2026-07-18)**: (1) `connect-four/tests/unit/usePaddlePrices.test.js` ports all 8 of `stripePrices.test.js`'s cases verbatim (fixtures unchanged) against `computeAnnualSavings`/`formatPrice` in `src/lib/usePaddlePrices.js` — confirmed red-for-the-right-reason by temporarily reintroducing the "doubled /mo/mo" bug (`interval: 'month'` instead of `null` in `computeAnnualSavings`'s `perMonth`) and observing the regression-guard test fail, then reverting. (2) `connect-four/server/paddleWebhookHttp.test.mjs` builds a real Express app + `http.createServer`, mounts the exact two middleware lines `server/index.js` uses (route-scoped `express.raw()` before the global `express.json()`), and POSTs an HMAC-SHA256-signed payload (mirroring the real Paddle Node SDK's `ts=<unix>;h1=<hex>` / `${ts}:${rawBody}` algorithm, confirmed against the paddle-docs MCP) to `/api/paddle/webhook` via a mock `paddleClient.webhooks.unmarshal` that performs the actual verification math against whatever raw bytes arrive. A second test in the same file builds an app with the two middlewares in the WRONG order and asserts the request now fails signature verification — proving the correct-ordering test is not vacuous. Both files are wired into `package.json`'s `test` and `test:fast` scripts. `npm run test:fast`: 1417/1417 passing (1402 baseline + 8 new `usePaddlePrices.test.js` cases + 3 new `paddleWebhookHttp.test.mjs` cases + 4 new OI-55 `paddleProcessor.test.mjs` cases).
+
+## OI-57 — Paddle Node SDK import blocks server boot path
+
+**Status**: resolved (2026-07-18)
+**Area**: `connect-four/server/index.js` (Paddle wiring block, ~line 2833)
+
+`await import('@paddle/paddle-node-sdk')` runs as a dynamic import mid-module in `index.js`, serializing every top-level statement after it (including the final `app.listen(...)`) behind the import's resolution — unlike a static top-level `import`, which Node's module loader would resolve concurrently with the file's other imports.
+
+**Why deferred**: adds avoidable but small startup latency on every boot/restart when `PADDLE_API_KEY` is set (dev restarts, CI, prod deploys); no correctness impact.
+**If picked up**: convert to a static `import { Paddle, Environment } from '@paddle/paddle-node-sdk'` at the top of `server/index.js`, then only construct the client conditionally inside the existing `if (process.env.PADDLE_API_KEY)` block (the SDK's presence in `node_modules` is guaranteed since it's now a hard dependency).
+
+**Resolved (2026-07-18)**: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.

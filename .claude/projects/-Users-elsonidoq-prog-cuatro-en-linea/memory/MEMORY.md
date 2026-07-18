@@ -27,8 +27,8 @@
 - [Auth flow traps](project_auth_flow_traps.md) — two supabase clients; GoTrue skips on_auth_user_created; NO route guard → CTA gate ≠ screen gate; deleteDatabase hangs sign-in
 - [Unapplied migration = silent 204](project_user_column_propagation.md) — PostgREST drops unknown columns from UPDATE → 204 persists nothing; no server hot-reload
 - [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl
-- [Stripe traps](project_stripe_traps.md) — mocks miss column/grant bugs; whsec PER-ENDPOINT; account is a SANDBOX; prices immutable; unset key 503s all; NOW migrating to Paddle
-- [Paddle integration](project_paddle_integration.md) — chosen MoR (Stripe unavailable in AR); MCP keys from CC env NOT server/.env (restart); Billing not Classic; legal pages via PR off main
+- [Stripe traps](project_stripe_traps.md) — OBSOLETE 2026-07-18 (Stripe fully removed); historical context only, do not use for current work
+- [Paddle integration](project_paddle_integration.md) — SHIPPED provider; MCP keys from CC env NOT server/.env; Billing not Classic; Paddle.js defaults to PROD (set sandbox+test_); successUrl/quantity/verifyTransaction fixes post-ship; domain review AND identity verify both gate live
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
 - [session-stats byPattern always empty](project_stats_architecture.md) — /api/user/session-stats/all reads stats.byPattern; stored shape is flat category keys (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
@@ -81,6 +81,8 @@
 
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
+- [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
+- [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — per-task review can't see the JOIN between two correct halves (server seam+client never asks; producer green+render wrong; endpoint takes param+button never sends); drive the cross-task path end-to-end
 - [Process & agent preferences](feedback_process_and_agent_preferences.md) — sizing bars; scope is a diff you MEASURE; Opus critique/Sonnet apply; AskUserQuestion ≥2 opts, never `preview` for text
 - [Open-issues destination](feedback_open_issues_destination.md) — deferred/latent bugs → docs/open_issues.md (OI-N), NOT memory
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — docs/superpowers/ is throwaway; migrate durable info to docs/architecture/
