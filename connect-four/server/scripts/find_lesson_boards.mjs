@@ -95,6 +95,30 @@ const SPECS = {
     return null;
   },
 
+  // L06 s4: stacked-column z-threat — same as z_threat_gap3 but the column must
+  // already hold discs, and the stack height must be EVEN so that row-parity
+  // intuition and the count disagree: with height h and gap 3 the threat sits at
+  // 0-ind row h+2, i.e. 1-based row h+3, which is ODD when h is even — "Green's
+  // natural row" by raw row parity, yet the odd count (3) makes it Gray's z-threat.
+  // (gap 1 is excluded by construction: gap 1 means the threat is gravity-top, an
+  // immediate threat — the degenerate case a z-threat lesson must avoid.)
+  z_threat_stacked: async (pos, board) => {
+    if (pos.ms.length < 8 || pos.ms.length > 22) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the z-threat
+    for (const [col, rows] of board.reachableThreats(2)) {
+      for (const r of rows) {
+        const h = board.colHeights[col];
+        const gap = r - h + 1;                               // inclusive cell count, KB formula
+        if (gap === 3 && h >= 2 && h % 2 === 0) {
+          const extra = extraThreats(board, [{ col, row: r }]);
+          if (extra > 2) return null;
+          return { col, row: r, gap, stackHeight: h, extraThreats: extra };
+        }
+      }
+    }
+    return null;
+  },
+
   // L06 s3: same shape but gap EXACTLY 2 (the non-z counterexample).
   z_threat_gap2: async (pos, board) => {
     if (pos.ms.length < 8 || pos.ms.length > 20) return null;
