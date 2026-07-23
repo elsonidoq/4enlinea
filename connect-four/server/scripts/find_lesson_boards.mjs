@@ -25,19 +25,20 @@ const maxScore  = (scores) => Math.max(...legalCols(scores).map(c => scores[c]))
 // didn't matter", which is worse than not teaching it at all (pilot z-threat
 // candidate 1 was exactly this).
 //
-// `pos.scores` is ALWAYS from the SIDE TO MOVE's perspective, so the check is
-// necessarily asymmetric depending on whether the pattern owner IS the side to move:
+// `pos.scores` are exact minimax values from the SIDE TO MOVE's perspective, so the
+// check is symmetric once expressed that way, but the sign flips depending on
+// whether the pattern owner IS the side to move:
 //   - owner === side to move: their own best legal continuation must not be losing,
 //     i.e. maxScore(pos.scores) >= 0.
-//   - owner !== side to move (the opponent is on move): we don't have the owner's
-//     own scores, only the mover's. The only unambiguous "owner is dead" signal
-//     available is the mover winning with EVERY legal reply (every score > 0) --
-//     that proves the owner loses no matter what. Anything short of that (a mixed
-//     board where the mover has at least one non-winning reply) still teaches
-//     something about the pattern, so it's kept.
+//   - owner !== side to move (the opponent/mover is on move): maxScore(pos.scores)
+//     is the mover's best guaranteed outcome. If it is > 0, the mover has a FORCED
+//     WIN against perfect play, which means the owner is dead lost no matter what
+//     they do -- reject. So the owner survives only when maxScore(pos.scores) <= 0
+//     (mover's best is a draw or a loss for the mover, i.e. a non-losing outcome
+//     for the owner).
 function ownerNotLost(pos, owner) {
   if (owner === pos.player) return maxScore(pos.scores) >= 0;
-  return !legalCols(pos.scores).every(c => pos.scores[c] > 0);
+  return maxScore(pos.scores) <= 0;
 }
 
 // --- Refinement 3: cleanliness cap -----------------------------------------------
@@ -51,8 +52,18 @@ function countMajorThreats(board) {
   }
   return total;
 }
+// Only subtract patternCells that are themselves counted in countMajorThreats (i.e.
+// actual empty major-threat cells for some player). Some tag: specs (figure_7,
+// j_shape) report their pattern's OCCUPIED disc cells in `cells` -- those are never
+// threat cells and must not be subtracted, or the count is deflated by up to 5.
+// Consequence: for those pattern-piece tags, the pattern's own pair of threat cells
+// (if the pattern also happens to create empty completing cells) is NOT excluded
+// from the count, so a "clean" figure-7/j_shape reads extraThreats=2 (its own
+// threat pair) rather than 0 -- the >2 cap for those tags means "no unrelated
+// threats beyond the pattern's own pair", not "zero threats besides the pattern".
 function extraThreats(board, patternCells) {
-  return countMajorThreats(board) - patternCells.length;
+  const isThreat = ({ col, row }) => [1, 2].some(p => (board.reachableThreats(p).get(col) ?? []).includes(row));
+  return countMajorThreats(board) - patternCells.filter(isThreat).length;
 }
 // Converts a classifier "cNrM" 1-indexed cell string (e.g. from tags.get(tag).cells)
 // into a 0-indexed { col, row } pair matching board.reachableThreats' coordinates.
