@@ -19,6 +19,48 @@ function mulberry32(a) {
 const legalCols = (scores) => [...Array(7).keys()].filter(c => scores[c] > -1000);
 const maxScore  = (scores) => Math.max(...legalCols(scores).map(c => scores[c]));
 
+// --- Refinement 2: owner-not-lost gate -------------------------------------------
+// A spec matches a *pattern* (e.g. "Gray owns a z-threat"), but that's not enough --
+// if the pattern owner is already dead lost, the board teaches "having the pattern
+// didn't matter", which is worse than not teaching it at all (pilot z-threat
+// candidate 1 was exactly this).
+//
+// `pos.scores` is ALWAYS from the SIDE TO MOVE's perspective, so the check is
+// necessarily asymmetric depending on whether the pattern owner IS the side to move:
+//   - owner === side to move: their own best legal continuation must not be losing,
+//     i.e. maxScore(pos.scores) >= 0.
+//   - owner !== side to move (the opponent is on move): we don't have the owner's
+//     own scores, only the mover's. The only unambiguous "owner is dead" signal
+//     available is the mover winning with EVERY legal reply (every score > 0) --
+//     that proves the owner loses no matter what. Anything short of that (a mixed
+//     board where the mover has at least one non-winning reply) still teaches
+//     something about the pattern, so it's kept.
+function ownerNotLost(pos, owner) {
+  if (owner === pos.player) return maxScore(pos.scores) >= 0;
+  return !legalCols(pos.scores).every(c => pos.scores[c] > 0);
+}
+
+// --- Refinement 3: cleanliness cap -----------------------------------------------
+// Counts every major-threat cell (both players, from `board.reachableThreats`) minus
+// the cells that belong to the matched pattern itself, so cluttered boards (extra
+// unrelated threats fighting for the learner's attention) can be capped/sorted on.
+function countMajorThreats(board) {
+  let total = 0;
+  for (const player of [1, 2]) {
+    for (const [, rows] of board.reachableThreats(player)) total += rows.length;
+  }
+  return total;
+}
+function extraThreats(board, patternCells) {
+  return countMajorThreats(board) - patternCells.length;
+}
+// Converts a classifier "cNrM" 1-indexed cell string (e.g. from tags.get(tag).cells)
+// into a 0-indexed { col, row } pair matching board.reachableThreats' coordinates.
+function parseCellStr(s) {
+  const [, colStr, rowStr] = /^c(\d+)r(\d+)$/.exec(s);
+  return { col: Number(colStr) - 1, row: Number(rowStr) - 1 };
+}
+
 // A "spec" answers: does this position teach the thing? Return null to reject, or
 // a detail object (merged into the candidate printout) to accept.
 // Every spec receives (pos = {ms, scores, player}, board = new Board(pos.ms), solver).
@@ -28,10 +70,15 @@ const SPECS = {
   // already decided against the side to move by more than a normal margin.
   z_threat_gap3: async (pos, board) => {
     if (pos.ms.length < 8 || pos.ms.length > 20) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the z-threat
     for (const [col, rows] of board.reachableThreats(2)) {
       for (const r of rows) {
         const gap = r - board.colHeights[col] + 1;           // inclusive cell count, KB formula
-        if (gap === 3) return { col, row: r, gap };
+        if (gap === 3) {
+          const extra = extraThreats(board, [{ col, row: r }]);
+          if (extra > 2) return null;
+          return { col, row: r, gap, extraThreats: extra };
+        }
       }
     }
     return null;
@@ -40,10 +87,15 @@ const SPECS = {
   // L06 s3: same shape but gap EXACTLY 2 (the non-z counterexample).
   z_threat_gap2: async (pos, board) => {
     if (pos.ms.length < 8 || pos.ms.length > 20) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the z-threat
     for (const [col, rows] of board.reachableThreats(2)) {
       for (const r of rows) {
         const gap = r - board.colHeights[col] + 1;
-        if (gap === 2) return { col, row: r, gap };
+        if (gap === 2) {
+          const extra = extraThreats(board, [{ col, row: r }]);
+          if (extra > 2) return null;
+          return { col, row: r, gap, extraThreats: extra };
+        }
       }
     }
     return null;
@@ -53,6 +105,7 @@ const SPECS = {
   // SAME ROW in another column with an even gap — the "same row, opposite ownership" contrast.
   z_threat_socratic: async (pos, board) => {
     if (pos.ms.length % 2 !== 1) return null;                // Gray to move -> learner plays Gray
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns both cells in the contrast
     const gaps = [];
     for (const [col, rows] of board.reachableThreats(2)) {
       for (const r of rows) {
@@ -62,19 +115,25 @@ const SPECS = {
     }
     const z  = gaps.find(t => t.gap % 2 === 1);
     const nz = gaps.find(t => t.gap % 2 === 0 && z && t.row === z.row && t.col !== z.col);
-    return z && nz ? { zthreat: z, distractor: nz } : null;
+    if (!z || !nz) return null;
+    const extra = extraThreats(board, [{ col: z.col, row: z.row }, { col: nz.col, row: nz.row }]);
+    if (extra > 2) return null;
+    return { zthreat: z, distractor: nz, extraThreats: extra };
   },
 
   // L09 slides/socratic: Allen-T2 adjacent undercut — Gray threat at row R, Green threat
   // at R+1 directly above, SAME column, both latent. Learner side = Gray.
   undercut_t2_adjacent: async (pos, board) => {
     if (pos.ms.length < 10 || pos.ms.length > 22) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the undercut threat
     const gray  = board.reachableThreats(2);
     const green = board.reachableThreats(1);
     for (const [col, rows] of gray) {
       for (const r of rows) {
         if ((green.get(col) ?? []).includes(r + 1) && r > board.colHeights[col]) {
-          return { col, lower: r, upper: r + 1 };
+          const extra = extraThreats(board, [{ col, row: r }, { col, row: r + 1 }]);
+          if (extra > 2) return null;
+          return { col, lower: r, upper: r + 1, extraThreats: extra };
         }
       }
     }
@@ -85,11 +144,16 @@ const SPECS = {
   // rows two apart.
   same_parity_pair: async (pos, board) => {
     if (pos.ms.length < 10 || pos.ms.length > 22) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the lower threat
     const gray  = board.reachableThreats(2);
     const green = board.reachableThreats(1);
     for (const [col, rows] of gray) {
       for (const r of rows) {
-        if ((green.get(col) ?? []).includes(r + 2)) return { col, lower: r, upper: r + 2 };
+        if ((green.get(col) ?? []).includes(r + 2)) {
+          const extra = extraThreats(board, [{ col, row: r }, { col, row: r + 2 }]);
+          if (extra > 2) return null;
+          return { col, lower: r, upper: r + 2, extraThreats: extra };
+        }
       }
     }
     return null;
@@ -107,10 +171,19 @@ const SPECS = {
     }
     const best = maxScore(pos.scores);
     if (best <= 0) return null;                              // fork must win, not save
+    // owner === pos.player here (side to move creates the fork); `best > 0` above is
+    // already strictly stronger than ownerNotLost's `maxScore >= 0`, so no separate
+    // owner-not-lost call is needed for this spec.
     for (const c of legalCols(pos.scores)) {
       if (pos.scores[c] !== best) continue;
       const tags = await classifyPattern(pos.ms + String(c), pos.player, solver);
-      if (tags.has('double_threat')) return { forkCol: c, score: pos.scores[c] };
+      if (tags.has('double_threat')) {
+        // the fork's own cells live on the post-move board, not this one, so there
+        // are no "pattern cells" to exclude here -- count all pre-move threat clutter
+        const extra = extraThreats(board, []);
+        if (extra > 2) return null;
+        return { forkCol: c, score: pos.scores[c], extraThreats: extra };
+      }
     }
     return null;
   },
@@ -129,11 +202,18 @@ async function main() {
   let spec = SPECS[specArg];
   if (!spec && specArg?.startsWith('tag:')) {
     const tag = specArg.slice(4);
-    spec = async (pos, _board, solver_) => {
+    spec = async (pos, board, solver_) => {
       if (pos.ms.length < 8 || pos.ms.length > 24) return null;
-      if (maxScore(pos.scores) < 0) return null;             // side to move must not be lost
+      // tag: specs' owner is always the side to move (pos.player) -- see ownerNotLost's
+      // to-move branch above (require maxScore(pos.scores) >= 0). The not-to-move branch
+      // never applies here since a tag is always evaluated for whoever is on move.
+      if (!ownerNotLost(pos, pos.player)) return null;
       const tags = await classifyPattern(pos.ms, pos.player, solver_);
-      return tags.has(tag) ? { tag, cells: tags.get(tag).cells } : null;
+      if (!tags.has(tag)) return null;
+      const cells = tags.get(tag).cells;                     // "cNrM" 1-indexed strings
+      const extra = extraThreats(board, cells.map(parseCellStr));
+      if (extra > 2) return null;
+      return { tag, cells, extraThreats: extra };
     };
   }
   if (!spec) {
@@ -154,7 +234,8 @@ async function main() {
       console.log(`    detail=${JSON.stringify(detail)}`);
       console.log(`    scores=${JSON.stringify(pos.scores)}`);
       console.log(`    render: ./visualize_board.sh ${pos.ms}`);
-      if (found >= count) break;
+      break; // Refinement 1: one candidate per game -- later plies of the same self-play
+             // trajectory are near-prefixes of this one, so stop searching this game now.
     }
   }
   solver.destroy();
