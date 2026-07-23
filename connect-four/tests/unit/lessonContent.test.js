@@ -26,6 +26,7 @@ const REMEDIATED = new Set([
   'opening-imitate',
   'claimeven',
   'z-threats',
+  'undercut',
 ]);
 
 // Task 12 empties this allowlist when it de-templates the socratic ask messages.
