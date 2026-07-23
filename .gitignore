@@ -6,3 +6,6 @@ supabase
 *jsonl
 win_distribution_data
 .DS_Store
+
+# SDD execution scratch (progress ledger, task briefs) — never committed
+.superpowers/
