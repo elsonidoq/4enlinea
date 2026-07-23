@@ -24,6 +24,7 @@ const REMEDIATED = new Set([
   'the-fork',
   'opening-centre',
   'opening-imitate',
+  'claimeven',
 ]);
 
 // Task 12 empties this allowlist when it de-templates the socratic ask messages.
