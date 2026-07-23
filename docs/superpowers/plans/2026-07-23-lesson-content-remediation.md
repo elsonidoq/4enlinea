@@ -237,8 +237,18 @@ async function main() {
 main();
 ```
 
-- [ ] **Step 2: Smoke-test each spec** (from `connect-four/`, solver built per Global Constraints): `node server/scripts/find_lesson_boards.mjs z_threat_gap3 --count 2`, then `tag:figure_7 --count 2`. Expected: candidates print with scores; if `reachableThreats` turns out to be gravity-top-only (its exact latency semantics are the one unverified assumption in this task — the CRIT session confirmed it returns above-gravity rows for undercut/z-threat detection at `classifier.js:882` `const count = threatRow - board.colHeights[col] + 1`, but confirm empirically), adjust specs to use `getMajorThreatCells(board)` (`classifier.js:145`) instead.
-- [ ] **Step 3: Commit** with a header comment marking it disposable curation tooling.
+- [x] **Step 2: Smoke-test each spec** (from `connect-four/`, solver built per Global Constraints): `node server/scripts/find_lesson_boards.mjs z_threat_gap3 --count 2`, then `tag:figure_7 --count 2`. Expected: candidates print with scores; if `reachableThreats` turns out to be gravity-top-only (its exact latency semantics are the one unverified assumption in this task — the CRIT session confirmed it returns above-gravity rows for undercut/z-threat detection at `classifier.js:882` `const count = threatRow - board.colHeights[col] + 1`, but confirm empirically), adjust specs to use `getMajorThreatCells(board)` (`classifier.js:145`) instead.
+- [x] **Step 3: Commit** with a header comment marking it disposable curation tooling.
+
+**Pilot results (2026-07-23, script committed as written above).** Both hard specs produced verified candidates in minutes on a fresh Linux solver build; `reachableThreats` confirmed to include above-gravity threat cells (no `getMajorThreatCells` fallback needed).
+
+- `z_threat_gap3` (seed 42, 60 games): keeper `33344434334252` — Gray major threat 0-ind (5,3) over a 1-disc column (gap exactly 3, latent) **plus** a Green major threat 0-ind (2,3) with gap 2 on the same board: one position serves L06 s1/s2 (odd gap) *and* s3's even-gap counterexample. `scr` row: `-5 3 3 -- 3 3 3` (Green to move, alive).
+- `tag:figure_7` (seed 7, 120 games): keeper `2423422445633136` — Green five-disc figure-7 (detector cells `c3r2,c4r3,c3r4,c4r4,c5r4`), both threat cells stacked at 0-ind (5,3)/(5,4), **both above gravity** (pure zugzwang form, KB-canonical). `scr` row: `9 9 9 10 9 11 9`. The detector's five `pattern` cells also empirically confirm the KB five-disc shape against L11's "four discs" copy. One blemish: a second threat pair in col 2 (clutter — see refinement 3).
+
+- [ ] **Step 4 (from pilot learnings): three spec refinements before production use**
+  1. **Dedup per game:** `break` out of the per-game loop after the first accepted candidate (pilot's z-threat candidates 1–3 were prefixes of one game).
+  2. **Owner-not-lost gate:** reject positions where the pattern owner is dead lost (pilot z-threat candidate 1 had Gray owning the z-threat while every Gray continuation scored negative — a board that teaches "having the threat didn't matter"). Concretely: when the owner is the side to move require `maxScore(pos.scores) >= 0`; otherwise require the *opponent's* max `<= 0` is NOT satisfied trivially — implement as: query `solver.query(pos.ms)` is already `pos.scores` (side to move); for owner-not-to-move, accept only if `maxScore(pos.scores) <= 0` is false OR the slide explicitly teaches a doomed position.
+  3. **Cleanliness cap:** count major threat cells (both players) NOT part of the matched pattern/detail; reject candidates with more than 2 extras (pilot figure-7 keeper carries a second pair in col 2 — usable, but the filter should *prefer* cleaner ones by emitting the extra-threat count in `detail` so the human selector can sort on it).
 
 ---
 
