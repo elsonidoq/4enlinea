@@ -5,7 +5,7 @@
 // Usage (from connect-four/):  node server/scripts/find_lesson_boards.mjs <spec> [--count 5] [--seed 42] [--games 400]
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { playGame } from '../gameSampling.js';
-import { Board, classifyPattern } from '../classifier.js';
+import { Board, classifyPattern, detectFigure7, detectJShape } from '../classifier.js';
 
 function mulberry32(a) {
   return function () {
@@ -222,7 +222,30 @@ async function main() {
       const tags = await classifyPattern(pos.ms, pos.player, solver_);
       if (!tags.has(tag)) return null;
       const cells = tags.get(tag).cells;                     // "cNrM" 1-indexed strings
-      const extra = extraThreats(board, cells.map(parseCellStr));
+      let patternCells = cells.map(parseCellStr);
+      // figure_7/j_shape's `cells` are the pattern's OCCUPIED disc cells (role:
+      // 'pattern_piece'), never the pattern's own completing threat cells -- without
+      // folding those in too, extraThreats would count them as "extra" even on an
+      // otherwise-clean board. detectFigure7 exposes the true empty completing cells
+      // via its `threatCells` field (classifier.js:1045-1055 -- kernel.emptyCells
+      // mapped through the match anchor, 0-indexed {row,col}); re-run it directly
+      // (same board/scores/perspective) and concatenate those cells in.
+      // detectJShape has NO equivalent field in its return value (classifier.js:1074-1092
+      // returns only matched/cells/highlightMetadata/categoryEvidence -- all
+      // pattern-piece cells), even though the J kernel does define emptyCells
+      // (classifier.js:822-834, 3 cells vs figure_7's 2). Obtaining j_shape's real
+      // threat cells would require classifier.js to expose them (as detectFigure7
+      // does) or exporting `convolve`/`J`/`J_FLIPPED`, which is out of scope for this
+      // script-only fix -- so this branch is a documented no-op for j_shape rather
+      // than a guessed value (see task-1-report.md for this gap).
+      if (tag === 'figure_7' || tag === 'j_shape') {
+        const detectFn = tag === 'figure_7' ? detectFigure7 : detectJShape;
+        const result = detectFn(board, pos.scores, pos.player);
+        if (result.matched && result.threatCells) {
+          patternCells = patternCells.concat(result.threatCells.map(t => ({ col: t.col, row: t.row })));
+        }
+      }
+      const extra = extraThreats(board, patternCells);
       if (extra > 2) return null;
       return { tag, cells, extraThreats: extra };
     };
