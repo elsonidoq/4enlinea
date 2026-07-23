@@ -36,7 +36,9 @@ async function checkLesson(lesson, solver) {
     rows.push(...overlayRows(s, `slides[${i}]`, new Board(s.movestring)));
   }
   const soc = lesson.socratic;
-  if (soc && typeof soc.movestring === 'string') {
+  if (soc && typeof soc.movestring !== 'string') {
+    rows.push({ where: 'socratic', ok: false, why: 'no movestring' });
+  } else if (soc && typeof soc.movestring === 'string') {
     const scores = await solver.query(soc.movestring);
     const max = maxLegal(scores);
     const okBest = scores[soc.correctCol] === max;
