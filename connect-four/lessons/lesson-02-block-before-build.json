@@ -8,7 +8,7 @@
       "movestring": "3332324445",
       "coachMessages": [
         {
-          "text": "Green has three discs in a row with one empty square to complete the four. What is Gray's only safe move?",
+          "text": "Gray has three discs in a row with one empty square to complete the four. What is Green's only safe move?",
           "mood": "think"
         }
       ],
@@ -46,7 +46,7 @@
       "legendItems": [
         {
           "type": "win",
-          "label": "Winning move"
+          "label": "Gray's three in a row"
         },
         {
           "type": "td",
@@ -134,20 +134,21 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Opponent's immediate threat (block this)"
+          "label": "Gray's immediate threat (the forced block)"
         },
         {
           "type": "tg",
-          "label": "User threat"
+          "label": "Green is building here (not yet a threat)"
         }
       ],
-      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Green discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
+      "_overlayIntent": "annotation",
+      "infoProse": "The direction doesn't change the urgency. A vertical stack, a diagonal, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square completes the four, and the block is forced. Here Gray's diagonal three must be blocked at the bottom of the first column right away — Green's own diagonal is still two squares short, so building it does not answer an immediate threat."
     },
     {
       "movestring": "3333332122454422126151",
       "coachMessages": [
         {
-          "text": "Green has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
+          "text": "Gray has three in a row — but is the completing square actually reachable this turn? Look carefully before blocking.",
           "mood": "think"
         }
       ],
@@ -182,8 +183,8 @@
           "type": "td"
         },
         {
-          "c": 4,
-          "r": 3,
+          "c": 1,
+          "r": 4,
           "type": "tg"
         },
         {
@@ -200,7 +201,7 @@
       "legendItems": [
         {
           "type": "win",
-          "label": "Gray's connected disks"
+          "label": "Gray's connected discs"
         },
         {
           "type": "td",
@@ -208,14 +209,14 @@
         },
         {
           "type": "tg",
-          "label": "Green should build here instead"
+          "label": "Green can even win right now — the buried threat changes nothing"
         },
         {
           "type": "claim",
           "label": "Empty cells below the threat"
         }
       ],
-      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for gray?"
+      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn, so Green does not need to spend a move blocking it. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. Here the check pays off at once: instead of blocking a threat that isn't real yet, Green is free to play the strongest move on the board — and in the second column Green can even win immediately.\n\nCan you spot another similar case on this board for Gray?"
     }
   ],
   "socratic": {
@@ -295,8 +296,8 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "7d335e8c-549a-4364-b052-6aa2086ce8c3",
-      "moveString": "236343326044152605",
+      "puzzleId": "0eb165aa-2235-4e84-9577-aa03769cb951",
+      "moveString": "34133344142",
       "goalPrompt": "Block your opponent's threat.",
       "goalPredicateType": "forced_block",
       "goalPredicateParams": {},
@@ -304,7 +305,7 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 2
     },
     {
       "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",
