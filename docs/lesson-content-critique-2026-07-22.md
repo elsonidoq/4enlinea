@@ -354,3 +354,27 @@ Coverage counts (fields with `_es` siblings per file; walker fields per `scripts
 ---
 
 *Verification data for this review (solver outputs per movestring) was generated with `./visualize_board.sh` on 2026-07-22; the Linux solver binary was built locally from `connect-four/solver-src` for this session and not committed.*
+
+---
+
+## Remediation status (2026-07-24)
+
+Outcome of the remediation branch (`claude/lesson-content-critique-349px7`), as verified by the final whole-branch review on 2026-07-24.
+
+| Finding | Outcome | Notes |
+|---|---|---|
+| X1 — placeholder boards | **FIXED** | All six placeholder lessons rebuilt on solver-verified boards; zero `<board instructions` blocks remain; strict tests enforce this for all 13 lessons. |
+| X2 — solver-refuted content | **FIXED** | L02 s4 overlay, L03 socratic board, L05 challenge prompts, figure-7 ch1, and both lost-position challenges replaced; full `verify_lesson_content.mjs` sweep all-PASS. |
+| X3 — color swaps | **FIXED** | Includes the L12 "Green shifted" survivor caught at the whole-branch review (fixed in the final copy wave). |
+| X4 — voice contract | **FIXED** | Final L02 s2 remnant fixed in the final copy wave; generic reader-"you" is allowed by the contract. |
+| X5 — coordinate indexing | **FIXED** | 1-based plain words everywhere user-visible; a static test bans `0-index` in lesson copy. |
+| X6 — false parity rule | **FIXED** | L04 rewritten around the true fill-count rule; L04↔L05 handoff consistent. |
+| X7 — socratic template | **FIXED** | All socratic asks are lesson-specific; the legacy-template allowlist is empty. |
+| X8 — overlay/legend drift | **FIXED** | Overlay contract + strict tests; per-slide `_overlayIntent` escape hatch documented. |
+| X9 — lesson ordering | **FIXED** | Files renumbered: tactics 1–10, openings 11–13; loader verified. |
+| X10 — Spanish/localization | **DEFERRED** | Task 14 blocked — no translation API key in the remediation environment. Additional es+audio debt accrued: rewritten socratic messages in L01/L02 need fresh `text_es`, and stale `_es`/audio siblings were deleted on every edited English field. |
+
+Additional notes:
+
+- **Gates now live**: `tests/unit/lessonContent.test.js` runs in `test:fast` (plus `tests/lessons/opening-lessons.test.js`, wired in the final copy wave), and `server/scripts/verify_lesson_content.mjs` provides the solver-backed content sweep.
+- **Board finder kept**: `server/scripts/find_lesson_boards.mjs` is retained as curation tooling. The recommendation to delete it after the remediation is recorded; the owner may still do so.
