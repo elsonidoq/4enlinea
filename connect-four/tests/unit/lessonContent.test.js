@@ -29,6 +29,7 @@ const REMEDIATED = new Set([
   'undercut',
   'overcut',
   'figure-7',
+  'j-shape',
 ]);
 
 // Task 12 empties this allowlist when it de-templates the socratic ask messages.
