@@ -794,6 +794,8 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 **Also carried by this page** (must survive any redesign — they are Paddle domain-review requirements, not decoration): the verbatim Merchant of Record clause ("Our order process is conducted by our online reseller Paddle.com…"), the 14-day refund statement, and the link to `/terms`.
 
+**Update (2026-07-18, verified during a live domain-review resubmission)**: two premises above are now stale — `connect-four/server/pricing.html` **does** exist on this branch/checkout (the "not on this branch" note is outdated), and the price source of truth has finished moving off Stripe to Paddle (`usePaddlePrices.js` / `GET /api/paddle/config`, not the `useStripePrices`/`/api/stripe/config` referenced above). The drift bug (item 2) is **not currently manifesting**: `pricing.html`'s hardcoded `$2.99`/`$21.99`, `en.json`'s `upgrade.body`/`upgrade.price` strings, and the **live** Paddle catalog's actual price objects were all cross-checked and agree, and this was the pricing consistency Paddle's domain reviewer flagged and (pending resubmission) should now clear. The underlying risk itself is unchanged and unfixed — nothing prevents these three from drifting apart again the next time a price changes, since `pricing.html`/`en.json` are still hand-maintained literals, not derived from the live config endpoint. Item 1 (real designed pricing page) is still fully open.
+
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
 **Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
@@ -1016,9 +1018,32 @@ A code-review verification pass ruled out the session-load-race variant of this 
 **Why deferred**: adds avoidable but small startup latency on every boot/restart when `PADDLE_API_KEY` is set (dev restarts, CI, prod deploys); no correctness impact.
 **If picked up**: convert to a static `import { Paddle, Environment } from '@paddle/paddle-node-sdk'` at the top of `server/index.js`, then only construct the client conditionally inside the existing `if (process.env.PADDLE_API_KEY)` block (the SDK's presence in `node_modules` is guaranteed since it's now a hard dependency).
 
+## OI-58 — `main`/production `server/index.js` CSP is missing 5 fixes shipped to `stagging`
+
+**Status**: deferred / open (created 2026-07-18)
+**Area**: `connect-four/server/index.js`'s `helmet({ contentSecurityPolicy: { directives: {...} } })` block
+
+This session fixed five separate CSP gaps on the `stagging` branch (commits `2794793`, `811be2c`, `fb0ecc1`, `ae3c006`, plus the `frameSrc`/`connectSrc` additions in the earlier Paddle-checkout commit): `script-src`/`connect-src`/`frame-src` for Paddle.js + Google Pay, `style-src` for Paddle's inline styles + external stylesheet + Google Fonts' stylesheet, and a new `font-src` directive for Google Fonts' `.woff2` files. All five block real functionality (Paddle checkout, Google Pay, the app's own webfonts) when the CSP header is actually enforced (i.e., any deployed build, not `npm run dev`).
+
+**Why deferred**: `main` (production, `decodec4.xyz`) is ~496 commits behind/diverged from `stagging` (per memory `project_paddle_integration` §4/§9) and this project's convention is to ship small prod-facing fixes via a fresh worktree off `origin/main`, not by merging the divergent branch. The user was offered this (a worktree-based PR carrying just the CSP diff) and explicitly declined, choosing to port the fix to `main` themselves.
+**If picked up**: diff `server/index.js`'s `helmet(...)` block between `stagging`'s current HEAD and `main`'s current HEAD; the `stagging`-side version (with `PADDLE_CDN`/`PADDLE_ORIGINS`/`GOOGLE_PAY_ORIGINS`/`GOOGLE_FONTS_STYLESHEET`/`GOOGLE_FONTS_FILES` constants and their per-directive rationale comments) is the target state — see `docs/architecture/server-conventions.md`'s "CSP Directive Rationale" section for the current, authoritative description of every directive and why.
+
 **Resolved (2026-07-18)**: `server/index.js` now has a static top-level `import { Paddle, Environment } from '@paddle/paddle-node-sdk'`; the `if (process.env.PADDLE_API_KEY)` block only constructs `new Paddle(...)` conditionally, same as before. Boot-tested both ways: (1) with `PADDLE_API_KEY` set (`server/.env`) — server starts, `GET /api/paddle/config` returns real prices (200). (2) without it — verified by temporarily forcing the guard false in a throwaway local edit (reverted before committing) since this sandbox's environment injects a real `PADDLE_API_KEY` into every child process regardless of the `.env` file or shell overrides used, making a true "unset" boot untestable here; with the guard forced false the server still starts cleanly and `/api/paddle/config` correctly 503s ("Payments not configured"). No behavior change versus the dynamic-import version — only the import timing moved earlier.
 
-## OI-58 — `detectOvercut` taxonomy mismatch: taught gravity-top-adjacent overcut is never tagged; `active_forcing` label actually means T5
+## OI-59 — UpgradeModal didn't auto-dismiss after a real (non-simulated) staging payment
+
+**Status**: resolved (2026-07-18)
+**Area**: `connect-four/src/lib/checkoutReturnFlow.js`, all 5 `UpgradeModal` call sites
+
+After a real sandbox test purchase completed on staging (the same purchase that finally turned Paddle's "Handle fulfillment and provisioning" onboarding step green — see memory `project_paddle_integration` §11), the upgrade modal did **not** slide away as the earlier fix in this session was built to do. The client's `POST /api/paddle/verify-transaction` call did fire and returned `{"activated":true}` — meaning `checkoutReturnFlow`'s shared store should have been set to `'activated'`, which should have flipped the subscribed screen's `uiState` prop to `'success'` and triggered `UpgradeModal`'s internal auto-dismiss effect. It did not (or if it showed "success" briefly, it never actually dismissed — this distinction was never confirmed).
+
+**Why deferred**: the immediate follow-up investigation got derailed by an unrelated one-off "upstream error" on a reproduction attempt (traced to a transient Railway-edge issue, not this bug — see memory `project_paddle_integration` §12), and root cause was never established. Two clarifying questions were asked but never answered: (1) did the modal show the green "success" message at all before getting stuck, or did it stay on the loading/spinner state the whole time — this distinguishes "checkoutReturnFlow subscription never fired" from "auto-dismiss timer/effect itself failed"; (2) which of the 5 `UpgradeModal` call sites was in use (Settings, Set Picker, Post-Set Summary, Saga, or Deep Reveal) — Deep Reveal's `onDismiss` has an extra `onClose?.()` call the other four don't, so it's the most likely to behave differently if there's a site-specific bug.
+
+**Root cause found (2026-07-18)**: confirmed via a screenshot of the actual stuck modal — it was frozen at its pristine pre-payment `'idle'` state (plan picker, active button), not the loading spinner or a success message. `subscribeCheckoutReturn` never replayed the *current* state to a new subscriber — it only notified listeners of *future* transitions. `useUpgradeCheckout.js`'s `checkout.completed` handler is a module-level singleton independent of which screen is mounted; if a screen's subscription effect wasn't active at the exact instant `setCheckoutReturnState('activated')` broadcast, that one-shot notification was lost forever, even though `checkoutReturnFlow`'s internal `state` variable correctly held `'activated'`. This explained the reported symptom exactly: the account correctly became Pro (the server-side tier flip via the webhook/`verifyTransaction` call is entirely independent of any UI listener), but the modal never learned about it and stayed on `'idle'` until manually dismissed.
+
+**Fix**: `subscribeCheckoutReturn` now immediately invokes the new listener with the current state at subscribe time (closing the race), and each of the 5 call sites now calls the (renamed-to-production-use) `resetCheckoutReturnState()` after consuming a terminal `'activated'`/`'failed'` state, so the replay-on-subscribe fix doesn't leak a stale outcome into some later, unrelated modal open. Covered by 2 new regression tests in `tests/unit/checkoutReturnFlow.test.js`.
+
+## OI-60 — `detectOvercut` taxonomy mismatch: taught gravity-top-adjacent overcut is never tagged; `active_forcing` label actually means T5
 
 **Status**: deferred / open — needs a classifier-owner decision (surfaced by the lesson-content final whole-branch review, 2026-07-24)
 **Area**: `connect-four/server/classifier.js` (`detectOvercut`, ~lines 959–985), lesson 07 (overcut) copy, deep-reveal shape naming
@@ -1029,7 +1054,7 @@ The overcut lesson teaches the gravity-top-adjacent shape (opponent threat direc
 **Why deferred**: fixing it means either extending the detector's case set or renaming/re-scoping the reason labels — a taxonomy decision for the classifier owner, not a copy fix.
 **If picked up**: decide whether the taught adjacent case should be a first-class overcut match (new T-rule branch) or whether the lesson should be re-scoped to the detector's actual cases; rename `active_forcing` to say T5 either way. Validate per reason-INVARIANTS I12 (full case-space + counterexample per case, through the production detector).
 
-## OI-59 — Challenge grader semantics: `evalUndercut` accepts losing non-killing columns; single-answer categories mark solver-tied/positive alternatives wrong
+## OI-61 — Challenge grader semantics: `evalUndercut` accepts losing non-killing columns; single-answer categories mark solver-tied/positive alternatives wrong
 
 **Status**: deferred / open (family of grader-semantics gaps; surfaced 2026-07-24, sibling of OI-1)
 **Area**: `connect-four/server/predicates.js` (`evalUndercut`), single-answer challenge grading (`ChallengeScreen.jsx` / `scoreMove` path), lessons 04/06/08 challenge boards
@@ -1042,7 +1067,7 @@ Two related acceptance-semantics gaps:
 **Why deferred**: the fix is a correctness-model choice (tie-aware acceptance vs per-board vetting of alternatives), overlapping OI-1's pattern-vs-score question; not a one-line patch.
 **If picked up**: either make acceptance tie-aware (accept any column whose solver score ties the stored answer, optionally gated on pattern membership) or vet each shipped challenge board so the stored answer is the unique max; and add a solver-verdict floor to `evalUndercut`.
 
-## OI-60 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
+## OI-62 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
 
 **Status**: deferred / open (small doc edits, 2026-07-24)
 **Area**: `docs/knowledge-base/allen-j-configuration.md`, `docs/knowledge-base/community-figure-7.md`
@@ -1054,7 +1079,7 @@ Two related acceptance-semantics gaps:
 **Why deferred**: pure documentation polish; no behavior at stake.
 **If picked up**: make both edits in the KB entries (and re-run `npm run sync-kb` so the app copy matches).
 
-## OI-61 — Lesson verifier/finder robustness gaps (solver crash on bad movestring, coarse `_overlayIntent`, unscanned i18n titles, vestigial REMEDIATED gate)
+## OI-63 — Lesson verifier/finder robustness gaps (solver crash on bad movestring, coarse `_overlayIntent`, unscanned i18n titles, vestigial REMEDIATED gate)
 
 **Status**: deferred / open (tooling hardening backlog, 2026-07-24)
 **Area**: `connect-four/server/scripts/verify_lesson_content.mjs`, `server/scripts/find_lesson_boards.mjs`, `connect-four/tests/unit/lessonContent.test.js`
@@ -1069,7 +1094,7 @@ Four residues in the remediation tooling:
 **Why deferred**: none blocks the shipped content; all are robustness/regression-surface improvements.
 **If picked up**: wrap solver calls per-check and emit FAIL rows; support per-overlay intent; extend the static scan to i18n titles; flip the REMEDIATED mechanism to an empty exemption set (strict by default, exemptions opt-in).
 
-## OI-62 — Owner decisions pending from the lesson remediation (paywall split, Spanish pass, two recommended new lessons)
+## OI-64 — Owner decisions pending from the lesson remediation (paywall split, Spanish pass, two recommended new lessons)
 
 **Status**: open — owner decisions, not code defects (2026-07-24)
 **Area**: `connect-four/lessons/*.json` (`free` flags), Task 14 of the remediation plan, lesson curriculum

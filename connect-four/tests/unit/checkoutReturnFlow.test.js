@@ -36,7 +36,8 @@ test('subscribeCheckoutReturn notifies subscribers of every state change, in ord
   setCheckoutReturnState('confirming');
   setCheckoutReturnState('activated');
 
-  assert.deepEqual(seen, ['confirming', 'activated']);
+  // First entry is the immediate replay at subscribe time (state was 'idle').
+  assert.deepEqual(seen, ['idle', 'confirming', 'activated']);
   unsubscribe();
 });
 
@@ -48,7 +49,38 @@ test('unsubscribe stops further notifications', () => {
   unsubscribe();
   setCheckoutReturnState('failed');
 
-  assert.deepEqual(seen, ['confirming']);
+  assert.deepEqual(seen, ['idle', 'confirming']);
+});
+
+test('subscribeCheckoutReturn immediately replays the CURRENT state to a listener that subscribes after the transition already happened (OI-59 regression)', () => {
+  resetCheckoutReturnState();
+  setCheckoutReturnState('confirming');
+  setCheckoutReturnState('activated');
+
+  // Simulates a component's subscription effect (re)mounting after
+  // checkout.completed already fired and flipped the shared state — e.g. the
+  // user navigated away and back while verify-transaction was in flight.
+  // Without the replay, this late subscriber would never learn the outcome.
+  const seenLate = [];
+  const unsubscribe = subscribeCheckoutReturn((s) => seenLate.push(s));
+
+  assert.deepEqual(seenLate, ['activated']);
+  unsubscribe();
+});
+
+test('resetCheckoutReturnState after consuming a terminal state prevents a later, unrelated subscriber from replaying stale state', () => {
+  resetCheckoutReturnState();
+  setCheckoutReturnState('activated');
+
+  // The consumer that saw 'activated' resets the store once it's done
+  // reacting, so a completely unrelated later subscribe (e.g. a different
+  // upgrade attempt opened much later) doesn't get a stale replay.
+  resetCheckoutReturnState();
+
+  const seen = [];
+  const unsubscribe = subscribeCheckoutReturn((s) => seen.push(s));
+  assert.deepEqual(seen, ['idle']);
+  unsubscribe();
 });
 
 test('a failed confirmation lands on "failed", not silently on "idle" (never a silent free-tier render)', () => {

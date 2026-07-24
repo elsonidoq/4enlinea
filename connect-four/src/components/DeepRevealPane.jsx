@@ -8,7 +8,7 @@ import { Icon } from './Icon.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { useCoachSpeech, speakDeepReveal, stopSpeech } from '../lib/useCoachSpeech.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
-import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { DEEP_REVEAL_SOFT_MS, DEEP_REVEAL_HARD_MS } from '../lib/deepRevealTimeout.js';
 import { canRevealAnon, markRevealedAnon } from '../lib/anonDeepReveal.js';
 import { langHeaders } from '../lib/apiLang.js';
@@ -106,8 +106,10 @@ export function DeepRevealPane({
         refreshProfile();
         setQuotaExceeded(false);
         setUpgradeUiState('success');
+        resetCheckoutReturnState();
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

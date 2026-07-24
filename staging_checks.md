@@ -716,12 +716,14 @@ exercised locally at all.
   **Why staging** — Paddle reviews the live public HTTPS site; no local equivalent. Submitted 2026-07-17, status `Pending`.
   **Expected** — status flips to approved (most auto-approve; else 5–7 business days).
   **Source** — Epic 10 staging checks; memory `project_paddle_integration` §7.
+  **Update (2026-07-18)**: first review came back `action_required` (soft-declined) citing pricing clarity/consistency. Verified `pricing.html` / in-app copy / live catalog all agree ($2.99/mo, $21.99/yr) — this specific reason should now be resolved. No per-domain resubmit control exists on this (non-partner) account's dashboard; resubmission is remove (X) + re-add via "+ Add a new domain" on `vendors.paddle.com/request-domain-approval` — see memory `project_paddle_integration` §9. Still pending the actual re-review outcome.
   - [ ] signed off (tester / date):
 
 - **What** — Complete Paddle account/identity verification (sole trader: Pablo Zivic's KYC/ID check, in-dashboard or emailed link).
   **Why staging** — real KYC against Paddle; independent of domain review; both must clear before live transactions.
   **Expected** — account verified; Paddle acts as Merchant of Record. DNI stays private (not on any public page).
   **Source** — Epic 10 staging checks; memory `project_paddle_integration` §7.
+  **Update (2026-07-18)**: confirmed still blocking — a real `POST /transaction-checkout` call against production returned `400 validation: transaction_checkout_not_enabled` ("Checkouts aren't enabled for this account... haven't fully completed the Paddle onboarding process"), independent of the domain-review status above. See memory `project_paddle_integration` §10.
   - [ ] signed off (tester / date):
 
 - **What** — First real (live, non-sandbox) payout lands as **USD** in the Argentine caja de ahorro en dólares, via wire.
@@ -752,6 +754,12 @@ exercised locally at all.
   **Why staging** — The live catalog is a **separate** set of Paddle price objects from the sandbox ones this epic built against (see the live-catalog-provisioning check above); the quantity limit is a property of the price object itself and does not carry over automatically when new live prices are created.
   **Expected** — The live checkout overlay shows a fixed "Qty: 1" (no +/- stepper) for both monthly and annual plans, matching sandbox behavior.
   **Source** — Epic 10 staging checks; `docs/architecture/api-conventions.md` "Quantity is fixed at 1 per subscription".
+  - [x] signed off (tester / date): applied directly via `client.prices.update` against both live price IDs (`pri_01kxr65aphrqnamh9xhfc1yfcm` monthly, `pri_01kxr65ar3xm337d84ka3ah3r9` annual) and confirmed in the response — 2026-07-18 (Claude, this session).
+
+- **What** — PayPal completes a full real purchase on production, end to end (button renders → payment authorized → `checkout.completed` fires → tier flips to `paid`).
+  **Why staging** — PayPal's flow is a redirect-based round-trip (distinct code path from the card/Google Pay in-overlay flow), which was never exercised beyond confirming the button renders on `decodec4.xyz`. No card/Google Pay success proves PayPal works — it could hit its own CSP gap (its own domains weren't added to `connect-src`/`frame-src` this session) or `successUrl`/redirect handling issue.
+  **Expected** — A real PayPal test payment completes without a CSP violation, `UpgradeModal` shows its success state and dismisses (per the 2026-07-18 animation/state fix), and `users.tier` flips to `paid` via either the webhook or the `verifyTransaction` fallback.
+  **Source** — 2026-07-18 session (Paddle CSP/environment-derivation debugging); this session did not test PayPal.
   - [ ] signed off (tester / date):
 
 - **What** — OI-55's identity-binding hardening (`handleWebhook`'s `transaction.completed` cross-check against an already-established `paddle_customer_id`) is exercised against a REAL second payment/renewal for the same Paddle customer, not just the 4 mocked-Paddle-client unit tests added when the hardening was implemented (2026-07-18).

@@ -5,7 +5,7 @@ import { TopBar } from '../components/TopBar.jsx';
 import { UpgradeModal } from '../components/UpgradeModal.jsx';
 import { useLanguage } from '../lib/useLanguage.js';
 import { useUpgradeCheckout } from '../lib/useUpgradeCheckout.js';
-import { subscribeCheckoutReturn } from '../lib/checkoutReturnFlow.js';
+import { subscribeCheckoutReturn, resetCheckoutReturnState } from '../lib/checkoutReturnFlow.js';
 import { fetchWithAuthRetry } from '../lib/fetchWithAuthRetry.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
@@ -62,8 +62,10 @@ export function SettingsScreen({ go, goBack }) {
       if (state === 'activated') {
         setTier('paid');
         setUpgradeUiState('success');
+        resetCheckoutReturnState();
       } else if (state === 'failed') {
         setUpgradeUiState('timeout');
+        resetCheckoutReturnState();
       }
     });
   }, []);
