@@ -5,105 +5,136 @@
   "userPerspective": "yellow",
   "slides": [
     {
+      "movestring": "33335414510",
+      "_boardInstructions": "Self-play find (overcut_active, seed 42, candidate 3): 11 plies, Gray to move. Third column (0-ind col 2) is empty. Green's bottom-row horizontal — X11/X7/X1 across 1-based cols 1/2/4 — completes at 0-ind (2,0), which IS the gravity-top cell of the empty column. Gray's row-2 horizontal — O10/O2/O8 across 1-based cols 2/4/5 — completes at 0-ind (2,1), directly above. extraThreats 0 — these are the only major threats. scr (Gray to move): -15 -15 2 -15 -15 -15 -15 — playing the third column is the unique non-losing (winning) move. Overlays: tg on Green's lower cell, td on Gray's upper cell — both real threats, verifier-checked.",
       "boardSpec": [
+        "g",
+        "gd",
         "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        "gdgd",
+        "dd",
+        "gg",
         ""
       ],
       "coachMessages": [
         {
-          "text": "Gray has a threat above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column should Gray play?",
+          "text": "Green's three discs on the bottom row complete four in the third column — on the very cell where the next disc in that column lands. Gray's completing cell sits directly above it, and it is Gray's move.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a mid-game position where Gray has a horizontal major threat completing at col C row R (e.g., row 3) and Green has a horizontal major threat completing at col C row R-1 (e.g., row 2 — directly below Gray's threat). The column has an odd number of empty cells remaining and it is Gray's turn. Do NOT yet explain what happens — just show the structural pattern: Gray's threat above, Green's threat below, same column. Mark Gray's threat cell with 'tg' and Green's threat cell with 'td'. Legend: 'tg' = Gray's upper threat, 'td' = Green's lower threat (same column).</board instructions>\n\nThe overcut setup: Gray's major threat sits directly above Green's major threat in the same column, and it is Gray's turn. Before reading on — think about what happens when Gray plays that column."
+      "overlays": [
+        { "c": 2, "r": 0, "type": "tg" },
+        { "c": 2, "r": 1, "type": "td" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Green's completing cell — the next playable cell in the column" },
+        { "type": "td", "label": "Gray's completing cell — directly above" }
+      ],
+      "infoProse": "Green's three discs across the bottom row — first, second and fourth columns — complete four-in-a-row on the bottom row of the third column. That column is empty, so Green's completing cell is exactly where the next disc dropped there will land. Green threatens to win next turn.\n\nGray's three discs across the second row — second, fourth and fifth columns — complete on the second row of that same column, directly above Green's cell.\n\nIt is Gray's move. Gray clearly has to deal with Green's threat — but look at what a single gray disc in the third column does before reading on. This shape — the opponent's completing cell at the next playable cell, the player's own completing cell directly above it — is the overcut."
     },
     {
+      "movestring": "333354145102",
+      "_boardInstructions": "DERIVED board: slide 1's movestring + the overcut column (0-ind col 2) appended, re-rendered and re-verified. Gray's disc O12 now occupies 0-ind (2,0) — Green's former completing cell (occupied, so NO overlay there; copy names the landed disc). Gray's threat at 0-ind (2,1) is now gravity-top — the only major threat on the board (renderer: 'Major threats: col3 row2 (O) [GT]'). scr (GREEN to move): -15 -15 -2 -15 -15 -15 -15 — every Green reply except blocking the third column loses on the spot, and even the block leaves Green losing (-2). Overlay: td on Gray's now-live threat only.",
       "boardSpec": [
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        "g",
+        "gd",
+        "d",
+        "gdgd",
+        "dd",
+        "gg",
         ""
       ],
       "coachMessages": [
         {
-          "text": "Gray plays col C. The disc lands on Green's threat cell at row R-1 — blocking Green. The next empty cell in that column is now row R: Gray's threat fires immediately.",
+          "text": "One drop, two jobs: Gray's disc fills Green's completing cell, and Gray's own completing cell becomes the next playable cell in the column.",
           "mood": "happy"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show the same position as slide 1 but now show the result AFTER Gray has played col C. Gray's disc lands at row R-1 (blocking Green's threat cell). Row R is now the top of the stack — Gray's threat is immediately live. Mark the Gray disc just placed at row R-1 with 'td' overlay ('Blocks Green's threat') and the now-live Gray threat cell at row R with 'tg' ('Gray's threat — now active'). Legend: 'td' = Gray's disc blocks Green, 'tg' = Gray's threat now fires (overcut).</board instructions>\n\nOne move does two things: (1) Gray's disc lands on Green's threat cell, physically blocking it; (2) row R is now the next available cell in the column, making Gray's threat immediately live. Green must now respond to Gray's threat — but Gray already forced the situation. This is the overcut: a single move that defends and attacks simultaneously.\n\nThe odd-column condition is what makes it work: Gray enters the column first, so Gray's disc lands at row R-1 rather than Gray's opponent reaching it first."
+      "overlays": [
+        { "c": 2, "r": 1, "type": "td" }
+      ],
+      "legendItems": [
+        { "type": "td", "label": "Gray's completing cell — now the next playable cell" }
+      ],
+      "infoProse": "Gray drops into the third column. The disc lands on the bottom row — exactly Green's completing cell. Green's threat is blocked, permanently.\n\nAnd the same disc did a second job: the second row of the third column is now the next playable cell, so Gray's threat is live. Green must answer it immediately — the solver confirms that every other Green reply loses on the spot, and even after Green blocks, Gray keeps a winning game. One move defended and attacked at the same time.\n\nThose three facts are the whole condition for this play, and none of them involves counting empty cells: Green's completing cell was the next playable cell in the column, Gray's completing cell sat directly above it, and it was Gray's turn. Gravity did the rest — Gray's disc landed on Green's cell, and the block itself lifted the column into Gray's threat."
     },
     {
+      "movestring": "33335414510",
+      "_boardInstructions": "Same board as slide 1 (overcut_active find 33335414510), same overlays — backdrop for naming the other two detector-recognized overcut cases in prose (same-parity / T4 and chain / T2, classifier.js detectOvercut). No new board claims are made about cases the board does not show; the copy explicitly says this board shows the forcing shape.",
       "boardSpec": [
+        "g",
+        "gd",
         "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        "gdgd",
+        "dd",
+        "gg",
         ""
       ],
       "coachMessages": [
         {
-          "text": "Same structural setup — but now the column has an even number of empty cells. Green enters first. What changes?",
-          "mood": "sad"
-        }
-      ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show the same structural position as slides 1–2 (Gray threat at row R, Green threat at row R-1, same column) but change the column to have an even number of empty cells and show it as Green's turn to enter the column first. Green plays col C, Green's disc lands at row R-1 — completing Green's own threat. Mark Green's disc at row R-1 with 'win' ('Green wins — completes their threat'). Gray's threat at row R is now irrelevant. Legend: 'win' = Green completes their threat (Gray's overcut failed).</board instructions>\n\nEven empty cells, Green's turn to enter: Green plays first into the column and lands on row R-1 — completing Green's own threat. Gray never gets to use the overcut. The mechanism is the same as Z-Threats: the parity of the column determines who gets the last word. For the overcut to work, you need an odd number of empty cells in the column AND it must be your turn to enter first."
-    },
-    {
-      "boardSpec": [
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ""
-      ],
-      "coachMessages": [
-        {
-          "text": "You land on row R-1 and block Green — but Green responds by playing col C again, this time at row R. That is Green's threat too. Double-check that row R belongs only to you.",
+          "text": "Overcut is the family name: an upper completing cell that wins even though an opponent cell sits below it in the same column. The forcing shape on this board is one member — game reviews recognize two more.",
           "mood": "think"
         }
       ],
-      "overlays": [],
-      "legendItems": [],
-      "infoProse": "<board instructions>Show a position similar to slide 1 (Gray upper threat at row R, Green lower threat at row R-1, odd-height column, Gray's turn) BUT the cell at row R is marked as a [*] cell — both Gray AND Green have a major threat passing through it. Gray plays col C, blocks Green's row R-1 threat — but now Green plays col C again, landing at row R and completing Green's own threat through that cell. Mark the shared threat cell at row R with a special 'both players' overlay (or use two overlapping markers). Label it 'Shared threat cell — belongs to both!'. Legend: mixed overlay = Both players have a major threat through this cell (overcut backfires here).</board instructions>\n\nBefore committing to an overcut, verify that the cell at row R is exclusively your threat. If both players have a major threat passing through that cell, your opponent can respond by playing into col C themselves — landing at row R and completing their own threat through the same cell. The overcut only works cleanly when row R belongs to you alone."
+      "overlays": [
+        { "c": 2, "r": 0, "type": "tg" },
+        { "c": 2, "r": 1, "type": "td" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Green's completing cell — the lower threat" },
+        { "type": "td", "label": "Gray's completing cell — the upper threat" }
+      ],
+      "infoProse": "When two completing cells from opposite players share a column, the lower one usually rules the upper one out — that is the undercut from the previous lesson. An overcut is the reverse verdict: the upper cell wins the column anyway. This board shows the forcing version — Green's cell is the next playable cell, Gray's is directly above, and one drop settles it.\n\nTwo more shapes earn the same verdict. Same-parity overcut: when the two completing cells sit two rows apart — say the third row and the fifth — the spare cell between them breaks the undercut exchange, the threats simply coexist, and the column can still be winning for the upper player. Chain overcut: when the upper player also owns a third completing cell below the opponent's, the opponent's threat is itself undercut from beneath, so it can never fire against the cell above it.\n\nThe forcing shape from the last slide is the one a player sets up and plays deliberately. The other two mostly appear when a game review names an overcut in a column nobody ever entered — that is what the review found there."
+    },
+    {
+      "movestring": "10231405030112342031435",
+      "_boardInstructions": "KB board (docs/knowledge-base/community-overcut.md, false_positives[1]) — the shared-cell gotcha, solver-verified there and re-rendered here. 23 plies, Gray to move. Third column: Green's row-4 horizontal (X11/X13/X19, 1-based cols 1/2/4) completes at 0-ind (2,3) — the gravity-top cell. Gray's row-5 horizontal (O18/O20/O22, cols 1/2/4) completes at 0-ind (2,4) directly above — BUT Green's falling diagonal X19/X21/X23 ALSO completes at (2,4): the renderer marks it col3 row5 (X+O), a shared cell. scr (Gray to move): -9 -9 -9 -9 -9 -9 10 — entering the third column LOSES (-9); Gray's winning move is the seventh column (+10, completing Gray's bottom-row horizontal O4/O6/O8 at 0-ind (6,0)). Busier board than slides 1-3 (Green also threatens at col6 row3): disclosed in task notes; no clean self-play find existed for this shape (overcut_shared_cell spec, 3 seeds, 2000 games, 0 hits). Overlays: tg on Green's lower cell (real Green threat), claim on the shared upper cell (Board.jsx renders one overlay type per cell, so the neutral amber marker carries the 'both players' meaning via the legend).",
+      "boardSpec": [
+        "dgggd",
+        "ggdgd",
+        "gdg",
+        "ddggd",
+        "ddg",
+        "dg",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "The same shape in the third column — Green's completing cell on top of the stack, Gray's directly above it. But look closer at that upper cell: Green completes a four there too.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [
+        { "c": 2, "r": 3, "type": "tg" },
+        { "c": 2, "r": 4, "type": "claim" }
+      ],
+      "legendItems": [
+        { "type": "tg", "label": "Green's completing cell — the next playable cell in the column" },
+        { "type": "claim", "label": "The cell above it — both players complete a four here" }
+      ],
+      "infoProse": "The third column looks like slide 1: Green's three discs across the fourth row complete on the fourth row of the third column — the next playable cell — and Gray's three discs across the fifth row complete directly above it. But the fifth-row cell is not Gray's alone. Green's diagonal, running down from that very cell to the sixth column's second row, completes there too. One cell, two winners.\n\nThat detail reverses everything. If Gray drops into the third column, the disc blocks Green's fourth-row cell — and the block itself makes the fifth row playable, with Green to move. Green drops into the same column and completes the diagonal. The overcut backfires: the solver scores the third column a loss for Gray, while Gray's actual winning move is the seventh column, completing a gray four on the bottom row at once.\n\nSo the checklist has one more line. The opponent's completing cell at the next playable cell, the player's own cell directly above, the player's turn — and that upper cell the player's alone. If the opponent also completes a four on the upper cell, playing the column just opens their winning cell for them."
     }
   ],
   "socratic": {
-    "goalPrompt": "Gray's threat sits directly above Green's threat in the same column. The column has an odd number of empty cells and it is Gray's turn. Which column wins?",
-    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat completing at col C at an odd-indexed row R, and Red has a horizontal major threat completing in the same col C at the even-indexed row R-1 directly below. Col C must have an odd number of empty cells and it must be Yellow's turn. Row R belongs exclusively to Yellow — Red has no threat through that cell. Mark Yellow's threat cell at row R with 'tg' and Red's threat cell at row R-1 with 'td'. Yellow wins by playing col C: the disc lands at R-1 (blocking Red's threat), and row R immediately becomes the next available cell, turning Yellow's threat into a direct check. No same-parity complications or shared-cell gotchas — keep the position clean so the active-forcing mechanic is the only thing at work.",
+    "movestring": "325653552332240366006",
+    "_boardInstructions": "Self-play find (overcut_active, seed 42, candidate 1): 21 plies (odd — the learner plays Gray by movestring-length parity). Green's rising diagonal X1 (4,1) / X7 (6,3) / X21 (7,4) 1-based completes at 0-ind (4,1) — the gravity-top cell of the fifth column: Green threatens to win next turn. Gray's rising diagonal O2/O6/O8 completes at 0-ind (4,2) directly above. correctCol 4 is the unique solver max: scr (Gray to move) -10 -10 -10 -10 4 -10 -10. Verified continuation (render of 3256535523322403660064): Gray's disc lands 0-ind (4,1) blocking Green, Gray's (4,2) becomes gravity-top ('col5 row3 (O) [GT]'), and every Green reply loses (best -4 at the forced block). Gray also has two spare threats at 0-ind (1,2)/(1,3) — extraThreats 2, not referenced by copy. SocraticScreen derives its own overlays, so none are authored here.",
     "boardSpec": [
+      "ggd",
       "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
+      "dgdg",
+      "gddgd",
+      "d",
+      "gggd",
+      "dgdg"
     ],
-    "correctCol": 3,
+    "overlays": [],
+    "correctCol": 4,
+    "goalPrompt": "Green's rising diagonal completes on the second row of the fifth column — the next playable cell there — and Gray's rising diagonal completes directly above it. Playing the fifth column is the solver's only non-losing move (+4): the disc blocks Green's cell and turns Gray's third-row threat into the next playable cell, and every Green reply loses. The forcing overcut from the slides.",
     "messages": {
       "ask": [
         {
-          "text": "I'm going to make a mistake here. See if you can punish it.",
-          "mood": "think",
-          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+          "text": "Green's diagonal is one drop away from winning on the second row of the fifth column. You are Gray — find the move that blocks Green and attacks at the same time.",
+          "mood": "think"
         }
       ],
       "wrong1": [
@@ -129,9 +160,8 @@
       ],
       "hint": [
         {
-          "text": "Look for an even square directly above one of my discs.",
-          "mood": "think",
-          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+          "text": "Your own completing cell sits directly above Green's. Fill Green's cell and yours becomes the next drop in that column.",
+          "mood": "think"
         }
       ]
     }
@@ -142,7 +172,7 @@
     {
       "puzzleId": "45c8f60d-14d6-4bc7-bff7-b63c4dd5e6ce",
       "moveString": "322233353155505310161125",
-      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPrompt": "Gray's lone completing cell in one column is boxed in by yours — one of your cells directly below it, another directly above. Your lower cell neutralizes Gray's threat, so the column wins for you. Enter it.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -168,7 +198,7 @@
     {
       "puzzleId": "b87536d6-5fca-4b06-b246-d3755d5c2702",
       "moveString": "413520424420116155020",
-      "goalPrompt": "Find the move that overcomes your opponent by playing above their intended threat.",
+      "goalPrompt": "One column stacks your completing cells around Green's lone one. Enter it: your drop makes an immediate threat, and Green's forced block lifts the column straight into a cell where you complete four.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],

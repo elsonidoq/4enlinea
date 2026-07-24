@@ -194,6 +194,57 @@ const SPECS = {
     return null;
   },
 
+  // L10 slides/socratic: active-forcing overcut — Green threat at the column's
+  // gravity-top cell (the next playable cell), Gray threat directly above it,
+  // Gray to move, and playing that column is the solver's best legal move (>= 0):
+  // one drop blocks Green's cell and makes Gray's own threat the next playable
+  // cell. Learner side = Gray (odd ply).
+  overcut_active: async (pos, board) => {
+    if (pos.ms.length % 2 !== 1) return null;                // Gray to move
+    if (pos.ms.length < 10 || pos.ms.length > 22) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the overcut threat
+    const gray  = board.reachableThreats(2);
+    const green = board.reachableThreats(1);
+    for (const [col, rows] of green) {
+      for (const r of rows) {
+        if (r !== board.colHeights[col]) continue;           // Green's cell is gravity-top
+        if (!(gray.get(col) ?? []).includes(r + 1)) continue; // Gray's cell directly above
+        if (pos.scores[col] !== maxScore(pos.scores) || maxScore(pos.scores) < 0) continue;
+        const extra = extraThreats(board, [{ col, row: r }, { col, row: r + 1 }]);
+        if (extra > 2) return null;
+        return { col, lower: r, upper: r + 1, score: pos.scores[col], extraThreats: extra };
+      }
+    }
+    return null;
+  },
+
+  // L10 s4 (shared-cell gotcha): same shape as overcut_active but the upper cell
+  // is ALSO a Green threat (a shared [*] cell) and playing the column backfires
+  // (solver-negative): Gray's block opens the shared cell and Green completes
+  // four there first. ownerNotLost keeps Gray alive, so the board also carries
+  // Gray's actual saving move elsewhere. Note extraThreats reads >= 1 on a
+  // "clean" find: the shared upper cell is counted for both players but
+  // subtracted only once.
+  overcut_shared_cell: async (pos, board) => {
+    if (pos.ms.length % 2 !== 1) return null;                // Gray to move
+    if (pos.ms.length < 10 || pos.ms.length > 24) return null;
+    if (!ownerNotLost(pos, 2)) return null;                  // Gray must not be dead lost
+    const gray  = board.reachableThreats(2);
+    const green = board.reachableThreats(1);
+    for (const [col, rows] of green) {
+      for (const r of rows) {
+        if (r !== board.colHeights[col]) continue;           // Green's cell is gravity-top
+        if (!(gray.get(col) ?? []).includes(r + 1)) continue; // Gray's cell directly above
+        if (!(green.get(col) ?? []).includes(r + 1)) continue; // ...but Green completes there too
+        if (pos.scores[col] >= 0) continue;                  // the would-be overcut loses
+        const extra = extraThreats(board, [{ col, row: r }, { col, row: r + 1 }]);
+        if (extra > 2) return null;
+        return { col, lower: r, upper: r + 1, score: pos.scores[col], extraThreats: extra };
+      }
+    }
+    return null;
+  },
+
   // L03 socratic replacement: side to move can create a double threat, the fork move WINS
   // (max solver score), and the opponent has NO gravity-top threat anywhere (the exact
   // failure of the current board, CRIT X2.2). Learner side = Green (even ply).
