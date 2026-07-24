@@ -34,11 +34,9 @@ const REMEDIATED = new Set([
   'opening-sharp',
 ]);
 
-// Task 12 empties this allowlist when it de-templates the socratic ask messages.
-const LEGACY_ASK_ALLOWLIST = new Set([
-  'immediate-threat', 'block-before-build', 'the-fork', 'claimeven', 'z-threats',
-  'undercut', 'overcut', 'figure-7', 'j-shape',
-]);
+// Task 12 emptied this allowlist: every socratic ask is now lesson-specific, and the
+// legacy-template assertion below applies to all lessons. Never re-add an id here.
+const LEGACY_ASK_ALLOWLIST = new Set([]);
 const LEGACY_ASK = "I'm going to make a mistake here. See if you can punish it.";
 
 function* userVisibleStrings(lesson) {
