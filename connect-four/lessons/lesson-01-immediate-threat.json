@@ -50,8 +50,7 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Threat square (the winning move)",
-          "label_es": "Casilla de amenaza (la jugada ganadora)"
+          "label": "Green's threat square — Gray must claim it"
         },
         {
           "type": "win",
@@ -107,13 +106,11 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "User threat",
-          "label_es": "Amenaza del usuario"
+          "label": "Green's threat"
         },
         {
           "type": "win",
-          "label": "Winning move",
-          "label_es": "Jugada ganadora"
+          "label": "Green's three connected discs"
         }
       ],
       "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss.",
@@ -178,13 +175,11 @@
     },
     {
       "movestring": "3333334225224455",
+      "_overlayIntent": "annotation",
       "coachMessages": [
         {
-          "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
-          "mood": "think",
-          "audio": "/audio/lessons/e378834b9957dba3.mp3",
-          "text_es": "Viste tu propia oportunidad de construir, pero tu oponente ya tiene tres en línea. ¿Qué pasa si primero extendés tu propia línea?",
-          "audio_es": "/audio/lessons/a5b50e8346bf658a.mp3"
+          "text": "Green sees a tempting square to build on — but Gray already has three in a row. What happens if Green builds first?",
+          "mood": "think"
         }
       ],
       "boardSpec": [
