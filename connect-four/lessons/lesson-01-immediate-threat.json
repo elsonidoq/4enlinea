@@ -166,8 +166,7 @@
         },
         {
           "type": "tg",
-          "label": "Winning move (interior gap)",
-          "label_es": "Jugada ganadora (hueco interior)"
+          "label": "Green's winning square (interior gap)"
         }
       ],
       "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls.",
