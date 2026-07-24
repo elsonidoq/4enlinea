@@ -2,6 +2,7 @@
   "id": "z-threats",
   "title": "Z-Threats",
   "free": true,
+  "order": 6,
   "userPerspective": "yellow",
   "slides": [
     {
