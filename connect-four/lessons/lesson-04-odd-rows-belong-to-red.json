@@ -6,9 +6,10 @@
   "slides": [
     {
       "movestring": "333333",
+      "_boardInstructions": "Kept board (remediation Task 10): the centre column filled straight up in strict alternation, moves 1-6. Green (X) occupies 1-based rows 1/3/5, Gray (O) rows 2/4/6 — the pure illustration of the title rule. No overlays. scr (Green to move): -1 0 1 -- 1 0 -1.",
       "coachMessages": [
         {
-          "text": "Green always goes first. In any empty column, who lands on the bottom cell? Who lands one above? Follow the sequence.",
+          "text": "Green always moves first. Watch one column fill straight up with the two players simply alternating — who lands on which row?",
           "mood": "think"
         }
       ],
@@ -23,13 +24,14 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Green plays first, so the first disc in any empty column always belongs to Green — that is row 0 (0-indexed, bottom). Gray lands at row 1, Green at row 2, Gray at row 3, and so on. The pattern never breaks.\n\nGreen owns rows 1, 3, 5 (odd numbers)\n"
+      "infoProse": "Green always moves first. Count rows from the bottom, starting at 1. When a column fills straight up with the two players simply alternating, Green lands on rows 1, 3 and 5 and Gray lands on rows 2, 4 and 6.\n\nThat is the pattern behind this lesson's title: odd rows belong to Green, even rows belong to Gray — each side's natural rows."
     },
     {
       "movestring": "333355111",
+      "_boardInstructions": "Kept board (remediation Task 10): nine discs spread over three columns (1-based cols 2/4/6, heights 3/4/2), Gray to move. Used to refute the old per-column alternation rule: the first column is empty, yet the next disc anywhere on the board is Gray's — disc count in a column says nothing about whose the next cell is. No overlays. scr (Gray to move): -15 -15 5 -15 5 -15 -15.",
       "coachMessages": [
         {
-          "text": "Each column runs its own alternation independently. Count the discs already in the column — that tells you who owns the next cell.",
+          "text": "Now a real game: three columns, three different heights. Careful — the number of discs already in a column does not say whose the next disc there will be.",
           "mood": "think"
         }
       ],
@@ -44,13 +46,15 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Each column has its own mini-game. Count how many discs are already there — the next disc in that column belongs to whoever is next in the alternation for that column's current height. The global rule (Green first everywhere) means: if a column has an even number of discs (0, 2, 4…), the next disc is Green's; if it has an odd number (1, 3, 5…), the next disc is Gray's."
+      "infoProse": "In a real game players skip between columns, so a column almost never fills in strict alternation — the disc count in a column does NOT tell you whose the next cell is. Nine discs are down here, so it is Gray's turn: Gray could drop into the empty first column right now, and that column's first disc would be Gray's.\n\nWhat row parity really tells you is who collects a cell when the column is forced to fill at the end of the game. In the middle of the game, ask a different question: how many empty cells sit between the top of the column and the cell you care about? That count — not the row number — decides who gets there, and the Z-Threats lesson turns it into a weapon."
     },
     {
       "movestring": "3",
+      "_overlayIntent": "annotation",
+      "_boardInstructions": "Kept board (remediation Task 10): a single Green disc at the bottom of the fourth column. Ownership illustration, NOT threats — hence _overlayIntent annotation. Both marked cells sit on the 1-based third row: (0-ind c2,r2) in the empty third column — 3 cells to fill, odd count, falls to Green — and (0-ind c3,r2) in the fourth column with one disc — 2 cells, even count, falls to Gray. scr (Gray to move): -4 -2 -2 -1 -2 -2 -4.",
       "coachMessages": [
         {
-          "text": "Watch out: the same row number can belong to different players in different columns. The row alone doesn't tell you who owns it.",
+          "text": "Careful: the same row number can fall to different players in different columns. One early disc is enough to flip it.",
           "mood": "think"
         }
       ],
@@ -78,20 +82,21 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Opponent threat"
+          "label": "Falls to Gray in the end-game fill"
         },
         {
           "type": "tg",
-          "label": "User threat"
+          "label": "Falls to Green in the end-game fill"
         }
       ],
-      "infoProse": "This is the critical trap: the same row number belongs to different players in different columns, depending on how many discs are already there. Row 3 in a fresh column belongs to Green (it is the 3rd disc, Green's turn). Row 3 in a column that already has one disc belongs to Gray (it is the 2nd disc to be placed, Gray's turn).\n\nThe shortcut: **subtract the current column height from the row number.** If the result is even, Green owns it; if odd, Gray owns it."
+      "infoProse": "Both marked cells sit on the third row — same row number, different fate.\n\nRun the standard end-game squeeze, where Gray answers each Green disc directly on top of it. In the empty third column that reproduces the first slide exactly: Green takes rows 1, 3 and 5, so the third row falls to Green. In the fourth column, Green's disc already occupies the first row. The same squeeze now starts one cell higher: Green lands on the second row and Gray caps the third — the very same row falls to Gray.\n\nWhat changed was not the row number but the empty space under the cell: three empty cells up to the third row in one column, two in the other. Who collects a cell is decided by that count, not by the row alone — the Z-Threats lesson turns the count into a precise rule."
     },
     {
       "movestring": "333321122214",
+      "_boardInstructions": "Kept board (remediation Task 10): Green's three-in-a-row on the 1-based third row (cols 2-4) is open at BOTH ends. Render-verified: Major threats col1 row3 (X) and col5 row3 (X) — both GREEN's, both on the SAME odd row. The difference is the fill count: first column empty — 3 cells inclusive, odd, favours Green; fifth column holds one Gray disc — 2 cells, even, favours Gray. Overlays: tg on (0-ind c0,r2) — real Green threat, verifier-checked; claim on (0-ind c4,r2) — also a real Green threat, marked claim as the plan's visual emphasis for 'the count goes against Green here'. scr (Green to move): 2 3 3 2 2 -13 2.",
       "coachMessages": [
         {
-          "text": "A threat is only real if the right player lands on the completing cell. Who will get there first in this column?",
+          "text": "Green has three in a row with both ends open — two threats on the same row. They are not equally valuable. Count the empty cells below each end.",
           "mood": "think"
         }
       ],
@@ -113,24 +118,97 @@
         {
           "c": 4,
           "r": 2,
-          "type": "td"
+          "type": "claim"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
-          "label": "User threat"
+          "label": "Green's threat — the count favours Green"
         },
         {
-          "type": "td",
-          "label": "Opponent threat"
+          "type": "claim",
+          "label": "Green's threat — the count favours Gray"
         }
       ],
-      "infoProse": "A threat is only as good as who lands on the completing cell. Before trusting any threat, ask: will I actually reach that cell, or will my opponent get there first? This is the question that Claimeven, Z-Threats, and all parity-based strategies are built on — and it all comes back to this one rule: count from the current column height."
+      "infoProse": "Green's three discs on the third row, columns two to four, are open at both ends: the completing cells in the first and fifth columns are BOTH Green's threats, and both sit on the same third row. Yet they are not equal.\n\nThe first column is empty: counting up to and including the threat cell takes three cells — an odd count. Under the end-game squeeze the threat cell itself falls to Green, so Green can simply wait for it. The fifth column already holds one Gray disc: only two cells remain — an even count. There the fill delivers the block: Gray lands on the threat cell in the natural course of the squeeze.\n\nSo the real question about any threat is never \"what row is it on?\" but \"who will actually land on the completing cell?\" — count the empty cells from the stack top. That question is what Claimeven and Z-Threats are built on."
     }
   ],
-  "socratic": null,
-  "confirmationCategory": null,
-  "confirmationCount": 0,
+  "socratic": {
+    "movestring": "31143333",
+    "_boardInstructions": "New find (remediation Task 10; oet search seed 42): 8 plies — even, so the learner plays Green by movestring-length parity, matching userPerspective red. detectOddEvenThreat matches for Green: two Green minor threats can each be promoted to a lasting major, both completing in the empty third column. Playing the FIRST column (0-ind 0) completes the rising diagonal (0-ind (0,0),(1,1)=X3,(3,3)=X7) into a major at 0-ind (2,2) — 1-based third column third row, count 3 from the empty column, odd, Green's. Playing the FIFTH column (0-ind 4) instead completes the horizontal row-2 line into a major at 0-ind (2,1) — third column second row, count 2, even, falls to Gray. correctCol 0 is the solver's UNIQUE max: scr (Green to move) 13 5 -2 -2 -2 0 -2; the distractor fifth column scores -2. SocraticScreen derives its own highlights, so no overlays are authored.",
+    "goalPrompt": "Green can promote one of two half-built lines into a lasting major threat, and both finishing cells sit in the empty third column: playing the first column builds the rising-diagonal threat on the third row (three empty cells up to it — odd count, Green collects it), while playing the fifth column builds the horizontal threat on the second row (two cells — even count, it falls to Gray). The first column is also the solver's unique best move (+13); the fifth scores -2.",
+    "boardSpec": [
+      "",
+      "dg",
+      "",
+      "ggdgd",
+      "d",
+      "",
+      ""
+    ],
+    "overlays": [],
+    "correctCol": 0,
+    "messages": {
+      "ask": [
+        {
+          "text": "You can finish a threat in two different ways here, and both finishing cells sit in the empty third column — one on the second row, one on the third. Only one of them will the end of the game hand to you. Click the column where you would drop your disc to build the threat you can actually collect.",
+          "mood": "think"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — that threat would finish on a cell the fill count gives to Gray. Try again.",
+          "mood": "oops"
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops"
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! That line finishes on the third row of the third column — an odd count of empty cells, so that cell is yours to collect.",
+          "mood": "happy"
+        }
+      ],
+      "hint": [
+        {
+          "text": "Count the empty cells in the third column: two up to the second row — even, Gray's — and three up to the third row — odd, yours. Your discs in the second and fourth columns already point a rising diagonal through that third-row cell. Extend that diagonal from below.",
+          "mood": "think"
+        }
+      ]
+    }
+  },
+  "confirmationCategory": "odd_even_threat",
+  "confirmationCount": 2,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "72a88f4e-7438-4e2d-8ba3-829521d7642b",
+      "moveString": "3553515566110063",
+      "goalPrompt": "Build a threat you will actually collect: play the move whose finishing cell sits an odd count of empty cells above the stack top.",
+      "goalPredicateType": "odd_even_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 3,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "2055cbeb-e5f6-41dc-8e1d-2a13f8c4dbb6",
+      "moveString": "3411022114433433",
+      "goalPrompt": "One move builds a threat on a cell the end-game gives to you; another builds one on a cell that falls to Gray. Play the one you can collect.",
+      "goalPredicateType": "odd_even_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": 2,
+      "userPlayer": 1
+    }
+  ],
   "order": 4
 }
