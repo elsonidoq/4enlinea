@@ -32,6 +32,8 @@ const REMEDIATED = new Set([
   'j-shape',
   'odd-rows-belong-to-red',
   'opening-sharp',
+  'threat-vocabulary',
+  'zugzwang-tempo',
 ]);
 
 // Task 12 emptied this allowlist: every socratic ask is now lesson-specific, and the

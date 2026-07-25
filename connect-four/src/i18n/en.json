@@ -916,6 +916,9 @@
     "block-before-build": {
       "title": "Block Before Build"
     },
+    "threat-vocabulary": {
+      "title": "Threat Vocabulary"
+    },
     "the-fork": {
       "title": "The Fork"
     },
@@ -927,6 +930,9 @@
     },
     "z-threats": {
       "title": "Z-Threats"
+    },
+    "zugzwang-tempo": {
+      "title": "Zugzwang & Tempo"
     },
     "undercut": {
       "title": "The Undercut"

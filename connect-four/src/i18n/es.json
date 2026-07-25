@@ -916,6 +916,9 @@
     "block-before-build": {
       "title": "Bloqueá Antes de Construir"
     },
+    "threat-vocabulary": {
+      "title": "Vocabulario de Amenazas"
+    },
     "the-fork": {
       "title": "La Bifurcación"
     },
@@ -927,6 +930,9 @@
     },
     "z-threats": {
       "title": "Amenazas-Z"
+    },
+    "zugzwang-tempo": {
+      "title": "Zugzwang y Tempo"
     },
     "undercut": {
       "title": "El Undercut"
