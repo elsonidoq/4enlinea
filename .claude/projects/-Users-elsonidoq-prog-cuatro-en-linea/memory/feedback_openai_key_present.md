@@ -17,6 +17,15 @@ server has the key) or `node --env-file=server/.env <script>`.
 **Why:** deferring a verifiable check produces a false "can't confirm locally" when the capability is in
 fact fully testable on localhost — the owner wants real end-to-end verification done, not punted.
 
+**EXCEPTION — Claude Code on the web / CCR containers have NO `server/.env` at all.** Verified
+2026-07-25: `connect-four/server/.env` **does not exist** in the remote execution container (the repo is
+cloned fresh; the untracked `.env` never comes with it). So in a remote session the key genuinely is
+absent, and TTS/LLM/Supabase-backed work cannot be verified there — that is a real environment limit,
+not the assumption this memory warns against. Resolve it by **checking**, not assuming either way:
+`ls connect-four/server/.env`. If absent, say "deferred: no `.env` in this remote container, verifiable
+on localhost" rather than either punting vaguely or claiming a check you couldn't run. The don't-punt
+rule above is about **local** sessions, where the key is present and everything is testable.
+
 **How to apply:** before writing "requires a real key, deferred," first try it against `server/.env`. Lesson
 audio generation was verified this way (real MP3s synthesized + served). Related: `docs/architecture/server-conventions.md` §Environment Variables,
 [[reference_supabase_connection]] (same `.env` file location trap), [[project_lesson_progression_audio_traps]].

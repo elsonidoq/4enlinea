@@ -767,3 +767,65 @@ exercised locally at all.
   **Expected** — A renewal/second payment for a real paying customer correctly re-confirms `tier: 'paid'` with no `securityRejected` false-positive; the residual first-payment forgery gap (documented in `docs/architecture/server-conventions.md` "Identity binding on `transaction.completed`") is a known, accepted limitation, not something this check needs to close.
   **Source** — Epic 10 staging checks; `docs/open_issues.md` OI-55; `docs/architecture/server-conventions.md` "Identity binding on `transaction.completed` (OI-55)".
   - [ ] signed off (tester / date):
+
+## Lesson curriculum: 15-lesson reorder, new lessons & full Spanish (2026-07-25, PR #19)
+
+All checks below trace to the lesson-content remediation merged to `stagging` in PR #19. **None of this
+session's work was exercised against a production build**: `staging.decodec4.xyz` is unreachable from the
+Claude-Code-on-the-web container (proxy policy denial), so every QA pass ran against **local dev on the
+merge commit**. Bundling, CSP, service-worker caching, and DB-backed tier entitlement are all unverified.
+
+- **What**: On deployed staging, open the Lessons saga and confirm the list reads **1–15 in order** with
+  **all ten free lessons before all five paid ones** (single PRO boundary at 10→11), and openings at 4–5.
+  **Why staging**: order comes from the lesson **filename prefix** parsed server-side at load
+  (`lessonLoader.js:169-176`), and the 13 existing lessons were renamed in this change. A stale build,
+  a cached bundle, or a file that failed to deploy reorders the curriculum silently — locally the loader
+  reads the working tree, so it cannot reproduce a partial deploy.
+  **Expected**: 15 rows, `order` 1–15 with no gaps/duplicates, exactly one free→paid transition, no
+  interleaved PRO badge.
+  **Source**: PR #19; `docs/architecture/lesson-editor.md` §"Curriculum ordering and the free/paid boundary".
+  - [ ] signed off (tester / date):
+
+- **What**: Confirm the two NEW lessons — `threat-vocabulary` (#3) and `zugzwang-tempo` (#10) — display
+  real **titles** in both `en` and `es`, not a raw key like `lesson.threat-vocabulary.title`.
+  **Why staging**: titles resolve from `lesson.<id>.title` in the **i18n bundle**, not from lesson JSON,
+  and are read through `t(..., {defaultValue})`. A key present in the repo but missing from the shipped
+  bundle renders the raw key or the English default with no error. `i18nKeyParity` proves en/es have the
+  same keys — it cannot prove the built bundle shipped them.
+  **Expected**: "Threat Vocabulary" / "Vocabulario de Amenazas" and "Zugzwang & Tempo" / "Zugzwang y
+  Tempo"; no bare dotted key anywhere in the saga list or lesson header.
+  - [ ] signed off (tester / date):
+
+- **What**: In `es`, walk all 15 lessons' concept slides and socratic screens and confirm the **text** is
+  Spanish throughout (voseo), with no English paragraphs.
+  **Why staging**: `pickLocalized` falls back to the English value per field when `_es` is missing or
+  empty, so any field that failed to deploy renders English **silently** — indistinguishable from
+  working without reading it in the deployed locale.
+  **Expected**: no English prose in `es`; discs referred to as verde/gris (never rojo/amarillo).
+  **Known-not-a-failure**: **narration will be English or absent everywhere** — no Spanish audio was ever
+  generated (OI-65). Judge text only.
+  - [ ] signed off (tester / date):
+
+- **What**: As a genuinely signed-out / free user on staging, confirm each of the five paid lessons
+  (11–15) is unreachable by **direct URL** (e.g. `/clchallenge/undercut`) — the guard redirects and the
+  upgrade modal appears, and no progress row is written.
+  **Why staging**: `useLessonLockGuard` resolves against **real** lessons/progress/tier fetches; local QA
+  used a dev tier stub, and the guard's `checking` state depends on real network latency (it must never
+  flash paid content, nor lock out a user before tier arrives). The tier itself is DB-backed.
+  **Expected**: redirect + upgrade modal on all five; completed lessons still revisitable; unlocked free
+  lessons unaffected; `lesson_progress` gains no row for the blocked id.
+  **Known residual (do NOT file as new)**: `GET /api/lessons/:id` still returns paid lesson JSON to an
+  unauthenticated caller — this check covers the UI guard only. Tracked as OI-66.
+  - [ ] signed off (tester / date):
+
+- **What**: Re-run the claimeven and undercut **challenge** flows on staging and confirm the prompt/hint
+  copy matches the grader's verdict in both `en` and `es` (undercut: staying **out** of the killing
+  column is correct; claimeven: taking the even square **above**).
+  **Why staging**: this copy lives in `coach.spoken.<category>.*` and is **shared by every puzzle in the
+  category, including DB-drawn practice boards** — staging draws real puzzles from the DB, local QA used
+  the two lesson boards. A prompt that reads correctly on the lesson board can be false or
+  grader-inverted on a practice board.
+  **Expected**: on every drawn board, the instruction points at the column the grader accepts; success
+  copy stays truthful when the accepted-gate promotes a weak-but-legal move.
+  **Source**: PR #19; `docs/open_issues.md` OI-61 (grader tie semantics) is the known open edge.
+  - [ ] signed off (tester / date):

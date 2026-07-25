@@ -102,4 +102,15 @@ make   # also runs: cp c4solver ../connect-four/server/c4solver
 ```
 Stale object files or a corrupted copy cause silent failures that look like C++ bugs — a full session was once lost chasing a crash that vanished after a clean rebuild. Especially after editing `Solver.cpp`/`main.cpp`.
 
-**Railway:** the committed `connect-four/server/c4solver` is a **macOS ARM64 (Mach-O)** binary and cannot run on Railway's Linux containers — the build must compile from source via `connect-four/nixpacks.toml`. `solver-src/` sits at the **repo root** (sibling of `connect-four/`), so the build command is `cd ../solver-src && make && npm run build`. The Makefile has no macOS-specific flags and yields a correct Linux binary.
+**Railway:** the committed `connect-four/server/c4solver` is a **macOS ARM64 (Mach-O)** binary and cannot run on Railway's Linux containers — the build must compile from source via `connect-four/nixpacks.toml`. `solver-src/` sits at the **repo root** (sibling of `connect-four/`), so the build command is `cd ../solver-src && make && npm run build`. The Makefile has no macOS-specific flags and yields a correct Linux binary. (`connect-four/railpack.json` now does this too: `cd solver-src && make -B SERVER_DIR=../server && test -f ../server/c4solver`.)
+
+## `skip-worktree` is set on the binary — `git status` LIES about it
+
+On Linux containers (Claude Code on the web) you must rebuild the solver to run anything solver-backed. To keep that rebuild from dirtying the tree, **`connect-four/server/c4solver` carries the git `skip-worktree` bit** (`git ls-files -v` → leading **`S`**). Consequences, all verified 2026-07-25:
+
+- `git status` and `git diff HEAD` report the file **clean** while the on-disk binary is a completely different ELF. There is no warning.
+- **`file connect-four/server/c4solver` describes the WORKING TREE, not the commit.** On a rebuilt Linux container it prints `ELF 64-bit LSB … x86-64`, which reads as "the committed binary is Linux". It is not — the blob is still Mach-O arm64. To see what is actually committed: `git cat-file -p HEAD:connect-four/server/c4solver | file -`.
+- A subagent made exactly this inference ("the committed binary is already a Linux ELF, `git status` clean on it") and reported it as fact. Both halves were artifacts of the skip-worktree bit.
+- **You cannot commit a real solver update while the bit is set** — `git add` is ignored. Clear it first: `git update-index --no-skip-worktree connect-four/server/c4solver`.
+
+Nothing in the repo sets this bit (no script, no hook — grepped); it is applied per-clone/per-container, so its presence varies by machine. Always check `git ls-files -v <path>` before reasoning about the binary's state. Related: [[feedback_verify_at_the_source_layer]].

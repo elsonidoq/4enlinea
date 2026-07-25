@@ -28,6 +28,8 @@ connect-four/tests/
   difficulty/
   scores/
   unit/
+  lessons/             # Lesson curriculum tests (load by lesson `id`, not filename)
+    opening-lessons.test.js
 ```
 
 **`tests/blunder/` convention**: All files in `tests/blunder/` use `node:test` (NOT Jest). They are included in `test:fast` and `test`. To run a single file: `node --test connect-four/tests/blunder/buildExplainContext.test.js`.
@@ -159,7 +161,8 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 - `tests/integration/evaluateMoveMultiSolution.test.js` (spec 049 Epic 9 T025 — moved into `npm test` alongside `test:fast`, FR-021)
 - `tests/integration/singleAnswerCategoriesAccepted.test.js` (spec 049 Epic 9 T025)
 - `tests/unit/i18nKeyParity.test.js` (spec 049 Epic 9 T025 — see "i18n key-parity guard" below)
-- `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer)
+- `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer, lessonContent)
+- `tests/lessons/opening-lessons.test.js` — see "Lesson content gates" below
 
 **`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js`, `tests/blunder/insertGameBlunder.test.js`, the reason-engine suite `server/tests/reasonEngine{,.denial,.drawToLose,.enrichment,.witness,.winSamples}.test.mjs` (solver-backed but fast), `server/tests/reasonNarratorVector.test.mjs` (pure), and `server/tests/computeEvidenceIsolation.test.mjs` (the reason-eval `compute.mjs` per-board error-isolation regression, pure — uses a throwing solver stub), and the `server/tests/winDistribution.*.test.mjs` suite (the win_distribution pipeline: `playPolicyGame`, policies, `extractOutcome`, `aggregateRows`, `renderReport` — all pure/solver-free) but **excludes** `tests/integration/candidate-generator.test.js`. (The reason-engine and win_distribution tests are in `test:fast` but **not** in the slower `test` script.)
 
@@ -201,6 +204,34 @@ found a batch of these (Stats logout, Settings→Papergames, Game TopBar, audio 
 list) and more remain (`docs/open_issues.md` OI-19). A passing parity test means "no key-level
 drift," NOT "the app is fully translated." When adding UI, wire every user-facing string through
 `t()` — a hardcoded literal is invisible to this guard.
+
+### Lesson content gates (added 2026-07-24/25)
+
+Lesson JSON is data, not code, so ordinary unit tests don't cover it. Two gates do, and they split by
+whether the check needs the solver:
+
+- **`tests/unit/lessonContent.test.js`** — pure **static** invariants over every lesson JSON
+  (`node:test`, registered in **both** `test` and `test:fast`). No solver, no network. It holds a
+  `REMEDIATED` set of lesson ids opted into the strict checks; **add every new lesson id to it** or the
+  lesson ships unchecked. (That gate is now vestigial and inverted-risk — every lesson is in it, so it
+  exempts nothing today but would silently exempt a *future* one. Flipping it to strict-by-default is
+  tracked in `docs/open_issues.md` OI-63.)
+- **`server/scripts/verify_lesson_content.mjs`** — **solver-gated** content verification: a socratic
+  `correctCol` must be the solver's max-scoring column, positions must not be lost for their owner, and
+  every `tg`/`td` overlay must be a real threat of that color (opt out per slide with
+  `_overlayIntent: "annotation"`). A socratic with no `movestring` **FAILs** rather than being skipped.
+
+  **This is a script, not a `node:test` file — it is in neither `test` nor `test:fast`, and nothing runs
+  it for you.** Run it by hand (`node server/scripts/verify_lesson_content.mjs`, from `connect-four/`)
+  after any lesson-content change. It needs a working c4solver binary; on Linux see
+  `reference_c4solver` re: rebuilding from `solver-src` and the `skip-worktree` bit that makes
+  `git status` and `file` misreport which binary is committed.
+
+`tests/lessons/opening-lessons.test.js` asserts curriculum-level properties and deliberately loads
+lessons **by `id`**, not by filename, so renumbering (`lesson-NN-slug.json`) doesn't break it. Follow
+that convention in any new curriculum test — prefixes get renumbered whenever a lesson is inserted. The
+free/paid contiguity and `order`-vs-prefix agreement rules live in
+`docs/architecture/lesson-editor.md` §"Curriculum ordering and the free/paid boundary".
 
 ### Pure Function Extraction Pattern
 

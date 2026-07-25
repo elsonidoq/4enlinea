@@ -4,7 +4,7 @@
 
 ## Solver, board evaluation, tactical patterns & movestrings
 
-- [c4solver scores + quirks](reference_c4solver.md) — max<0=ALL lose vs min<0=SOME lose; book offset; error-not-hang; exit 137 → rebuild
+- [c4solver scores + quirks](reference_c4solver.md) — max<0=ALL lose vs min<0=SOME lose; book offset; error-not-hang; exit 137 → rebuild; skip-worktree makes `git status`+`file` lie
 - [Forced-block detection](reference_cat5_forced_block_detection.md) — forced-win terminals: scores go FLAT; use checkWin per column, not scores
 - [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() DT/forced_win fire only absent→present; loose vs strict DT predicates — don't dedupe
 - [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — KB is source-of-truth (V1/V5 were WRONG, V2/V4 1-indexed); open-three ≠ double_threat
@@ -16,6 +16,7 @@
 - [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
 - [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline confirmationChallenges 404 (need a DB row)
+- [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — goalPrompt/socratic.overlays/userPerspective are dead; socratic color = movestring parity
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
 - [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — 200 + a plausible `generated` array ≠ the server saw your file; probe /api/admin/lessons/:id, restart first
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab

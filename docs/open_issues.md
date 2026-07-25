@@ -1096,12 +1096,58 @@ Four residues in the remediation tooling:
 
 ## OI-64 — Owner decisions pending from the lesson remediation (paywall split, Spanish pass, two recommended new lessons)
 
-**Status**: open — owner decisions, not code defects (2026-07-24)
+**Status**: **mostly RESOLVED 2026-07-25** (merged to `stagging` via PR #19) — only the Spanish **audio** half remains open
 **Area**: `connect-four/lessons/*.json` (`free` flags), Task 14 of the remediation plan, lesson curriculum
 **Discovered**: lesson-content remediation final review (2026-07-24)
 
-1. **Non-contiguous paywall after renumbering**: the free/paid split is now free 1–6 + 11–12, paid 7–10 + 13. Deliberate ordering, accidental paywall shape — decide whether to re-tier.
-2. **Task 14 Spanish + audio pass** is still pending an API key in the environment (see X10 in `docs/lesson-content-critique-2026-07-22.md`'s remediation-status appendix); includes the new es+audio debt from rewritten L01/L02 socratic messages and deleted stale `_es`/audio on edited fields.
-3. **Two recommended new lessons**: a threat-vocabulary primer (major/minor/immediate/gravity-top) and a zugzwang/tempo lesson. The undefined "major threat" usage in L06/L07/L10 strengthens the vocabulary-primer case.
+1. ~~**Non-contiguous paywall after renumbering**: free 1–6 + 11–12, paid 7–10 + 13.~~ **RESOLVED 2026-07-25.** Re-tiered to **15 lessons, free 1–10 / paid 11–15 — exactly one free→paid transition**, openings early at 4–5. Enforced by a loader check; the contiguity rule is now documented in `docs/architecture/lesson-editor.md` §"Curriculum ordering and the free/paid boundary".
+2. **Spanish TEXT done, AUDIO still open.** All 15 lessons are fully translated (~280 `_es` fields, Rioplatense voseo). **No Spanish audio clips were generated for any of it** — see OI-65. The "pending an API key" framing was wrong for a *local* session (the key is in `connect-four/server/.env`); it is correct only for remote Claude-Code-on-the-web containers, which have no `.env` at all.
+3. ~~**Two recommended new lessons.**~~ **RESOLVED 2026-07-25.** Both written on solver-verified boards and shipped free: `threat-vocabulary` (#3, defines major/minor/immediate/gravity-top before L06/L07/L10 use the terms) and `zugzwang-tempo` (#10).
 
-**If picked up**: each is an owner call — re-tier or accept the split; run the translation+audio pass once a key is provisioned; green-light (or decline) the two new lessons. Cross-ref: OI-18, OI-43.
+**If picked up**: only the audio pass remains — see OI-65. Cross-ref: OI-18, OI-43, OI-63.
+
+## OI-65 — All 15 lessons are translated to Spanish but have NO Spanish audio; `es` learners get English clips
+
+**Status**: deferred / open (2026-07-25)
+**Area**: `connect-four/lessons/*.json` (`coachMessages[].audio_es`, `socratic.messages[phase][].audio_es`), `POST /api/admin/lessons/:id/generate-audio`
+**Discovered**: lesson localization + new-lesson fan-out (2026-07-25), merged in PR #19
+
+All 15 lessons now carry complete Spanish text (~280 `_es` fields), but **not one Spanish audio clip was
+generated** — including for the two new lessons (`threat-vocabulary`, `zugzwang-tempo`), whose English
+audio is also missing.
+
+The failure mode is worse than silence: `pickLocalized` backfills `audio` from English per field, so an
+`es` learner hears the **English clip** under the Spanish text. `lesson-editor.md` already flags this
+("translated but not yet voiced… arguably worse than silence — translate and run generate-audio
+`{lang:'es'}` together"); this session did the first half only.
+
+**Why deferred**: the work ran in a remote Claude-Code-on-the-web container, which has **no
+`connect-four/server/.env`** (verified — the file simply doesn't exist there), so `OPENAI_API_KEY` was
+unavailable. On a local checkout the key is present and this is fully runnable; it is not blocked on
+provisioning anything.
+
+**If picked up**: from a local session, run `generate-audio` for each of the 15 lessons in both `en` and
+`es`, confirm `audio_es` is populated everywhere (and that `prune-audio`'s `audio_es` invariant still
+holds), then spot-check playback on `:5173` — **not** `:3001`, which does not serve `public/`. Cross-ref:
+OI-18, OI-64.
+
+## OI-66 — `GET /api/lessons/:id` serves paid lesson content to unauthenticated callers
+
+**Status**: open — architectural decision, deliberately out of scope for the content/QA work (2026-07-25)
+**Area**: `connect-four/server` lesson routes, `src/lib/useLessonLockGuard.js`, `src/screens/sagaLock.js`
+**Discovered**: browser QA of the remediated lessons (2026-07-25), documented in PR #19
+
+A free or anonymous caller can fetch a **paid** lesson's full JSON — slides, prose, socratic answer —
+directly from `GET /api/lessons/:id`. The paywall is enforced in the client only.
+
+PR #19 added `useLessonLockGuard` so a paid lesson can no longer be opened *or completed* through a
+direct URL like `/clchallenge/undercut` (previously it could, leaving "✓ Completed" beside still-locked
+free lessons). That closes the **UI** hole; the endpoint is untouched, so `curl` still returns paid
+content. With the tier split now at free 1–10 / paid 11–15, five lessons are exposed this way.
+
+**Why deferred**: adding server-side entitlement means deciding how the endpoint authenticates and what
+it returns to an unentitled caller (404 vs 402 vs a redacted stub) — an architecture call, not a QA fix.
+**If picked up**: gate the handler on the caller's tier, reusing the same `free`-flag/tier source
+`deriveLockReason` uses so client and server cannot drift; decide the unentitled response shape; keep
+metadata (title, `free`, `order`) public so the saga list still renders. Add an integration test that a
+signed-out fetch of a paid id does not return `slides`.

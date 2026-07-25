@@ -28,6 +28,8 @@ translation is visible. Non-translatable fields (`movestring`, `boardSpec`, `ove
 `userPerspective`, `_boardInstructions`) are language-independent and do not change with the toggle.
 
 **Traps:**
+- **`goalPrompt` / `goalPrompt_es` are edited and localized here but never reach the learner** — see
+  "Fields the learner UI ignores" below. Translating them is harmless but changes nothing on screen.
 - `lessonToJsonPayload` (the PUT body builder) rebuilds `slides`/`socratic` from whitelists — it must
   spread the source object *then* override derived fields (`boardSpec`), or it silently drops `_es`
   (and, historically, the un-suffixed `socratic.goalPrompt`) on every save.
@@ -151,6 +153,46 @@ The `BoardEditor` component has two modes:
   in sync (new types get default labels; removed types drop from legend)
 
 ---
+
+## Fields the learner UI ignores (editor ≠ app)
+
+The editor is a faithful view of the **JSON**, not of the **app**. Three fields render in the editor
+(or merely look authoritative in the file) but are never read by the learner screens. Verified at
+source 2026-07-25; re-verify by grepping the screen before trusting any of it.
+
+| Field | Editor | Learner app | What actually drives it |
+|---|---|---|---|
+| `socratic.goalPrompt`, `confirmationChallenges[].goalPrompt` (+ `_es`) | editable | **never rendered** | `ChallengeScreen.jsx:116-118` picks a **random** key from `coach.spoken.<category>.prompt.{0,1,2}`; the socratic prompt comes from `socratic.messages.ask` |
+| `socratic.overlays` | **rendered** | **ignored** | `SocraticScreen.jsx:151` derives its own overlays (`win` ring on the dropped cell at `correct`, on the correct cell at `wrong2`) and never reads the authored array. `slides[].overlays` **are** rendered — this is socratic-only |
+| `userPerspective` | shown as non-translatable | **not consulted** | `SocraticScreen.jsx:96`: `movestring.length % 2 === 0 ? 'red' : 'yellow'` — **movestring length parity** decides the learner's disc color (even → P1/GREEN, odd → P2/GRAY) |
+
+Consequences to design around:
+
+- **To change a challenge prompt, edit i18n, not the lesson.** A whole round of `goalPrompt`
+  corrections once shipped into dead fields and was reported as fixed.
+- **`coach.spoken.<category>.*` is shared by every puzzle in the category**, including DB-drawn
+  practice boards. Keep it outcome-neutral and mechanism-accurate — never assert a board-specific
+  verdict ("Gray is winning here"), and make sure it points the same direction as the **grader**
+  (`evalUndercut` marks the *killing* column wrong, so "find the undercut" instructs a Blunder).
+- **An authored socratic overlay on the answer cell looks like a spoiler in the editor** and is
+  invisible in the app — the two surfaces disagree, so judge spoilers against the app.
+- **Copy that names the learner's color must match movestring parity**, not `userPerspective`.
+
+## Curriculum ordering and the free/paid boundary
+
+Display order is the **filename numeric prefix** (`lesson-NN-slug.json`), parsed in
+`lessonLoader.js:169-176`, which overwrites and ignores the JSON `order` field. Keep the JSON `order`
+in sync anyway — it is the field a reader trusts, and the curriculum now asserts the two agree.
+
+- **Reorder by renaming files with `git mv`**, never by editing `order`. Use a **two-phase rename**
+  (all → temp prefixes → final) or intermediate renames collide with existing prefixes.
+- `id` is independent of the filename, so renames preserve `lesson_progress` rows. **Locate a lesson
+  by `id`, never by prefix** — `tests/lessons/opening-lessons.test.js` loads by id for this reason.
+- **Tier contiguity is a product requirement**: all `free: true` lessons precede all paid ones, giving
+  **exactly one free→paid transition**. As of 2026-07-25 that is 15 lessons, free 1–10 / paid 11–15,
+  with the opening lessons early (4–5). An insertion that interleaves tiers is a regression.
+- Titles come from the i18n key `lesson.<id>.title` in **both** `en.json` and `es.json`; a new lesson
+  needs both or `i18nKeyParity` fails. There is no `title_es`.
 
 ## Socratic Solver Verification
 
