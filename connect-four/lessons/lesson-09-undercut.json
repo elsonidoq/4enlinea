@@ -23,12 +23,26 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 1, "type": "td" },
-        { "c": 2, "r": 2, "type": "tg" }
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "Gray's completing cell — the lower threat" },
-        { "type": "tg", "label": "Green's completing cell — directly above" }
+        {
+          "type": "td",
+          "label": "Gray's completing cell — the lower threat"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cell — directly above"
+        }
       ],
       "infoProse": "Gray's three discs across the second row — fourth, fifth and sixth columns — complete four-in-a-row on the second row of the third column. Green's three discs directly above them, across the third row, complete on the third row of that same column. Two major threats, one column, Gray's sitting below Green's.\n\nBecause gravity fills a column from the bottom up, the second row must be settled before the third row can ever be reached. When two threats from opposite players share a column on rows of opposite parity like this — one even, one odd — the lower threat neutralizes the upper one. That is the undercut.\n\nNeutralized does not mean Green's cell vanishes, and it does not mean the column is instant death for anyone who touches it. It means something more precise: Green's threat can never be used to win the game. The next slide walks through exactly why."
     },
@@ -51,14 +65,35 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "claim" },
-        { "c": 2, "r": 1, "type": "td" },
-        { "c": 2, "r": 2, "type": "tg" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "claim"
+        },
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "The entry cell — the first disc in the column lands here" },
-        { "type": "td", "label": "Gray's completing cell — the lower threat" },
-        { "type": "tg", "label": "Green's completing cell — directly above" }
+        {
+          "type": "claim",
+          "label": "The entry cell — the first disc in the column lands here"
+        },
+        {
+          "type": "td",
+          "label": "Gray's completing cell — the lower threat"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cell — directly above"
+        }
       ],
       "infoProse": "Suppose Green enters the third column first. The disc lands on the first row — and Gray's completing cell on the second row becomes immediately playable. Gray drops there and wins on the spot. So Green can never afford to enter this column while Gray's threat stands.\n\nNow suppose Gray enters first. Gray's disc lands on the first row, threatening to win on the second row next turn. Green has no win of its own anywhere on the board, so Green must block: Green's disc fills the second row, and Gray's threat is dead. But that block lifts the column — Green's own completing cell on the third row is now the next drop, and it is Gray's turn. Gray fills the third row. Two moves spent, both threats dead.\n\nSo the column is one-sided. If Green enters it, Gray wins at once; if Gray enters it, the forced exchange buries both threats. In neither line does Green's upper threat ever produce a win — that is what neutralizes means. Note that Gray's lower threat is not neutralized by anything: it stays fully active, and it is the one that dictates who may touch the column."
     },
@@ -81,12 +116,26 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 1, "type": "td" },
-        { "c": 2, "r": 2, "type": "tg" }
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "Gray's lower threat — the undercut" },
-        { "type": "tg", "label": "Green's threat — neutralized, it can never win" }
+        {
+          "type": "td",
+          "label": "Gray's lower threat — the undercut"
+        },
+        {
+          "type": "tg",
+          "label": "Green's threat — neutralized, it can never win"
+        }
       ],
       "infoProse": "Game reviews use this word from the victim's side. When a review says a threat \"was undercut\", it means exactly this shape: an opponent threat directly below, on a row of the opposite parity, so the threat above can no longer win the game. Here Green spent its last move completing the third-row line — three discs of work invested in a threat that was dead on arrival, because Gray's second-row three-in-a-row was already finished beneath it.\n\nThe threat does not vanish from the board, and Gray still has to respect the sequence — but in every line it ends blocked or unreached. That is why building toward a completing cell that sits directly above an opponent threat of the opposite row parity is wasted effort.\n\nThe strong version of the same idea is Gray's seat on this board: aiming a three-in-a-row at the cell directly below an opponent's threat. The lower cell owns the column."
     },
@@ -109,14 +158,35 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 2, "type": "td" },
-        { "c": 4, "r": 3, "type": "claim" },
-        { "c": 4, "r": 4, "type": "tg" }
+        {
+          "c": 4,
+          "r": 2,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 4,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "Gray's completing cell — third row" },
-        { "type": "claim", "label": "The spare cell between the two threats" },
-        { "type": "tg", "label": "Green's completing cell — fifth row" }
+        {
+          "type": "td",
+          "label": "Gray's completing cell — third row"
+        },
+        {
+          "type": "claim",
+          "label": "The spare cell between the two threats"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cell — fifth row"
+        }
       ],
       "infoProse": "Gray's rising diagonal completes on the third row of the fifth column. Green's three discs across the fifth row complete two rows higher, on the fifth row of the same column. Lower Gray, upper Green — it looks like the undercut again. It is not.\n\nThe difference is row parity. On the earlier board the two completing cells sat on neighbouring rows, one even and one odd. Here both sit on odd rows — the third and the fifth — with a spare cell on the fourth row between them. That spare cell breaks the mechanism: when Gray's third-row cell eventually gets blocked, the next open cell is the harmless fourth row, so the block does not expose Green's threat at all. The forced exchange that killed both threats on the earlier board never happens.\n\nInstead, each threat lives its own life. Whoever is eventually forced to fill the fourth row hands the fifth row to the other player — so Green's upper threat remains a genuine weapon, and Gray's lower threat stays live beneath it. Same-parity threats in one column simply coexist: both must be answered separately, and no undercut exists. Before calling a stack of threats an undercut, check the rows: opposite parity, or nothing."
     },
@@ -139,12 +209,26 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 2, "type": "claim" },
-        { "c": 4, "r": 3, "type": "tg" }
+        {
+          "c": 4,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "The cell a real undercut would need — Gray has no completed three aiming here" },
-        { "type": "tg", "label": "Green's completing cell — fully alive" }
+        {
+          "type": "claim",
+          "label": "The cell a real undercut would need — Gray has no completed three aiming here"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cell — fully alive"
+        }
       ],
       "infoProse": "Green's rising diagonal — first row of the second column, second row of the third, third row of the fourth — completes on the fourth row of the fifth column. Below that cell, the fifth column holds a single gray disc on its first row.\n\nA disc is not a threat. An undercut needs a completed major threat below: three gray discs that all need one specific lower cell in this column. Gray does have two discs of a diagonal pointing at the third row — but two discs make no major threat, and a lone disc at the bottom makes none at all. There is no gray completing cell anywhere in the fifth column, so nothing neutralizes Green's threat. It is fully alive, and Gray still has to deal with it.\n\nTwo moves later in this very game, Gray finished that diagonal — and the picture changed completely. That position is next."
     }
@@ -256,5 +340,5 @@
       "userPlayer": 2
     }
   ],
-  "order": 7
+  "order": 9
 }

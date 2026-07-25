@@ -24,16 +24,46 @@
         }
       ],
       "overlays": [
-        { "c": 3, "r": 0, "type": "tg" },
-        { "c": 3, "r": 2, "type": "tg" },
-        { "c": 3, "r": 4, "type": "tg" },
-        { "c": 3, "r": 1, "type": "td" },
-        { "c": 3, "r": 3, "type": "td" },
-        { "c": 3, "r": 5, "type": "td" }
+        {
+          "c": 3,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 3,
+          "r": 4,
+          "type": "tg"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 3,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 3,
+          "r": 5,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Green's natural rows (first, third, fifth)" },
-        { "type": "td", "label": "Gray's natural rows (second, fourth, sixth)" }
+        {
+          "type": "tg",
+          "label": "Green's natural rows (first, third, fifth)"
+        },
+        {
+          "type": "td",
+          "label": "Gray's natural rows (second, fourth, sixth)"
+        }
       ],
       "infoProse": "The dots on the centre column show the pattern from the parity lesson: counting rows from the bottom, the odd rows (first, third, fifth) are Green's natural squares, and the even rows (second, fourth, sixth) are Gray's.\n\nIn a column with an even number of empty squares, those squares stack into pairs: an odd row below, an even row directly above it. If Green takes the lower square of a pair, the upper square is right there for Gray to take on the very next move.\n\nThat simple exchange — Green gets the odd square, Gray immediately takes the even square above it — is called Claimeven, and it is the foundation of Gray's whole defensive plan."
     },
@@ -57,13 +87,31 @@
         }
       ],
       "overlays": [
-        { "c": 0, "r": 1, "type": "td" },
-        { "c": 2, "r": 1, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" }
+        {
+          "c": 0,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "The square Gray claims with the reply" },
-        { "type": "win", "label": "Green's pair aiming through the claimed square" }
+        {
+          "type": "td",
+          "label": "The square Gray claims with the reply"
+        },
+        {
+          "type": "win",
+          "label": "Green's pair aiming through the claimed square"
+        }
       ],
       "infoProse": "Green's move landed on the first row of the first column — an odd row, Green's natural territory. Claimeven is Gray's reply: play the same column at once and take the even square directly above.\n\nLook at the ringed discs: Green has two discs side by side on the second row, in the third and fourth columns. One of their four-in-a-row windows runs along the second row through the claimed square — the moment Gray takes that square, the window is dead forever. That is the Claimeven bargain: Gray concedes the odd square below, gets the even square above, and every Green four-in-a-row that needs the claimed square is refuted.\n\nThe solver confirms the reply keeps Gray winning here — no calculation of individual threats required."
     },
@@ -87,25 +135,92 @@
         }
       ],
       "overlays": [
-        { "c": 0, "r": 1, "type": "td" },
-        { "c": 0, "r": 3, "type": "td" },
-        { "c": 0, "r": 5, "type": "td" },
-        { "c": 1, "r": 1, "type": "td" },
-        { "c": 1, "r": 3, "type": "td" },
-        { "c": 1, "r": 5, "type": "td" },
-        { "c": 2, "r": 3, "type": "td" },
-        { "c": 2, "r": 5, "type": "td" },
-        { "c": 4, "r": 1, "type": "td" },
-        { "c": 4, "r": 3, "type": "td" },
-        { "c": 4, "r": 5, "type": "td" },
-        { "c": 5, "r": 3, "type": "td" },
-        { "c": 5, "r": 5, "type": "td" },
-        { "c": 6, "r": 1, "type": "td" },
-        { "c": 6, "r": 3, "type": "td" },
-        { "c": 6, "r": 5, "type": "td" }
+        {
+          "c": 0,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 0,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 0,
+          "r": 5,
+          "type": "td"
+        },
+        {
+          "c": 1,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 1,
+          "r": 5,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 2,
+          "r": 5,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 4,
+          "r": 5,
+          "type": "td"
+        },
+        {
+          "c": 5,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 5,
+          "r": 5,
+          "type": "td"
+        },
+        {
+          "c": 6,
+          "r": 1,
+          "type": "td"
+        },
+        {
+          "c": 6,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 6,
+          "r": 5,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "Gray's claimed squares — one per pair, always the upper one" }
+        {
+          "type": "td",
+          "label": "Gray's claimed squares — one per pair, always the upper one"
+        }
       ],
       "infoProse": "Count the empty squares in each open column: six, six, four, six, four, six — all even. Every open column therefore splits into stacked pairs of empty squares: an odd row below, an even row directly above.\n\nGray's entire strategy is one rule: whatever column Green plays, reply directly above. Green collects the lower squares of the pairs, Gray collects the upper ones — the marked squares — and every Green four-in-a-row that needs a marked square dies along the way.\n\nA position like this is called a claimeven position, and it is the reason Claimeven matters: the pairing runs on autopilot, board-wide, with nothing left to calculate. One honest caveat: Claimeven by itself only promises Gray the even squares — whether that wins, draws, or merely survives depends on the position. Here it wins: the solver scores every legal Green move as losing against best play."
     },
@@ -129,12 +244,26 @@
         }
       ],
       "overlays": [
-        { "c": 3, "r": 3, "type": "td" },
-        { "c": 1, "r": 2, "type": "tg" }
+        {
+          "c": 3,
+          "r": 3,
+          "type": "td"
+        },
+        {
+          "c": 1,
+          "r": 2,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "A true Claimeven square — even row, directly above a Green disc on an odd row" },
-        { "type": "tg", "label": "An odd-row square — Green's natural territory, not a Claimeven" }
+        {
+          "type": "td",
+          "label": "A true Claimeven square — even row, directly above a Green disc on an odd row"
+        },
+        {
+          "type": "tg",
+          "label": "An odd-row square — Green's natural territory, not a Claimeven"
+        }
       ],
       "infoProse": "Green's newest disc went into the second column and landed on the second row — an even row, a square that would naturally have been Gray's. The square above it sits on the third row: odd, Green's natural territory. Replying there is not a Claimeven — it spends Gray's move on an odd square, and the solver scores that reply as losing for Gray.\n\nCompare the fourth column: Green's disc there sits on the third row (odd), and the empty square directly above it, on the fourth row, is even. That is a genuine Claimeven square — taking it keeps Gray winning.\n\nThe rule before every reply: check the row Green's disc just landed on. Odd row below, even row above — claim it. Even row below — stop; replying above helps Green, and a different plan is needed."
     }
@@ -218,5 +347,5 @@
       "userPlayer": 2
     }
   ],
-  "order": 5
+  "order": 7
 }

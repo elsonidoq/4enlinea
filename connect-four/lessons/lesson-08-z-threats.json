@@ -2,7 +2,7 @@
   "id": "z-threats",
   "title": "Z-Threats",
   "free": true,
-  "order": 6,
+  "order": 8,
   "userPerspective": "yellow",
   "slides": [
     {
@@ -24,13 +24,31 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 1, "type": "claim" },
-        { "c": 4, "r": 2, "type": "claim" },
-        { "c": 4, "r": 3, "type": "td" }
+        {
+          "c": 4,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "Count these cells, starting at the stack top" },
-        { "type": "td", "label": "Gray's threat cell — the count ends here" }
+        {
+          "type": "claim",
+          "label": "Count these cells, starting at the stack top"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell — the count ends here"
+        }
       ],
       "infoProse": "Gray's discs in the second, third and fourth columns form a rising diagonal, and its missing fourth cell — the threat cell — is the fourth row of the fifth column.\n\nThe fifth column already holds one disc, so the next disc there would land on the second row. Count the empty cells from there up to and including the threat cell: second row, third row, fourth row. Three cells — an odd number.\n\nA major threat whose count is odd is called a Z-Threat. That count is the whole test: start at the current stack top (not at the floor), include the threat cell itself, and check odd or even. The next slides show why odd is the number that matters."
     },
@@ -54,13 +72,31 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 1, "type": "tg" },
-        { "c": 4, "r": 2, "type": "tg" },
-        { "c": 4, "r": 3, "type": "td" }
+        {
+          "c": 4,
+          "r": 1,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Cells Green gets squeezed into" },
-        { "type": "td", "label": "The threat cell — Gray takes it last" }
+        {
+          "type": "tg",
+          "label": "Cells Green gets squeezed into"
+        },
+        {
+          "type": "td",
+          "label": "The threat cell — Gray takes it last"
+        }
       ],
       "infoProse": "The wrong plan is to dive into the fifth column right away: every disc Gray drops there is a free move handed to Green elsewhere, and after Gray's first disc the threat cell still is not reachable.\n\nA Z-Threat is a waiting weapon. Gray leaves the column alone and keeps making useful moves on the rest of the board. Sooner or later Green runs out of safe moves elsewhere and has to drop into the fifth column, landing on the second row. Gray answers somewhere else again. When Green is squeezed in a second time, that disc lands on the third row — and now the threat cell on the fourth row is the next drop in the column. Gray takes it and completes the diagonal.\n\nThat is the odd count at work: three cells means the two below the threat get absorbed by the squeezed player, and the last one — the threat itself — falls to Gray. Odd count = the threat belongs to Gray, as long as Gray keeps a useful move in hand and lets Green be the one forced into the column."
     },
@@ -83,12 +119,26 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 1, "type": "claim" },
-        { "c": 4, "r": 2, "type": "td" }
+        {
+          "c": 4,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "Count these cells, starting at the stack top" },
-        { "type": "td", "label": "Gray's threat cell — the count ends here" }
+        {
+          "type": "claim",
+          "label": "Count these cells, starting at the stack top"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell — the count ends here"
+        }
       ],
       "infoProse": "Gray's rising diagonal through the third, fourth and sixth columns is missing its third cell: the third row of the fifth column. That column holds one disc, so the count runs second row, third row — two cells. An even count means this is not a Z-Threat.\n\nRun the same waiting game and watch it flip. Green will never drop into that column voluntarily: a Green disc on the second row would put the threat cell straight into Gray's reach — the solver rates it Green's worst move on the board, the fastest loss. But if Gray is ever the one squeezed into the column, Gray's own disc fills the second row, and Green simply blocks the threat cell on the very next move.\n\nWith an even count, the squeeze delivers the block to Green instead of the threat to Gray. Even count = the same waiting game hands the cell to the opponent."
     },
@@ -111,15 +161,41 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 2, "type": "claim" },
-        { "c": 4, "r": 3, "type": "claim" },
-        { "c": 4, "r": 4, "type": "td" },
-        { "c": 1, "r": 2, "type": "claim" },
-        { "c": 1, "r": 3, "type": "td" }
+        {
+          "c": 4,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 4,
+          "type": "td"
+        },
+        {
+          "c": 1,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "claim", "label": "Counted cells below each threat" },
-        { "type": "td", "label": "Gray threat cells — count to each from its own stack top" }
+        {
+          "type": "claim",
+          "label": "Counted cells below each threat"
+        },
+        {
+          "type": "td",
+          "label": "Gray threat cells — count to each from its own stack top"
+        }
       ],
       "infoProse": "From the parity lesson, Gray's natural rows are the even ones — second, fourth, sixth. So the threat on the fifth row of the fifth column looks like Green territory, and the one on the fourth row of the second column looks safely Gray's. Both readings are wrong, because both columns already hold two discs.\n\nFifth column: count from the stack top — third row, fourth row, fifth row. Three cells, odd: a genuine Z-Threat for Gray, sitting on an 'odd' row.\n\nSecond column: third row, fourth row. Two cells, even: not a Z-Threat, even though the fourth row is one of Gray's 'natural' even rows.\n\nEvery disc already in a column shifts the count by one. The raw row number tells the truth only in an empty column — once a column has discs in it, always count from the stack top."
     }

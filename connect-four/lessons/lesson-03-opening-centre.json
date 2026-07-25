@@ -44,7 +44,7 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a third-row (odd-row) horizontal connection nearby, while Gray's best threats sit on the diagonals through the centre. Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour."
+      "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a horizontal connection on the third row nearby, while Gray's best threats sit on the diagonals through the centre. (Why the third row favours Green is exactly what the Odd Rows lesson explains later.) Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour."
     },
     {
       "movestring": "3333311115555",
@@ -160,5 +160,5 @@
   },
   "confirmationCategory": null,
   "confirmationCount": 0,
-  "order": 11
+  "order": 3
 }

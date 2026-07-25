@@ -23,13 +23,32 @@
         }
       ],
       "overlays": [
-        { "c": 3, "r": 0, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 4, "r": 1, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" }
+        {
+          "c": 3,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The four J discs" }
+        {
+          "type": "win",
+          "label": "The four J discs"
+        }
       ],
       "infoProse": "Green's four ringed discs form the letter J. Read them from the bottom: one disc at the foot of the fourth column, on the first row. Above it comes a gap — Gray owns the second row there. Then the shape closes: green discs side by side on the third row of the fourth and fifth columns, with one more green disc tucked underneath on the fifth column's second row.\n\nTwo things make this a J and not just a cluster. First, the gap column: the J's own column holds green discs on the first and third rows with one cell between them — it is not a stacked pair. Second, the neighbouring column carries two green discs, one level with the gap and one level with the upper disc — the hook of the J. The gap cell itself can even belong to Gray, as it does here; the J never needs it.\n\nThis exact position is Allen's textbook example. With Gray to move, the solver scores every Gray reply as losing. The next slide shows where that power comes from."
     },
@@ -52,17 +71,51 @@
         }
       ],
       "overlays": [
-        { "c": 3, "r": 0, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 4, "r": 1, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 5, "r": 2, "type": "claim" },
-        { "c": 6, "r": 2, "type": "claim" },
-        { "c": 6, "r": 3, "type": "claim" }
+        {
+          "c": 3,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 6,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 6,
+          "r": 3,
+          "type": "claim"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The four J discs" },
-        { "type": "claim", "label": "Green's three completing cells — two columns" }
+        {
+          "type": "win",
+          "label": "The four J discs"
+        },
+        {
+          "type": "claim",
+          "label": "Green's three completing cells — two columns"
+        }
       ],
       "infoProse": "Count Green's ways to finish. Three cells matter, spread across two columns: the sixth column's third row, and the seventh column's third and fourth rows. None of them is a major threat yet — each winning line still needs two cells — but together they form a trap with no exit.\n\nHere is Allen's argument. When the seventh column eventually fills, the players take its cells in turn, so sooner or later Green must get either its third row or its fourth row. Either one is enough. If Green lands on the seventh column's third row, the sixth column's third-row cell now completes four along the third row. If Green lands on the seventh column's fourth row instead, that same sixth-column cell completes the rising diagonal that starts at the J's foot. Whichever way the column fills, the sixth column's third row becomes a major threat.\n\nSo the whole triple boils down to one future major threat on the third row — an odd row. That is why the J is counted like a single major odd-row threat: Gray can delay, but one disc at a time cannot defend three cells in two columns. The solver agrees — with Gray to move here, every legal Gray move loses."
     },
@@ -85,21 +138,62 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 0, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 2, "r": 2, "type": "claim" },
-        { "c": 1, "r": 2, "type": "claim" },
-        { "c": 1, "r": 3, "type": "claim" },
-        { "c": 1, "r": 0, "type": "td" }
+        {
+          "c": 4,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 1,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "claim"
+        },
+        {
+          "c": 1,
+          "r": 0,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The four mirrored J discs" },
-        { "type": "claim", "label": "The J's completing cells — now pointing left" },
-        { "type": "td", "label": "Gray's bottom-row threat — Green must block it now" }
+        {
+          "type": "win",
+          "label": "The four mirrored J discs"
+        },
+        {
+          "type": "claim",
+          "label": "The J's completing cells — now pointing left"
+        },
+        {
+          "type": "td",
+          "label": "Gray's bottom-row threat — Green must block it now"
+        }
       ],
-      "infoProse": "The same J, reflected. The foot sits at the bottom of the fifth column — first row — with the gap above it, and the hook now points left: the fourth column carries the other two green discs. The three completing cells run leftward: the third column's third row, and the second column's third and fourth rows. A mirrored J is every bit as valid as the original.\n\nNow the rule that decides whether any J is real. The pivot cell — the one that eventually becomes the major threat — always lands exactly two rows above the J's bottom disc, so it shares that disc's parity. Lessons 4 to 6 showed who collects which rows when the board fills up at the end of a tight game: Green, who moves first, naturally lands on the odd rows — first, third, fifth — while Gray collects the even ones. So a green J works when the bottom disc of the J sits on an odd row — first or third. Here it sits on the first row, and the future major threat ripens on the third row: a row Green collects. Move the identical shape up one row — bottom disc on an even row — and its threat ripens on an even row instead, exactly where Gray naturally lands. Same picture, no squeeze: a ghost.\n\nOne honest note about this board: Gray has three discs and a gap on the bottom row, so Green's next move is forced — block the second column. The solver confirms Green blocks and still wins. A J does not demand quiet play; it keeps its grip while the rest of the game goes on."
+      "infoProse": "The same J, reflected. The foot sits at the bottom of the fifth column — first row — with the gap above it, and the hook now points left: the fourth column carries the other two green discs. The three completing cells run leftward: the third column's third row, and the second column's third and fourth rows. A mirrored J is every bit as valid as the original.\n\nNow the rule that decides whether any J is real. The pivot cell — the one that eventually becomes the major threat — always lands exactly two rows above the J's bottom disc, so it shares that disc's parity. The Odd Rows, Claimeven and Z-Threats lessons showed who collects which rows when the board fills up at the end of a tight game: Green, who moves first, naturally lands on the odd rows — first, third, fifth — while Gray collects the even ones. So a green J works when the bottom disc of the J sits on an odd row — first or third. Here it sits on the first row, and the future major threat ripens on the third row: a row Green collects. Move the identical shape up one row — bottom disc on an even row — and its threat ripens on an even row instead, exactly where Gray naturally lands. Same picture, no squeeze: a ghost.\n\nOne honest note about this board: Gray has three discs and a gap on the bottom row, so Green's next move is forced — block the second column. The solver confirms Green blocks and still wins. A J does not demand quiet play; it keeps its grip while the rest of the game goes on."
     },
     {
       "movestring": "5556656",
@@ -120,13 +214,32 @@
         }
       ],
       "overlays": [
-        { "c": 5, "r": 0, "type": "win" },
-        { "c": 5, "r": 2, "type": "win" },
-        { "c": 6, "r": 1, "type": "win" },
-        { "c": 6, "r": 2, "type": "win" }
+        {
+          "c": 5,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 6,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 6,
+          "r": 2,
+          "type": "win"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The same four J discs — against the wall" }
+        {
+          "type": "win",
+          "label": "The same four J discs — against the wall"
+        }
       ],
       "infoProse": "These are the same seven moves as the first slide, pushed two columns to the right. The J is intact — foot on the sixth column's first row, an odd row, gap above it, hook on the seventh column — and yet the solver's verdict flips completely: with Gray to move, Gray now has a winning line, where the centred version left Gray losing everywhere. Nothing is wrong with the shape. What is missing is room.\n\nThe J's punch was its three completing cells extending past the hook. Here they would need an eighth and a ninth column, and the board ends at seven. That is the first failure condition, edge proximity: a J needs two columns of space on its open side. The second is overcutting: the pivot cell just past the hook — on the first slide, the sixth column's third row — belongs to every one of the J's winning lines. If Gray ever owns that cell, the horizontal and the diagonal die together and the triple threat evaporates, so watch what Gray collects on the J's open side. The third is parity cancellation: the J is worth one major odd-row threat, no more — if Gray has built two odd-row threats of its own in separate columns, they outweigh it, and the squeeze the J relies on never arrives.\n\nA J is a strong asset, not a guaranteed win. Before counting on one: check the edge, check the pivot cell, and check the rest of the board's threats."
     }
@@ -248,5 +361,5 @@
       "userPlayer": 2
     }
   ],
-  "order": 10
+  "order": 12
 }

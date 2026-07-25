@@ -23,12 +23,26 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "tg" },
-        { "c": 2, "r": 1, "type": "td" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Green's completing cell — the next playable cell in the column" },
-        { "type": "td", "label": "Gray's completing cell — directly above" }
+        {
+          "type": "tg",
+          "label": "Green's completing cell — the next playable cell in the column"
+        },
+        {
+          "type": "td",
+          "label": "Gray's completing cell — directly above"
+        }
       ],
       "infoProse": "Green's three discs across the bottom row — first, second and fourth columns — complete four-in-a-row on the bottom row of the third column. That column is empty, so Green's completing cell is exactly where the next disc dropped there will land. Green threatens to win next turn.\n\nGray's three discs across the second row — second, fourth and fifth columns — complete on the second row of that same column, directly above Green's cell.\n\nIt is Gray's move. Gray clearly has to deal with Green's threat — but look at what a single gray disc in the third column does before reading on. This shape — the opponent's completing cell at the next playable cell, the player's own completing cell directly above it — is the overcut."
     },
@@ -51,10 +65,17 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 1, "type": "td" }
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "td", "label": "Gray's completing cell — now the next playable cell" }
+        {
+          "type": "td",
+          "label": "Gray's completing cell — now the next playable cell"
+        }
       ],
       "infoProse": "Gray drops into the third column. The disc lands on the bottom row — exactly Green's completing cell. Green's threat is blocked, permanently.\n\nAnd the same disc did a second job: the second row of the third column is now the next playable cell, so Gray's threat is live. Green must answer it immediately — the solver confirms that every other Green reply loses on the spot, and even after Green blocks, Gray keeps a winning game. One move defended and attacked at the same time.\n\nThose three facts are the whole condition for this play, and none of them involves counting empty cells: Green's completing cell was the next playable cell in the column, Gray's completing cell sat directly above it, and it was Gray's turn. Gravity did the rest — Gray's disc landed on Green's cell, and the block itself lifted the column into Gray's threat."
     },
@@ -77,12 +98,26 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "tg" },
-        { "c": 2, "r": 1, "type": "td" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 1,
+          "type": "td"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Green's completing cell — the lower threat" },
-        { "type": "td", "label": "Gray's completing cell — the upper threat" }
+        {
+          "type": "tg",
+          "label": "Green's completing cell — the lower threat"
+        },
+        {
+          "type": "td",
+          "label": "Gray's completing cell — the upper threat"
+        }
       ],
       "infoProse": "When two completing cells from opposite players share a column, the lower one usually rules the upper one out — that is the undercut from the previous lesson. An overcut is the reverse verdict: the upper cell wins the column anyway. This board shows the forcing version — Green's cell is the next playable cell, Gray's is directly above, and one drop settles it.\n\nTwo more shapes earn the same verdict. Same-parity overcut: when the two completing cells sit two rows apart — say the third row and the fifth — the spare cell between them breaks the undercut exchange, the threats simply coexist, and the column can still be winning for the upper player. Chain overcut: when the upper player also owns a third completing cell below the opponent's, the opponent's threat is itself undercut from beneath, so it can never fire against the cell above it.\n\nThe forcing shape from the last slide is the one a player sets up and plays deliberately. The other two mostly appear when a game review names an overcut in a column nobody ever entered — that is what the review found there."
     },
@@ -105,12 +140,26 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 3, "type": "tg" },
-        { "c": 2, "r": 4, "type": "claim" }
+        {
+          "c": 2,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 2,
+          "r": 4,
+          "type": "claim"
+        }
       ],
       "legendItems": [
-        { "type": "tg", "label": "Green's completing cell — the next playable cell in the column" },
-        { "type": "claim", "label": "The cell above it — both players complete a four here" }
+        {
+          "type": "tg",
+          "label": "Green's completing cell — the next playable cell in the column"
+        },
+        {
+          "type": "claim",
+          "label": "The cell above it — both players complete a four here"
+        }
       ],
       "infoProse": "The third column looks like slide 1: Green's three discs across the fourth row complete on the fourth row of the third column — the next playable cell — and Gray's three discs across the fifth row complete directly above it. But the fifth-row cell is not Gray's alone. Green's diagonal, running down from that very cell to the sixth column's second row, completes there too. One cell, two winners.\n\nThat detail reverses everything. If Gray drops into the third column, the disc blocks Green's fourth-row cell — and the block itself makes the fifth row playable, with Green to move. Green drops into the same column and completes the diagonal. The overcut backfires: the solver scores the third column a loss for Gray, while Gray's actual winning move is the seventh column, completing a gray four on the bottom row at once.\n\nSo the checklist has one more line. The opponent's completing cell at the next playable cell, the player's own cell directly above, the player's turn — and that upper cell the player's alone. If the opponent also completes a four on the upper cell, playing the column just opens their winning cell for them."
     }
@@ -222,5 +271,5 @@
       "userPlayer": 2
     }
   ],
-  "order": 8
+  "order": 10
 }

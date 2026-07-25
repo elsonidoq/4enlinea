@@ -23,17 +23,51 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 2, "r": 2, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 5, "r": 2, "type": "tg" },
-        { "c": 5, "r": 3, "type": "tg" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 5,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The five Figure-7 discs" },
-        { "type": "tg", "label": "Green's completing cells — same column, adjacent rows" }
+        {
+          "type": "win",
+          "label": "The five Figure-7 discs"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cells — same column, adjacent rows"
+        }
       ],
       "infoProse": "The Figure-7 is five discs shaped like the digit '7'. Green's diagonal arm climbs from the third column's bottom row through the fourth column's second row to the fifth column's third row. Green's horizontal arm runs along the third row, from the third column to that same fifth-column disc. The two arms share that corner disc — the hinge. Three discs on the diagonal, three on the row, five in total.\n\nNow count Green's completing cells. The horizontal arm completes four on the third row of the sixth column. The diagonal arm completes four on the fourth row of the sixth column. Both threats land in the same column, one directly above the other — that stacked pair is the Figure-7's signature.\n\nThe sixth column is still empty, so neither cell can be reached yet: a disc dropped there would land on the bottom row. Both threats are waiting above the stack. The solver already calls the position lost for Gray — every legal Gray move loses. The next slide shows why the stacked pair is impossible to defend."
     },
@@ -56,16 +90,46 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 2, "r": 2, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 5, "r": 3, "type": "tg" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The five Figure-7 discs" },
-        { "type": "tg", "label": "Green's upper threat — now the next playable cell" }
+        {
+          "type": "win",
+          "label": "The five Figure-7 discs"
+        },
+        {
+          "type": "tg",
+          "label": "Green's upper threat — now the next playable cell"
+        }
       ],
       "infoProse": "Here is the same position three moves later, after the sixth column filled. Gray entered it first — the solver had already confirmed that every Gray move loses, so waiting only delays this. Green stacked a disc on top, and that lifted the column to Green's lower completing cell: the third row of the sixth column became the next playable cell, an immediate threat.\n\nGray had to block it — that is the gray disc now sitting on the third row of the sixth column. But look where the block landed: directly below Green's other completing cell on the fourth row. Because the two threats sit on adjacent rows of the same column, the block itself raised the stack by one and made the upper cell the next playable cell. Green now wins there, completing the diagonal.\n\nThat is the whole trap. Blocking the lower threat hands over the upper one — one move can never defend two cells stacked in the same column. And because both cells started above the stack, Gray could not defuse anything early: any disc Gray ever puts in that column only carries the stack closer to Green's pair."
     },
@@ -88,19 +152,53 @@
         }
       ],
       "overlays": [
-        { "c": 2, "r": 0, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 2, "r": 2, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 5, "r": 2, "type": "tg" },
-        { "c": 5, "r": 3, "type": "tg" }
+        {
+          "c": 2,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 5,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The five Figure-7 discs" },
-        { "type": "tg", "label": "Green's completing cells — the lower one now immediately playable" }
+        {
+          "type": "win",
+          "label": "The five Figure-7 discs"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cells — the lower one now immediately playable"
+        }
       ],
-      "infoProse": "This board carries the identical five-disc '7', but the sixth column is no longer empty: two gray discs already sit at its bottom. That lifts the stack to Green's lower completing cell — the third row is now the next playable cell, an immediate threat Gray must answer this very move. And the answer walks straight into slide 2's ending: the block lands directly below the fourth-row cell and activates it. No waiting, no manoeuvring — the trap fires at once.\n\nNote what can never happen here: both threats immediately playable at the same time. In a single column only one cell is ever the next playable one, so a stacked pair always keeps one threat above the stack — that latent threat is what makes this a trap rather than a plain fork. A fork with two immediately playable threats (lesson 3) needs two different columns, and there the defender at least chooses which one to block.\n\nStill, the purest Figure-7 is the empty-column version from the first two slides: both threats latent, the opponent free to move anywhere — and doomed the moment the column fills. When the column comes pre-filled, as here, the position is just as won, but it plays out as a two-move forcing sequence rather than a standing threat that poisons a whole column for the rest of the game."
+      "infoProse": "This board carries the identical five-disc '7', but the sixth column is no longer empty: two gray discs already sit at its bottom. That lifts the stack to Green's lower completing cell — the third row is now the next playable cell, an immediate threat Gray must answer this very move. And the answer walks straight into slide 2's ending: the block lands directly below the fourth-row cell and activates it. No waiting, no manoeuvring — the trap fires at once.\n\nNote what can never happen here: both threats immediately playable at the same time. In a single column only one cell is ever the next playable one, so a stacked pair always keeps one threat above the stack — that latent threat is what makes this a trap rather than a plain fork. A fork with two immediately playable threats (the Fork lesson) needs two different columns, and there the defender at least chooses which one to block.\n\nStill, the purest Figure-7 is the empty-column version from the first two slides: both threats latent, the opponent free to move anywhere — and doomed the moment the column fills. When the column comes pre-filled, as here, the position is just as won, but it plays out as a two-move forcing sequence rather than a standing threat that poisons a whole column for the rest of the game."
     },
     {
       "movestring": "43222430403",
@@ -121,17 +219,51 @@
         }
       ],
       "overlays": [
-        { "c": 4, "r": 0, "type": "win" },
-        { "c": 3, "r": 1, "type": "win" },
-        { "c": 2, "r": 2, "type": "win" },
-        { "c": 4, "r": 2, "type": "win" },
-        { "c": 3, "r": 2, "type": "win" },
-        { "c": 1, "r": 2, "type": "tg" },
-        { "c": 1, "r": 3, "type": "tg" }
+        {
+          "c": 4,
+          "r": 0,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 2,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 1,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 1,
+          "r": 3,
+          "type": "tg"
+        }
       ],
       "legendItems": [
-        { "type": "win", "label": "The five Mirror-7 discs" },
-        { "type": "tg", "label": "Green's completing cells — same column, adjacent rows, mirrored side" }
+        {
+          "type": "win",
+          "label": "The five Mirror-7 discs"
+        },
+        {
+          "type": "tg",
+          "label": "Green's completing cells — same column, adjacent rows, mirrored side"
+        }
       ],
       "infoProse": "This is the exact position from the first slide — no new disc has been played. But the '7' has a reflection hiding in it. Read the diagonal the other way: from the fifth column's bottom row, up through the fourth column's second row, to the third column's third row. The horizontal arm is the same row of three, now read from the fifth column back to the third. The hinge is the third-column disc, and the two completing cells stack in the second column, on the third and fourth rows — same column, adjacent rows, both above the empty column's stack.\n\nThat is the Mirror-7: the identical trap with the threat column on the left of the hinge instead of the right. Here the two figures even share four of their five discs — only the foot of the diagonal differs — which is why this one position holds two stacked threat pairs at once, one in the sixth column and one in the second.\n\nThe logic needs no re-learning: whichever side the pair stacks on, blocking the lower cell activates the upper one. The danger is purely perceptual. A player who memorised the rising-diagonal picture scans only to the right and misses the reflection. Whenever three discs line up on a diagonal, check both sides of it for the row of three."
     }
@@ -268,5 +400,5 @@
       "userPlayer": 2
     }
   ],
-  "order": 9
+  "order": 11
 }
