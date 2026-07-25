@@ -11,6 +11,7 @@ import { useAudio } from '../lib/useAudio.js';
 import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getNarrationQueue } from '../lib/lessonNarration.js';
 import { langHeaders } from '../lib/apiLang.js';
+import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -25,7 +26,7 @@ function swatchColor(type) {
   return OVERLAY_SWATCH_COLOR[type] ?? 'rgba(128, 128, 128, 0.4)';
 }
 
-export function ConceptScreen({ go, goBack, lessonId }) {
+export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
   const { t } = useTranslation();
   const { store } = useStore();
   const { speechEnabled } = useAudio();
@@ -33,8 +34,13 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   const [loadState, setLoadState] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [slideIndex, setSlideIndex] = useState(0);
   const startedRef = useRef(false);
+  // Direct-URL lock guard (PRO tier + lesson order) — mirrors SagaScreen's rules.
+  // While it is 'checking' (or after a 'blocked' redirect) loadState stays 'loading',
+  // so the normal loading state shows and locked lesson content is never rendered.
+  const lockStatus = useLessonLockGuard(lessonId, goReplace);
 
   useEffect(() => {
+    if (lockStatus !== 'allowed') return;
     fetch(`${API}/api/lessons/${lessonId}`, { headers: langHeaders() })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -48,7 +54,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
         console.error('[ConceptScreen] fetch error:', err);
         setLoadState('error');
       });
-  }, [lessonId]);
+  }, [lessonId, lockStatus]);
 
   // Track lesson start exactly once when lesson first loads
   useEffect(() => {
@@ -106,7 +112,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
 
   if (loadState === 'loading') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
         <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)' }}>
           {t('common.loading', 'Loading…')}
@@ -117,7 +123,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
 
   if (loadState === 'error' || !lesson) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
         <TopBar onBack={() => goBack()} onLogoClick={() => go('home')} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
           <p style={{ color: 'var(--ink-soft)', fontSize: 15 }}>{t('common.error', 'Something went wrong.')}</p>
@@ -133,7 +139,12 @@ export function ConceptScreen({ go, goBack, lessonId }) {
   const hasInfoProse = slide.infoProse && slide.infoProse.trim().length > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    // height (not minHeight) + minHeight:0 on the scroller: the root is pinned to the
+    // viewport so the content area scrolls INTERNALLY and the Toolbar stays reachable
+    // at the viewport bottom (QA 2026-07-25: Continue sat below the fold on mobile
+    // because minHeight let the root grow past the viewport). 100dvh tracks the mobile
+    // dynamic viewport; this codebase already uses it unconditionally elsewhere.
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <TopBar
         title={t(`lesson.${lessonId}.title`, { defaultValue: lesson.title })}
         onBack={() => go('saga')}
@@ -143,7 +154,7 @@ export function ConceptScreen({ go, goBack, lessonId }) {
 
       <CoachDialog messages={slide.coachMessages} onReplay={handleReplayNarration} />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 8px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px 8px' }}>
         <Board
           board={boardSpecToBoard(slide.boardSpec)}
           canPlay={false}

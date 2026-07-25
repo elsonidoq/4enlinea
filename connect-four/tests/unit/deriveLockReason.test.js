@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveLockReason, dispatchLockAction } from '../../src/screens/sagaLock.js';
+import { deriveLockReason, dispatchLockAction, deriveLessonAccess } from '../../src/screens/sagaLock.js';
 
 function makeLessons() {
   return [
@@ -81,4 +81,49 @@ test('done-lesson short-circuit: a completed lesson whose predecessor is incompl
   // matching 'none'.
   const reason = deriveLockReason(lesson, lessons, progress, 'free');
   assert.equal(reason, 'order');
+});
+
+// --- deriveLessonAccess (direct-URL guard, QA 2026-07-25 lock-bypass fix) ---
+
+test('deriveLessonAccess — free first lesson is allowed for a fresh free profile', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('l1', lessons, [], 'free'), 'allowed');
+});
+
+test('deriveLessonAccess — sequence-locked lesson returns orderLock', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('l2', lessons, [], 'free'), 'orderLock');
+});
+
+test('deriveLessonAccess — PRO lesson for a free user returns upgrade (both-locked too)', () => {
+  const lessons = makeLessons();
+  // both tier- and order-locked → upgrade wins, same as dispatchLockAction('both')
+  assert.equal(deriveLessonAccess('l3', lessons, [], 'free'), 'upgrade');
+  // tier-locked only (predecessors complete)
+  const progress = [
+    { lessonId: 'l1', status: 'complete' },
+    { lessonId: 'l2', status: 'complete' },
+  ];
+  assert.equal(deriveLessonAccess('l3', lessons, progress, 'free'), 'upgrade');
+});
+
+test('deriveLessonAccess — paid tier + complete predecessor is allowed', () => {
+  const lessons = makeLessons();
+  const progress = [
+    { lessonId: 'l1', status: 'complete' },
+    { lessonId: 'l2', status: 'complete' },
+  ];
+  assert.equal(deriveLessonAccess('l3', lessons, progress, 'paid'), 'allowed');
+});
+
+test('deriveLessonAccess — done short-circuit matches handleNodeTap (completed lesson always allowed)', () => {
+  const lessons = makeLessons();
+  // l2 complete but its predecessor l1 is NOT — the same short-circuit as the saga tap.
+  const progress = [{ lessonId: 'l2', status: 'complete' }];
+  assert.equal(deriveLessonAccess('l2', lessons, progress, 'free'), 'allowed');
+});
+
+test('deriveLessonAccess — unknown lessonId is allowed (screen surfaces its own 404)', () => {
+  const lessons = makeLessons();
+  assert.equal(deriveLessonAccess('nope', lessons, [], 'free'), 'allowed');
 });

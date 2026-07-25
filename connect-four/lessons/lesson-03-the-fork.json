@@ -192,18 +192,7 @@
       "",
       "d"
     ],
-    "overlays": [
-      {
-        "c": 1,
-        "r": 0,
-        "type": "claim"
-      },
-      {
-        "c": 5,
-        "r": 0,
-        "type": "claim"
-      }
-    ],
+    "overlays": [],
     "correctCol": 4,
     "goalPrompt": "Green to move. Playing the fifth column makes three green discs in a row on the bottom row with open squares at both ends (second and sixth columns) — a fork Gray cannot fully block. Solver: the fork move is the unique best move (+16); every other column is strictly worse.",
     "_boardInstructions": "Board from movestring 33333026 (solver-verified 2026-07-24). Green (to move) has bottom-row discs in columns 3 and 4 (1-based); column 4 also carries an alternating tower up to row 5. Gray has lone bottom-row discs in columns 1 and 7. Playing the fifth column lands Green on the bottom row, making three in a row across columns 3-5 with BOTH completing squares open and immediately playable: bottom of column 2 and bottom of column 6 (marked with 'claim' overlays — before the move they are only minor threats, so they are amber attention markers, not threat dots). Gray has no gravity-top threat anywhere. Solver scores pre-move: [-3,1,3,-3,16,3,-2] — column 5 (1-based) is the unique max and wins.",

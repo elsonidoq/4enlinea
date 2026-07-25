@@ -230,28 +230,7 @@
       "",
       ""
     ],
-    "overlays": [
-      {
-        "c": 3,
-        "r": 0,
-        "type": "tg"
-      },
-      {
-        "c": 2,
-        "r": 0,
-        "type": "win"
-      },
-      {
-        "c": 1,
-        "r": 0,
-        "type": "win"
-      },
-      {
-        "c": 0,
-        "r": 0,
-        "type": "win"
-      }
-    ],
+    "overlays": [],
     "correctCol": 3,
     "_boardInstructions": "Minimal board, Gray (second player) to move (5 plies). Green (first player) has three discs across the bottom row of cols 0–2; col 3 row 0 is the only empty cell that completes Green's four and it is immediately playable. Gray has two discs stacked in col 4 (rows 0–1), a tempting stack to keep building. Overlays: 'tg' on col 3 row 0 (Green's completing cell — the forced block) and 'win' rings on Green's three bottom discs. The learner must choose col 3 to block Green's immediate threat — the solver's only non-losing move (+4; every other column scores -18) — rather than build on the col-4 stack.",
     "goalPrompt": "Gray (the learner) must block before building: Green has three in a row across the bottom of the first three columns, and the bottom of the fourth column is the only cell that completes the four. Blocking there is the solver's only non-losing move (+4 — every other column loses at -18).",

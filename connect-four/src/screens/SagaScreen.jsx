@@ -140,16 +140,19 @@ function LessonNode({ lesson, state, onTap }) {
   );
 }
 
-export function SagaScreen({ go, goBack }) {
+// `lockAction` ('upgrade' | 'orderLock', session-only param) is passed by
+// useLessonLockGuard when a direct lesson URL was blocked: the saga opens the
+// SAME affordance handleNodeTap would have shown for that lock reason.
+export function SagaScreen({ go, goBack, lockAction }) {
   const { t } = useTranslation();
   const { store } = useStore();
   const handleUpgrade = useUpgradeCheckout();
   const [lessons, setLessons] = useState([]);
   const [progress, setProgress] = useState([]);
   const [tier, setTier] = useState('free');
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(lockAction === 'upgrade');
   const [upgradeUiState, setUpgradeUiState] = useState('idle');
-  const [orderLockOpen, setOrderLockOpen] = useState(false);
+  const [orderLockOpen, setOrderLockOpen] = useState(lockAction === 'orderLock');
 
   // See SettingsScreen.jsx's identical subscription for the full rationale:
   // UpgradeModal's controlled uiState/onUiStateChange props had no caller, so
