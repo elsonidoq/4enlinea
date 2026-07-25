@@ -1,0 +1,258 @@
+{
+  "id": "zugzwang-tempo",
+  "title": "Zugzwang & Tempo",
+  "free": true,
+  "order": 91,
+  "userPerspective": "red",
+  "slides": [
+    {
+      "movestring": "33333111123244",
+      "_boardInstructions": "Self-play find (z_threat_gap2 search, seed 7): move 14, Green to move. Gray's horizontal on 0-ind row 1 — (2,1) O12, (3,1) O2, (4,1) O14 — needs (5,1). Column 5 (0-ind) is empty, so the inclusive count from the floor is 2 (rows 0,1): even — the mutual-avoidance shape. Only major threat on the board (extraThreats 0). scr (Green to move): -3 -2 0 -- -3 -14 -1; par: 6E 2E 4E 0E 4E 6E 6E. Green entering col 5 is the fastest loss (-14, makes the threat gravity-top); col 2 holds the draw (0). Overlays: claim on the entry cell (5,0), td on the threat cell (5,1) — real Gray threat, verifier-checked.",
+      "boardSpec": [
+        "",
+        "dgdg",
+        "dd",
+        "gdgdgg",
+        "gd",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Gray's three in a row wants exactly one cell in the sixth column — and yet neither player dares to touch that column. Watch what the obligation to move does to this game.",
+          "mood": "think",
+          "text_es": "El tres en línea de Gris quiere exactamente una casilla en la sexta columna — y sin embargo ningún jugador se anima a tocar esa columna. Mirá lo que la obligación de mover le hace a esta partida."
+        }
+      ],
+      "overlays": [
+        {
+          "c": 5,
+          "r": 0,
+          "type": "claim"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "claim",
+          "label": "The entry cell — whoever plays here first loses the fight above",
+          "label_es": "La casilla de entrada — quien juegue acá primero pierde la pelea de arriba"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell — the prize in the contested column",
+          "label_es": "La casilla de la amenaza de Gris — el premio de la columna en disputa"
+        }
+      ],
+      "infoProse": "In Connect Four there is no passing: when it is a player's turn, a disc must fall somewhere. Most of the time that is harmless. Sometimes it decides the game.\n\nGray has three discs in a row on the second row — third, fourth and fifth columns — and the missing cell sits on the second row of the sixth column, one cell above the floor. Neither player wants to touch that column. If Green enters first, Green's disc fills the first row and puts Gray's cell within immediate reach — the solver rates it Green's fastest loss on the board. If Gray enters first, Gray's own disc fills the first row and Green simply blocks the cell above on the very next move.\n\nSo both players stay away. But the board is finite: sooner or later one of them runs out of moves elsewhere and is forced to enter. That compulsion — having to move when every move hurts — is called zugzwang, and it produces a simple rule: the player who is forced in first loses the fight, and the player who is not forced collects the contested cell.",
+      "infoProse_es": "En el Cuatro en Línea no se puede pasar: cuando es el turno de un jugador, una ficha tiene que caer en algún lado. La mayoría de las veces eso no importa. A veces decide la partida.\n\nGris tiene tres fichas en línea en la segunda fila — tercera, cuarta y quinta columna — y la casilla que le falta está en la segunda fila de la sexta columna, una casilla arriba del piso. Ningún jugador quiere tocar esa columna. Si Verde entra primero, su ficha llena la primera fila y deja la casilla de Gris al alcance inmediato — el solver la califica como la derrota más rápida de Verde en todo el tablero. Si Gris entra primero, su propia ficha llena la primera fila y Verde simplemente bloquea la casilla de arriba en la jugada siguiente.\n\nAsí que los dos se mantienen lejos. Pero el tablero es finito: tarde o temprano uno de los dos se queda sin jugadas en otro lado y queda forzado a entrar. Esa obligación — tener que mover cuando toda jugada duele — se llama zugzwang, y produce una regla simple: el jugador que es forzado a entrar primero pierde la pelea, y el jugador que no es forzado se queda con la casilla en disputa."
+    },
+    {
+      "movestring": "33333111123244",
+      "_boardInstructions": "Same board as slide 1 (z_threat_gap2 find, seed 7). scr: -3 -2 0 -- -3 -14 -1 — col 2 (0-ind) is Green's only non-losing move (draw, 0); every other outside column is a slow loss (-1..-3); col 5 is the immediate collapse (-14). Overlays: claim on col 2's landing cell (2,2) (ht=2), td on the threat cell (5,1).",
+      "boardSpec": [
+        "",
+        "dgdg",
+        "dd",
+        "gdgdgg",
+        "gd",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Green cannot pass — but Green can choose where the obligation goes next. Every safe disc dropped outside the contested column hands the problem back to Gray.",
+          "mood": "think",
+          "text_es": "Verde no puede pasar — pero sí puede elegir a dónde va la obligación. Cada ficha segura que tira fuera de la columna en disputa le devuelve el problema a Gris."
+        }
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 5,
+          "r": 1,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "claim",
+          "label": "Green's best spare move — the landing cell in the third column",
+          "label_es": "La mejor jugada de reserva de Verde — la casilla donde cae la ficha en la tercera columna"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell in the contested column",
+          "label_es": "La casilla de la amenaza de Gris en la columna en disputa"
+        }
+      ],
+      "infoProse": "A move a player can make safely somewhere else is called a spare move, and spending one is spending a tempo. Each spare move says to the opponent: \"your turn — you deal with the contested column.\" As long as Green has spare moves, Green cannot be forced into the sixth column. The moment they run out, the obligation lands.\n\nSpare moves are not all equal. Here the solver says exactly one Green move — the third column — keeps the game perfectly level; the other outside columns postpone the problem but lose ground against best play. What never changes is the gulf between all of them and entering the sixth column, the immediate collapse.\n\nThat is the whole tempo game: count who can keep making useful moves. The player with spare moves in hand dictates the pace; the player who runs out first is forced in — and the player who is not forced collects the contested cell.",
+      "infoProse_es": "Una jugada que un jugador puede hacer con seguridad en otro lado se llama jugada de reserva, y gastarla es gastar un tempo. Cada jugada de reserva le dice al rival: \"te toca — arreglate vos con la columna en disputa.\" Mientras Verde tenga jugadas de reserva, no puede ser forzado a entrar en la sexta columna. En el momento en que se le acaban, la obligación le cae encima.\n\nNo todas las jugadas de reserva valen lo mismo. Acá el solver dice que exactamente una jugada de Verde — la tercera columna — mantiene la partida perfectamente equilibrada; las otras columnas de afuera postergan el problema pero pierden terreno contra el mejor juego. Lo que nunca cambia es el abismo entre todas ellas y entrar en la sexta columna, el colapso inmediato.\n\nEse es todo el juego del tempo: contá quién puede seguir haciendo jugadas útiles. El jugador con jugadas de reserva en la mano marca el ritmo; el que se queda sin ellas primero es forzado a entrar — y el jugador que no es forzado se queda con la casilla en disputa."
+    },
+    {
+      "movestring": "33334244322265",
+      "_boardInstructions": "Self-play find (z_threat_gap3 search, seed 7): move 14, Green to move. Gray's ascending diagonal — 0-ind (2,0) O6, (3,1) O2, (4,2) O8 — needs (5,3). Column 5 holds one Gray disc (O14 at row 0), so the inclusive count from the stack top is 3 (rows 1,2,3): odd — a z-threat. Only major threat on the board (extraThreats 0). scr (Green to move): -5 -4 -5 -5 -3 -5 -5 — every Green move loses with best play; par: 6E 6E 2E 1O 3O 5O 5O. Overlays: claim on the two absorbed cells (5,1),(5,2), td on the threat cell (5,3) — real Gray threat, verifier-checked.",
+      "boardSpec": [
+        "",
+        "",
+        "ddgd",
+        "gdgdg",
+        "ggd",
+        "d",
+        "g"
+      ],
+      "coachMessages": [
+        {
+          "text": "The counting rule from the Z-Threats lesson says this cell belongs to Gray. Here is the machinery behind that promise: every forced Green entry pays for it, one tempo at a time.",
+          "mood": "think",
+          "text_es": "La regla de conteo de la lección de Amenazas-Z dice que esta casilla es de Gris. Acá está la maquinaria detrás de esa promesa: cada entrada forzada de Verde la paga, un tempo a la vez."
+        }
+      ],
+      "overlays": [
+        {
+          "c": 5,
+          "r": 1,
+          "type": "claim"
+        },
+        {
+          "c": 5,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 5,
+          "r": 3,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "claim",
+          "label": "The cells the squeezed player is forced to absorb",
+          "label_es": "Las casillas que el jugador forzado tiene que absorber"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell — the owner collects it last",
+          "label_es": "La casilla de la amenaza de Gris — el dueño la toma al final"
+        }
+      ],
+      "infoProse": "Gray's rising diagonal — first row of the third column, second row of the fourth, third row of the fifth — needs the fourth row of the sixth column. That column holds one disc, so the count from the stack top runs second, third, fourth row: three cells, odd. The Z-Threats lesson already gave the verdict: an odd count makes the cell Gray's. This board shows why.\n\nGray never needs to enter the sixth column: as long as Gray keeps one useful move in hand, Gray can always answer somewhere else. Green is the one who eventually runs out. First forced entry: Green's disc lands on the second row, and Gray spends a spare move elsewhere. Second forced entry: Green fills the third row — and now the threat cell is the next drop in the column. Gray takes it and completes the diagonal.\n\nRead the count as a tempo ledger. An odd count leaves an even number of cells below the threat, and the squeezed player swallows all of them; the last cell — the threat itself — falls to the owner. The solver confirms the grip on this board: every Green move already loses against best play.",
+      "infoProse_es": "La diagonal ascendente de Gris — primera fila de la tercera columna, segunda fila de la cuarta, tercera fila de la quinta — necesita la cuarta fila de la sexta columna. Esa columna tiene una ficha, así que el conteo desde arriba de la pila recorre la segunda, la tercera y la cuarta fila: tres casillas, impar. La lección de Amenazas-Z ya dio el veredicto: un conteo impar hace que la casilla sea de Gris. Este tablero muestra por qué.\n\nGris nunca necesita entrar en la sexta columna: mientras conserve una jugada útil en la mano, siempre puede responder en otro lado. Verde es quien tarde o temprano se queda sin opciones. Primera entrada forzada: la ficha de Verde cae en la segunda fila, y Gris gasta una jugada de reserva en otra parte. Segunda entrada forzada: Verde llena la tercera fila — y ahora la casilla de la amenaza es la próxima jugada disponible en la columna. Gris la toma y completa la diagonal.\n\nLeé el conteo como un libro de tempos. Un conteo impar deja una cantidad par de casillas debajo de la amenaza, y el jugador forzado se las traga todas; la última casilla — la amenaza misma — le cae al dueño. El solver confirma el dominio en este tablero: toda jugada de Verde ya pierde contra el mejor juego."
+    },
+    {
+      "movestring": "33334221056632566154",
+      "_boardInstructions": "Self-play find (z_threat_stacked search, seed 7): move 20, Green to move. Gray's ascending diagonal — 0-ind (1,1) O18, (2,2) O14, (3,3) O4 — needs (4,4). Column 4 holds two discs (X5 row 0, O20 row 1), so the inclusive count from the stack top is 3 (rows 2,3,4): odd — a z-threat sitting on 1-based row 5, an ODD row ('Green territory' by the raw parity rule). Only major threat on the board (extraThreats 0). scr (Green to move): -9 -9 0 -9 -2 0 -9 — max 0, Green not lost; par: 5O 4E 3O 1O 4E 3O 2E. Note the whole-column parity of col 4 is 4E (four empties) — the copy counts only to the threat cell (3), per the KB distinction. Overlays: claim on the two counted cells (4,2),(4,3), td on the threat cell (4,4) — real Gray threat, verifier-checked.",
+      "boardSpec": [
+        "g",
+        "dd",
+        "dgd",
+        "gdgdg",
+        "gd",
+        "dgg",
+        "gddg"
+      ],
+      "coachMessages": [
+        {
+          "text": "An odd row — supposedly Green's territory — and yet the count says the cell is Gray's. The two discs already sitting in that column explain everything.",
+          "mood": "think",
+          "text_es": "Una fila impar — supuestamente territorio de Verde — y sin embargo el conteo dice que la casilla es de Gris. Las dos fichas que ya están en esa columna lo explican todo."
+        }
+      ],
+      "overlays": [
+        {
+          "c": 4,
+          "r": 2,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "claim"
+        },
+        {
+          "c": 4,
+          "r": 4,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "claim",
+          "label": "Count from the stack top — the two cells below the threat",
+          "label_es": "Contá desde arriba de la pila — las dos casillas debajo de la amenaza"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell — an odd row, but Gray's by the count",
+          "label_es": "La casilla de la amenaza de Gris — una fila impar, pero de Gris por el conteo"
+        }
+      ],
+      "infoProse": "The parity rule says Green, moving first, naturally lands on the odd rows — first, third, fifth — and Gray on the even ones. Gray's diagonal here — second row of the second column, third row of the third, fourth row of the fourth — needs the fifth row of the fifth column. An odd row: Green territory, by that rule. Yet the cell is Gray's.\n\nThe row rule is the zugzwang ledger read on an untouched column: if nothing has ever been played there, the squeeze fills it from the floor in strict alternation, and row numbers and counts agree. But the fifth column already holds two discs, played long before any squeeze — and every disc already sitting in a column shifts the ledger by one. Count from the stack top to Gray's cell: third, fourth, fifth row — three cells, odd. So the squeeze delivers the fifth row to Gray, exactly as on the previous board.\n\nThat is why ownership of a cell follows the empty-cell count in its column, not the raw row number: zugzwang only distributes the cells that are still empty when the forcing begins. The row rule is the special case of an empty column; the count is the rule itself.",
+      "infoProse_es": "La regla de paridad dice que Verde, por mover primero, cae naturalmente en las filas impares — primera, tercera, quinta — y Gris en las pares. La diagonal de Gris acá — segunda fila de la segunda columna, tercera fila de la tercera, cuarta fila de la cuarta — necesita la quinta fila de la quinta columna. Una fila impar: territorio de Verde, según esa regla. Y sin embargo la casilla es de Gris.\n\nLa regla de las filas es el libro de tempos del zugzwang leído sobre una columna intacta: si nunca se jugó nada ahí, el apretón la llena desde el piso en alternancia estricta, y los números de fila y los conteos coinciden. Pero la quinta columna ya tiene dos fichas, jugadas mucho antes de cualquier apretón — y cada ficha que ya está en una columna corre el libro en uno. Contá desde arriba de la pila hasta la casilla de Gris: tercera, cuarta y quinta fila — tres casillas, impar. Así que el apretón le entrega la quinta fila a Gris, exactamente como en el tablero anterior.\n\nPor eso la propiedad de una casilla sigue al conteo de casillas vacías de su columna, no al número de fila a secas: el zugzwang solo reparte las casillas que siguen vacías cuando empieza el forzamiento. La regla de las filas es el caso particular de una columna vacía; el conteo es la regla en sí."
+    }
+  ],
+  "socratic": {
+    "movestring": "3345533226550551",
+    "_boardInstructions": "Custom self-play find (scratchpad find_zugzwang_socratic.mjs, seed 31): 16 plies (even — the learner plays GREEN by movestring-length parity). Gray's ascending diagonal — 0-ind (2,0) O8, (3,1) O2, (5,3) O12 — needs (4,2). Column 4 holds one Green disc (X3 row 0), so the inclusive count is 2 (rows 1,2): even — entering makes the threat gravity-top. Only major threat on the board (extra 0). correctCol 2 is the unique solver max: scr -1 -5 4 -1 -13 -- -1 — col 2 is Green's only non-losing move (+4, winning); the poisoned col 4 is the fastest loss (-13). Position winning for the learner. SocraticScreen derives its own overlays, so none are authored here.",
+    "goalPrompt": "Green must not enter the fifth column: Gray's diagonal cell on its third row has an even count (two — third and second row from the landing spot), so entering makes it immediately playable (solver -13). The third column is the solver's unique best move (+4) — the spare move that keeps Green winning.",
+    "boardSpec": [
+      "g",
+      "d",
+      "dg",
+      "gddg",
+      "g",
+      "dggddg",
+      "d"
+    ],
+    "overlays": [],
+    "correctCol": 2,
+    "messages": {
+      "ask": [
+        {
+          "text": "Gray's diagonal needs just one cell — the third row of the fifth column, one cell above where the next disc in that column would land. You cannot pass. Where do you spend this move?",
+          "mood": "think",
+          "text_es": "A la diagonal de Gris le falta una sola casilla — la tercera fila de la quinta columna, una casilla arriba de donde caería la próxima ficha de esa columna. No podés pasar. ¿Dónde gastás esta jugada?"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — that move does not keep you safe. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — esa jugada no te deja a salvo. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly — a spare move. Gray's trap only works if you walk into it; the third column builds your own game and leaves the poisoned column alone.",
+          "mood": "happy",
+          "text_es": "¡Exacto — una jugada de reserva! La trampa de Gris solo funciona si te metés vos; la tercera columna construye tu propio juego y deja en paz la columna envenenada."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Count the empty cells in the fifth column, from the landing spot up to Gray's cell: two — an even count. Entering hands Gray the cell. Spend your tempo where your own discs are building instead.",
+          "mood": "think",
+          "text_es": "Contá las casillas vacías de la quinta columna, desde donde cae la ficha hasta la casilla de Gris: dos — un conteo par. Entrar le regala la casilla a Gris. Gastá tu tempo donde crecen tus propias fichas."
+        }
+      ]
+    }
+  },
+  "confirmationCategory": null,
+  "confirmationCount": 0
+}
