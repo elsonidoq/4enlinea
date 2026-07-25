@@ -1,7 +1,7 @@
 /**
  * Lesson loader — reads lesson JSON files from the lessons/ directory at startup.
  *
- * Files must match the pattern lesson-NN-*.json (e.g. lesson-05-claimeven.json).
+ * Files must match the pattern lesson-NN-*.json (e.g. lesson-08-claimeven.json).
  * The numeric prefix determines the display order.
  *
  * Exported API:

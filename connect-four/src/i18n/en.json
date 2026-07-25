@@ -243,22 +243,22 @@
       },
       "claimeven": {
         "prompt": {
-          "0": "As Gray, you can secure a draw — find the Claimeven move.",
-          "1": "Gray has a drawing strategy here. Which column keeps it alive?",
-          "2": "Use Claimeven: Gray plays below every Green even-row threat."
+          "0": "Claimeven: Gray takes the even square directly above Green's odd-row disc. Which column does it?",
+          "1": "Green just landed on an odd row. Which column lets Gray claim the even square right above it?",
+          "2": "Use Claimeven — answer directly above Green's odd-row disc to kill every Green line through that square."
         },
         "hint": {
-          "0": "Look for an even row where Green has a threat — Gray should mirror below it.",
-          "1": "Claimeven works by ensuring Gray always gets the square directly below Green's even-row threats."
+          "0": "Find a column where Green's top disc sits on an odd row and the square directly above it is empty.",
+          "1": "Counting rows from the bottom starting at 1, Claimeven hands Gray the even square above Green's odd-row disc."
         },
         "optimal": {
-          "0": "Exactly — that's the Claimeven move that secures the draw."
+          "0": "Exactly — Gray claims the even square above, and every Green line through it is dead."
         },
         "suboptimal": {
-          "0": "You're still in the draw zone, but the Claimeven key column was stronger."
+          "0": "That holds, but the Claimeven column — the even square right above Green's odd-row disc — was stronger."
         },
         "blunder": {
-          "0": "That column gives up Gray's Claimeven drawing advantage."
+          "0": "That gives up the Claimeven square, so Green can still use the even row above."
         }
       },
       "z_threat": {
@@ -422,30 +422,30 @@
       },
       "undercut": {
         "prompt": {
-          "0": "Two threats in the same column — the lower one wins. Find the undercut.",
-          "1": "An undercut is waiting — identify the column where a lower threat kills an upper one.",
-          "2": "Gravity works in your favor here. Find the undercut move."
+          "0": "Your threat in this column has been undercut — the opponent's lower threat fires first. Play anywhere else.",
+          "1": "One column is poisoned: the opponent completes below your threat. Find it, then stay out of it.",
+          "2": "Gravity favours the lower threat here. Pick any column except the undercut one."
         },
         "hint": {
-          "0": "Look for a column with threats at two different rows — the lower one wins.",
-          "1": "Same column, opposite parity rows — the undercut is a gravity exploit."
+          "0": "Look for a column where the opponent's threat sits below yours — entering it lets them win first.",
+          "1": "The undercut column is the one to stay out of, not the one to play."
         },
         "optimal": {
-          "0": "That undercut neutralizes the upper threat perfectly.",
-          "1": "Gravity does the work — the lower threat wins the column.",
-          "2": "Clean undercut. Your opponent's upper threat is dead.",
-          "3": "Exactly right — same column, lower threat kills the upper one."
+          "0": "Right — you stayed out of the undercut column.",
+          "1": "Good — entering that column would have let the opponent's lower threat fire first.",
+          "2": "Correct: that column belongs to their lower threat, and you left it alone.",
+          "3": "You avoided the poisoned column."
         },
         "suboptimal": {
-          "0": "Good thinking, but the undercut column was the killing move here.",
-          "1": "Close — there was a column where a lower threat neutralizes an upper one.",
-          "2": "Not bad, but you missed the undercut opportunity."
+          "0": "You avoided the undercut column, but a stronger move was available elsewhere.",
+          "1": "Safe from the undercut — though another column held more.",
+          "2": "Not the undercut column, good — but there was a better option."
         },
         "blunder": {
-          "0": "That plays into the wrong parity — the undercut was elsewhere.",
-          "1": "You missed the undercut column. The lower threat wins.",
-          "2": "Wrong column — your opponent's threat is still alive.",
-          "3": "That doesn't exploit the gravity advantage. Look again."
+          "0": "That costs you here. The undercut column — where their threat completes below yours — is the one to stay out of.",
+          "1": "That loses ground. Remember the lower threat fires first, so that column is theirs.",
+          "2": "Weak choice — and steer clear of the column where their threat sits below yours.",
+          "3": "That drops the advantage. Avoid the undercut column and keep your own threats alive."
         }
       },
       "generic": {
@@ -916,6 +916,9 @@
     "block-before-build": {
       "title": "Block Before Build"
     },
+    "threat-vocabulary": {
+      "title": "Threat Vocabulary"
+    },
     "the-fork": {
       "title": "The Fork"
     },
@@ -927,6 +930,9 @@
     },
     "z-threats": {
       "title": "Z-Threats"
+    },
+    "zugzwang-tempo": {
+      "title": "Zugzwang & Tempo"
     },
     "undercut": {
       "title": "The Undercut"

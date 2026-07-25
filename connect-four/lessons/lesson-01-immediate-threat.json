@@ -50,7 +50,8 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's threat square — Gray must claim it"
+          "label": "Green's threat square — Gray must claim it",
+          "label_es": "Casilla de amenaza de verde — gris tiene que ocuparla"
         },
         {
           "type": "win",
@@ -106,11 +107,13 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's threat"
+          "label": "Green's threat",
+          "label_es": "Amenaza de verde"
         },
         {
           "type": "win",
-          "label": "Green's three connected discs"
+          "label": "Green's three connected discs",
+          "label_es": "Tres fichas conectadas de verde"
         }
       ],
       "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss.",
@@ -166,7 +169,8 @@
         },
         {
           "type": "tg",
-          "label": "Green's winning square (interior gap)"
+          "label": "Green's winning square (interior gap)",
+          "label_es": "Casilla ganadora de verde (hueco interior)"
         }
       ],
       "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls.",
@@ -178,7 +182,8 @@
       "coachMessages": [
         {
           "text": "Green sees a tempting square to build on — but Gray already has three in a row. What happens if Green builds first?",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Verde ve una casilla tentadora para construir — pero gris ya tiene tres en línea. ¿Qué pasa si verde construye primero?"
         }
       ],
       "boardSpec": [
@@ -221,6 +226,7 @@
   "socratic": {
     "_boardInstructions": "Green (first player, to move — 12 plies) has three discs stacked vertically in col 0 at rows 0–2; playing col 0 drops a disc at row 3 and completes a vertical four — the unique solver-max (+15, all other columns ≤14). Col 1 carries three Gray discs at rows 0–2, a Green disc at row 3, and Gray at row 4. Col 2 holds two Gray discs (rows 0–1); col 3 holds two Green discs (rows 0–1), a tempting horizontal setup that does not win this turn. No overlays: the learner's task is to spot unaided the column whose green stack is already three deep and play it to win right now.",
     "goalPrompt": "Green (the learner) has three discs stacked in the first column; playing the first column completes a vertical four-in-a-row and is the solver's unique best move (+15 — every other column scores 14 or less).",
+    "goalPrompt_es": "Verde (el alumno) tiene tres fichas apiladas en la primera columna; jugar la primera columna completa un cuatro en línea vertical y es la única mejor jugada del solver (+15 — todas las demás columnas puntúan 14 o menos).",
     "movestring": "320101311201",
     "boardSpec": [
       "ggg",
@@ -237,7 +243,8 @@
       "ask": [
         {
           "text": "You are Green, and it's your move. One column already holds three of your discs, one on top of another — a single disc finishes the job. Can you find it and win right now?",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Sos verde, y es tu turno. Una columna ya tiene tres de tus fichas, una arriba de la otra — una sola ficha más completa la jugada. ¿Podés encontrarla y ganar ahora mismo?"
         }
       ],
       "wrong1": [
@@ -270,7 +277,8 @@
       "hint": [
         {
           "text": "Threats run in every direction — including straight up. Look for a vertical stack of three green discs with the square above it still empty, and drop your disc on top.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Las amenazas corren en todas las direcciones — incluso derecho hacia arriba. Buscá una pila vertical de tres fichas verdes con la casilla de arriba todavía vacía, y soltá tu ficha justo encima."
         }
       ]
     }

@@ -243,22 +243,22 @@
       },
       "claimeven": {
         "prompt": {
-          "0": "Como Gris, podés asegurar un empate — encontrá la jugada de Claimeven.",
-          "1": "Gris tiene una estrategia de empate aquí. ¿Qué columna la mantiene viva?",
-          "2": "Usá Claimeven: Gris juega debajo de cada amenaza de Verde en fila par."
+          "0": "Claimeven: Gris toma la casilla par justo encima de la ficha de Verde en fila impar. ¿Qué columna lo logra?",
+          "1": "Verde acaba de caer en una fila impar. ¿Qué columna le permite a Gris reclamar la casilla par justo encima?",
+          "2": "Usá Claimeven — respondé justo encima de la ficha de Verde en fila impar para matar cada línea de Verde que pasa por esa casilla."
         },
         "hint": {
-          "0": "Buscá una fila par donde Verde tenga una amenaza — Gris debería reflejarse debajo.",
-          "1": "Claimeven funciona asegurando que Gris siempre obtenga la casilla justo debajo de las amenazas de fila par de Verde."
+          "0": "Buscá una columna donde la ficha más alta de Verde esté en fila impar y la casilla justo encima esté vacía.",
+          "1": "Contando las filas desde abajo empezando en 1, Claimeven le entrega a Gris la casilla par encima de la ficha de Verde en fila impar."
         },
         "optimal": {
-          "0": "Exacto — esa es la jugada de Claimeven que asegura el empate."
+          "0": "Exacto — Gris reclama la casilla par de arriba, y cada línea de Verde que pasa por ahí queda muerta."
         },
         "suboptimal": {
-          "0": "Seguís en la zona de empate, pero la columna clave de Claimeven era más fuerte."
+          "0": "Eso aguanta, pero la columna de Claimeven — la casilla par justo encima de la ficha de Verde en fila impar — era más fuerte."
         },
         "blunder": {
-          "0": "Esa columna cede la ventaja de empate de Claimeven de Gris."
+          "0": "Eso cede la casilla de Claimeven, así que Verde todavía puede usar la fila par de arriba."
         }
       },
       "z_threat": {
@@ -422,30 +422,30 @@
       },
       "undercut": {
         "prompt": {
-          "0": "Dos amenazas en la misma columna — la de abajo gana. Encontrá el undercut.",
-          "1": "Un undercut está esperando — identificá la columna donde una amenaza inferior mata a una superior.",
-          "2": "La gravedad juega a tu favor aquí. Encontrá la jugada de undercut."
+          "0": "Tu amenaza en esta columna fue undercuteada — la amenaza inferior del oponente se completa primero. Jugá en cualquier otra parte.",
+          "1": "Hay una columna envenenada: el oponente completa debajo de tu amenaza. Encontrala, y no entres.",
+          "2": "La gravedad favorece a la amenaza inferior aquí. Elegí cualquier columna excepto la del undercut."
         },
         "hint": {
-          "0": "Buscá una columna con amenazas en dos filas distintas — la de abajo gana.",
-          "1": "Misma columna, filas de paridad opuesta — el undercut aprovecha la gravedad."
+          "0": "Buscá una columna donde la amenaza del oponente esté debajo de la tuya — entrar ahí le permite ganar primero.",
+          "1": "La columna del undercut es la que hay que evitar, no la que hay que jugar."
         },
         "optimal": {
-          "0": "Ese undercut neutraliza perfectamente la amenaza superior.",
-          "1": "La gravedad hace el trabajo — la amenaza inferior gana la columna.",
-          "2": "Undercut limpio. La amenaza superior de tu oponente está muerta.",
-          "3": "Exactamente correcto — misma columna, la amenaza inferior mata a la superior."
+          "0": "Correcto — te quedaste fuera de la columna del undercut.",
+          "1": "Bien — entrar en esa columna habría dejado que la amenaza inferior del oponente se complete primero.",
+          "2": "Correcto: esa columna pertenece a su amenaza inferior, y la dejaste en paz.",
+          "3": "Evitaste la columna envenenada."
         },
         "suboptimal": {
-          "0": "Buen razonamiento, pero la columna del undercut era la jugada decisiva aquí.",
-          "1": "Cerca — había una columna donde una amenaza inferior neutraliza a una superior.",
-          "2": "No está mal, pero te perdiste la oportunidad de undercut."
+          "0": "Evitaste la columna del undercut, pero había una jugada más fuerte en otra parte.",
+          "1": "A salvo del undercut — aunque otra columna daba más.",
+          "2": "No es la columna del undercut, bien — pero había una opción mejor."
         },
         "blunder": {
-          "0": "Eso juega la paridad equivocada — el undercut estaba en otra parte.",
-          "1": "Te perdiste la columna del undercut. La amenaza inferior gana.",
-          "2": "Columna equivocada — la amenaza de tu oponente sigue viva.",
-          "3": "Eso no aprovecha la ventaja de la gravedad. Volvé a intentarlo."
+          "0": "Eso te cuesta aquí. La columna del undercut — donde su amenaza se completa debajo de la tuya — es la que hay que evitar.",
+          "1": "Eso pierde terreno. Acordate: la amenaza inferior se completa primero, así que esa columna es de ellos.",
+          "2": "Elección floja — y mantenete lejos de la columna donde su amenaza está debajo de la tuya.",
+          "3": "Eso entrega la ventaja. Evitá la columna del undercut y mantené vivas tus propias amenazas."
         }
       },
       "generic": {
@@ -916,6 +916,9 @@
     "block-before-build": {
       "title": "Bloqueá Antes de Construir"
     },
+    "threat-vocabulary": {
+      "title": "Vocabulario de Amenazas"
+    },
     "the-fork": {
       "title": "La Bifurcación"
     },
@@ -927,6 +930,9 @@
     },
     "z-threats": {
       "title": "Amenazas-Z"
+    },
+    "zugzwang-tempo": {
+      "title": "Zugzwang y Tempo"
     },
     "undercut": {
       "title": "El Undercut"

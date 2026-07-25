@@ -33,3 +33,24 @@ export function dispatchLockAction(reason) {
   if (reason === 'order') return 'orderLock';
   return 'navigate';
 }
+
+/**
+ * Direct-URL guard decision for the lesson screens (concept/socratic/clchallenge).
+ * Composes SagaScreen.handleNodeTap's exact rules so the guard can never drift from
+ * the saga affordances:
+ *   1. done short-circuit — a completed lesson is always accessible (matches handleNodeTap);
+ *   2. otherwise deriveLockReason → dispatchLockAction.
+ * An unknown lessonId returns 'allowed' — the screen's own /api/lessons/:id fetch
+ * surfaces the not-found error; the guard only enforces locks.
+ * @returns {'allowed' | 'upgrade' | 'orderLock'}
+ */
+export function deriveLessonAccess(lessonId, lessons, progress, tier) {
+  const lesson = lessons.find(l => l.id === lessonId);
+  if (!lesson) return 'allowed';
+
+  const isDone = progress.some(p => p.lessonId === lessonId && p.status === 'complete');
+  if (isDone) return 'allowed';
+
+  const action = dispatchLockAction(deriveLockReason(lesson, lessons, progress, tier));
+  return action === 'navigate' ? 'allowed' : action;
+}

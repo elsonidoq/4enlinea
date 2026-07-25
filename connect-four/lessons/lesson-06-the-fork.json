@@ -1,0 +1,309 @@
+{
+  "id": "the-fork",
+  "title": "The Fork",
+  "free": true,
+  "userPerspective": "yellow",
+  "slides": [
+    {
+      "movestring": "33212303",
+      "coachMessages": [
+        {
+          "text": "Gray has one strong threat. Green blocks it. What did Gray accomplish?",
+          "text_es": "Gris tiene una amenaza fuerte. Verde la bloquea. ¿Qué logró Gris?",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "g",
+        "d",
+        "gg",
+        "gddd",
+        "",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 3,
+          "r": 3,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 2,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 1,
+          "type": "win"
+        },
+        {
+          "c": 3,
+          "r": 4,
+          "type": "td"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "win",
+          "label": "Gray's connected discs",
+          "label_es": "Fichas conectadas de Gris"
+        },
+        {
+          "type": "td",
+          "label": "Gray's threat cell",
+          "label_es": "Casilla de amenaza de Gris"
+        }
+      ],
+      "infoProse": "One threat gives your opponent a simple task: block it. They use one move, your attack is over, and you have gained nothing. To guarantee a win, you need your opponent to face a problem they cannot fully solve in a single move.",
+      "infoProse_es": "Una sola amenaza le da a tu rival una tarea simple: bloquearla. Usan un movimiento, tu ataque termina, y no ganaste nada. Para garantizar una victoria, necesitás que tu rival enfrente un problema que no pueda resolver del todo en un solo movimiento."
+    },
+    {
+      "movestring": "3333332444441",
+      "coachMessages": [
+        {
+          "text": "One move, two threats. Gray must answer — but one reply can only cover one of them.",
+          "text_es": "Un movimiento, dos amenazas. Gris debe responder — pero una sola respuesta solo puede cubrir una de ellas.",
+          "mood": "happy"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "g",
+        "g",
+        "gdgdgd",
+        "dgdgd",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 2,
+          "r": 1,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Green's two threat cells (Gray can only block one)",
+          "label_es": "Las dos casillas de amenaza de Verde (Gris solo puede bloquear una)"
+        }
+      ],
+      "infoProse": "A fork is a single move that creates two simultaneous threats. Your opponent has one turn to respond — they can block one threat, but the other remains. On your next move, you win. The key: both threat cells must be immediately reachable (at the top of their column's current stack).",
+      "infoProse_es": "Una doble amenaza (fork) es un solo movimiento que crea dos amenazas simultáneas. Tu rival tiene un turno para responder — puede bloquear una amenaza, pero la otra queda en pie. En tu próximo movimiento, ganás. La clave: ambas casillas de amenaza tienen que ser jugables de inmediato (en la parte superior de la pila actual de su columna)."
+    },
+    {
+      "movestring": "3333322422111",
+      "coachMessages": [
+        {
+          "text": "Forks don't have to point left and right. Two threats can stack in the same column — and blocking the bottom one hands Green the top.",
+          "text_es": "Las dobles amenazas no siempre apuntan a izquierda y derecha. Dos amenazas pueden apilarse en la misma columna — y bloquear la de abajo le entrega a Verde la de arriba.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "gdg",
+        "dggd",
+        "gdgdg",
+        "d",
+        "",
+        ""
+      ],
+      "overlays": [
+        {
+          "c": 0,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 2,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Green's stacked threat cells (two pairs, one per side)",
+          "label_es": "Las casillas de amenaza apiladas de Verde (dos pares, uno por lado)"
+        }
+      ],
+      "infoProse": "Forks are not always spread across two different columns. When two threats complete in the same column on adjacent rows, blocking the lower one gives Green the upper one — the block itself becomes the setup. This board actually holds two such stacked pairs, one in the first column and one in the fifth: whoever finds either pair has found the same pattern.\n\nOne important caution: all four of these cells sit high above empty squares — none of them is playable yet, so this is NOT a fork Green can cash today. It is a trap that wins later, as the columns underneath fill up. The Z-Threats and Figure-7 lessons build on exactly this idea.",
+      "infoProse_es": "Las dobles amenazas no siempre se reparten entre dos columnas distintas. Cuando dos amenazas se completan en la misma columna, en filas adyacentes, bloquear la de abajo le regala a Verde la de arriba — el propio bloqueo se convierte en la preparación. Este tablero en realidad tiene dos pares apilados así, uno en la primera columna y otro en la quinta: quien encuentre cualquiera de los dos pares encontró el mismo patrón.\n\nUna advertencia importante: las cuatro casillas están muy por encima de espacios vacíos — ninguna es jugable todavía, así que esto NO es una doble amenaza que Verde pueda cobrar hoy. Es una trampa que gana más adelante, a medida que se llenan las columnas de abajo. Las lecciones de Amenazas-Z y Figura-7 se construyen sobre esta misma idea."
+    },
+    {
+      "movestring": "332443322243621",
+      "coachMessages": [
+        {
+          "text": "This looks like a fork — but are both threat cells actually reachable right now? Check the column heights before celebrating.",
+          "text_es": "Esto parece una doble amenaza — pero ¿las dos casillas de amenaza son realmente jugables ahora mismo? Fijate en la altura de las columnas antes de festejar.",
+          "mood": "think"
+        }
+      ],
+      "boardSpec": [
+        "",
+        "g",
+        "gdgdd",
+        "gddgd",
+        "dgg",
+        "",
+        "g"
+      ],
+      "overlays": [
+        {
+          "c": 5,
+          "r": 1,
+          "type": "tg"
+        },
+        {
+          "c": 0,
+          "r": 0,
+          "type": "win"
+        }
+      ],
+      "legendItems": [
+        {
+          "type": "tg",
+          "label": "Future threat (not reachable yet - not a fork)",
+          "label_es": "Amenaza futura (todavía no jugable - no es una doble amenaza)"
+        },
+        {
+          "type": "win",
+          "label": "Real immediate threat",
+          "label_es": "Amenaza real inmediata"
+        }
+      ],
+      "infoProse": "A fork only works when both threats are immediately reachable — at the top of their column's current stack. A position with one real threat and one future threat is not a fork: your opponent blocks the immediate threat and has plenty of time to deal with the buried one later. Always verify that both threat cells are playable on the very next move.",
+      "infoProse_es": "Una doble amenaza solo funciona cuando ambas amenazas son jugables de inmediato — en la parte superior de la pila actual de su columna. Una posición con una amenaza real y una amenaza futura no es una doble amenaza: tu rival bloquea la amenaza inmediata y tiene tiempo de sobra para ocuparse más tarde de la que está enterrada. Verificá siempre que las dos casillas de amenaza sean jugables en el próximo movimiento."
+    }
+  ],
+  "socratic": {
+    "movestring": "33333026",
+    "boardSpec": [
+      "d",
+      "",
+      "g",
+      "gdgdg",
+      "",
+      "",
+      "d"
+    ],
+    "overlays": [],
+    "correctCol": 4,
+    "goalPrompt": "Green to move. Playing the fifth column makes three green discs in a row on the bottom row with open squares at both ends (second and sixth columns) — a fork Gray cannot fully block. Solver: the fork move is the unique best move (+16); every other column is strictly worse.",
+    "goalPrompt_es": "Le toca a Verde. Jugar en la quinta columna forma tres fichas verdes seguidas en la fila de abajo con casillas abiertas en ambos extremos (segunda y sexta columna) — una doble amenaza que Gris no puede bloquear del todo. Solver: el movimiento de la doble amenaza es el único mejor movimiento (+16); cualquier otra columna es estrictamente peor.",
+    "_boardInstructions": "Board from movestring 33333026 (solver-verified 2026-07-24). Green (to move) has bottom-row discs in columns 3 and 4 (1-based); column 4 also carries an alternating tower up to row 5. Gray has lone bottom-row discs in columns 1 and 7. Playing the fifth column lands Green on the bottom row, making three in a row across columns 3-5 with BOTH completing squares open and immediately playable: bottom of column 2 and bottom of column 6 (NOT overlay-marked: SocraticScreen ignores authored socratic overlays and renders only its own phase-derived 'win' ring, so the former 'claim' markers were dead content — QA 2026-07-25). Gray has no gravity-top threat anywhere. Solver scores pre-move: [-3,1,3,-3,16,3,-2] — column 5 (1-based) is the unique max and wins.",
+    "messages": {
+      "ask": [
+        {
+          "text": "You're playing Green, and it's your move. One square turns the bottom row into two threats at once — can you find the fork?",
+          "text_es": "Estás jugando con Verde, y es tu turno. Una casilla convierte la fila de abajo en dos amenazas a la vez — ¿podés encontrar la doble amenaza?",
+          "mood": "think"
+        }
+      ],
+      "wrong1": [
+        {
+          "text": "Not quite — look for the right square. Try again.",
+          "mood": "oops",
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+        }
+      ],
+      "wrong2": [
+        {
+          "text": "Let me show you.",
+          "mood": "oops",
+          "text_es": "Dejame mostrarte."
+        }
+      ],
+      "correct": [
+        {
+          "text": "Exactly! You saw it.",
+          "mood": "happy",
+          "text_es": "¡Exacto! Lo viste."
+        }
+      ],
+      "hint": [
+        {
+          "text": "Two green discs already sit side by side on the bottom row, and the squares at both ends of that row are still empty. Which move stretches that pair into a three with a winning square at each end?",
+          "text_es": "Ya hay dos fichas verdes una al lado de la otra en la fila de abajo, y las casillas de los dos extremos de esa fila siguen vacías. ¿Qué movimiento estira ese par a un tres con una casilla ganadora en cada extremo?",
+          "mood": "think"
+        }
+      ]
+    }
+  },
+  "confirmationCategory": "double_threat",
+  "confirmationCount": 4,
+  "confirmationChallenges": [
+    {
+      "puzzleId": "d1170298-5d4a-4c7b-ac1e-57e0f6929648",
+      "moveString": "104300405142342531",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPrompt_es": "Encontrá el movimiento que crea dos amenazas simultáneas.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "b9ad0136-8665-4994-860d-64f6123df557",
+      "moveString": "0256543133",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPrompt_es": "Encontrá el movimiento que crea dos amenazas simultáneas.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "c910e365-38ce-48c8-8d2e-51bac76f6c0d",
+      "moveString": "253454464424013022",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPrompt_es": "Encontrá el movimiento que crea dos amenazas simultáneas.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "0198f91c-4772-4016-b229-0c5046ad8f69",
+      "moveString": "666321611604056530311253504104",
+      "goalPrompt": "Find the move that creates two simultaneous threats.",
+      "goalPrompt_es": "Encontrá el movimiento que crea dos amenazas simultáneas.",
+      "goalPredicateType": "double_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": null,
+      "correctCol": null,
+      "userPlayer": 1
+    }
+  ],
+  "order": 6
+}

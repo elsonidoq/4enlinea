@@ -13,10 +13,11 @@ import { langHeaders } from '../lib/apiLang.js';
 import { useAudio } from '../lib/useAudio.js';
 import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getNarrationQueue } from '../lib/lessonNarration.js';
+import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
-export function SocraticScreen({ go, goBack, lessonId }) {
+export function SocraticScreen({ go, goBack, goReplace, lessonId }) {
   const { t } = useTranslation();
   const { store } = useStore();
   const { speechEnabled } = useAudio();
@@ -27,8 +28,13 @@ export function SocraticScreen({ go, goBack, lessonId }) {
   const [board, setBoard] = useState(null);
   const [heights, setHeights] = useState(null);
   const [lastDrop, setLastDrop] = useState(null);
+  // Direct-URL lock guard (PRO tier + lesson order) — mirrors SagaScreen's rules.
+  // While 'checking' (or after a 'blocked' redirect) the lesson fetch below never
+  // runs, so loadState stays 'loading' and locked content is never rendered.
+  const lockStatus = useLessonLockGuard(lessonId, goReplace);
 
   useEffect(() => {
+    if (lockStatus !== 'allowed') return;
     fetch(`${API}/api/lessons/${lessonId}`, { headers: langHeaders() })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -51,7 +57,7 @@ export function SocraticScreen({ go, goBack, lessonId }) {
         console.error('[SocraticScreen] fetch error:', err);
         setLoadState('error');
       });
-  }, [lessonId]);
+  }, [lessonId, lockStatus]);
 
 
   function advance() {
