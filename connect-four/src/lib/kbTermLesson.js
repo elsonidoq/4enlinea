@@ -56,17 +56,17 @@ export const KB_TERM_LESSON = {
     displayName: 'Special Before',
   },
   'community-double-threat': {
-    lessonId: null,
+    lessonId: 'the-fork',
     practiceCategory: 'double_threat',
     displayName: 'Double Threat',
   },
   'community-immediate-threat': {
-    lessonId: null,
+    lessonId: 'immediate-threat',
     practiceCategory: 'immediate_threat',
     displayName: 'Immediate Threat',
   },
   'community-forced-block': {
-    lessonId: null,
+    lessonId: 'block-before-build',
     practiceCategory: null,
     displayName: 'Forced Block',
   },

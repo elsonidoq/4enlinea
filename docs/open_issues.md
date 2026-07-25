@@ -1042,3 +1042,66 @@ After a real sandbox test purchase completed on staging (the same purchase that 
 **Root cause found (2026-07-18)**: confirmed via a screenshot of the actual stuck modal — it was frozen at its pristine pre-payment `'idle'` state (plan picker, active button), not the loading spinner or a success message. `subscribeCheckoutReturn` never replayed the *current* state to a new subscriber — it only notified listeners of *future* transitions. `useUpgradeCheckout.js`'s `checkout.completed` handler is a module-level singleton independent of which screen is mounted; if a screen's subscription effect wasn't active at the exact instant `setCheckoutReturnState('activated')` broadcast, that one-shot notification was lost forever, even though `checkoutReturnFlow`'s internal `state` variable correctly held `'activated'`. This explained the reported symptom exactly: the account correctly became Pro (the server-side tier flip via the webhook/`verifyTransaction` call is entirely independent of any UI listener), but the modal never learned about it and stayed on `'idle'` until manually dismissed.
 
 **Fix**: `subscribeCheckoutReturn` now immediately invokes the new listener with the current state at subscribe time (closing the race), and each of the 5 call sites now calls the (renamed-to-production-use) `resetCheckoutReturnState()` after consuming a terminal `'activated'`/`'failed'` state, so the replay-on-subscribe fix doesn't leak a stale outcome into some later, unrelated modal open. Covered by 2 new regression tests in `tests/unit/checkoutReturnFlow.test.js`.
+
+## OI-60 — `detectOvercut` taxonomy mismatch: taught gravity-top-adjacent overcut is never tagged; `active_forcing` label actually means T5
+
+**Status**: deferred / open — needs a classifier-owner decision (surfaced by the lesson-content final whole-branch review, 2026-07-24)
+**Area**: `connect-four/server/classifier.js` (`detectOvercut`, ~lines 959–985), lesson 07 (overcut) copy, deep-reveal shape naming
+**Discovered**: lesson-content remediation final review (2026-07-24)
+
+The overcut lesson teaches the gravity-top-adjacent shape (opponent threat directly under yours, immediately playable), but `detectOvercut` never tags that case: its match requires one of `isT4SameParity`/`isT5Exception`/`isT2Blocking`, and the `reason` it labels `'active_forcing'` is in fact the T5 rows-3/6 helper (`isT5Exception` branch). So deep reveals may name shapes the lesson only covers as "family", and the label text misdescribes what matched.
+
+**Why deferred**: fixing it means either extending the detector's case set or renaming/re-scoping the reason labels — a taxonomy decision for the classifier owner, not a copy fix.
+**If picked up**: decide whether the taught adjacent case should be a first-class overcut match (new T-rule branch) or whether the lesson should be re-scoped to the detector's actual cases; rename `active_forcing` to say T5 either way. Validate per reason-INVARIANTS I12 (full case-space + counterexample per case, through the production detector).
+
+## OI-61 — Challenge grader semantics: `evalUndercut` accepts losing non-killing columns; single-answer categories mark solver-tied/positive alternatives wrong
+
+**Status**: deferred / open (family of grader-semantics gaps; surfaced 2026-07-24, sibling of OI-1)
+**Area**: `connect-four/server/predicates.js` (`evalUndercut`), single-answer challenge grading (`ChallengeScreen.jsx` / `scoreMove` path), lessons 04/06/08 challenge boards
+**Discovered**: lesson-content remediation final review (2026-07-24)
+
+Two related acceptance-semantics gaps:
+1. `evalUndercut` accepts columns that lose outright as long as they are non-killing — the predicate checks the pattern condition but not the solver verdict.
+2. Single-answer categories mark solver-tied or even solver-positive alternative columns wrong when they don't match the stored answer. Concrete examples from the remediation pass: L06 ch2, L08 ch1, L04 ch2 each have a defensible alternative column that grades as incorrect.
+
+**Why deferred**: the fix is a correctness-model choice (tie-aware acceptance vs per-board vetting of alternatives), overlapping OI-1's pattern-vs-score question; not a one-line patch.
+**If picked up**: either make acceptance tie-aware (accept any column whose solver score ties the stored answer, optionally gated on pattern membership) or vet each shipped challenge board so the stored answer is the unique max; and add a solver-verdict floor to `evalUndercut`.
+
+## OI-62 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
+
+**Status**: deferred / open (small doc edits, 2026-07-24)
+**Area**: `docs/knowledge-base/allen-j-configuration.md`, `docs/knowledge-base/community-figure-7.md`
+**Discovered**: lesson-content remediation (2026-07-24)
+
+1. `allen-j-configuration.md`'s worked example `3334434` was solver-verified during the 2026-07-24 remediation (used as the J-shape lesson's canonical board); the entry should record that verification.
+2. `community-figure-7.md` should note that the `gravity_top>=2` filter is dead code for same-column adjacent-row threats — the case it ostensibly guards can't occur there.
+
+**Why deferred**: pure documentation polish; no behavior at stake.
+**If picked up**: make both edits in the KB entries (and re-run `npm run sync-kb` so the app copy matches).
+
+## OI-63 — Lesson verifier/finder robustness gaps (solver crash on bad movestring, coarse `_overlayIntent`, unscanned i18n titles, vestigial REMEDIATED gate)
+
+**Status**: deferred / open (tooling hardening backlog, 2026-07-24)
+**Area**: `connect-four/server/scripts/verify_lesson_content.mjs`, `server/scripts/find_lesson_boards.mjs`, `connect-four/tests/unit/lessonContent.test.js`
+**Discovered**: lesson-content remediation final review (2026-07-24)
+
+Four residues in the remediation tooling:
+1. Neither verifier nor finder wraps `solver.query` in try/catch — an invalid movestring crashes the whole run instead of producing a FAIL row for that item.
+2. `_overlayIntent` is per-slide; a slide mixing annotation and threat overlays can't declare intent per overlay.
+3. `lessonContent.test.js` scans lesson JSON copy but not i18n lesson titles (`lesson.<id>.title`), so a 0-indexed or off-voice title would pass.
+4. The strict tests' REMEDIATED gate is now vestigial and inverted-risk: every lesson is remediated, so the gate exempts nothing today but would silently exempt any *future* lesson added to the list.
+
+**Why deferred**: none blocks the shipped content; all are robustness/regression-surface improvements.
+**If picked up**: wrap solver calls per-check and emit FAIL rows; support per-overlay intent; extend the static scan to i18n titles; flip the REMEDIATED mechanism to an empty exemption set (strict by default, exemptions opt-in).
+
+## OI-64 — Owner decisions pending from the lesson remediation (paywall split, Spanish pass, two recommended new lessons)
+
+**Status**: open — owner decisions, not code defects (2026-07-24)
+**Area**: `connect-four/lessons/*.json` (`free` flags), Task 14 of the remediation plan, lesson curriculum
+**Discovered**: lesson-content remediation final review (2026-07-24)
+
+1. **Non-contiguous paywall after renumbering**: the free/paid split is now free 1–6 + 11–12, paid 7–10 + 13. Deliberate ordering, accidental paywall shape — decide whether to re-tier.
+2. **Task 14 Spanish + audio pass** is still pending an API key in the environment (see X10 in `docs/lesson-content-critique-2026-07-22.md`'s remediation-status appendix); includes the new es+audio debt from rewritten L01/L02 socratic messages and deleted stale `_es`/audio on edited fields.
+3. **Two recommended new lessons**: a threat-vocabulary primer (major/minor/immediate/gravity-top) and a zugzwang/tempo lesson. The undefined "major threat" usage in L06/L07/L10 strengthens the vocabulary-primer case.
+
+**If picked up**: each is an owner call — re-tier or accept the split; run the translation+audio pass once a key is provisioned; green-light (or decline) the two new lessons. Cross-ref: OI-18, OI-43.

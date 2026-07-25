@@ -8,7 +8,7 @@
       "movestring": "3332324445",
       "coachMessages": [
         {
-          "text": "Green has three discs in a row with one empty square to complete the four. What is Gray's only safe move?",
+          "text": "Gray has three discs in a row with one empty square to complete the four. What is Green's only safe move?",
           "mood": "think"
         }
       ],
@@ -46,7 +46,7 @@
       "legendItems": [
         {
           "type": "win",
-          "label": "Winning move"
+          "label": "Gray's three in a row"
         },
         {
           "type": "td",
@@ -59,7 +59,7 @@
       "movestring": "333232444525",
       "coachMessages": [
         {
-          "text": "You built — but Gray didn't wait. See what happens when Green ignores the threat.",
+          "text": "Green built — and Gray didn't wait. This is what happens when the threat is ignored.",
           "mood": "sad"
         }
       ],
@@ -134,20 +134,21 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Opponent's immediate threat (block this)"
+          "label": "Gray's immediate threat (the forced block)"
         },
         {
           "type": "tg",
-          "label": "User threat"
+          "label": "Green is building here (not yet a threat)"
         }
       ],
-      "infoProse": "The direction doesn't change the urgency. A vertical stack of three Green discs, a diagonal three-in-a-row, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square, their turn next, you must block."
+      "_overlayIntent": "annotation",
+      "infoProse": "The direction doesn't change the urgency. A vertical stack, a diagonal, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square completes the four, and the block is forced. Here Gray's diagonal three must be blocked at the bottom of the first column right away — Green's own diagonal is still two squares short, so building it does not answer an immediate threat."
     },
     {
       "movestring": "3333332122454422126151",
       "coachMessages": [
         {
-          "text": "Green has three in a row — but is the completing square actually reachable this turn? Look carefully before you block.",
+          "text": "Gray has three in a row — but is the completing square actually reachable this turn? Look carefully before blocking.",
           "mood": "think"
         }
       ],
@@ -182,8 +183,8 @@
           "type": "td"
         },
         {
-          "c": 4,
-          "r": 3,
+          "c": 1,
+          "r": 4,
           "type": "tg"
         },
         {
@@ -200,7 +201,7 @@
       "legendItems": [
         {
           "type": "win",
-          "label": "Gray's connected disks"
+          "label": "Gray's connected discs"
         },
         {
           "type": "td",
@@ -208,14 +209,14 @@
         },
         {
           "type": "tg",
-          "label": "Green should build here instead"
+          "label": "Green can even win right now — the buried threat changes nothing"
         },
         {
           "type": "claim",
           "label": "Empty cells below the threat"
         }
       ],
-      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn. In that case, building is fine. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. \n\nCan you spot another similar case in this board for gray?"
+      "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn, so Green does not need to spend a move blocking it. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. Here the check pays off at once: instead of blocking a threat that isn't real yet, Green is free to play the strongest move on the board — and in the second column Green can even win immediately.\n\nCan you spot another similar case on this board for Gray?"
     }
   ],
   "socratic": {
@@ -252,13 +253,13 @@
       }
     ],
     "correctCol": 3,
-    "_boardInstructions": "Show a minimal board where Red has three horizontal discs across the bottom of columns 0, 1, and 2 (row 0), leaving column 3 row 0 as the only empty cell that completes Red's four-in-a-row — it is immediately playable since nothing is below it. Yellow has two discs at row 0 in columns 5 and 6, making column 4 look like a tempting building move. Mark Red's completing cell at col 3 row 0 with 'tg' (this is the mandatory block) and the tempting Yellow building cell at col 4 row 0 with 'td' (the trap — playing here hands Red the win). No other overlays are needed. The student must choose col 3 to block Red's immediate threat rather than extend their own position.",
+    "_boardInstructions": "Minimal board, Gray (second player) to move (5 plies). Green (first player) has three discs across the bottom row of cols 0–2; col 3 row 0 is the only empty cell that completes Green's four and it is immediately playable. Gray has two discs stacked in col 4 (rows 0–1), a tempting stack to keep building. Overlays: 'tg' on col 3 row 0 (Green's completing cell — the forced block) and 'win' rings on Green's three bottom discs. The learner must choose col 3 to block Green's immediate threat — the solver's only non-losing move (+4; every other column scores -18) — rather than build on the col-4 stack.",
+    "goalPrompt": "Gray (the learner) must block before building: Green has three in a row across the bottom of the first three columns, and the bottom of the fourth column is the only cell that completes the four. Blocking there is the solver's only non-losing move (+4 — every other column loses at -18).",
     "messages": {
       "ask": [
         {
-          "text": "I'm going to make a mistake here. See if you can punish it.",
-          "mood": "think",
-          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+          "text": "You are Gray, and it's your move. Building on your own stack looks tempting — but look at what Green has along the bottom row first. Which move keeps you in the game?",
+          "mood": "think"
         }
       ],
       "wrong1": [
@@ -284,9 +285,8 @@
       ],
       "hint": [
         {
-          "text": "Look for an even square directly above one of my discs.",
-          "mood": "think",
-          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+          "text": "If you spend this turn building, Green completes four in a row on the very next move. Follow Green's three discs along the bottom row and take the empty square that finishes their line.",
+          "mood": "think"
         }
       ]
     }
@@ -295,8 +295,8 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "7d335e8c-549a-4364-b052-6aa2086ce8c3",
-      "moveString": "236343326044152605",
+      "puzzleId": "0eb165aa-2235-4e84-9577-aa03769cb951",
+      "moveString": "34133344142",
       "goalPrompt": "Block your opponent's threat.",
       "goalPredicateType": "forced_block",
       "goalPredicateParams": {},
@@ -304,7 +304,7 @@
       "interactionMode": "single_move",
       "highlightMetadata": null,
       "correctCol": null,
-      "userPlayer": 1
+      "userPlayer": 2
     },
     {
       "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",

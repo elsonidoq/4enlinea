@@ -2,168 +2,148 @@
   "id": "z-threats",
   "title": "Z-Threats",
   "free": true,
+  "order": 6,
   "userPerspective": "yellow",
   "slides": [
     {
-      "coachMessages": [
-        {
-          "text": "Gray has a threat up in that column. How safe is it? Count the empty cells between the column top and the threat cell.",
-          "mood": "think"
-        }
-      ],
+      "movestring": "22343321",
+      "_boardInstructions": "Self-play find (z_threat_gap3 search, seed 42): move 8, Green to move. Gray's ascending diagonal — 0-ind (1,0) O8, (2,1) O2, (3,2) O6 — needs (4,3). Column 4 (0-ind) holds one Gray disc, so the inclusive count from the stack top is 3 (rows 1,2,3 0-ind): odd, latent (not gravity-top). Only major threat on the board (extraThreats 0). scr (Green to move): -5 -5 -2 -2 -5 -4 -5 — Gray not lost anywhere. Overlays: claim on the two counted cells below, td on the threat cell (real Gray threat, verifier-checked).",
       "boardSpec": [
-        "ggd",
-        "ggd",
-        "ggd",
-        "dd",
         "",
+        "d",
+        "gdg",
+        "ggd",
+        "d",
         "",
         ""
       ],
-      "overlays": [
-        {
-          "c": 3,
-          "r": 2,
-          "type": "tg"
-        }
-      ],
-      "legendItems": [
-        {
-          "type": "tg",
-          "label": "Threat cell"
-        },
-        {
-          "type": "td",
-          "label": "Gap cell (count these)"
-        }
-      ],
-      "infoProse": "<board instructions>Show a column (any column) that is partially empty, with Gray having a horizontal major threat at some cell in that column. The column top should be at least 3 empty cells below the threat cell. Place a `tg` overlay on the threat cell and `td` overlays on each of the 3 empty gap cells between the column top and the threat. The rest of the board should have enough discs to make a plausible mid-game position.</board instructions>\n\nA Z-Threat is a major threat where the number of empty cells from the current column top up to and including the threat cell is odd. Count those cells — that number is all you need."
-    },
-    {
       "coachMessages": [
         {
-          "text": "You enter this column first. You go 1st, opponent 2nd, you 3rd — and you land on the threat. But this only works if you are the one to play into the column first.",
+          "text": "Gray has three discs on a rising diagonal, and the fourth cell sits high in the fifth column. How real is that threat? Count the empty cells from the column's stack top up to and including the threat cell.",
+          "mood": "think"
+        }
+      ],
+      "overlays": [
+        { "c": 4, "r": 1, "type": "claim" },
+        { "c": 4, "r": 2, "type": "claim" },
+        { "c": 4, "r": 3, "type": "td" }
+      ],
+      "legendItems": [
+        { "type": "claim", "label": "Count these cells, starting at the stack top" },
+        { "type": "td", "label": "Gray's threat cell — the count ends here" }
+      ],
+      "infoProse": "Gray's discs in the second, third and fourth columns form a rising diagonal, and its missing fourth cell — the threat cell — is the fourth row of the fifth column.\n\nThe fifth column already holds one disc, so the next disc there would land on the second row. Count the empty cells from there up to and including the threat cell: second row, third row, fourth row. Three cells — an odd number.\n\nA major threat whose count is odd is called a Z-Threat. That count is the whole test: start at the current stack top (not at the floor), include the threat cell itself, and check odd or even. The next slides show why odd is the number that matters."
+    },
+    {
+      "movestring": "22343321",
+      "_overlayIntent": "annotation",
+      "_boardInstructions": "Same board as slide 1 (z_threat_gap3 find 22343321). Annotation overlays depict the zugzwang fill order: tg on the two cells below the threat — the cells Green gets squeezed into (NOT green threats, hence _overlayIntent) — and td on the threat cell Gray collects last. scr: -5 -5 -2 -2 -5 -4 -5.",
+      "boardSpec": [
+        "",
+        "d",
+        "gdg",
+        "ggd",
+        "d",
+        "",
+        ""
+      ],
+      "coachMessages": [
+        {
+          "text": "Why is odd good for Gray? Because Gray never has to rush in. The column cannot stay half-empty forever — and with an odd count, the threat cell is the one that falls to Gray.",
           "mood": "happy"
         }
       ],
-      "boardSpec": [
-        "ggd",
-        "ggd",
-        "ggd",
-        "dd",
-        "",
-        "",
-        ""
-      ],
       "overlays": [
-        {
-          "c": 3,
-          "r": 2,
-          "type": "tg"
-        }
+        { "c": 4, "r": 1, "type": "tg" },
+        { "c": 4, "r": 2, "type": "tg" },
+        { "c": 4, "r": 3, "type": "td" }
       ],
       "legendItems": [
-        {
-          "type": "tg",
-          "label": "Your move"
-        },
-        {
-          "type": "td",
-          "label": "Opponent's move"
-        }
+        { "type": "tg", "label": "Cells Green gets squeezed into" },
+        { "type": "td", "label": "The threat cell — Gray takes it last" }
       ],
-      "infoProse": "<board instructions>Same column and threat as slide 1. Use alternating `tg` / `td` overlays on the gap cells to show the turn sequence: first gap cell = `tg` (your move), second = `td` (opponent), threat cell = `tg` (your move). The alternation should make it visually clear that you land on the threat.</board instructions>\n\nWith 3 empty cells you play moves 1 and 3 in this column; your opponent plays move 2. Since 3 is odd, the last move — the threat cell — is yours. That is what makes it a Z-Threat.\n\nCritical condition: **you must be the one to enter the column first.** If your opponent plays into this column before you, the sequence reverses — they play moves 1 and 3, and they land on your threat cell instead."
+      "infoProse": "The wrong plan is to dive into the fifth column right away: every disc Gray drops there is a free move handed to Green elsewhere, and after Gray's first disc the threat cell still is not reachable.\n\nA Z-Threat is a waiting weapon. Gray leaves the column alone and keeps making useful moves on the rest of the board. Sooner or later Green runs out of safe moves elsewhere and has to drop into the fifth column, landing on the second row. Gray answers somewhere else again. When Green is squeezed in a second time, that disc lands on the third row — and now the threat cell on the fourth row is the next drop in the column. Gray takes it and completes the diagonal.\n\nThat is the odd count at work: three cells means the two below the threat get absorbed by the squeezed player, and the last one — the threat itself — falls to Gray. Odd count = the threat belongs to Gray, as long as Gray keeps a useful move in hand and lets Green be the one forced into the column."
     },
     {
+      "movestring": "3253645505",
+      "_boardInstructions": "Self-play find (z_threat_gap2 search, seed 42): move 10, Green to move. Gray's ascending diagonal — 0-ind (2,0) O2, (3,1) O4, (5,3) O10 — needs (4,2). Column 4 holds one Gray disc, so the inclusive count is 2 (rows 1,2 0-ind): even, NOT a z-threat. Only major threat on the board (extraThreats 0). scr (Green to move): -7 -6 -5 -5 -16 -7 -7 — Green entering col 4 is the fastest loss on the board (it makes the threat gravity-top), which the prose cites.",
+      "boardSpec": [
+        "g",
+        "",
+        "d",
+        "gd",
+        "d",
+        "ggdd",
+        "g"
+      ],
       "coachMessages": [
         {
-          "text": "Now the gap is 2. You go 1st, opponent goes 2nd — and lands on your threat cell. Even gap means the threat doesn't work yet.",
+          "text": "Same idea, different column: Gray's diagonal needs the third row of the fifth column. Count from the stack top: second row, third row — two cells. Even. The waiting game no longer works for Gray.",
           "mood": "sad"
         }
       ],
-      "boardSpec": [
-        "ggd",
-        "ggd",
-        "ggd",
-        "dd",
-        "",
-        "",
-        ""
-      ],
       "overlays": [
-        {
-          "c": 3,
-          "r": 2,
-          "type": "td"
-        }
+        { "c": 4, "r": 1, "type": "claim" },
+        { "c": 4, "r": 2, "type": "td" }
       ],
       "legendItems": [
-        {
-          "type": "tg",
-          "label": "Your move"
-        },
-        {
-          "type": "td",
-          "label": "Opponent's move / dead threat"
-        }
+        { "type": "claim", "label": "Count these cells, starting at the stack top" },
+        { "type": "td", "label": "Gray's threat cell — the count ends here" }
       ],
-      "infoProse": "<board instructions>Same setup as slides 1–2 but change the gap to 2 cells (even). Mark the first gap cell `tg` (your move) and the threat cell `td` (opponent's move — they land there). The threat cell should visually signal 'not yours'.</board instructions>\n\nEven gap: 2 empty cells, you play 1st, opponent plays 2nd and reaches the threat. This is not a Z-Threat — entering the column first hands the threat cell to your opponent. You need an odd gap for the threat to be yours."
+      "infoProse": "Gray's rising diagonal through the third, fourth and sixth columns is missing its third cell: the third row of the fifth column. That column holds one disc, so the count runs second row, third row — two cells. An even count means this is not a Z-Threat.\n\nRun the same waiting game and watch it flip. Green will never drop into that column voluntarily: a Green disc on the second row would put the threat cell straight into Gray's reach — the solver rates it Green's worst move on the board, the fastest loss. But if Gray is ever the one squeezed into the column, Gray's own disc fills the second row, and Green simply blocks the threat cell on the very next move.\n\nWith an even count, the squeeze delivers the block to Green instead of the threat to Gray. Even count = the same waiting game hands the cell to the opponent."
     },
     {
+      "movestring": "33332422213100002524",
+      "_boardInstructions": "Self-play find (new z_threat_stacked spec, seed 42): move 20, Green to move. Two Gray threats above 2-high stacks, and row-parity intuition disagrees with the count in BOTH directions: (a) 0-ind (4,4) — ascending diagonal (1,1) O12, (2,2) O8, (3,3) O4 — count 3 from height 2 (odd, z-threat) but 1-based row 5 is an ODD row ('Green's territory' by raw parity); (b) 0-ind (1,3) — descending diagonal (2,2) O8, (3,1) O2, (4,0) O6 — count 2 from height 2 (even, NOT a z-threat) but 1-based row 4 is an EVEN row ('Gray's natural home'). Both td overlays are real Gray threats (verifier-checked). scr (Green to move): -10 -11 -- -10 -2 -10 -10 — Gray not lost anywhere.",
+      "boardSpec": [
+        "gdgd",
+        "dd",
+        "ggdggg",
+        "gdgdg",
+        "dd",
+        "d",
+        ""
+      ],
       "coachMessages": [
         {
-          "text": "The column already has discs. Don't count from the bottom — count from the top of the stack. The stack shifts the parity.",
+          "text": "Two Gray threats, both above stacked columns. The row numbers point one way — the counts point the other. Trust the count.",
           "mood": "think"
         }
       ],
-      "boardSpec": [
-        "ggd",
-        "ggd",
-        "ggd",
-        "dd",
-        "",
-        "",
-        ""
-      ],
       "overlays": [
-        {
-          "c": 3,
-          "r": 2,
-          "type": "tg"
-        }
+        { "c": 4, "r": 2, "type": "claim" },
+        { "c": 4, "r": 3, "type": "claim" },
+        { "c": 4, "r": 4, "type": "td" },
+        { "c": 1, "r": 2, "type": "claim" },
+        { "c": 1, "r": 3, "type": "td" }
       ],
       "legendItems": [
-        {
-          "type": "tg",
-          "label": "Z-Threat cell"
-        },
-        {
-          "type": "td",
-          "label": "Gap to count"
-        }
+        { "type": "claim", "label": "Counted cells below each threat" },
+        { "type": "td", "label": "Gray threat cells — count to each from its own stack top" }
       ],
-      "infoProse": "<board instructions>Show a column that is already partially filled (2–3 discs at the bottom). Gray has a horizontal threat above the stack. The raw row number of the threat should be even (a naive student using row parity would say 'not mine'), but the gap from the stack top to the threat should be odd (1 or 3). Mark the gap cells `td` and the threat cell `tg`. This is the key gotcha: count from the stack top, not from row 0.</board instructions>\n\nThe raw row number can mislead you. What matters is the gap from the current column top to the threat cell. Even an 'even-row' threat becomes a Z-Threat if the discs below it shift the count to odd. Always count from the stack top."
+      "infoProse": "From the parity lesson, Gray's natural rows are the even ones — second, fourth, sixth. So the threat on the fifth row of the fifth column looks like Green territory, and the one on the fourth row of the second column looks safely Gray's. Both readings are wrong, because both columns already hold two discs.\n\nFifth column: count from the stack top — third row, fourth row, fifth row. Three cells, odd: a genuine Z-Threat for Gray, sitting on an 'odd' row.\n\nSecond column: third row, fourth row. Two cells, even: not a Z-Threat, even though the fourth row is one of Gray's 'natural' even rows.\n\nEvery disc already in a column shifts the count by one. The raw row number tells the truth only in an empty column — once a column has discs in it, always count from the stack top."
     }
   ],
   "socratic": {
-    "_boardInstructions": "Show a mid-game position where Yellow has a horizontal major threat at row 2 in two different columns: column 3 and one other column (e.g., column 6). Column 3 already has exactly one disc at the bottom (row 0), so the gap from the column top to the threat is 1 cell (odd) — making it a Z-Threat. The distractor column is fully empty, so its gap to row 2 is 2 cells (even) — not a Z-Threat. Mark Yellow's threat cell in column 3 with 'tg' and the threat cell in the distractor column with 'td'. The student must notice that the single disc in column 3 shifts the parity — the same row number, opposite ownership.",
-    "goalPrompt": "Which column contains Gray's Z-Threat?",
+    "movestring": "25611155232213443333050",
+    "_boardInstructions": "Self-play find (z_threat_socratic search, seed 42): 23 plies (odd — the learner plays Gray by movestring-length parity). Gray has major threats on the same row, 0-ind row 3: at (6,3) — descending diagonal (3,0) O10, (4,1) O16, (5,2) O8 — count 3 from height 1 (odd → z-threat); and at (4,3) — horizontal (2,3) O12, (3,3) O18, (5,3) O22 — count 2 from height 2 (even → distractor). correctCol 6 is solver-max: scr 6 5 5 -- 5 5 6 (col 0 ties at +6 but holds no Gray threat; the distractor col 4 scores 5). Position winning for Gray. extraThreats 0 — the contrast pair are the only major threats on the board. SocraticScreen derives its own overlays, so none are authored here.",
+    "goalPrompt": "Gray has major threats on the fourth row of both the fifth and seventh columns. Only the seventh column's is a Z-Threat: its count from the stack top (second, third, fourth rows) is three — odd — while the fifth column's count (third, fourth rows) is two — even. Clicking the seventh column is also the solver's best move (+6).",
     "boardSpec": [
-      "ggd",
-      "ggd",
-      "ggd",
-      "dd",
-      "",
-      "",
-      ""
+      "gg",
+      "dgdg",
+      "gggd",
+      "ddgdgd",
+      "gd",
+      "dgdd",
+      "g"
     ],
-    "correctCol": 3,
+    "overlays": [],
+    "correctCol": 6,
     "messages": {
       "ask": [
         {
-          "text": "I'm going to make a mistake here. See if you can punish it.",
-          "mood": "think",
-          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+          "text": "Two columns hold a Gray threat on the same row — the fifth and the seventh. Only one of them is truly yours. Which column?",
+          "mood": "think"
         }
       ],
       "wrong1": [
@@ -189,9 +169,8 @@
       ],
       "hint": [
         {
-          "text": "Look for an even square directly above one of my discs.",
-          "mood": "think",
-          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+          "text": "Count the empty cells in each column, from the stack top up to and including the threat cell. One count is even, one is odd — the odd one is yours.",
+          "mood": "think"
         }
       ]
     }

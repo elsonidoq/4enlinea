@@ -29,7 +29,7 @@
       "movestring": "3332223362",
       "coachMessages": [
         {
-          "text": "Green grabbed both central key cells early — the centre column at rows 2 and 3 (0-indexed). This D3-D4 opening is usually an easy win, but here it has sharpened: Green to move, and only ONE column wins.",
+          "text": "Green grabbed both central key cells early — the third and fourth cells of the centre column. This D3-D4 opening is usually an easy win, but here it has sharpened: Green to move, and only ONE column wins.",
           "mood": "think"
         }
       ],
@@ -44,7 +44,7 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Owning both central key cells early — Allen's D3 and D4 — is usually powerful and comparatively easy to convert. But 'usually easy' does not mean 'always safe': in this exact position, only col 1 (0-indexed) keeps the win — every other column throws it away. Recognising the D3-D4 shape tells you the position is good; it does not tell you which move keeps it that way."
+      "infoProse": "Owning both central key cells early — Allen's D3 and D4 — is usually powerful and comparatively easy to convert. But 'usually easy' does not mean 'always safe': in this exact position, only the second column from the left keeps the win — every other column throws it away. Recognising the D3-D4 shape tells you the position is good; it does not tell you which move keeps it that way."
     },
     {
       "movestring": "3332222",
@@ -123,5 +123,5 @@
   },
   "confirmationCategory": null,
   "confirmationCount": 0,
-  "order": 14
+  "order": 13
 }

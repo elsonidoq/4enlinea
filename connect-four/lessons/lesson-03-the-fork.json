@@ -59,7 +59,7 @@
       "movestring": "3333332444441",
       "coachMessages": [
         {
-          "text": "One move, two threats. Green must answer — but there is only one answer, and it only covers one.",
+          "text": "One move, two threats. Gray must answer — but one reply can only cover one of them.",
           "mood": "happy"
         }
       ],
@@ -87,7 +87,7 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's two threat cells (opponent can only block one)"
+          "label": "Green's two threat cells (Gray can only block one)"
         }
       ],
       "infoProse": "A fork is a single move that creates two simultaneous threats. Your opponent has one turn to respond — they can block one threat, but the other remains. On your next move, you win. The key: both threat cells must be immediately reachable (at the top of their column's current stack)."
@@ -96,7 +96,7 @@
       "movestring": "3333322422111",
       "coachMessages": [
         {
-          "text": "Forks don't have to point left and right. Two threats can stack vertically in the same column — blocking the bottom one hands Gray the top.",
+          "text": "Forks don't have to point left and right. Two threats can stack in the same column — and blocking the bottom one hands Green the top.",
           "mood": "think"
         }
       ],
@@ -119,15 +119,25 @@
           "c": 0,
           "r": 2,
           "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 3,
+          "type": "tg"
+        },
+        {
+          "c": 4,
+          "r": 2,
+          "type": "tg"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
-          "label": "Both Green threat cells (stacked in the same column)"
+          "label": "Green's stacked threat cells (two pairs, one per side)"
         }
       ],
-      "infoProse": "Forks are not always spread across two different columns. When two threats both complete in the same column on adjacent rows, blocking the bottom threat hands you the top one — your opponent's block becomes your setup. This stacked variant is just as decisive as the spread-out form."
+      "infoProse": "Forks are not always spread across two different columns. When two threats complete in the same column on adjacent rows, blocking the lower one gives Green the upper one — the block itself becomes the setup. This board actually holds two such stacked pairs, one in the first column and one in the fifth: whoever finds either pair has found the same pattern.\n\nOne important caution: all four of these cells sit high above empty squares — none of them is playable yet, so this is NOT a fork Green can cash today. It is a trap that wins later, as the columns underneath fill up. The Z-Threats and Figure-7 lessons build on exactly this idea."
     },
     {
       "movestring": "332443322243621",
@@ -172,41 +182,36 @@
     }
   ],
   "socratic": {
-    "movestring": "44442222224333",
+    "movestring": "33333026",
     "boardSpec": [
+      "d",
       "",
-      "",
-      "gdgdgd",
-      "dgd",
+      "g",
       "gdgdg",
       "",
-      ""
+      "",
+      "d"
     ],
     "overlays": [
       {
-        "c": 3,
-        "r": 2,
-        "type": "claim"
-      },
-      {
         "c": 1,
         "r": 0,
-        "type": "win"
+        "type": "claim"
       },
       {
         "c": 5,
         "r": 0,
-        "type": "win"
+        "type": "claim"
       }
     ],
-    "correctCol": 3,
-    "_boardInstructions": "Show a position where Yellow has two discs at row 0 in columns 1 and 2, and two more discs at row 0 in columns 4 and 5 — forming two incomplete horizontal lines that both pass through column 3. Column 3 is empty, as are columns 0 and 6 at row 0. Add two Red discs at row 1 in columns 2 and 4 to make the board plausible. Playing column 3 lands Yellow at row 0 and instantly creates two threats: the line across columns 1–2–3 needs only column 0 to win, and the line across columns 3–4–5 needs only column 6 to win. Mark column 0 row 0 with 'tg' and column 6 row 0 with 'tg' so the student can see the two fork targets before clicking.",
+    "correctCol": 4,
+    "goalPrompt": "Green to move. Playing the fifth column makes three green discs in a row on the bottom row with open squares at both ends (second and sixth columns) — a fork Gray cannot fully block. Solver: the fork move is the unique best move (+16); every other column is strictly worse.",
+    "_boardInstructions": "Board from movestring 33333026 (solver-verified 2026-07-24). Green (to move) has bottom-row discs in columns 3 and 4 (1-based); column 4 also carries an alternating tower up to row 5. Gray has lone bottom-row discs in columns 1 and 7. Playing the fifth column lands Green on the bottom row, making three in a row across columns 3-5 with BOTH completing squares open and immediately playable: bottom of column 2 and bottom of column 6 (marked with 'claim' overlays — before the move they are only minor threats, so they are amber attention markers, not threat dots). Gray has no gravity-top threat anywhere. Solver scores pre-move: [-3,1,3,-3,16,3,-2] — column 5 (1-based) is the unique max and wins.",
     "messages": {
       "ask": [
         {
-          "text": "I'm going to make a mistake here. See if you can punish it.",
-          "mood": "think",
-          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo."
+          "text": "You're playing Green, and it's your move. One square turns the bottom row into two threats at once — can you find the fork?",
+          "mood": "think"
         }
       ],
       "wrong1": [
@@ -232,9 +237,8 @@
       ],
       "hint": [
         {
-          "text": "Look for an even square directly above one of my discs.",
-          "mood": "think",
-          "text_es": "Buscá una casilla par justo encima de una de mis fichas."
+          "text": "Two green discs already sit side by side on the bottom row, and both amber squares are open. Which move stretches that pair into a three with a winning square at each end?",
+          "mood": "think"
         }
       ]
     }

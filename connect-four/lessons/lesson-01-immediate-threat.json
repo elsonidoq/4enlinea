@@ -50,8 +50,7 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Threat square (the winning move)",
-          "label_es": "Casilla de amenaza (la jugada ganadora)"
+          "label": "Green's threat square — Gray must claim it"
         },
         {
           "type": "win",
@@ -107,13 +106,11 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "User threat",
-          "label_es": "Amenaza del usuario"
+          "label": "Green's threat"
         },
         {
           "type": "win",
-          "label": "Winning move",
-          "label_es": "Jugada ganadora"
+          "label": "Green's three connected discs"
         }
       ],
       "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss.",
@@ -169,8 +166,7 @@
         },
         {
           "type": "tg",
-          "label": "Winning move (interior gap)",
-          "label_es": "Jugada ganadora (hueco interior)"
+          "label": "Green's winning square (interior gap)"
         }
       ],
       "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls.",
@@ -178,13 +174,11 @@
     },
     {
       "movestring": "3333334225224455",
+      "_overlayIntent": "annotation",
       "coachMessages": [
         {
-          "text": "You spotted your own chance to build — but your opponent already has three in a row. What happens if you extend your own line first?",
-          "mood": "think",
-          "audio": "/audio/lessons/e378834b9957dba3.mp3",
-          "text_es": "Viste tu propia oportunidad de construir, pero tu oponente ya tiene tres en línea. ¿Qué pasa si primero extendés tu propia línea?",
-          "audio_es": "/audio/lessons/a5b50e8346bf658a.mp3"
+          "text": "Green sees a tempting square to build on — but Gray already has three in a row. What happens if Green builds first?",
+          "mood": "think"
         }
       ],
       "boardSpec": [
@@ -225,7 +219,8 @@
     }
   ],
   "socratic": {
-    "_boardInstructions": "Yellow has three discs stacked vertically in col 0 at rows 0, 1, and 2; playing col 0 again drops a disc at row 3 and completes a vertical four-in-a-row — mark col 0 row 3 with 'tg'. Col 3 holds two Yellow discs (rows 0 and 1), which looks like a promising horizontal setup; mark col 3 row 2 with 'td' to flag it as tempting but not an immediate win. Col 1 carries three Red discs at rows 0–2 topped by a Yellow disc at row 3, adding board density without giving Red an active immediate threat. The student's task is to spot the single column whose stack is already three deep and play it to win right now.",
+    "_boardInstructions": "Green (first player, to move — 12 plies) has three discs stacked vertically in col 0 at rows 0–2; playing col 0 drops a disc at row 3 and completes a vertical four — the unique solver-max (+15, all other columns ≤14). Col 1 carries three Gray discs at rows 0–2, a Green disc at row 3, and Gray at row 4. Col 2 holds two Gray discs (rows 0–1); col 3 holds two Green discs (rows 0–1), a tempting horizontal setup that does not win this turn. No overlays: the learner's task is to spot unaided the column whose green stack is already three deep and play it to win right now.",
+    "goalPrompt": "Green (the learner) has three discs stacked in the first column; playing the first column completes a vertical four-in-a-row and is the solver's unique best move (+15 — every other column scores 14 or less).",
     "movestring": "320101311201",
     "boardSpec": [
       "ggg",
@@ -241,11 +236,8 @@
     "messages": {
       "ask": [
         {
-          "text": "I'm going to make a mistake here. See if you can punish it.",
-          "mood": "think",
-          "text_es": "Voy a cometer un error aquí. Mirá si podés castigarlo.",
-          "audio": "/audio/lessons/a2230ed7085dda79.mp3",
-          "audio_es": "/audio/lessons/f770cd4ea25777eb.mp3"
+          "text": "You are Green, and it's your move. One column already holds three of your discs, one on top of another — a single disc finishes the job. Can you find it and win right now?",
+          "mood": "think"
         }
       ],
       "wrong1": [
@@ -277,11 +269,8 @@
       ],
       "hint": [
         {
-          "text": "Look for an even square directly above one of my discs.",
-          "mood": "think",
-          "text_es": "Buscá una casilla par justo encima de una de mis fichas.",
-          "audio": "/audio/lessons/1ab32125dd370e7d.mp3",
-          "audio_es": "/audio/lessons/ffbaa400e146d675.mp3"
+          "text": "Threats run in every direction — including straight up. Look for a vertical stack of three green discs with the square above it still empty, and drop your disc on top.",
+          "mood": "think"
         }
       ]
     }
