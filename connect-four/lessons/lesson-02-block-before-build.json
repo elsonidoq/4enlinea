@@ -310,6 +310,7 @@
       "puzzleId": "25bb4952-abb5-416c-97d6-21b6b1bad830",
       "moveString": "3211362341106",
       "goalPrompt": "Block your opponent's threat.",
+      "goalPrompt_es": "Bloqueá la amenaza de tu oponente.",
       "goalPredicateType": "forced_block",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
