@@ -19,7 +19,8 @@
       "coachMessages": [
         {
           "text": "Two threats share the third column: Gray's completing cell on the second row, Green's directly above it on the third. Gravity fills a column bottom-up — the lower cell always comes first.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Dos amenazas comparten la tercera columna: la casilla que completa la de Gris está en la segunda fila, la de Verde justo arriba, en la tercera. La gravedad llena una columna de abajo hacia arriba — la casilla de abajo siempre llega primero."
         }
       ],
       "overlays": [
@@ -37,14 +38,17 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's completing cell — the lower threat"
+          "label": "Gray's completing cell — the lower threat",
+          "label_es": "La casilla que completa Gris — la amenaza de abajo"
         },
         {
           "type": "tg",
-          "label": "Green's completing cell — directly above"
+          "label": "Green's completing cell — directly above",
+          "label_es": "La casilla que completa Verde — justo arriba"
         }
       ],
-      "infoProse": "Gray's three discs across the second row — fourth, fifth and sixth columns — complete four-in-a-row on the second row of the third column. Green's three discs directly above them, across the third row, complete on the third row of that same column. Two major threats, one column, Gray's sitting below Green's.\n\nBecause gravity fills a column from the bottom up, the second row must be settled before the third row can ever be reached. When two threats from opposite players share a column on rows of opposite parity like this — one even, one odd — the lower threat neutralizes the upper one. That is the undercut.\n\nNeutralized does not mean Green's cell vanishes, and it does not mean the column is instant death for anyone who touches it. It means something more precise: Green's threat can never be used to win the game. The next slide walks through exactly why."
+      "infoProse": "Gray's three discs across the second row — fourth, fifth and sixth columns — complete four-in-a-row on the second row of the third column. Green's three discs directly above them, across the third row, complete on the third row of that same column. Two major threats, one column, Gray's sitting below Green's.\n\nBecause gravity fills a column from the bottom up, the second row must be settled before the third row can ever be reached. When two threats from opposite players share a column on rows of opposite parity like this — one even, one odd — the lower threat neutralizes the upper one. That is the undercut.\n\nNeutralized does not mean Green's cell vanishes, and it does not mean the column is instant death for anyone who touches it. It means something more precise: Green's threat can never be used to win the game. The next slide walks through exactly why.",
+      "infoProse_es": "Las tres fichas de Gris a lo largo de la segunda fila — columnas cuarta, quinta y sexta — completan un cuatro en línea en la segunda fila de la tercera columna. Las tres fichas de Verde justo arriba, a lo largo de la tercera fila, completan en la tercera fila de esa misma columna. Dos amenazas mayores, una columna, la de Gris debajo de la de Verde.\n\nComo la gravedad llena una columna de abajo hacia arriba, la segunda fila tiene que resolverse antes de que se pueda llegar a la tercera. Cuando dos amenazas de jugadores opuestos comparten una columna en filas de paridad opuesta, así — una par, una impar — la amenaza de abajo neutraliza a la de arriba. Eso es el undercut.\n\nNeutralizada no significa que la casilla de Verde desaparezca, ni que la columna sea muerte instantánea para quien la toque. Significa algo más preciso: la amenaza de Verde nunca podrá usarse para ganar la partida. La próxima diapositiva explica exactamente por qué."
     },
     {
       "movestring": "314614446646450663355",
@@ -61,7 +65,8 @@
       "coachMessages": [
         {
           "text": "The third column is empty, so someone has to go first. Walk both cases through — that two-move exchange is the whole undercut rule.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "La tercera columna está vacía, así que alguien tiene que entrar primero. Recorré los dos casos — ese intercambio de dos movidas es toda la regla del undercut."
         }
       ],
       "overlays": [
@@ -84,18 +89,22 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "The entry cell — the first disc in the column lands here"
+          "label": "The entry cell — the first disc in the column lands here",
+          "label_es": "La casilla de entrada — acá cae la primera ficha de la columna"
         },
         {
           "type": "td",
-          "label": "Gray's completing cell — the lower threat"
+          "label": "Gray's completing cell — the lower threat",
+          "label_es": "La casilla que completa Gris — la amenaza de abajo"
         },
         {
           "type": "tg",
-          "label": "Green's completing cell — directly above"
+          "label": "Green's completing cell — directly above",
+          "label_es": "La casilla que completa Verde — justo arriba"
         }
       ],
-      "infoProse": "Suppose Green enters the third column first. The disc lands on the first row — and Gray's completing cell on the second row becomes immediately playable. Gray drops there and wins on the spot. So Green can never afford to enter this column while Gray's threat stands.\n\nNow suppose Gray enters first. Gray's disc lands on the first row, threatening to win on the second row next turn. Green has no win of its own anywhere on the board, so Green must block: Green's disc fills the second row, and Gray's threat is dead. But that block lifts the column — Green's own completing cell on the third row is now the next drop, and it is Gray's turn. Gray fills the third row. Two moves spent, both threats dead.\n\nSo the column is one-sided. If Green enters it, Gray wins at once; if Gray enters it, the forced exchange buries both threats. In neither line does Green's upper threat ever produce a win — that is what neutralizes means. Note that Gray's lower threat is not neutralized by anything: it stays fully active, and it is the one that dictates who may touch the column."
+      "infoProse": "Suppose Green enters the third column first. The disc lands on the first row — and Gray's completing cell on the second row becomes immediately playable. Gray drops there and wins on the spot. So Green can never afford to enter this column while Gray's threat stands.\n\nNow suppose Gray enters first. Gray's disc lands on the first row, threatening to win on the second row next turn. Green has no win of its own anywhere on the board, so Green must block: Green's disc fills the second row, and Gray's threat is dead. But that block lifts the column — Green's own completing cell on the third row is now the next drop, and it is Gray's turn. Gray fills the third row. Two moves spent, both threats dead.\n\nSo the column is one-sided. If Green enters it, Gray wins at once; if Gray enters it, the forced exchange buries both threats. In neither line does Green's upper threat ever produce a win — that is what neutralizes means. Note that Gray's lower threat is not neutralized by anything: it stays fully active, and it is the one that dictates who may touch the column.",
+      "infoProse_es": "Supongamos que Verde entra primero en la tercera columna. La ficha cae en la primera fila — y la casilla que completa la amenaza de Gris en la segunda fila queda inmediatamente jugable. Gris tira ahí y gana en el acto. Así que Verde nunca puede permitirse entrar en esta columna mientras la amenaza de Gris siga en pie.\n\nAhora supongamos que Gris entra primero. La ficha de Gris cae en la primera fila, amenazando con ganar en la segunda fila en la próxima movida. Verde no tiene ninguna victoria propia en ningún lugar del tablero, así que Verde tiene que bloquear: la ficha de Verde llena la segunda fila, y la amenaza de Gris queda muerta. Pero ese bloqueo levanta la columna — la propia casilla que completa Verde, en la tercera fila, ahora es la próxima caída, y le toca a Gris. Gris llena la tercera fila. Dos movidas gastadas, las dos amenazas muertas.\n\nAsí que la columna es unilateral. Si Verde entra, Gris gana de inmediato; si Gris entra, el intercambio forzado entierra las dos amenazas. En ninguna de las dos líneas la amenaza de arriba de Verde llega a producir una victoria — eso es lo que significa neutralizar. Notá que la amenaza de abajo de Gris no queda neutralizada por nada: se mantiene completamente activa, y es la que decide quién puede tocar la columna."
     },
     {
       "movestring": "314614446646450663355",
@@ -112,7 +121,8 @@
       "coachMessages": [
         {
           "text": "Same board, read from Green's side. Green's very last move completed the third-row line — but the cell below already belonged to Gray's threat. Green's threat was undercut at birth.",
-          "mood": "sad"
+          "mood": "sad",
+          "text_es": "Mismo tablero, leído desde el lado de Verde. La última movida de Verde completó la línea de la tercera fila — pero la casilla de abajo ya le pertenecía a la amenaza de Gris. La amenaza de Verde nació undercut."
         }
       ],
       "overlays": [
@@ -130,14 +140,17 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's lower threat — the undercut"
+          "label": "Gray's lower threat — the undercut",
+          "label_es": "La amenaza de abajo de Gris — el undercut"
         },
         {
           "type": "tg",
-          "label": "Green's threat — neutralized, it can never win"
+          "label": "Green's threat — neutralized, it can never win",
+          "label_es": "La amenaza de Verde — neutralizada, nunca puede ganar"
         }
       ],
-      "infoProse": "Game reviews use this word from the victim's side. When a review says a threat \"was undercut\", it means exactly this shape: an opponent threat directly below, on a row of the opposite parity, so the threat above can no longer win the game. Here Green spent its last move completing the third-row line — three discs of work invested in a threat that was dead on arrival, because Gray's second-row three-in-a-row was already finished beneath it.\n\nThe threat does not vanish from the board, and Gray still has to respect the sequence — but in every line it ends blocked or unreached. That is why building toward a completing cell that sits directly above an opponent threat of the opposite row parity is wasted effort.\n\nThe strong version of the same idea is Gray's seat on this board: aiming a three-in-a-row at the cell directly below an opponent's threat. The lower cell owns the column."
+      "infoProse": "Game reviews use this word from the victim's side. When a review says a threat \"was undercut\", it means exactly this shape: an opponent threat directly below, on a row of the opposite parity, so the threat above can no longer win the game. Here Green spent its last move completing the third-row line — three discs of work invested in a threat that was dead on arrival, because Gray's second-row three-in-a-row was already finished beneath it.\n\nThe threat does not vanish from the board, and Gray still has to respect the sequence — but in every line it ends blocked or unreached. That is why building toward a completing cell that sits directly above an opponent threat of the opposite row parity is wasted effort.\n\nThe strong version of the same idea is Gray's seat on this board: aiming a three-in-a-row at the cell directly below an opponent's threat. The lower cell owns the column.",
+      "infoProse_es": "Las revisiones de partidas usan esta palabra desde el lado de la víctima. Cuando una revisión dice que una amenaza \"fue undercut\", significa exactamente esta forma: una amenaza del rival justo debajo, en una fila de paridad opuesta, de modo que la amenaza de arriba ya no puede ganar la partida. Acá Verde gastó su última movida completando la línea de la tercera fila — tres fichas de trabajo invertidas en una amenaza que nació muerta, porque el tres en fila de Gris en la segunda fila ya estaba terminado debajo.\n\nLa amenaza no desaparece del tablero, y Gris igual tiene que respetar la secuencia — pero en todas las líneas termina bloqueada o inalcanzada. Por eso construir hacia una casilla que completa y que está justo arriba de una amenaza rival de paridad de fila opuesta es esfuerzo desperdiciado.\n\nLa versión fuerte de la misma idea es el lugar de Gris en este tablero: apuntar un tres en fila a la casilla directamente debajo de una amenaza rival. La casilla de abajo es dueña de la columna."
     },
     {
       "movestring": "326223332522553365501",
@@ -154,7 +167,8 @@
       "coachMessages": [
         {
           "text": "Now the fifth column: Gray's completing cell on the third row, Green's on the fifth. Both odd rows — same parity — and this time neither threat kills the other.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Ahora la quinta columna: la casilla que completa Gris está en la tercera fila, la de Verde en la quinta. Las dos filas son impares — misma paridad — y esta vez ninguna amenaza mata a la otra."
         }
       ],
       "overlays": [
@@ -177,18 +191,22 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's completing cell — third row"
+          "label": "Gray's completing cell — third row",
+          "label_es": "La casilla que completa Gris — tercera fila"
         },
         {
           "type": "claim",
-          "label": "The spare cell between the two threats"
+          "label": "The spare cell between the two threats",
+          "label_es": "La casilla libre entre las dos amenazas"
         },
         {
           "type": "tg",
-          "label": "Green's completing cell — fifth row"
+          "label": "Green's completing cell — fifth row",
+          "label_es": "La casilla que completa Verde — quinta fila"
         }
       ],
-      "infoProse": "Gray's rising diagonal completes on the third row of the fifth column. Green's three discs across the fifth row complete two rows higher, on the fifth row of the same column. Lower Gray, upper Green — it looks like the undercut again. It is not.\n\nThe difference is row parity. On the earlier board the two completing cells sat on neighbouring rows, one even and one odd. Here both sit on odd rows — the third and the fifth — with a spare cell on the fourth row between them. That spare cell breaks the mechanism: when Gray's third-row cell eventually gets blocked, the next open cell is the harmless fourth row, so the block does not expose Green's threat at all. The forced exchange that killed both threats on the earlier board never happens.\n\nInstead, each threat lives its own life. Whoever is eventually forced to fill the fourth row hands the fifth row to the other player — so Green's upper threat remains a genuine weapon, and Gray's lower threat stays live beneath it. Same-parity threats in one column simply coexist: both must be answered separately, and no undercut exists. Before calling a stack of threats an undercut, check the rows: opposite parity, or nothing."
+      "infoProse": "Gray's rising diagonal completes on the third row of the fifth column. Green's three discs across the fifth row complete two rows higher, on the fifth row of the same column. Lower Gray, upper Green — it looks like the undercut again. It is not.\n\nThe difference is row parity. On the earlier board the two completing cells sat on neighbouring rows, one even and one odd. Here both sit on odd rows — the third and the fifth — with a spare cell on the fourth row between them. That spare cell breaks the mechanism: when Gray's third-row cell eventually gets blocked, the next open cell is the harmless fourth row, so the block does not expose Green's threat at all. The forced exchange that killed both threats on the earlier board never happens.\n\nInstead, each threat lives its own life. Whoever is eventually forced to fill the fourth row hands the fifth row to the other player — so Green's upper threat remains a genuine weapon, and Gray's lower threat stays live beneath it. Same-parity threats in one column simply coexist: both must be answered separately, and no undercut exists. Before calling a stack of threats an undercut, check the rows: opposite parity, or nothing.",
+      "infoProse_es": "La diagonal ascendente de Gris completa en la tercera fila de la quinta columna. Las tres fichas de Verde a lo largo de la quinta fila completan dos filas más arriba, en la quinta fila de esa misma columna. Gris abajo, Verde arriba — parece el undercut otra vez. No lo es.\n\nLa diferencia es la paridad de fila. En el tablero anterior, las dos casillas que completaban estaban en filas vecinas, una par y una impar. Acá las dos están en filas impares — la tercera y la quinta — con una casilla libre en la cuarta fila entre medio. Esa casilla libre rompe el mecanismo: cuando la casilla de la tercera fila de Gris finalmente se bloquee, la próxima casilla abierta es la inofensiva cuarta fila, así que el bloqueo no expone para nada la amenaza de Verde. El intercambio forzado que mató las dos amenazas en el tablero anterior acá no ocurre.\n\nEn cambio, cada amenaza vive su propia vida. Quien finalmente se vea forzado a llenar la cuarta fila le entrega la quinta fila al otro jugador — así que la amenaza de arriba de Verde sigue siendo un arma genuina, y la amenaza de abajo de Gris se mantiene viva debajo. Las amenazas de la misma paridad en una columna simplemente coexisten: hay que responder a las dos por separado, y no existe ningún undercut. Antes de llamar undercut a una pila de amenazas, revisá las filas: paridad opuesta, o nada."
     },
     {
       "movestring": "333334160205002",
@@ -205,7 +223,8 @@
       "coachMessages": [
         {
           "text": "One gray disc sits at the bottom of the fifth column, below Green's threat. Is Green's threat undercut? No — and the difference is the whole rule.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Una ficha gris está en el fondo de la quinta columna, debajo de la amenaza de Verde. ¿Está undercut la amenaza de Verde? No — y la diferencia es toda la regla."
         }
       ],
       "overlays": [
@@ -223,14 +242,17 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "The cell a real undercut would need — Gray has no completed three aiming here"
+          "label": "The cell a real undercut would need — Gray has no completed three aiming here",
+          "label_es": "La casilla que necesitaría un undercut real — Gris no tiene un tres completo apuntando acá"
         },
         {
           "type": "tg",
-          "label": "Green's completing cell — fully alive"
+          "label": "Green's completing cell — fully alive",
+          "label_es": "La casilla que completa Verde — completamente viva"
         }
       ],
-      "infoProse": "Green's rising diagonal — first row of the second column, second row of the third, third row of the fourth — completes on the fourth row of the fifth column. Below that cell, the fifth column holds a single gray disc on its first row.\n\nA disc is not a threat. An undercut needs a completed major threat below: three gray discs that all need one specific lower cell in this column. Gray does have two discs of a diagonal pointing at the third row — but two discs make no major threat, and a lone disc at the bottom makes none at all. There is no gray completing cell anywhere in the fifth column, so nothing neutralizes Green's threat. It is fully alive, and Gray still has to deal with it.\n\nTwo moves later in this very game, Gray finished that diagonal — and the picture changed completely. That position is next."
+      "infoProse": "Green's rising diagonal — first row of the second column, second row of the third, third row of the fourth — completes on the fourth row of the fifth column. Below that cell, the fifth column holds a single gray disc on its first row.\n\nA disc is not a threat. An undercut needs a completed major threat below: three gray discs that all need one specific lower cell in this column. Gray does have two discs of a diagonal pointing at the third row — but two discs make no major threat, and a lone disc at the bottom makes none at all. There is no gray completing cell anywhere in the fifth column, so nothing neutralizes Green's threat. It is fully alive, and Gray still has to deal with it.\n\nTwo moves later in this very game, Gray finished that diagonal — and the picture changed completely. That position is next.",
+      "infoProse_es": "La diagonal ascendente de Verde — primera fila de la segunda columna, segunda fila de la tercera, tercera fila de la cuarta — completa en la cuarta fila de la quinta columna. Debajo de esa casilla, la quinta columna tiene una sola ficha gris en su primera fila.\n\nUna ficha no es una amenaza. Un undercut necesita una amenaza mayor completa debajo: tres fichas grises que necesiten todas la misma casilla específica más abajo en esta columna. Gris sí tiene dos fichas de una diagonal apuntando a la tercera fila — pero dos fichas no forman una amenaza mayor, y una ficha sola en el fondo no forma ninguna. No hay ninguna casilla que complete Gris en toda la quinta columna, así que nada neutraliza la amenaza de Verde. Está completamente viva, y Gris todavía tiene que lidiar con ella.\n\nDos movidas más adelante en esta misma partida, Gris terminó esa diagonal — y el panorama cambió por completo. Esa posición es la siguiente."
     }
   ],
   "socratic": {
@@ -248,11 +270,13 @@
     "overlays": [],
     "correctCol": 4,
     "goalPrompt": "Gray has completed the diagonal that needs the third row of the fifth column — directly below Green's fourth-row threat, undercutting it. Pressing the fifth column is the solver's best move (+12): the disc lands on the second row, turns Gray's third-row cell into an immediate threat, and at the same time builds a second threat along the second row that completes in the seventh column. Green cannot block both, and Green's undercut threat above cannot save the game.",
+    "goalPrompt_es": "Gris completó la diagonal que necesita la tercera fila de la quinta columna — justo debajo de la amenaza de Verde en la cuarta fila, dejándola undercut. Apretar la quinta columna es la mejor movida del solver (+12): la ficha cae en la segunda fila, convierte la casilla de la tercera fila de Gris en una amenaza inmediata y, al mismo tiempo, arma una segunda amenaza a lo largo de la segunda fila que completa en la séptima columna. Verde no puede bloquear las dos, y la amenaza undercut de Verde arriba no puede salvar la partida.",
     "messages": {
       "ask": [
         {
           "text": "Gray's diagonal is now complete: it needs only the third row of the fifth column, directly below Green's threat. You are Gray — where do you press?",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "La diagonal de Gris ya está completa: solo necesita la tercera fila de la quinta columna, justo debajo de la amenaza de Verde. Vos sos Gris — ¿dónde apretás?"
         }
       ],
       "wrong1": [
@@ -279,7 +303,8 @@
       "hint": [
         {
           "text": "The undercut column itself. Dropping into the fifth column puts your third-row cell within immediate reach — and Green's threat above it can never punish the advance.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "La columna del undercut, justamente. Tirar en la quinta columna pone tu casilla de la tercera fila al alcance inmediato — y la amenaza de Verde arriba nunca puede castigar el avance."
         }
       ]
     }
@@ -291,6 +316,7 @@
       "puzzleId": "744957c2-0d06-49d5-9ae3-14415993f71b",
       "moveString": "2342444423322500664032500",
       "goalPrompt": "Your threat in this column has been undercut: Green's completing cell sits directly below yours, so entering the column hands Green the win first. Show you see it — play any other column.",
+      "goalPrompt_es": "Tu amenaza en esta columna fue undercut: la casilla que completa Verde está justo debajo de la tuya, así que entrar en la columna le entrega la victoria a Verde primero. Demostrá que lo ves — jugá cualquier otra columna.",
       "goalPredicateType": "undercut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -317,6 +343,7 @@
       "puzzleId": "dceec0c6-79e7-4d28-a53c-9df44d39d5d6",
       "moveString": "332154334424356",
       "goalPrompt": "Your threat in this column has been undercut: Green's completing cell sits directly below yours, so entering the column hands Green the win first. Show you see it — play any other column.",
+      "goalPrompt_es": "Tu amenaza en esta columna fue undercut: la casilla que completa Verde está justo debajo de la tuya, así que entrar en la columna le entrega la victoria a Verde primero. Demostrá que lo ves — jugá cualquier otra columna.",
       "goalPredicateType": "undercut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],

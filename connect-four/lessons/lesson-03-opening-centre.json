@@ -9,7 +9,8 @@
       "coachMessages": [
         {
           "text": "It's your very first move of the game. Seven columns to choose from — but they are not all equal. Which one gives you the most ways to connect four later?",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Es tu primer movimiento de la partida. Hay siete columnas para elegir — pero no todas son iguales. ¿Cuál te da más maneras de conectar cuatro más adelante?"
         }
       ],
       "boardSpec": [
@@ -23,14 +24,16 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Every four-in-a-row runs through some set of columns and rows. A disc in the middle column sits inside far more possible horizontal, vertical, and diagonal lines than a disc on the edge — so it keeps the most winning paths alive. That is why the centre column is the strongest opening square: it is the only first move that lets Green force a win with perfect play. The four columns further from the centre are markedly weaker."
+      "infoProse": "Every four-in-a-row runs through some set of columns and rows. A disc in the middle column sits inside far more possible horizontal, vertical, and diagonal lines than a disc on the edge — so it keeps the most winning paths alive. That is why the centre column is the strongest opening square: it is the only first move that lets Green force a win with perfect play. The four columns further from the centre are markedly weaker.",
+      "infoProse_es": "Todo cuatro en línea atraviesa un conjunto determinado de columnas y filas. Una ficha en la columna del medio se encuentra dentro de muchas más líneas horizontales, verticales y diagonales posibles que una ficha en el borde — así que mantiene viva la mayor cantidad de caminos ganadores. Por eso la columna central es la casilla de apertura más fuerte: es el único primer movimiento que le permite a Verde forzar una victoria con juego perfecto. Las cuatro columnas más alejadas del centro son notablemente más débiles."
     },
     {
       "movestring": "333334444",
       "coachMessages": [
         {
           "text": "Here both players raced up the centre column, then Gray opened the next column over and Green answered on top. This is the '5-4' central-column opening — a known Green win.",
-          "mood": "happy"
+          "mood": "happy",
+          "text_es": "Acá ambos jugadores subieron rápido por la columna central, después Gris abrió la columna de al lado y Verde respondió arriba. Esta es la apertura de columna central '5-4' — una victoria conocida para Verde."
         }
       ],
       "boardSpec": [
@@ -44,14 +47,16 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a horizontal connection on the third row nearby, while Gray's best threats sit on the diagonals through the centre. (Why the third row favours Green is exactly what the Odd Rows lesson explains later.) Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour."
+      "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a horizontal connection on the third row nearby, while Gray's best threats sit on the diagonals through the centre. (Why the third row favours Green is exactly what the Odd Rows lesson explains later.) Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour.",
+      "infoProse_es": "Este es el resultado central de la teoría de aperturas: jugar por el centro gana, jugar por el borde no. Después de que ambos lados construyen la columna central, Verde es el único que puede amenazar una conexión horizontal en la tercera fila cercana, mientras que las mejores amenazas de Gris están en las diagonales que pasan por el centro. (Por qué la tercera fila favorece a Verde es exactamente lo que explica más adelante la lección de Filas Impares.) Verde usó esa ventaja para pasar a la columna vecina y ya está ganando acá — la posición está completamente resuelta a favor de Verde."
     },
     {
       "movestring": "3333311115555",
       "coachMessages": [
         {
           "text": "Green and Gray built three columns in parallel, each answering directly on top of the last disc. Simple moves, strong position.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "Verde y Gris construyeron tres columnas en paralelo, cada uno respondiendo directamente arriba de la última ficha. Movimientos simples, posición fuerte."
         }
       ],
       "boardSpec": [
@@ -65,14 +70,16 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Notice the shape: three columns, each filled by simply answering above the opponent's last disc. This is Allen's 'I play where you play' idea — when nothing sharper is available, playing directly on top of your opponent is often good enough, and it keeps the game easy to navigate. It is a shortcut, not a rule; you still have to check it against real threats as the game develops."
+      "infoProse": "Notice the shape: three columns, each filled by simply answering above the opponent's last disc. This is Allen's 'I play where you play' idea — when nothing sharper is available, playing directly on top of your opponent is often good enough, and it keeps the game easy to navigate. It is a shortcut, not a rule; you still have to check it against real threats as the game develops.",
+      "infoProse_es": "Fijate en la forma: tres columnas, cada una completada simplemente respondiendo arriba de la última ficha del rival. Esta es la idea de Allen de 'yo juego donde vos jugás' — cuando no hay nada más agudo disponible, jugar directamente arriba del rival suele alcanzar, y mantiene la partida fácil de navegar. Es un atajo, no una regla; igual tenés que verificarlo contra las amenazas reales a medida que avanza la partida."
     },
     {
       "movestring": "333",
       "coachMessages": [
         {
           "text": "Why is the centre worth so much? Count the lines. The next cell up the centre column sits on 13 different four-in-a-row lines — a corner cell sits on just 3.",
-          "mood": "think"
+          "mood": "think",
+          "text_es": "¿Por qué vale tanto el centro? Contá las líneas. La siguiente casilla de la columna central se encuentra en 13 líneas distintas de cuatro en línea — una casilla de esquina se encuentra en apenas 3."
         }
       ],
       "boardSpec": [
@@ -99,10 +106,12 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "Compare these two cells — count the lines through each"
+          "label": "Compare these two cells — count the lines through each",
+          "label_es": "Compará estas dos casillas — contá las líneas que pasan por cada una"
         }
       ],
-      "infoProse": "Here is the arithmetic behind the whole lesson. The board has 69 possible four-in-a-row windows — horizontal, vertical, and diagonal. The two middle cells of the centre column each lie on 13 of those windows, the most of any cell on the board, and even the centre column's bottom cell lies on 7. A corner cell lies on just 3. Every disc placed in the centre keeps far more winning lines alive than the same disc on the edge — that count is the reason the centre column is the strongest territory on the board."
+      "infoProse": "Here is the arithmetic behind the whole lesson. The board has 69 possible four-in-a-row windows — horizontal, vertical, and diagonal. The two middle cells of the centre column each lie on 13 of those windows, the most of any cell on the board, and even the centre column's bottom cell lies on 7. A corner cell lies on just 3. Every disc placed in the centre keeps far more winning lines alive than the same disc on the edge — that count is the reason the centre column is the strongest territory on the board.",
+      "infoProse_es": "Acá está la aritmética detrás de toda la lección. El tablero tiene 69 ventanas posibles de cuatro en línea — horizontales, verticales y diagonales. Las dos casillas del medio de la columna central se encuentran, cada una, en 13 de esas ventanas, la mayor cantidad de cualquier casilla del tablero, e incluso la casilla de abajo de la columna central se encuentra en 7. Una casilla de esquina se encuentra en apenas 3. Cada ficha colocada en el centro mantiene vivas muchas más líneas ganadoras que la misma ficha en el borde — ese conteo es la razón por la que la columna central es el territorio más fuerte del tablero."
     }
   ],
   "socratic": {
@@ -119,6 +128,7 @@
     "overlays": [],
     "correctCol": 3,
     "goalPrompt": "You move first — where is the strongest opening move?",
+    "goalPrompt_es": "Movés primero — ¿dónde está la jugada de apertura más fuerte?",
     "_boardInstructions": "Empty board, Green (first player) to move. No overlays: nothing should hint at the answer before the student attempts it. Correct answer is the centre column (0-indexed col 3).",
     "messages": {
       "ask": [

@@ -19,6 +19,7 @@
       "coachMessages": [
         {
           "text": "Green's three discs on the bottom row complete four in the third column — on the very cell where the next disc in that column lands. Gray's completing cell sits directly above it, and it is Gray's move.",
+          "text_es": "Las tres fichas verdes en la fila inferior completan cuatro en la tercera columna — justo en la casilla donde cae la próxima ficha de esa columna. La casilla que completa Gris está justo arriba, y es el turno de Gris.",
           "mood": "think"
         }
       ],
@@ -37,14 +38,17 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's completing cell — the next playable cell in the column"
+          "label": "Green's completing cell — the next playable cell in the column",
+          "label_es": "La casilla que completa Verde — la próxima casilla jugable de la columna"
         },
         {
           "type": "td",
-          "label": "Gray's completing cell — directly above"
+          "label": "Gray's completing cell — directly above",
+          "label_es": "La casilla que completa Gris — justo arriba"
         }
       ],
-      "infoProse": "Green's three discs across the bottom row — first, second and fourth columns — complete four-in-a-row on the bottom row of the third column. That column is empty, so Green's completing cell is exactly where the next disc dropped there will land. Green threatens to win next turn.\n\nGray's three discs across the second row — second, fourth and fifth columns — complete on the second row of that same column, directly above Green's cell.\n\nIt is Gray's move. Gray clearly has to deal with Green's threat — but look at what a single gray disc in the third column does before reading on. This shape — the opponent's completing cell at the next playable cell, the player's own completing cell directly above it — is the overcut."
+      "infoProse": "Green's three discs across the bottom row — first, second and fourth columns — complete four-in-a-row on the bottom row of the third column. That column is empty, so Green's completing cell is exactly where the next disc dropped there will land. Green threatens to win next turn.\n\nGray's three discs across the second row — second, fourth and fifth columns — complete on the second row of that same column, directly above Green's cell.\n\nIt is Gray's move. Gray clearly has to deal with Green's threat — but look at what a single gray disc in the third column does before reading on. This shape — the opponent's completing cell at the next playable cell, the player's own completing cell directly above it — is the overcut.",
+      "infoProse_es": "Las tres fichas verdes en la fila inferior — primera, segunda y cuarta columna — completan cuatro en línea en la fila inferior de la tercera columna. Esa columna está vacía, así que la casilla que completa Verde es exactamente donde caerá la próxima ficha que se tire ahí. Verde amenaza con ganar en el próximo turno.\n\nLas tres fichas grises en la segunda fila — segunda, cuarta y quinta columna — completan en la segunda fila de esa misma columna, justo arriba de la casilla de Verde.\n\nEs el turno de Gris. Gris claramente tiene que ocuparse de la amenaza de Verde — pero fijate qué hace una sola ficha gris en la tercera columna antes de seguir leyendo. Esta forma — la casilla que completa al rival en la próxima casilla jugable, y la propia casilla que completa justo arriba — es el overcut."
     },
     {
       "movestring": "333354145102",
@@ -61,6 +65,7 @@
       "coachMessages": [
         {
           "text": "One drop, two jobs: Gray's disc fills Green's completing cell, and Gray's own completing cell becomes the next playable cell in the column.",
+          "text_es": "Una ficha, dos trabajos: la ficha de Gris llena la casilla que completa Verde, y la propia casilla que completa Gris se convierte en la próxima casilla jugable de la columna.",
           "mood": "happy"
         }
       ],
@@ -74,10 +79,12 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's completing cell — now the next playable cell"
+          "label": "Gray's completing cell — now the next playable cell",
+          "label_es": "La casilla que completa Gris — ahora la próxima casilla jugable"
         }
       ],
-      "infoProse": "Gray drops into the third column. The disc lands on the bottom row — exactly Green's completing cell. Green's threat is blocked, permanently.\n\nAnd the same disc did a second job: the second row of the third column is now the next playable cell, so Gray's threat is live. Green must answer it immediately — the solver confirms that every other Green reply loses on the spot, and even after Green blocks, Gray keeps a winning game. One move defended and attacked at the same time.\n\nThose three facts are the whole condition for this play, and none of them involves counting empty cells: Green's completing cell was the next playable cell in the column, Gray's completing cell sat directly above it, and it was Gray's turn. Gravity did the rest — Gray's disc landed on Green's cell, and the block itself lifted the column into Gray's threat."
+      "infoProse": "Gray drops into the third column. The disc lands on the bottom row — exactly Green's completing cell. Green's threat is blocked, permanently.\n\nAnd the same disc did a second job: the second row of the third column is now the next playable cell, so Gray's threat is live. Green must answer it immediately — the solver confirms that every other Green reply loses on the spot, and even after Green blocks, Gray keeps a winning game. One move defended and attacked at the same time.\n\nThose three facts are the whole condition for this play, and none of them involves counting empty cells: Green's completing cell was the next playable cell in the column, Gray's completing cell sat directly above it, and it was Gray's turn. Gravity did the rest — Gray's disc landed on Green's cell, and the block itself lifted the column into Gray's threat.",
+      "infoProse_es": "Gris tira en la tercera columna. La ficha cae en la fila inferior — exactamente la casilla que completa Verde. La amenaza de Verde queda bloqueada, para siempre.\n\nY la misma ficha hizo un segundo trabajo: la segunda fila de la tercera columna ahora es la próxima casilla jugable, así que la amenaza de Gris está viva. Verde tiene que responder de inmediato — el solver confirma que cualquier otra respuesta de Verde pierde en el acto, y hasta después de que Verde bloquee, Gris sigue con una partida ganadora. Una jugada que defiende y ataca al mismo tiempo.\n\nEsos tres hechos son toda la condición para esta jugada, y ninguno tiene que ver con contar casillas vacías: la casilla que completaba Verde era la próxima casilla jugable de la columna, la casilla que completa Gris estaba justo arriba, y era el turno de Gris. La gravedad hizo el resto — la ficha de Gris cayó sobre la casilla de Verde, y el mismo bloqueo elevó la columna hasta la amenaza de Gris."
     },
     {
       "movestring": "33335414510",
@@ -94,6 +101,7 @@
       "coachMessages": [
         {
           "text": "Overcut is the family name: an upper completing cell that wins even though an opponent cell sits below it in the same column. The forcing shape on this board is one member — game reviews recognize two more.",
+          "text_es": "Overcut es el nombre de familia: una casilla superior que completa y gana la partida aunque haya una casilla del rival debajo, en la misma columna. La forma forzada que se ve en este tablero es un caso — el análisis de partidas reconoce otros dos.",
           "mood": "think"
         }
       ],
@@ -112,14 +120,17 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's completing cell — the lower threat"
+          "label": "Green's completing cell — the lower threat",
+          "label_es": "La casilla que completa Verde — la amenaza inferior"
         },
         {
           "type": "td",
-          "label": "Gray's completing cell — the upper threat"
+          "label": "Gray's completing cell — the upper threat",
+          "label_es": "La casilla que completa Gris — la amenaza superior"
         }
       ],
-      "infoProse": "When two completing cells from opposite players share a column, the lower one usually rules the upper one out — that is the undercut from the previous lesson. An overcut is the reverse verdict: the upper cell wins the column anyway. This board shows the forcing version — Green's cell is the next playable cell, Gray's is directly above, and one drop settles it.\n\nTwo more shapes earn the same verdict. Same-parity overcut: when the two completing cells sit two rows apart — say the third row and the fifth — the spare cell between them breaks the undercut exchange, the threats simply coexist, and the column can still be winning for the upper player. Chain overcut: when the upper player also owns a third completing cell below the opponent's, the opponent's threat is itself undercut from beneath, so it can never fire against the cell above it.\n\nThe forcing shape from the last slide is the one a player sets up and plays deliberately. The other two mostly appear when a game review names an overcut in a column nobody ever entered — that is what the review found there."
+      "infoProse": "When two completing cells from opposite players share a column, the lower one usually rules the upper one out — that is the undercut from the previous lesson. An overcut is the reverse verdict: the upper cell wins the column anyway. This board shows the forcing version — Green's cell is the next playable cell, Gray's is directly above, and one drop settles it.\n\nTwo more shapes earn the same verdict. Same-parity overcut: when the two completing cells sit two rows apart — say the third row and the fifth — the spare cell between them breaks the undercut exchange, the threats simply coexist, and the column can still be winning for the upper player. Chain overcut: when the upper player also owns a third completing cell below the opponent's, the opponent's threat is itself undercut from beneath, so it can never fire against the cell above it.\n\nThe forcing shape from the last slide is the one a player sets up and plays deliberately. The other two mostly appear when a game review names an overcut in a column nobody ever entered — that is what the review found there.",
+      "infoProse_es": "Cuando dos casillas que completan, de jugadores opuestos, comparten una columna, la de abajo normalmente descarta a la de arriba — eso es el undercut de la lección anterior. Un overcut es el veredicto contrario: la casilla de arriba gana la columna de todos modos. Este tablero muestra la versión forzada — la casilla de Verde es la próxima casilla jugable, la de Gris está justo arriba, y una sola ficha lo resuelve.\n\nHay otras dos formas que llegan al mismo veredicto. Overcut de igual paridad: cuando las dos casillas que completan quedan a dos filas de distancia — digamos la tercera fila y la quinta — la casilla libre entre ambas rompe el intercambio del undercut, las amenazas simplemente coexisten, y la columna puede seguir siendo ganadora para el jugador de arriba. Overcut en cadena: cuando el jugador de arriba también tiene una tercera casilla que completa por debajo de la del rival, la amenaza del rival queda a su vez con un undercut por debajo, así que nunca puede dispararse contra la casilla de arriba.\n\nLa forma forzada de la diapositiva anterior es la que un jugador arma y juega a propósito. Las otras dos mayormente aparecen cuando un análisis de partida nombra un overcut en una columna donde nadie entró nunca — eso es lo que encontró el análisis ahí."
     },
     {
       "movestring": "10231405030112342031435",
@@ -136,6 +147,7 @@
       "coachMessages": [
         {
           "text": "The same shape in the third column — Green's completing cell on top of the stack, Gray's directly above it. But look closer at that upper cell: Green completes a four there too.",
+          "text_es": "La misma forma en la tercera columna — la casilla que completa Verde arriba de la pila, y la de Gris justo encima. Pero mirá bien esa casilla superior: Verde también completa un cuatro ahí.",
           "mood": "think"
         }
       ],
@@ -154,14 +166,17 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's completing cell — the next playable cell in the column"
+          "label": "Green's completing cell — the next playable cell in the column",
+          "label_es": "La casilla que completa Verde — la próxima casilla jugable de la columna"
         },
         {
           "type": "claim",
-          "label": "The cell above it — both players complete a four here"
+          "label": "The cell above it — both players complete a four here",
+          "label_es": "La casilla de arriba — acá completan cuatro los dos jugadores"
         }
       ],
-      "infoProse": "The third column looks like slide 1: Green's three discs across the fourth row complete on the fourth row of the third column — the next playable cell — and Gray's three discs across the fifth row complete directly above it. But the fifth-row cell is not Gray's alone. Green's diagonal, running down from that very cell to the sixth column's second row, completes there too. One cell, two winners.\n\nThat detail reverses everything. If Gray drops into the third column, the disc blocks Green's fourth-row cell — and the block itself makes the fifth row playable, with Green to move. Green drops into the same column and completes the diagonal. The overcut backfires: the solver scores the third column a loss for Gray, while Gray's actual winning move is the seventh column, completing a gray four on the bottom row at once.\n\nSo the checklist has one more line. The opponent's completing cell at the next playable cell, the player's own cell directly above, the player's turn — and that upper cell the player's alone. If the opponent also completes a four on the upper cell, playing the column just opens their winning cell for them."
+      "infoProse": "The third column looks like slide 1: Green's three discs across the fourth row complete on the fourth row of the third column — the next playable cell — and Gray's three discs across the fifth row complete directly above it. But the fifth-row cell is not Gray's alone. Green's diagonal, running down from that very cell to the sixth column's second row, completes there too. One cell, two winners.\n\nThat detail reverses everything. If Gray drops into the third column, the disc blocks Green's fourth-row cell — and the block itself makes the fifth row playable, with Green to move. Green drops into the same column and completes the diagonal. The overcut backfires: the solver scores the third column a loss for Gray, while Gray's actual winning move is the seventh column, completing a gray four on the bottom row at once.\n\nSo the checklist has one more line. The opponent's completing cell at the next playable cell, the player's own cell directly above, the player's turn — and that upper cell the player's alone. If the opponent also completes a four on the upper cell, playing the column just opens their winning cell for them.",
+        "infoProse_es": "La tercera columna se parece a la de la diapositiva 1: las tres fichas verdes de la cuarta fila completan en la cuarta fila de la tercera columna — la próxima casilla jugable — y las tres fichas grises de la quinta fila completan justo arriba. Pero la casilla de la quinta fila no es solo de Gris. La diagonal de Verde, que baja desde esa misma casilla hasta la segunda fila de la sexta columna, también completa ahí. Una casilla, dos ganadores.\n\nEse detalle cambia todo. Si Gris tira en la tercera columna, la ficha bloquea la casilla de la cuarta fila de Verde — y ese mismo bloqueo habilita la quinta fila, con Verde para jugar. Verde tira en la misma columna y completa la diagonal. El overcut sale mal: el solver califica la tercera columna como derrota para Gris, mientras que la jugada ganadora real de Gris es la séptima columna, que completa un cuatro gris en la fila inferior de una.\n\nAsí que la lista de chequeo tiene una línea más. La casilla que completa al rival en la próxima casilla jugable, la propia casilla justo arriba, el turno del jugador — y que esa casilla superior sea solo del jugador. Si el rival también completa un cuatro en la casilla superior, jugar la columna solo le abre su casilla ganadora."
     }
   ],
   "socratic": {
@@ -179,10 +194,12 @@
     "overlays": [],
     "correctCol": 4,
     "goalPrompt": "Green's rising diagonal completes on the second row of the fifth column — the next playable cell there — and Gray's rising diagonal completes directly above it. Playing the fifth column is the solver's only non-losing move (+4): the disc blocks Green's cell and turns Gray's third-row threat into the next playable cell, and every Green reply loses. The forcing overcut from the slides.",
+    "goalPrompt_es": "La diagonal ascendente de Verde completa en la segunda fila de la quinta columna — la próxima casilla jugable ahí — y la diagonal ascendente de Gris completa justo arriba. Jugar la quinta columna es la única jugada no perdedora del solver (+4): la ficha bloquea la casilla de Verde y convierte la amenaza de Gris en la tercera fila en la próxima casilla jugable, y toda respuesta de Verde pierde. El overcut forzado de las diapositivas.",
     "messages": {
       "ask": [
         {
           "text": "Green's diagonal is one drop away from winning on the second row of the fifth column. You are Gray — find the move that blocks Green and attacks at the same time.",
+          "text_es": "La diagonal de Verde está a una ficha de ganar en la segunda fila de la quinta columna. Vos sos Gris — encontrá la jugada que bloquea a Verde y ataca al mismo tiempo.",
           "mood": "think"
         }
       ],
@@ -210,6 +227,7 @@
       "hint": [
         {
           "text": "Your own completing cell sits directly above Green's. Fill Green's cell and yours becomes the next drop in that column.",
+          "text_es": "Tu propia casilla que completa está justo arriba de la de Verde. Llená la casilla de Verde y la tuya se convierte en la próxima ficha de esa columna.",
           "mood": "think"
         }
       ]
@@ -222,6 +240,7 @@
       "puzzleId": "45c8f60d-14d6-4bc7-bff7-b63c4dd5e6ce",
       "moveString": "322233353155505310161125",
       "goalPrompt": "Gray's lone completing cell in one column is boxed in by yours — one of your cells directly below it, another directly above. Your lower cell neutralizes Gray's threat, so the column wins for you. Enter it.",
+      "goalPrompt_es": "La única casilla que completa Gris en una columna está encerrada por las tuyas — una de tus casillas justo debajo, otra justo arriba. Tu casilla de abajo neutraliza la amenaza de Gris, así que la columna es ganadora para vos. Entrá ahí.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -248,6 +267,7 @@
       "puzzleId": "b87536d6-5fca-4b06-b246-d3755d5c2702",
       "moveString": "413520424420116155020",
       "goalPrompt": "One column stacks your completing cells around Green's lone one. Enter it: your drop makes an immediate threat, and Green's forced block lifts the column straight into a cell where you complete four.",
+      "goalPrompt_es": "Una columna apila tus casillas que completan alrededor de la única de Verde. Entrá ahí: tu ficha crea una amenaza inmediata, y el bloqueo forzado de Verde eleva la columna directo a una casilla donde completás cuatro.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
