@@ -29,7 +29,7 @@
 - [Unapplied migration = silent 204](project_user_column_propagation.md) — PostgREST drops unknown columns from UPDATE → 204 persists nothing; no server hot-reload
 - [Supabase envs & poolers](reference_supabase_connection.md) — staging=6543 txn-pooler (NO DDL); local needs the JWT service key, not sb_secret_*; storage signedUrl; delete-staging-user-by-email.js
 - [Stripe traps](project_stripe_traps.md) — OBSOLETE 2026-07-18 (Stripe fully removed); historical context only, do not use for current work
-- [Paddle integration](project_paddle_integration.md) — sandbox/live from key prefix NOT NODE_ENV/MODE (both always prod here); CSP=5-round discovery; domain resubmit=remove+re-add; checkout_not_enabled≠domain gate
+- [Paddle integration](project_paddle_integration.md) — sandbox/live from key prefix NOT NODE_ENV/MODE; CSP=5-round discovery; domain resubmit=remove+re-add; checkout_not_enabled≠domain gate; fulfillment checklist needs 6 events + a REAL delivery
 - [explanation_cache bypasses producers](project_blunder_serving_dual_paths.md) — cache-hit path skips the producer guards; sanitize at the response seam + TRUNCATE on deploy
 - [session-stats byPattern always empty](project_stats_architecture.md) — /api/user/session-stats/all reads stats.byPattern; stored shape is flat category keys (open bug)
 - [Deploy: invisible strict npm ci](project_spec031_staging_production_deploy.md) — railpack.json hides the auto-injected npm ci; peer conflicts fail the build; npm ci --dry-run
