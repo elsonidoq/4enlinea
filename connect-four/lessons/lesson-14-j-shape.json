@@ -111,6 +111,30 @@
           "type": "claim"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 },
+            { "c": 6, "r": 2 }
+          ],
+          "label": "Green's third-row line",
+          "label_es": "La línea de Verde en la tercera fila"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 0 },
+            { "c": 4, "r": 1 },
+            { "c": 5, "r": 2 },
+            { "c": 6, "r": 3 }
+          ],
+          "label": "Green's rising diagonal from the J's foot",
+          "label_es": "La diagonal ascendente de Verde desde el pie de la J"
+        }
+      ],
       "legendItems": [
         {
           "type": "win",

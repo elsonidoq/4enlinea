@@ -261,10 +261,17 @@ without touching the data model or prop names at all.
 
 The primary click target is a **per-column wrapper `<div>`** — one per column, carrying
 `onClick={handleClick}`, which branches to `onColToggle` in multi-select mode and otherwise to
-`onColumnClick`. It is *not* the per-cell handler: `onCellClick` is the deprecated curation shim
-below, live only for `CurationWorkspace`. Anything that adds column-level behavior (keyboard
+`onColumnClick`. It is *not* the per-cell handler. Anything that adds column-level behavior (keyboard
 activation, ARIA roles, focus) belongs on the wrapper, and must route through the same
 `handleClick` so the multi-select branch is preserved.
+
+**`onCellClick` is a live per-cell seam, not a CurationWorkspace-only shim** (corrected 2026-07-28 —
+this section previously said the latter). It is the *admin cell-annotation* handler: `BoardEditor`
+passes it in overlay mode, and in `SlideEditor`'s window-highlight picking mode. It fires with
+`(col, row)` and calls `stopPropagation`, so it suppresses the column wrapper's `handleClick`. The
+genuinely deprecated prop is `highlightedCells` (see "Deprecated prop" below) — do not conflate the
+two. New *game* surfaces should still use column-level clicks; `onCellClick` is for authoring UIs
+that need a specific cell rather than a drop.
 
 A board is interactive iff it passes `canPlay={true}`. Every such caller also passes
 `onColumnClick`. **`CurationWorkspace` and `BoardEditor`'s disc-placement mode are interactive
@@ -282,6 +289,41 @@ screen's name.
 | `tr` | red translucent ring | user's last committed column / wrong-move indicator |
 | `claim` | amber translucent fill | claimeven cell |
 | `win` | pulsing green outline | winning-line flash |
+
+### `zhCells` — capsule/zone highlights on `Board`
+
+Separate from the per-cell `overlays` prop. `Board`'s `zhCells` prop draws translucent **capsules**
+(SVG lines with `strokeLinecap="round"`, `strokeWidth = cellW * 0.85`, `opacity="0.4"`, in an
+absolutely-positioned `<svg>` at `zIndex: 2` with `pointerEvents: 'none'`). Shape:
+
+```js
+zhCells = [{ color: '<css color>', cells: [{c,r}, …], windows: [[{c,r}, …], …] }]
+```
+
+Each entry renders independently, so overlapping zones keep their own colour. Two branches inside
+the `zhSvg` memo:
+
+- **`windows` present and non-empty** — the *structural* branch. Each window draws exactly one
+  capsule from `w[0]` to `w[w.length - 1]`, no dots, **no validation of the cells between**. Callers
+  must pass windows already ordered along the line; an unordered array silently yields a capsule of
+  the wrong length or angle.
+- **otherwise** — `groupCellsByCapsules(cells)` heuristically finds collinear runs (horizontal →
+  vertical → diagonal↗ → diagonal↘), leftover cells becoming dots. Used by zone types that carry no
+  window structure.
+
+`color` is a raw CSS colour, not a type token, and it is composited **at 0.4 opacity** — pass opaque
+values, never an already-translucent `rgba()`.
+
+Consumers split by where the data comes from:
+
+| Consumer | Source |
+|---|---|
+| `ChallengeScreen`, `MistakeDetailScreen`, `AdminDeepRevealEvalPage` | React state driven by `AnnotatedExplanation` — runtime, LLM-driven |
+| `ConceptScreen` | **authored** lesson JSON (`slides[].windowHighlights`) mapped by `windowHighlightsToZhCells` in `src/lib/lessonWindows.js` |
+
+Do not route authored content through `AnnotatedExplanation`. Memoize the array you pass —
+`boardPropsAreEqual` falls back to `Object.is` for every non-`board` prop, so a fresh-but-equal array
+defeats the memo. Authoring contract and its gates: `lesson-editor.md` §"Window highlights".
 
 ### BadgeType enum (LOCKED — cross-epic contract)
 

@@ -27,6 +27,19 @@
       ],
       "overlays": [],
       "legendItems": [],
+      "windowHighlights": [
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 },
+            { "c": 4, "r": 0 }
+          ],
+          "label": "The dead window — both colours are inside it",
+          "label_es": "La ventana muerta — los dos colores están adentro"
+        }
+      ],
       "infoProse": "A window is any four cells in a straight line: horizontal, vertical, or diagonal. Every threat in the game is a statement about one window. The moment both colours have a disc inside the same window, that window is dead — neither player can ever finish four there. The bottom-row window running from the second to the fifth column is exactly that: one gray disc, two green, dead forever.",
       "infoProse_es": "Una ventana es cualquier grupo de cuatro casillas en línea recta: horizontal, vertical o diagonal. Toda amenaza del juego es una afirmación sobre una ventana. En el momento en que los dos colores tienen una ficha en la misma ventana, esa ventana está muerta: ninguno de los dos puede completar cuatro ahí. La ventana de la fila de abajo que va de la segunda a la quinta columna es justamente eso: una ficha gris, dos verdes, muerta para siempre."
     },
@@ -67,6 +80,19 @@
           "type": "claim",
           "label": "The two empty cells of Green's minor threat",
           "label_es": "Las dos casillas vacías de la amenaza menor de Verde"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 },
+            { "c": 4, "r": 0 },
+            { "c": 5, "r": 0 }
+          ],
+          "label": "Green's minor-threat window",
+          "label_es": "La ventana de la amenaza menor de Verde"
         }
       ],
       "infoProse": "Two discs of one colour plus two empty cells in a window, with no enemy disc inside, is a minor threat. Think of it as a plan under construction: Green still needs both of the marked cells. If Green fills one of them and the window stays clean, the minor threat grows into something far more serious. That stronger shape is the next slide's word.",

@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 04c4bf45-005f-4617-8eae-aeefaab3b257
+  modified: 2026-07-28T12:41:05.763Z
 ---
 
 ## KB naming convention
@@ -13,6 +14,15 @@ metadata:
 - `allis-` prefix — canonical Allis concepts
 - `community-` prefix — project-local heuristics
 - `derived-` prefix — logical derivations
+
+**Every entry carries one of those prefixes — there is no bare-concept-name file.** Do not cite (or
+tell a subagent to read) `docs/knowledge-base/<concept>.md`; that path never exists and the agent
+either wastes turns or silently proceeds without the predicate. Verified 2026-07-28: no `undercut.md`,
+`overcut.md`, `figure-7.md`, `j-shape.md`, `claimeven.md`, or `z-threat.md`. The real slugs for the
+lesson/puzzle vocabulary are `allen-t2` (undercut — "the lower threat undercuts the upper"),
+`community-overcut`, `community-figure-7`, `allen-j-configuration`, `allis-claimeven`,
+`community-z-threat`. **Always `ls docs/knowledge-base/` or read its README before naming a path** —
+the mapping from the product's term to the KB slug is not guessable.
 
 Schema defined in `docs/knowledge-base/README.md`. Template entry: `allen-t4.md`. Fully solver-verified entries: `allen-t4` plus the 6 **opening-theory** entries (added 2026-07-03).
 

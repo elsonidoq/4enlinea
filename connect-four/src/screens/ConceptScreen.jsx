@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
@@ -12,6 +12,7 @@ import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getNarrationQueue } from '../lib/lessonNarration.js';
 import { langHeaders } from '../lib/apiLang.js';
 import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
+import { windowHighlightsToZhCells, WINDOW_HIGHLIGHT_COLOR, DEFAULT_WINDOW_HIGHLIGHT_COLOR } from '../lib/lessonWindows.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -110,6 +111,16 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
     }
   }
 
+  // Authored window highlights (slides[].windowHighlights) → Board's zhCells capsule
+  // renderer. Memoized so the array reference is stable across re-renders triggered by
+  // unrelated state (narration): Board's boardPropsAreEqual comparator falls back to
+  // Object.is for non-`board` props, so a fresh-but-equal array would defeat the memo.
+  // Hoisted above the loading/error early returns — rules of hooks.
+  const zhCells = useMemo(
+    () => windowHighlightsToZhCells(lesson?.slides?.[slideIndex]?.windowHighlights),
+    [lesson, slideIndex],
+  );
+
   if (loadState === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
@@ -135,7 +146,11 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
 
   const slide = lesson.slides[slideIndex];
   const legendItems = slide.legendItems ?? [];
-  const hasLegend = legendItems.length > 0;
+  // Window highlights get their OWN legend rows rather than going through legendItems:
+  // the content gate requires every legendItems[].type to have a matching per-cell
+  // overlay of that type on the same slide, and a window has no such overlay.
+  const windowLegendItems = (slide.windowHighlights ?? []).filter(w => w.label);
+  const hasLegend = legendItems.length > 0 || windowLegendItems.length > 0;
   const hasInfoProse = slide.infoProse && slide.infoProse.trim().length > 0;
 
   return (
@@ -159,6 +174,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
           board={boardSpecToBoard(slide.boardSpec)}
           canPlay={false}
           overlays={slide.overlays ?? []}
+          zhCells={zhCells}
         />
 
         {hasLegend && (
@@ -175,6 +191,24 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
                 }} />
                 <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>
                   {item.label}
+                </span>
+              </div>
+            ))}
+            {windowLegendItems.map((w, i) => (
+              <div key={`w${i}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* Pill swatch, not a square: it reads as the capsule drawn on the board.
+                    Board renders the capsule at opacity 0.4, so match that here. */}
+                <span style={{
+                  display: 'inline-block',
+                  width: 24,
+                  height: 12,
+                  borderRadius: 6,
+                  background: WINDOW_HIGHLIGHT_COLOR[w.type] ?? DEFAULT_WINDOW_HIGHLIGHT_COLOR,
+                  opacity: 0.4,
+                  flexShrink: 0,
+                }} />
+                <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>
+                  {w.label}
                 </span>
               </div>
             ))}

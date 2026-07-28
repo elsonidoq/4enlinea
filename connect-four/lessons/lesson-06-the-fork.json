@@ -89,6 +89,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 0, "r": 0 },
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 }
+          ],
+          "label": "Green's bottom-row line",
+          "label_es": "La línea de Verde en la fila de abajo"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 3 }
+          ],
+          "label": "Green's diagonal line",
+          "label_es": "La línea diagonal de Verde"
+        }
+      ],
       "legendItems": [
         {
           "type": "tg",
@@ -177,6 +201,30 @@
           "c": 0,
           "r": 0,
           "type": "win"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "win",
+          "cells": [
+            { "c": 0, "r": 0 },
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 }
+          ],
+          "label": "The line Green can finish right now",
+          "label_es": "La línea que Verde puede completar ahora mismo"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 3 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 1 },
+            { "c": 6, "r": 0 }
+          ],
+          "label": "The line Green cannot reach yet",
+          "label_es": "La línea que Verde todavía no puede alcanzar"
         }
       ],
       "legendItems": [

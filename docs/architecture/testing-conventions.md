@@ -161,7 +161,7 @@ Tests are **explicitly listed** in the `test` and `test:fast` scripts in `packag
 - `tests/integration/evaluateMoveMultiSolution.test.js` (spec 049 Epic 9 T025 — moved into `npm test` alongside `test:fast`, FR-021)
 - `tests/integration/singleAnswerCategoriesAccepted.test.js` (spec 049 Epic 9 T025)
 - `tests/unit/i18nKeyParity.test.js` (spec 049 Epic 9 T025 — see "i18n key-parity guard" below)
-- `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer, lessonContent)
+- `tests/unit/` (aiDifficulty, annotatedText, boardSpecToBoard, detectClaimodd, lessonLoader, socraticReducer, lessonContent, lessonWindows)
 - `tests/lessons/opening-lessons.test.js` — see "Lesson content gates" below
 
 **`npm run test:fast` additionally includes** `server/llmCoachHelpers.test.js`, `tests/blunder/insertGameBlunder.test.js`, the reason-engine suite `server/tests/reasonEngine{,.denial,.drawToLose,.enrichment,.witness,.winSamples}.test.mjs` (solver-backed but fast), `server/tests/reasonNarratorVector.test.mjs` (pure), and `server/tests/computeEvidenceIsolation.test.mjs` (the reason-eval `compute.mjs` per-board error-isolation regression, pure — uses a throwing solver stub), and the `server/tests/winDistribution.*.test.mjs` suite (the win_distribution pipeline: `playPolicyGame`, policies, `extractOutcome`, `aggregateRows`, `renderReport` — all pure/solver-free) but **excludes** `tests/integration/candidate-generator.test.js`. (The reason-engine and win_distribution tests are in `test:fast` but **not** in the slower `test` script.)
@@ -226,6 +226,19 @@ whether the check needs the solver:
   after any lesson-content change. It needs a working c4solver binary; on Linux see
   `reference_c4solver` re: rebuilding from `solver-src` and the `skip-worktree` bit that makes
   `git status` and `file` misreport which binary is committed.
+- **`tests/unit/lessonWindows.test.js`** (added 2026-07-28, registered in **both** `test` and
+  `test:fast`) — the pure `windowHighlights` JSON → `Board` `zhCells` mapping and the
+  `isStraightLineWindow` geometry predicate (`src/lib/lessonWindows.js`). `lessonContent.test.js`
+  applies that same predicate to every authored window, plus known-`type` and `label` ⇒ `label_es`.
+
+  **These window checks are unconditional — deliberately not gated on `REMEDIATED`** (the field is
+  new, so every use of it is new). They exist because the capsule renderer draws blindly from
+  `cells[0]` to `cells[last]`: an unordered, bent, or gapped array produces a plausible-looking
+  capsule over the *wrong* squares, which no other layer catches — `verify_lesson_content.mjs` knows
+  only about `tg`/`td` overlays, and nobody notices by eye unless they open that exact slide.
+  Window geometry is intentionally **not** added to the solver script: a window asserts no
+  solver-checkable fact, and keeping the gate pure means content authors can run it for free.
+  See `lesson-editor.md` §"Window highlights" for the authoring contract.
 
 `tests/lessons/opening-lessons.test.js` asserts curriculum-level properties and deliberately loads
 lessons **by `id`**, not by filename, so renumbering (`lesson-NN-slug.json`) doesn't break it. Follow
@@ -264,6 +277,47 @@ Pure function extraction covers logic, not rendering — assertions like "does t
 - **First example**: `connect-four/tests/dom/ErrorBoundary.dom.test.jsx` — renders `ErrorBoundary` around a child that throws and asserts the fallback's Retry button mounts.
 
 Use DOM tests for render/remount/interaction assertions the pure-function pattern can't express. Keep pure-function extraction as the default for pure logic — it's cheaper to write and run.
+
+#### jsdom does not implement `ResizeObserver` — stub it before rendering `Board`
+
+`Board.jsx` constructs a `ResizeObserver` **unconditionally** in the effect that measures board width
+for the `zhCells` capsule SVG. jsdom has no such global, so any DOM test that renders `Board` — or
+anything containing it (`BoardEditor`, `SlideEditor`, `SocraticEditor`, every lesson/review screen) —
+dies at render with `ResizeObserver is not defined`. Stub it in a `before()` hook:
+
+```js
+before(() => {
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+});
+```
+
+Because `setup.js` registers jsdom at import time but the stub runs in `before()`, import the
+component **lazily** (`const { default: X } = await import('...')`) so the stub is installed first.
+Worked example: `tests/dom/SlideEditorWindows.dom.test.jsx`.
+
+#### Simulate interaction with `fireEvent`, not `user-event`
+
+`@testing-library/user-event` is **not installed** — only `@testing-library/dom` and
+`@testing-library/react`. Use `fireEvent` from `@testing-library/react`.
+
+Two things this does *not* cost you, both verified rather than assumed:
+
+- **`fireEvent.click` respects a native `disabled` button** — jsdom does not invoke the handler.
+  Assertions of the form "this control stays disabled until the input is valid" are honest with
+  `fireEvent`. (It does *not* respect CSS `pointer-events: none`, so prefer real `disabled`
+  attributes over CSS-only gating in components you intend to test.)
+- **`fireEvent.change` works on React controlled inputs** — RTL patches the native value setter, so
+  no `Object.getOwnPropertyDescriptor(...).set.call(el, v)` dance is needed inside tests. (That
+  dance *is* still needed when driving the app over raw CDP in a browser.) Note `change` replaces
+  the whole value rather than appending a keystroke — assert on the full string.
+
+**When to reconsider adding `user-event`** (evaluated and declined 2026-07-28): it is 438 KB with
+zero runtime deps and its only peer, `@testing-library/dom >=7.21.4`, is already satisfied — so the
+cost is low, but at four DOM-test files the benefit is too. The trigger to add it is the first test
+that exercises **keyboard/focus interaction** — e.g. `Board`'s Enter/Space column activation
+(spec 043 FR-001..006), currently covered only at the pure-helper layer in
+`tests/unit/boardA11y.test.js`. Real focus management and key sequences are where `user-event`
+genuinely beats hand-dispatched `keyDown`.
 
 ### `node --test` Conventions
 

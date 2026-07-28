@@ -47,6 +47,30 @@
           "label_es": "La casilla que completa Gris — justo arriba"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 0, "r": 0 },
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 }
+          ],
+          "label": "Green's line — three bottom-row discs completing in the third column",
+          "label_es": "La línea de Verde — tres fichas en la fila inferior que completan en la tercera columna"
+        },
+        {
+          "type": "td",
+          "cells": [
+            { "c": 1, "r": 1 },
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 1 }
+          ],
+          "label": "Gray's line — three second-row discs completing directly above",
+          "label_es": "La línea de Gris — tres fichas en la segunda fila que completan justo arriba"
+        }
+      ],
       "infoProse": "Green's three discs across the bottom row — first, second and fourth columns — complete four-in-a-row on the bottom row of the third column. That column is empty, so Green's completing cell is exactly where the next disc dropped there will land. Green threatens to win next turn.\n\nGray's three discs across the second row — second, fourth and fifth columns — complete on the second row of that same column, directly above Green's cell.\n\nIt is Gray's move. Gray clearly has to deal with Green's threat — but look at what a single gray disc in the third column does before reading on. This shape — the opponent's completing cell at the next playable cell, the player's own completing cell directly above it — is the overcut.",
       "infoProse_es": "Las tres fichas verdes en la fila inferior — primera, segunda y cuarta columna — completan cuatro en línea en la fila inferior de la tercera columna. Esa columna está vacía, así que la casilla que completa Verde es exactamente donde caerá la próxima ficha que se tire ahí. Verde amenaza con ganar en el próximo turno.\n\nLas tres fichas grises en la segunda fila — segunda, cuarta y quinta columna — completan en la segunda fila de esa misma columna, justo arriba de la casilla de Verde.\n\nEs el turno de Gris. Gris claramente tiene que ocuparse de la amenaza de Verde — pero fijate qué hace una sola ficha gris en la tercera columna antes de seguir leyendo. Esta forma — la casilla que completa al rival en la próxima casilla jugable, y la propia casilla que completa justo arriba — es el overcut."
     },
@@ -173,6 +197,30 @@
           "type": "claim",
           "label": "The cell above it — both players complete a four here",
           "label_es": "La casilla de arriba — acá completan cuatro los dos jugadores"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 0, "r": 4 },
+            { "c": 1, "r": 4 },
+            { "c": 2, "r": 4 },
+            { "c": 3, "r": 4 }
+          ],
+          "label": "Gray's line on the fifth row — it completes on the cell above",
+          "label_es": "La línea de Gris en la quinta fila — completa en la casilla de arriba"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 4 },
+            { "c": 3, "r": 3 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 1 }
+          ],
+          "label": "Green's diagonal — it completes on that same cell",
+          "label_es": "La diagonal de Verde — completa en esa misma casilla"
         }
       ],
       "infoProse": "The third column looks like slide 1: Green's three discs across the fourth row complete on the fourth row of the third column — the next playable cell — and Gray's three discs across the fifth row complete directly above it. But the fifth-row cell is not Gray's alone. Green's diagonal, running down from that very cell to the sixth column's second row, completes there too. One cell, two winners.\n\nThat detail reverses everything. If Gray drops into the third column, the disc blocks Green's fourth-row cell — and the block itself makes the fifth row playable, with Green to move. Green drops into the same column and completes the diagonal. The overcut backfires: the solver scores the third column a loss for Gray, while Gray's actual winning move is the seventh column, completing a gray four on the bottom row at once.\n\nSo the checklist has one more line. The opponent's completing cell at the next playable cell, the player's own cell directly above, the player's turn — and that upper cell the player's alone. If the opponent also completes a four on the upper cell, playing the column just opens their winning cell for them.",

@@ -47,6 +47,17 @@
       ],
       "overlays": [],
       "legendItems": [],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 2 },
+            { "c": 3, "r": 3 }
+          ],
+          "label": "Green's two central key cells",
+          "label_es": "Las dos casillas clave centrales de Verde"
+        }
+      ],
       "infoProse": "Owning both central key cells early — Allen's D3 and D4 — is usually powerful and comparatively easy to convert. But 'usually easy' does not mean 'always safe': in this exact position, only the second column from the left keeps the win — every other column throws it away. Recognising the D3-D4 shape tells you the position is good; it does not tell you which move keeps it that way.",
       "infoProse_es": "Quedarse temprano con las dos casillas clave centrales — el D3 y el D4 de Allen — suele ser poderoso y comparativamente fácil de convertir. Pero 'generalmente fácil' no significa 'siempre seguro': en esta posición exacta, solo la segunda columna desde la izquierda mantiene la victoria — cualquier otra columna la desperdicia. Reconocer la forma D3-D4 te dice que la posición es buena; no te dice qué jugada la mantiene así."
     },

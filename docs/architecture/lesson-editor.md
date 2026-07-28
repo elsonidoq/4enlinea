@@ -14,7 +14,7 @@ and preview in the real lesson flow without a server restart.
 
 Spanish lesson content lives in `_es` **sibling fields** inside the same lesson JSON, not a separate
 file: `infoProse_es`, `coachMessages[].text_es`, `coachMessages[].audio_es`, `legendItems[].label_es`,
-`socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`. `getLesson(id, locale)` merges them
+`windowHighlights[].label_es`, `socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`. `getLesson(id, locale)` merges them
 **per field** with English fallback (`lessonLoader.js#localizeLesson`) and strips all `_es` keys from the
 client response — so a partial translation degrades gracefully instead of blanking a slide. `GET
 /api/admin/lessons/:id` deliberately reads **raw** (`getLessonsAll()`), keeping `_es` intact for editing.
@@ -76,7 +76,7 @@ references; do not remove the wrapper to "match the spec."
 | `src/screens/AdminLessonListScreen.jsx` | Lists all lessons with new/edit/delete |
 | `src/screens/AdminLessonEditorScreen.jsx` | Full editor form — assembles all sub-components, handles save/preview/delete |
 | `src/components/admin/BoardEditor.jsx` | Board widget: movestring field + interactive Board + overlay mode toggle |
-| `src/components/admin/SlideEditor.jsx` | Single slide card: BoardEditor + coach messages + auto-synced legend + infoProse |
+| `src/components/admin/SlideEditor.jsx` | Single slide card: BoardEditor + coach messages + auto-synced legend + window highlights + infoProse |
 | `src/components/admin/SocraticEditor.jsx` | Socratic section: BoardEditor + correctCol picker with solver verification |
 | `src/components/admin/LessonMetaForm.jsx` | Top-level fields: title, id/slug, order, free/pro, userPerspective |
 
@@ -151,6 +151,86 @@ The `BoardEditor` component has two modes:
 - Clear overlays button
 - Legend items auto-sync: `SlideEditor` watches overlay changes and keeps `legendItems`
   in sync (new types get default labels; removed types drop from legend)
+
+---
+
+## Window highlights (`slides[].windowHighlights`)
+
+Added 2026-07-28. A **concept slide** may draw one translucent capsule (a rounded pill, like a
+highlighter stroke) per straight line of board cells, on top of the per-cell `overlays`. Use it when
+the slide's text names a line/window as a *unit* ("the window from the second column to the fifth",
+"three on a diagonal") and the learner would otherwise reconstruct that grouping by eye.
+
+```json
+"windowHighlights": [
+  { "type": "tg",
+    "cells": [{"c":2,"r":0},{"c":3,"r":0},{"c":4,"r":0},{"c":5,"r":0}],
+    "label": "Green's minor-threat window",
+    "label_es": "La ventana de la amenaza menor de Verde" }
+]
+```
+
+| Key | Rule |
+|---|---|
+| `type` | Optional. Reuses the locked `OverlayType` tokens `tg`/`td`/`claim`/`win`, so a window and a per-cell overlay of the same type read as the same colour. Unknown/absent → fallback colour. |
+| `cells` | 2–4 cells, 0-indexed (row 0 = bottom, col 0 = left), contiguous unit steps, collinear, and **ordered along the line**. |
+| `label` | Optional. Renders as its own legend row with a **pill** swatch. |
+| `label_es` | **Required whenever `label` is present.** |
+
+**Contract details that are easy to get wrong:**
+
+- **Order is load-bearing.** `Board.jsx`'s `zhSvg` takes its `windows` branch and draws one capsule
+  from `cells[0]` to `cells[last]`, ignoring everything between. An unordered array renders a
+  wrong-length or wrong-angle capsule with no error. The only gate is `isStraightLineWindow()`, run
+  by `tests/unit/lessonContent.test.js`.
+- **Labels do NOT go through `legendItems`.** The content gate requires every `legendItems[].type`
+  to have a matching per-cell **overlay** of that type on the same slide; a window has none, so a
+  legend entry for one fails the suite. `ConceptScreen` renders window labels itself from
+  `slide.windowHighlights`, and `syncLegend` must never see them.
+- **Capsule colours are opaque hex** (`WINDOW_HIGHLIGHT_COLOR` in `src/lib/lessonWindows.js`), a
+  deliberately separate map from `ConceptScreen`'s `OVERLAY_SWATCH_COLOR`. Board renders the capsule
+  at `opacity="0.4"`, so already-translucent `rgba()` values would compound to ~0.16 and vanish.
+- **Concept slides only.** `SocraticScreen` derives its own overlays and reads no authored ones, so
+  a `windowHighlights` on the socratic node renders nothing.
+- The capsule draws **over** discs (`zIndex: 2`, `pointerEvents: 'none'`), so it tints them.
+
+**Where it is enforced:**
+
+| Layer | What it checks |
+|---|---|
+| `validateLesson` (`server/lessonLoader.js`) | Structure only — array, objects, ≥2 on-board integer cells. Deliberately permissive: the loader **excludes an invalid file entirely**, so an over-strict rule would silently drop a lesson from the app. |
+| `localizeLesson` | Merges `label_es` over `label` per field and strips `_es`, same as `legendItems`. |
+| `tests/unit/lessonContent.test.js` | Geometry (contiguous/collinear/ordered/2–4/on-board), known `type`, and `label` ⇒ `label_es`. Unconditional — not gated on `REMEDIATED`. |
+| `tests/unit/lessonWindows.test.js` | The pure JSON → `zhCells` mapping and the geometry predicate. |
+| `verify_lesson_content.mjs` | **Nothing, by design** — a window asserts no solver-checkable fact the way a `tg`/`td` cell does. |
+
+### Authoring one in the editor
+
+Added 2026-07-28 (closes OI-67). Each slide card has a **Window highlights** section below its
+board. It lists the slide's windows (colour swatch, `type` picker, cell span, label field honouring
+the `lang` toggle, *Edit cells* / *✕*) and a **+ Add window** button.
+
+- **The control lives entirely in `SlideEditor`.** `BoardEditor` gained four optional,
+  inert-by-default props — `zhCells`, `pickCellsActive`, `onPickCell`, `pickCellsNotice` — and
+  knows nothing about the `windowHighlights` schema; it only lends its board as a picking surface.
+  `SocraticEditor` passes none of them, so the socratic editor shows no window UI at all.
+- **Order capture is click-in-sequence**: click order *is* array order. Clicking a picked cell
+  removes it; *Undo last* pops the tail. While picking, the disc/overlay toolbar is replaced by a
+  notice so a stray click can't drop a disc into the position being annotated.
+- **Nothing invalid is ever written.** *Save window* is disabled until
+  `describeWindowDraft()` (`src/lib/windowDraft.js`) reports the draft valid per
+  `isStraightLineWindow`; the reason is shown instead. The collinear-but-out-of-order case — the one
+  failure a rendered capsule *hides* — is called out specifically and offers **Fix order**.
+- The live preview draws a **valid** draft as one capsule and an **invalid** one as a dot per cell,
+  so a bend stays visible rather than being smoothed into a plausible straight capsule.
+- Swatches use `WINDOW_HIGHLIGHT_COLOR` at `opacity 0.4` — what `ConceptScreen` actually renders —
+  not `BoardEditor`'s brighter `OVERLAY_COLORS`.
+- Removing the last window **deletes the key** rather than storing `[]`, so untouched slides stay
+  `windowHighlights`-free; `emptySlide()` is unchanged for the same reason.
+- A `label` with no `label_es` shows an inline warning (that combination fails the content gate).
+
+Covered by `tests/unit/windowDraft.test.js` (order/validity helpers) and
+`tests/dom/SlideEditorWindows.dom.test.jsx` (what the admin sees, plus the SocraticEditor guard).
 
 ---
 

@@ -56,6 +56,17 @@
           "type": "td"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 3, "r": 0 },
+            { "c": 3, "r": 1 }
+          ],
+          "label": "One pair — odd square below, even square directly above",
+          "label_es": "Un par —casilla impar abajo, casilla par justo encima"
+        }
+      ],
       "legendItems": [
         {
           "type": "tg",
@@ -106,6 +117,19 @@
           "c": 3,
           "r": 1,
           "type": "win"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "win",
+          "cells": [
+            { "c": 0, "r": 1 },
+            { "c": 1, "r": 1 },
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 1 }
+          ],
+          "label": "Green's second-row window, running through the claimed square",
+          "label_es": "La ventana de Verde en la segunda fila, que pasa por la casilla reclamada"
         }
       ],
       "legendItems": [
@@ -265,6 +289,26 @@
           "c": 1,
           "r": 2,
           "type": "tg"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 3, "r": 2 },
+            { "c": 3, "r": 3 }
+          ],
+          "label": "Green's disc on an odd row, with the even square Gray claims above it",
+          "label_es": "La ficha de Verde en una fila impar, con la casilla par que Gris reclama encima"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 1 },
+            { "c": 1, "r": 2 }
+          ],
+          "label": "Green's disc on an even row — the square above it is odd, so there is nothing to claim",
+          "label_es": "La ficha de Verde en una fila par —la casilla de encima es impar, así que no hay nada para reclamar"
         }
       ],
       "legendItems": [

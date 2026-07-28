@@ -475,3 +475,62 @@ test('validateLesson: socratic.messages shape', () => {
   assert.match(validateLesson(makeSocraticLesson({ ask: ['nope'] })), /socratic\.messages\.ask\[0\] must be an object/);
   assert.match(validateLesson(makeSocraticLesson({ ask: [{ mood: 'think' }] })), /socratic\.messages\.ask\[0\]\.text must be a string/);
 });
+
+// ---- slides[].windowHighlights (authored capsule overlays) ----
+
+const WH_ROW0 = [{ c: 1, r: 0 }, { c: 2, r: 0 }, { c: 3, r: 0 }, { c: 4, r: 0 }];
+
+/** Lesson with one concept slide carrying `windowHighlights`. */
+function makeWindowLesson(windowHighlights) {
+  return makeValidLesson({
+    slides: [{ movestring: '', boardSpec: ['', '', '', '', '', '', ''], windowHighlights }],
+  });
+}
+
+test('validateLesson: windowHighlights shape', () => {
+  assert.equal(validateLesson(makeWindowLesson([{ type: 'claim', cells: WH_ROW0 }])), null);
+  assert.equal(validateLesson(makeWindowLesson([])), null, 'empty array is fine');
+  assert.equal(validateLesson(makeValidLesson()), null, 'absent field is fine');
+  // Permissive by design about `type` and `label`: the loader EXCLUDES an invalid file
+  // entirely, so only shapes that would actually break the renderer are rejected here.
+  assert.equal(validateLesson(makeWindowLesson([{ cells: WH_ROW0 }])), null, 'type may be absent');
+  assert.equal(validateLesson(makeWindowLesson([{ type: 'made-up', cells: WH_ROW0 }])), null, 'unknown type falls back to a colour');
+
+  assert.match(validateLesson(makeWindowLesson('nope')), /windowHighlights must be an array/);
+  assert.match(validateLesson(makeWindowLesson(['nope'])), /windowHighlights\[0\] must be an object/);
+  assert.match(validateLesson(makeWindowLesson([{ type: 'tg' }])), /windowHighlights\[0\]\.cells must be an array of at least 2 cells/);
+  assert.match(validateLesson(makeWindowLesson([{ cells: [{ c: 0, r: 0 }] }])), /windowHighlights\[0\]\.cells must be an array of at least 2 cells/);
+  assert.match(validateLesson(makeWindowLesson([{ cells: [{ c: 7, r: 0 }, { c: 6, r: 0 }] }])), /windowHighlights\[0\]\.cells\[0\] is off-board/);
+  assert.match(validateLesson(makeWindowLesson([{ cells: [{ c: 0, r: 0 }, { c: 0, r: 6 }] }])), /windowHighlights\[0\]\.cells\[1\] is off-board/);
+});
+
+test('locale=es merges windowHighlights label_es and strips it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeWindowLesson([{
+    type: 'claim', cells: WH_ROW0, label: 'A dead window', label_es: 'Una ventana muerta',
+  }]));
+  loadLessons(dir);
+
+  const es = getLesson('test-lesson-1', 'es');
+  assert.equal(es.slides[0].windowHighlights[0].label, 'Una ventana muerta');
+  assert.equal(es.slides[0].windowHighlights[0].label_es, undefined, 'all _es keys are stripped');
+  assert.deepEqual(es.slides[0].windowHighlights[0].cells, WH_ROW0, 'cells survive localization unchanged');
+  assert.equal(es.slides[0].windowHighlights[0].type, 'claim');
+
+  const en = getLesson('test-lesson-1', 'en');
+  assert.equal(en.slides[0].windowHighlights[0].label, 'A dead window');
+  assert.equal(en.slides[0].windowHighlights[0].label_es, undefined);
+});
+
+test('windowHighlights label falls back to English when label_es is absent', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lessons-'));
+  writeTempLesson(dir, 'lesson-01-test.json', makeWindowLesson([
+    { type: 'tg', cells: WH_ROW0, label: 'English only' },
+    { type: 'td', cells: WH_ROW0 },
+  ]));
+  loadLessons(dir);
+
+  const es = getLesson('test-lesson-1', 'es');
+  assert.equal(es.slides[0].windowHighlights[0].label, 'English only');
+  assert.equal('label' in es.slides[0].windowHighlights[1], false, 'an unlabelled window gains no label key');
+});

@@ -18,9 +18,10 @@
 - [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline confirmationChallenges 404 (need a DB row)
 - [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — goalPrompt/socratic.overlays/userPerspective are dead; socratic color = movestring parity
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
-- [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — 200 + a plausible `generated` array ≠ the server saw your file; probe /api/admin/lessons/:id, restart first
+- [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ the server saw your file; admin-API saves need no restart
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
 - [Lesson unlock is pairwise, not furthest-pointer](project_lesson_progress_unlock_is_pairwise.md) — editing one lesson_progress row doesn't unblock earlier ones; use backfill-lesson-progress.mjs
+- [windowHighlights capsule traps](project_lesson_window_highlights_traps.md) — cells must be ORDERED (drawn first→last, unchecked); opaque colours only; never via legendItems
 
 ## Server, API, DB schema, auth, payments & deploy
 
@@ -84,7 +85,7 @@
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
-- [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — per-task review can't see the JOIN between two correct halves (server seam+client never asks; producer green+render wrong; endpoint takes param+button never sends); drive the cross-task path end-to-end
+- [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes
 - [Process & agent preferences](feedback_process_and_agent_preferences.md) — sizing bars; scope is a diff you MEASURE; Opus critique/Sonnet apply; AskUserQuestion ≥2 opts, never `preview` for text
 - [Open-issues destination](feedback_open_issues_destination.md) — deferred/latent bugs → docs/open_issues.md (OI-N), NOT memory
 - [Superpowers docs aren't durable](feedback_superpowers_docs_not_durable.md) — docs/superpowers/ is throwaway; migrate durable info to docs/architecture/
@@ -100,6 +101,6 @@
 - [User profile](user_profile.md) — strong C++/React/algorithms; empirical debugger; commits WIP himself — never auto-commit, quarantine before delete
 - [SpecKit workflow](project_speckit_workflow.md) — specs at specs/; check-prerequisites errors on main (non-fatal, proceed)
 - [Custom commands](reference_custom_commands.md) — /coordinate-implementation; /epics-manager generic (per-epic managers DELETED; epics self-carry decisions)
-- [Knowledge base status](project_kb_status.md) — naming/gaps; verify movestrings w/ optimal_line.mjs; Allen-notation traps (mover info LOST once written as digits)
+- [Knowledge base status](project_kb_status.md) — every entry is prefixed (`docs/knowledge-base/undercut.md` NEVER exists — ls first); verify movestrings w/ optimal_line.mjs; Allen-notation traps
 - [External PDFs](reference_external_pdfs.md) — Allis/Bagan/Allen page ranges; corrected rule outcomes are counter-intuitive (1R vs 1B = Draw; Bagan ≠ C4 parity)
-- [Open Chrome debug](reference_open_chrome.md) — binary launch required; open -a fails on macOS
+- [Open Chrome debug](reference_open_chrome.md) — binary launch; sibling locks MCP browser → own 9222 + CDP; seed progress status:'complete'

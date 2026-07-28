@@ -15,8 +15,23 @@ const OVERLAY_COLORS = { tg: '#4ade80', td: '#9ca3af', claim: '#fbbf24', win: '#
  *   onMovestringChange: (ms: string) => void
  *   onOverlaysChange: (overlays: Array<{c,r,type}>) => void
  *   label: string  (optional, shown above the widget)
+ *
+ * Optional cell-picking surface for an OWNER-DRIVEN mode (used by SlideEditor's
+ * windowHighlights control). BoardEditor deliberately knows nothing about the
+ * windowHighlights schema — it only lends its board:
+ *   zhCells: Array — forwarded verbatim to Board's zhCells capsule renderer (preview only)
+ *   pickCellsActive: boolean — when true, every board click routes to onPickCell and
+ *     the disc/overlay toolbar is replaced by a notice; disc placement is suspended
+ *   onPickCell: (col, row) => void
+ *   pickCellsNotice: string — what to tell the admin while picking
+ *
+ * All four default to inert, so callers that don't pass them (SocraticEditor) get the
+ * exact previous behaviour and no extra UI. No caller migration required.
  */
-export default function BoardEditor({ movestring, overlays, onMovestringChange, onOverlaysChange, label }) {
+export default function BoardEditor({
+  movestring, overlays, onMovestringChange, onOverlaysChange, label,
+  zhCells = [], pickCellsActive = false, onPickCell, pickCellsNotice = '',
+}) {
   const [mode, setMode] = useState('disc');
   const [activeType, setActiveType] = useState('tg');
 
@@ -64,7 +79,16 @@ export default function BoardEditor({ movestring, overlays, onMovestringChange, 
         </button>
       </div>
 
-      {/* Mode toolbar */}
+      {/* Mode toolbar — replaced wholesale while an owner is picking cells, so the admin
+          can't half-place a disc into the position they're annotating. */}
+      {pickCellsActive ? (
+        <div style={{
+          padding: '5px 10px', borderRadius: 6, fontSize: 12,
+          border: '1px dashed #8b5cf6', color: '#c4b5fd', background: 'rgba(139,92,246,0.08)',
+        }}>
+          {pickCellsNotice || 'Click board cells to pick them.'}
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={() => setMode('disc')}
@@ -101,14 +125,16 @@ export default function BoardEditor({ movestring, overlays, onMovestringChange, 
           </button>
         )}
       </div>
+      )}
 
       {/* Board */}
       <Board
         board={board}
         overlays={overlays}
-        onColumnClick={mode === 'disc' ? handleColumnClick : undefined}
-        onCellClick={mode === 'overlay' ? handleCellClick : undefined}
-        canPlay={mode === 'disc'}
+        zhCells={zhCells}
+        onColumnClick={!pickCellsActive && mode === 'disc' ? handleColumnClick : undefined}
+        onCellClick={pickCellsActive ? onPickCell : (mode === 'overlay' ? handleCellClick : undefined)}
+        canPlay={!pickCellsActive && mode === 'disc'}
       />
     </div>
   );

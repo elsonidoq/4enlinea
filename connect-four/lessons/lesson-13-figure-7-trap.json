@@ -60,6 +60,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 3 }
+          ],
+          "label": "The diagonal arm — completes on the fourth row",
+          "label_es": "El brazo diagonal — completa en la cuarta fila"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 }
+          ],
+          "label": "The horizontal arm — completes on the third row",
+          "label_es": "El brazo horizontal — completa en la tercera fila"
+        }
+      ],
       "legendItems": [
         {
           "type": "win",
@@ -124,6 +148,30 @@
           "c": 5,
           "r": 3,
           "type": "tg"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 3 }
+          ],
+          "label": "The diagonal arm — Green completes it right now",
+          "label_es": "El brazo diagonal — Verde lo completa ahora mismo"
+        },
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 }
+          ],
+          "label": "The horizontal arm — dead, Gray's block sits on its last cell",
+          "label_es": "El brazo horizontal — muerto: el bloqueo de Gris ocupa su última casilla"
         }
       ],
       "legendItems": [
@@ -197,6 +245,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 3 }
+          ],
+          "label": "The diagonal arm — completes on the fourth row, still latent",
+          "label_es": "El brazo diagonal — completa en la cuarta fila, todavía latente"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 }
+          ],
+          "label": "The horizontal arm — completes on the third row, playable now",
+          "label_es": "El brazo horizontal — completa en la tercera fila, jugable ya"
+        }
+      ],
       "legendItems": [
         {
           "type": "win",
@@ -266,6 +338,30 @@
           "c": 1,
           "r": 3,
           "type": "tg"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 4, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 2, "r": 2 },
+            { "c": 1, "r": 3 }
+          ],
+          "label": "The mirrored diagonal arm — completes on the fourth row",
+          "label_es": "El brazo diagonal espejado — completa en la cuarta fila"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 4, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 2, "r": 2 },
+            { "c": 1, "r": 2 }
+          ],
+          "label": "The horizontal arm read leftward — completes on the third row",
+          "label_es": "El brazo horizontal leído hacia la izquierda — completa en la tercera fila"
         }
       ],
       "legendItems": [

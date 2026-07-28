@@ -151,6 +151,19 @@
           "label_es": "Verde está construyendo acá (todavía no es una amenaza)"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 0, "r": 0 },
+            { "c": 1, "r": 1 },
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 3 }
+          ],
+          "label": "Gray's diagonal — one square from four",
+          "label_es": "La diagonal de Gris — a una casilla del cuatro"
+        }
+      ],
       "_overlayIntent": "annotation",
       "infoProse": "The direction doesn't change the urgency. A vertical stack, a diagonal, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square completes the four, and the block is forced. Here Gray's diagonal three must be blocked at the bottom of the first column right away — Green's own diagonal is still two squares short, so building it does not answer an immediate threat.",
       "infoProse_es": "La dirección no cambia la urgencia. Una pila vertical, una diagonal, una línea horizontal — todas son amenazas igual de inmediatas. La regla es la misma en cada caso: una casilla vacía completa el cuatro, y el bloqueo es forzado. Acá el tres en diagonal de Gris tiene que bloquearse ya mismo en la base de la primera columna — a la propia diagonal de Verde todavía le faltan dos casillas, así que construirla no responde a una amenaza inmediata."
@@ -230,6 +243,30 @@
           "type": "claim",
           "label": "Empty cells below the threat",
           "label_es": "Casillas vacías debajo de la amenaza"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 0, "r": 2 },
+            { "c": 1, "r": 3 },
+            { "c": 2, "r": 4 },
+            { "c": 3, "r": 5 }
+          ],
+          "label": "Gray's diagonal window — its empty square is buried",
+          "label_es": "La ventana diagonal de Gris — su casilla vacía está enterrada"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 4 },
+            { "c": 2, "r": 3 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 1 }
+          ],
+          "label": "Green's winning diagonal (play the second column)",
+          "label_es": "La diagonal ganadora de Verde (jugá la segunda columna)"
         }
       ],
       "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn, so Green does not need to spend a move blocking it. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. Here the check pays off at once: instead of blocking a threat that isn't real yet, Green is free to play the strongest move on the board — and in the second column Green can even win immediately.\n\nCan you spot another similar case on this board for Gray?",

@@ -39,6 +39,40 @@ function validateBoardSpecs(lesson) {
 }
 
 /**
+ * Validate `slides[].windowHighlights` — the authored capsule overlays (see
+ * src/lib/lessonWindows.js for the contract). Deliberately structural only: the loader
+ * EXCLUDES an invalid file entirely, so an over-strict rule would silently remove a
+ * lesson from the app. `type` and `label` are unchecked (an unknown type falls back to a
+ * colour), and window GEOMETRY — collinear, contiguous, ordered along the line — is
+ * enforced by tests/unit/lessonContent.test.js, which fails loudly instead.
+ * Returns an error string if invalid, or null if valid.
+ */
+function validateWindowHighlights(lesson) {
+  for (let i = 0; i < lesson.slides.length; i++) {
+    const wh = lesson.slides[i].windowHighlights;
+    if (wh === undefined) continue;
+    if (!Array.isArray(wh)) return `slides[${i}].windowHighlights must be an array`;
+    for (let j = 0; j < wh.length; j++) {
+      const w = wh[j];
+      if (typeof w !== 'object' || w === null || Array.isArray(w)) {
+        return `slides[${i}].windowHighlights[${j}] must be an object`;
+      }
+      if (!Array.isArray(w.cells) || w.cells.length < 2) {
+        return `slides[${i}].windowHighlights[${j}].cells must be an array of at least 2 cells`;
+      }
+      for (let k = 0; k < w.cells.length; k++) {
+        const cell = w.cells[k];
+        const ok = cell != null &&
+          Number.isInteger(cell.c) && cell.c >= 0 && cell.c <= 6 &&
+          Number.isInteger(cell.r) && cell.r >= 0 && cell.r <= 5;
+        if (!ok) return `slides[${i}].windowHighlights[${j}].cells[${k}] is off-board`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Validate required top-level fields on a lesson object.
  * Returns an error string if invalid, or null if valid.
  */
@@ -118,6 +152,9 @@ export function validateLesson(lesson) {
 
   const boardSpecErr = validateBoardSpecs(lesson);
   if (boardSpecErr) return boardSpecErr;
+
+  const windowErr = validateWindowHighlights(lesson);
+  if (windowErr) return windowErr;
 
   return null;
 }
@@ -243,6 +280,13 @@ export function localizeLesson(lesson, locale = 'en') {
     }
     if (Array.isArray(slide.coachMessages)) {
       next.coachMessages = slide.coachMessages.map((m) => localizeMessage(m, locale));
+    }
+    if (Array.isArray(slide.windowHighlights)) {
+      next.windowHighlights = slide.windowHighlights.map((w) => {
+        const nw = stripEsKeys(w);
+        if ('label' in w || 'label_es' in w) assignLocalized(nw, w, 'label', locale);
+        return nw;
+      });
     }
     if (Array.isArray(slide.legendItems)) {
       next.legendItems = slide.legendItems.map((li) => {

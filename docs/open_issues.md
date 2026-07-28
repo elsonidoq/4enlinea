@@ -1151,3 +1151,106 @@ it returns to an unentitled caller (404 vs 402 vs a redacted stub) — an archit
 `deriveLockReason` uses so client and server cannot drift; decide the unentitled response shape; keep
 metadata (title, `free`, `order`) public so the saga list still renders. Add an integration test that a
 signed-out fetch of a paid id does not return `slides`.
+
+## OI-67 — Admin lesson editor has no UI control for `slides[].windowHighlights`
+
+**Status**: RESOLVED 2026-07-28 — control shipped; see `docs/architecture/lesson-editor.md`
+§"Window highlights" → "Authoring one in the editor". Decisions taken: control lives in
+`SlideEditor` (BoardEditor gained only optional, inert-by-default cell-picking props, so
+`SocraticEditor` surfaces nothing); click-in-sequence order capture with per-cell toggle, "Undo
+last" and a "Fix order" affordance for the collinear-but-unordered case; commit gated on
+`isStraightLineWindow`; `emptySlide()` left unchanged (absent, not `[]`).
+**Area**: `connect-four/src/components/admin/SlideEditor.jsx`, `src/components/admin/BoardEditor.jsx`,
+`src/lib/windowDraft.js`
+**Discovered**: while wiring `windowHighlights` end to end
+
+Concept slides can carry `windowHighlights` (translucent capsules over a line of cells — contract in
+`docs/architecture/lesson-editor.md` §"Window highlights"). The field renders in the app, validates,
+and survives save/load via the object spreads in `lessonToJsonPayload` / `hydrateLesson` — but the
+**admin editor has no control for it**. An admin can neither author one nor see that a slide already
+has one; today the only way to add a capsule is hand-editing the lesson JSON. All 48 windows across
+13 lessons were authored that way.
+
+**Why deferred**: it is a genuine interaction-design task, not a wiring gap — how cell *order* gets
+captured is the crux (click-in-sequence, where click order **is** array order and you need a visible
+in-progress state plus undo; versus pick-two-endpoints-and-interpolate). Worth a decision with the
+owner rather than an agent's default.
+
+**If picked up**:
+- Gate on `isStraightLineWindow()` from `src/lib/lessonWindows.js` — never write a window that fails
+  it; show the admin why instead. Bent/gapped selections are the likely authoring mistake.
+- Respect the editor's `lang` toggle: `fk('label')` yields `label` / `label_es` (`label_es` is
+  required whenever `label` is present, per the content gate).
+- Do **not** feed windows into `syncLegend`/`legendItems` — the content test requires every
+  `legendItems[].type` to have a matching per-cell overlay, which a window has none of.
+- **`BoardEditor` is shared with `SocraticEditor`**, and the socratic node does not support the
+  field. Any new prop must be optional and the window mode must not appear when it is absent — or
+  keep the control in `SlideEditor` and pass `zhCells` down for a read-only preview.
+- Type-picker swatches should use `WINDOW_HIGHLIGHT_COLOR` (opaque), not `BoardEditor`'s
+  `OVERLAY_COLORS`; the values differ deliberately because Board composites capsules at 0.4 opacity.
+- Verify by save → reload editor → open the lesson in the app. React state alone proves nothing:
+  the server caches lessons at startup, so restart `$API_PORT` before trusting a re-test.
+
+## OI-68 — `windowHighlights` visual + content review items
+
+**Status**: open — cosmetic / editorial, no functional impact (2026-07-28)
+**Area**: `connect-four/src/components/Board.jsx` (`zhSvg`), `connect-four/lessons/lesson-04-opening-centre.json`
+**Discovered**: browser spot-checks of the 48 authored windows
+
+Two things noticed while reviewing the rendered capsules, neither worth blocking on:
+
+1. **Capsules tint the discs they cover.** The SVG sits at `zIndex: 2` above the board, so an amber
+   (`claim`) capsule over a gray disc reads brown and over green reads olive. Legible everywhere it
+   currently ships, and the labels disambiguate — but it is a real cost on any slide whose teaching
+   point *is* disc colour (e.g. lesson-03 slide 1, "one gray disc and two green"). Fixing it means
+   either dropping the capsule below the discs (loses the highlighter feel) or an outline-only
+   variant like the settled z-threat badge spec in `frontend-conventions.md`. Do not simply lower
+   the opacity — at 0.4 it is already near the floor of visibility.
+2. **`opening-centre` slide index 1 draws a window over one disc and three empty cells.** It is
+   exactly what the prose asserts ("Green is the only one who can threaten a horizontal connection
+   on the third row nearby") and it is the only Gray-free four-window on that row, so it is not
+   wrong — but it is the sparsest of the 48 and reads as a window that barely exists yet. Worth an
+   editorial second opinion on whether the prose or the capsule should go.
+
+## OI-69 — Admin lesson-editor cosmetic + a11y nits left after the `windowHighlights` control
+
+**Status**: open — cosmetic, no functional impact (2026-07-28)
+**Area**: `connect-four/src/components/admin/SlideEditor.jsx`, `connect-four/src/components/Board.jsx`
+**Discovered**: shipping the `windowHighlights` control and the coach-message textarea change
+
+1. **`infoProse` renders in the browser-default monospace.** The coach-message field was converted
+   from `<input>` to `<textarea>` and given `fontFamily: 'inherit'`; `infoProse` is an older
+   `<textarea>` that never set one, so browsers apply their monospace default. The two now sit
+   adjacent in the same card in different typefaces, which reads as a bug rather than a choice. Fix
+   is one line (`fontFamily: 'inherit'` on the `infoProse` textarea) — deliberately not taken,
+   because it is a visual change to a field outside the requested scope and the owner has not
+   weighed in. Decide, then either apply it or record that monospace is intentional there.
+2. **`Board`'s per-column `aria-label`s ("column 1".."column 7") repeat once per board on the same
+   page.** The admin lesson editor renders four boards (three slides + socratic), so a screen reader
+   hears seven ambiguous "column N" targets four times over. Pre-existing, from
+   `getColumnA11yProps` (spec 043) — it is correct for a single-board game screen and only becomes
+   ambiguous on multi-board admin pages. Fixing it means threading a board-scope label into
+   `getColumnA11yProps`, which touches the locked a11y contract; not worth it for an admin-only
+   surface unless someone is doing an a11y pass anyway. Every `aria-label` `SlideEditor` itself
+   emits is already index-scoped (`Slide N …`) and unique.
+
+## OI-70 — `npm run lint` is red repo-wide (254 errors), so lint gates nothing
+
+**Status**: open — pre-existing, long-standing (observed 2026-07-28)
+**Area**: `connect-four/eslint.config.js` and the whole tree
+**Discovered**: running `npx eslint` on touched files during the `windowHighlights` work
+
+`npx eslint .` reports **268 problems (254 errors, 14 warnings)**. A large share are environment
+rules misfiring rather than real defects — e.g. `'process' is not defined` (`no-undef`) in Node-side
+scripts that the config lints with browser globals only. Because the baseline is red, `npm run lint`
+cannot be used as a gate, is not in CI, and a genuinely new lint error is invisible in the noise.
+
+Concretely observed: `src/components/admin/BoardEditor.jsx` imports `boardToSpec` and never uses it
+(`no-unused-vars`) — harmless, pre-existing, and exactly the kind of thing a working lint would have
+caught at authoring time.
+
+**If picked up**: split the eslint config by environment (browser for `src/`, node for `server/`,
+`scripts/`, `tests/`) before touching any individual rule — that alone should clear most of the 254.
+Then run `--fix`, triage the remainder, and only then consider adding `lint` to the test scripts.
+Until that happens, run `npx eslint <files-you-touched>` and compare against the same files on
+`main` rather than trusting a clean/dirty verdict.

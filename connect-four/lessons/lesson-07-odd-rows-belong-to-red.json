@@ -130,6 +130,18 @@
           "type": "claim"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 2 },
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 }
+          ],
+          "label": "Green's three in a row — open at both ends",
+          "label_es": "Los tres en línea de Verde — abiertos en ambos extremos"
+        }
+      ],
       "legendItems": [
         {
           "type": "tg",

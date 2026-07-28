@@ -35,6 +35,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 1 },
+            { "c": 5, "r": 1 }
+          ],
+          "label": "Gray's second-row line — third to sixth column",
+          "label_es": "La línea de Gris en la segunda fila — de la tercera a la sexta columna"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 }
+          ],
+          "label": "Green's third-row line — directly above",
+          "label_es": "La línea de Verde en la tercera fila — justo arriba"
+        }
+      ],
       "legendItems": [
         {
           "type": "td",
@@ -137,6 +161,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 1 },
+            { "c": 5, "r": 1 }
+          ],
+          "label": "Gray's line — finished first, underneath",
+          "label_es": "La línea de Gris — terminada primero, por debajo"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 }
+          ],
+          "label": "Green's line — three discs of wasted work",
+          "label_es": "La línea de Verde — tres fichas de trabajo desperdiciado"
+        }
+      ],
       "legendItems": [
         {
           "type": "td",
@@ -188,6 +236,30 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 3 }
+          ],
+          "label": "Gray's rising diagonal — completes on the third row",
+          "label_es": "La diagonal ascendente de Gris — completa en la tercera fila"
+        },
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 2, "r": 4 },
+            { "c": 3, "r": 4 },
+            { "c": 4, "r": 4 },
+            { "c": 5, "r": 4 }
+          ],
+          "label": "Green's fifth-row line — two rows higher",
+          "label_es": "La línea de Verde en la quinta fila — dos filas más arriba"
+        }
+      ],
       "legendItems": [
         {
           "type": "td",
@@ -237,6 +309,19 @@
           "c": 4,
           "r": 3,
           "type": "tg"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 1 },
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 3 }
+          ],
+          "label": "Green's rising diagonal — the only major threat here",
+          "label_es": "La diagonal ascendente de Verde — la única amenaza mayor acá"
         }
       ],
       "legendItems": [

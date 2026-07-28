@@ -41,6 +41,18 @@
           "type": "td"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 4, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 4, "r": 3 }
+          ],
+          "label": "The count: three cells — odd",
+          "label_es": "El conteo: tres casillas — impar"
+        }
+      ],
       "legendItems": [
         {
           "type": "claim",
@@ -139,6 +151,17 @@
           "type": "td"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 4, "r": 1 },
+            { "c": 4, "r": 2 }
+          ],
+          "label": "The count: two cells — even, so no Z-Threat",
+          "label_es": "El conteo: dos casillas — par, así que no hay Amenaza-Z"
+        }
+      ],
       "legendItems": [
         {
           "type": "claim",
@@ -198,6 +221,27 @@
           "c": 1,
           "r": 3,
           "type": "td"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 4, "r": 2 },
+            { "c": 4, "r": 3 },
+            { "c": 4, "r": 4 }
+          ],
+          "label": "Fifth column: three cells — odd, a Z-Threat",
+          "label_es": "Quinta columna: tres casillas — impar, una Amenaza-Z"
+        },
+        {
+          "type": "claim",
+          "cells": [
+            { "c": 1, "r": 2 },
+            { "c": 1, "r": 3 }
+          ],
+          "label": "Second column: two cells — even, not a Z-Threat",
+          "label_es": "Segunda columna: dos casillas — par, no es una Amenaza-Z"
         }
       ],
       "legendItems": [

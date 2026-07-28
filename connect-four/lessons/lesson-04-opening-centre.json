@@ -47,6 +47,19 @@
       ],
       "overlays": [],
       "legendItems": [],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 0, "r": 2 },
+            { "c": 1, "r": 2 },
+            { "c": 2, "r": 2 },
+            { "c": 3, "r": 2 }
+          ],
+          "label": "Green's horizontal window on the third row",
+          "label_es": "La ventana horizontal de Verde en la tercera fila"
+        }
+      ],
       "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a horizontal connection on the third row nearby, while Gray's best threats sit on the diagonals through the centre. (Why the third row favours Green is exactly what the Odd Rows lesson explains later.) Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour.",
       "infoProse_es": "Este es el resultado central de la teoría de aperturas: jugar por el centro gana, jugar por el borde no. Después de que ambos lados construyen la columna central, Verde es el único que puede amenazar una conexión horizontal en la tercera fila cercana, mientras que las mejores amenazas de Gris están en las diagonales que pasan por el centro. (Por qué la tercera fila favorece a Verde es exactamente lo que explica más adelante la lección de Filas Impares.) Verde usó esa ventaja para pasar a la columna vecina y ya está ganando acá — la posición está completamente resuelta a favor de Verde."
     },

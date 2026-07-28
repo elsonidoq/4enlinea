@@ -47,6 +47,19 @@
           "type": "win"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 1, "r": 0 },
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 0 },
+            { "c": 4, "r": 0 }
+          ],
+          "label": "The four-cell window",
+          "label_es": "La ventana de cuatro casillas"
+        }
+      ],
       "legendItems": [
         {
           "type": "tg",
@@ -102,6 +115,19 @@
           "c": 4,
           "r": 1,
           "type": "win"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 0 },
+            { "c": 4, "r": 1 },
+            { "c": 5, "r": 2 },
+            { "c": 6, "r": 3 }
+          ],
+          "label": "Green's diagonal window",
+          "label_es": "La ventana diagonal de verde"
         }
       ],
       "legendItems": [
@@ -161,6 +187,19 @@
           "type": "tg"
         }
       ],
+      "windowHighlights": [
+        {
+          "type": "tg",
+          "cells": [
+            { "c": 3, "r": 2 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 2 },
+            { "c": 6, "r": 2 }
+          ],
+          "label": "The four-cell window (gap in the middle)",
+          "label_es": "La ventana de cuatro casillas (hueco en el medio)"
+        }
+      ],
       "legendItems": [
         {
           "type": "win",
@@ -205,6 +244,19 @@
           "c": 5,
           "r": 3,
           "type": "td"
+        }
+      ],
+      "windowHighlights": [
+        {
+          "type": "td",
+          "cells": [
+            { "c": 2, "r": 0 },
+            { "c": 3, "r": 1 },
+            { "c": 4, "r": 2 },
+            { "c": 5, "r": 3 }
+          ],
+          "label": "Gray's diagonal window",
+          "label_es": "La ventana diagonal de gris"
         }
       ],
       "legendItems": [

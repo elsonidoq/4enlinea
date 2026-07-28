@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseMovestring, boardToSpec } from '../../src/lib/movestring.js';
+import { isStraightLineWindow, WINDOW_HIGHLIGHT_COLOR } from '../../src/lib/lessonWindows.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LESSONS_DIR = path.join(__dirname, '../../lessons');
@@ -48,6 +49,8 @@ function* userVisibleStrings(lesson) {
       for (const k of ['text', 'text_es']) if (typeof m[k] === 'string') yield [`slides[${i}].coachMessages[${j}].${k}`, m[k]];
     for (const [j, li] of (s.legendItems ?? []).entries())
       for (const k of ['label', 'label_es']) if (typeof li[k] === 'string') yield [`slides[${i}].legendItems[${j}].${k}`, li[k]];
+    for (const [j, w] of (s.windowHighlights ?? []).entries())
+      for (const k of ['label', 'label_es']) if (typeof w[k] === 'string') yield [`slides[${i}].windowHighlights[${j}].${k}`, w[k]];
   }
   if (lesson.socratic) {
     for (const k of ['goalPrompt', 'goalPrompt_es'])
@@ -117,6 +120,47 @@ test('lessonContent[strict]: legends match overlays; tg/td/claim sit on empty ce
       for (const o of s.overlays ?? [])
         if (o.type !== 'win')  // 'win' rings discs, so occupied cells are legal for it
           assert.equal(board[o.r][o.c], 'empty', `${file} slides[${i}]: '${o.type}' overlay on occupied (${o.c},${o.r})`);
+    }
+  }
+});
+
+// windowHighlights is authored by hand, one capsule per four-in-a-line window, and the
+// renderer draws blindly from cells[0] to cells[last]. An unordered, bent, or gapped
+// array therefore draws a plausible-looking capsule over the WRONG cells and nothing
+// else catches it — not the solver script (which knows only about tg/td overlays) and
+// not the eye, unless someone opens that exact slide. This is that gate. It is
+// unconditional (not gated on REMEDIATED): the field is new, so every use of it is new.
+test('lessonContent: windowHighlights are contiguous straight lines, ordered along the line', () => {
+  for (const { file, lesson } of lessons) {
+    for (const [i, s] of (lesson.slides ?? []).entries()) {
+      for (const [j, w] of (s.windowHighlights ?? []).entries()) {
+        const where = `${file} slides[${i}].windowHighlights[${j}]`;
+        assert.ok(isStraightLineWindow(w.cells),
+          `${where}: cells are not 2–4 on-board cells in a contiguous, ordered straight line: ${JSON.stringify(w.cells)}`);
+        assert.ok(w.type === undefined || Object.hasOwn(WINDOW_HIGHLIGHT_COLOR, w.type),
+          `${where}: unknown type '${w.type}' (known: ${Object.keys(WINDOW_HIGHLIGHT_COLOR).join(', ')})`);
+        // A missing label_es ships English silently — the lessonLoader falls back per field.
+        if (typeof w.label === 'string' && w.label.length > 0) {
+          assert.equal(typeof w.label_es, 'string', `${where}: label without label_es ships English in Spanish`);
+          assert.ok(w.label_es.length > 0, `${where}: label_es is empty`);
+        }
+      }
+    }
+  }
+});
+
+test('lessonContent: every windowHighlight cell is inside the slide it annotates', () => {
+  // Guards the copy/paste failure mode: a window lifted from another slide's board.
+  // Board geometry, not occupancy — a window legitimately spans discs AND empty cells.
+  for (const { file, lesson } of lessons) {
+    for (const [i, s] of (lesson.slides ?? []).entries()) {
+      if (!(s.windowHighlights ?? []).length) continue;
+      assert.equal(typeof s.movestring, 'string', `${file} slides[${i}]: windowHighlights on a slide with no movestring`);
+      const board = parseMovestring(s.movestring);
+      for (const [j, w] of s.windowHighlights.entries())
+        for (const cell of w.cells)
+          assert.ok(board[cell.r]?.[cell.c] !== undefined,
+            `${file} slides[${i}].windowHighlights[${j}]: cell (${cell.c},${cell.r}) is off this board`);
     }
   }
 });
