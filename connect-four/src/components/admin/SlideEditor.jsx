@@ -183,6 +183,29 @@ export default function SlideEditor({ slide, index, total, lang = 'en', onChange
         pickCellsNotice="Picking window cells — click them in order along the line. Click a picked cell to remove it."
       />
 
+      {/* Window counts — the only authored half of the feature. The 6x7 `windowCounts`
+          array is a DERIVED CACHE: saveLessonFile recomputes it from this slide's
+          movestring on every write and strips it when the box is unchecked, so there is
+          nothing here to edit by hand and no numbers to keep in sync. The board preview
+          above does not show them until you save, for the same reason boardSpec is
+          re-derived server-side rather than previewed live. */}
+      <div>
+        <div style={label}>Window counts</div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 13, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={slide.showWindowCounts === true}
+            onChange={e => updateField('showWindowCounts', e.target.checked)}
+            aria-label={`Slide ${index + 1} show window counts`}
+          />
+          <span>Show how many four-in-a-rows are still open to the learner through each empty cell</span>
+        </label>
+        <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+          Counted from <strong>{slide.movestring ? 'this slide’s board' : 'the empty board'}</strong> for the
+          lesson’s own player. Numbers are recomputed on save — they will not appear in the preview above.
+        </div>
+      </div>
+
       {/* Window highlights — translucent capsules drawn over a straight line of cells.
           Deliberately NOT routed through legendItems: the content gate requires every
           legendItems[].type to have a matching per-cell overlay, and a window has none. */}
