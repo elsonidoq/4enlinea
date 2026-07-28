@@ -236,6 +236,7 @@ Move strings are 0-indexed (columns `0–6`) throughout — in the DB, on the wi
 | `onColToggle` | `(col: number) => void` | — | When provided, activates multi-select mode; all taps call `onColToggle` instead of `onColumnClick` |
 | `interactionMode` | `'single_move' \| 'sequence'` | `'single_move'` | `'sequence'` = Board never self-locks; required for `forced_win` multi-move type |
 | `stepLabels` | `{ "row,col": number }` | `{}` | Renders a numbered label centered ON the green/gray disc (teal ring + white digit) WITHOUT recoloring it — unlike the deprecated red/yellow `highlightedCells` shim. Used by `/admin/fv-suff` to number lookahead moves; safe for game surfaces. |
+| `windowCounts` | `(number\|null)[6][7] \| null` | `null` | Per-cell live-window counts for lesson overlays; `[row][col]`, row 0 = bottom, `null` where a disc sits. Renders a violet tint + digit on EMPTY cells only; the tint is suppressed where a per-cell `overlays` entry already colours the cell. Must be memoized by the caller. See `lesson-editor.md` § Window counts. |
 
 ### Specing an existing component — preserve its API
 

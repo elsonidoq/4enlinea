@@ -234,6 +234,46 @@ Covered by `tests/unit/windowDraft.test.js` (order/validity helpers) and
 
 ---
 
+## Window counts (slides[].showWindowCounts / windowCounts)
+
+Renders, in every EMPTY cell of a concept slide's board, how many four-in-a-row windows
+through that cell still contain no opponent disc — as a violet tint plus the integer.
+
+| key | type | meaning |
+|---|---|---|
+| `showWindowCounts` | boolean | Authored intent. The only field a human writes. |
+| `windowCounts` | `(number\|null)[6][7]` | **Derived cache.** `[row][col]`, row 0 = bottom, `null` where a disc sits. Present iff `showWindowCounts` is true. |
+
+- **Never hand-author `windowCounts`.** `saveLessonFile` (`server/lessonAdmin.js`) recomputes
+  it from the slide's movestring on every admin write and strips it from slides that do not
+  opt in, so editing a board in the editor refreshes it automatically. To repair a file
+  edited directly on disk, run `node scripts/backfill-window-counts.mjs [lesson-id...]`.
+- **Perspective is `lesson.userPerspective`, not the side to move.** Both opening lessons
+  are `userPerspective: "red"` while most of their slides have gray to move; counting for
+  the mover would show the opponent's opportunities in a lesson about where *you* should
+  play.
+- **The tint scale is pinned to a fixed maximum of 13** (`WINDOW_COUNT_MAX` in
+  `src/lib/lessonWindows.js`), never to the maximum on the board being drawn. As the
+  opponent kills lines the counts fall and the board visibly dims; a per-board maximum
+  would re-saturate every board and erase that signal.
+- **On an empty board the count is pure geometry** — 13 at the two middle centre cells,
+  3 at a corner, 69 windows in total. That is the same formula, not a special case.
+- **Concept slides only.** `socratic` ignores both fields; a content test enforces it.
+- **The overlay is parity-blind, by design.** Window counts are vertically symmetric, so they
+  express the *column* fact (the centre sits on far more lines) and cannot express the *row*
+  fact (green completes lines on odd rows, gray on even). That is deliberate scope, not a
+  gap: rows belong to `lesson-07-odd-rows-belong-to-red`. Copy must therefore describe the
+  number as lines **open through** a square, never as a chance of winning there, and must not
+  present the two 13-cells as "the best squares".
+- **Enforcement:** `validateLesson` checks shape only (the loader excludes an invalid file
+  entirely). Staleness is caught by `tests/unit/lessonContent.test.js`, which recomputes and
+  fails loudly.
+- The legend row is emitted by `ConceptScreen` from the i18n key
+  `lesson.windowCounts.legend` — it does **not** go through `legendItems`, which requires a
+  matching per-cell overlay type.
+
+---
+
 ## Fields the learner UI ignores (editor ≠ app)
 
 The editor is a faithful view of the **JSON**, not of the **app**. Three fields render in the editor
