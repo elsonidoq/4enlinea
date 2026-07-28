@@ -6,6 +6,7 @@
   "slides": [
     {
       "movestring": "",
+      "showWindowCounts": true,
       "coachMessages": [
         {
           "text": "It's your very first move of the game. Seven columns to choose from — but they are not all equal. Which one gives you the most ways to connect four later?",
@@ -24,11 +25,68 @@
       ],
       "overlays": [],
       "legendItems": [],
-      "infoProse": "Every four-in-a-row runs through some set of columns and rows. A disc in the middle column sits inside far more possible horizontal, vertical, and diagonal lines than a disc on the edge — so it keeps the most winning paths alive. That is why the centre column is the strongest opening square: it is the only first move that lets Green force a win with perfect play. The four columns further from the centre are markedly weaker.",
-      "infoProse_es": "Todo cuatro en línea atraviesa un conjunto determinado de columnas y filas. Una ficha en la columna del medio se encuentra dentro de muchas más líneas horizontales, verticales y diagonales posibles que una ficha en el borde — así que mantiene viva la mayor cantidad de caminos ganadores. Por eso la columna central es la casilla de apertura más fuerte: es el único primer movimiento que le permite a Verde forzar una victoria con juego perfecto. Las cuatro columnas más alejadas del centro son notablemente más débiles."
+      "infoProse": "Every four-in-a-row runs through some set of columns and rows. A disc in the middle column sits inside far more possible horizontal, vertical, and diagonal lines than a disc on the edge — so it keeps the most winning paths alive. That is why the centre column is the strongest opening square: it is the only first move that lets Green force a win with perfect play. The four columns further from the centre are markedly weaker. The number on each square counts the lines that pass through it — it is not a ranking of where to play. Which of those lines you actually get to finish depends on who lands on which row, and that is its own lesson later on.",
+      "infoProse_es": "Todo cuatro en línea atraviesa un conjunto determinado de columnas y filas. Una ficha en la columna del medio se encuentra dentro de muchas más líneas horizontales, verticales y diagonales posibles que una ficha en el borde — así que mantiene viva la mayor cantidad de caminos ganadores. Por eso la columna central es la casilla de apertura más fuerte: es el único primer movimiento que le permite a Verde forzar una victoria con juego perfecto. Las cuatro columnas más alejadas del centro son notablemente más débiles. El número en cada casilla cuenta las líneas que pasan por ella — no es un ranking de dónde jugar. Cuáles de esas líneas llegás a completar depende de quién cae en qué fila, y eso es una lección aparte más adelante.",
+      "windowCounts": [
+        [
+          3,
+          4,
+          5,
+          7,
+          5,
+          4,
+          3
+        ],
+        [
+          4,
+          6,
+          8,
+          10,
+          8,
+          6,
+          4
+        ],
+        [
+          5,
+          8,
+          11,
+          13,
+          11,
+          8,
+          5
+        ],
+        [
+          5,
+          8,
+          11,
+          13,
+          11,
+          8,
+          5
+        ],
+        [
+          4,
+          6,
+          8,
+          10,
+          8,
+          6,
+          4
+        ],
+        [
+          3,
+          4,
+          5,
+          7,
+          5,
+          4,
+          3
+        ]
+      ]
     },
     {
       "movestring": "333334444",
+      "showWindowCounts": true,
       "coachMessages": [
         {
           "text": "Here both players raced up the centre column, then Gray opened the next column over and Green answered on top. This is the '5-4' central-column opening — a known Green win.",
@@ -51,17 +109,85 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 0, "r": 2 },
-            { "c": 1, "r": 2 },
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 2 }
+            {
+              "c": 0,
+              "r": 2
+            },
+            {
+              "c": 1,
+              "r": 2
+            },
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            }
           ],
           "label": "Green's horizontal window on the third row",
           "label_es": "La ventana horizontal de Verde en la tercera fila"
         }
       ],
       "infoProse": "This is the headline result of opening theory: central-column play wins, edge play doesn't. After both sides build up the centre column, Green is the only one who can threaten a horizontal connection on the third row nearby, while Gray's best threats sit on the diagonals through the centre. (Why the third row favours Green is exactly what the Odd Rows lesson explains later.) Green used that edge to shift into the neighbouring column and is already winning here — the position is fully resolved in Green's favour.",
-      "infoProse_es": "Este es el resultado central de la teoría de aperturas: jugar por el centro gana, jugar por el borde no. Después de que ambos lados construyen la columna central, Verde es el único que puede amenazar una conexión horizontal en la tercera fila cercana, mientras que las mejores amenazas de Gris están en las diagonales que pasan por el centro. (Por qué la tercera fila favorece a Verde es exactamente lo que explica más adelante la lección de Filas Impares.) Verde usó esa ventaja para pasar a la columna vecina y ya está ganando acá — la posición está completamente resuelta a favor de Verde."
+      "infoProse_es": "Este es el resultado central de la teoría de aperturas: jugar por el centro gana, jugar por el borde no. Después de que ambos lados construyen la columna central, Verde es el único que puede amenazar una conexión horizontal en la tercera fila cercana, mientras que las mejores amenazas de Gris están en las diagonales que pasan por el centro. (Por qué la tercera fila favorece a Verde es exactamente lo que explica más adelante la lección de Filas Impares.) Verde usó esa ventaja para pasar a la columna vecina y ya está ganando acá — la posición está completamente resuelta a favor de Verde.",
+      "windowCounts": [
+        [
+          2,
+          3,
+          2,
+          null,
+          null,
+          2,
+          1
+        ],
+        [
+          3,
+          2,
+          5,
+          null,
+          null,
+          2,
+          3
+        ],
+        [
+          5,
+          7,
+          4,
+          null,
+          null,
+          6,
+          4
+        ],
+        [
+          4,
+          4,
+          8,
+          null,
+          null,
+          4,
+          4
+        ],
+        [
+          3,
+          6,
+          6,
+          null,
+          4,
+          6,
+          3
+        ],
+        [
+          3,
+          3,
+          5,
+          6,
+          4,
+          3,
+          3
+        ]
+      ]
     },
     {
       "movestring": "3333311115555",
@@ -88,11 +214,12 @@
     },
     {
       "movestring": "333",
+      "showWindowCounts": true,
       "coachMessages": [
         {
-          "text": "Why is the centre worth so much? Count the lines. The next cell up the centre column sits on 13 different four-in-a-row lines — a corner cell sits on just 3.",
+          "text": "Why is the centre worth so much? Count the lines. The next cell up the centre column still sits on 11 four-in-a-row lines you could finish — a corner cell sits on just 3.",
           "mood": "think",
-          "text_es": "¿Por qué vale tanto el centro? Contá las líneas. La siguiente casilla de la columna central se encuentra en 13 líneas distintas de cuatro en línea — una casilla de esquina se encuentra en apenas 3."
+          "text_es": "¿Por qué vale tanto el centro? Contá las líneas. La siguiente casilla de la columna central todavía se encuentra en 11 líneas de cuatro en línea que podrías completar — una casilla de esquina se encuentra en apenas 3."
         }
       ],
       "boardSpec": [
@@ -123,8 +250,64 @@
           "label_es": "Compará estas dos casillas — contá las líneas que pasan por cada una"
         }
       ],
-      "infoProse": "Here is the arithmetic behind the whole lesson. The board has 69 possible four-in-a-row windows — horizontal, vertical, and diagonal. The two middle cells of the centre column each lie on 13 of those windows, the most of any cell on the board, and even the centre column's bottom cell lies on 7. A corner cell lies on just 3. Every disc placed in the centre keeps far more winning lines alive than the same disc on the edge — that count is the reason the centre column is the strongest territory on the board.",
-      "infoProse_es": "Acá está la aritmética detrás de toda la lección. El tablero tiene 69 ventanas posibles de cuatro en línea — horizontales, verticales y diagonales. Las dos casillas del medio de la columna central se encuentran, cada una, en 13 de esas ventanas, la mayor cantidad de cualquier casilla del tablero, e incluso la casilla de abajo de la columna central se encuentra en 7. Una casilla de esquina se encuentra en apenas 3. Cada ficha colocada en el centro mantiene vivas muchas más líneas ganadoras que la misma ficha en el borde — ese conteo es la razón por la que la columna central es el territorio más fuerte del tablero."
+      "infoProse": "Here is the arithmetic behind the whole lesson. The board has 69 possible four-in-a-row windows — horizontal, vertical, and diagonal. The two middle cells of the centre column each lie on 13 of those windows, the most of any cell on the board, and even the centre column's bottom cell lies on 7. A corner cell lies on just 3. Every disc placed in the centre keeps far more winning lines alive than the same disc on the edge — that count is the reason the centre column is the strongest territory on the board. On this board the numbers show 11 rather than 13 on that centre cell: gray's disc already sits inside two of its vertical lines, and a line with a gray disc in it can never be yours. That is the centre's advantage being spent, one line at a time. A high count is still not the same as a win — which of those lines you actually get to finish depends on who lands on which row, and that is the subject of a later lesson.",
+      "infoProse_es": "Acá está la aritmética detrás de toda la lección. El tablero tiene 69 ventanas posibles de cuatro en línea — horizontales, verticales y diagonales. Las dos casillas del medio de la columna central se encuentran, cada una, en 13 de esas ventanas, la mayor cantidad de cualquier casilla del tablero, e incluso la casilla de abajo de la columna central se encuentra en 7. Una casilla de esquina se encuentra en apenas 3. Cada ficha colocada en el centro mantiene vivas muchas más líneas ganadoras que la misma ficha en el borde — ese conteo es la razón por la que la columna central es el territorio más fuerte del tablero. En este tablero los números muestran 11 en lugar de 13 en esa casilla central: la ficha gris ya está dentro de dos de sus líneas verticales, y una línea con una ficha gris adentro nunca puede ser tuya. Esa es la ventaja del centro gastándose, una línea a la vez. Igual, un número alto no es lo mismo que una victoria — cuáles de esas líneas llegás a completar depende de quién cae en qué fila, y ese es el tema de una lección posterior.",
+      "windowCounts": [
+        [
+          3,
+          4,
+          4,
+          null,
+          4,
+          4,
+          3
+        ],
+        [
+          3,
+          4,
+          5,
+          null,
+          5,
+          4,
+          3
+        ],
+        [
+          5,
+          8,
+          9,
+          null,
+          9,
+          8,
+          5
+        ],
+        [
+          5,
+          6,
+          11,
+          11,
+          11,
+          6,
+          5
+        ],
+        [
+          3,
+          6,
+          8,
+          9,
+          8,
+          6,
+          3
+        ],
+        [
+          3,
+          4,
+          5,
+          7,
+          5,
+          4,
+          3
+        ]
+      ]
     }
   ],
   "socratic": {

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseMovestring, boardToSpec } from '../../src/lib/movestring.js';
 import { isStraightLineWindow, WINDOW_HIGHLIGHT_COLOR } from '../../src/lib/lessonWindows.js';
+import { computeWindowCounts } from '../../server/windowCounts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LESSONS_DIR = path.join(__dirname, '../../lessons');
@@ -169,5 +170,46 @@ test('lessonContent[strict]: socratic ask is lesson-specific (legacy template re
   for (const { file, lesson } of lessons) {
     if (!lesson.socratic || LEGACY_ASK_ALLOWLIST.has(lesson.id)) continue;
     assert.notEqual(lesson.socratic.messages?.ask?.[0]?.text, LEGACY_ASK, `${file}: still uses the legacy ask template`);
+  }
+});
+
+// windowCounts is a DERIVED CACHE written by saveLessonFile, not authored copy. If someone
+// edits a movestring by hand (or the recompute is ever bypassed), the board would render a
+// stale, confidently-wrong number that nothing else catches — the value looks plausible and
+// only a person opening that exact slide and recounting 69 windows would notice. This is
+// that gate. Unconditional, not gated on REMEDIATED: the field is new, so every use is new.
+test('lessonContent: windowCounts equals a fresh recompute from the slide movestring', () => {
+  for (const { file, lesson } of lessons) {
+    for (const [i, s] of (lesson.slides ?? []).entries()) {
+      const where = `${file} slides[${i}]`;
+      if (s.showWindowCounts !== true) {
+        assert.equal(s.windowCounts, undefined,
+          `${where}: windowCounts present without showWindowCounts — strip it`);
+        continue;
+      }
+      assert.equal(typeof s.movestring, 'string', `${where}: showWindowCounts on a slide with no movestring`);
+      assert.deepEqual(s.windowCounts, computeWindowCounts(s.movestring, lesson.userPerspective),
+        `${where}: windowCounts is stale — re-run scripts/backfill-window-counts.mjs`);
+    }
+  }
+});
+
+test('lessonContent: showWindowCounts is a concept-slide field only', () => {
+  for (const { file, lesson } of lessons) {
+    assert.equal(lesson.socratic?.showWindowCounts, undefined,
+      `${file}: showWindowCounts on socratic — the field is concept-slide only`);
+    assert.equal(lesson.socratic?.windowCounts, undefined,
+      `${file}: windowCounts on socratic — the field is concept-slide only`);
+  }
+});
+
+test('lessonContent: the two opening lessons opt every concept slide into windowCounts', () => {
+  // Locks in the shipped scope so a later edit cannot silently drop the overlay.
+  for (const id of ['opening-centre', 'opening-sharp']) {
+    const entry = lessons.find(l => l.lesson.id === id);
+    assert.ok(entry, `no lesson with id "${id}"`);
+    // opening-centre opts in 3 of its 4 slides; opening-sharp all 3 of its 3.
+    const opted = entry.lesson.slides.filter(s => s.showWindowCounts === true).length;
+    assert.equal(opted, 3, `${id}: expected 3 slides with showWindowCounts`);
   }
 });
