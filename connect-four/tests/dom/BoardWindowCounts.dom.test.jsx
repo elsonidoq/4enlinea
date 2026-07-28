@@ -54,3 +54,28 @@ test('Board skips cells marked null (occupied) and renders 0 without a tint', ()
   assert.ok(zero, 'a 0 count must still render its digit');
   assert.equal(zero.parentElement.style.background, 'transparent');
 });
+
+test('Board never renders a digit on an occupied cell, even when windowCounts supplies a non-null count for it', () => {
+  cleanup();
+  // Deliberately inconsistent with the production data contract (an occupied cell should
+  // carry `null` in windowCounts): this isolates the `value === 'empty'` half of the guard.
+  // 99 appears nowhere else in the grid, so a stray match can only come from this cell.
+  const counts = EMPTY_COUNTS.map(r => [...r]);
+  counts[0][3] = 99;
+  const board = Array.from({ length: 6 }, () => Array(7).fill('empty'));
+  board[0][3] = 'red';
+  render(<Board board={board} windowCounts={counts} />);
+  assert.equal(screen.queryByText('99'), null, 'an occupied cell must never render its windowCounts digit');
+});
+
+test('Board suppresses the tint but still renders the digit when a per-cell overlay colours the same cell', () => {
+  cleanup();
+  // The real slide-4 case: a `claim` ring on top of a live-window count. The two must
+  // never muddy — background stays transparent, digit renders on top.
+  const counts = EMPTY_COUNTS.map(r => [...r]);
+  render(<Board windowCounts={counts} overlays={[{ c: 3, r: 2, type: 'claim' }]} />);
+  const digits = screen.getAllByText('13');
+  assert.equal(digits.length, 2, 'the digit must still render under the overlay');
+  const overlaidDigit = digits.find(el => el.parentElement.style.background === 'transparent');
+  assert.ok(overlaidDigit, 'the overlaid cell\'s wrapper must have a transparent background');
+});
