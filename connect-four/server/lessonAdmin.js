@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { computeWindowCounts } from './windowCounts.js';
 
 export function lessonFilePath(dir, lesson) {
   const prefix = String(lesson.order).padStart(2, '0');
@@ -14,13 +15,26 @@ export function findLessonFile(dir, id) {
 /**
  * Write lesson to disk. If oldId is provided and differs from lesson.id,
  * the old file is deleted first (handles rename).
+ *
+ * `slides[].windowCounts` is a DERIVED CACHE, never authored: it is recomputed here
+ * from the slide's movestring on every write, so editing a board in the admin editor
+ * refreshes it automatically. Slides without `showWindowCounts` have it stripped.
  */
 export function saveLessonFile(dir, lesson, oldId = null) {
   if (oldId && oldId !== lesson.id) {
     const oldFile = findLessonFile(dir, oldId);
     if (oldFile) fs.unlinkSync(path.join(dir, oldFile));
   }
-  fs.writeFileSync(lessonFilePath(dir, lesson), JSON.stringify(lesson, null, 2), 'utf8');
+  const stamped = {
+    ...lesson,
+    slides: (lesson.slides ?? []).map(slide => {
+      const { windowCounts: _stale, ...rest } = slide;
+      return slide.showWindowCounts === true
+        ? { ...rest, windowCounts: computeWindowCounts(slide.movestring ?? '', lesson.userPerspective) }
+        : rest;
+    }),
+  };
+  fs.writeFileSync(lessonFilePath(dir, stamped), JSON.stringify(stamped, null, 2), 'utf8');
 }
 
 export function deleteLessonFile(dir, id) {

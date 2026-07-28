@@ -73,6 +73,40 @@ function validateWindowHighlights(lesson) {
 }
 
 /**
+ * Validate `slides[].showWindowCounts` / `slides[].windowCounts`. Structural only, for
+ * the same reason as validateWindowHighlights: the loader EXCLUDES an invalid file
+ * entirely, so an over-strict rule silently removes a lesson from the app. Whether the
+ * stored counts are STALE is checked by tests/unit/lessonContent.test.js, which fails
+ * loudly instead.
+ * Returns an error string if invalid, or null if valid.
+ */
+function validateWindowCounts(lesson) {
+  for (let i = 0; i < lesson.slides.length; i++) {
+    const slide = lesson.slides[i];
+    if (slide.showWindowCounts !== undefined && typeof slide.showWindowCounts !== 'boolean') {
+      return `slides[${i}].showWindowCounts must be a boolean`;
+    }
+    const wc = slide.windowCounts;
+    if (wc === undefined) continue;
+    if (!Array.isArray(wc) || wc.length !== 6) {
+      return `slides[${i}].windowCounts must be an array of exactly 6 rows`;
+    }
+    for (let r = 0; r < 6; r++) {
+      if (!Array.isArray(wc[r]) || wc[r].length !== 7) {
+        return `slides[${i}].windowCounts[${r}] must be an array of exactly 7 cells`;
+      }
+      for (let c = 0; c < 7; c++) {
+        const v = wc[r][c];
+        if (v !== null && !(Number.isInteger(v) && v >= 0)) {
+          return `slides[${i}].windowCounts[${r}][${c}] must be null or a non-negative integer`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Validate required top-level fields on a lesson object.
  * Returns an error string if invalid, or null if valid.
  */
@@ -155,6 +189,9 @@ export function validateLesson(lesson) {
 
   const windowErr = validateWindowHighlights(lesson);
   if (windowErr) return windowErr;
+
+  const windowCountsErr = validateWindowCounts(lesson);
+  if (windowCountsErr) return windowCountsErr;
 
   return null;
 }
