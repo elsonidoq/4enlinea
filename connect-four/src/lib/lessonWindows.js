@@ -111,14 +111,18 @@ export const WINDOW_COUNT_MAX = 13;
 const WINDOW_COUNT_PEAK_ALPHA = 0.55;
 
 /**
- * Violet, matching DEFAULT_WINDOW_HIGHLIGHT_COLOR (#8b5cf6): the app's neutral structural
- * colour, chosen so the overlay collides with neither the green/gray discs nor the amber
- * `claim` / red `tr` overlays.
+ * Red, the `--red` design token (#e8392e = rgb(232, 57, 46)).
+ *
+ * NOTE the adjacency: `--threat-red` is rgb(232, 84, 62), used by the `tr` per-cell overlay
+ * to mean DANGER. This tint means the opposite — opportunity — so the two must never appear
+ * on the same cell. They cannot: the tint is suppressed wherever a per-cell `overlays` entry
+ * already colours the cell (see Board.jsx), which covers every `tr` case. Keep that
+ * suppression if you touch the render.
  * @param {number} count
  * @returns {string} a CSS colour; 'transparent' at zero
  */
 export function windowCountTint(count) {
   if (!count || count <= 0) return 'transparent';
   const alpha = Math.min(count, WINDOW_COUNT_MAX) / WINDOW_COUNT_MAX * WINDOW_COUNT_PEAK_ALPHA;
-  return `rgba(139, 92, 246, ${Number(alpha.toFixed(4))})`;
+  return `rgba(232, 57, 46, ${Number(alpha.toFixed(4))})`;
 }

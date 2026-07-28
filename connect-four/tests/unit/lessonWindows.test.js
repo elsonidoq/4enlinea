@@ -110,12 +110,18 @@ test('windowCountTint: scales alpha against the fixed board maximum, not the boa
   // Fixed scale is the point: a mid-game board must read visibly dimmer than the opening,
   // because that decay IS the lesson. A per-board max would renormalise it away.
   assert.equal(WINDOW_COUNT_MAX, Math.max(...computeWindowCounts('', 'red').flat()));
-  assert.equal(windowCountTint(13), 'rgba(139, 92, 246, 0.55)');
+  assert.equal(windowCountTint(13), 'rgba(232, 57, 46, 0.55)');
   assert.equal(windowCountTint(0), 'transparent');
   const mid = windowCountTint(7);
-  assert.match(mid, /^rgba\(139, 92, 246, 0\.2\d+\)$/);
+  assert.match(mid, /^rgba\(232, 57, 46, 0\.2\d+\)$/);
 });
 
 test('windowCountTint: a count above the maximum is clamped, never over-saturated', () => {
-  assert.equal(windowCountTint(99), 'rgba(139, 92, 246, 0.55)');
+  assert.equal(windowCountTint(99), 'rgba(232, 57, 46, 0.55)');
+});
+
+test('windowCountTint: is not the --threat-red used by the `tr` danger overlay', () => {
+  // The tint means opportunity; rgb(232,84,62) means danger. Adjacent reds, opposite
+  // meanings — a copy/paste of the wrong triple would invert the message silently.
+  assert.doesNotMatch(windowCountTint(13), /232, ?84, ?62/);
 });

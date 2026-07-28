@@ -237,7 +237,7 @@ Covered by `tests/unit/windowDraft.test.js` (order/validity helpers) and
 ## Window counts (slides[].showWindowCounts / windowCounts)
 
 Renders, in every EMPTY cell of a concept slide's board, how many four-in-a-row windows
-through that cell still contain no opponent disc — as a violet tint plus the integer.
+through that cell still contain no opponent disc — as a red tint plus the integer.
 
 | key | type | meaning |
 |---|---|---|
