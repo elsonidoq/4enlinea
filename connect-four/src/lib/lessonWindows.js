@@ -97,3 +97,28 @@ export function windowHighlightsToZhCells(windowHighlights) {
       windows: [w.cells],
     }));
 }
+
+/**
+ * The largest number of four-in-a-row windows through any cell on an empty board (the two
+ * middle cells of the centre column). The tint scale is pinned to this FIXED value rather
+ * than to the maximum on the board being drawn: as the opponent kills lines the counts fall
+ * and the board visibly dims, and that decay is the thing the overlay exists to show. A
+ * per-board maximum would re-saturate every board and erase it.
+ */
+export const WINDOW_COUNT_MAX = 13;
+
+/** Peak alpha, at a count of WINDOW_COUNT_MAX. Stays readable behind the digit. */
+const WINDOW_COUNT_PEAK_ALPHA = 0.55;
+
+/**
+ * Violet, matching DEFAULT_WINDOW_HIGHLIGHT_COLOR (#8b5cf6): the app's neutral structural
+ * colour, chosen so the overlay collides with neither the green/gray discs nor the amber
+ * `claim` / red `tr` overlays.
+ * @param {number} count
+ * @returns {string} a CSS colour; 'transparent' at zero
+ */
+export function windowCountTint(count) {
+  if (!count || count <= 0) return 'transparent';
+  const alpha = Math.min(count, WINDOW_COUNT_MAX) / WINDOW_COUNT_MAX * WINDOW_COUNT_PEAK_ALPHA;
+  return `rgba(139, 92, 246, ${Number(alpha.toFixed(4))})`;
+}

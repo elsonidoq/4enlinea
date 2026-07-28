@@ -11,6 +11,8 @@ import {
   windowHighlightsToZhCells,
   isStraightLineWindow,
   WINDOW_HIGHLIGHT_COLOR,
+  WINDOW_COUNT_MAX,
+  windowCountTint,
 } from '../../src/lib/lessonWindows.js';
 
 const ROW0_2_TO_5 = [{ c: 1, r: 0 }, { c: 2, r: 0 }, { c: 3, r: 0 }, { c: 4, r: 0 }];
@@ -101,4 +103,18 @@ test('isStraightLineWindow: accepts a 2- or 3-cell partial line (a highlight nee
   assert.equal(isStraightLineWindow([
     { c: 0, r: 0 }, { c: 1, r: 0 }, { c: 2, r: 0 }, { c: 3, r: 0 }, { c: 4, r: 0 },
   ]), false, '5 cells is not a window');
+});
+
+test('windowCountTint: scales alpha against the fixed board maximum, not the board in hand', () => {
+  // Fixed scale is the point: a mid-game board must read visibly dimmer than the opening,
+  // because that decay IS the lesson. A per-board max would renormalise it away.
+  assert.equal(WINDOW_COUNT_MAX, 13);
+  assert.equal(windowCountTint(13), 'rgba(139, 92, 246, 0.55)');
+  assert.equal(windowCountTint(0), 'transparent');
+  const mid = windowCountTint(7);
+  assert.match(mid, /^rgba\(139, 92, 246, 0\.2\d+\)$/);
+});
+
+test('windowCountTint: a count above the maximum is clamped, never over-saturated', () => {
+  assert.equal(windowCountTint(99), 'rgba(139, 92, 246, 0.55)');
 });

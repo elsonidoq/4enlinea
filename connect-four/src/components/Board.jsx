@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Icon } from './Icon.jsx';
 import { getColumnA11yProps } from './boardA11y.js';
 import { boardPropsAreEqual } from '../lib/board.js';
+import { windowCountTint } from '../lib/lessonWindows.js';
 
 const ROWS = 6;
 const COLS = 7;
@@ -100,6 +101,9 @@ function BoardImpl({
   stepLabels = {},
   // Coach-mention zone highlights — Array<{color: string, cells: Array<{c,r}>}> (0-indexed).
   zhCells = [],
+  // Per-cell live-window counts for lesson overlays — (number|null)[6][7], [row][col],
+  // row 0 = bottom, null where a disc sits. Rendered only on EMPTY cells.
+  windowCounts = null,
 }) {
   const [hoverCol, setHoverCol] = useState(null);
 
@@ -293,6 +297,7 @@ function BoardImpl({
               const value = board[r]?.[col] ?? 'empty';
               const ovType = ovMap[`${col},${r}`];
               const stepLabel = stepLabels[`${r},${col}`];
+              const windowCount = windowCounts?.[r]?.[col] ?? null;
               // Deprecated shim lookup
               const shimEntry = highlightedCells.find(([hr, hc]) => hr === r && hc === col);
               const shimRole = shimEntry?.[2] ?? null;
@@ -368,6 +373,25 @@ function BoardImpl({
                           ovType === 'claim' ? { background: 'var(--claim)',        boxShadow: '0 0 0 2px rgba(245,166,35,.7) inset' } :
                           {}),
                     }} />
+                  )}
+
+                  {/* Live-window count — how many four-in-a-rows the learner can still
+                      finish through this square. Empty cells only. The tint is suppressed
+                      where a per-cell overlay already colours the cell (slide 4 rings the
+                      two cells its coach text compares), so the two never muddy. */}
+                  {windowCount != null && value === 'empty' && (
+                    <span style={{
+                      position: 'absolute', inset: '8%', borderRadius: '50%',
+                      background: ovType ? 'transparent' : windowCountTint(windowCount),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      pointerEvents: 'none', userSelect: 'none',
+                    }}>
+                      <span style={{
+                        fontSize: compact ? 10 : 12,
+                        fontWeight: 800,
+                        color: 'var(--ink)',
+                      }}>{windowCount}</span>
+                    </span>
                   )}
 
                   {/* Deprecated shim: curation-role highlight (CurationWorkspace.jsx only) */}
