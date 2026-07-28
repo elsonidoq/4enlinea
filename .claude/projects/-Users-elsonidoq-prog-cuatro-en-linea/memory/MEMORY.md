@@ -20,6 +20,7 @@
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
 - [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — 200 + a plausible `generated` array ≠ the server saw your file; probe /api/admin/lessons/:id, restart first
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
+- [Lesson unlock is pairwise, not furthest-pointer](project_lesson_progress_unlock_is_pairwise.md) — editing one lesson_progress row doesn't unblock earlier ones; use backfill-lesson-progress.mjs
 
 ## Server, API, DB schema, auth, payments & deploy
 
