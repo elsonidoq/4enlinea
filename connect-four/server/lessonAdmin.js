@@ -34,7 +34,7 @@ export function saveLessonFile(dir, lesson, oldId = null) {
         : rest;
     }),
   };
-  fs.writeFileSync(lessonFilePath(dir, stamped), JSON.stringify(stamped, null, 2), 'utf8');
+  fs.writeFileSync(lessonFilePath(dir, stamped), JSON.stringify(stamped, null, 2) + '\n', 'utf8');
 }
 
 export function deleteLessonFile(dir, id) {

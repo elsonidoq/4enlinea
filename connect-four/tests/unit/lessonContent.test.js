@@ -203,13 +203,25 @@ test('lessonContent: showWindowCounts is a concept-slide field only', () => {
   }
 });
 
-test('lessonContent: the two opening lessons opt every concept slide into windowCounts', () => {
-  // Locks in the shipped scope so a later edit cannot silently drop the overlay.
-  for (const id of ['opening-centre', 'opening-sharp']) {
+test('lessonContent: the two opening lessons opt in the correct set of concept slides into windowCounts', () => {
+  // Locks in the shipped scope (by movestring, not just count) so a later edit cannot
+  // silently swap in the wrong slide and still pass.
+  const EXPECTED_OPTED_MOVESTRINGS = {
+    // opening-centre opts in 3 of its 4 slides; "3333311115555" is NOT opted in.
+    'opening-centre': ['', '333334444', '333'],
+    // opening-sharp opts in all 3 of its 3 slides.
+    'opening-sharp': ['333334444', '3332223362', '3332222'],
+  };
+  for (const [id, expected] of Object.entries(EXPECTED_OPTED_MOVESTRINGS)) {
     const entry = lessons.find(l => l.lesson.id === id);
     assert.ok(entry, `no lesson with id "${id}"`);
-    // opening-centre opts in 3 of its 4 slides; opening-sharp all 3 of its 3.
-    const opted = entry.lesson.slides.filter(s => s.showWindowCounts === true).length;
-    assert.equal(opted, 3, `${id}: expected 3 slides with showWindowCounts`);
+    const opted = entry.lesson.slides
+      .filter(s => s.showWindowCounts === true)
+      .map(s => s.movestring);
+    assert.deepEqual(
+      [...opted].sort(),
+      [...expected].sort(),
+      `${id}: expected showWindowCounts on movestrings ${JSON.stringify(expected)}, got ${JSON.stringify(opted)}`,
+    );
   }
 });

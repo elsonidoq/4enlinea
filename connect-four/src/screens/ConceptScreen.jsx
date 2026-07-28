@@ -126,7 +126,9 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
   // boardPropsAreEqual falls back to Object.is for non-`board` props, so a fresh-but-equal
   // array every render would defeat the memo.
   const windowCounts = useMemo(
-    () => lesson?.slides?.[slideIndex]?.windowCounts ?? null,
+    () => (lesson?.slides?.[slideIndex]?.showWindowCounts === true
+      ? lesson.slides[slideIndex].windowCounts ?? null
+      : null),
     [lesson, slideIndex],
   );
 

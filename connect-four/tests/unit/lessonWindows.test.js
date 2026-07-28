@@ -14,6 +14,7 @@ import {
   WINDOW_COUNT_MAX,
   windowCountTint,
 } from '../../src/lib/lessonWindows.js';
+import { computeWindowCounts } from '../../server/windowCounts.js';
 
 const ROW0_2_TO_5 = [{ c: 1, r: 0 }, { c: 2, r: 0 }, { c: 3, r: 0 }, { c: 4, r: 0 }];
 
@@ -108,7 +109,7 @@ test('isStraightLineWindow: accepts a 2- or 3-cell partial line (a highlight nee
 test('windowCountTint: scales alpha against the fixed board maximum, not the board in hand', () => {
   // Fixed scale is the point: a mid-game board must read visibly dimmer than the opening,
   // because that decay IS the lesson. A per-board max would renormalise it away.
-  assert.equal(WINDOW_COUNT_MAX, 13);
+  assert.equal(WINDOW_COUNT_MAX, Math.max(...computeWindowCounts('', 'red').flat()));
   assert.equal(windowCountTint(13), 'rgba(139, 92, 246, 0.55)');
   assert.equal(windowCountTint(0), 'transparent');
   const mid = windowCountTint(7);
