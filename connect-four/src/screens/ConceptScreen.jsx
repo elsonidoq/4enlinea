@@ -12,7 +12,7 @@ import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
 import { getNarrationQueue } from '../lib/lessonNarration.js';
 import { langHeaders } from '../lib/apiLang.js';
 import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
-import { windowHighlightsToZhCells, WINDOW_HIGHLIGHT_COLOR, DEFAULT_WINDOW_HIGHLIGHT_COLOR } from '../lib/lessonWindows.js';
+import { windowHighlightsToZhCells, WINDOW_HIGHLIGHT_COLOR, DEFAULT_WINDOW_HIGHLIGHT_COLOR, WINDOW_COUNT_MAX, windowCountTint } from '../lib/lessonWindows.js';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -121,6 +121,15 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
     [lesson, slideIndex],
   );
 
+  // Derived per-cell live-window counts (slides[].windowCounts), stamped into the lesson
+  // JSON by saveLessonFile. Memoized for the same reason as zhCells: Board's
+  // boardPropsAreEqual falls back to Object.is for non-`board` props, so a fresh-but-equal
+  // array every render would defeat the memo.
+  const windowCounts = useMemo(
+    () => lesson?.slides?.[slideIndex]?.windowCounts ?? null,
+    [lesson, slideIndex],
+  );
+
   if (loadState === 'loading') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
@@ -150,7 +159,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
   // the content gate requires every legendItems[].type to have a matching per-cell
   // overlay of that type on the same slide, and a window has no such overlay.
   const windowLegendItems = (slide.windowHighlights ?? []).filter(w => w.label);
-  const hasLegend = legendItems.length > 0 || windowLegendItems.length > 0;
+  const hasLegend = legendItems.length > 0 || windowLegendItems.length > 0 || slide.showWindowCounts === true;
   const hasInfoProse = slide.infoProse && slide.infoProse.trim().length > 0;
 
   return (
@@ -175,6 +184,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
           canPlay={false}
           overlays={slide.overlays ?? []}
           zhCells={zhCells}
+          windowCounts={windowCounts}
         />
 
         {hasLegend && (
@@ -212,6 +222,22 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
                 </span>
               </div>
             ))}
+            {slide.showWindowCounts === true && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* Swatch at peak tint, so it reads as the darkest square on the board. */}
+                <span style={{
+                  display: 'inline-block',
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  background: windowCountTint(WINDOW_COUNT_MAX),
+                  flexShrink: 0,
+                }} />
+                <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>
+                  {t('lesson.windowCounts.legend', 'Four-in-a-rows still open to you through each square')}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
