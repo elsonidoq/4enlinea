@@ -341,10 +341,42 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "51a0caae-980d-4863-9cdf-37ecb3aeb59b",
-      "moveString": "4334433135461151",
-      "goalPrompt": "You are Green. One J is already on the board — but its bottom disc sits on the second row, an even row, so its payoff ripens on a row Gray naturally collects: a ghost. One move builds a second J whose bottom disc sits on an odd row. Spot the J pattern and play the move that builds it.",
-      "goalPrompt_es": "Sos Verde. Ya hay una J en el tablero — pero su ficha inferior está en la segunda fila, una fila par, así que su recompensa madura en una fila que naturalmente se queda Gris: un fantasma. Una jugada construye una segunda J cuya ficha inferior está en una fila impar. Encontrá el patrón de la J y jugá la movida que la construye.",
+      "puzzleId": "d5b70e64-9c21-4f8a-a3e6-7148bd2c05f9",
+      "moveString": "3334304400153301214210",
+      "goalPrompt": "You are Green. Three-quarters of a J already sits across the fourth and fifth columns. One move completes it, and the square it lands on is an odd row — the rows Green collects. Spot the J pattern and play the move that builds it.",
+      "goalPrompt_es": "Sos Verde. Tres cuartos de una J ya están repartidos entre la cuarta y la quinta columna. Una jugada la completa, y la casilla donde cae está en una fila impar —las filas que se queda Verde. Encontrá el patrón de la J y jugá la movida que la construye.",
+      "goalPredicateType": "j_shape",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "cells",
+        "cells": [
+          {
+            "row": 2,
+            "role": "pattern_piece",
+            "column": 3
+          },
+          {
+            "row": 3,
+            "role": "pattern_piece",
+            "column": 4
+          },
+          {
+            "row": 4,
+            "role": "pattern_piece",
+            "column": 3
+          }
+        ]
+      },
+      "correctCol": 4,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "9e3c81d7-4a56-4b2f-8c90-6de2f5713a4b",
+      "moveString": "433353554335044022255",
+      "goalPrompt": "You are Gray this time. Your discs on the fifth column's third row and the fourth column's fourth and fifth rows are three-quarters of a J. Spot the J pattern and play the move that completes it.",
+      "goalPrompt_es": "Esta vez sos Gris. Tus fichas en la tercera fila de la quinta columna y en la cuarta y quinta fila de la cuarta columna son tres cuartos de una J. Encontrá el patrón de la J y jugá la movida que la completa.",
       "goalPredicateType": "j_shape",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -366,38 +398,6 @@
             "row": 4,
             "role": "pattern_piece",
             "column": 3
-          }
-        ]
-      },
-      "correctCol": 4,
-      "userPlayer": 1
-    },
-    {
-      "puzzleId": "02f88fdf-f26d-4d38-b1c3-5fc74eaba1e4",
-      "moveString": "43055465500",
-      "goalPrompt": "You are Gray this time. Your discs on the sixth column's first and third rows and the fifth column's second row are three-quarters of a J, hook pointing left. Spot the J pattern and play the move that completes it.",
-      "goalPrompt_es": "Esta vez sos Gris. Tus fichas en la primera y tercera fila de la sexta columna y en la segunda fila de la quinta columna son tres cuartos de una J, con el gancho apuntando a la izquierda. Encontrá el patrón de la J y jugá la movida que la completa.",
-      "goalPredicateType": "j_shape",
-      "goalPredicateParams": {},
-      "cooperativeAiMoves": [],
-      "interactionMode": "single_move",
-      "highlightMetadata": {
-        "type": "cells",
-        "cells": [
-          {
-            "row": 0,
-            "role": "pattern_piece",
-            "column": 5
-          },
-          {
-            "row": 2,
-            "role": "pattern_piece",
-            "column": 5
-          },
-          {
-            "row": 1,
-            "role": "pattern_piece",
-            "column": 4
           }
         ]
       },

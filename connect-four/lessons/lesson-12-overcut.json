@@ -285,10 +285,10 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "45c8f60d-14d6-4bc7-bff7-b63c4dd5e6ce",
-      "moveString": "322233353155505310161125",
-      "goalPrompt": "Gray's lone completing cell in one column is boxed in by yours — one of your cells directly below it, another directly above. Your lower cell neutralizes Gray's threat, so the column wins for you. Enter it.",
-      "goalPrompt_es": "La única casilla que completa Gris en una columna está encerrada por las tuyas — una de tus casillas justo debajo, otra justo arriba. Tu casilla de abajo neutraliza la amenaza de Gris, así que la columna es ganadora para vos. Entrá ahí.",
+      "puzzleId": "7c4f2ab9-15e0-4d63-8a71-b9e5c0d3f682",
+      "moveString": "333236002233151546",
+      "goalPrompt": "Gray's only completing cell in the fifth column is the very next square in it — and two rows higher, that same column holds a square where you complete four. Enter the column: your disc takes Gray's square away, and what is left ripens for you.",
+      "goalPrompt_es": "La única casilla que completa Gris en la quinta columna es justo la siguiente casilla de esa columna —y dos filas más arriba, esa misma columna tiene una casilla donde completás cuatro. Entrá en la columna: tu ficha le saca esa casilla a Gris, y lo que queda madura para vos.",
       "goalPredicateType": "overcut",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
@@ -297,7 +297,7 @@
         "type": "cells",
         "cells": [
           {
-            "row": 2,
+            "row": 1,
             "role": "neutralised_threat",
             "column": 4
           },

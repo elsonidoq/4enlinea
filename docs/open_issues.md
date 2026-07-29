@@ -1067,6 +1067,23 @@ Two related acceptance-semantics gaps:
 **Why deferred**: the fix is a correctness-model choice (tie-aware acceptance vs per-board vetting of alternatives), overlapping OI-1's pattern-vs-score question; not a one-line patch.
 **If picked up**: either make acceptance tie-aware (accept any column whose solver score ties the stored answer, optionally gated on pattern membership) or vet each shipped challenge board so the stored answer is the unique max; and add a solver-verdict floor to `evalUndercut`.
 
+**UPDATE 2026-07-28 — item 2 RESOLVED, item 1 still open.**
+
+Item 2 was fixed by the "vet each board" route, made systematic rather than per-board:
+`server/answerSetInvariant.js` now defines `optimalCols ⊆ acceptedCols ∧ acceptedCols ∩ optimalCols ≠ ∅`,
+enforced at three points — `candidate-generator.js#checkPredicate` (generation), the new
+`tests/lessons/lessonAnswerSets.test.js` (blocking, in `test` and `test:fast`), and
+`server/scripts/audit_answer_ambiguity.mjs` (on-demand, incl. DB rows). Eight ambiguous lesson
+boards were replaced; lessons now audit 39/39 and the local DB 295/295. The concrete examples cited
+above no longer exist in the shipped content.
+
+Item 1 (`evalUndercut` has no solver-verdict floor) **remains**: the invariant deliberately exempts
+**lost positions**, and `detectUndercut` only fires when `scores[C] < 0`, so undercut boards are
+routinely losing — exactly where the exemption applies. A losing non-killing column can therefore
+still grade "correct" in an undercut drill. Cross-ref OI-74, which shows the undercut lesson and the
+undercut puzzle category model opposite sides of the pattern; item 1 is probably not fixable in
+isolation from that decision.
+
 ## OI-62 — KB touch-ups from the lesson remediation: `3334434` now solver-verified; figure-7 `gravity_top>=2` filter note
 
 **Status**: deferred / open (small doc edits, 2026-07-24)
@@ -1090,6 +1107,8 @@ Four residues in the remediation tooling:
 2. `_overlayIntent` is per-slide; a slide mixing annotation and threat overlays can't declare intent per overlay.
 3. `lessonContent.test.js` scans lesson JSON copy but not i18n lesson titles (`lesson.<id>.title`), so a 0-indexed or off-voice title would pass.
 4. The strict tests' REMEDIATED gate is now vestigial and inverted-risk: every lesson is remediated, so the gate exempts nothing today but would silently exempt any *future* lesson added to the list.
+5. (added 2026-07-28) `find_lesson_boards.mjs` has **no `--help`**, violating the house convention that every script prints purpose + options + defaults and exits 0 *before* required-arg validation. `node server/scripts/find_lesson_boards.mjs --help` currently errors with `Unknown spec "--help"`, so the only way to learn the spec names is to trigger that error or read the source.
+6. (added 2026-07-28) The spec matchers in `find_lesson_boards.mjs` are **independent re-implementations** of the concepts in `classifier.js`, and they diverge: of 50 `undercut_t2_adjacent` candidates only 13 are recognised by `detectUndercut`. Partly legitimate (they model opposite sides — see OI-74), but nothing in either file says so, and the finder never checks that the pattern column is a *good* move, **[undercut resolved 2026-07-28 — `undercut_t2_adjacent` now validates against the production `detectUndercutBeneficiary` and requires the column to be the solver max; the other specs are unchanged and this item still stands for them]** so it happily returns boards where the detected pattern isn't even solver-optimal (measured: the z-threat column was among the optimal set in only 25 of 50 `z_threat_socratic` candidates).
 
 **Why deferred**: none blocks the shipped content; all are robustness/regression-surface improvements.
 **If picked up**: wrap solver calls per-check and emit FAIL rows; support per-overlay intent; extend the static scan to i18n titles; flip the REMEDIATED mechanism to an empty exemption set (strict by default, exemptions opt-in).
@@ -1254,3 +1273,201 @@ caught at authoring time.
 Then run `--fix`, triage the remainder, and only then consider adding `lint` to the test scripts.
 Until that happens, run `npx eslint <files-you-touched>` and compare against the same files on
 `main` rather than trusting a clean/dirty verdict.
+
+## OI-71 — Removing the `windowCounts` empty-cell guard hangs `test:dom` instead of failing it
+
+**Status**: open — low priority, cosmetic to the test experience (observed 2026-07-28)
+**Area**: `connect-four/src/components/Board.jsx` (windowCounts render block), `connect-four/tests/dom/BoardWindowCounts.dom.test.jsx`
+
+While mutation-proving the fix for the untested `value === 'empty'` guard, deleting that half of the
+condition did **not** produce a clean assertion failure. `npm run test:dom` instead hung and was
+killed after ~32s (0% CPU, stable low RSS across three separate runs — a genuine block, not a busy
+loop). The unmutated suite passes in under a second.
+
+This does not weaken the test — the mutant never goes green, which is what the guard needs — but a
+hang is a poor failure mode: a future regression here will read as flaky infrastructure rather than
+as a broken guard. Root cause was not investigated. Suspicion (unverified) is that rendering a digit
+into every occupied cell interacts badly with jsdom or the testing-library query used, rather than
+anything in `Board` itself.
+
+**If picked up**: reproduce by deleting `&& value === 'empty'` from the windowCounts block in
+`Board.jsx`, then bisect the assertion in `BoardWindowCounts.dom.test.jsx` that stops returning.
+
+## OI-72 — Lesson editor re-submits a stale `windowCounts` array on every save
+
+**Status**: open — harmless, noise only (observed 2026-07-28)
+**Area**: `connect-four/src/lib/lessonPayload.js`, `connect-four/src/components/admin/SlideEditor.jsx`
+
+`lessonToJsonPayload` spreads `...slide`, so the 42-number `windowCounts` array the editor loaded is
+PUT back to the server on every save. `saveLessonFile` immediately recomputes and overwrites it, so
+the stored value is always correct — this costs only payload size and a moment's confusion for anyone
+reading the request body and assuming the client authored those numbers.
+
+Deliberately not "fixed" by stripping the field client-side: the spread is what makes every unknown
+authored field (including `_es` siblings the editor does not surface) survive a round trip, and
+special-casing one field there is a worse trade than the noise. If it is ever addressed, do it by
+having the editor drop *all* server-derived fields via a single declared list, not an ad-hoc delete.
+
+Related: the editor's board preview does not render the counts until after a save, for the same
+reason `boardSpec` is re-derived server-side. Documented as intended behaviour in
+`docs/architecture/lesson-editor.md` §"Window counts" → "Authoring one in the editor"; listed here
+only so a future reader knows it was a decision, not an oversight.
+
+## OI-73 — `lesson.windowCounts` shares the i18n namespace with per-lesson-id keys
+
+**Status**: open — latent, currently harmless (observed 2026-07-28)
+**Area**: `connect-four/src/i18n/en.json`, `es.json`
+
+Lesson-scoped UI copy lives under `lesson.<something>`, where `<something>` is normally a **lesson
+id** (`lesson.opening-centre.title`, `lesson.j-shape.title`, …). Two shared sub-trees already break
+that pattern — `lesson.node.*` and `lesson.confirmation.*` — and this session added a third,
+`lesson.windowCounts.legend`.
+
+The collision only becomes real if a lesson is ever given the id `windowCounts` (or `node`, or
+`confirmation`), which would silently shadow the shared key. Nothing enforces the separation.
+
+**If picked up**: move the shared sub-trees under an explicit namespace (`lessonUi.*`) so lesson ids
+own `lesson.*` outright, or add an assertion to `tests/unit/i18nKeyParity.test.js` that no lesson id
+collides with a reserved sub-key. The latter is a two-line guard and probably the right size.
+
+---
+
+## OI-74 — `detectUndercut`'s `perspective` parameter is unsound; the undercut lesson and the undercut puzzle category teach opposite sides
+
+**Status**: ✅ RESOLVED 2026-07-28
+**Area**: `connect-four/server/classifier.js`, `server/scripts/find_lesson_boards.mjs`,
+`docs/architecture/server-conventions.md` § "Undercut has two sides"
+
+**Was**: `detectUndercut(board, scores, perspective)` read `perspective`'s threats while the
+`scores[col] < 0` gate kept reading the **mover's** score, so the same column matched twice with
+opposite owners. Repro `33211553350634544` (Gray to move, `scores[2] = -12`) returned
+killing/dead at rows (2,3) for `perspective=2` and at (3,4) for `perspective=1`; the second is
+incoherent. Separately, `lesson-11-undercut` teaches the *beneficiary* side while the detector and
+the `undercut` puzzle category model the *victim*, so a correct lesson board could not be validated
+against anything.
+
+**Resolution** — all three sub-decisions taken:
+
+- **(a)** The `perspective` parameter is **gone**. It was not merely unused (`classifyPattern`
+  *did* pass it, and `classifyAiMove` / `explainContext` reach it with `perspective !==
+  board.currentPlayer` in production) — it was meaningless: which player is victim and which is
+  beneficiary is fixed by who is to move, because c4solver scores are always the mover's.
+  `classifyPattern`'s `undercut` tag is now perspective-independent and both perspectives agree.
+- **(b)** The two sides are named: `detectUndercutVictim` (mover is the victim, `scores[C] < 0`)
+  and `detectUndercutBeneficiary` (mover owns the killer, `scores[C] > 0`), over a shared core.
+  `find_lesson_boards.mjs`'s `undercut_t2_adjacent` now validates against the beneficiary detector
+  (plus adjacency, latency, and a solver-max gate), so lesson-11 boards are machine-checkable.
+- **(c)** Product call (owner, 2026-07-28): **keep both sides.** The `undercut` puzzle category
+  stays the victim-side defensive drill; lesson 11 stays the beneficiary-side offensive lesson.
+  The split is documented in `server-conventions.md` so it stops reading as a defect.
+
+Found and fixed along the way: the killer search used `find(rp => rp < R)`, inspecting only the
+**lowest** lower threat. An adjacent T2 killer sitting above a same-parity T4 pair was therefore
+missed — which is exactly lesson 11's shape. It now scans every lower threat.
+
+**Verified**: `test:fast` 1483/1483; `verify_lesson_content.mjs` all PASS; lesson audit 39/39 OK;
+`--puzzles undercut --env local` 28 rows, 0 failures. All 28 active `undercut` rows re-derive
+byte-identical `highlight_metadata` under the new detector, so **the pool needed no repair**.
+
+## OI-76 — `detectOvercut` has the same unsound `perspective` that OI-74 removed from undercut
+
+**Status**: open — latent (observed 2026-07-28)
+**Area**: `connect-four/server/classifier.js#detectOvercut`
+
+```js
+export function detectOvercut(board, scores, perspective = board.currentPlayer) {
+  const threats = board.reachableThreats(perspective);
+  ...
+  if (!scores || scores[col] <= 0) continue; // overcut requires playing C to be winning
+```
+
+`threats` follow `perspective`; `scores` are **always** the side to move's. Passing the opponent
+mixes one player's threats with the other player's score sign. This is literally the OI-74 defect;
+only undercut was in scope for that fix.
+
+Blast radius is larger than undercut's was, which is why it was not swept in: `overcut` is in
+`MISSED_OWN_PRIORITY` (`tagBlunder` Phase C), which evaluates it on `moves + correctCol` where the
+blunderer is **not** the mover — i.e. always the unsound branch. Fixing it changes blunder tags,
+which are stored and user-visible.
+
+**Not affected — do not "fix" these**: `detectFigure7` and `detectJShape` also take three arguments,
+but their second parameter is `_scores` and is genuinely unused ("kept for caller signature
+compatibility"). They are pure kernel convolutions over `perspective`'s own discs
+(`convolve(board, perspective, kernel)`), with no score gate to mix, and are sound for any
+perspective. They were wrongly named in the first draft of this entry, by argument shape rather than
+by what the body reads.
+
+**If picked up**: apply the OI-74 shape — decide whether the role is fixed by who is to move (then
+drop `perspective`, as undercut did) or whether the non-mover case genuinely needs a child-position
+solver query (then follow `detectForbiddenColumns`'s FR-033 recursion). Do not just flip the gate's
+sign without deciding which. Re-run `tests/blunder/tagBlunderFixtures.test.js` and expect real diffs
+there — read each changed fixture before preserving it.
+
+## OI-77 — `infoProse` paragraph breaks (`\n\n`) do not render; multi-paragraph lesson prose reads as one wall of text
+
+**Surfaced**: 2026-07-28, while shortening `lesson-03-threat-vocabulary`.
+
+`ConceptScreen` renders the field as a bare text node:
+
+```jsx
+          }}>
+            {slide.infoProse}
+          </div>
+```
+
+The wrapping `<div>` carries inline styles only (`padding`, `background`, `borderRadius`, `fontSize`,
+`lineHeight`, `color`) — no `white-space: pre-wrap`, and no split-on-`\n\n` into `<p>` elements. HTML
+collapses the newlines, so every authored paragraph break disappears and the block renders as a single
+run-on paragraph.
+
+Most lessons author `infoProse` as 2–4 paragraphs separated by `\n\n`, so this affects the whole
+curriculum, not one lesson. It is invisible to the test suite (`lessonContent.test.js` only inspects
+the string) and invisible in the **admin editor**, where the field is a `<textarea>` that shows the
+newlines faithfully — so authoring and learner surfaces disagree, the same class of trap as the
+`socratic.overlays` row in `lesson-editor.md` §"Fields the learner UI ignores".
+
+**Workaround in force**: `lesson-03` was rewritten to one short paragraph per slide, which sidesteps
+the bug rather than fixing it. Other lessons still carry multi-paragraph prose.
+
+**If picked up**: either add `whiteSpace: 'pre-wrap'` to that div (one line, preserves authored
+breaks, cheapest), or split on `/\n\n+/` and map to `<p>` with real paragraph spacing (better
+typography, since `pre-wrap` also preserves incidental single newlines). Prefer the second if any
+lesson relies on soft-wrapping inside a paragraph. Whichever is chosen, re-read the changed lessons
+in the browser afterwards — restoring the breaks will lengthen every prose block on screen and may
+push the Continue button below the fold on mobile, which is what the `height`/`minHeight:0` scroller
+comment in `ConceptScreen` was added to prevent.
+
+---
+
+## OI-75 — `odd_even_threat` is in neither acceptance set, so its stored `correctCol` is never consulted
+
+**Status**: open — latent, currently masked (observed 2026-07-28)
+**Area**: `connect-four/server/categories.js`, `src/lib/categories.js`, `src/screens/ChallengeScreen.jsx`, `connect-four/lessons/lesson-07-odd-rows-belong-to-red.json`
+
+`categories.js` deliberately keeps `odd_even_threat` out of both `MULTI_SOLUTION_CATEGORIES` and
+`SINGLE_ANSWER_CATEGORIES` (the comment there is explicit that membership must not be derived by
+negation). The consequence is not: `ChallengeScreen.jsx` computes
+
+```js
+const usesAcceptedGate = isMultiSolutionCategory || SINGLE_ANSWER_CATEGORIES.has(effectiveCategory);
+const isCorrect = usesAcceptedGate ? data.accepted === true : data.quality === 'optimal';
+```
+
+so an `odd_even_threat` drill is graded purely on **solver score**, and the authored `correctCol`
+(and `evalOddEvenThreat`) is never consulted at grading time. The drill does not actually test the
+taught concept — any solver-optimal column passes.
+
+Masked today because lesson 07's two challenges happen to have their taught column *be* the unique
+solver optimum (verified 2026-07-28, boards `3553515566110063` cc 3 and `3411022114433433` cc 2), so
+the two agree by luck. The day an author picks a concept-correct column that is not solver-max, the
+lesson will mark its own taught answer wrong.
+
+**Why deferred**: fixing it means deciding whether `odd_even_threat` is a single-answer category
+(add it to the set and let `evalOddEvenThreat` grade) or a genuinely score-graded one (then the
+stored `correctCol` should be dropped, not silently ignored). That is the same modelling question as
+OI-1 / OI-61.
+
+**If picked up**: pick one of the two models; if single-answer, add the slug to
+`SINGLE_ANSWER_CATEGORIES` in **both** `server/categories.js` and the hand-mirrored
+`src/lib/categories.js`, and confirm the lesson-07 boards still pass
+`tests/lessons/lessonAnswerSets.test.js`.

@@ -10,7 +10,8 @@
         {
           "text": "Gray has one strong threat. Green blocks it. What did Gray accomplish?",
           "text_es": "Gris tiene una amenaza fuerte. Verde la bloquea. ¿Qué logró Gris?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/8fcd42a2b64c8119.mp3"
         }
       ],
       "boardSpec": [
@@ -65,7 +66,8 @@
         {
           "text": "One move, two threats. Gray must answer — but one reply can only cover one of them.",
           "text_es": "Un movimiento, dos amenazas. Gris debe responder — pero una sola respuesta solo puede cubrir una de ellas.",
-          "mood": "happy"
+          "mood": "happy",
+          "audio": "/audio/lessons/9d5c05a34be61e77.mp3"
         }
       ],
       "boardSpec": [
@@ -93,10 +95,22 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 0, "r": 0 },
-            { "c": 1, "r": 0 },
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 0 }
+            {
+              "c": 0,
+              "r": 0
+            },
+            {
+              "c": 1,
+              "r": 0
+            },
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 0
+            }
           ],
           "label": "Green's bottom-row line",
           "label_es": "La línea de Verde en la fila de abajo"
@@ -104,10 +118,22 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 1, "r": 0 },
-            { "c": 2, "r": 1 },
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 3 }
+            {
+              "c": 1,
+              "r": 0
+            },
+            {
+              "c": 2,
+              "r": 1
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 3
+            }
           ],
           "label": "Green's diagonal line",
           "label_es": "La línea diagonal de Verde"
@@ -129,7 +155,8 @@
         {
           "text": "Forks don't have to point left and right. Two threats can stack in the same column — and blocking the bottom one hands Green the top.",
           "text_es": "Las dobles amenazas no siempre apuntan a izquierda y derecha. Dos amenazas pueden apilarse en la misma columna — y bloquear la de abajo le entrega a Verde la de arriba.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/9a34b3a03ff841a0.mp3"
         }
       ],
       "boardSpec": [
@@ -179,7 +206,8 @@
         {
           "text": "This looks like a fork — but are both threat cells actually reachable right now? Check the column heights before celebrating.",
           "text_es": "Esto parece una doble amenaza — pero ¿las dos casillas de amenaza son realmente jugables ahora mismo? Fijate en la altura de las columnas antes de festejar.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/1405896bb1ffc5c9.mp3"
         }
       ],
       "boardSpec": [
@@ -207,10 +235,22 @@
         {
           "type": "win",
           "cells": [
-            { "c": 0, "r": 0 },
-            { "c": 1, "r": 0 },
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 0 }
+            {
+              "c": 0,
+              "r": 0
+            },
+            {
+              "c": 1,
+              "r": 0
+            },
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 0
+            }
           ],
           "label": "The line Green can finish right now",
           "label_es": "La línea que Verde puede completar ahora mismo"
@@ -218,10 +258,22 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 3, "r": 3 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 1 },
-            { "c": 6, "r": 0 }
+            {
+              "c": 3,
+              "r": 3
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 1
+            },
+            {
+              "c": 6,
+              "r": 0
+            }
           ],
           "label": "The line Green cannot reach yet",
           "label_es": "La línea que Verde todavía no puede alcanzar"
@@ -264,35 +316,40 @@
         {
           "text": "You're playing Green, and it's your move. One square turns the bottom row into two threats at once — can you find the fork?",
           "text_es": "Estás jugando con Verde, y es tu turno. Una casilla convierte la fila de abajo en dos amenazas a la vez — ¿podés encontrar la doble amenaza?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/9c70888a17d1b796.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! You saw it.",
           "mood": "happy",
-          "text_es": "¡Exacto! Lo viste."
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3"
         }
       ],
       "hint": [
         {
           "text": "Two green discs already sit side by side on the bottom row, and the squares at both ends of that row are still empty. Which move stretches that pair into a three with a winning square at each end?",
           "text_es": "Ya hay dos fichas verdes una al lado de la otra en la fila de abajo, y las casillas de los dos extremos de esa fila siguen vacías. ¿Qué movimiento estira ese par a un tres con una casilla ganadora en cada extremo?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/7427dbf1cd5654e0.mp3"
         }
       ]
     }

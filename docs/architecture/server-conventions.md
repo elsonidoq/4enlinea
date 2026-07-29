@@ -156,7 +156,9 @@ The set contains exactly 16 tags (as of 2026-06-25): `immediate_threat`, `forced
 - `classifier.js` → **labeling only**: determines which tactical pattern a position exhibits. Output: a category slug and evidence tags. Used for puzzle curation, candidate generation, and coach explanations.
 - `predicates.js` → **correctness scoring only**: determines whether the learner's move satisfies the puzzle goal. Output: `'correct' | 'wrong' | 'tied'`. A classifier tag does NOT imply predicate correctness, and a correct move does not require a matching classifier tag.
 
-A puzzle's `category` field is set by the classifier at generation time. The predicate evaluator reads `category` to dispatch to the right evaluator, but the classifier is never called during puzzle-check requests.
+A puzzle's `category` field is set by the classifier at generation time. The predicate evaluator reads `category` to dispatch to the right evaluator.
+
+**Separation of responsibility, NOT a ban on reuse.** `predicates.js` may — and for concept-defined categories **must** — call a `classifier.js` detector to decide *what counts as* the taught pattern. What it must never do is re-derive the pattern with its own private logic. `evalForcedWin` has always called `detectForcedWin`/`detectDoubleThreat`; `evalDoubleThreat` now calls `detectDoubleThreat` too. See "Answer sets are derived, never re-implemented" below for why.
 
 **New endpoint modes gate on an explicit request flag, never absence-of-field.** When adding a new mode to an existing endpoint, branch on an explicit boolean (e.g. `aiMove: true`), not on some other field being missing — sibling callers may also omit that field. This is why `evaluate-move` dispatches on `aiMove`, not on a missing `category`.
 
@@ -169,6 +171,88 @@ New category evaluators MUST be added as a named function `eval<CategoryCamelCas
 
 Categories that store their answer in `highlightMetadata` (z_threat, undercut, overcut) read `puzzle.highlightMetadata`.
 Categories that store their answer as a scalar (claimeven, figure_7, j_shape) read `puzzle.correctCol`.
+
+### Answer sets are derived, never re-implemented (2026-07-28)
+
+An evaluator's job is to produce the **set** of columns that satisfy the concept, then map that
+set to `correct` (sole member) / `tied` (one of several) / `wrong`. Two rules:
+
+1. **Derive the set from the canonical detector.** For a concept `classifier.js` already defines,
+   the evaluator loops over legal columns and asks the detector. It must not re-derive the rule.
+   `evalDoubleThreat` used to, with a private helper that only looked at cells at the current
+   column height — so it saw only `detectDoubleThreat`'s **Case A** (gravity-top threats in ≥2
+   distinct columns) and graded every **Case B** fork (two threats stacked on consecutive rows of
+   one column) as wrong. That shipped as a live bug in lesson 6.
+2. **No fallback.** An evaluator must never answer "no column satisfies the concept" by grading
+   something else instead. `evalDoubleThreat` used to fall back to "highest positive solver
+   score", which turned a fork drill into a best-move drill — and because
+   `candidate-generator.js` grades through the same function, it admitted fork-less boards into
+   the pool: **98 of 100** `double_threat` puzzles contained no fork on any column. An empty set
+   means the board is not a puzzle for that category; return `wrong` and let
+   `checkPredicate` report `passes: false`.
+
+**The board-quality invariant that makes single-answer categories sound.** For the six
+`SINGLE_ANSWER_CATEGORIES` the detectors are *instance* detectors — they return their first match
+and a single column, so there is no cheap way to enumerate a set. Those evaluators legitimately
+compare against the stored scalar, but only because the board is required to satisfy:
+
+```
+optimalCols ⊆ acceptedCols        every winning move is accepted
+acceptedCols ∩ optimalCols ≠ ∅    the taught move actually wins
+```
+
+A board that violates either is a **content defect** — replace the board, never loosen the grader.
+
+**The rule lives in exactly one place: `server/answerSetInvariant.js`.** Import
+`classifyAnswerSet` / `answerSetHolds`; never restate the comparison. It was briefly written out
+twice and the copies drifted within the hour — one grew a lost-position exemption and the other
+did not, which retired 7 perfectly good `undercut` puzzles. Three consumers share it:
+
+| consumer | role |
+|---|---|
+| `candidate-generator.js#checkPredicate` | generation guard — a candidate violating the invariant never enters the pool (`forbidden_columns` exempt: its `correctCols` are the columns to AVOID, so the subset relation is inverted) |
+| `server/scripts/audit_answer_ambiguity.mjs` | audits lessons + DB rows; `--source` finds replacement boards; `--repair --yes` retires failing rows (`is_active = false`, because `puzzle_attempts.puzzle_id` is an FK with no cascade) and inserts verified replacements |
+| `tests/lessons/lessonAnswerSets.test.js` | blocking gate over lesson JSON, in **both** `test` and `test:fast` |
+
+Two verdicts are **not** defects and must stay non-failing:
+
+- **`LOST-POSITION`** — every legal move loses, so `optimal` only means "loses slowest". `undercut`
+  lives here *by definition*: `detectUndercutVictim` only fires when `scores[C] < 0`.
+- **`NO-SCORES`** — `immediate_threat` and `forced_block` are board-derived and are legitimately
+  checked with `scores = []`; with no scores there is nothing to judge.
+
+### Undercut has two sides
+
+An undercut is **one** situation with **two** roles: the **victim** owns the upper threat that dies,
+the **beneficiary** owns the lower threat that kills it. Which role a player holds is fixed by the
+position — specifically by **who is to move** — never by a caller-supplied argument. c4solver
+`scores` are always the mover's, so a score gate is only meaningful for the mover; that is why both
+detectors anchor there and why neither takes a `perspective` parameter (OI-74).
+
+| detector | side to move is… | score gate | used by |
+|---|---|---|---|
+| `classifier.js#detectUndercutVictim` | the victim (their threat dies) | `scores[C] < 0` — entering C loses | the `undercut` puzzle category (`checkUndercutPredicate` → `evalUndercut`, avoid-the-column) and the `undercut` `classifyPattern` tag |
+| `classifier.js#detectUndercutBeneficiary` | the beneficiary (they own the killer) | `scores[C] > 0` — pressing C wins | `scripts/find_lesson_boards.mjs` spec `undercut_t2_adjacent`, which curates boards for `lesson-11-undercut` |
+
+Consequences worth stating outright, because each has been mistaken for a defect:
+
+- **A correct lesson-11 board can never match `detectUndercutVictim`**, and a valid `undercut`
+  puzzle can never match `detectUndercutBeneficiary`. The gates are mutually exclusive by
+  construction. Validate a board against the side its content teaches.
+- **The learner meets both sides on purpose.** The puzzle category is the defensive drill ("never
+  enter that column"); lesson 11 teaches the offensive side ("press the column below their threat").
+  This split is deliberate — do not "align" one to the other.
+- **`classifyPattern`'s `undercut` tag is perspective-independent** — both perspectives get the same
+  cells. Read for the side to move it means "the column you must not enter"; read for the player who
+  just moved it means "the undercut you just landed", which is exactly how `POSITIVE_TEMPLATES` and
+  `tagBlunder`'s Phase D consume it.
+- **The killer search scans every lower threat in the column**, not just the lowest. The upper threat
+  is dead as soon as *any* lower threat neutralises it under Allen T2/T4/T5, and an adjacent T2
+  killer routinely sits above a same-parity T4 pair.
+
+`detectOvercut` still takes a `perspective` while gating on the mover's score — the same
+unsoundness, not yet fixed. See OI-76. (`detectFigure7` / `detectJShape` are *not* affected: their
+second parameter is `_scores` and is unused.)
 
 ### Generation-time candidate guards — color casting & stray forced-block (spec 044 US1/US2)
 
@@ -334,7 +418,7 @@ When `perspective !== board.currentPlayer && solver !== null`, each detector rec
 
 This IIFE (`(async () => { ... })()`) returns a Promise, so these five detectors become async when the perspective changes. The IIFE shields against terminal child positions (where the solver rejects) by returning `{ matched: false }` — a terminal game cannot exhibit tactical patterns.
 
-Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectUndercut`, `detectOvercut`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
+Detectors that do NOT depend on solver scores (`detectImmediateThreat`, `detectDoubleThreat`, `detectFigure7`, `detectJShape`, `detectClaimodd`) never enter the IIFE — they only use board geometry, which is perspective-independent for threat analysis. `detectFigure7` and `detectJShape` take a second argument but it is `_scores`, unused; do not mistake their three-argument shape for a score dependency. `detectUndercutVictim` and `detectOvercut` genuinely read `scores` while sitting in the sync branch: `detectUndercutVictim` resolves this by taking no perspective at all (see § "Undercut has two sides"), `detectOvercut` is still unsound — OI-76. `detectClaimeven` uses the solver independently via its simulation, not via the FR-033 IIFE.
 
 ### `detectClaimeven` — parity rule and simulation
 
@@ -1097,6 +1181,13 @@ const jobMap = new Map();
 **Directory**: `connect-four/lessons/`. Ships empty in Epic 4; content added in Epic 5.
 
 **The cache is boot-once and nothing watches the directory.** `reloadLessons()` is called only from inside the admin create/update/delete/generate-audio handlers. Any out-of-band edit to `lessons/*.json` while a server is running (migration script, hand edit, branch switch) leaves the cache stale — and because those handlers read the cache and then `saveLessonFile` it back, **the next admin write silently overwrites your disk edits with the pre-edit object**. Restart the server after editing lesson files on disk, before touching any admin lesson endpoint.
+
+**`saveLessonFile` is the single write seam, and it STAMPS derived fields.** Every admin write path — `POST /api/admin/lessons`, `PUT /api/admin/lessons/:id`, `generate-audio` — and the maintenance script `scripts/backfill-window-counts.mjs` all funnel through `saveLessonFile(dir, lesson, oldId)` in `server/lessonAdmin.js`. It is therefore the correct home for anything that must be **derived, never authored**: put the recompute here and no caller can forget it.
+
+It currently stamps `slides[].windowCounts` (recomputed from each slide's `movestring` for every slide with `showWindowCounts === true`, stripped from all others — see `lesson-editor.md` §"Window counts") and appends a trailing newline. Two consequences worth knowing:
+
+- **A round-trip is idempotent and refreshes the cache.** `PUT`ting a lesson file's own current content returns 200, runs `reloadLessons()`, and leaves the file byte-identical — a clean way to pick up disk edits without restarting the server. This only holds if the file is already in canonical form; a file with stale or absent derived fields *will* change.
+- **A no-arg maintenance script that re-saves every lesson rewrites every lesson file.** Adding a stamped field or a formatting change to `saveLessonFile` therefore shows up as a diff across the whole `lessons/` directory the next time such a script runs, not just on the files you meant to touch.
 
 **Raw vs. localized reads — do not conflate.** `getLessonsAll()` returns the **raw** cached objects, `_es` fields intact. `getLesson(id, locale)` applies `localizeLesson`, which **strips every `_es` key**. Admin write paths (`GET/POST /api/admin/lessons/:id`, `generate-audio`) must use `getLessonsAll()`: `getLesson()` would both starve `generateLessonAudio(lang:'es')` of `text_es` and destroy every translation on save.
 

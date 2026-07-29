@@ -9,19 +9,23 @@
 - [Coach creation transition gate](project_coach_creation_transition_gate.md) — classify() DT/forced_win fire only absent→present; loose vs strict DT predicates — don't dedupe
 - [Verified tactical movestrings](reference_verified_tactical_movestrings.md) — KB is source-of-truth (V1/V5 were WRONG, V2/V4 1-indexed); open-three ≠ double_threat
 - [missed_own capitalize principle](project_missed_own_capitalize_principle.md) — DT/figure_7/immediate_threat survive wrong moves; only undercut kills a fork
+- [classifyPattern perspective trap](project_classify_pattern_perspective_trap.md) — perspective ≠ side-to-move is the COMMON prod path; `_scores` = reads nothing; detectOvercut still unsound (OI-76)
 - [generate_candidates "fetch failed"](project_generate_candidates_fetch_failed_flake.md) — many categories 0 = env flake (Docker/solver load), not broken; re-run standalone
 
 ## Puzzle categories, challenge & lessons
 
 - [New-category wiring](project_new_category_wiring_checklist.md) — before adding a category read server-conventions §Category Registry; missing candidate-generator.js = SILENT failure
 - [Opening theory scoping](project_opening_theory_scoping.md) — NO opening challenge category (won boards have losing side to move); openings → Lessons
-- [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline confirmationChallenges 404 (need a DB row)
+- [Lesson interactivity](project_lesson_interactivity_evaluation.md) — Socratic = client-side col===correctCol; inline challenges DO work (/api/evaluate-move, no DB row)
+- [Lesson board sourcing traps](project_lesson_answer_set_invariant.md) — undercut boards are valid for ONE side only; lesson-11 MUST fail detectUndercutVictim; JSONB key-order false drift
 - [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — goalPrompt/socratic.overlays/userPerspective are dead; socratic color = movestring parity
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
 - [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ the server saw your file; admin-API saves need no restart
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
+- [New lesson slide field wiring](project_lesson_slide_field_wiring.md) — 6 wiring points; the SlideEditor control is forgotten EVERY time (OI-67, then showWindowCounts)
 - [Lesson unlock is pairwise, not furthest-pointer](project_lesson_progress_unlock_is_pairwise.md) — editing one lesson_progress row doesn't unblock earlier ones; use backfill-lesson-progress.mjs
 - [windowHighlights capsule traps](project_lesson_window_highlights_traps.md) — cells must be ORDERED (drawn first→last, unchecked); opaque colours only; never via legendItems
+- [Lesson text clips silently](project_lesson_text_overflow_traps.md) — 120px coach cap on EVERY screen (not just `fixed`); splitting a message makes it WORSE; ES binds; infoProse \n\n collapses
 
 ## Server, API, DB schema, auth, payments & deploy
 
@@ -70,6 +74,7 @@
 ## Simulation, scripts, sampling & epics
 
 - [Coverage rare-fill trap](project_coverage_sampler_rarefill_trap.md) — a REQUIRED-but-unreachable predicate → satisfied() never flips, looks hung; opp_neutralization may be DEAD not rare
+- [win_distribution row vs column](project_win_distribution_row_vs_column.md) — COLUMN marginal is policy-invariant (safe); ROW marginal is an artifact of mistake rate; only parity DIRECTION is robust
 - [gameSampling rng determinism](project_gamesampling_rng_determinism_trap.md) — one extra rng() call shifts every candidate; the FR-011 minMoves floor protects T017
 - [Inline Node scripts](reference_inline_node_scripts.md) — TOOLS/compute_feature_vector.mjs first; absolute imports; solver hangs (try/finally); shell for-loop → EMPTY
 - [Scripts need real --help](feedback_scripts_meaningful_help.md) — purpose + options + defaults, exit 0 BEFORE required-arg validation
@@ -83,6 +88,7 @@
 ## Workflow, agents & process
 
 - [Verify at the source layer](feedback_verify_at_the_source_layer.md) — every false belief hides in a layer: signature NOT doc comment, diff NOT agent report, real output NOT your fixture, all-N NOT a sample
+- [A wrong test is part of the bug](feedback_wrong_test_is_part_of_the_bug.md) — never shape a fix to keep an existing test green; read the fixture, not its name; a defect in a fixture is usually in the data too
 - [Concurrent agents clobber](feedback_concurrent_agents_clobber.md) — the user runs agents in parallel; two in one tree overwrite SILENTLY; line numbers stale within the hour
 - [External auto-backup commits](project_external_auto_backup_commits.md) — a background process auto-commits STAGED work unpredictably (once broke HEAD); stage explicit paths only, never git add -A, git status --short before commit
 - [Isolated review misses seams](feedback_isolated_review_misses_seams.md) — the JOIN of two correct halves; 1-instance tests miss N-instance clashes

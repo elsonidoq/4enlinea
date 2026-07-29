@@ -8,7 +8,7 @@ import {
   Board,
   detectImmediateThreat, detectDoubleThreat, detectForcedBlock,
   detectForcedWin, detectForbiddenColumns,
-  detectZThreat, detectUndercut, detectOvercut,
+  detectZThreat, detectUndercutVictim, detectOvercut,
   detectFigure7, detectJShape, detectClaimeven,
   detectOddEvenThreat,
 } from '../../server/classifier.js';

@@ -829,3 +829,97 @@ merge commit**. Bundling, CSP, service-worker caching, and DB-backed tier entitl
   copy stays truthful when the accepted-gate promotes a weak-but-legal move.
   **Source**: PR #19; `docs/open_issues.md` OI-61 (grader tie semantics) is the known open edge.
   - [ ] signed off (tester / date):
+
+---
+
+## Lessons — Window-count overlay on the opening lessons (added 2026-07-28)
+
+Feature: `slides[].showWindowCounts` / `windowCounts` render a per-cell red tint + digit on
+lesson-04 (Own the Centre) slides 1/2/4 and all three lesson-15 (Sharp Openings) slides. Contract in
+`docs/architecture/lesson-editor.md` §"Window counts".
+
+- **What**: On deployed staging, open **Own the Centre** and confirm slide 1 shows the full grid of
+  digits (13 at both middle centre cells, 3 at the corners) with a visible red gradient; slide 3
+  shows **no** digits and no window-count legend row; slide 4 shows **11** on the cell above the
+  centre stack and **3** on the bottom-left corner, each inside its amber `claim` ring with **no red
+  tint underneath**. Then open **Sharp Openings** slide 2 and confirm the green capsule and the red
+  digits coexist with both legend rows. Repeat the whole pass with the app language set to Spanish.
+  **Why staging**: every local check ran against the **Vite dev server**. The production build is
+  served by Express with Helmet's CSP, which never applies under `npm run dev`
+  (see the CSP/Helmet trap in project memory) — the overlay is new inline-styled content
+  (`background: rgba(...)` + a digit `<span>` per cell), so a restrictive `style-src` would strip the
+  tint while leaving the digits, which reads as a styling bug rather than a CSP one. Local QA also
+  could not confirm that the **lesson JSON files** carrying the stamped `windowCounts` arrays were
+  deployed alongside the code: the server reads them from a boot-time cache, so a code-only deploy
+  renders nothing at all with no error anywhere.
+  **Expected**: identical to the local screenshots — tint present and graded, digits legible at
+  mobile width, Spanish legend reads *"Líneas de cuatro todavía abiertas para vos por cada casilla"*
+  and English *"Four-in-a-rows still open to you through each square"*. No English string appears in
+  the Spanish pass (the slide-1 and slide-4 guardrail sentences are newly added Spanish prose and
+  would fall back silently).
+  **Source**: `docs/superpowers/plans/2026-07-28-lesson-window-count-overlay.md` Task 5 Step 6 — the
+  one plan step never completed locally.
+  - [ ] signed off (tester / date):
+
+**Not verifiable on staging, by design (do NOT file as a gap):** the admin editor's "Window counts"
+checkbox is behind `requireLocalhost`, so `/admin/lessons` is unreachable on staging. Its behaviour is
+covered by `tests/dom/SlideEditorWindowCounts.dom.test.jsx` plus a local
+`lessonToJsonPayload → validateLesson → saveLessonFile` round-trip, and that is the most that can be
+confirmed anywhere.
+
+---
+
+## Epic 6 — Lessons: answer-set correctness (added 2026-07-28)
+
+- **What**: On deployed **staging**, run the answer-set audit against the staging database:
+  `node server/scripts/audit_answer_ambiguity.mjs --puzzles --env staging`. If it reports failures,
+  repair per category: `--puzzles <category> --env staging --repair --yes`. Repeat for
+  **production** before that deploy is considered done.
+- **Why staging**: the 2026-07-28 fix removed `evalDoubleThreat`'s "no fork → grade by highest
+  solver score" fallback. That fallback is what admitted fork-less boards into the pool in the first
+  place: measured on the **local** DB, **98 of 100** `double_threat` puzzles contained no double
+  threat on any column. The repair (retire + regenerate) was applied to **local only** — staging and
+  production almost certainly hold the same bad rows, and with the fallback gone those boards now
+  grade **every column wrong**, breaking the Challenge category for real users. Nothing in the
+  deploy pipeline audits or migrates puzzle rows, and the pools differ per environment, so this
+  cannot be confirmed locally.
+- **Expected**: audit exits 0 with no `NO-CONCEPT` / `AMBIGUOUS` / `SUBOPTIMAL-ANSWER` rows.
+  `LOST-POSITION` rows are expected and are **not** failures (`undercut` boards are losing by
+  definition). After repair, drawing the `double_threat` category in Challenge mode serves boards
+  where a fork actually exists.
+- **Note**: repair retires via `is_active = false`, never `DELETE` — `puzzle_attempts.puzzle_id` is
+  an FK with no cascade, so deleting an attempted puzzle errors.
+- **Source**: session 2026-07-28 (fork-lesson grader fix); `docs/architecture/server-conventions.md`
+  §"Answer sets are derived, never re-implemented".
+- [ ] Signed off (tester / date):
+
+- **What**: On deployed staging, play through the **replaced lesson boards** in **both `en` and
+  `es`** and confirm no coach text is clipped: lesson 09 (`z-threats`) and lesson 11 (`undercut`)
+  socratic boards, and the confirmation challenges of lessons 08, 09, 12 and 14.
+- **Why staging**: eight lesson boards were replaced and their `ask` / `hint` /
+  `goalPrompt` copy rewritten in both languages during this session. There is a known **120px cap on
+  the coach bubble on every lesson screen** and Spanish strings run materially longer than English
+  (see memory `project_lesson_text_overflow_traps`), and text overflow is silent — it clips with no
+  error and no test catches it. Local dev was verified for *correctness* (solver + audit + suite),
+  not for *rendering*, and the clip threshold depends on the deployed font/viewport.
+- **Expected**: every coach message is fully visible in both locales on a phone-width viewport; no
+  ellipsis or cut-off final line; the socratic question still names the same columns the board shows.
+- **Source**: session 2026-07-28 (8 ambiguous lesson boards replaced); OI-74.
+- [ ] Signed off (tester / date):
+
+- **What**: On deployed **staging** (then **production**), re-audit the `undercut` pool and confirm
+  its stored metadata still matches what the detector derives:
+  `node server/scripts/audit_answer_ambiguity.mjs --puzzles undercut --env staging`.
+- **Why staging**: the 2026-07-28 OI-74 fix widened `detectUndercutVictim`'s killer search — it now
+  scans **every** lower threat in the column, not just the lowest. On **local** all 28 active
+  `undercut` rows re-derive byte-identical `highlight_metadata`, so no repair was needed there, but
+  staging and production hold **different rows** generated at different times. `evalUndercut` grades
+  from the stored `cells[].role === 'killing_threat'` at request time, so a row whose stored killing
+  column disagrees with the current detector would grade a legitimate answer wrong. Nothing in the
+  deploy pipeline audits or migrates puzzle rows.
+- **Expected**: audit exits 0; only `LOST-POSITION` / `OK` verdicts (`undercut` boards are losing by
+  definition — `LOST-POSITION` is **not** a failure). If any row fails, repair with
+  `--puzzles undercut --env staging --repair --yes` (retires via `is_active = false`).
+- **Source**: session 2026-07-28 (OI-74 undercut perspective fix);
+  `docs/architecture/server-conventions.md` §"Undercut has two sides".
+- [ ] Signed off (tester / date):

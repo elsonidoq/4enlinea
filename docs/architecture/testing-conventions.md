@@ -240,6 +240,26 @@ whether the check needs the solver:
   solver-checkable fact, and keeping the gate pure means content authors can run it for free.
   See `lesson-editor.md` §"Window highlights" for the authoring contract.
 
+- **`tests/lessons/lessonAnswerSets.test.js`** (added 2026-07-28, registered in **both** `test` and
+  `test:fast`) — **solver-backed**, the blocking gate for the answer-set invariant on lesson
+  content: every socratic node and every confirmation challenge must satisfy
+  `optimalCols ⊆ acceptedCols` and `acceptedCols ∩ optimalCols ≠ ∅`, so a learner is never told a
+  winning move is wrong. It imports the rule from `server/answerSetInvariant.js` rather than
+  restating it, and holds one solver process for the file via `before`/`after` (~120 ms for all 39
+  boards). See `server-conventions.md` §"Answer sets are derived, never re-implemented".
+
+  It exists because that rule was previously enforced **nowhere** — the two scripts that could have
+  caught it are manual — and the originating defect (a fork challenge accepting 1 of its 3 genuine
+  double-threat columns) sat in shipped content undetected. Two verdicts are deliberately
+  **non-failing**: `LOST-POSITION` (every legal move loses, so "optimal" only means "loses
+  slowest" — `undercut` is here by definition) and `NO-SCORES`.
+
+- **`server/scripts/audit_answer_ambiguity.mjs`** — the same invariant as an on-demand tool over
+  lessons **and** DB `puzzles` rows, which the test cannot reach. Also a script in neither test
+  list. `--source <category>` prints verified replacement boards; `--repair --yes` retires failing
+  puzzle rows (`is_active = false`) and inserts verified replacements. Run it after changing a
+  detector or a predicate — a grader change can invalidate stored `highlight_metadata`.
+
 `tests/lessons/opening-lessons.test.js` asserts curriculum-level properties and deliberately loads
 lessons **by `id`**, not by filename, so renumbering (`lesson-NN-slug.json`) doesn't break it. Follow
 that convention in any new curriculum test — prefixes get renumbered whenever a lesson is inserted. The
@@ -275,8 +295,22 @@ Pure function extraction covers logic, not rendering — assertions like "does t
 - **Tooling**: `@testing-library/react`'s `render`/`screen`, `@testing-library/dom`, `jsdom`, `global-jsdom`.
 - **File list convention**: like `test`/`test:fast`, `test:dom` enumerates files explicitly (no globbing) — the directory-recursion mode of `node --test` filters by extension and does not pick up `.jsx`. Add new DOM test files to the `test:dom` script in `connect-four/package.json` by name.
 - **First example**: `connect-four/tests/dom/ErrorBoundary.dom.test.jsx` — renders `ErrorBoundary` around a child that throws and asserts the fallback's Retry button mounts.
+- **Rendering `Board` (directly or via `SlideEditor`/`BoardEditor`) requires a `ResizeObserver` stub.** jsdom does not implement it, and `Board`'s capsule-measuring effect constructs one **unconditionally** — so the render throws before any assertion runs. Stub it in a `before()` hook and import the component **after** that hook with a dynamic `await import(...)`, since a static import would be hoisted above the stub:
+
+  ```js
+  before(() => {
+    globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+  });
+  const { render, screen, cleanup } = await import('@testing-library/react');
+  const { Board } = await import('../../src/components/Board.jsx');
+  ```
+
+  Established by `tests/dom/SlideEditorWindows.dom.test.jsx`; also used by
+  `BoardWindowCounts.dom.test.jsx` and `SlideEditorWindowCounts.dom.test.jsx`.
 
 Use DOM tests for render/remount/interaction assertions the pure-function pattern can't express. Keep pure-function extraction as the default for pure logic — it's cheaper to write and run.
+
+**A DOM test that renders the component but never varies the guard it claims to cover is not coverage.** Before landing one, break the branch under test and confirm the test goes red. This is not hypothetical: the `windowCounts` render guard (`value === 'empty'`) originally had three passing tests, none of which supplied a non-null count on an occupied cell — deleting the guard left the suite green. The same applies to constants: assert a value against whatever *derives* it, never against a restatement of its literal.
 
 #### jsdom does not implement `ResizeObserver` — stub it before rendering `Board`
 

@@ -766,12 +766,28 @@ messages (append a post-move feedback bubble below the prompt, rather than repla
 grow the coach region's height — pushing the board, the next flow sibling, downward.
 
 **Convention**: any screen that accumulates coach messages over a board MUST pass the `fixed` prop —
-`<CoachDialog fixed …>`. `fixed` reserves a stable outer `height:140` (inner `maxHeight:120,
-overflowY:auto`), so appended bubbles scroll within the region instead of growing it. `GameScreen`,
+`<CoachDialog fixed …>`. `fixed` reserves a stable **outer** `height:140` plus a background/margin, so
+appended bubbles scroll within the region instead of growing it. `GameScreen`,
 `ReviewScreen`, and (as of the flicker fix) `ChallengeScreen` use `fixed`. Screens that only ever show a
 single, *replaced* message (`ConceptScreen`, `SocraticScreen`, `HomeScreen`) do not accumulate and so do
 not need it. If you add a board+coach screen and the board visibly shifts when feedback appears, the fix is
 `fixed`, not board memoization.
+
+**The `maxHeight:120, overflowY:auto` bubble cap is NOT part of `fixed`.** It sits on the inner bubbles
+container in `CoachDialog.jsx`, outside the `fixed` ternary, so it applies on **every** screen including
+the two lesson screens that omit `fixed`. Two consequences for anyone writing coach copy:
+
+- **The cap is a silent truncation, not a layout change.** The box fits **5 rendered lines** of text
+  (`scrollHeight` 119 fits; 139 overflows — 22px of any measurement is bubble padding), roughly
+  **205 characters**. Longer copy scrolls instead of shrinking the font, and no test catches it.
+- **More messages make it worse, not better.** `CoachDialog` renders all `messages` stacked inside that
+  one box — it is not a sequential reveal — so splitting a long message into two costs ~28px more
+  (6px gap + a second bubble's padding). The mount effect also sets `scrollTop = scrollHeight`, so the
+  learner lands on the *last* bubble with earlier ones scrolled out of view.
+
+To check copy, read `scrollHeight - clientHeight` off that container in the browser for every slide, in
+**both** locales — Spanish runs ~15% longer than English and routinely overflows alone. Lesson-side
+authoring limits: `docs/architecture/lesson-editor.md` §"Text length limits".
 
 ## Debug Panel (`ClassifyAllPanel`)
 

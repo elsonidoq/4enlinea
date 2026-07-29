@@ -1,28 +1,44 @@
 ---
 name: project_lesson_interactivity_evaluation
-description: How lesson interactivity is evaluated — Socratic is client-side; inline confirmationChallenges are NOT functional (check endpoint needs a DB puzzle row)
-metadata:
+description: "How lesson interactivity is evaluated — Socratic is a client-side scalar with no solver; inline confirmationChallenges DO work (via /api/evaluate-move, not /check)"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: d7194ddb-70f6-4602-a846-18bfc9014c46
+  modified: 2026-07-28T21:04:32.541Z
 ---
 
-Two different evaluation paths for lesson interactivity, with a trap:
+Two different evaluation paths for lesson interactivity.
 
-- **Socratic** (`SocraticScreen.jsx`): evaluated **purely client-side** — `col === lesson.socratic.correctCol`
-  (`SocraticScreen.jsx:~78`). No server call, no solver, no predicate. So any curated `correctCol`
-  works (including an empty-board `boardSpec` and deep positions), as long as it's correct.
-- **Confirmation‑challenge drills** (`ChallengeScreen` `lessonMode`): evaluated **server-side** via
-  `POST /api/puzzles/:id/check`, which **requires a real DB puzzle row** (it `SELECT`s the puzzle by
-  `:id`, 404s otherwise, and computes scores from the DB `move_string`). `ChallengeScreen` generates
-  `id: ch.puzzleId || 'inline-' + ch.moveString` for inline entries — but that `inline-…` id **404s**.
-  **So self-contained/inline confirmationChallenges do NOT work.** A working drill needs either a
-  seeded DB puzzle row or a new inline-evaluation server path.
+- **Socratic** (`SocraticScreen.jsx`): evaluated **purely client-side** — `col === lesson.socratic.correctCol`.
+  No server call, no solver, no predicate. Its soundness rests entirely on a **content**
+  invariant: the authored column must be the *unique* solver optimum, or a learner who plays an
+  equally-winning column is told "Not quite". That invariant is now enforced by
+  `tests/lessons/lessonAnswerSets.test.js`.
+- **Confirmation-challenge drills** (`ChallengeScreen` `lessonMode`): evaluated **server-side** via
+  `POST /api/evaluate-move`, which takes `{movestring, col, category, correctCol, highlightMetadata}`
+  and needs **no DB puzzle row**. Correctness is `data.accepted === true` for any category in
+  `MULTI_SOLUTION_CATEGORIES ∪ SINGLE_ANSWER_CATEGORIES`, else `data.quality === 'optimal'`.
+
+**CORRECTED 2026-07-28 — the old note here said inline `confirmationChallenges` "do NOT work"
+because `POST /api/puzzles/:id/check` 404s on an `inline-…` id. That is stale.** `/check` is
+reached **only** from `handleForbiddenSubmit` (the `forbidden_columns` path). Every `single_move`
+challenge — which is all lesson challenges — goes through `/api/evaluate-move`. Lessons are
+therefore **self-contained**: they carry `moveString` / `correctCol` / `highlightMetadata` inline,
+and as of 2026-07-28 not one of the 24 lesson `puzzleId`s resolved to a row in the local `puzzles`
+table. Consequences:
+
+- Deleting or retiring `puzzles` rows cannot break a lesson.
+- But the admin lesson editor's puzzle **picker** reads real rows, so re-picking a challenge finds
+  nothing if that category's pool is empty. A lesson's stored `puzzleId` is close to decorative.
+- `recordPuzzleAttempt` still posts that dangling `puzzle_id`, which has an FK to `puzzles`.
 
 Also: `evaluatePredicate` (`predicates.js`) is **category-keyed** with **no generic best/winning-move
 predicate** — an unknown `goalPredicateType` falls through to `{ result: 'wrong' }`.
 
-**Why:** discovered while scoping opening lessons (2026-07-04). It's why opening "find the move"
-practice was delivered as one client-side Socratic per lesson and the server-evaluated drills were cut.
+**How to apply:** for a lesson "pick the column" interaction, the Socratic is cheapest and needs no
+DB anything — just make sure the answer is the unique optimum. Inline confirmation challenges are
+fully functional; do not "fix" them by seeding puzzle rows. Convert KB movestrings to `boardSpec`
+with `boardToSpec(parseMovestring(ms))` (`src/lib/movestring.js`).
 
-**How to apply:** for lesson "pick the column" interactions, prefer the Socratic (client-side
-`correctCol`) unless you genuinely need multiple server-scored drills — those require DB puzzles or new
-endpoint work. Convert KB movestrings to `boardSpec` with `boardToSpec(parseMovestring(ms))` (`src/lib/movestring.js`).
+Related: [[project_lesson_answer_set_invariant]], [[project_lesson_json_fields_not_rendered]].

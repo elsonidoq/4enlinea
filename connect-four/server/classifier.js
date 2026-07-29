@@ -896,33 +896,49 @@ export function detectZThreat(board, scores, perspective = board.currentPlayer, 
 }
 
 /**
- * T007 — Undercut detection.
- * Finds column C where current player has a threat at R and opponent has a threat at R' < R
- * in the same column (opponent's lower threat kills current player's upper threat).
- * Returns matched only when scores[C] < 0 (playing in C is losing — avoid it).
+ * Does a threat at row `kill` neutralise the opponent's threat directly above it at row `R`
+ * in the same column? Pure row geometry — ownership-independent, so both undercut sides use it.
+ * @see allen-t2, allen-t4, allen-t5
+ */
+function undercutKills(R, kill) {
+  if (isT4SameParity(R, kill)) return false;                          // U1 @see allen-t4
+  if (isT5Exception(R, kill)) return false;                           // U2 @see allen-t5
+  if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) return false;  // U3 @see allen-t2 sub-case 3
+  return true;
+}
+
+/**
+ * Shared core of the two undercut sides. One undercut situation, two roles:
+ * the VICTIM owns the upper threat that dies, the BENEFICIARY owns the lower threat that
+ * kills it. Both detectors anchor on the SIDE TO MOVE, because c4solver `scores` are always
+ * the mover's — a score gate is meaningless for anyone else (this is the OI-74 defect).
+ *
  * @param {Board} board
- * @param {number[]} scores  c4solver scores per column
- * @returns {{ matched: boolean, col?: number, metadata?: HighlightMetadata }}
+ * @param {number[]} scores  c4solver scores per column, from the side to move's perspective
+ * @param {object} roles
+ * @param {number} roles.victim       player whose upper threat dies
+ * @param {number} roles.beneficiary  player whose lower threat kills it
+ * @param {(s: number) => boolean} roles.scoreOk  gate on the mover's score for the column
  * @complexity O(42)
  * @cache not cached
  */
-export function detectUndercut(board, scores, perspective = board.currentPlayer) {
-  // @see allen-t4, allen-t5, allen-t2
-  const threats    = board.reachableThreats(perspective); // Map<col, row[]>
-  const oppThreats = board.reachableThreats(3 - perspective);
+function detectUndercutCore(board, scores, { victim, beneficiary, scoreOk }) {
+  const deadThreats = board.reachableThreats(victim);      // Map<col, row[]>
+  const killThreats = board.reachableThreats(beneficiary);
 
   for (let col = 0; col < COLS; col++) {
     if (board.colHeights[col] >= ROWS) continue;
-    if (!scores || scores[col] >= 0) continue; // undercut requires playing C to be losing
-    const colRows    = threats.get(col) ?? [];
-    const oppColRows = oppThreats.get(col) ?? [];
+    if (!scores || !scoreOk(scores[col])) continue;
+    const deadRows = deadThreats.get(col) ?? [];
+    const killRows = killThreats.get(col) ?? [];
 
-    for (const R of colRows) {
-      const kill = oppColRows.find(rp => rp < R);
+    for (const R of deadRows) {
+      // EVERY lower threat is a candidate killer — the upper threat is dead as soon as ANY of
+      // them neutralises it. Inspecting only the lowest one (the original `find(rp => rp < R)`)
+      // silently missed an adjacent T2 kill sitting above a same-parity T4 pair, which is
+      // exactly the shape lesson 11 teaches.
+      const kill = killRows.find(rp => rp < R && undercutKills(R, rp));
       if (kill === undefined) continue;
-      if (isT4SameParity(R, kill)) continue;                            // U1 @see allen-t4
-      if (isT5Exception(R, kill)) continue;                             // U2 @see allen-t5
-      if (R % 2 === 1 && kill % 2 === 0 && R !== kill + 1) continue;   // U3 @see allen-t2 sub-case 3
       const hCells = [
         { column: col, row: kill, role: 'killing_threat' },
         { column: col, row: R,    role: 'dead_threat' },
@@ -939,6 +955,51 @@ export function detectUndercut(board, scores, perspective = board.currentPlayer)
     }
   }
   return { matched: false, cells: [] };
+}
+
+/**
+ * T007 — Undercut, VICTIM side: the side to move owns the threat that dies.
+ * Finds column C where the mover has a threat at R and the opponent has a killing threat at
+ * R' < R in the same column, and entering C loses for the mover (`scores[C] < 0`) — so the
+ * drill is avoid-the-column. This is the `undercut` puzzle category and the `undercut` tag.
+ *
+ * There is deliberately NO `perspective` parameter: which player is victim and which is
+ * beneficiary is fixed by who is to move, not by a caller argument. See
+ * docs/architecture/server-conventions.md § "Undercut has two sides".
+ *
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, cells: string[], highlightMetadata?: object }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectUndercutVictim(board, scores) {
+  const mover = board.currentPlayer;
+  return detectUndercutCore(board, scores, {
+    victim: mover, beneficiary: 3 - mover, scoreOk: s => s < 0,
+  });
+}
+
+/**
+ * Undercut, BENEFICIARY side: the side to move owns the LOWER killing threat and pressing the
+ * column wins (`scores[C] > 0`). The mirror of {@link detectUndercutVictim} on the same
+ * geometry — this is the side lesson 11 teaches, and the matcher `undercut_t2_adjacent` in
+ * scripts/find_lesson_boards.mjs validates its boards against.
+ *
+ * Not a `classifyPattern` tag: on a classifier board the side to move is the one facing the
+ * decision, and the `undercut` tag names their exposure.
+ *
+ * @param {Board} board
+ * @param {number[]} scores  c4solver scores per column
+ * @returns {{ matched: boolean, cells: string[], highlightMetadata?: object }}
+ * @complexity O(42)
+ * @cache not cached
+ */
+export function detectUndercutBeneficiary(board, scores) {
+  const mover = board.currentPlayer;
+  return detectUndercutCore(board, scores, {
+    victim: 3 - mover, beneficiary: mover, scoreOk: s => s > 0,
+  });
 }
 
 /**
@@ -1642,7 +1703,11 @@ export async function classifyPattern(ms, perspective, solver) {
     ['z_threat',          () => detectZThreat(board, scores, perspective, solver)],
     ['odd_even_threat',   () => detectOddEvenThreat(board, scores, perspective, solver)],
     // Non-score-consuming (no recursive solver step needed)
-    ['undercut',          () => detectUndercut(board, scores, perspective)],
+    // undercut takes no perspective: the side to move is the victim by construction, so the
+    // tag is the same for both perspectives — for the mover it reads "the column you must not
+    // enter", for the player who just moved it reads "the undercut you just landed". Passing a
+    // perspective here mixed one player's threats with the other's score sign (OI-74).
+    ['undercut',          () => detectUndercutVictim(board, scores)],
     ['overcut',           () => detectOvercut(board, scores, perspective)],
     ['figure_7',          () => detectFigure7(board, scores, perspective)],
     ['j_shape',           () => detectJShape(board, scores, perspective)],

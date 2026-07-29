@@ -272,7 +272,60 @@ through that cell still contain no opponent disc — as a red tint plus the inte
   `lesson.windowCounts.legend` — it does **not** go through `legendItems`, which requires a
   matching per-cell overlay type.
 
+### Authoring one in the editor
+
+`SlideEditor` renders a **"Window counts"** checkbox (between the board and the Window-highlights
+section) wired to `updateField('showWindowCounts', …)`. It is the only control, by design: it sets
+the flag and nothing else. The 6×7 array is stamped server-side on save, so
+
+- **the editor's board preview does not show the numbers until you save** — same reason `boardSpec`
+  is re-derived on save rather than previewed live. The helper text under the checkbox says so.
+- **the editor must never write `windowCounts`.** `tests/dom/SlideEditorWindowCounts.dom.test.jsx`
+  pins this: an editor that authored numbers would bypass the recompute and defeat the staleness
+  gate. If you add a live preview later, keep the write path one-way.
+
+`SocraticEditor` deliberately has no such control — the field is concept-slide only, and the same
+DOM test asserts its absence there.
+
+The colour is the `--red` token (`rgb(232, 57, 46)`) via `windowCountTint()` in
+`src/lib/lessonWindows.js`. Note the adjacency: `--threat-red` is `rgb(232, 84, 62)` and means
+**danger** on the `tr` overlay, whereas this tint means **opportunity**. They can never share a cell
+because the tint is suppressed wherever a per-cell `overlays` entry already colours it — preserve
+that suppression if you touch the render.
+
 ---
+
+## Text length limits (`coachMessages[].text`, `infoProse`)
+
+Neither field is length-checked anywhere — not by `validateLesson`, not by
+`tests/unit/lessonContent.test.js`. Both limits below are enforced only by you.
+
+**Editorial cap: 4 sentences** per coach message and per `infoProse` block. When a slide's content
+outgrows that, **split the slide**, don't compress the teaching: reuse the same `movestring` /
+`boardSpec` across the split siblings and reveal `overlays` progressively, one idea per slide. Slides
+may freely share a board — nothing in the loader, the tests, or `verify_lesson_content.mjs` requires a
+slide's position to be unique. (Worked example: `lesson-03-threat-vocabulary.json` covers 4 boards
+across 10 slides.)
+
+**Physical cap on coach bubbles: ~205 characters / 5 rendered lines.** `CoachDialog`'s bubble
+container is capped at `maxHeight: 120px` on *every* screen (the cap is independent of the `fixed`
+prop — see `frontend-conventions.md` §"Coach-message accumulation"). Longer text scrolls and clips
+silently, and the container auto-scrolls to its bottom on mount, so the opening words are what
+disappears. **Splitting one message into two `coachMessages` makes this worse** — both render stacked
+in the same box. Shorten instead.
+
+**Spanish is the binding constraint.** `_es` copy runs ~15% longer than English at equal sentence
+count, so a slide can pass in `en` and clip in `es`. Measure in Spanish.
+
+**`infoProse` is one text node.** `ConceptScreen` renders it into a plain `<div>` with no
+`white-space: pre-wrap` and no paragraph splitting, so authored `\n\n` collapses to a single space —
+a multi-paragraph block renders as one run-on paragraph (OI-77). Until that is fixed, prefer one
+short paragraph per slide.
+
+Verification: in the browser, read `scrollHeight - clientHeight` off the `maxHeight: 120px` container
+for every slide in both locales; non-zero means clipped. Restart the API server first — it caches
+lessons at startup, so an un-restarted server serves the pre-edit text and makes a real fix look
+like a no-op.
 
 ## Fields the learner UI ignores (editor ≠ app)
 
@@ -321,6 +374,52 @@ calls `POST /api/scores` with the current movestring and checks whether the
 chosen column's score is > 0 (winning). Shows a green checkmark or a warning
 inline. This is advisory, not a hard block — the author can save with an
 unverified column.
+
+**The editor's check is weaker than the shipping requirement.** It asks only "is this column
+winning?"; the invariant below requires it to be the **unique** best move. A board can show the
+green checkmark and still fail `tests/lessons/lessonAnswerSets.test.js`.
+
+---
+
+## The answer-set invariant (what makes a lesson board valid)
+
+Added 2026-07-28. Every socratic node and every confirmation challenge must satisfy:
+
+```
+optimalCols ⊆ acceptedCols        every solver-optimal column is accepted
+acceptedCols ∩ optimalCols ≠ ∅    the taught answer is itself a best move
+```
+
+For a **socratic** the accepted set is the single authored `correctCol` (`SocraticScreen` grades
+`col === socratic.correctCol`, client-side, no solver), so the rule reduces to: **the authored
+column must be the strict unique solver optimum.** Any tie means a learner who plays the tied
+column is told "Not quite" for a move that wins just as fast.
+
+For a **confirmation challenge** the accepted set is whatever `evaluatePredicate` accepts for that
+category.
+
+A board that violates either rule is a **content defect — replace the board, never loosen the
+grader.** Check with `node server/scripts/audit_answer_ambiguity.mjs`; source replacements with
+`--source <category>` (it already filters out lost positions and invariant violations) or
+`server/scripts/find_lesson_boards.mjs`. The rule lives in `server/answerSetInvariant.js`; see
+`server-conventions.md` §"Answer sets are derived, never re-implemented".
+
+**Traps when replacing a board:**
+
+- **`goalPrompt` / `goalPrompt_es` are usually board-specific prose.** They are never rendered to
+  the learner (see "Fields the learner UI ignores"), but leaving them describing the *old* position
+  is how a file starts lying to its next reader. Rewrite or genericise them with the board.
+- **`highlightMetadata` for `figure_7` / `j_shape` lists only the pattern pieces already on the
+  board**, excluding the empty completing cell — the detector's raw output includes it, and copying
+  that verbatim spoils the puzzle.
+- **`userPlayer` must match movestring parity** (`ms.length % 2 === 0 ? 1 : 2`) or
+  `lessonContent.test.js` fails.
+- **A lesson board must not be lost for its owner** (`verify_lesson_content.mjs`), which is stricter
+  than the invariant — the invariant deliberately exempts lost positions.
+- **`boardSpec` must be re-derived**: `boardToSpec(parseMovestring(ms))` from `src/lib/movestring.js`.
+- A correct board can legitimately **fail** the matching `classifier.js` detector when the lesson
+  teaches the pattern from the opposite side to the detector — see `docs/open_issues.md` OI-74 for
+  the undercut case.
 
 ---
 

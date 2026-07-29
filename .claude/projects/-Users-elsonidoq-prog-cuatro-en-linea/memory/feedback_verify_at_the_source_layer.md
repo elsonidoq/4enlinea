@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: beac6818-214f-4294-b8d7-b0f88677a1a0
+  modified: 2026-07-28T16:15:56.228Z
 ---
 
 **You trust representations of reality over reality itself. That is one mistake, and it wears many costumes.**
@@ -39,13 +40,14 @@ Whenever you are about to believe something about a system, ask: *is this the tr
 - **File-disjoint ≠ isolated.** Ran a fix agent alongside a batch agent; files were disjoint, the **working tree** was not, so one agent's `git add` swept the other's uncommitted work into its commit.
 - **My own broken command almost became a fact.** `rg -rn "AdminLessonEditorScreen" src/lib/…` returned nothing, so I reported the editor screen "isn't routed" — `-r` is ripgrep's `--replace`. It was routed all along (`App.jsx` pathname checks, not `screenRegistry`). I noticed the empty output, mentioned it in passing, and *let it stand for a whole turn*. An empty result is a claim about your command before it's a claim about the code.
 - **A green suite I'd filtered.** Reported "1378 pass, 0 fail" by grepping the summary lines — never checking the exit code, while a registered-but-deleted test file was being silently skipped. I built the filter that hid the evidence.
+- **An assertion that compared a literal to itself.** A plan I authored shipped `assert.equal(WINDOW_COUNT_MAX, 13)` where `WINDOW_COUNT_MAX` **is** the literal `13` one file away. It can never fail: change the board geometry that produces the 13 and every tint mis-scales with the suite fully green. A sibling test asserted a render guard no fixture exercised — deleting `&& value === 'empty'` left all three tests passing. Both survived a spec, a plan, six task reviews *and* a whole-branch review. Fixed by deriving the expectation from the real geometry (`Math.max(...computeWindowCounts('', 'red').flat())`). **A tautological assertion is worse than no test — it occupies the slot where a real one would go, and reads as coverage.**
 
 **The lesson that generalizes past all of it:** I first wrote these rules scoped to *plan authoring* — and then made three more of the same errors, in *verification*, *code review*, and *orchestration*. **A rule scoped to one costume does not transfer.** The principle is the deliverable, not the checklist.
 
 **How to apply:**
 1. **Name the layer.** Before believing a claim, say what layer it's from and what layer the truth is on. Go there.
 2. **If you can't paste it, you didn't read it.** Cite `file:line` and paste the verbatim line. Paraphrase is where staleness hides.
-3. **A green test is not evidence.** It must exercise the production path, use a real value, and RED for the right reason. If you wrote the fixture, you tested your belief.
+3. **A green test is not evidence.** It must exercise the production path, use a real value, and RED for the right reason. If you wrote the fixture, you tested your belief. **Prove it by mutation:** break the guard, watch the test fail, restore. For a constant, derive the expectation from whatever produces it — never restate the literal.
 4. **Verify with the real input**, never a constructed one. If you hand-built the request, you proved nothing about the caller.
 5. **Sample only if it covers the variation.** Parse all instances when the corpus is small enough — 13 files is not too many.
 6. **Ask "is it called?"** before "are the copies consistent?" Grep for call sites, not for agreement.

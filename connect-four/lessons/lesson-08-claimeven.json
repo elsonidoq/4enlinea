@@ -385,16 +385,16 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "6923a566-5e96-43ab-bd8f-00357514c326",
-      "moveString": "414445215",
-      "goalPrompt": "Gray is winning here. Green has a disc on the bottom row of the third column with the even square directly above it still empty — claim that square, and every open column stays paired for Gray.",
-      "goalPrompt_es": "Gris está ganando acá. Verde tiene una ficha en la fila de abajo de la tercera columna, con la casilla par justo encima todavía vacía —reclamá esa casilla, y todas las columnas abiertas siguen emparejadas para Gris.",
+      "puzzleId": "0a1e6b52-3d18-4a0c-9f5b-2c7d41e8b930",
+      "moveString": "333336122241046612122601314",
+      "goalPrompt": "Exactly one open column has an odd number of empty squares left — every other open column is already even. Drop into it, so all of them pair up and Gray's reply-above strategy carries the win.",
+      "goalPrompt_es": "Exactamente una columna abierta quedó con una cantidad impar de casillas vacías —todas las demás ya son pares. Entrá ahí, para que todas queden emparejadas y la estrategia de responder-encima de Gris asegure la victoria.",
       "goalPredicateType": "claimeven",
       "goalPredicateParams": {},
       "cooperativeAiMoves": [],
       "interactionMode": "single_move",
       "highlightMetadata": null,
-      "correctCol": 2,
+      "correctCol": 4,
       "userPlayer": 2
     },
     {

@@ -2,10 +2,14 @@
 // Finds lesson boards by mistake-weighted self-play + structural spec + solver gate.
 // See docs/superpowers/plans/2026-07-23-lesson-content-remediation.md (Task 1) for specs' intents.
 //
-// Usage (from connect-four/):  node server/scripts/find_lesson_boards.mjs <spec> [--count 5] [--seed 42] [--games 400]
+// Usage (from connect-four/):
+//   node server/scripts/find_lesson_boards.mjs <spec> [--count 5] [--seed 42] [--games 400]
+//   node server/scripts/find_lesson_boards.mjs <spec> --check <movestring>
+//     Run <spec> against ONE board instead of searching. Prints MATCH + detail (exit 0) or
+//     NO MATCH (exit 1) — use it to re-validate a board already adopted into a lesson.
 import { createSolverProcess } from '../c4solver-wrapper.js';
 import { playGame } from '../gameSampling.js';
-import { Board, classifyPattern, detectFigure7, detectJShape } from '../classifier.js';
+import { Board, classifyPattern, detectFigure7, detectJShape, detectUndercutBeneficiary } from '../classifier.js';
 
 function mulberry32(a) {
   return function () {
@@ -158,21 +162,32 @@ const SPECS = {
 
   // L09 slides/socratic: Allen-T2 adjacent undercut — Gray threat at row R, Green threat
   // at R+1 directly above, SAME column, both latent. Learner side = Gray.
+  //
+  // This is the BENEFICIARY side of the undercut (Gray owns the lower killing threat and
+  // pressing the column wins), so it is validated against `detectUndercutBeneficiary`, NOT
+  // against `detectUndercutVictim` / the `undercut` puzzle category — those model the mover
+  // as the victim and only fire when the column LOSES. A correct board for this spec can
+  // never match the victim detector. See docs/architecture/server-conventions.md
+  // § "Undercut has two sides" and OI-74.
   undercut_t2_adjacent: async (pos, board) => {
     if (pos.ms.length < 10 || pos.ms.length > 22) return null;
+    if (pos.player !== 2) return null;                       // Gray on move — she is the beneficiary
     if (!ownerNotLost(pos, 2)) return null;                  // Gray owns the undercut threat
-    const gray  = board.reachableThreats(2);
-    const green = board.reachableThreats(1);
-    for (const [col, rows] of gray) {
-      for (const r of rows) {
-        if ((green.get(col) ?? []).includes(r + 1) && r > board.colHeights[col]) {
-          const extra = extraThreats(board, [{ col, row: r }, { col, row: r + 1 }]);
-          if (extra > 2) return null;
-          return { col, lower: r, upper: r + 1, extraThreats: extra };
-        }
-      }
-    }
-    return null;
+    // The production detector is the authority on which lower threat actually kills the upper
+    // one (Allen T2/T4/T5) and on the score gate; the spec only ADDS the adjacency this
+    // lesson slide illustrates.
+    const uc = detectUndercutBeneficiary(board, pos.scores);
+    if (!uc.matched) return null;
+    const kill = uc.highlightMetadata.cells.find(c => c.role === 'killing_threat');
+    const dead = uc.highlightMetadata.cells.find(c => c.role === 'dead_threat');
+    if (dead.row !== kill.row + 1) return null;              // T2 sub-case 3: immediately adjacent
+    if (kill.row <= board.colHeights[kill.column]) return null; // both latent, not gravity-top
+    // The undercut column must be the solver's best move, or the socratic answer built from
+    // this board is not optimal and the answer-set invariant rejects it downstream.
+    if (pos.scores[kill.column] !== maxScore(pos.scores)) return null;
+    const extra = extraThreats(board, [{ col: kill.column, row: kill.row }, { col: dead.column, row: dead.row }]);
+    if (extra > 2) return null;
+    return { col: kill.column, lower: kill.row, upper: dead.row, score: pos.scores[kill.column], extraThreats: extra };
   },
 
   // L09 s3: same-parity pair (T4 — neither kills the other): opposite owners, same column,
@@ -282,6 +297,11 @@ async function main() {
     return i === -1 ? dflt : Number(rest[i + 1]);
   };
   const count = opt('count', 5), seed = opt('seed', 42), games = opt('games', 400);
+  // --check <movestring>: run the spec against ONE board instead of searching. Exists so a board
+  // already adopted into a lesson can be re-validated against the spec that curated it, without
+  // re-deriving the spec's conditions by hand.
+  const checkIdx = rest.indexOf('--check');
+  const checkMs = checkIdx === -1 ? null : rest[checkIdx + 1];
 
   const solver = createSolverProcess();
   const rng = mulberry32(seed);
@@ -328,6 +348,17 @@ async function main() {
   if (!spec) {
     console.error(`Unknown spec "${specArg}". Known: ${Object.keys(SPECS).join(', ')}, or tag:<classifier-tag>`);
     process.exit(2);
+  }
+
+  if (checkMs) {
+    const scores = await solver.query(checkMs);
+    const pos = { ms: checkMs, scores, player: (checkMs.length % 2) + 1 };
+    const detail = await spec(pos, new Board(checkMs), solver);
+    console.log(`${specArg}  ms=${checkMs}  ply=${checkMs.length}  toMove=${pos.player === 1 ? 'Green' : 'Gray'}`);
+    console.log(`  scores=${JSON.stringify(scores)}`);
+    console.log(detail ? `  MATCH   detail=${JSON.stringify(detail)}` : '  NO MATCH');
+    solver.destroy();
+    process.exit(detail ? 0 : 1);
   }
 
   const seen = new Set();

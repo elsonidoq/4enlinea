@@ -48,20 +48,36 @@ describe('checkPredicate() — US3 multi-solution acceptance (FR-010, FR-011)', 
     assert.deepEqual(result.correctCols.slice().sort(), [1, 4, 5, 6]);
   });
 
+  // The two boards below replaced '333332' and '3333320200110' (2026-07-28). Those two contain
+  // NO double threat on any column — they only passed because evalDoubleThreat had a "no fork ->
+  // grade by highest positive solver score" fallback, since removed. Their names claimed "2 legal
+  // fork columns" while asserting fallback behaviour. Both boards here are real, verified through
+  // detectDoubleThreat, with solver-harvested scores.
   test('double_threat: 2 legal fork columns -> accepted, both recorded', async () => {
-    const ms = '333332';
-    const scores = [-2, -3, 1, -3, -3, 1, -2];
+    const ms = '3344';
+    const scores = [-4, -3, 18, 2, 2, 18, -3];
     const result = await checkPredicate('double_threat', ms, scores, null);
     assert.equal(result.passes, true);
     assert.deepEqual(result.correctCols.slice().sort(), [2, 5]);
   });
 
-  test('double_threat: another 2-fork board -> accepted, both recorded', async () => {
-    const ms = '3333320200110';
-    const scores = [3, 3, 3, 3, 4, 3, 4];
+  test('double_threat: a board whose forks include stacked (Case B) columns -> all 3 recorded', async () => {
+    // lesson-06 confirmation challenge 0. Cols 1 and 5 fork by the stacked/consecutive-row route
+    // (block the lower threat, win the upper); col 2 forks by the two-distinct-columns route.
+    const ms = '104300405142342531';
+    const scores = [-10, 11, 11, 10, -10, 11, -10];
     const result = await checkPredicate('double_threat', ms, scores, null);
     assert.equal(result.passes, true);
-    assert.deepEqual(result.correctCols.slice().sort(), [4, 6]);
+    assert.deepEqual(result.correctCols.slice().sort(), [1, 2, 5]);
+  });
+
+  test('double_threat: a board with no fork on any column is NOT a double_threat puzzle', async () => {
+    // '333332' — the board the two replaced tests used. No column creates a double threat.
+    const ms = '333332';
+    const scores = [-2, -3, 1, -3, -3, 1, -2];
+    const result = await checkPredicate('double_threat', ms, scores, null);
+    assert.equal(result.passes, false);
+    assert.deepEqual(result.correctCols, []);
   });
 });
 
@@ -89,8 +105,8 @@ describe('evaluatePredicate() — US3 solve-time: every valid multi-solution col
   });
 
   test('double_threat: both fork columns score correct/tied; a non-fork column scores wrong (Acceptance Scenario 3)', () => {
-    const ms = '333332';
-    const scores = [-2, -3, 1, -3, -3, 1, -2];
+    const ms = '3344';
+    const scores = [-4, -3, 18, 2, 2, 18, -3];
     const puzzle = { category: 'double_threat', moveString: ms };
     for (const col of [2, 5]) {
       const r = evaluatePredicate(puzzle, col, scores);
@@ -99,6 +115,32 @@ describe('evaluatePredicate() — US3 solve-time: every valid multi-solution col
     // col 0 does not create a fork on this board.
     const nonFork = evaluatePredicate(puzzle, 0, scores);
     assert.equal(nonFork.result, 'wrong');
+  });
+
+  // Regression for the reported bug: lesson-06 confirmation challenge 0 accepted only col 2,
+  // because evalDoubleThreat re-implemented the concept and saw only gravity-top threats in
+  // distinct columns (Case A). Cols 1 and 5 are stacked/consecutive-row forks (Case B) —
+  // classifier.js#detectDoubleThreat has always recognised them.
+  test('double_threat: stacked (Case B) fork columns score correct/tied, not wrong', () => {
+    const ms = '104300405142342531';
+    const scores = [-10, 11, 11, 10, -10, 11, -10];
+    const puzzle = { category: 'double_threat', moveString: ms };
+    for (const col of [1, 2, 5]) {
+      const r = evaluatePredicate(puzzle, col, scores);
+      assert.ok(r.result === 'correct' || r.result === 'tied', `col ${col} should be correct/tied, got ${r.result}`);
+    }
+    for (const col of [0, 3, 4, 6]) {
+      assert.equal(evaluatePredicate(puzzle, col, scores).result, 'wrong', `col ${col} should be wrong`);
+    }
+  });
+
+  test('double_threat: with no fork on the board, every column scores wrong (no solver-score fallback)', () => {
+    const ms = '333332';
+    const scores = [-2, -3, 1, -3, -3, 1, -2];
+    const puzzle = { category: 'double_threat', moveString: ms };
+    for (let col = 0; col < 7; col++) {
+      assert.equal(evaluatePredicate(puzzle, col, scores).result, 'wrong', `col ${col} should be wrong`);
+    }
   });
 });
 
@@ -144,25 +186,32 @@ describe('checkPredicate() — FR-014 regression: z_threat/overcut/claimeven sin
     assert.equal(wrongCol.result, 'wrong', 'counterexample: non-answer column must remain wrong');
   });
 
+  // Board replaced 2026-07-28. The previous fixture '33343063631016044110624245'
+  // (scores [-8,-8,8,-1000,8,8,-8]) had THREE winning columns at +8 — 2, 4 and 5 — while
+  // accepting only col 5, so it asserted that two winning moves are graded wrong. That is the
+  // same defect as the reported fork bug, now rejected by checkPredicate's answer-set invariant.
   test('overcut: exactly one correctCol (the major_threat column), all other columns wrong', async () => {
-    const ms = '33343063631016044110624245';
-    const scores = [-8, -8, 8, -1000, 8, 8, -8];
+    const ms = '355230660352552323326664210500114';
+    const scores = [-4, -4, -1000, -1000, 4, -1000, -4];
     const result = await checkPredicate('overcut', ms, scores, null);
     assert.equal(result.passes, true);
-    assert.deepEqual(result.correctCols, [5]);
+    assert.deepEqual(result.correctCols, [4]);
 
     const puzzle = { category: 'overcut', moveString: ms, highlightMetadata: result.highlight_metadata };
     const wrongCol = evaluatePredicate(puzzle, 0, scores);
     assert.equal(wrongCol.result, 'wrong', 'counterexample: non-answer column must remain wrong');
   });
 
+  // Board replaced 2026-07-28. The previous fixture '433334115316311455651'
+  // (scores [10,-1000,10,-1000,10,10,11]) taught col 4 at +10 while col 6 won faster at +11 —
+  // i.e. the drill's answer was not a best move. Rejected by the answer-set invariant.
   test('claimeven: exactly one correctCol, all other columns wrong', async () => {
-    const ms = '433334115316311455651';
-    const scores = [10, -1000, 10, -1000, 10, 10, 11];
+    const ms = '333310012441135316555651622222005';
+    const scores = [2, -1000, -1000, -1000, 2, -1000, 3];
     const result = await checkPredicate('claimeven', ms, scores, solver);
     assert.equal(result.passes, true);
-    assert.deepEqual(result.correctCols, [4]);
-    assert.equal(result.correct_col, 4);
+    assert.deepEqual(result.correctCols, [6]);
+    assert.equal(result.correct_col, 6);
 
     const puzzle = { category: 'claimeven', moveString: ms, correctCol: result.correct_col };
     const wrongCol = evaluatePredicate(puzzle, 0, scores);

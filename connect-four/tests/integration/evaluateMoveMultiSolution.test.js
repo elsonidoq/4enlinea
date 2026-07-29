@@ -111,10 +111,13 @@ describe('POST /api/evaluate-move — accepted field agrees with evaluatePredica
   let server, baseUrl;
   // Deterministic per-board scores stub avoids a live c4solver process for this parity check —
   // every board below is used with its already-captured real solver scores, so no live solver
-  // call is needed to reproduce them. '333332' (T019 fixture) keeps its original single-board
-  // shape; the two OI-1 z_threat repro boards (T009) are keyed explicitly since they carry
-  // different real scores.
+  // call is needed to reproduce them. The two OI-1 z_threat repro boards (T009) are keyed
+  // explicitly since they carry different real scores.
   const scoresByMove = {
+    // lesson-06 confirmation challenge 0. Replaced '333332' (2026-07-28), which this suite
+    // called "a real double_threat fork board" but which contains no fork on any column — it
+    // only scored accepted:true through evalDoubleThreat's since-removed solver-score fallback.
+    '104300405142342531': [-10, 11, 11, 10, -10, 11, -10],
     '333332': [-2, -3, 1, -3, -3, 1, -2],
     // OI-1 repro board 1 — scores from a live solver.query() call made during test authoring.
     '3333302444422222060315555054': [3, -1, -1000, -1000, 3, 3, 3],
@@ -131,7 +134,9 @@ describe('POST /api/evaluate-move — accepted field agrees with evaluatePredica
   }));
   after(() => new Promise(resolve => server.close(resolve)));
 
-  const ms = '333332'; // double_threat board, fork columns [2, 5] (see t019_multi_solution_search.mjs)
+  // double_threat board, fork columns [1, 2, 5] — verified through classifier.js#detectDoubleThreat.
+  // Cols 1 and 5 are stacked (Case B) forks; col 2 is a two-column (Case A) fork.
+  const ms = '104300405142342531';
 
   test('a valid non-canonical fork column (col 5) is scored accepted:true — client and server never disagree', async () => {
     const body = { movestring: ms, col: 5, category: 'double_threat' };

@@ -181,58 +181,45 @@ function evalForcedBlock(candidateCol, moveString) {
   return { result: 'wrong', correctCol: safeCols[0] };
 }
 
-// double_threat: Create a double threat (≥2 simultaneous winning threats after the move).
+// double_threat: Create a double threat — a move after which the opponent cannot answer every
+// winning cell.
+//
+// The definition of "double threat" lives in ONE place: classifier.js#detectDoubleThreat, which
+// recognises both routes —
+//   Case A: gravity-top threats in ≥2 distinct columns;
+//   Case B: two threats stacked on consecutive rows of ONE column (the opponent must block the
+//           lower, which hands over the upper).
+// This evaluator must never re-derive it. It previously did, with a private helper that only read
+// cells at the current column height, so it saw Case A only and graded every Case-B fork wrong —
+// the reported lesson-06 bug (board '104300405142342531': cols 1 and 5 are Case-B forks).
+//
+// There is deliberately NO "no fork -> grade by highest positive solver score" fallback. That
+// fallback used to make a fork drill silently become a best-move drill, and — because
+// candidate-generator.js grades through this same function — it admitted boards with no fork at
+// all into the double_threat puzzle pool. A board where no column forks is not a double_threat
+// puzzle: every column is wrong and checkPredicate reports passes: false.
 function evalDoubleThreat(candidateCol, scores, moveString) {
-  const { board, heights } = parseBoard(moveString);
-  const moveCount = moveString.length;
-  const player = currentPlayer(moveCount);
+  const board = new Board(moveString);
+  const player = board.currentPlayer;
 
-  function getThreatCells(b, h, p) {
-    // Returns cells where p has an immediate winning threat (not pre-empted by opponent).
-    const opp = 3 - p;
+  // The winning cells the fork leaves behind, in the historical { col, row } shape (0-indexed),
+  // read from the same primitive detectDoubleThreat itself walks (classifier.js:1430-1432).
+  function threatCellsAfterMove(col) {
     const cells = [];
-    for (let col = 0; col < COLS; col++) {
-      const row = h[col];
-      if (row >= ROWS) continue;
-      b[row][col] = p;
-      const playerWins = checkWin(b, row, col, p);
-      b[row][col] = 0;
-      if (!playerWins) continue;
-      b[row][col] = opp;
-      const oppWins = checkWin(b, row, col, opp);
-      b[row][col] = 0;
-      if (!oppWins) cells.push({ col, row });
+    for (const [c, rows] of board.withMove(col).reachableThreats(player)) {
+      for (const row of rows) cells.push({ col: c, row });
     }
     return cells;
   }
 
-  function threatCellsAfterMove(col) {
-    const row = heights[col];
-    if (row >= ROWS) return [];
-    const b = board.map(r => [...r]);
-    const h = [...heights];
-    b[row][col] = player;
-    h[col]++;
-    return getThreatCells(b, h, player);
-  }
-
-  // Find all columns that create ≥2 threats
   const doubleThreatCols = [];
   for (let col = 0; col < COLS; col++) {
-    if (scores[col] > 0 && threatCellsAfterMove(col).length >= 2) {
-      doubleThreatCols.push(col);
-    }
+    if (board.colHeights[col] >= ROWS) continue;
+    if (!(scores[col] > 0)) continue;   // a structural fork that still loses is not the answer
+    if (detectDoubleThreat(board.withMove(col), player).matched) doubleThreatCols.push(col);
   }
 
-  if (doubleThreatCols.length === 0) {
-    // Fallback: positive score moves
-    const bestScore = Math.max(...scores.filter(s => s > 0));
-    const bestCols = scores.reduce((acc, s, i) => { if (s === bestScore) acc.push(i); return acc; }, []);
-    if (bestCols.includes(candidateCol)) {
-      return { result: 'tied', tiedWith: bestCols.filter(c => c !== candidateCol), correctCol: bestCols[0] };
-    }
-    return { result: 'wrong', correctCol: bestCols[0] };
-  }
+  if (doubleThreatCols.length === 0) return { result: 'wrong' };
 
   if (doubleThreatCols.includes(candidateCol)) {
     const others = doubleThreatCols.filter(c => c !== candidateCol);

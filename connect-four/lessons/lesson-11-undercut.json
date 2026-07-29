@@ -341,27 +341,27 @@
     }
   ],
   "socratic": {
-    "movestring": "33333416020500250",
-    "_boardInstructions": "Full undercut_t2_adjacent candidate (seed 42, candidate 5): 17 plies (odd — the learner plays Gray by movestring-length parity). Gray's falling diagonal O4 (3,3), O16 (5,1), O8 (6,0) 0-ind completes at 0-ind (4,2); Green's rising diagonal X3/X7/X15 completes at 0-ind (4,3) directly above — Gray has undercut Green. correctCol 4 is solver-max: scr (Gray to move) -1 -11 2 0 12 11 12 (col 6 ties at +12 — ties allowed). Verified continuation (render of 333334160205002504): Gray's disc lands 0-ind (4,1), making (4,2) gravity-top AND creating a second gravity-top threat at (6,1) via the row-2 horizontal O2/O18/O16; all Green replies score -12. extraThreats 0. SocraticScreen derives its own overlays, so none are authored here.",
+    "movestring": "2501222544566432114",
+    "_boardInstructions": "undercut_t2_adjacent candidate (seed 7). Replaced 33333416020500250 on 2026-07-28: there col 6 tied the answer at +12, so a learner playing it was told 'Not quite' for an equally winning move. 19 plies (odd — the learner plays Gray by movestring-length parity). This lesson teaches the undercut from the BENEFICIARY's side (see slides 1-2), so the board is deliberately NOT a detectUndercutVictim match: that detector (the `undercut` puzzle category) models the side to move as the VICTIM and only fires when scores[C] < 0, whereas here pressing the column WINS. The board IS validated by detectUndercutBeneficiary, which the curation spec undercut_t2_adjacent now uses — see docs/architecture/server-conventions.md 'Undercut has two sides' and OI-74. Gray's completing cells are 0-ind (3,2) and (3,3); Green's sits directly above at 0-ind (3,4), undercut and unreachable. correctCol 3 is the STRICT unique solver max: scr (Gray to move) 10 10 10 11 10 3 10. Verified continuation: after Gray plays col 3 every Green reply scores -11; Green must block 0-ind (3,2), which lifts the column to (3,3) where Gray completes four (checkWin true). extraThreats 1. SocraticScreen derives its own overlays, so none are authored here.",
     "boardSpec": [
-      "gggdg",
       "g",
-      "dg",
-      "gdgdg",
-      "d",
-      "dd",
-      "d"
+      "dgd",
+      "ggdgd",
+      "g",
+      "gddg",
+      "ddg",
+      "dg"
     ],
     "overlays": [],
-    "correctCol": 4,
-    "goalPrompt": "Gray has completed the diagonal that needs the third row of the fifth column — directly below Green's fourth-row threat, undercutting it. Pressing the fifth column is the solver's best move (+12): the disc lands on the second row, turns Gray's third-row cell into an immediate threat, and at the same time builds a second threat along the second row that completes in the seventh column. Green cannot block both, and Green's undercut threat above cannot save the game.",
-    "goalPrompt_es": "Gris completó la diagonal que necesita la tercera fila de la quinta columna — justo debajo de la amenaza de Verde en la cuarta fila, dejándola undercut. Apretar la quinta columna es la mejor movida del solver (+12): la ficha cae en la segunda fila, convierte la casilla de la tercera fila de Gris en una amenaza inmediata y, al mismo tiempo, arma una segunda amenaza a lo largo de la segunda fila que completa en la séptima columna. Verde no puede bloquear las dos, y la amenaza undercut de Verde arriba no puede salvar la partida.",
+    "correctCol": 3,
+    "goalPrompt": "Gray's completing cells wait on the third and fourth rows of the fourth column; Green's sits directly above them on the fifth row, undercut and out of reach. Pressing the fourth column is the solver's uniquely best move (+11, against +10 elsewhere): Green must block Gray's third-row cell, which lifts the column to Gray's fourth-row cell and completes four. Green's threat above never gets a turn.",
+    "goalPrompt_es": "Las casillas que completan a Gris esperan en la tercera y la cuarta fila de la cuarta columna; la de Verde está justo encima, en la quinta fila, undercut y fuera de alcance. Apretar la cuarta columna es la única mejor movida del solver (+11, contra +10 en el resto): Verde tiene que bloquear la casilla de la tercera fila de Gris, lo que eleva la columna hasta la casilla de la cuarta fila de Gris y completa cuatro. La amenaza de Verde de arriba nunca llega a jugar.",
     "messages": {
       "ask": [
         {
-          "text": "Gray's diagonal is now complete: it needs only the third row of the fifth column, directly below Green's threat. You are Gray — where do you press?",
+          "text": "Gray's completing cells wait on the third and fourth rows of the fourth column, and Green's sits directly above them on the fifth row — undercut, and out of reach. You are Gray — where do you press?",
           "mood": "think",
-          "text_es": "La diagonal de Gris ya está completa: solo necesita la tercera fila de la quinta columna, justo debajo de la amenaza de Verde. Vos sos Gris — ¿dónde apretás?"
+          "text_es": "Las casillas que completan a Gris esperan en la tercera y la cuarta fila de la cuarta columna, y la de Verde está justo encima, en la quinta fila —undercut, y fuera de alcance. Vos sos Gris — ¿dónde apretás?"
         }
       ],
       "wrong1": [
@@ -387,9 +387,9 @@
       ],
       "hint": [
         {
-          "text": "The undercut column itself. Dropping into the fifth column puts your third-row cell within immediate reach — and Green's threat above it can never punish the advance.",
+          "text": "The undercut column itself. Dropping into the fourth column starts the climb: Green has to block your third-row cell, and that lifts the column straight to your fourth-row cell — while Green's threat above never gets a turn.",
           "mood": "think",
-          "text_es": "La columna del undercut, justamente. Tirar en la quinta columna pone tu casilla de la tercera fila al alcance inmediato — y la amenaza de Verde arriba nunca puede castigar el avance."
+          "text_es": "La columna del undercut, justamente. Tirar en la cuarta columna empieza la escalada: Verde tiene que bloquear tu casilla de la tercera fila, y eso eleva la columna justo hasta tu casilla de la cuarta fila —mientras que la amenaza de Verde de arriba nunca llega a jugar."
         }
       ]
     }

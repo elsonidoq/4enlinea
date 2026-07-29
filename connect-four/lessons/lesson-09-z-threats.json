@@ -261,27 +261,27 @@
     }
   ],
   "socratic": {
-    "movestring": "25611155232213443333050",
-    "_boardInstructions": "Self-play find (z_threat_socratic search, seed 42): 23 plies (odd — the learner plays Gray by movestring-length parity). Gray has major threats on the same row, 0-ind row 3: at (6,3) — descending diagonal (3,0) O10, (4,1) O16, (5,2) O8 — count 3 from height 1 (odd → z-threat); and at (4,3) — horizontal (2,3) O12, (3,3) O18, (5,3) O22 — count 2 from height 2 (even → distractor). correctCol 6 is solver-max: scr 6 5 5 -- 5 5 6 (col 0 ties at +6 but holds no Gray threat; the distractor col 4 scores 5). Position winning for Gray. extraThreats 0 — the contrast pair are the only major threats on the board. SocraticScreen derives its own overlays, so none are authored here.",
-    "goalPrompt": "Gray has major threats on the fourth row of both the fifth and seventh columns. Only the seventh column's is a Z-Threat: its count from the stack top (second, third, fourth rows) is three — odd — while the fifth column's count (third, fourth rows) is two — even. Clicking the seventh column is also the solver's best move (+6).",
-    "goalPrompt_es": "Gris tiene amenazas mayores en la cuarta fila tanto de la quinta como de la séptima columna. Solo la de la séptima columna es una Amenaza-Z: su conteo desde arriba de la pila (segunda, tercera, cuarta fila) es tres — impar — mientras que el conteo de la quinta columna (tercera, cuarta fila) es dos — par. Hacer clic en la séptima columna también es la mejor jugada según el solver (+6).",
+    "movestring": "431311063331412212322",
+    "_boardInstructions": "Self-play find (z_threat_socratic search, seed 7). Replaced 25611155232213443333050 on 2026-07-28: on that board col 0 tied the answer at +6, so a learner playing it was told 'Not quite' for an equally winning move. 21 plies (odd — the learner plays Gray by movestring-length parity). Gray's z-threat and its distractor sit on the same row, 0-ind row 3: the z-threat at (0,3), counting 3 empty cells from the stack top (0-ind rows 1,2,3 — odd → Gray's); the distractor at (4,3), counting 2 (0-ind rows 2,3 — even → not Gray's). correctCol 0 is the STRICT unique solver max: scr 9 -- 8 -- 8 8 8, so no other column ties it. Position winning for Gray. extraThreats 1 (Gray also holds (0,4), stacked above the z-threat in the same column, which does not compete for the learner's attention). SocraticScreen derives its own overlays, so none are authored here.",
+    "goalPrompt": "Gray has major threats on the fourth row of both the first and fifth columns. Only the first column's is a Z-Threat: its count from the stack top (second, third, fourth rows) is three — odd — while the fifth column's count (third, fourth rows) is two — even. Clicking the first column is also the solver's uniquely best move (+9, against +8 everywhere else).",
+    "goalPrompt_es": "Gris tiene amenazas mayores en la cuarta fila tanto de la primera como de la quinta columna. Solo la de la primera columna es una Amenaza-Z: su conteo desde arriba de la pila (segunda, tercera, cuarta fila) es tres — impar — mientras que el conteo de la quinta columna (tercera, cuarta fila) es dos — par. Hacer clic en la primera columna también es la única mejor jugada según el solver (+9, contra +8 en todas las demás).",
     "boardSpec": [
+      "g",
+      "ggdddg",
+      "gdddg",
+      "ddgdgg",
       "gg",
-      "dgdg",
-      "gggd",
-      "ddgdgd",
-      "gd",
-      "dgdd",
-      "g"
+      "",
+      "d"
     ],
     "overlays": [],
-    "correctCol": 6,
+    "correctCol": 0,
     "messages": {
       "ask": [
         {
-          "text": "Two columns hold a Gray threat on the same row — the fifth and the seventh. Only one of them is truly yours. Which column?",
+          "text": "Two columns hold a Gray threat on the same row — the first and the fifth. Only one of them is truly yours. Which column?",
           "mood": "think",
-          "text_es": "Dos columnas tienen una amenaza de Gris en la misma fila — la quinta y la séptima. Solo una de ellas es realmente tuya. ¿Cuál columna?"
+          "text_es": "Dos columnas tienen una amenaza de Gris en la misma fila — la primera y la quinta. Solo una de ellas es realmente tuya. ¿Cuál columna?"
         }
       ],
       "wrong1": [
@@ -318,8 +318,27 @@
   "confirmationCount": 2,
   "confirmationChallenges": [
     {
-      "puzzleId": "22a4c6ab-9ae6-4b1a-aa9e-0781945c6c67",
-      "moveString": "3551333260",
+      "puzzleId": "b1d94f07-6e2a-4c85-9713-8a0f5c6db24e",
+      "moveString": "33333345122222454214",
+      "goalPrompt": "Identify the column where a Z-threat gives you unstoppable parity control.",
+      "goalPrompt_es": "Identificá la columna donde una Amenaza-Z te da control de paridad imparable.",
+      "goalPredicateType": "z_threat",
+      "goalPredicateParams": {},
+      "cooperativeAiMoves": [],
+      "interactionMode": "single_move",
+      "highlightMetadata": {
+        "type": "capsule",
+        "toRow": 4,
+        "column": 1,
+        "fromRow": 2,
+        "badgeCount": 3
+      },
+      "correctCol": 1,
+      "userPlayer": 1
+    },
+    {
+      "puzzleId": "3f6a20c8-8b47-49de-a5c1-0d7e93b4f156",
+      "moveString": "443555433312243512255321041",
       "goalPrompt": "Identify the column where a Z-threat gives you unstoppable parity control.",
       "goalPrompt_es": "Identificá la columna donde una Amenaza-Z te da control de paridad imparable.",
       "goalPredicateType": "z_threat",
@@ -329,30 +348,11 @@
       "highlightMetadata": {
         "type": "capsule",
         "toRow": 2,
-        "column": 4,
+        "column": 6,
         "fromRow": 0,
         "badgeCount": 3
       },
-      "correctCol": 4,
-      "userPlayer": 1
-    },
-    {
-      "puzzleId": "e58a4d58-d89b-482e-b1e6-ccf5bebc8786",
-      "moveString": "11412362505",
-      "goalPrompt": "Identify the column where a Z-threat gives you unstoppable parity control.",
-      "goalPrompt_es": "Identificá la columna donde una Amenaza-Z te da control de paridad imparable.",
-      "goalPredicateType": "z_threat",
-      "goalPredicateParams": {},
-      "cooperativeAiMoves": [],
-      "interactionMode": "single_move",
-      "highlightMetadata": {
-        "type": "capsule",
-        "toRow": 3,
-        "column": 0,
-        "fromRow": 1,
-        "badgeCount": 3
-      },
-      "correctCol": 0,
+      "correctCol": 6,
       "userPlayer": 2
     }
   ]

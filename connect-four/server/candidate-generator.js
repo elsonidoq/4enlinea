@@ -1,8 +1,9 @@
 import { evaluatePredicate } from './predicates.js';
+import { answerSetHolds } from './answerSetInvariant.js';
 import {
   classify, checkWin, getImmediateThreats, parseBoardState,
   hasActiveDoubleThreat, Board, hasWon,
-  detectZThreat, detectClaimeven, detectUndercut, detectOvercut,
+  detectZThreat, detectClaimeven, detectUndercutVictim, detectOvercut,
   detectFigure7, detectJShape, detectOddEvenThreat,
   detectDoubleThreat, detectForcedWin, detectForcedBlock,
 } from './classifier.js';
@@ -330,7 +331,7 @@ export async function checkClaimevenPredicate(ms, scores, solver) {
 
 export function checkUndercutPredicate(ms, scores) {
   const b = new Board(ms);
-  const result = detectUndercut(b, scores);
+  const result = detectUndercutVictim(b, scores);
   if (!result.matched) return { passes: false, correctCols: [] };
   // For undercut, "correct" = any column except the killing_threat column
   const killingCol = result.highlightMetadata.cells.find(c => c.role === 'killing_threat').column;
@@ -462,6 +463,20 @@ export async function checkPredicate(category, moveString, scores, solver) {
       const coincides = answerCols.some(c => blockCols.includes(c));
       if (!coincides) return { passes: false, correctCols: [] };
     }
+  }
+
+  // Answer-set invariant (2026-07-28) — see server/answerSetInvariant.js for the rule and why it
+  // exists. One cross-cutting guard rather than a per-category patch, because the failure is
+  // generic: a detector says "the pattern is here" while saying nothing about whether playing it
+  // is best. Measured need — `checkUndercutPredicate` marks every column EXCEPT the killing one
+  // correct without ever checking the killing column is bad, so it emitted boards whose single
+  // best move was the one the drill punishes (2 of 7 sampled). The same hole exists wherever an
+  // instance detector supplies the answer.
+  //
+  // forbidden_columns is exempt: its `correctCols` are the columns to AVOID, so the subset
+  // relation is inverted and the test would be meaningless there.
+  if (category !== 'forbidden_columns' && !answerSetHolds(result.correctCols, scores)) {
+    return { passes: false, correctCols: [] };
   }
 
   return result;
