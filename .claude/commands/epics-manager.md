@@ -24,7 +24,27 @@ Runs before anything else — before even parsing `$ARGUMENTS` for the epic file
 
 3. **In the main checkout** (either because that's where invocation started, or because step 2 resolved to "create fresh"): invoke `superpowers:using-git-worktrees` to set up an isolated workspace for this epic, following that skill's own detection → native-tool-first → git-fallback → project-setup → clean-baseline flow. Name the worktree after the epic (its slug or heading), not a generic name, so it's identifiable later. If the user's answer in step 2 was "work in place anyway," skip this step entirely.
 
-4. Set `worktree_setup_done: true` in state and proceed to Epic resolution. If the resulting workspace is a git worktree of this repo, dev-server/test work inside it must follow `docs/architecture/worktree-conventions.md` (run `eval "$(./worktree-ports.sh)"` before starting or killing any server — never assume `3001`/`5173` are free or yours to touch).
+4. **Copy the untracked env files into the new worktree (MANDATORY — the setup skill does NOT do this).** `superpowers:using-git-worktrees` Step 2 runs only `npm install`; every `.env*` file here is gitignored (`connect-four/.gitignore:2`), so `git worktree add` produces a workspace with **no secrets at all**. Without this step the reason-engine tests fail with `ENOENT`, the server can't boot, and every OpenAI/Supabase/Paddle-dependent task looks like "needs a key" when the key exists. Run from the **main checkout**, with `$WT` = the new worktree path:
+
+   ```bash
+   # server-side secrets (OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY, PADDLE_API_KEY, …)
+   for f in connect-four/server/.env connect-four/server/.env.local \
+            connect-four/server/.env.staging connect-four/server/.env.production; do
+     [ -f "$f" ] && cp "$f" "$WT/$f"
+   done
+   # frontend build env (VITE_*)
+   for f in connect-four/.env.local connect-four/.env.local.local \
+            connect-four/.env.local.staging connect-four/.env.local.production; do
+     [ -f "$f" ] && cp "$f" "$WT/$f"
+   done
+   ls -la "$WT/connect-four/server/.env"   # verify it landed; do NOT print its contents
+   ```
+
+   Copy, never symlink — a symlink means an edit in one workspace silently changes the other. Never echo, `cat`, or otherwise print a value from these files ([[feedback_never_print_secrets]]); confirm by path/size only.
+
+5. **Baseline with `npm run test:fast`, not `npm test`.** The setup skill's Step 3 ("Verify Clean Baseline") suggests a generic `npm test`; in this repo that runs `candidate-generator.test.js`, which calls the real c4solver up to 400× per test and routinely hangs 10+ minutes (`CLAUDE.md` §Running tests). Use `cd connect-four && npm run test:fast`. If the baseline is red, report it before starting the epic — a pre-existing failure inherited into a worktree reads as damage the epic caused.
+
+6. Set `worktree_setup_done: true` in state and proceed to Epic resolution. If the resulting workspace is a git worktree of this repo, dev-server/test work inside it must follow `docs/architecture/worktree-conventions.md` (run `eval "$(./worktree-ports.sh)"` before starting or killing any server — never assume `3001`/`5173` are free or yours to touch).
 
 ---
 

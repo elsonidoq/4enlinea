@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 0ad220ef-6705-44bc-8c78-a29812c83801
+  modified: 2026-07-29T14:22:25.225Z
 ---
 
 Two non-obvious traps when creating a git worktree in this repo (both hit during the
@@ -31,6 +32,20 @@ call `loadEnv` at **import time** and hard-fail with `ENOENT` on `connect-four/s
 Result: ~7 reason-engine/test files "fail" for a reason unrelated to your change. Copy
 `connect-four/server/.env` from the main checkout into the worktree before running
 `npm run test:fast`. (Also run `npm install` — node_modules isn't shared.)
+
+**Nothing copies it for you** (verified at source 2026-07-29): `superpowers:using-git-worktrees`
+Step 2 "Project Setup" runs *only* `npm install` / `cargo build` / `pip install` / `go mod download`
+— there is no env-copy step anywhere in the skill. `/epics-manager` was amended 2026-07-29 to do it
+explicitly (step 4 of its Worktree setup) for **all** of `connect-four/server/.env{,.local,.staging,
+.production}` and `connect-four/.env.local*` (the VITE_ side). Any *other* worktree path — the
+`EnterWorktree` tool, a hand-run `git worktree add`, another manager command — still leaves you with
+zero secrets. **Copy, never symlink** (a symlink makes an edit in one workspace mutate the other),
+and never print a value to confirm ([[feedback_never_print_secrets]]) — check the path exists.
+
+**2a. The skill's baseline step suggests the wrong test command here.** Its Step 3 says run
+`npm test`; in this repo that pulls in `candidate-generator.test.js` (real c4solver up to 400×/test,
+hangs 10+ min — `CLAUDE.md` §Running tests). Always baseline a new worktree with
+`cd connect-four && npm run test:fast`.
 
 **2b. `--legacy-peer-deps` is NO LONGER needed (fixed 2026-07-14).** The single peer conflict
 was the OI-16 jsdom mismatch (`global-jsdom@^29` peer-wanting `jsdom >=29 <30` while the repo pins
