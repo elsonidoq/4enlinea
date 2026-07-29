@@ -140,21 +140,31 @@ Handoff chain: `brainstorm_gate` → `epic_brainstorm` → `epic_brainstorm_fix`
 After each critique sub-agent returns, convert its output into multiple-choice questions using the `AskUserQuestion` tool. Apply in every `*_critique` stage.
 
 **Parsing the critique:**
-- Each item under `## Blocking issues` becomes one question.
-- Each item under `## Decisions required` becomes one question.
+- Each item under `## Blocking issues` becomes one question **unless it auto-accepts** (see below).
+- Each item under `## Decisions required` becomes one question — always. These are owner choices by construction; never auto-accept one.
 
-**Formulating options:**
+**Single-viable-option rule (do not ask what has only one answer):**
+A `Blocking issue` auto-accepts — apply the recommended resolution without asking — when **both** hold:
+1. The critique gives a recommended resolution, and
+2. No clear alternative exists, i.e. the question you would build has exactly one real option besides the tool's automatic `"Other"`.
+
+Do **not** manufacture a second option to keep a question alive, and do not auto-accept merely because a recommendation is present — a recommendation between two genuine alternatives is still a question. If you are unsure whether an alternative is real, ask.
+
+**Reporting auto-accepted items (required):** before making any `AskUserQuestion` call for this critique — or, if every item auto-accepted, before advancing to the fix stage — tell the user in one line per item what was auto-applied and why there was no alternative. This is what keeps the rule from silently removing oversight along with the keystrokes. If the user objects to any of them in their next message, reopen it as a question and re-run the fix stage.
+
+**Formulating options** (for items that were not auto-accepted):
 - For **Blocking issues**: "How should this be resolved?" + one-sentence summary. Options:
   - `"Accept recommendation"` — description is the recommended resolution verbatim.
-  - Option 2 only when a clear alternative exists.
+  - Option 2 — the genuine alternative that made this a question at all.
   - Tool automatically adds `"Other"`.
 - For **Decisions required**: question and options come from the critique. Append `"(Recommended)"` to the recommended option.
 
-**Batching:** 1–4 questions per `AskUserQuestion` call. Make sequential calls if more than 4.
+**Batching:** 1–4 questions per `AskUserQuestion` call. Make sequential calls if more than 4. If every item auto-accepted, make **no** `AskUserQuestion` call — do not invent a question to fill the stage.
 
 **After collecting all answers:**
 - Scan for discussion signals ("let's discuss", "not sure", "explain"). If found, engage inline, then proceed.
 - If no discussion signals, immediately save to `pending_answers` and advance.
+- `pending_answers` must record **every** item — asked and auto-accepted alike — so the fix agent's input is identical either way. It must be non-null once the critique has been processed, even when no question was asked; the Interrupted-critique recovery above treats a null `pending_answers` as "the Q&A never completed" and would otherwise re-run it forever.
 
 **Deferral detection:**
 Scan for "defer", "later", "post-MVP", "out of scope". If found, extract what and the target milestone; record in `pending_deferrals`.
@@ -164,6 +174,8 @@ Scan for "defer", "later", "post-MVP", "out of scope". If found, extract what an
 ## [Issue/question summary]
 Answer: [selected option label] — [Other text if provided]
 ```
+For an auto-accepted item, use the same shape with the label `Accept recommendation (auto-applied — no alternative)`, so the fix agent cannot tell the two apart and applies both identically.
+
 If `pending_deferrals` is non-empty, append a `## Deferrals` section.
 
 ---

@@ -708,6 +708,38 @@ exercised locally at all.
   `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` V7; OI-43, OI-46.
 - [ ] Signed off (tester / date):
 
+- **What**: On deployed staging, open any concept slide of any lesson in **both** `en` and `es` and
+  confirm the coach **speaks the bubble and then reads the info-prose block** — two clips, in that
+  order, audibly. Then press ⏹ mid-prose and confirm the audio actually stops.
+- **Why staging**: two independent local blind spots. (1) The chrome-devtools automation browser
+  **disables autoplay blocking**, so `audio.play()` resolves with no user gesture and a clip that a
+  real browser would reject with `NotAllowedError` looks like it played — see
+  `project_app_qa_setup_gotchas`. Locally this was verified only as *queue order* (by patching
+  `window.Audio` and reading constructed srcs) plus a 200/`audio/mpeg` fetch; neither proves a sound
+  came out. (2) The 30 `infoProseAudio` clips are committed static assets under
+  `public/audio/lessons/`, which **Express does not serve in dev** (it serves `../dist`) — only Vite
+  does, and only `vite build` copies `public/`→`dist/` for production.
+- **Expected**: in each locale, the bubble clip plays, then the prose clip, with no gap requiring a
+  tap; ⏹ silences both; the mp3 requests return **200/206** `audio/mpeg`, not the SPA `index.html`
+  fallback. In `es` the prose is heard in Spanish, not English (`pickLocalized` falls back to the
+  English clip silently, so a Spanish clip that failed to ship is indistinguishable from working
+  except by ear).
+- **Source**: session 2026-07-29 (lesson info-prose narration; `getSlideNarrationQueue`,
+  `collectMessages` textKey/audioKey).
+- [ ] Signed off (tester / date):
+
+- **What**: On deployed staging, run the lesson **audio prune** (`POST /api/admin/lessons/prune-audio`,
+  or confirm equivalently that no referenced clip is missing) and verify **zero** `infoProseAudio`
+  clips are reported deleted and none 404 in the app.
+- **Why staging**: `collectReferencedAudio` now reads each walker entry's own `audioKey`, so the 30
+  prose clips are protected only if the deployed build carries that change. The failure mode is
+  catastrophic and silent — the exact divergence that has already deleted every clip of a category
+  twice (`audio_es`, then socratic). Locally this was audited by re-implementing the walk in a script
+  (58 referenced / 58 on disk / 0 orphans), not by running the deployed prune route.
+- **Expected**: `{ deleted: [] }` for every prose clip; every lesson still narrates its prose afterwards.
+- **Source**: session 2026-07-29; `server-conventions.md` §`collectMessages`.
+- [ ] Signed off (tester / date):
+
 ## Epic 10 — Paddle Checkout Migration (replace & remove Stripe)
 
 > Submitted/pending in the real world as of 2026-07-17 — these gate the first live payout test and cannot be exercised in sandbox. The rest of Epic 10's staging checks (deployed webhook delivery, live catalog) get appended when the epic is implemented; these three are already in flight.

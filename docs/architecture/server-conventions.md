@@ -859,11 +859,20 @@ directly `node --test`-able without an Express app or a real TTS provider.
   distinct file. There is no separate manifest/registry/approval file — the lesson JSON's own `audio`
   field is the sole source of truth (contrast with spec 039's i18n-key-driven, manifest-gated coach TTS
   pipeline, which this module deliberately does NOT reuse or extend).
-- **`collectMessages(lesson)`** → `[{ message, locator }]` — **the single walker over every narratable
-  message in a lesson.** Yields `slides[si].coachMessages[mi]` (locator `slides[${si}].coachMessages[${mi}]`)
-  **first**, then `socratic.messages[phase][mi]` (locator `socratic.messages.${phase}[${mi}]`) in the fixed
+- **`collectMessages(lesson)`** → `[{ message, locator, textKey, audioKey }]` — **the single walker over
+  every narratable text in a lesson.** Yields, per slide, `slides[si].coachMessages[mi]` (locator
+  `slides[${si}].coachMessages[${mi}]`) and then that slide's **`infoProse`** (locator
+  `slides[${si}].infoProse`), and after all slides `socratic.messages[phase][mi]`
+  (locator `socratic.messages.${phase}[${mi}]`) in the fixed
   `SOCRATIC_PHASES` order (`ask`, `wrong1`, `wrong2`, `correct`, `hint`) — never `Object.keys`, so locators
   and logs are deterministic. Tolerates `socratic: null` (lesson 4) and an absent/malformed `messages`.
+  **Not every narratable string is coachMessage-shaped**, hence `textKey`/`audioKey` on each entry:
+  coach and socratic messages use `text`/`audio`, but a slide's prose lives on the *slide* under
+  `infoProse`/`infoProseAudio`. Callers derive the Spanish sibling from those keys
+  (`lang === 'es' ? `${key}_es` : key`) rather than hardcoding `text_es`/`audio_es`. A slide is yielded
+  if **either** `infoProse` or `infoProse_es` is non-empty, so an es-only slide still gets a clip.
+  The prose entry comes **after** its slide's coach messages, matching the order the learner hears
+  them (bubble, then prose — see `getSlideNarrationQueue` in `src/lib/lessonNarration.js`).
   **Both `generateLessonAudio` and `collectReferencedAudio` MUST consume it.** This is not a tidiness
   refactor: `collectReferencedAudio` feeds `pruneOrphanedLessonAudio`, which *deletes* unreferenced mp3s,
   so any message the generator can see but the collector cannot has its clip deleted as an orphan on the
@@ -878,7 +887,8 @@ directly `node --test`-able without an Express app or a real TTS provider.
   dependency-injected `synthesize` and `dir` params are the test seam (a test passes a stub synthesize
   function and a temp dir; production code omits both and gets the real `server/ttsProvider.js`
   `synthesize` + the real `public/audio/lessons/` dir). Walks via `collectMessages`, so it covers concept
-  slides **and** `socratic.messages`. `lang='es'` reads `text_es`/writes `audio_es`. **Regenerates
+  slides (coach messages **and** `infoProse`) **and** `socratic.messages`. `lang='es'` reads the `_es`
+  sibling of each entry's `textKey` and writes the `_es` sibling of its `audioKey`. **Regenerates
   unconditionally**: the text hash keys the *filename*, but the voice/prompt/speed/model live in
   `tts-prompt.<lang>.json` and are not in that hash, so a hash match says nothing about whether the clip
   still sounds right. It used to skip on a hash match, which made the admin "Generate audios" button
@@ -890,7 +900,9 @@ directly `node --test`-able without an Express app or a real TTS provider.
   `audio` is left unset/unchanged and recorded in the `failed` array. Returns `{ lesson, generated,
   failed }`, mutating (and returning) the same lesson object passed in.
 - **`collectReferencedAudio(allLessons)`** — walks via `collectMessages` and collects the `path.basename`
-  of **both** `audio` and `audio_es` across every message. Feeds `pruneOrphanedLessonAudio`.
+  of **both** `message[audioKey]` and `message[`${audioKey}_es`]` across every entry. Reading the key off
+  the entry (rather than hardcoding `audio`/`audio_es`) is what keeps the 30 `infoProseAudio` clips from
+  being deleted as orphans on the next prune. Feeds `pruneOrphanedLessonAudio`.
 - **`pruneOrphanedLessonAudio(allLessons, dir = LESSON_AUDIO_DIR)`** — synchronous; deletes any `.mp3`
   under `dir` not in `collectReferencedAudio`'s set, returns the list of deleted filenames.
 - **`SOCRATIC_PHASES`** — exported `['ask','wrong1','wrong2','correct','hint']`. The canonical phase order.

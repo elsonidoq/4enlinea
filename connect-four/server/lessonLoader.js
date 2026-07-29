@@ -73,6 +73,25 @@ function validateWindowHighlights(lesson) {
 }
 
 /**
+ * Validate `slides[].infoProseAudio` / `infoProseAudio_es` — the generated narration
+ * clip for a slide's info prose. Structural only and deliberately permissive: the
+ * loader EXCLUDES an invalid file entirely, so an over-strict rule silently removes a
+ * lesson from the app.
+ * Returns an error string if invalid, or null if valid.
+ */
+function validateInfoProseAudio(lesson) {
+  for (let i = 0; i < lesson.slides.length; i++) {
+    for (const key of ['infoProseAudio', 'infoProseAudio_es']) {
+      const v = lesson.slides[i][key];
+      if (v !== undefined && typeof v !== 'string') {
+        return `slides[${i}].${key} must be a string`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Validate `slides[].showWindowCounts` / `slides[].windowCounts`. Structural only, for
  * the same reason as validateWindowHighlights: the loader EXCLUDES an invalid file
  * entirely, so an over-strict rule silently removes a lesson from the app. Whether the
@@ -192,6 +211,9 @@ export function validateLesson(lesson) {
 
   const windowCountsErr = validateWindowCounts(lesson);
   if (windowCountsErr) return windowCountsErr;
+
+  const infoProseAudioErr = validateInfoProseAudio(lesson);
+  if (infoProseAudioErr) return infoProseAudioErr;
 
   return null;
 }
@@ -314,6 +336,10 @@ export function localizeLesson(lesson, locale = 'en') {
     const next = stripEsKeys(slide);
     if ('infoProse' in slide || 'infoProse_es' in slide) {
       assignLocalized(next, slide, 'infoProse', locale);
+    }
+    // The prose narration clip, localized the same way as the prose it reads.
+    if ('infoProseAudio' in slide || 'infoProseAudio_es' in slide) {
+      assignLocalized(next, slide, 'infoProseAudio', locale);
     }
     if (Array.isArray(slide.coachMessages)) {
       next.coachMessages = slide.coachMessages.map((m) => localizeMessage(m, locale));

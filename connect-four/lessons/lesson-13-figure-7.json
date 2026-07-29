@@ -20,7 +20,9 @@
         {
           "text": "Five discs forming the digit '7': three on a rising diagonal, three across a row, sharing the corner disc. Green's two completing cells stack in the sixth column — same column, adjacent rows.",
           "mood": "think",
-          "text_es": "Cinco fichas que forman el dígito '7': tres en una diagonal ascendente, tres en una fila, compartiendo la ficha del vértice. Las dos casillas que completan la jugada de Verde se apilan en la sexta columna — la misma columna, filas contiguas."
+          "text_es": "Cinco fichas que forman el dígito '7': tres en una diagonal ascendente, tres en una fila, compartiendo la ficha del vértice. Las dos casillas que completan la jugada de Verde se apilan en la sexta columna — la misma columna, filas contiguas.",
+          "audio_es": "/audio/lessons/3c42b21282405f18.mp3",
+          "audio": "/audio/lessons/d2793c7e27375862.mp3"
         }
       ],
       "overlays": [
@@ -64,24 +66,48 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 1 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 3 }
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 3
+            }
           ],
-          "label": "The diagonal arm — completes on the fourth row",
-          "label_es": "El brazo diagonal — completa en la cuarta fila"
+          "label": "The diagonal arm",
+          "label_es": "El brazo diagonal"
         },
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 2 }
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 2
+            }
           ],
-          "label": "The horizontal arm — completes on the third row",
-          "label_es": "El brazo horizontal — completa en la tercera fila"
+          "label": "The horizontal arm",
+          "label_es": "El brazo horizontal"
         }
       ],
       "legendItems": [
@@ -92,12 +118,14 @@
         },
         {
           "type": "tg",
-          "label": "Green's completing cells — same column, adjacent rows",
-          "label_es": "Las casillas que completan la jugada de Verde — misma columna, filas contiguas"
+          "label": "Green's completing cells",
+          "label_es": "Casillas que completa Verde"
         }
       ],
       "infoProse": "The Figure-7 is five discs shaped like the digit '7'. Green's diagonal arm climbs from the third column's bottom row through the fourth column's second row to the fifth column's third row. Green's horizontal arm runs along the third row, from the third column to that same fifth-column disc. The two arms share that corner disc — the hinge. Three discs on the diagonal, three on the row, five in total.\n\nNow count Green's completing cells. The horizontal arm completes four on the third row of the sixth column. The diagonal arm completes four on the fourth row of the sixth column. Both threats land in the same column, one directly above the other — that stacked pair is the Figure-7's signature.\n\nThe sixth column is still empty, so neither cell can be reached yet: a disc dropped there would land on the bottom row. Both threats are waiting above the stack. The solver already calls the position lost for Gray — every legal Gray move loses. The next slide shows why the stacked pair is impossible to defend.",
-      "infoProse_es": "La Figura 7 son cinco fichas con forma del dígito '7'. El brazo diagonal de Verde sube desde la fila inferior de la tercera columna, pasa por la segunda fila de la cuarta columna, y llega a la tercera fila de la quinta columna. El brazo horizontal de Verde recorre la tercera fila, desde la tercera columna hasta esa misma ficha de la quinta columna. Los dos brazos comparten esa ficha del vértice — la bisagra. Tres fichas en la diagonal, tres en la fila, cinco en total.\n\nAhora contá las casillas que completan la jugada de Verde. El brazo horizontal completa cuatro en la tercera fila de la sexta columna. El brazo diagonal completa cuatro en la cuarta fila de la sexta columna. Las dos amenazas caen en la misma columna, una justo arriba de la otra — ese par apilado es la firma de la Figura 7.\n\nLa sexta columna todavía está vacía, así que ninguna de las dos casillas se puede alcanzar todavía: una ficha que caiga ahí aterrizaría en la fila inferior. Las dos amenazas esperan por encima de la pila. El solver ya declara la posición perdida para Gris — todas las jugadas legales de Gris pierden. La próxima diapositiva muestra por qué ese par apilado es imposible de defender."
+      "infoProse_es": "La Figura 7 son cinco fichas con forma del dígito '7'. El brazo diagonal de Verde sube desde la fila inferior de la tercera columna, pasa por la segunda fila de la cuarta columna, y llega a la tercera fila de la quinta columna. El brazo horizontal de Verde recorre la tercera fila, desde la tercera columna hasta esa misma ficha de la quinta columna. Los dos brazos comparten esa ficha del vértice — la bisagra. Tres fichas en la diagonal, tres en la fila, cinco en total.\n\nAhora contá las casillas que completan la jugada de Verde. El brazo horizontal completa cuatro en la tercera fila de la sexta columna. El brazo diagonal completa cuatro en la cuarta fila de la sexta columna. Las dos amenazas caen en la misma columna, una justo arriba de la otra — ese par apilado es la firma de la Figura 7.\n\nLa sexta columna todavía está vacía, así que ninguna de las dos casillas se puede alcanzar todavía: una ficha que caiga ahí aterrizaría en la fila inferior. Las dos amenazas esperan por encima de la pila. El solver ya declara la posición perdida para Gris — todas las jugadas legales de Gris pierden. La próxima diapositiva muestra por qué ese par apilado es imposible de defender.",
+      "infoProseAudio_es": "/audio/lessons/3e42785ad8d0b1a2.mp3",
+      "infoProseAudio": "/audio/lessons/44719dc0e0878c3a.mp3"
     },
     {
       "movestring": "43222430403555",
@@ -115,7 +143,9 @@
         {
           "text": "Gray finally had to block the lower threat — and the block landed directly below Green's upper threat, switching it on. The move that answers one threat activates the other.",
           "mood": "happy",
-          "text_es": "Gris finalmente tuvo que bloquear la amenaza inferior — y el bloqueo cayó justo debajo de la amenaza superior de Verde, activándola. La jugada que responde a una amenaza activa la otra."
+          "text_es": "Gris finalmente tuvo que bloquear la amenaza inferior — y el bloqueo cayó justo debajo de la amenaza superior de Verde, activándola. La jugada que responde a una amenaza activa la otra.",
+          "audio_es": "/audio/lessons/a92ff218e989c4c7.mp3",
+          "audio": "/audio/lessons/fa5d21cd15e6a906.mp3"
         }
       ],
       "overlays": [
@@ -154,24 +184,48 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 1 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 3 }
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 3
+            }
           ],
-          "label": "The diagonal arm — Green completes it right now",
-          "label_es": "El brazo diagonal — Verde lo completa ahora mismo"
+          "label": "The diagonal arm",
+          "label_es": "El brazo diagonal"
         },
         {
           "type": "claim",
           "cells": [
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 2 }
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 2
+            }
           ],
-          "label": "The horizontal arm — dead, Gray's block sits on its last cell",
-          "label_es": "El brazo horizontal — muerto: el bloqueo de Gris ocupa su última casilla"
+          "label": "The horizontal arm",
+          "label_es": "El brazo horizontal"
         }
       ],
       "legendItems": [
@@ -182,12 +236,14 @@
         },
         {
           "type": "tg",
-          "label": "Green's upper threat — now the next playable cell",
-          "label_es": "La amenaza superior de Verde — ahora es la próxima casilla jugable"
+          "label": "Green's upper threat",
+          "label_es": "La amenaza superior de Verde"
         }
       ],
       "infoProse": "Here is the same position three moves later, after the sixth column filled. Gray entered it first — the solver had already confirmed that every Gray move loses, so waiting only delays this. Green stacked a disc on top, and that lifted the column to Green's lower completing cell: the third row of the sixth column became the next playable cell, an immediate threat.\n\nGray had to block it — that is the gray disc now sitting on the third row of the sixth column. But look where the block landed: directly below Green's other completing cell on the fourth row. Because the two threats sit on adjacent rows of the same column, the block itself raised the stack by one and made the upper cell the next playable cell. Green now wins there, completing the diagonal.\n\nThat is the whole trap. Blocking the lower threat hands over the upper one — one move can never defend two cells stacked in the same column. And because both cells started above the stack, Gray could not defuse anything early: any disc Gray ever puts in that column only carries the stack closer to Green's pair.",
-      "infoProse_es": "Acá está la misma posición tres jugadas después, con la sexta columna ya llena. Gris entró primero — el solver ya había confirmado que todas las jugadas de Gris pierden, así que esperar solo retrasaba lo inevitable. Verde apiló una ficha encima, y eso elevó la columna hasta la casilla inferior de Verde: la tercera fila de la sexta columna se convirtió en la próxima casilla jugable, una amenaza inmediata.\n\nGris tuvo que bloquearla — esa es la ficha gris que ahora está en la tercera fila de la sexta columna. Pero mirá dónde cayó el bloqueo: justo debajo de la otra casilla de Verde, en la cuarta fila. Como las dos amenazas están en filas contiguas de la misma columna, el propio bloqueo elevó la pila un lugar más y convirtió la casilla superior en la próxima jugable. Verde gana ahí, completando la diagonal.\n\nEsa es toda la trampa. Bloquear la amenaza inferior entrega la superior — una sola jugada nunca puede defender dos casillas apiladas en la misma columna. Y como las dos casillas empezaban por encima de la pila, Gris no podía desactivar nada antes de tiempo: cualquier ficha que Gris ponga en esa columna solo acerca la pila al par de Verde."
+      "infoProse_es": "Acá está la misma posición tres jugadas después, con la sexta columna ya llena. Gris entró primero — el solver ya había confirmado que todas las jugadas de Gris pierden, así que esperar solo retrasaba lo inevitable. Verde apiló una ficha encima, y eso elevó la columna hasta la casilla inferior de Verde: la tercera fila de la sexta columna se convirtió en la próxima casilla jugable, una amenaza inmediata.\n\nGris tuvo que bloquearla — esa es la ficha gris que ahora está en la tercera fila de la sexta columna. Pero mirá dónde cayó el bloqueo: justo debajo de la otra casilla de Verde, en la cuarta fila. Como las dos amenazas están en filas contiguas de la misma columna, el propio bloqueo elevó la pila un lugar más y convirtió la casilla superior en la próxima jugable. Verde gana ahí, completando la diagonal.\n\nEsa es toda la trampa. Bloquear la amenaza inferior entrega la superior — una sola jugada nunca puede defender dos casillas apiladas en la misma columna. Y como las dos casillas empezaban por encima de la pila, Gris no podía desactivar nada antes de tiempo: cualquier ficha que Gris ponga en esa columna solo acerca la pila al par de Verde.",
+      "infoProseAudio_es": "/audio/lessons/3b4283e2c3bc7ea5.mp3",
+      "infoProseAudio": "/audio/lessons/735589d1a852d9ec.mp3"
     },
     {
       "movestring": "22233535444",
@@ -205,7 +261,9 @@
         {
           "text": "Same five discs — but the sixth column already holds two gray discs, so Green's lower threat is immediately playable. The trap fires right now instead of lying in wait.",
           "mood": "think",
-          "text_es": "Las mismas cinco fichas — pero la sexta columna ya tiene dos fichas grises, así que la amenaza inferior de Verde es jugable de inmediato. La trampa se activa ahora mismo en vez de quedar esperando."
+          "text_es": "Las mismas cinco fichas — pero la sexta columna ya tiene dos fichas grises, así que la amenaza inferior de Verde es jugable de inmediato. La trampa se activa ahora mismo en vez de quedar esperando.",
+          "audio_es": "/audio/lessons/16ece19d3e69f1ff.mp3",
+          "audio": "/audio/lessons/7acedcc57cc64d07.mp3"
         }
       ],
       "overlays": [
@@ -249,24 +307,48 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 1 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 3 }
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 3
+            }
           ],
-          "label": "The diagonal arm — completes on the fourth row, still latent",
-          "label_es": "El brazo diagonal — completa en la cuarta fila, todavía latente"
+          "label": "The diagonal arm (latent)",
+          "label_es": "El brazo diagonal (latente)"
         },
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 2 }
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 2
+            }
           ],
-          "label": "The horizontal arm — completes on the third row, playable now",
-          "label_es": "El brazo horizontal — completa en la tercera fila, jugable ya"
+          "label": "The horizontal arm (playable)",
+          "label_es": "El brazo horizontal (jugable)"
         }
       ],
       "legendItems": [
@@ -277,12 +359,14 @@
         },
         {
           "type": "tg",
-          "label": "Green's completing cells — the lower one now immediately playable",
-          "label_es": "Las casillas que completan la jugada de Verde — la inferior ahora es jugable de inmediato"
+          "label": "Green's completing cells",
+          "label_es": "Casillas que completa Verde"
         }
       ],
       "infoProse": "This board carries the identical five-disc '7', but the sixth column is no longer empty: two gray discs already sit at its bottom. That lifts the stack to Green's lower completing cell — the third row is now the next playable cell, an immediate threat Gray must answer this very move. And the answer walks straight into slide 2's ending: the block lands directly below the fourth-row cell and activates it. No waiting, no manoeuvring — the trap fires at once.\n\nNote what can never happen here: both threats immediately playable at the same time. In a single column only one cell is ever the next playable one, so a stacked pair always keeps one threat above the stack — that latent threat is what makes this a trap rather than a plain fork. A fork with two immediately playable threats (the Fork lesson) needs two different columns, and there the defender at least chooses which one to block.\n\nStill, the purest Figure-7 is the empty-column version from the first two slides: both threats latent, the opponent free to move anywhere — and doomed the moment the column fills. When the column comes pre-filled, as here, the position is just as won, but it plays out as a two-move forcing sequence rather than a standing threat that poisons a whole column for the rest of the game.",
-      "infoProse_es": "Este tablero tiene el mismo '7' de cinco fichas, pero la sexta columna ya no está vacía: dos fichas grises ocupan su base. Eso eleva la pila hasta la casilla inferior de Verde — la tercera fila ahora es la próxima casilla jugable, una amenaza inmediata que Gris tiene que responder en esta misma jugada. Y la respuesta lleva directo al final de la diapositiva 2: el bloqueo cae justo debajo de la casilla de la cuarta fila y la activa. Sin esperas, sin maniobras — la trampa se dispara de una.\n\nFijate qué nunca puede pasar acá: que las dos amenazas sean jugables de inmediato al mismo tiempo. En una sola columna solo una casilla es la próxima jugable en cada momento, así que un par apilado siempre deja una amenaza por encima de la pila — esa amenaza latente es lo que convierte esto en una trampa y no en una bifurcación simple. Una bifurcación con dos amenazas jugables de inmediato (la lección de Bifurcación) necesita dos columnas distintas, y ahí el que defiende al menos elige cuál bloquear.\n\nAun así, la Figura 7 más pura es la versión de columna vacía de las primeras dos diapositivas: las dos amenazas latentes, el rival libre de jugar donde quiera — y condenado en el momento en que se llene la columna. Cuando la columna ya viene parcialmente llena, como acá, la posición está igual de ganada, pero se juega como una secuencia forzada de dos jugadas en vez de una amenaza permanente que envenena toda la columna por el resto de la partida."
+      "infoProse_es": "Este tablero tiene el mismo '7' de cinco fichas, pero la sexta columna ya no está vacía: dos fichas grises ocupan su base. Eso eleva la pila hasta la casilla inferior de Verde — la tercera fila ahora es la próxima casilla jugable, una amenaza inmediata que Gris tiene que responder en esta misma jugada. Y la respuesta lleva directo al final de la diapositiva 2: el bloqueo cae justo debajo de la casilla de la cuarta fila y la activa. Sin esperas, sin maniobras — la trampa se dispara de una.\n\nFijate qué nunca puede pasar acá: que las dos amenazas sean jugables de inmediato al mismo tiempo. En una sola columna solo una casilla es la próxima jugable en cada momento, así que un par apilado siempre deja una amenaza por encima de la pila — esa amenaza latente es lo que convierte esto en una trampa y no en una bifurcación simple. Una bifurcación con dos amenazas jugables de inmediato (la lección de Bifurcación) necesita dos columnas distintas, y ahí el que defiende al menos elige cuál bloquear.\n\nAun así, la Figura 7 más pura es la versión de columna vacía de las primeras dos diapositivas: las dos amenazas latentes, el rival libre de jugar donde quiera — y condenado en el momento en que se llene la columna. Cuando la columna ya viene parcialmente llena, como acá, la posición está igual de ganada, pero se juega como una secuencia forzada de dos jugadas en vez de una amenaza permanente que envenena toda la columna por el resto de la partida.",
+      "infoProseAudio_es": "/audio/lessons/9997a39ffc7a2398.mp3",
+      "infoProseAudio": "/audio/lessons/81d51d3b5275135f.mp3"
     },
     {
       "movestring": "43222430403",
@@ -300,7 +384,9 @@
         {
           "text": "The very same position as the first board — now look left. A second '7', mirrored: the diagonal falls toward the left, and the threat pair stacks in the second column.",
           "mood": "think",
-          "text_es": "Exactamente la misma posición que el primer tablero — ahora mirá para la izquierda. Un segundo '7', espejado: la diagonal cae hacia la izquierda, y el par de amenazas se apila en la segunda columna."
+          "text_es": "Exactamente la misma posición que el primer tablero — ahora mirá para la izquierda. Un segundo '7', espejado: la diagonal cae hacia la izquierda, y el par de amenazas se apila en la segunda columna.",
+          "audio_es": "/audio/lessons/7cf653e9ab46cf58.mp3",
+          "audio": "/audio/lessons/255f31b54350995c.mp3"
         }
       ],
       "overlays": [
@@ -344,24 +430,48 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 4, "r": 0 },
-            { "c": 3, "r": 1 },
-            { "c": 2, "r": 2 },
-            { "c": 1, "r": 3 }
+            {
+              "c": 4,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            },
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 1,
+              "r": 3
+            }
           ],
-          "label": "The mirrored diagonal arm — completes on the fourth row",
-          "label_es": "El brazo diagonal espejado — completa en la cuarta fila"
+          "label": "The mirrored diagonal arm",
+          "label_es": "El brazo diagonal espejado"
         },
         {
           "type": "tg",
           "cells": [
-            { "c": 4, "r": 2 },
-            { "c": 3, "r": 2 },
-            { "c": 2, "r": 2 },
-            { "c": 1, "r": 2 }
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 1,
+              "r": 2
+            }
           ],
-          "label": "The horizontal arm read leftward — completes on the third row",
-          "label_es": "El brazo horizontal leído hacia la izquierda — completa en la tercera fila"
+          "label": "The horizontal arm, leftward",
+          "label_es": "El brazo horizontal, a la izquierda"
         }
       ],
       "legendItems": [
@@ -372,12 +482,14 @@
         },
         {
           "type": "tg",
-          "label": "Green's completing cells — same column, adjacent rows, mirrored side",
-          "label_es": "Las casillas que completan la jugada de Verde — misma columna, filas contiguas, del lado espejado"
+          "label": "Green's completing cells",
+          "label_es": "Casillas que completa Verde"
         }
       ],
       "infoProse": "This is the exact position from the first slide — no new disc has been played. But the '7' has a reflection hiding in it. Read the diagonal the other way: from the fifth column's bottom row, up through the fourth column's second row, to the third column's third row. The horizontal arm is the same row of three, now read from the fifth column back to the third. The hinge is the third-column disc, and the two completing cells stack in the second column, on the third and fourth rows — same column, adjacent rows, both above the empty column's stack.\n\nThat is the Mirror-7: the identical trap with the threat column on the left of the hinge instead of the right. Here the two figures even share four of their five discs — only the foot of the diagonal differs — which is why this one position holds two stacked threat pairs at once, one in the sixth column and one in the second.\n\nThe logic needs no re-learning: whichever side the pair stacks on, blocking the lower cell activates the upper one. The danger is purely perceptual. A player who memorised the rising-diagonal picture scans only to the right and misses the reflection. Whenever three discs line up on a diagonal, check both sides of it for the row of three.",
-      "infoProse_es": "Esta es exactamente la misma posición de la primera diapositiva — no se jugó ninguna ficha nueva. Pero el '7' tiene un reflejo escondido adentro. Leé la diagonal al revés: desde la fila inferior de la quinta columna, subiendo por la segunda fila de la cuarta columna, hasta la tercera fila de la tercera columna. El brazo horizontal es la misma fila de tres, ahora leída desde la quinta columna hacia la tercera. La bisagra es la ficha de la tercera columna, y las dos casillas que completan se apilan en la segunda columna, en la tercera y la cuarta fila — misma columna, filas contiguas, las dos por encima de la pila de la columna vacía.\n\nEso es el Mirror-7: la misma trampa, pero con la columna de amenaza a la izquierda de la bisagra en vez de a la derecha. Acá las dos figuras hasta comparten cuatro de sus cinco fichas — solo difiere el pie de la diagonal — por eso esta única posición contiene dos pares de amenazas apiladas al mismo tiempo, uno en la sexta columna y otro en la segunda.\n\nLa lógica no cambia: de cualquier lado que se apile el par, bloquear la casilla inferior activa la superior. El peligro es puramente perceptivo. Un jugador que memorizó la imagen de la diagonal ascendente solo escanea hacia la derecha y se pierde el reflejo. Cada vez que tres fichas se alinean en una diagonal, revisá los dos lados en busca de la fila de tres."
+      "infoProse_es": "Esta es exactamente la misma posición de la primera diapositiva — no se jugó ninguna ficha nueva. Pero el '7' tiene un reflejo escondido adentro. Leé la diagonal al revés: desde la fila inferior de la quinta columna, subiendo por la segunda fila de la cuarta columna, hasta la tercera fila de la tercera columna. El brazo horizontal es la misma fila de tres, ahora leída desde la quinta columna hacia la tercera. La bisagra es la ficha de la tercera columna, y las dos casillas que completan se apilan en la segunda columna, en la tercera y la cuarta fila — misma columna, filas contiguas, las dos por encima de la pila de la columna vacía.\n\nEso es el Mirror-7: la misma trampa, pero con la columna de amenaza a la izquierda de la bisagra en vez de a la derecha. Acá las dos figuras hasta comparten cuatro de sus cinco fichas — solo difiere el pie de la diagonal — por eso esta única posición contiene dos pares de amenazas apiladas al mismo tiempo, uno en la sexta columna y otro en la segunda.\n\nLa lógica no cambia: de cualquier lado que se apile el par, bloquear la casilla inferior activa la superior. El peligro es puramente perceptivo. Un jugador que memorizó la imagen de la diagonal ascendente solo escanea hacia la derecha y se pierde el reflejo. Cada vez que tres fichas se alinean en una diagonal, revisá los dos lados en busca de la fila de tres.",
+      "infoProseAudio_es": "/audio/lessons/70e81ee5985b05c9.mp3",
+      "infoProseAudio": "/audio/lessons/55fb2d199737e419.mp3"
     }
   ],
   "socratic": {
@@ -401,35 +513,45 @@
         {
           "text": "Your gray discs form a Figure-7 — a rising diagonal and a row of three sharing their corner disc. Both of your completing cells stack in one column, one directly above the other. Find that column and play it.",
           "mood": "think",
-          "text_es": "Tus fichas grises forman una Figura 7 — una diagonal ascendente y una fila de tres que comparten la ficha del vértice. Tus dos casillas que completan se apilan en una columna, una justo arriba de la otra. Encontrá esa columna y jugala."
+          "text_es": "Tus fichas grises forman una Figura 7 — una diagonal ascendente y una fila de tres que comparten la ficha del vértice. Tus dos casillas que completan se apilan en una columna, una justo arriba de la otra. Encontrá esa columna y jugala.",
+          "audio_es": "/audio/lessons/bd4f9405081f92cb.mp3",
+          "audio": "/audio/lessons/c6bfe5cc55a6fb24.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! You saw it.",
           "mood": "happy",
-          "text_es": "¡Exacto! Lo viste."
+          "text_es": "¡Exacto! Lo viste.",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3"
         }
       ],
       "hint": [
         {
           "text": "Trace where your diagonal completes four, and where your row of three completes four. The two cells land in the same column, on the fifth and sixth rows.",
           "mood": "think",
-          "text_es": "Trazá dónde tu diagonal completa cuatro, y dónde tu fila de tres completa cuatro. Las dos casillas caen en la misma columna, en la quinta y sexta fila."
+          "text_es": "Trazá dónde tu diagonal completa cuatro, y dónde tu fila de tres completa cuatro. Las dos casillas caen en la misma columna, en la quinta y sexta fila.",
+          "audio_es": "/audio/lessons/d760786ba169ce31.mp3",
+          "audio": "/audio/lessons/a4c5ae4129800114.mp3"
         }
       ]
     }

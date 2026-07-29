@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getNarrationQueue } from '../../src/lib/lessonNarration.js';
+import { getNarrationQueue, getSlideNarrationQueue } from '../../src/lib/lessonNarration.js';
 
 test('speechEnabled:false returns [] regardless of populated audio', () => {
   const messages = [
@@ -83,4 +83,57 @@ test('accepts a socratic message array unmodified (same shape as coachMessages)'
   assert.deepEqual(getNarrationQueue(socraticAsk, false), []);
   // An unsynthesized phase (migration landed, audio not generated yet) narrates nothing.
   assert.deepEqual(getNarrationQueue([{ text: 'Punish it', mood: 'think' }], true), []);
+});
+
+// --- getSlideNarrationQueue: coach bubbles, then the info prose ---------------
+
+test('getSlideNarrationQueue: bubbles first, then infoProse', () => {
+  const slide = {
+    coachMessages: [{ audio: '/audio/lessons/a.mp3' }, { audio: '/audio/lessons/b.mp3' }],
+    infoProseAudio: '/audio/lessons/prose.mp3',
+  };
+  assert.deepEqual(getSlideNarrationQueue(slide, true), [
+    '/audio/lessons/a.mp3',
+    '/audio/lessons/b.mp3',
+    '/audio/lessons/prose.mp3',
+  ]);
+});
+
+test('getSlideNarrationQueue: a prose-only slide still narrates', () => {
+  const slide = { coachMessages: [{ text: 'no clip yet' }], infoProseAudio: '/audio/lessons/prose.mp3' };
+  assert.deepEqual(getSlideNarrationQueue(slide, true), ['/audio/lessons/prose.mp3']);
+});
+
+test('getSlideNarrationQueue: no infoProseAudio behaves exactly like getNarrationQueue', () => {
+  const slide = { coachMessages: [{ audio: '/audio/lessons/a.mp3' }] };
+  assert.deepEqual(getSlideNarrationQueue(slide, true), ['/audio/lessons/a.mp3']);
+});
+
+test('getSlideNarrationQueue: speechEnabled:false returns [] even with prose audio', () => {
+  const slide = {
+    coachMessages: [{ audio: '/audio/lessons/a.mp3' }],
+    infoProseAudio: '/audio/lessons/prose.mp3',
+  };
+  assert.deepEqual(getSlideNarrationQueue(slide, false), []);
+});
+
+test('getSlideNarrationQueue: empty/whitespace/null infoProseAudio is skipped', () => {
+  for (const bad of ['', '   ', null, undefined]) {
+    assert.deepEqual(
+      getSlideNarrationQueue({ coachMessages: [{ audio: '/audio/lessons/a.mp3' }], infoProseAudio: bad }, true),
+      ['/audio/lessons/a.mp3'],
+      `infoProseAudio ${JSON.stringify(bad)} should be skipped`,
+    );
+  }
+});
+
+test('getSlideNarrationQueue: tolerates undefined/empty slides', () => {
+  assert.deepEqual(getSlideNarrationQueue(undefined, true), []);
+  assert.deepEqual(getSlideNarrationQueue({}, true), []);
+});
+
+test('getSlideNarrationQueue: does not mutate the caller\'s coachMessages array', () => {
+  const coachMessages = [{ audio: '/audio/lessons/a.mp3' }];
+  getSlideNarrationQueue({ coachMessages, infoProseAudio: '/audio/lessons/prose.mp3' }, true);
+  assert.equal(coachMessages.length, 1);
 });

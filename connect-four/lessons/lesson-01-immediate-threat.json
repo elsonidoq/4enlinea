@@ -51,10 +51,22 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 1, "r": 0 },
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 0 },
-            { "c": 4, "r": 0 }
+            {
+              "c": 1,
+              "r": 0
+            },
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 0
+            },
+            {
+              "c": 4,
+              "r": 0
+            }
           ],
           "label": "The four-cell window",
           "label_es": "La ventana de cuatro casillas"
@@ -63,8 +75,8 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's threat square — Gray must claim it",
-          "label_es": "Casilla de amenaza de verde — gris tiene que ocuparla"
+          "label": "Green's threat square",
+          "label_es": "Casilla de amenaza de verde"
         },
         {
           "type": "win",
@@ -73,7 +85,9 @@
         }
       ],
       "infoProse": "An immediate threat is any four-cell window that already contains three of your discs and one empty square. That empty square is your threat cell — play it and you win instantly.",
-      "infoProse_es": "Una amenaza inmediata es cualquier ventana de cuatro casillas que ya contiene tres de tus fichas y una casilla vacía. Esa casilla vacía es tu casilla de amenaza: jugala y ganás al instante."
+      "infoProse_es": "Una amenaza inmediata es cualquier ventana de cuatro casillas que ya contiene tres de tus fichas y una casilla vacía. Esa casilla vacía es tu casilla de amenaza: jugala y ganás al instante.",
+      "infoProseAudio": "/audio/lessons/2c79bb556322ca5d.mp3",
+      "infoProseAudio_es": "/audio/lessons/0ea3bddb13d7d265.mp3"
     },
     {
       "movestring": "644565566",
@@ -121,10 +135,22 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 3, "r": 0 },
-            { "c": 4, "r": 1 },
-            { "c": 5, "r": 2 },
-            { "c": 6, "r": 3 }
+            {
+              "c": 3,
+              "r": 0
+            },
+            {
+              "c": 4,
+              "r": 1
+            },
+            {
+              "c": 5,
+              "r": 2
+            },
+            {
+              "c": 6,
+              "r": 3
+            }
           ],
           "label": "Green's diagonal window",
           "label_es": "La ventana diagonal de verde"
@@ -143,7 +169,9 @@
         }
       ],
       "infoProse": "The pattern is identical in every direction. Your eye will naturally scan horizontally first — train yourself to also check vertical columns and both diagonal slopes. A diagonal threat is just as decisive as a horizontal one, and easier to miss.",
-      "infoProse_es": "El patrón es idéntico en todas las direcciones. Tu mirada va a recorrer naturalmente en horizontal primero, pero entrenate para revisar también las columnas verticales y ambas diagonales. Una amenaza diagonal es tan decisiva como una horizontal, y es más fácil que se te pase por alto."
+      "infoProse_es": "El patrón es idéntico en todas las direcciones. Tu mirada va a recorrer naturalmente en horizontal primero, pero entrenate para revisar también las columnas verticales y ambas diagonales. Una amenaza diagonal es tan decisiva como una horizontal, y es más fácil que se te pase por alto.",
+      "infoProseAudio": "/audio/lessons/742f8c88adc78110.mp3",
+      "infoProseAudio_es": "/audio/lessons/73e04dd5ee18f619.mp3"
     },
     {
       "movestring": "3334243556566",
@@ -191,13 +219,25 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 2 },
-            { "c": 6, "r": 2 }
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 2
+            },
+            {
+              "c": 6,
+              "r": 2
+            }
           ],
-          "label": "The four-cell window (gap in the middle)",
-          "label_es": "La ventana de cuatro casillas (hueco en el medio)"
+          "label": "The four-cell window",
+          "label_es": "La ventana de cuatro casillas"
         }
       ],
       "legendItems": [
@@ -208,12 +248,14 @@
         },
         {
           "type": "tg",
-          "label": "Green's winning square (interior gap)",
-          "label_es": "Casilla ganadora de verde (hueco interior)"
+          "label": "Green's winning square",
+          "label_es": "Casilla ganadora de verde"
         }
       ],
       "infoProse": "When the empty cell sits in the middle of the four-cell window rather than at an end, the threat is harder to spot. The rule is the same: any window of four with three of your discs and one empty square is an immediate threat, regardless of where the gap falls.",
-      "infoProse_es": "Cuando la celda vacía queda en el medio de la ventana de cuatro celdas en vez de en un extremo, la amenaza es más difícil de ver. La regla es la misma: cualquier ventana de cuatro con tres de tus fichas y una casilla vacía es una amenaza inmediata, sin importar dónde quede el hueco."
+      "infoProse_es": "Cuando la celda vacía queda en el medio de la ventana de cuatro celdas en vez de en un extremo, la amenaza es más difícil de ver. La regla es la misma: cualquier ventana de cuatro con tres de tus fichas y una casilla vacía es una amenaza inmediata, sin importar dónde quede el hueco.",
+      "infoProseAudio": "/audio/lessons/1e53dbf594bc84e8.mp3",
+      "infoProseAudio_es": "/audio/lessons/59fecf1cf6f458e9.mp3"
     },
     {
       "movestring": "3333334225224455",
@@ -222,7 +264,9 @@
         {
           "text": "Green sees a tempting square to build on — but Gray already has three in a row. What happens if Green builds first?",
           "mood": "think",
-          "text_es": "Verde ve una casilla tentadora para construir — pero gris ya tiene tres en línea. ¿Qué pasa si verde construye primero?"
+          "text_es": "Verde ve una casilla tentadora para construir — pero gris ya tiene tres en línea. ¿Qué pasa si verde construye primero?",
+          "audio": "/audio/lessons/952e564584216087.mp3",
+          "audio_es": "/audio/lessons/60f4a2845ca78b4c.mp3"
         }
       ],
       "boardSpec": [
@@ -250,10 +294,22 @@
         {
           "type": "td",
           "cells": [
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 1 },
-            { "c": 4, "r": 2 },
-            { "c": 5, "r": 3 }
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 5,
+              "r": 3
+            }
           ],
           "label": "Gray's diagonal window",
           "label_es": "La ventana diagonal de gris"
@@ -262,17 +318,19 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Tempting Green build (wrong this turn)",
-          "label_es": "Formación tentadora de verde (equivocada en este turno)"
+          "label": "Tempting Green build",
+          "label_es": "Formación tentadora de verde"
         },
         {
           "type": "td",
-          "label": "Opponent's immediate threat (block this!)",
-          "label_es": "Amenaza inmediata del oponente (¡bloqueá esto!)"
+          "label": "Opponent's threat — block it!",
+          "label_es": "Amenaza del oponente — ¡bloqueala!"
         }
       ],
       "infoProse": "Immediate threats are urgent for both players. Before committing to your own move, always scan your opponent's board for the pattern: any four-cell window with three of their discs and one empty square. A missed block loses the game on the very next move — no matter how good your own plan looked.",
-      "infoProse_es": "Las amenazas inmediatas son urgentes para ambos jugadores. Antes de decidir tu propia jugada, revisá siempre el tablero de tu oponente buscando este patrón: cualquier ventana de cuatro casillas con tres de sus fichas y una casilla vacía. Si no bloqueás una, perdés la partida en la jugada siguiente, por más bueno que pareciera tu propio plan."
+      "infoProse_es": "Las amenazas inmediatas son urgentes para ambos jugadores. Antes de decidir tu propia jugada, revisá siempre el tablero de tu oponente buscando este patrón: cualquier ventana de cuatro casillas con tres de sus fichas y una casilla vacía. Si no bloqueás una, perdés la partida en la jugada siguiente, por más bueno que pareciera tu propio plan.",
+      "infoProseAudio": "/audio/lessons/567b53817ca6b9cd.mp3",
+      "infoProseAudio_es": "/audio/lessons/f3c66b4607baef24.mp3"
     }
   ],
   "socratic": {
@@ -296,7 +354,9 @@
         {
           "text": "You are Green, and it's your move. One column already holds three of your discs, one on top of another — a single disc finishes the job. Can you find it and win right now?",
           "mood": "think",
-          "text_es": "Sos verde, y es tu turno. Una columna ya tiene tres de tus fichas, una arriba de la otra — una sola ficha más completa la jugada. ¿Podés encontrarla y ganar ahora mismo?"
+          "text_es": "Sos verde, y es tu turno. Una columna ya tiene tres de tus fichas, una arriba de la otra — una sola ficha más completa la jugada. ¿Podés encontrarla y ganar ahora mismo?",
+          "audio": "/audio/lessons/a5dcd125ce91fddb.mp3",
+          "audio_es": "/audio/lessons/eb92dd092e450bfa.mp3"
         }
       ],
       "wrong1": [
@@ -330,7 +390,9 @@
         {
           "text": "Threats run in every direction — including straight up. Look for a vertical stack of three green discs with the square above it still empty, and drop your disc on top.",
           "mood": "think",
-          "text_es": "Las amenazas corren en todas las direcciones — incluso derecho hacia arriba. Buscá una pila vertical de tres fichas verdes con la casilla de arriba todavía vacía, y soltá tu ficha justo encima."
+          "text_es": "Las amenazas corren en todas las direcciones — incluso derecho hacia arriba. Buscá una pila vertical de tres fichas verdes con la casilla de arriba todavía vacía, y soltá tu ficha justo encima.",
+          "audio": "/audio/lessons/40579c8f05d14ca7.mp3",
+          "audio_es": "/audio/lessons/d0aa2cd7ca360fe5.mp3"
         }
       ]
     }

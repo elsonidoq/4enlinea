@@ -21,7 +21,9 @@
         {
           "text": "From the parity lesson: counting from the bottom, the odd rows — first, third, fifth — belong to Green, and the even rows — second, fourth, sixth — belong to Gray. Gray's natural square always sits directly above Green's.",
           "text_es": "De la lección de paridad: contando desde abajo, las filas impares —primera, tercera, quinta— le pertenecen a Verde, y las filas pares —segunda, cuarta, sexta— le pertenecen a Gris. La casilla natural de Gris siempre está justo encima de la de Verde.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/8304d0bb510d9440.mp3",
+          "audio_es": "/audio/lessons/354121ede07319f0.mp3"
         }
       ],
       "overlays": [
@@ -60,27 +62,35 @@
         {
           "type": "claim",
           "cells": [
-            { "c": 3, "r": 0 },
-            { "c": 3, "r": 1 }
+            {
+              "c": 3,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 1
+            }
           ],
-          "label": "One pair — odd square below, even square directly above",
-          "label_es": "Un par —casilla impar abajo, casilla par justo encima"
+          "label": "One pair — odd below, even above",
+          "label_es": "Un par — impar abajo, par encima"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's natural rows (first, third, fifth)",
-          "label_es": "Filas naturales de Verde (primera, tercera, quinta)"
+          "label": "Green's natural rows",
+          "label_es": "Filas naturales de Verde"
         },
         {
           "type": "td",
-          "label": "Gray's natural rows (second, fourth, sixth)",
-          "label_es": "Filas naturales de Gris (segunda, cuarta, sexta)"
+          "label": "Gray's natural rows",
+          "label_es": "Filas naturales de Gris"
         }
       ],
       "infoProse": "The dots on the centre column show the pattern from the parity lesson: counting rows from the bottom, the odd rows (first, third, fifth) are Green's natural squares, and the even rows (second, fourth, sixth) are Gray's.\n\nIn a column with an even number of empty squares, those squares stack into pairs: an odd row below, an even row directly above it. If Green takes the lower square of a pair, the upper square is right there for Gray to take on the very next move.\n\nThat simple exchange — Green gets the odd square, Gray immediately takes the even square above it — is called Claimeven, and it is the foundation of Gray's whole defensive plan.",
-      "infoProse_es": "Los puntos en la columna central muestran el patrón de la lección de paridad: contando las filas desde abajo, las filas impares (primera, tercera, quinta) son las casillas naturales de Verde, y las filas pares (segunda, cuarta, sexta) son las de Gris.\n\nEn una columna con una cantidad par de casillas vacías, esas casillas se apilan en pares: una fila impar abajo, una fila par justo encima. Si Verde ocupa la casilla de abajo del par, la casilla de arriba queda ahí, lista para que Gris la tome en la jugada siguiente.\n\nEse intercambio simple —Verde se queda con la casilla impar, Gris toma de inmediato la casilla par de encima— se llama Claimeven, y es la base de todo el plan defensivo de Gris."
+      "infoProse_es": "Los puntos en la columna central muestran el patrón de la lección de paridad: contando las filas desde abajo, las filas impares (primera, tercera, quinta) son las casillas naturales de Verde, y las filas pares (segunda, cuarta, sexta) son las de Gris.\n\nEn una columna con una cantidad par de casillas vacías, esas casillas se apilan en pares: una fila impar abajo, una fila par justo encima. Si Verde ocupa la casilla de abajo del par, la casilla de arriba queda ahí, lista para que Gris la tome en la jugada siguiente.\n\nEse intercambio simple —Verde se queda con la casilla impar, Gris toma de inmediato la casilla par de encima— se llama Claimeven, y es la base de todo el plan defensivo de Gris.",
+      "infoProseAudio": "/audio/lessons/897c02f18108287b.mp3",
+      "infoProseAudio_es": "/audio/lessons/3df94d8a74685a04.mp3"
     },
     {
       "movestring": "32332533350",
@@ -99,7 +109,9 @@
         {
           "text": "Green just dropped into the first column, landing on the bottom row — an odd row. Gray answers directly above: the second-row square is claimed, and every Green line that needed that square is dead.",
           "text_es": "Verde acaba de tirar en la primera columna, y la ficha cayó en la fila de abajo —una fila impar—. Gris responde justo encima: la casilla de la segunda fila queda reclamada, y toda línea de Verde que necesitaba esa casilla queda muerta.",
-          "mood": "happy"
+          "mood": "happy",
+          "audio": "/audio/lessons/63123acc89a5fd76.mp3",
+          "audio_es": "/audio/lessons/dacd79ff107194d1.mp3"
         }
       ],
       "overlays": [
@@ -123,29 +135,43 @@
         {
           "type": "win",
           "cells": [
-            { "c": 0, "r": 1 },
-            { "c": 1, "r": 1 },
-            { "c": 2, "r": 1 },
-            { "c": 3, "r": 1 }
+            {
+              "c": 0,
+              "r": 1
+            },
+            {
+              "c": 1,
+              "r": 1
+            },
+            {
+              "c": 2,
+              "r": 1
+            },
+            {
+              "c": 3,
+              "r": 1
+            }
           ],
-          "label": "Green's second-row window, running through the claimed square",
-          "label_es": "La ventana de Verde en la segunda fila, que pasa por la casilla reclamada"
+          "label": "Green's second-row window",
+          "label_es": "Ventana de Verde en la fila 2"
         }
       ],
       "legendItems": [
         {
           "type": "td",
-          "label": "The square Gray claims with the reply",
-          "label_es": "La casilla que Gris reclama con la respuesta"
+          "label": "The square Gray claims",
+          "label_es": "La casilla que reclama Gris"
         },
         {
           "type": "win",
-          "label": "Green's pair aiming through the claimed square",
-          "label_es": "El par de Verde que apunta a través de la casilla reclamada"
+          "label": "Green's pair through that square",
+          "label_es": "El par de Verde por esa casilla"
         }
       ],
       "infoProse": "Green's move landed on the first row of the first column — an odd row, Green's natural territory. Claimeven is Gray's reply: play the same column at once and take the even square directly above.\n\nLook at the ringed discs: Green has two discs side by side on the second row, in the third and fourth columns. One of their four-in-a-row windows runs along the second row through the claimed square — the moment Gray takes that square, the window is dead forever. That is the Claimeven bargain: Gray concedes the odd square below, gets the even square above, and every Green four-in-a-row that needs the claimed square is refuted.\n\nThe solver confirms the reply keeps Gray winning here — no calculation of individual threats required.",
-      "infoProse_es": "La jugada de Verde cayó en la primera fila de la primera columna —una fila impar, territorio natural de Verde—. Claimeven es la respuesta de Gris: jugar de inmediato en la misma columna y tomar la casilla par justo encima.\n\nFijate en las fichas marcadas: Verde tiene dos fichas una al lado de la otra en la segunda fila, en la tercera y cuarta columna. Una de sus ventanas de cuatro en línea pasa por la segunda fila, a través de la casilla reclamada —en el momento en que Gris toma esa casilla, la ventana queda muerta para siempre. Ese es el trato de Claimeven: Gris cede la casilla impar de abajo, se queda con la casilla par de arriba, y toda línea de cuatro de Verde que necesitaba la casilla reclamada queda refutada.\n\nEl solver confirma que la respuesta mantiene a Gris ganando acá —sin necesidad de calcular amenazas individuales."
+      "infoProse_es": "La jugada de Verde cayó en la primera fila de la primera columna —una fila impar, territorio natural de Verde—. Claimeven es la respuesta de Gris: jugar de inmediato en la misma columna y tomar la casilla par justo encima.\n\nFijate en las fichas marcadas: Verde tiene dos fichas una al lado de la otra en la segunda fila, en la tercera y cuarta columna. Una de sus ventanas de cuatro en línea pasa por la segunda fila, a través de la casilla reclamada —en el momento en que Gris toma esa casilla, la ventana queda muerta para siempre. Ese es el trato de Claimeven: Gris cede la casilla impar de abajo, se queda con la casilla par de arriba, y toda línea de cuatro de Verde que necesitaba la casilla reclamada queda refutada.\n\nEl solver confirma que la respuesta mantiene a Gris ganando acá —sin necesidad de calcular amenazas individuales.",
+      "infoProseAudio": "/audio/lessons/435d8adc64463bdd.mp3",
+      "infoProseAudio_es": "/audio/lessons/a5405b6a787bb6bd.mp3"
     },
     {
       "movestring": "3233253335",
@@ -164,7 +190,9 @@
         {
           "text": "Every open column here has an even number of empty squares. Gray does not need to calculate a thing: wherever Green plays, Gray answers directly above. The solver agrees — every Green move in this position loses.",
           "text_es": "Acá, todas las columnas abiertas tienen una cantidad par de casillas vacías. Gris no necesita calcular nada: donde sea que juegue Verde, Gris responde justo encima. El solver está de acuerdo —cualquier jugada de Verde en esta posición pierde.",
-          "mood": "happy"
+          "mood": "happy",
+          "audio": "/audio/lessons/a1dfafa59308b423.mp3",
+          "audio_es": "/audio/lessons/51ddd28125b6c280.mp3"
         }
       ],
       "overlays": [
@@ -252,12 +280,14 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's claimed squares — one per pair, always the upper one",
-          "label_es": "Las casillas reclamadas por Gris —una por par, siempre la de arriba"
+          "label": "Gray's claimed squares",
+          "label_es": "Casillas reclamadas por Gris"
         }
       ],
       "infoProse": "Count the empty squares in each open column: six, six, four, six, four, six — all even. Every open column therefore splits into stacked pairs of empty squares: an odd row below, an even row directly above.\n\nGray's entire strategy is one rule: whatever column Green plays, reply directly above. Green collects the lower squares of the pairs, Gray collects the upper ones — the marked squares — and every Green four-in-a-row that needs a marked square dies along the way.\n\nA position like this is called a claimeven position, and it is the reason Claimeven matters: the pairing runs on autopilot, board-wide, with nothing left to calculate. One honest caveat: Claimeven by itself only promises Gray the even squares — whether that wins, draws, or merely survives depends on the position. Here it wins: the solver scores every legal Green move as losing against best play.",
-      "infoProse_es": "Contá las casillas vacías de cada columna abierta: seis, seis, cuatro, seis, cuatro, seis —todas pares. Por eso, cada columna abierta se divide en pares apilados de casillas vacías: una fila impar abajo, una fila par justo encima.\n\nToda la estrategia de Gris se reduce a una sola regla: en cualquier columna que juegue Verde, responder justo encima. Verde se queda con las casillas de abajo de los pares, Gris con las de arriba —las casillas marcadas— y toda línea de cuatro de Verde que necesite una casilla marcada muere en el camino.\n\nUna posición así se llama posición de claimeven, y por eso Claimeven importa: el emparejamiento funciona en piloto automático, en todo el tablero, sin nada más que calcular. Una salvedad honesta: Claimeven por sí solo solo le garantiza a Gris las casillas pares —si eso alcanza para ganar, empatar o apenas sobrevivir depende de la posición. Acá gana: el solver puntúa cualquier jugada legal de Verde como perdedora contra el mejor juego."
+      "infoProse_es": "Contá las casillas vacías de cada columna abierta: seis, seis, cuatro, seis, cuatro, seis —todas pares. Por eso, cada columna abierta se divide en pares apilados de casillas vacías: una fila impar abajo, una fila par justo encima.\n\nToda la estrategia de Gris se reduce a una sola regla: en cualquier columna que juegue Verde, responder justo encima. Verde se queda con las casillas de abajo de los pares, Gris con las de arriba —las casillas marcadas— y toda línea de cuatro de Verde que necesite una casilla marcada muere en el camino.\n\nUna posición así se llama posición de claimeven, y por eso Claimeven importa: el emparejamiento funciona en piloto automático, en todo el tablero, sin nada más que calcular. Una salvedad honesta: Claimeven por sí solo solo le garantiza a Gris las casillas pares —si eso alcanza para ganar, empatar o apenas sobrevivir depende de la posición. Acá gana: el solver puntúa cualquier jugada legal de Verde como perdedora contra el mejor juego.",
+      "infoProseAudio": "/audio/lessons/a77609d9c661d4ae.mp3",
+      "infoProseAudio_es": "/audio/lessons/8d79cfafafb377f0.mp3"
     },
     {
       "movestring": "332434011",
@@ -276,7 +306,9 @@
         {
           "text": "Careful — the reply-above reflex only applies when Green's disc landed on an odd row. Green's newest disc here sits on the second row. Replying above it would put Gray on an odd row, and the solver says that move loses.",
           "text_es": "Cuidado —el reflejo de responder-encima solo se aplica cuando la ficha de Verde cayó en una fila impar. La ficha más nueva de Verde acá está en la segunda fila. Responder encima de ella pondría a Gris en una fila impar, y el solver dice que esa jugada pierde.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/3a0c7e44743ab2b8.mp3",
+          "audio_es": "/audio/lessons/297cc8bec3c60b6a.mp3"
         }
       ],
       "overlays": [
@@ -295,36 +327,50 @@
         {
           "type": "td",
           "cells": [
-            { "c": 3, "r": 2 },
-            { "c": 3, "r": 3 }
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 3
+            }
           ],
-          "label": "Green's disc on an odd row, with the even square Gray claims above it",
-          "label_es": "La ficha de Verde en una fila impar, con la casilla par que Gris reclama encima"
+          "label": "Green on an odd row",
+          "label_es": "Verde en una fila impar"
         },
         {
           "type": "tg",
           "cells": [
-            { "c": 1, "r": 1 },
-            { "c": 1, "r": 2 }
+            {
+              "c": 1,
+              "r": 1
+            },
+            {
+              "c": 1,
+              "r": 2
+            }
           ],
-          "label": "Green's disc on an even row — the square above it is odd, so there is nothing to claim",
-          "label_es": "La ficha de Verde en una fila par —la casilla de encima es impar, así que no hay nada para reclamar"
+          "label": "Green on an even row",
+          "label_es": "Verde en una fila par"
         }
       ],
       "legendItems": [
         {
           "type": "td",
-          "label": "A true Claimeven square — even row, directly above a Green disc on an odd row",
-          "label_es": "Una verdadera casilla de Claimeven —fila par, justo encima de una ficha de Verde en una fila impar"
+          "label": "A true Claimeven square",
+          "label_es": "Una casilla de Claimeven real"
         },
         {
           "type": "tg",
-          "label": "An odd-row square — Green's natural territory, not a Claimeven",
-          "label_es": "Una casilla de fila impar —territorio natural de Verde, no un Claimeven"
+          "label": "An odd-row square",
+          "label_es": "Una casilla de fila impar"
         }
       ],
       "infoProse": "Green's newest disc went into the second column and landed on the second row — an even row, a square that would naturally have been Gray's. The square above it sits on the third row: odd, Green's natural territory. Replying there is not a Claimeven — it spends Gray's move on an odd square, and the solver scores that reply as losing for Gray.\n\nCompare the fourth column: Green's disc there sits on the third row (odd), and the empty square directly above it, on the fourth row, is even. That is a genuine Claimeven square — taking it keeps Gray winning.\n\nThe rule before every reply: check the row Green's disc just landed on. Odd row below, even row above — claim it. Even row below — stop; replying above helps Green, and a different plan is needed.",
-      "infoProse_es": "La ficha más nueva de Verde cayó en la segunda columna, en la segunda fila —una fila par, una casilla que naturalmente le hubiera correspondido a Gris. La casilla de encima está en la tercera fila: impar, territorio natural de Verde. Responder ahí no es un Claimeven —gasta la jugada de Gris en una casilla impar, y el solver puntúa esa respuesta como perdedora para Gris.\n\nComparalo con la cuarta columna: ahí la ficha de Verde está en la tercera fila (impar), y la casilla vacía justo encima, en la cuarta fila, es par. Esa sí es una verdadera casilla de Claimeven —tomarla mantiene a Gris ganando.\n\nLa regla antes de cada respuesta: fijate en qué fila cayó la ficha de Verde. Fila impar abajo, fila par arriba —reclamala. Fila par abajo —pará; responder encima ayuda a Verde, y hace falta un plan distinto."
+      "infoProse_es": "La ficha más nueva de Verde cayó en la segunda columna, en la segunda fila —una fila par, una casilla que naturalmente le hubiera correspondido a Gris. La casilla de encima está en la tercera fila: impar, territorio natural de Verde. Responder ahí no es un Claimeven —gasta la jugada de Gris en una casilla impar, y el solver puntúa esa respuesta como perdedora para Gris.\n\nComparalo con la cuarta columna: ahí la ficha de Verde está en la tercera fila (impar), y la casilla vacía justo encima, en la cuarta fila, es par. Esa sí es una verdadera casilla de Claimeven —tomarla mantiene a Gris ganando.\n\nLa regla antes de cada respuesta: fijate en qué fila cayó la ficha de Verde. Fila impar abajo, fila par arriba —reclamala. Fila par abajo —pará; responder encima ayuda a Verde, y hace falta un plan distinto.",
+      "infoProseAudio": "/audio/lessons/9c62ae7e55e12d94.mp3",
+      "infoProseAudio_es": "/audio/lessons/b4fe7dd3b39e1f52.mp3"
     }
   ],
   "socratic": {
@@ -348,35 +394,45 @@
         {
           "text": "Green's last disc just landed on an odd row. Which column lets Gray claim the even square directly above it?",
           "text_es": "La última ficha de Verde acaba de caer en una fila impar. ¿En qué columna puede Gris reclamar la casilla par justo encima?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/65ff5b5690bdb01c.mp3",
+          "audio_es": "/audio/lessons/9a5ce0e18dff11c5.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! You saw it.",
           "mood": "happy",
-          "text_es": "¡Exacto! Lo viste."
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
         }
       ],
       "hint": [
         {
           "text": "Find Green's newest disc — it sits on the third row, and the even square directly above it is still empty. Claim it.",
           "text_es": "Encontrá la ficha más nueva de Verde —está en la tercera fila, y la casilla par justo encima todavía está vacía. Reclamala.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/7cb775ea67c115c6.mp3",
+          "audio_es": "/audio/lessons/41ddd84ed5b78a07.mp3"
         }
       ]
     }

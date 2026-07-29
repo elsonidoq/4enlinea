@@ -260,6 +260,8 @@ const LOCALE_FIXTURE = {
   slides: [{
     infoProse: 'An immediate threat is any four-cell window.',
     infoProse_es: 'Una amenaza inmediata es cualquier ventana de cuatro celdas.',
+    infoProseAudio: '/audio/lessons/prose-en.mp3',
+    infoProseAudio_es: '/audio/lessons/prose-es.mp3',
     coachMessages: [
       { text: 'Look at the board.', text_es: 'Mirá el tablero.', audio: '/audio/lessons/aaa.mp3', audio_es: '/audio/lessons/bbb.mp3' },
       { text: 'No translation yet.', audio: '/audio/lessons/ccc.mp3' },
@@ -286,6 +288,19 @@ test('locale es merges Spanish text AND its matching audio', () => {
   assert.strictEqual(out.slides[0].legendItems[0].label, 'Casilla de amenaza');
   assert.strictEqual(out.socratic.goalPrompt, 'Encontrá la jugada ganadora.');
   assert.ok(!('text_es' in out.slides[0].coachMessages[0]));
+});
+
+test('infoProseAudio is localized alongside the prose it narrates', () => {
+  // Without the localizeLesson wiring the English clip leaks into the Spanish
+  // payload, so ConceptScreen reads the prose aloud in the wrong language.
+  assert.strictEqual(localizeLesson(LOCALE_FIXTURE, 'en').slides[0].infoProseAudio, '/audio/lessons/prose-en.mp3');
+  assert.strictEqual(localizeLesson(LOCALE_FIXTURE, 'es').slides[0].infoProseAudio, '/audio/lessons/prose-es.mp3');
+  assert.ok(!('infoProseAudio_es' in localizeLesson(LOCALE_FIXTURE, 'es').slides[0]));
+});
+
+test('a slide with no prose audio gains no undefined infoProseAudio key', () => {
+  const out = localizeLesson({ id: 'x', slides: [{ infoProse: 'Hi' }], socratic: null }, 'es');
+  assert.ok(!('infoProseAudio' in out.slides[0]));
 });
 
 test('es falls back PER FIELD so a partial translation never blanks a slide', () => {

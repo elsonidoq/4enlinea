@@ -11,7 +11,9 @@
         {
           "text": "Five discs up the centre, then four up the next column over — the '5-4' opening. Gray, to move here, is already lost.",
           "mood": "happy",
-          "text_es": "Cinco fichas subiendo por el centro, y después cuatro en la columna siguiente — la apertura '5-4'. Gris, que mueve acá, ya está perdido."
+          "text_es": "Cinco fichas subiendo por el centro, y después cuatro en la columna siguiente — la apertura '5-4'. Gris, que mueve acá, ya está perdido.",
+          "audio": "/audio/lessons/f7ec6e1081c2d478.mp3",
+          "audio_es": "/audio/lessons/29fd0ecdc2a64ea9.mp3"
         }
       ],
       "boardSpec": [
@@ -27,6 +29,8 @@
       "legendItems": [],
       "infoProse": "This is Allen's flagship central-column win: Green stacks the centre column five discs high, then continues into the neighbouring column, always blocking Gray's horizontal ideas as it goes. Once the shape is complete, Green already holds a winning odd-row threat on the far side — Gray, to move, has no defence.",
       "infoProse_es": "Esta es la victoria insignia de Allen por columna central: Verde apila la columna central hasta cinco fichas de altura, y después continúa en la columna vecina, bloqueando siempre las ideas horizontales de Gris en el camino. Una vez completada la forma, Verde ya tiene una amenaza ganadora de fila impar del otro lado — Gris, que mueve, no tiene defensa.",
+      "infoProseAudio": "/audio/lessons/ee87734a0badbd4b.mp3",
+      "infoProseAudio_es": "/audio/lessons/9fb40af64bf271df.mp3",
       "windowCounts": [
         [
           2,
@@ -91,7 +95,9 @@
         {
           "text": "Green grabbed both central key cells early — the third and fourth cells of the centre column. This D3-D4 opening is usually an easy win, but here it has sharpened: Green to move, and only ONE column wins.",
           "mood": "think",
-          "text_es": "Verde se quedó temprano con las dos casillas clave centrales — la tercera y la cuarta casilla de la columna central. Esta apertura D3-D4 suele ser una victoria fácil, pero acá se afiló: Verde mueve, y solo UNA columna gana."
+          "text_es": "Verde se quedó temprano con las dos casillas clave centrales — la tercera y la cuarta casilla de la columna central. Esta apertura D3-D4 suele ser una victoria fácil, pero acá se afiló: Verde mueve, y solo UNA columna gana.",
+          "audio": "/audio/lessons/02c8b28b56541627.mp3",
+          "audio_es": "/audio/lessons/27171ef35869955d.mp3"
         }
       ],
       "boardSpec": [
@@ -118,12 +124,14 @@
               "r": 3
             }
           ],
-          "label": "Green's two central key cells",
-          "label_es": "Las dos casillas clave centrales de Verde"
+          "label": "Green's central key cells",
+          "label_es": "Casillas clave centrales de Verde"
         }
       ],
       "infoProse": "Owning both central key cells early — Allen's D3 and D4 — is usually powerful and comparatively easy to convert. But 'usually easy' does not mean 'always safe': in this exact position, only the second column from the left keeps the win — every other column throws it away. Recognising the D3-D4 shape tells you the position is good; it does not tell you which move keeps it that way.",
       "infoProse_es": "Quedarse temprano con las dos casillas clave centrales — el D3 y el D4 de Allen — suele ser poderoso y comparativamente fácil de convertir. Pero 'generalmente fácil' no significa 'siempre seguro': en esta posición exacta, solo la segunda columna desde la izquierda mantiene la victoria — cualquier otra columna la desperdicia. Reconocer la forma D3-D4 te dice que la posición es buena; no te dice qué jugada la mantiene así.",
+      "infoProseAudio": "/audio/lessons/e126a59adc6891d6.mp3",
+      "infoProseAudio_es": "/audio/lessons/2475cdaa7c5f7b14.mp3",
       "windowCounts": [
         [
           1,
@@ -188,7 +196,9 @@
         {
           "text": "Same centre column, but Gray never let Green claim that second central cell. Gray, to move here, still loses — but the win is thinner than the D3-D4 lines.",
           "mood": "think",
-          "text_es": "Misma columna central, pero Gris nunca dejó que Verde se quedara con esa segunda casilla central. Gris, que mueve acá, igual pierde — pero la victoria es más ajustada que en las líneas D3-D4."
+          "text_es": "Misma columna central, pero Gris nunca dejó que Verde se quedara con esa segunda casilla central. Gris, que mueve acá, igual pierde — pero la victoria es más ajustada que en las líneas D3-D4.",
+          "audio": "/audio/lessons/67df83c59af58e23.mp3",
+          "audio_es": "/audio/lessons/3561aa47016a71fc.mp3"
         }
       ],
       "boardSpec": [
@@ -204,6 +214,8 @@
       "legendItems": [],
       "infoProse": "This is the sibling '3-4' opening: Green's centre column stands only three high (no D4), so the easy D3-D4 plan is unavailable and Green's win depends on a delayed, more precise follow-up instead. It is still a Green win here, but a thin one — and a self-trapping one: Allen notes that once the centre is left at three high, a LATER D4 by Green often turns into the blunder that throws the win away.",
       "infoProse_es": "Esta es la apertura hermana '3-4': la columna central de Verde tiene solo tres de altura (sin D4), así que el plan fácil D3-D4 no está disponible y la victoria de Verde depende en cambio de un seguimiento más preciso y demorado. Acá sigue siendo una victoria de Verde, pero ajustada — y una trampa para sí mismo: Allen señala que, una vez que el centro queda en tres de altura, un D4 POSTERIOR de Verde suele convertirse en el error que tira la victoria.",
+      "infoProseAudio": "/audio/lessons/e98d446cf7c68b1c.mp3",
+      "infoProseAudio_es": "/audio/lessons/d430033183897b3c.mp3",
       "windowCounts": [
         [
           1,
@@ -283,35 +295,45 @@
         {
           "text": "Green dominates the third row on the right, Gray has compensation on the fifth row on the left. Green to move — only one column wins. Which one?",
           "mood": "think",
-          "text_es": "Verde domina la tercera fila a la derecha, Gris tiene compensación en la quinta fila a la izquierda. Verde mueve — solo una columna gana. ¿Cuál es?"
+          "text_es": "Verde domina la tercera fila a la derecha, Gris tiene compensación en la quinta fila a la izquierda. Verde mueve — solo una columna gana. ¿Cuál es?",
+          "audio": "/audio/lessons/8d2e0d030fe87c23.mp3",
+          "audio_es": "/audio/lessons/e38c3a8d8aab5986.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly — that column completes Green's third-row threat right now. Every other column throws the win away; this is Allen's 'only one move to win' Third-Row Gambit.",
           "mood": "happy",
-          "text_es": "Exacto — esa columna completa la amenaza de tercera fila de Verde ahora mismo. Cualquier otra columna desperdicia la victoria; este es el 'Third-Row Gambit' de Allen, la única jugada que gana."
+          "text_es": "Exacto — esa columna completa la amenaza de tercera fila de Verde ahora mismo. Cualquier otra columna desperdicia la victoria; este es el 'Third-Row Gambit' de Allen, la única jugada que gana.",
+          "audio": "/audio/lessons/2d85c63ede0101a5.mp3",
+          "audio_es": "/audio/lessons/9a7f26ac672e5d39.mp3"
         }
       ],
       "hint": [
         {
           "text": "Look at Green's threats on the right flank. Which column completes them right now?",
           "mood": "think",
-          "text_es": "Mirá las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?"
+          "text_es": "Mirá las amenazas de Verde en el flanco derecho. ¿Qué columna las completa ahora mismo?",
+          "audio": "/audio/lessons/13f95ffb4aa7d3a0.mp3",
+          "audio_es": "/audio/lessons/81291b6fce8c084a.mp3"
         }
       ]
     }

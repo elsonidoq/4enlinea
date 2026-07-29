@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 7622effc-b51a-4ecb-aabd-07abd6931e35
-  modified: 2026-07-28T16:14:39.155Z
+  modified: 2026-07-29T13:23:06.550Z
 ---
 
 A new authored field on `slides[]` needs **six** wiring points. Five of them are enforced by tests or
@@ -37,6 +37,15 @@ The checklist:
    spreads `...slide`, so the field round-trips through the editor **whether or not you add a
    control** — which is exactly why its absence is invisible. Note `SocraticEditor` is a separate
    component: a concept-slide-only field must NOT appear there.
+
+**A SERVER-GENERATED slide field swaps point 6 for two others.** Worked example: `infoProseAudio` /
+`infoProseAudio_es` (2026-07-29). It needs **no** `SlideEditor` control — it is written by
+`generateLessonAudio`, never authored — but it does need (a) `localizeLesson` to merge the `_es`
+sibling, or the Spanish payload silently serves the **English** clip, and (b) the field name to reach
+`collectReferencedAudio` (via the walker entry's `audioKey`), or `pruneOrphanedLessonAudio` **deletes
+every clip** on the next prune. The editor round trip is free — `hydrateLesson` spreads `...s` and
+`lessonToJsonPayload` spreads `...slide` — but pin it with a test anyway: the failure mode is a save
+that silently strips the clips and leaves every slide quiet after the bubble.
 
 **How to apply:** when a plan adds a `slides[]` field, add "SlideEditor control + a
 `tests/dom/*.dom.test.jsx` for it" as an explicit task before starting. If the field is a *derived

@@ -21,7 +21,9 @@
         {
           "text": "Gray has three discs on a rising diagonal, and the fourth cell sits high in the fifth column. How real is that threat? Count the empty cells from the column's stack top up to and including the threat cell.",
           "mood": "think",
-          "text_es": "Gris tiene tres fichas en una diagonal ascendente, y la cuarta casilla está arriba en la quinta columna. ¿Qué tan real es esa amenaza? Contá las casillas vacías desde arriba de la pila de la columna hasta la casilla de la amenaza, inclusive."
+          "text_es": "Gris tiene tres fichas en una diagonal ascendente, y la cuarta casilla está arriba en la quinta columna. ¿Qué tan real es esa amenaza? Contá las casillas vacías desde arriba de la pila de la columna hasta la casilla de la amenaza, inclusive.",
+          "audio": "/audio/lessons/46422f612062a7b6.mp3",
+          "audio_es": "/audio/lessons/9612252d2a35f06c.mp3"
         }
       ],
       "overlays": [
@@ -45,28 +47,39 @@
         {
           "type": "claim",
           "cells": [
-            { "c": 4, "r": 1 },
-            { "c": 4, "r": 2 },
-            { "c": 4, "r": 3 }
+            {
+              "c": 4,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 3
+            }
           ],
-          "label": "The count: three cells — odd",
-          "label_es": "El conteo: tres casillas — impar"
+          "label": "The count: three cells",
+          "label_es": "El conteo: tres casillas"
         }
       ],
       "legendItems": [
         {
           "type": "claim",
-          "label": "Count these cells, starting at the stack top",
-          "label_es": "Contá estas casillas, empezando desde arriba de la pila"
+          "label": "Count these cells",
+          "label_es": "Contá estas casillas"
         },
         {
           "type": "td",
-          "label": "Gray's threat cell — the count ends here",
-          "label_es": "La casilla de la amenaza de Gris — el conteo termina acá"
+          "label": "Gray's threat cell",
+          "label_es": "La casilla de la amenaza de Gris"
         }
       ],
       "infoProse": "Gray's discs in the second, third and fourth columns form a rising diagonal, and its missing fourth cell — the threat cell — is the fourth row of the fifth column.\n\nThe fifth column already holds one disc, so the next disc there would land on the second row. Count the empty cells from there up to and including the threat cell: second row, third row, fourth row. Three cells — an odd number.\n\nA major threat whose count is odd is called a Z-Threat. That count is the whole test: start at the current stack top (not at the floor), include the threat cell itself, and check odd or even. The next slides show why odd is the number that matters.",
-      "infoProse_es": "Las fichas de Gris en la segunda, tercera y cuarta columna forman una diagonal ascendente, y su cuarta casilla faltante — la casilla de la amenaza — es la cuarta fila de la quinta columna.\n\nLa quinta columna ya tiene una ficha, así que la próxima ficha ahí caería en la segunda fila. Contá las casillas vacías desde ahí hasta la casilla de la amenaza, inclusive: segunda fila, tercera fila, cuarta fila. Tres casillas — un número impar.\n\nUna amenaza mayor cuyo conteo es impar se llama Amenaza-Z. Ese conteo es toda la prueba: empezá desde arriba de la pila actual (no desde el piso), incluí la casilla de la amenaza misma, y fijate si es par o impar. Las próximas diapositivas muestran por qué el impar es el número que importa."
+      "infoProse_es": "Las fichas de Gris en la segunda, tercera y cuarta columna forman una diagonal ascendente, y su cuarta casilla faltante — la casilla de la amenaza — es la cuarta fila de la quinta columna.\n\nLa quinta columna ya tiene una ficha, así que la próxima ficha ahí caería en la segunda fila. Contá las casillas vacías desde ahí hasta la casilla de la amenaza, inclusive: segunda fila, tercera fila, cuarta fila. Tres casillas — un número impar.\n\nUna amenaza mayor cuyo conteo es impar se llama Amenaza-Z. Ese conteo es toda la prueba: empezá desde arriba de la pila actual (no desde el piso), incluí la casilla de la amenaza misma, y fijate si es par o impar. Las próximas diapositivas muestran por qué el impar es el número que importa.",
+      "infoProseAudio": "/audio/lessons/04c0702b46b8c66d.mp3",
+      "infoProseAudio_es": "/audio/lessons/65b813e1e169281e.mp3"
     },
     {
       "movestring": "22343321",
@@ -85,7 +98,9 @@
         {
           "text": "Why is odd good for Gray? Because Gray never has to rush in. The column cannot stay half-empty forever — and with an odd count, the threat cell is the one that falls to Gray.",
           "mood": "happy",
-          "text_es": "¿Por qué el impar favorece a Gris? Porque Gris nunca tiene que apurarse a entrar. La columna no puede quedar a medio llenar para siempre — y con un conteo impar, la casilla de la amenaza es la que le toca a Gris."
+          "text_es": "¿Por qué el impar favorece a Gris? Porque Gris nunca tiene que apurarse a entrar. La columna no puede quedar a medio llenar para siempre — y con un conteo impar, la casilla de la amenaza es la que le toca a Gris.",
+          "audio": "/audio/lessons/46308d2c5bd33ee8.mp3",
+          "audio_es": "/audio/lessons/106380da521dff30.mp3"
         }
       ],
       "overlays": [
@@ -108,17 +123,19 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Cells Green gets squeezed into",
-          "label_es": "Casillas donde Verde queda obligado a entrar"
+          "label": "Cells Green is squeezed into",
+          "label_es": "Casillas donde Verde queda forzado"
         },
         {
           "type": "td",
-          "label": "The threat cell — Gray takes it last",
-          "label_es": "La casilla de la amenaza — Gris la toma al final"
+          "label": "The threat cell",
+          "label_es": "La casilla de la amenaza"
         }
       ],
       "infoProse": "The wrong plan is to dive into the fifth column right away: every disc Gray drops there is a free move handed to Green elsewhere, and after Gray's first disc the threat cell still is not reachable.\n\nA Z-Threat is a waiting weapon. Gray leaves the column alone and keeps making useful moves on the rest of the board. Sooner or later Green runs out of safe moves elsewhere and has to drop into the fifth column, landing on the second row. Gray answers somewhere else again. When Green is squeezed in a second time, that disc lands on the third row — and now the threat cell on the fourth row is the next drop in the column. Gray takes it and completes the diagonal.\n\nThat is the odd count at work: three cells means the two below the threat get absorbed by the squeezed player, and the last one — the threat itself — falls to Gray. Odd count = the threat belongs to Gray, as long as Gray keeps a useful move in hand and lets Green be the one forced into the column.",
-      "infoProse_es": "El plan equivocado es meterse de una en la quinta columna: cada ficha que Gris tira ahí es un movimiento gratis para Verde en otro lado, y después de la primera ficha de Gris la casilla de la amenaza todavía no es alcanzable.\n\nUna Amenaza-Z es un arma de espera. Gris deja la columna en paz y sigue haciendo movimientos útiles en el resto del tablero. Tarde o temprano Verde se queda sin movimientos seguros en otro lado y tiene que tirar en la quinta columna, cayendo en la segunda fila. Gris responde en otro lado de nuevo. Cuando Verde queda forzado a entrar por segunda vez, esa ficha cae en la tercera fila — y ahora la casilla de la amenaza en la cuarta fila es la próxima jugada disponible en la columna. Gris la toma y completa la diagonal.\n\nAhí está el conteo impar en acción: tres casillas significa que las dos de abajo de la amenaza son absorbidas por el jugador forzado a entrar, y la última — la amenaza misma — le cae a Gris. Conteo impar = la amenaza le pertenece a Gris, siempre y cuando Gris mantenga un movimiento útil en reserva y deje que sea Verde quien se vea forzado a entrar en la columna."
+      "infoProse_es": "El plan equivocado es meterse de una en la quinta columna: cada ficha que Gris tira ahí es un movimiento gratis para Verde en otro lado, y después de la primera ficha de Gris la casilla de la amenaza todavía no es alcanzable.\n\nUna Amenaza-Z es un arma de espera. Gris deja la columna en paz y sigue haciendo movimientos útiles en el resto del tablero. Tarde o temprano Verde se queda sin movimientos seguros en otro lado y tiene que tirar en la quinta columna, cayendo en la segunda fila. Gris responde en otro lado de nuevo. Cuando Verde queda forzado a entrar por segunda vez, esa ficha cae en la tercera fila — y ahora la casilla de la amenaza en la cuarta fila es la próxima jugada disponible en la columna. Gris la toma y completa la diagonal.\n\nAhí está el conteo impar en acción: tres casillas significa que las dos de abajo de la amenaza son absorbidas por el jugador forzado a entrar, y la última — la amenaza misma — le cae a Gris. Conteo impar = la amenaza le pertenece a Gris, siempre y cuando Gris mantenga un movimiento útil en reserva y deje que sea Verde quien se vea forzado a entrar en la columna.",
+      "infoProseAudio": "/audio/lessons/c3b99d6e22a941c2.mp3",
+      "infoProseAudio_es": "/audio/lessons/1da26c6c183f24d6.mp3"
     },
     {
       "movestring": "3253645505",
@@ -136,7 +153,9 @@
         {
           "text": "Same idea, different column: Gray's diagonal needs the third row of the fifth column. Count from the stack top: second row, third row — two cells. Even. The waiting game no longer works for Gray.",
           "mood": "sad",
-          "text_es": "Misma idea, otra columna: la diagonal de Gris necesita la tercera fila de la quinta columna. Contá desde arriba de la pila: segunda fila, tercera fila — dos casillas. Par. El juego de espera ya no funciona para Gris."
+          "text_es": "Misma idea, otra columna: la diagonal de Gris necesita la tercera fila de la quinta columna. Contá desde arriba de la pila: segunda fila, tercera fila — dos casillas. Par. El juego de espera ya no funciona para Gris.",
+          "audio": "/audio/lessons/b5194d99c32974f6.mp3",
+          "audio_es": "/audio/lessons/5136eb3f59e16b20.mp3"
         }
       ],
       "overlays": [
@@ -155,27 +174,35 @@
         {
           "type": "claim",
           "cells": [
-            { "c": 4, "r": 1 },
-            { "c": 4, "r": 2 }
+            {
+              "c": 4,
+              "r": 1
+            },
+            {
+              "c": 4,
+              "r": 2
+            }
           ],
-          "label": "The count: two cells — even, so no Z-Threat",
-          "label_es": "El conteo: dos casillas — par, así que no hay Amenaza-Z"
+          "label": "The count: two cells",
+          "label_es": "El conteo: dos casillas"
         }
       ],
       "legendItems": [
         {
           "type": "claim",
-          "label": "Count these cells, starting at the stack top",
-          "label_es": "Contá estas casillas, empezando desde arriba de la pila"
+          "label": "Count these cells",
+          "label_es": "Contá estas casillas"
         },
         {
           "type": "td",
-          "label": "Gray's threat cell — the count ends here",
-          "label_es": "La casilla de la amenaza de Gris — el conteo termina acá"
+          "label": "Gray's threat cell",
+          "label_es": "La casilla de la amenaza de Gris"
         }
       ],
       "infoProse": "Gray's rising diagonal through the third, fourth and sixth columns is missing its third cell: the third row of the fifth column. That column holds one disc, so the count runs second row, third row — two cells. An even count means this is not a Z-Threat.\n\nRun the same waiting game and watch it flip. Green will never drop into that column voluntarily: a Green disc on the second row would put the threat cell straight into Gray's reach — the solver rates it Green's worst move on the board, the fastest loss. But if Gray is ever the one squeezed into the column, Gray's own disc fills the second row, and Green simply blocks the threat cell on the very next move.\n\nWith an even count, the squeeze delivers the block to Green instead of the threat to Gray. Even count = the same waiting game hands the cell to the opponent.",
-      "infoProse_es": "La diagonal ascendente de Gris que pasa por la tercera, cuarta y sexta columna le falta su tercera casilla: la tercera fila de la quinta columna. Esa columna ya tiene una ficha, así que el conteo va segunda fila, tercera fila — dos casillas. Un conteo par significa que esto no es una Amenaza-Z.\n\nProbá el mismo juego de espera y mirá cómo se da vuelta. Verde nunca va a tirar en esa columna por voluntad propia: una ficha de Verde en la segunda fila dejaría la casilla de la amenaza directamente al alcance de Gris — el solver la califica como el peor movimiento de Verde en todo el tablero, la derrota más rápida. Pero si en algún momento es Gris quien queda forzado a entrar en la columna, la propia ficha de Gris llena la segunda fila, y Verde simplemente bloquea la casilla de la amenaza en la jugada siguiente.\n\nCon un conteo par, el forzado entrega el bloqueo a Verde en vez de la amenaza a Gris. Conteo par = el mismo juego de espera le entrega la casilla al oponente."
+      "infoProse_es": "La diagonal ascendente de Gris que pasa por la tercera, cuarta y sexta columna le falta su tercera casilla: la tercera fila de la quinta columna. Esa columna ya tiene una ficha, así que el conteo va segunda fila, tercera fila — dos casillas. Un conteo par significa que esto no es una Amenaza-Z.\n\nProbá el mismo juego de espera y mirá cómo se da vuelta. Verde nunca va a tirar en esa columna por voluntad propia: una ficha de Verde en la segunda fila dejaría la casilla de la amenaza directamente al alcance de Gris — el solver la califica como el peor movimiento de Verde en todo el tablero, la derrota más rápida. Pero si en algún momento es Gris quien queda forzado a entrar en la columna, la propia ficha de Gris llena la segunda fila, y Verde simplemente bloquea la casilla de la amenaza en la jugada siguiente.\n\nCon un conteo par, el forzado entrega el bloqueo a Verde en vez de la amenaza a Gris. Conteo par = el mismo juego de espera le entrega la casilla al oponente.",
+      "infoProseAudio": "/audio/lessons/dc5b9d7e887593a4.mp3",
+      "infoProseAudio_es": "/audio/lessons/a957b7ea867f455e.mp3"
     },
     {
       "movestring": "33332422213100002524",
@@ -193,7 +220,9 @@
         {
           "text": "Two Gray threats, both above stacked columns. The row numbers point one way — the counts point the other. Trust the count.",
           "mood": "think",
-          "text_es": "Dos amenazas de Gris, ambas arriba de columnas apiladas. Los números de fila apuntan para un lado — los conteos apuntan para el otro. Confiá en el conteo."
+          "text_es": "Dos amenazas de Gris, ambas arriba de columnas apiladas. Los números de fila apuntan para un lado — los conteos apuntan para el otro. Confiá en el conteo.",
+          "audio": "/audio/lessons/952f0c3154a5e61a.mp3",
+          "audio_es": "/audio/lessons/b331ab27ecd043c5.mp3"
         }
       ],
       "overlays": [
@@ -227,21 +256,36 @@
         {
           "type": "claim",
           "cells": [
-            { "c": 4, "r": 2 },
-            { "c": 4, "r": 3 },
-            { "c": 4, "r": 4 }
+            {
+              "c": 4,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 3
+            },
+            {
+              "c": 4,
+              "r": 4
+            }
           ],
-          "label": "Fifth column: three cells — odd, a Z-Threat",
-          "label_es": "Quinta columna: tres casillas — impar, una Amenaza-Z"
+          "label": "Fifth column: three — odd",
+          "label_es": "Quinta columna: tres — impar"
         },
         {
           "type": "claim",
           "cells": [
-            { "c": 1, "r": 2 },
-            { "c": 1, "r": 3 }
+            {
+              "c": 1,
+              "r": 2
+            },
+            {
+              "c": 1,
+              "r": 3
+            }
           ],
-          "label": "Second column: two cells — even, not a Z-Threat",
-          "label_es": "Segunda columna: dos casillas — par, no es una Amenaza-Z"
+          "label": "Second column: two — even",
+          "label_es": "Segunda columna: dos — par"
         }
       ],
       "legendItems": [
@@ -252,12 +296,14 @@
         },
         {
           "type": "td",
-          "label": "Gray threat cells — count to each from its own stack top",
-          "label_es": "Casillas de amenaza de Gris — contá cada una desde arriba de su propia pila"
+          "label": "Gray threat cells",
+          "label_es": "Casillas de amenaza de Gris"
         }
       ],
       "infoProse": "From the parity lesson, Gray's natural rows are the even ones — second, fourth, sixth. So the threat on the fifth row of the fifth column looks like Green territory, and the one on the fourth row of the second column looks safely Gray's. Both readings are wrong, because both columns already hold two discs.\n\nFifth column: count from the stack top — third row, fourth row, fifth row. Three cells, odd: a genuine Z-Threat for Gray, sitting on an 'odd' row.\n\nSecond column: third row, fourth row. Two cells, even: not a Z-Threat, even though the fourth row is one of Gray's 'natural' even rows.\n\nEvery disc already in a column shifts the count by one. The raw row number tells the truth only in an empty column — once a column has discs in it, always count from the stack top.",
-      "infoProse_es": "Según la lección de paridad, las filas naturales de Gris son las pares — segunda, cuarta, sexta. Entonces la amenaza en la quinta fila de la quinta columna parece territorio de Verde, y la de la cuarta fila de la segunda columna parece segura para Gris. Las dos lecturas están equivocadas, porque ambas columnas ya tienen dos fichas.\n\nQuinta columna: contá desde arriba de la pila — tercera fila, cuarta fila, quinta fila. Tres casillas, impar: una Amenaza-Z genuina para Gris, ubicada en una fila 'impar'.\n\nSegunda columna: tercera fila, cuarta fila. Dos casillas, par: no es una Amenaza-Z, aunque la cuarta fila sea una de las filas 'naturales' pares de Gris.\n\nCada ficha que ya está en una columna corre el conteo en uno. El número de fila crudo dice la verdad solo en una columna vacía — una vez que una columna tiene fichas, siempre contá desde arriba de la pila."
+      "infoProse_es": "Según la lección de paridad, las filas naturales de Gris son las pares — segunda, cuarta, sexta. Entonces la amenaza en la quinta fila de la quinta columna parece territorio de Verde, y la de la cuarta fila de la segunda columna parece segura para Gris. Las dos lecturas están equivocadas, porque ambas columnas ya tienen dos fichas.\n\nQuinta columna: contá desde arriba de la pila — tercera fila, cuarta fila, quinta fila. Tres casillas, impar: una Amenaza-Z genuina para Gris, ubicada en una fila 'impar'.\n\nSegunda columna: tercera fila, cuarta fila. Dos casillas, par: no es una Amenaza-Z, aunque la cuarta fila sea una de las filas 'naturales' pares de Gris.\n\nCada ficha que ya está en una columna corre el conteo en uno. El número de fila crudo dice la verdad solo en una columna vacía — una vez que una columna tiene fichas, siempre contá desde arriba de la pila.",
+      "infoProseAudio": "/audio/lessons/bf33fc4314d1af6c.mp3",
+      "infoProseAudio_es": "/audio/lessons/9d026f965f6e0165.mp3"
     }
   ],
   "socratic": {
@@ -281,35 +327,45 @@
         {
           "text": "Two columns hold a Gray threat on the same row — the first and the fifth. Only one of them is truly yours. Which column?",
           "mood": "think",
-          "text_es": "Dos columnas tienen una amenaza de Gris en la misma fila — la primera y la quinta. Solo una de ellas es realmente tuya. ¿Cuál columna?"
+          "text_es": "Dos columnas tienen una amenaza de Gris en la misma fila — la primera y la quinta. Solo una de ellas es realmente tuya. ¿Cuál columna?",
+          "audio": "/audio/lessons/c794ee5d02e13b99.mp3",
+          "audio_es": "/audio/lessons/a71012697e34e1d9.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! You saw it.",
           "mood": "happy",
-          "text_es": "¡Exacto! Lo viste."
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
         }
       ],
       "hint": [
         {
           "text": "Count the empty cells in each column, from the stack top up to and including the threat cell. One count is even, one is odd — the odd one is yours.",
           "mood": "think",
-          "text_es": "Contá las casillas vacías en cada columna, desde arriba de la pila hasta la casilla de la amenaza, inclusive. Un conteo es par, el otro es impar — el impar es tuyo."
+          "text_es": "Contá las casillas vacías en cada columna, desde arriba de la pila hasta la casilla de la amenaza, inclusive. Un conteo es par, el otro es impar — el impar es tuyo.",
+          "audio": "/audio/lessons/dfc668d641afeec5.mp3",
+          "audio_es": "/audio/lessons/58c80a2e89e86b63.mp3"
         }
       ]
     }

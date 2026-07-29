@@ -11,7 +11,9 @@
         {
           "text": "Green always moves first. Watch one column fill straight up with the two players simply alternating — who lands on which row?",
           "text_es": "Verde siempre mueve primero. Mirá cómo una columna se llena de abajo hacia arriba mientras los dos jugadores simplemente se alternan — ¿quién cae en qué fila?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/d5724abcc6e9ef91.mp3",
+          "audio_es": "/audio/lessons/16b2a15192334448.mp3"
         }
       ],
       "boardSpec": [
@@ -26,7 +28,9 @@
       "overlays": [],
       "legendItems": [],
       "infoProse": "Green always moves first. Count rows from the bottom, starting at 1. When a column fills straight up with the two players simply alternating, Green lands on rows 1, 3 and 5 and Gray lands on rows 2, 4 and 6.\n\nThat is the pattern behind this lesson's title: odd rows belong to Green, even rows belong to Gray — each side's natural rows.",
-      "infoProse_es": "Verde siempre mueve primero. Contá las filas desde abajo, empezando por 1. Cuando una columna se llena de forma continua con los dos jugadores alternándose, Verde cae en las filas 1, 3 y 5, y Gris cae en las filas 2, 4 y 6.\n\nEse es el patrón detrás del título de esta lección: las filas impares le pertenecen a Verde, las filas pares le pertenecen a Gris — las filas naturales de cada jugador."
+      "infoProse_es": "Verde siempre mueve primero. Contá las filas desde abajo, empezando por 1. Cuando una columna se llena de forma continua con los dos jugadores alternándose, Verde cae en las filas 1, 3 y 5, y Gris cae en las filas 2, 4 y 6.\n\nEse es el patrón detrás del título de esta lección: las filas impares le pertenecen a Verde, las filas pares le pertenecen a Gris — las filas naturales de cada jugador.",
+      "infoProseAudio": "/audio/lessons/c719d41279070013.mp3",
+      "infoProseAudio_es": "/audio/lessons/e1e96b1be0e08120.mp3"
     },
     {
       "movestring": "333355111",
@@ -35,7 +39,9 @@
         {
           "text": "Now a real game: three columns, three different heights. Careful — the number of discs already in a column does not say whose the next disc there will be.",
           "text_es": "Ahora un juego real: tres columnas, tres alturas distintas. Cuidado — la cantidad de fichas que ya hay en una columna no te dice de quién va a ser la próxima ficha ahí.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/7b0e887bdfef79fe.mp3",
+          "audio_es": "/audio/lessons/3f45a54858f69f74.mp3"
         }
       ],
       "boardSpec": [
@@ -50,7 +56,9 @@
       "overlays": [],
       "legendItems": [],
       "infoProse": "In a real game players skip between columns, so a column almost never fills in strict alternation — the disc count in a column does NOT tell you whose the next cell is. Nine discs are down here, so it is Gray's turn: Gray could drop into the empty first column right now, and that column's first disc would be Gray's.\n\nWhat row parity really tells you is who collects a cell when the column is forced to fill at the end of the game. In the middle of the game, ask a different question: how many empty cells sit between the top of the column and the cell you care about? That count — not the row number — decides who gets there, and the Z-Threats lesson turns it into a weapon.",
-      "infoProse_es": "En un juego real los jugadores saltan entre columnas, así que una columna casi nunca se llena en estricta alternancia — la cantidad de fichas en una columna NO te dice de quién es la próxima casilla. Acá ya hay nueve fichas, así que es el turno de Gris: Gris podría tirar en la primera columna, que está vacía, ahora mismo, y la primera ficha de esa columna sería de Gris.\n\nLo que la paridad de fila realmente te dice es quién se queda con una casilla cuando la columna se ve forzada a llenarse al final de la partida. En la mitad de la partida, hacete otra pregunta: ¿cuántas casillas vacías hay entre el tope de la columna y la casilla que te interesa? Esa cantidad — no el número de fila — decide quién llega ahí, y la lección de Amenazas-Z la convierte en un arma."
+      "infoProse_es": "En un juego real los jugadores saltan entre columnas, así que una columna casi nunca se llena en estricta alternancia — la cantidad de fichas en una columna NO te dice de quién es la próxima casilla. Acá ya hay nueve fichas, así que es el turno de Gris: Gris podría tirar en la primera columna, que está vacía, ahora mismo, y la primera ficha de esa columna sería de Gris.\n\nLo que la paridad de fila realmente te dice es quién se queda con una casilla cuando la columna se ve forzada a llenarse al final de la partida. En la mitad de la partida, hacete otra pregunta: ¿cuántas casillas vacías hay entre el tope de la columna y la casilla que te interesa? Esa cantidad — no el número de fila — decide quién llega ahí, y la lección de Amenazas-Z la convierte en un arma.",
+      "infoProseAudio": "/audio/lessons/0f271eada4610a9a.mp3",
+      "infoProseAudio_es": "/audio/lessons/66c76fa6fb9f0a83.mp3"
     },
     {
       "movestring": "3",
@@ -60,7 +68,9 @@
         {
           "text": "Careful: the same row number can fall to different players in different columns. One early disc is enough to flip it.",
           "text_es": "Cuidado: el mismo número de fila puede caer en manos de distintos jugadores según la columna. Una sola ficha temprana alcanza para cambiarlo.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/e15addc61a397b41.mp3",
+          "audio_es": "/audio/lessons/60478021ba4d8f36.mp3"
         }
       ],
       "boardSpec": [
@@ -87,17 +97,19 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Falls to Gray in the end-game fill",
-          "label_es": "Cae en manos de Gris en el llenado de final de partida"
+          "label": "Falls to Gray at the end",
+          "label_es": "Cae en manos de Gris al final"
         },
         {
           "type": "tg",
-          "label": "Falls to Green in the end-game fill",
-          "label_es": "Cae en manos de Verde en el llenado de final de partida"
+          "label": "Falls to Green at the end",
+          "label_es": "Cae en manos de Verde al final"
         }
       ],
       "infoProse": "Both marked cells sit on the third row — same row number, different fate.\n\nRun the standard end-game squeeze, where Gray answers each Green disc directly on top of it. In the empty third column that reproduces the first slide exactly: Green takes rows 1, 3 and 5, so the third row falls to Green. In the fourth column, Green's disc already occupies the first row. The same squeeze now starts one cell higher: Green lands on the second row and Gray caps the third — the very same row falls to Gray.\n\nWhat changed was not the row number but the empty space under the cell: three empty cells up to the third row in one column, two in the other. Who collects a cell is decided by that count, not by the row alone — the Z-Threats lesson turns the count into a precise rule.",
-      "infoProse_es": "Las dos casillas marcadas están en la tercera fila — mismo número de fila, destino distinto.\n\nCorré el apriete estándar de final de partida, donde Gris responde a cada ficha de Verde poniéndose justo encima. En la tercera columna, que está vacía, eso reproduce exactamente la primera diapositiva: Verde toma las filas 1, 3 y 5, así que la tercera fila cae en manos de Verde. En la cuarta columna, la ficha de Verde ya ocupa la primera fila. El mismo apriete ahora arranca una casilla más arriba: Verde cae en la segunda fila y Gris corona la tercera — esa misma fila cae en manos de Gris.\n\nLo que cambió no fue el número de fila sino el espacio vacío debajo de la casilla: tres casillas vacías hasta la tercera fila en una columna, dos en la otra. Quién se queda con una casilla lo decide esa cantidad, no la fila sola — la lección de Amenazas-Z convierte esa cantidad en una regla precisa."
+      "infoProse_es": "Las dos casillas marcadas están en la tercera fila — mismo número de fila, destino distinto.\n\nCorré el apriete estándar de final de partida, donde Gris responde a cada ficha de Verde poniéndose justo encima. En la tercera columna, que está vacía, eso reproduce exactamente la primera diapositiva: Verde toma las filas 1, 3 y 5, así que la tercera fila cae en manos de Verde. En la cuarta columna, la ficha de Verde ya ocupa la primera fila. El mismo apriete ahora arranca una casilla más arriba: Verde cae en la segunda fila y Gris corona la tercera — esa misma fila cae en manos de Gris.\n\nLo que cambió no fue el número de fila sino el espacio vacío debajo de la casilla: tres casillas vacías hasta la tercera fila en una columna, dos en la otra. Quién se queda con una casilla lo decide esa cantidad, no la fila sola — la lección de Amenazas-Z convierte esa cantidad en una regla precisa.",
+      "infoProseAudio": "/audio/lessons/a01f36ebf4ff5852.mp3",
+      "infoProseAudio_es": "/audio/lessons/248e7d95d2ea7adf.mp3"
     },
     {
       "movestring": "333321122214",
@@ -106,7 +118,9 @@
         {
           "text": "Green has three in a row with both ends open — two threats on the same row. They are not equally valuable. Count the empty cells below each end.",
           "text_es": "Verde tiene tres en línea con ambos extremos abiertos — dos amenazas en la misma fila. No valen lo mismo. Contá las casillas vacías debajo de cada extremo.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/1f93d0164c42b436.mp3",
+          "audio_es": "/audio/lessons/ffd8c2a20747275e.mp3"
         }
       ],
       "boardSpec": [
@@ -134,28 +148,39 @@
         {
           "type": "tg",
           "cells": [
-            { "c": 1, "r": 2 },
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 2 }
+            {
+              "c": 1,
+              "r": 2
+            },
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 2
+            }
           ],
-          "label": "Green's three in a row — open at both ends",
-          "label_es": "Los tres en línea de Verde — abiertos en ambos extremos"
+          "label": "Green's three in a row",
+          "label_es": "Los tres en línea de Verde"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's threat — the count favours Green",
-          "label_es": "Amenaza de Verde — la cuenta favorece a Verde"
+          "label": "Green's threat — Green's count",
+          "label_es": "Amenaza de Verde — cuenta de Verde"
         },
         {
           "type": "claim",
-          "label": "Green's threat — the count favours Gray",
-          "label_es": "Amenaza de Verde — la cuenta favorece a Gris"
+          "label": "Green's threat — Gray's count",
+          "label_es": "Amenaza de Verde — cuenta de Gris"
         }
       ],
       "infoProse": "Green's three discs on the third row, columns two to four, are open at both ends: the completing cells in the first and fifth columns are BOTH Green's threats, and both sit on the same third row. Yet they are not equal.\n\nThe first column is empty: counting up to and including the threat cell takes three cells — an odd count. Under the end-game squeeze the threat cell itself falls to Green, so Green can simply wait for it. The fifth column already holds one Gray disc: only two cells remain — an even count. There the fill delivers the block: Gray lands on the threat cell in the natural course of the squeeze.\n\nSo the real question about any threat is never \"what row is it on?\" but \"who will actually land on the completing cell?\" — count the empty cells from the stack top. That question is what Claimeven and Z-Threats are built on.",
-      "infoProse_es": "Las tres fichas de Verde en la tercera fila, columnas dos a cuatro, están abiertas en ambos extremos: las casillas que completan la línea en la primera y la quinta columna son AMBAS amenazas de Verde, y las dos están en la misma tercera fila. Sin embargo, no son iguales.\n\nLa primera columna está vacía: contar hasta la casilla de amenaza inclusive lleva tres casillas — una cuenta impar. Bajo el apriete de final de partida, la casilla de amenaza misma cae en manos de Verde, así que Verde puede simplemente esperarla. La quinta columna ya tiene una ficha de Gris: solo quedan dos casillas — una cuenta par. Ahí el llenado entrega el bloqueo: Gris cae en la casilla de amenaza en el curso natural del apriete.\n\nAsí que la verdadera pregunta sobre cualquier amenaza nunca es \"¿en qué fila está?\" sino \"¿quién va a caer realmente en la casilla que completa la línea?\" — contá las casillas vacías desde el tope de la pila. Esa pregunta es la base de Claimeven y Amenazas-Z."
+      "infoProse_es": "Las tres fichas de Verde en la tercera fila, columnas dos a cuatro, están abiertas en ambos extremos: las casillas que completan la línea en la primera y la quinta columna son AMBAS amenazas de Verde, y las dos están en la misma tercera fila. Sin embargo, no son iguales.\n\nLa primera columna está vacía: contar hasta la casilla de amenaza inclusive lleva tres casillas — una cuenta impar. Bajo el apriete de final de partida, la casilla de amenaza misma cae en manos de Verde, así que Verde puede simplemente esperarla. La quinta columna ya tiene una ficha de Gris: solo quedan dos casillas — una cuenta par. Ahí el llenado entrega el bloqueo: Gris cae en la casilla de amenaza en el curso natural del apriete.\n\nAsí que la verdadera pregunta sobre cualquier amenaza nunca es \"¿en qué fila está?\" sino \"¿quién va a caer realmente en la casilla que completa la línea?\" — contá las casillas vacías desde el tope de la pila. Esa pregunta es la base de Claimeven y Amenazas-Z.",
+      "infoProseAudio": "/audio/lessons/6a7eaf1c961a3ca0.mp3",
+      "infoProseAudio_es": "/audio/lessons/806024a38a1b255b.mp3"
     }
   ],
   "socratic": {
@@ -179,35 +204,45 @@
         {
           "text": "You can finish a threat in two different ways here, and both finishing cells sit in the empty third column — one on the second row, one on the third. Only one of them will the end of the game hand to you. Click the column where you would drop your disc to build the threat you can actually collect.",
           "text_es": "Acá podés completar una amenaza de dos maneras distintas, y las dos casillas que la completan están en la tercera columna, que está vacía — una en la segunda fila, otra en la tercera. El final de la partida solo te va a entregar una de las dos. Cliqueá la columna donde tirarías tu ficha para construir la amenaza que realmente vas a poder cobrar.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/0ba9e2451e15b7b2.mp3",
+          "audio_es": "/audio/lessons/9b8c2117d8aeed59.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — that threat would finish on a cell the fill count gives to Gray. Try again.",
           "text_es": "No exactamente — esa amenaza se completaría en una casilla que la cuenta del llenado le da a Gris. Intentalo de nuevo.",
-          "mood": "oops"
+          "mood": "oops",
+          "audio": "/audio/lessons/4c134ebe151968db.mp3",
+          "audio_es": "/audio/lessons/37a33e0e8922046e.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "text_es": "Dejame mostrarte.",
-          "mood": "oops"
+          "mood": "oops",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! That line finishes on the third row of the third column — an odd count of empty cells, so that cell is yours to collect.",
           "text_es": "¡Exacto! Esa línea se completa en la tercera fila de la tercera columna — una cuenta impar de casillas vacías, así que esa casilla es tuya para cobrar.",
-          "mood": "happy"
+          "mood": "happy",
+          "audio": "/audio/lessons/0bc0d251c18fd8c2.mp3",
+          "audio_es": "/audio/lessons/6e9e05776b77a407.mp3"
         }
       ],
       "hint": [
         {
           "text": "Count the empty cells in the third column: two up to the second row — even, Gray's — and three up to the third row — odd, yours. Your discs in the second and fourth columns already point a rising diagonal through that third-row cell. Extend that diagonal from below.",
           "text_es": "Contá las casillas vacías en la tercera columna: dos hasta la segunda fila — par, de Gris — y tres hasta la tercera fila — impar, tuya. Tus fichas en la segunda y cuarta columna ya marcan una diagonal ascendente que pasa por esa casilla de la tercera fila. Extendé esa diagonal desde abajo.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/01c69c0e71d6d6c7.mp3",
+          "audio_es": "/audio/lessons/92cdaddbabdcd77b.mp3"
         }
       ]
     }

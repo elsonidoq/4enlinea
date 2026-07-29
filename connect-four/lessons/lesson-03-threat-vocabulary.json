@@ -22,7 +22,8 @@
           "text": "Every threat lives inside a window: four cells in a straight line. On the bottom row, the window from the second column to the fifth holds one gray disc and two green. Nobody can complete four there.",
           "mood": "think",
           "text_es": "Toda amenaza vive dentro de una ventana: cuatro casillas en línea recta. En la fila de abajo, la ventana de la segunda a la quinta columna tiene una gris y dos verdes. Nadie puede completar cuatro ahí.",
-          "audio": "/audio/lessons/e15354ab6bd5bc94.mp3"
+          "audio": "/audio/lessons/e15354ab6bd5bc94.mp3",
+          "audio_es": "/audio/lessons/8d97171750e047f8.mp3"
         }
       ],
       "overlays": [],
@@ -31,17 +32,31 @@
         {
           "type": "claim",
           "cells": [
-            { "c": 1, "r": 0 },
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 0 },
-            { "c": 4, "r": 0 }
+            {
+              "c": 1,
+              "r": 0
+            },
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 0
+            },
+            {
+              "c": 4,
+              "r": 0
+            }
           ],
-          "label": "The dead window — both colours are inside it",
-          "label_es": "La ventana muerta — los dos colores están adentro"
+          "label": "The dead window",
+          "label_es": "La ventana muerta"
         }
       ],
       "infoProse": "A window is any four cells in a straight line: horizontal, vertical, or diagonal. Every threat in the game is a statement about one window. The moment both colours have a disc inside the same window, that window is dead — neither player can ever finish four there. The bottom-row window running from the second to the fifth column is exactly that: one gray disc, two green, dead forever.",
-      "infoProse_es": "Una ventana es cualquier grupo de cuatro casillas en línea recta: horizontal, vertical o diagonal. Toda amenaza del juego es una afirmación sobre una ventana. En el momento en que los dos colores tienen una ficha en la misma ventana, esa ventana está muerta: ninguno de los dos puede completar cuatro ahí. La ventana de la fila de abajo que va de la segunda a la quinta columna es justamente eso: una ficha gris, dos verdes, muerta para siempre."
+      "infoProse_es": "Una ventana es cualquier grupo de cuatro casillas en línea recta: horizontal, vertical o diagonal. Toda amenaza del juego es una afirmación sobre una ventana. En el momento en que los dos colores tienen una ficha en la misma ventana, esa ventana está muerta: ninguno de los dos puede completar cuatro ahí. La ventana de la fila de abajo que va de la segunda a la quinta columna es justamente eso: una ficha gris, dos verdes, muerta para siempre.",
+      "infoProseAudio": "/audio/lessons/27a088bf734dfa05.mp3",
+      "infoProseAudio_es": "/audio/lessons/94cb6b6667c57f76.mp3"
     },
     {
       "movestring": "33333321",
@@ -60,7 +75,8 @@
           "text": "Now the window from the third column to the sixth: two green discs, two empty cells, no gray inside. Two discs plus two empty cells in a clean window is a minor threat — not dangerous yet.",
           "mood": "think",
           "text_es": "Ahora la ventana de la tercera a la sexta columna: dos fichas verdes, dos casillas vacías, nada de gris. Dos fichas más dos casillas vacías en una ventana limpia es una amenaza menor.",
-          "audio": "/audio/lessons/120d049a711c49d4.mp3"
+          "audio": "/audio/lessons/120d049a711c49d4.mp3",
+          "audio_es": "/audio/lessons/a33a49872d2bac81.mp3"
         }
       ],
       "overlays": [
@@ -78,25 +94,39 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "The two empty cells of Green's minor threat",
-          "label_es": "Las dos casillas vacías de la amenaza menor de Verde"
+          "label": "Green's minor-threat cells",
+          "label_es": "Casillas de amenaza menor de Verde"
         }
       ],
       "windowHighlights": [
         {
           "type": "tg",
           "cells": [
-            { "c": 2, "r": 0 },
-            { "c": 3, "r": 0 },
-            { "c": 4, "r": 0 },
-            { "c": 5, "r": 0 }
+            {
+              "c": 2,
+              "r": 0
+            },
+            {
+              "c": 3,
+              "r": 0
+            },
+            {
+              "c": 4,
+              "r": 0
+            },
+            {
+              "c": 5,
+              "r": 0
+            }
           ],
           "label": "Green's minor-threat window",
           "label_es": "La ventana de la amenaza menor de Verde"
         }
       ],
       "infoProse": "Two discs of one colour plus two empty cells in a window, with no enemy disc inside, is a minor threat. Think of it as a plan under construction: Green still needs both of the marked cells. If Green fills one of them and the window stays clean, the minor threat grows into something far more serious. That stronger shape is the next slide's word.",
-      "infoProse_es": "Dos fichas de un color más dos casillas vacías en una ventana, sin ninguna ficha rival adentro, es una amenaza menor. Pensala como un plan en construcción: a Verde todavía le faltan las dos casillas marcadas. Si Verde llena una de ellas y la ventana sigue limpia, la amenaza menor crece hasta convertirse en algo mucho más serio. Esa forma más fuerte es la palabra de la próxima diapositiva."
+      "infoProse_es": "Dos fichas de un color más dos casillas vacías en una ventana, sin ninguna ficha rival adentro, es una amenaza menor. Pensala como un plan en construcción: a Verde todavía le faltan las dos casillas marcadas. Si Verde llena una de ellas y la ventana sigue limpia, la amenaza menor crece hasta convertirse en algo mucho más serio. Esa forma más fuerte es la palabra de la próxima diapositiva.",
+      "infoProseAudio": "/audio/lessons/17af840efd093524.mp3",
+      "infoProseAudio_es": "/audio/lessons/dd6e198f1cef034f.mp3"
     },
     {
       "movestring": "33331001",
@@ -115,7 +145,8 @@
           "text": "Gray has three discs on a rising diagonal — first, second and fourth columns. The one missing cell is the third row of the third column. Three discs plus one empty cell: memorise this shape.",
           "mood": "think",
           "text_es": "Gris tiene tres fichas en una diagonal ascendente — columnas primera, segunda y cuarta. La casilla que falta es la tercera fila de la tercera columna. Memorizá esta forma.",
-          "audio": "/audio/lessons/277540a378ff97f4.mp3"
+          "audio": "/audio/lessons/277540a378ff97f4.mp3",
+          "audio_es": "/audio/lessons/285d81c643c16fdb.mp3"
         }
       ],
       "overlays": [
@@ -128,12 +159,14 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's major threat — the missing fourth cell",
-          "label_es": "La amenaza mayor de Gris — la cuarta casilla que falta"
+          "label": "Gray's major threat",
+          "label_es": "La amenaza mayor de Gris"
         }
       ],
       "infoProse": "A window holding three discs of one colour and exactly one empty cell is a major threat. Whoever plays that empty cell completes four in a row, so all the tension of the window sits on that single cell. Here the marked cell — third row, third column — completes Gray's rising diagonal. Major threats are the currency of the whole game.",
-      "infoProse_es": "Una ventana con tres fichas de un color y exactamente una casilla vacía es una amenaza mayor. Quien juegue esa casilla vacía completa cuatro en línea, así que toda la tensión de la ventana vive en esa única casilla. Acá la casilla marcada — tercera fila, tercera columna — completa la diagonal ascendente de Gris. Las amenazas mayores son la moneda de toda la partida."
+      "infoProse_es": "Una ventana con tres fichas de un color y exactamente una casilla vacía es una amenaza mayor. Quien juegue esa casilla vacía completa cuatro en línea, así que toda la tensión de la ventana vive en esa única casilla. Acá la casilla marcada — tercera fila, tercera columna — completa la diagonal ascendente de Gris. Las amenazas mayores son la moneda de toda la partida.",
+      "infoProseAudio": "/audio/lessons/2481cb15cdbab1a8.mp3",
+      "infoProseAudio_es": "/audio/lessons/63bb92485486fad3.mp3"
     },
     {
       "movestring": "33331001",
@@ -152,7 +185,8 @@
           "text": "Look at the third column: completely empty. A disc dropped there lands on the bottom row, far below the threat cell. A major threat whose cell is still out of reach is called latent.",
           "mood": "think",
           "text_es": "Mirá la tercera columna: está vacía. Una ficha soltada ahí cae en la fila de abajo, muy lejos de la casilla de la amenaza. Una amenaza mayor cuya casilla está fuera de alcance se llama latente.",
-          "audio": "/audio/lessons/2f7532137037448b.mp3"
+          "audio": "/audio/lessons/2f7532137037448b.mp3",
+          "audio_es": "/audio/lessons/d91c99f00a1b2bb7.mp3"
         }
       ],
       "overlays": [
@@ -175,17 +209,19 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's major threat — the missing fourth cell",
-          "label_es": "La amenaza mayor de Gris — la cuarta casilla que falta"
+          "label": "Gray's major threat",
+          "label_es": "La amenaza mayor de Gris"
         },
         {
           "type": "claim",
-          "label": "Empty cells below it — they must fill before the threat cell is reachable",
-          "label_es": "Casillas vacías debajo — deben llenarse antes de que la casilla de la amenaza sea alcanzable"
+          "label": "Empty cells below it",
+          "label_es": "Casillas vacías debajo"
         }
       ],
       "infoProse": "Two more discs must land in the third column before Gray's threat cell can be played at all. A major threat that is real but still out of reach is latent. Latent does not mean harmless: the column will fill sooner or later, and whoever takes that cell then decides the diagonal. Later lessons on parity, Z-threats, and the undercut are all about who eventually collects cells like this one.",
-      "infoProse_es": "Tienen que caer dos fichas más en la tercera columna antes de que la casilla de la amenaza de Gris se pueda jugar. Una amenaza mayor que es real pero todavía está fuera de alcance es latente. Latente no significa inofensiva: la columna se va a llenar tarde o temprano, y quien tome esa casilla entonces decide la diagonal. Las lecciones posteriores sobre paridad, amenazas-Z y el undercut tratan justamente de quién termina cobrando casillas como esta."
+      "infoProse_es": "Tienen que caer dos fichas más en la tercera columna antes de que la casilla de la amenaza de Gris se pueda jugar. Una amenaza mayor que es real pero todavía está fuera de alcance es latente. Latente no significa inofensiva: la columna se va a llenar tarde o temprano, y quien tome esa casilla entonces decide la diagonal. Las lecciones posteriores sobre paridad, amenazas-Z y el undercut tratan justamente de quién termina cobrando casillas como esta.",
+      "infoProseAudio": "/audio/lessons/5c3c47f76d44465b.mp3",
+      "infoProseAudio_es": "/audio/lessons/53834bd61b9612c1.mp3"
     },
     {
       "movestring": "33333512551505504030014",
@@ -204,7 +240,8 @@
           "text": "In every column, gravity decides where the next disc lands: on the lowest empty cell. That cell is the column's gravity-top — the only one you can play this turn.",
           "mood": "think",
           "text_es": "En cada columna, la gravedad decide dónde cae la próxima ficha: en la casilla vacía más baja. Esa casilla es el tope de gravedad — la única que podés jugar este turno.",
-          "audio": "/audio/lessons/03ad0dd44cc17a51.mp3"
+          "audio": "/audio/lessons/03ad0dd44cc17a51.mp3",
+          "audio_es": "/audio/lessons/00a5c99c49872e7e.mp3"
         }
       ],
       "overlays": [
@@ -232,12 +269,14 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "Gravity-tops — the one playable cell in each open column",
-          "label_es": "Topes de gravedad — la única casilla jugable de cada columna abierta"
+          "label": "Gravity-tops",
+          "label_es": "Topes de gravedad"
         }
       ],
       "infoProse": "Each open column has exactly one playable cell: its gravity-top, the lowest empty cell in it. Everything above a gravity-top is out of reach this turn. A full column — like the fourth and the sixth here — has no playable cell at all. Count the discs in any column and you can find its gravity-top yourself.",
-      "infoProse_es": "Cada columna abierta tiene exactamente una casilla jugable: su tope de gravedad, la casilla vacía más baja. Todo lo que está arriba de un tope de gravedad queda fuera de alcance en este turno. Una columna llena — como la cuarta y la sexta acá — no tiene ninguna casilla jugable. Contá las fichas de cualquier columna y vas a encontrar su tope de gravedad vos mismo."
+      "infoProse_es": "Cada columna abierta tiene exactamente una casilla jugable: su tope de gravedad, la casilla vacía más baja. Todo lo que está arriba de un tope de gravedad queda fuera de alcance en este turno. Una columna llena — como la cuarta y la sexta acá — no tiene ninguna casilla jugable. Contá las fichas de cualquier columna y vas a encontrar su tope de gravedad vos mismo.",
+      "infoProseAudio": "/audio/lessons/bf2bafd1cdd89a96.mp3",
+      "infoProseAudio_es": "/audio/lessons/8b87299a7cedbc8c.mp3"
     },
     {
       "movestring": "33333512551505504030014",
@@ -256,7 +295,8 @@
           "text": "Find Gray's rising diagonal: the bottom of the third column, the second row of the fourth, the fourth row of the sixth. Its missing cell is the third row of the fifth column.",
           "mood": "think",
           "text_es": "Encontrá la diagonal ascendente de Gris: la base de la tercera columna, la segunda fila de la cuarta, la cuarta fila de la sexta. Le falta la tercera fila de la quinta columna.",
-          "audio": "/audio/lessons/fc53af60cf1bbfe3.mp3"
+          "audio": "/audio/lessons/fc53af60cf1bbfe3.mp3",
+          "audio_es": "/audio/lessons/65ba346ad1347fe5.mp3"
         }
       ],
       "overlays": [
@@ -289,17 +329,19 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "Gravity-tops — the one playable cell in each open column",
-          "label_es": "Topes de gravedad — la única casilla jugable de cada columna abierta"
+          "label": "Gravity-tops",
+          "label_es": "Topes de gravedad"
         },
         {
           "type": "td",
-          "label": "Gray's threat cell — it sits exactly on a gravity-top",
-          "label_es": "La casilla de la amenaza de Gris — está exactamente sobre un tope de gravedad"
+          "label": "Gray's threat cell",
+          "label_es": "La casilla de la amenaza de Gris"
         }
       ],
       "infoProse": "Gray's diagonal is missing exactly one cell: the third row of the fifth column. That column holds two discs, so its gravity-top is the third row — the very same cell. The threat cell and the one playable cell of that column are identical. That coincidence changes everything.",
-      "infoProse_es": "A la diagonal de Gris le falta exactamente una casilla: la tercera fila de la quinta columna. Esa columna tiene dos fichas, así que su tope de gravedad es la tercera fila — exactamente la misma casilla. La casilla de la amenaza y la única casilla jugable de esa columna son la misma. Esa coincidencia lo cambia todo."
+      "infoProse_es": "A la diagonal de Gris le falta exactamente una casilla: la tercera fila de la quinta columna. Esa columna tiene dos fichas, así que su tope de gravedad es la tercera fila — exactamente la misma casilla. La casilla de la amenaza y la única casilla jugable de esa columna son la misma. Esa coincidencia lo cambia todo.",
+      "infoProseAudio": "/audio/lessons/7738c6aaf7553b8a.mp3",
+      "infoProseAudio_es": "/audio/lessons/663dc5388c96aa2d.mp3"
     },
     {
       "movestring": "33333512551505504030014",
@@ -318,7 +360,8 @@
           "text": "A major threat whose empty cell sits on a gravity-top is an immediate threat. It is Gray's turn: one disc in the fifth column ends the game right now.",
           "mood": "think",
           "text_es": "Una amenaza mayor cuya casilla vacía está sobre un tope de gravedad es una amenaza inmediata. Es el turno de Gris: una ficha en la quinta columna termina la partida ya.",
-          "audio": "/audio/lessons/d6430e04c32287ad.mp3"
+          "audio": "/audio/lessons/d6430e04c32287ad.mp3",
+          "audio_es": "/audio/lessons/dc9671fbbcef67bf.mp3"
         }
       ],
       "overlays": [
@@ -351,17 +394,19 @@
       "legendItems": [
         {
           "type": "claim",
-          "label": "Gravity-tops — the one playable cell in each open column",
-          "label_es": "Topes de gravedad — la única casilla jugable de cada columna abierta"
+          "label": "Gravity-tops",
+          "label_es": "Topes de gravedad"
         },
         {
           "type": "td",
-          "label": "Gray's threat cell — it sits exactly on a gravity-top",
-          "label_es": "La casilla de la amenaza de Gris — está exactamente sobre un tope de gravedad"
+          "label": "Gray's threat cell",
+          "label_es": "La casilla de la amenaza de Gris"
         }
       ],
       "infoProse": "A major threat whose empty cell sits on a gravity-top is an immediate threat. Here it is Gray's turn, so one disc in the fifth column completes the diagonal and wins on the spot. Had it been Green's turn, Green would have to take that very cell first, or lose. An immediate threat tolerates no delay: it gets used — or blocked — this very turn.",
-      "infoProse_es": "Una amenaza mayor cuya casilla vacía está sobre un tope de gravedad es una amenaza inmediata. Acá es el turno de Gris, así que una ficha en la quinta columna completa la diagonal y gana en el acto. Si fuera el turno de Verde, Verde tendría que tomar esa misma casilla primero, o perder. Una amenaza inmediata no tolera demoras: se usa — o se bloquea — en este mismo turno."
+      "infoProse_es": "Una amenaza mayor cuya casilla vacía está sobre un tope de gravedad es una amenaza inmediata. Acá es el turno de Gris, así que una ficha en la quinta columna completa la diagonal y gana en el acto. Si fuera el turno de Verde, Verde tendría que tomar esa misma casilla primero, o perder. Una amenaza inmediata no tolera demoras: se usa — o se bloquea — en este mismo turno.",
+      "infoProseAudio": "/audio/lessons/e6e274962672eb6b.mp3",
+      "infoProseAudio_es": "/audio/lessons/21f2944ddb395de6.mp3"
     },
     {
       "movestring": "333444343342526111",
@@ -380,7 +425,8 @@
           "text": "Green to move. The third column holds two discs, so its gravity-top is the third row — exactly the marked cell. Which of the three words does that make it?",
           "mood": "think",
           "text_es": "Juega Verde. La tercera columna tiene dos fichas, así que su tope de gravedad es la tercera fila — exactamente la casilla marcada. ¿Cuál de las tres palabras le corresponde?",
-          "audio": "/audio/lessons/bdd2680264c59a02.mp3"
+          "audio": "/audio/lessons/bdd2680264c59a02.mp3",
+          "audio_es": "/audio/lessons/3b2cdc6b20573803.mp3"
         }
       ],
       "overlays": [
@@ -393,12 +439,14 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's threat cell — sitting on the gravity-top",
-          "label_es": "La casilla de amenaza de Verde — sobre el tope de gravedad"
+          "label": "Green's threat cell",
+          "label_es": "La casilla de amenaza de Verde"
         }
       ],
       "infoProse": "Run the gravity-top test on the marked cell: the third column holds two discs, so the third row is where a disc would land. That is precisely where Green's rising diagonal needs its fourth disc. So this is an immediate threat, and it is Green's turn. The solver rates that drop the strongest move on the board.",
-      "infoProse_es": "Aplicá la prueba del tope de gravedad a la casilla marcada: la tercera columna tiene dos fichas, así que la tercera fila es donde caería una ficha. Ahí es exactamente donde la diagonal ascendente de Verde necesita su cuarta ficha. Así que esto es una amenaza inmediata, y es el turno de Verde. El solver califica esa jugada como la más fuerte del tablero."
+      "infoProse_es": "Aplicá la prueba del tope de gravedad a la casilla marcada: la tercera columna tiene dos fichas, así que la tercera fila es donde caería una ficha. Ahí es exactamente donde la diagonal ascendente de Verde necesita su cuarta ficha. Así que esto es una amenaza inmediata, y es el turno de Verde. El solver califica esa jugada como la más fuerte del tablero.",
+      "infoProseAudio": "/audio/lessons/b299299783b69f0a.mp3",
+      "infoProseAudio_es": "/audio/lessons/36bdaed470a0b85b.mp3"
     },
     {
       "movestring": "333444343342526111",
@@ -417,7 +465,8 @@
           "text": "Two more marked cells, both the same three-plus-one shape, and neither is playable. One is a second Green threat above the first; the other is Gray's, two rows out of reach.",
           "mood": "think",
           "text_es": "Dos casillas marcadas más, las dos con la misma forma de tres más uno, y ninguna se puede jugar. Una es de Verde, arriba de la primera; la otra es de Gris, dos filas fuera de alcance.",
-          "audio": "/audio/lessons/083cb92617f74f1f.mp3"
+          "audio": "/audio/lessons/083cb92617f74f1f.mp3",
+          "audio_es": "/audio/lessons/7e2bacfb20a8e1d0.mp3"
         }
       ],
       "overlays": [
@@ -440,17 +489,19 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green major-threat cells — same shape, different reach",
-          "label_es": "Casillas de amenaza mayor de Verde — misma forma, distinto alcance"
+          "label": "Green major-threat cells",
+          "label_es": "Amenazas mayores de Verde"
         },
         {
           "type": "td",
-          "label": "Gray major-threat cell — also latent",
-          "label_es": "Casilla de amenaza mayor de Gris — también latente"
+          "label": "Gray major-threat cell",
+          "label_es": "Amenaza mayor de Gris"
         }
       ],
       "infoProse": "One row above Green's winning cell, in the same column, a falling diagonal through the fourth, fifth and sixth columns needs the fourth row of the third column. Identical shape, but it sits above the gravity-top, so it is latent — a promise, not a move. Gray's cell tells the same story: a rising diagonal needs the fourth row of the sixth column, and that column holds a single disc. Two rows out of reach.",
-      "infoProse_es": "Una fila arriba de la casilla ganadora de Verde, en la misma columna, una diagonal descendente por la cuarta, quinta y sexta columna necesita la cuarta fila de la tercera columna. Forma idéntica, pero está arriba del tope de gravedad, así que es latente — una promesa, no una jugada. La casilla de Gris cuenta la misma historia: una diagonal ascendente necesita la cuarta fila de la sexta columna, y esa columna tiene una sola ficha. Dos filas fuera de alcance."
+      "infoProse_es": "Una fila arriba de la casilla ganadora de Verde, en la misma columna, una diagonal descendente por la cuarta, quinta y sexta columna necesita la cuarta fila de la tercera columna. Forma idéntica, pero está arriba del tope de gravedad, así que es latente — una promesa, no una jugada. La casilla de Gris cuenta la misma historia: una diagonal ascendente necesita la cuarta fila de la sexta columna, y esa columna tiene una sola ficha. Dos filas fuera de alcance.",
+      "infoProseAudio": "/audio/lessons/3ee2ab1434cd9185.mp3",
+      "infoProseAudio_es": "/audio/lessons/fed575773f8f9acb.mp3"
     },
     {
       "movestring": "333444343342526111",
@@ -469,7 +520,8 @@
           "text": "Three marked cells, one shape, three different meanings. What separates them is gravity, not shape. Same shape, different clock.",
           "mood": "think",
           "text_es": "Tres casillas marcadas, una sola forma, tres significados distintos. Lo que las separa es la gravedad, no la forma. Misma forma, distinto reloj.",
-          "audio": "/audio/lessons/2f64b4ce8ec52039.mp3"
+          "audio": "/audio/lessons/2f64b4ce8ec52039.mp3",
+          "audio_es": "/audio/lessons/d68982dca10ec43e.mp3"
         }
       ],
       "overlays": [
@@ -492,17 +544,19 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green major-threat cells — same shape, different reach",
-          "label_es": "Casillas de amenaza mayor de Verde — misma forma, distinto alcance"
+          "label": "Green major-threat cells",
+          "label_es": "Amenazas mayores de Verde"
         },
         {
           "type": "td",
-          "label": "Gray major-threat cell — also latent",
-          "label_es": "Casilla de amenaza mayor de Gris — también latente"
+          "label": "Gray major-threat cell",
+          "label_es": "Amenaza mayor de Gris"
         }
       ],
       "infoProse": "This is the whole vocabulary in one picture. Minor threat: two discs plus two empty cells in a clean window — a plan under construction. Major threat: three discs plus one empty cell — immediate when that cell is a gravity-top, latent when it waits above one. Shape alone never tells you which; gravity does.",
-      "infoProse_es": "Este es todo el vocabulario en una sola imagen. Amenaza menor: dos fichas más dos casillas vacías en una ventana limpia — un plan en construcción. Amenaza mayor: tres fichas más una casilla vacía — inmediata cuando esa casilla es un tope de gravedad, latente cuando espera arriba de uno. La forma sola nunca te dice cuál es; la gravedad sí."
+      "infoProse_es": "Este es todo el vocabulario en una sola imagen. Amenaza menor: dos fichas más dos casillas vacías en una ventana limpia — un plan en construcción. Amenaza mayor: tres fichas más una casilla vacía — inmediata cuando esa casilla es un tope de gravedad, latente cuando espera arriba de uno. La forma sola nunca te dice cuál es; la gravedad sí.",
+      "infoProseAudio": "/audio/lessons/546b77cda5a5ad87.mp3",
+      "infoProseAudio_es": "/audio/lessons/e05a5132208dfb2c.mp3"
     }
   ],
   "socratic": {
@@ -526,7 +580,8 @@
           "text": "You play the gray discs. Gray has three in a row on the third row, and both end cells of that line are still empty — one in the first column, one in the fifth. Only one of them can actually be taken this turn. Which column wins right now?",
           "mood": "think",
           "text_es": "Vos jugás con las fichas grises. Gris tiene tres en línea en la tercera fila, y las dos casillas que cierran esa línea siguen vacías — una en la primera columna, otra en la quinta. Solo una se puede tomar de verdad en este turno. ¿Qué columna gana ya mismo?",
-          "audio": "/audio/lessons/18067da2a25c45a7.mp3"
+          "audio": "/audio/lessons/18067da2a25c45a7.mp3",
+          "audio_es": "/audio/lessons/be5e852974bd5c94.mp3"
         }
       ],
       "wrong1": [
@@ -534,7 +589,8 @@
           "text": "Not quite — one of those two cells is out of gravity's reach this turn. Check where a disc would actually land. Try again.",
           "mood": "oops",
           "text_es": "No exactamente — una de esas dos casillas está fuera del alcance de la gravedad en este turno. Fijate dónde caería de verdad una ficha. Intentalo de nuevo.",
-          "audio": "/audio/lessons/33460d67f4bee02c.mp3"
+          "audio": "/audio/lessons/33460d67f4bee02c.mp3",
+          "audio_es": "/audio/lessons/e5a9a29d4083950d.mp3"
         }
       ],
       "wrong2": [
@@ -542,7 +598,8 @@
           "text": "Let me show you.",
           "mood": "oops",
           "text_es": "Dejame mostrarte.",
-          "audio": "/audio/lessons/c95e0c9442ef3582.mp3"
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
@@ -550,7 +607,8 @@
           "text": "Exactly! The first column's cell was a gravity-top: two discs below it, so your disc lands right on it and completes four. The fifth column's cell was the same shape — but two rows out of reach. Immediate beats latent.",
           "mood": "happy",
           "text_es": "¡Exacto! La casilla de la primera columna era un tope de gravedad: dos fichas debajo, así que tu ficha cae justo ahí y completa cuatro. La casilla de la quinta columna tenía la misma forma — pero estaba dos filas fuera de alcance. Lo inmediato le gana a lo latente.",
-          "audio": "/audio/lessons/404201a943ce8fd9.mp3"
+          "audio": "/audio/lessons/404201a943ce8fd9.mp3",
+          "audio_es": "/audio/lessons/d9b190bdaab7a913.mp3"
         }
       ],
       "hint": [
@@ -558,7 +616,8 @@
           "text": "Run the gravity-top test on each end cell: count the discs already in its column. Is the empty cell the very next place a disc would land?",
           "mood": "think",
           "text_es": "Aplicá la prueba del tope de gravedad a cada casilla del extremo: contá las fichas que ya hay en su columna. ¿Es la casilla vacía el próximo lugar exacto donde caería una ficha?",
-          "audio": "/audio/lessons/f6e6cfecae2788f1.mp3"
+          "audio": "/audio/lessons/f6e6cfecae2788f1.mp3",
+          "audio_es": "/audio/lessons/49497729a20cc3df.mp3"
         }
       ]
     }

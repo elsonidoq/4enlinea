@@ -10,7 +10,9 @@
         {
           "text": "Gray has three discs in a row with one empty square to complete the four. What is Green's only safe move?",
           "text_es": "Gris tiene tres fichas en fila con una casilla vacía para completar el cuatro. ¿Cuál es el único movimiento seguro para Verde?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/21227fa81594ce55.mp3",
+          "audio_es": "/audio/lessons/efa0be5c55806948.mp3"
         }
       ],
       "boardSpec": [
@@ -52,12 +54,14 @@
         },
         {
           "type": "td",
-          "label": "The only safe move (block here)",
-          "label_es": "El único movimiento seguro (bloqueá acá)"
+          "label": "The only safe move",
+          "label_es": "El único movimiento seguro"
         }
       ],
       "infoProse": "When your opponent can complete four-in-a-row on their very next move, you must block that square. There is no better move — building your own position while your opponent wins is not strategy, it is a loss.",
-      "infoProse_es": "Cuando tu oponente puede completar cuatro en línea en su próximo movimiento, tenés que bloquear esa casilla. No hay mejor movimiento — construir tu propia posición mientras tu oponente gana no es estrategia, es una derrota."
+      "infoProse_es": "Cuando tu oponente puede completar cuatro en línea en su próximo movimiento, tenés que bloquear esa casilla. No hay mejor movimiento — construir tu propia posición mientras tu oponente gana no es estrategia, es una derrota.",
+      "infoProseAudio": "/audio/lessons/14b748b53cbf63e2.mp3",
+      "infoProseAudio_es": "/audio/lessons/171a2a6f81ddb37e.mp3"
     },
     {
       "movestring": "333232444525",
@@ -65,7 +69,9 @@
         {
           "text": "Green built — and Gray didn't wait. This is what happens when the threat is ignored.",
           "text_es": "Verde construyó — y Gris no esperó. Esto es lo que pasa cuando se ignora la amenaza.",
-          "mood": "sad"
+          "mood": "sad",
+          "audio": "/audio/lessons/9678d864d3e371b7.mp3",
+          "audio_es": "/audio/lessons/593c33ab3c416be1.mp3"
         }
       ],
       "boardSpec": [
@@ -107,7 +113,9 @@
         }
       ],
       "infoProse": "This is the consequence of building instead of blocking: your opponent completes four-in-a-row on the very next turn. No matter how promising your own move looked, the game is over before you get to use it. Block first, always.",
-      "infoProse_es": "Esta es la consecuencia de construir en lugar de bloquear: tu oponente completa el cuatro en línea en el próximo turno. Por más prometedor que pareciera tu propio movimiento, el juego termina antes de que puedas usarlo. Bloqueá primero, siempre."
+      "infoProse_es": "Esta es la consecuencia de construir en lugar de bloquear: tu oponente completa el cuatro en línea en el próximo turno. Por más prometedor que pareciera tu propio movimiento, el juego termina antes de que puedas usarlo. Bloqueá primero, siempre.",
+      "infoProseAudio": "/audio/lessons/0bfb3dd81c7b91d7.mp3",
+      "infoProseAudio_es": "/audio/lessons/b7b8ab2309762bc7.mp3"
     },
     {
       "movestring": "33333321222421",
@@ -115,7 +123,9 @@
         {
           "text": "Threats don't only run sideways. A vertical or diagonal three-in-a-row is just as urgent — the same rule applies.",
           "text_es": "Las amenazas no solo van de costado. Un tres en línea vertical o diagonal es igual de urgente — se aplica la misma regla.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/d67624a23cd7626f.mp3",
+          "audio_es": "/audio/lessons/f344db4d8680a5e0.mp3"
         }
       ],
       "boardSpec": [
@@ -142,31 +152,45 @@
       "legendItems": [
         {
           "type": "td",
-          "label": "Gray's immediate threat (the forced block)",
-          "label_es": "La amenaza inmediata de Gris (el bloqueo forzado)"
+          "label": "Gray's immediate threat",
+          "label_es": "La amenaza inmediata de Gris"
         },
         {
           "type": "tg",
-          "label": "Green is building here (not yet a threat)",
-          "label_es": "Verde está construyendo acá (todavía no es una amenaza)"
+          "label": "Green is building here",
+          "label_es": "Verde está construyendo acá"
         }
       ],
       "windowHighlights": [
         {
           "type": "td",
           "cells": [
-            { "c": 0, "r": 0 },
-            { "c": 1, "r": 1 },
-            { "c": 2, "r": 2 },
-            { "c": 3, "r": 3 }
+            {
+              "c": 0,
+              "r": 0
+            },
+            {
+              "c": 1,
+              "r": 1
+            },
+            {
+              "c": 2,
+              "r": 2
+            },
+            {
+              "c": 3,
+              "r": 3
+            }
           ],
-          "label": "Gray's diagonal — one square from four",
-          "label_es": "La diagonal de Gris — a una casilla del cuatro"
+          "label": "Gray's diagonal",
+          "label_es": "La diagonal de Gris"
         }
       ],
       "_overlayIntent": "annotation",
       "infoProse": "The direction doesn't change the urgency. A vertical stack, a diagonal, a horizontal run — all are equally immediate threats. The rule is the same in every case: one empty square completes the four, and the block is forced. Here Gray's diagonal three must be blocked at the bottom of the first column right away — Green's own diagonal is still two squares short, so building it does not answer an immediate threat.",
-      "infoProse_es": "La dirección no cambia la urgencia. Una pila vertical, una diagonal, una línea horizontal — todas son amenazas igual de inmediatas. La regla es la misma en cada caso: una casilla vacía completa el cuatro, y el bloqueo es forzado. Acá el tres en diagonal de Gris tiene que bloquearse ya mismo en la base de la primera columna — a la propia diagonal de Verde todavía le faltan dos casillas, así que construirla no responde a una amenaza inmediata."
+      "infoProse_es": "La dirección no cambia la urgencia. Una pila vertical, una diagonal, una línea horizontal — todas son amenazas igual de inmediatas. La regla es la misma en cada caso: una casilla vacía completa el cuatro, y el bloqueo es forzado. Acá el tres en diagonal de Gris tiene que bloquearse ya mismo en la base de la primera columna — a la propia diagonal de Verde todavía le faltan dos casillas, así que construirla no responde a una amenaza inmediata.",
+      "infoProseAudio": "/audio/lessons/0568c8e011230a50.mp3",
+      "infoProseAudio_es": "/audio/lessons/f18750db89aaf8ac.mp3"
     },
     {
       "movestring": "3333332122454422126151",
@@ -174,7 +198,9 @@
         {
           "text": "Gray has three in a row — but is the completing square actually reachable this turn? Look carefully before blocking.",
           "text_es": "Gris tiene tres en fila — pero ¿la casilla que completa la línea es realmente alcanzable este turno? Fijate bien antes de bloquear.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/50a10fc21d11678b.mp3",
+          "audio_es": "/audio/lessons/4f05c784745f0ac0.mp3"
         }
       ],
       "boardSpec": [
@@ -236,8 +262,8 @@
         },
         {
           "type": "tg",
-          "label": "Green can even win right now — the buried threat changes nothing",
-          "label_es": "Verde incluso puede ganar ahora mismo — la amenaza enterrada no cambia nada"
+          "label": "Green can even win right now",
+          "label_es": "Verde incluso puede ganar ahora mismo"
         },
         {
           "type": "claim",
@@ -249,28 +275,54 @@
         {
           "type": "td",
           "cells": [
-            { "c": 0, "r": 2 },
-            { "c": 1, "r": 3 },
-            { "c": 2, "r": 4 },
-            { "c": 3, "r": 5 }
+            {
+              "c": 0,
+              "r": 2
+            },
+            {
+              "c": 1,
+              "r": 3
+            },
+            {
+              "c": 2,
+              "r": 4
+            },
+            {
+              "c": 3,
+              "r": 5
+            }
           ],
-          "label": "Gray's diagonal window — its empty square is buried",
-          "label_es": "La ventana diagonal de Gris — su casilla vacía está enterrada"
+          "label": "Gray's diagonal window",
+          "label_es": "La ventana diagonal de Gris"
         },
         {
           "type": "tg",
           "cells": [
-            { "c": 1, "r": 4 },
-            { "c": 2, "r": 3 },
-            { "c": 3, "r": 2 },
-            { "c": 4, "r": 1 }
+            {
+              "c": 1,
+              "r": 4
+            },
+            {
+              "c": 2,
+              "r": 3
+            },
+            {
+              "c": 3,
+              "r": 2
+            },
+            {
+              "c": 4,
+              "r": 1
+            }
           ],
-          "label": "Green's winning diagonal (play the second column)",
-          "label_es": "La diagonal ganadora de Verde (jugá la segunda columna)"
+          "label": "Green's winning diagonal",
+          "label_es": "La diagonal ganadora de Verde"
         }
       ],
       "infoProse": "Not every three-in-a-row is an immediate threat. If the completing square is buried — sitting above empty cells in its column — Gray cannot reach it this turn, so Green does not need to spend a move blocking it. Always check: is that square the very next disc that can be placed in its column? If not, the threat is not yet immediate. Here the check pays off at once: instead of blocking a threat that isn't real yet, Green is free to play the strongest move on the board — and in the second column Green can even win immediately.\n\nCan you spot another similar case on this board for Gray?",
-      "infoProse_es": "No todo tres en línea es una amenaza inmediata. Si la casilla que completa la línea está enterrada — ubicada arriba de casillas vacías en su columna — Gris no puede alcanzarla este turno, así que Verde no necesita gastar un movimiento bloqueándola. Revisá siempre: ¿esa casilla es la próxima ficha que se puede colocar en su columna? Si no lo es, la amenaza todavía no es inmediata. Acá la revisión rinde frutos de inmediato: en lugar de bloquear una amenaza que todavía no es real, Verde queda libre para jugar el movimiento más fuerte del tablero — y en la segunda columna Verde incluso puede ganar de inmediato.\n\n¿Podés encontrar otro caso parecido en este tablero para Gris?"
+      "infoProse_es": "No todo tres en línea es una amenaza inmediata. Si la casilla que completa la línea está enterrada — ubicada arriba de casillas vacías en su columna — Gris no puede alcanzarla este turno, así que Verde no necesita gastar un movimiento bloqueándola. Revisá siempre: ¿esa casilla es la próxima ficha que se puede colocar en su columna? Si no lo es, la amenaza todavía no es inmediata. Acá la revisión rinde frutos de inmediato: en lugar de bloquear una amenaza que todavía no es real, Verde queda libre para jugar el movimiento más fuerte del tablero — y en la segunda columna Verde incluso puede ganar de inmediato.\n\n¿Podés encontrar otro caso parecido en este tablero para Gris?",
+      "infoProseAudio": "/audio/lessons/7f71c234093162b9.mp3",
+      "infoProseAudio_es": "/audio/lessons/f36eb623c80c3237.mp3"
     }
   ],
   "socratic": {
@@ -294,35 +346,45 @@
         {
           "text": "You are Gray, and it's your move. Building on your own stack looks tempting — but look at what Green has along the bottom row first. Which move keeps you in the game?",
           "text_es": "Vos sos Gris, y es tu turno. Construir sobre tu propia pila parece tentador — pero primero mirá lo que tiene Verde a lo largo de la fila de abajo. ¿Qué movimiento te mantiene en el juego?",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/93eb5af2aec18dd2.mp3",
+          "audio_es": "/audio/lessons/610d747ea15cd708.mp3"
         }
       ],
       "wrong1": [
         {
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
-          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo."
+          "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
         }
       ],
       "wrong2": [
         {
           "text": "Let me show you.",
           "mood": "oops",
-          "text_es": "Dejame mostrarte."
+          "text_es": "Dejame mostrarte.",
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
         {
           "text": "Exactly! You saw it.",
           "mood": "happy",
-          "text_es": "¡Exacto! Lo viste."
+          "text_es": "¡Exacto! Lo viste.",
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
         }
       ],
       "hint": [
         {
           "text": "If you spend this turn building, Green completes four in a row on the very next move. Follow Green's three discs along the bottom row and take the empty square that finishes their line.",
           "text_es": "Si usás este turno para construir, Verde completa cuatro en fila en el próximo movimiento. Seguí las tres fichas de Verde a lo largo de la fila de abajo y tomá la casilla vacía que completa su línea.",
-          "mood": "think"
+          "mood": "think",
+          "audio": "/audio/lessons/611afe8204ff5543.mp3",
+          "audio_es": "/audio/lessons/fdea843d9c896f95.mp3"
         }
       ]
     }

@@ -1,11 +1,11 @@
 ---
 name: project_lesson_disk_edit_cache_clobber
-description: Editing lessons/*.json on disk while the server runs → the next admin lesson write silently saves the stale boot-time cache back over your edits
+description: An admin lesson write reports 200 but your file is unchanged — either it saved the stale boot-time cache over your disk edit, or (filename slug != id) it forked the lesson into a different file entirely
 metadata: 
   node_type: memory
   type: project
   originSessionId: ad93c596-0ef4-4b37-984d-dacf404370a9
-  modified: 2026-07-28T13:16:07.694Z
+  modified: 2026-07-29T14:04:41.004Z
 ---
 
 **Nothing watches `connect-four/lessons/`.** `server/lessonLoader.js` reads every lesson file **once at boot** into a module-level `_lessons` array. `reloadLessons()` exists but is only ever called from *inside* the admin create/update/delete/generate-audio handlers — never by a file watcher, never on a timer, never on a plain read.
@@ -44,3 +44,36 @@ formatting, since the server re-serializes). `git status --short lessons/` shoul
 Restoring only the file leaves the cache holding your test data.
 
 **Why:** the boot-once cache is deliberate (no filesystem reads on request), and the admin handlers are the only sanctioned writers — so within the app's own model, cache *is* truth. The trap only exists because a human/script can write the same files behind its back. Related: [[project_lesson_progression_audio_traps]].
+
+## Second mechanism, identical symptom: the write can land in a DIFFERENT FILE (2026-07-29, OI-80)
+
+Everything above assumes the handler at least writes to *your* file. It may not. `saveLessonFile`
+writes to `lessonFilePath(dir, lesson)`, which **constructs** the path —
+`` `lesson-${String(lesson.order).padStart(2,'0')}-${lesson.id}.json` `` — instead of locating the
+file it came from. So **if a lesson's on-disk filename slug is not byte-identical to its `id`, every
+admin write forks it into a brand-new file** and leaves the original untouched. `findLessonFile`
+shares the flaw (regex `^lesson-\d+-${id}\.json$`), so the delete and rename paths miss it too.
+
+Worked example: `lessons/lesson-13-figure-7-trap.json` carried `id: "figure-7"`.
+`POST /api/admin/lessons/figure-7/generate-audio` created `lessons/lesson-13-figure-7.json`; the
+tracked file kept zero audio. Then it compounded — `reloadLessons()` picked up **both**, so the next
+call's `getLessonsAll().find(l => l.id === 'figure-7')` matched the `-trap` entry (readdir order puts
+it first: `-` 0x2D < `.` 0x2E), started from the audio-less copy, and **overwrote the freshly-written
+file**, replacing English clips with Spanish-only ones. Net: 16 files, a duplicate id, one lesson
+silently unvoiced in English. Both calls returned `200 { generated: [13 locators], failed: [] }`.
+
+**The tell is that the diagnostic above passes.** `curl /api/admin/lessons/<id> | grep <new field>`
+returns your content — it is reading the *fork*. So is the app. Only the filesystem disagrees. So
+when a lesson write "worked" but the file you are watching is unchanged, add one check that the
+per-file cache probe cannot make:
+
+```
+git status --short lessons/   # an untracked lesson-NN-<id>.json is the fork
+ls lessons/ | wc -l           # 15; 16 means you have a duplicate id
+```
+
+As of 2026-07-29 all 15 lessons have slug == id, so the trap is **dormant, not fixed** — the next
+lesson added with a mismatched slug re-arms it. Rename the file (keep `id` and the numeric prefix:
+`id` keys `lesson_progress`, the prefix keys curriculum order) rather than editing `id`. Full
+write-up and the recommended fix — identify by reading each file's `id`, plus a `lessonContent.test.js`
+gate asserting slug == `id` and prefix == `order` — are in `docs/open_issues.md` **OI-80**.

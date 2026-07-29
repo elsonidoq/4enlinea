@@ -789,6 +789,33 @@ To check copy, read `scrollHeight - clientHeight` off that container in the brow
 **both** locales — Spanish runs ~15% longer than English and routinely overflows alone. Lesson-side
 authoring limits: `docs/architecture/lesson-editor.md` §"Text length limits".
 
+`CoachDialog` also takes two optional narration props. `onStop` renders a ⏹ button beside the 🔁
+replay (both hidden unless narration exists), and `hasNarration` **overrides** the default derivation
+from `messages[].audio` — `ConceptScreen` passes it because a slide whose only clip is the info-prose
+narration has no message audio and would otherwise show no controls at all.
+
+## Lesson concept slides: the board is pinned, the prose scrolls
+
+`ConceptScreen`'s content column is `flex: 1; minHeight: 0; display: flex; flexDirection: column`.
+The board + legend live in a `flexShrink: 0` wrapper; `<InfoProsePanel>`
+(`src/components/InfoProsePanel.jsx`) is the only flexible child, at `flex: '0 1 auto'; minHeight: 96;
+overflowY: auto`. Long prose therefore scrolls **inside its own panel** and never pushes the board —
+the thing the prose is describing — off screen. The column keeps `overflowY: auto` purely as
+graceful degradation for a viewport too short for the board plus that 96px floor.
+
+**flex-grow must stay 0.** With `flex: '1 1 auto'` the panel stretched to absorb every leftover pixel,
+so on a tall viewport short prose sat at the top of a huge empty white box. `0 1 auto` makes the panel
+exactly as tall as its content when there is room, while flex-shrink 1 (against the board's
+`flexShrink: 0`) still makes it the only thing that gives way when there is not.
+
+The board is width-driven (square cells at `width: 100%`), so the only way to bound its **height** is
+to bound its width: the board sits in a wrapper with `maxWidth: calc(34dvh * 7 / 6)`. On a tall
+viewport that exceeds the column width and is inert; on a short one it shrinks the board so the prose
+keeps a usable share. Measured across all 15 lessons at 390x740: prose 96-194px, zero page overflow.
+
+`InfoProsePanel` also owns paragraph rendering — it splits the authored string on blank lines into
+`<p>` elements (OI-77). Do not inline `{slide.infoProse}` back into a `<div>`; that is the bug.
+
 ## Debug Panel (`ClassifyAllPanel`)
 
 A developer-only panel that shows the output of `classifyAll` for any board position: 11 detector rows (immediate_threat, double_threat, forced_block, forced_win, forbidden_columns, z_threat, undercut, overcut, figure_7, j_shape, claimeven) + board state (scores, threats, parity).

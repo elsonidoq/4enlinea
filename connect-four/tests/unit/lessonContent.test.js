@@ -207,8 +207,11 @@ test('lessonContent: the two opening lessons opt in the correct set of concept s
   // Locks in the shipped scope (by movestring, not just count) so a later edit cannot
   // silently swap in the wrong slide and still pass.
   const EXPECTED_OPTED_MOVESTRINGS = {
-    // opening-centre opts in 3 of its 4 slides; "3333311115555" is NOT opted in.
-    'opening-centre': ['', '333334444', '333'],
+    // opening-centre opts in 3 of its 5 slides. Two are empty boards: the overlay
+    // INTRODUCTION slide (which explains how to read the numbers) and the
+    // "which column?" slide that follows and uses them. "3333311115555" and
+    // "333334444" are NOT opted in.
+    'opening-centre': ['', '', '333'],
     // opening-sharp opts in all 3 of its 3 slides.
     'opening-sharp': ['333334444', '3332223362', '3332222'],
   };

@@ -1,10 +1,34 @@
 import { useRef, useEffect } from 'react';
 import { CoachAvatar } from './CoachAvatar.jsx';
 
-export function CoachDialog({ messages, size = 58, fixed = false, onReplay }) {
+/** Shared styling for the 🔁 / ⏹ narration controls. */
+const NARRATION_BUTTON_STYLE = {
+  flexShrink: 0,
+  width: 32,
+  height: 32,
+  borderRadius: '50%',
+  border: 'none',
+  background: '#fff',
+  boxShadow: 'var(--shadow-sm)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  fontSize: 15,
+  color: 'var(--ink-soft)',
+  WebkitTapHighlightColor: 'transparent',
+};
+
+/**
+ * `hasNarration` is an optional override. By default it is derived from
+ * messages[].audio, which is correct for every screen whose only narration is the
+ * bubbles. ConceptScreen also narrates the slide's infoProse, so it passes the value
+ * in — otherwise a prose-only slide would render no narration controls.
+ */
+export function CoachDialog({ messages, size = 58, fixed = false, onReplay, onStop, hasNarration }) {
   const mood = messages[messages.length - 1]?.mood ?? 'happy';
   const bubblesRef = useRef(null);
-  const hasNarration = messages.some(
+  const narrationAvailable = hasNarration ?? messages.some(
     (m) => typeof m?.audio === 'string' && m.audio.trim().length > 0,
   );
 
@@ -82,31 +106,31 @@ export function CoachDialog({ messages, size = 58, fixed = false, onReplay }) {
           </div>
         ))}
       </div>
-      {onReplay && hasNarration && (
-        <button
-          type="button"
-          onClick={onReplay}
-          aria-label="Replay narration"
-          title="Replay narration"
-          style={{
-            flexShrink: 0,
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            border: 'none',
-            background: '#fff',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            fontSize: 15,
-            color: 'var(--ink-soft)',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          🔁
-        </button>
+      {narrationAvailable && (onReplay || onStop) && (
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {onReplay && (
+            <button
+              type="button"
+              onClick={onReplay}
+              aria-label="Replay narration"
+              title="Replay narration"
+              style={NARRATION_BUTTON_STYLE}
+            >
+              🔁
+            </button>
+          )}
+          {onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop narration"
+              title="Stop narration"
+              style={NARRATION_BUTTON_STYLE}
+            >
+              ⏹
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -20,12 +20,12 @@
 - [Lesson board sourcing traps](project_lesson_answer_set_invariant.md) — undercut boards are valid for ONE side only; lesson-11 MUST fail detectUndercutVictim; JSONB key-order false drift
 - [Lesson fields NOT rendered](project_lesson_json_fields_not_rendered.md) — goalPrompt/socratic.overlays/userPerspective are dead; socratic color = movestring parity
 - [Lesson/coach audio traps](project_lesson_progression_audio_traps.md) — CoachDialog never speaks; only coach.spoken.* synthesized; :3001 won't serve public/ (test :5173)
-- [Lesson disk-edit cache clobber](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ the server saw your file; admin-API saves need no restart
+- [Lesson write lands elsewhere](project_lesson_disk_edit_cache_clobber.md) — a 200 ≠ it saw your file, or wrote the one you watch (slug≠id forks it)
 - [odd_even_threat split life](project_detect_odd_even_threat_yellow.md) — still a classifyPattern tag + puzzle category, but OFF the coach prompt & blunder vocab
 - [New lesson slide field wiring](project_lesson_slide_field_wiring.md) — 6 wiring points; the SlideEditor control is forgotten EVERY time (OI-67, then showWindowCounts)
 - [Lesson unlock is pairwise, not furthest-pointer](project_lesson_progress_unlock_is_pairwise.md) — editing one lesson_progress row doesn't unblock earlier ones; use backfill-lesson-progress.mjs
 - [windowHighlights capsule traps](project_lesson_window_highlights_traps.md) — cells must be ORDERED (drawn first→last, unchecked); opaque colours only; never via legendItems
-- [Lesson text clips silently](project_lesson_text_overflow_traps.md) — 120px coach cap on EVERY screen (not just `fixed`); splitting a message makes it WORSE; ES binds; infoProse \n\n collapses
+- [Lesson text clips silently](project_lesson_text_overflow_traps.md) — 120px coach cap on EVERY screen (not just `fixed`); splitting a message makes it WORSE; ES binds; a wrapping legend row steals visible infoProse
 
 ## Server, API, DB schema, auth, payments & deploy
 
@@ -77,7 +77,9 @@
 - [win_distribution row vs column](project_win_distribution_row_vs_column.md) — COLUMN marginal is policy-invariant (safe); ROW marginal is an artifact of mistake rate; only parity DIRECTION is robust
 - [gameSampling rng determinism](project_gamesampling_rng_determinism_trap.md) — one extra rng() call shifts every candidate; the FR-011 minMoves floor protects T017
 - [Inline Node scripts](reference_inline_node_scripts.md) — TOOLS/compute_feature_vector.mjs first; absolute imports; solver hangs (try/finally); shell for-loop → EMPTY
+- [Rate limit kills bulk loops](project_api_rate_limit_breaks_bulk_scripts.md) — 120/min per IP shared with browser QA; PLAIN-TEXT 429 → opaque JSON decode error; no handler log line
 - [Scripts need real --help](feedback_scripts_meaningful_help.md) — purpose + options + defaults, exit 0 BEFORE required-arg validation
+- [Open-issues epic backlog](reference_open_issues_epics.md) — epic #s are LANE-major not priority; closing the OI entry is acceptance criteria; 7 OIs already stale-resolved
 
 ## QA, worktrees & Papergames
 

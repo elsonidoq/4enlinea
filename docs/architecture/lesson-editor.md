@@ -13,7 +13,7 @@ and preview in the real lesson flow without a server restart.
 ## Spanish localization (`_es` sibling fields)
 
 Spanish lesson content lives in `_es` **sibling fields** inside the same lesson JSON, not a separate
-file: `infoProse_es`, `coachMessages[].text_es`, `coachMessages[].audio_es`, `legendItems[].label_es`,
+file: `infoProse_es`, `infoProseAudio_es`, `coachMessages[].text_es`, `coachMessages[].audio_es`, `legendItems[].label_es`,
 `windowHighlights[].label_es`, `socratic.goalPrompt_es`, `confirmationChallenges[].goalPrompt_es`. `getLesson(id, locale)` merges them
 **per field** with English fallback (`lessonLoader.js#localizeLesson`) and strips all `_es` keys from the
 client response — so a partial translation degrades gracefully instead of blanking a slide. `GET
@@ -317,10 +317,26 @@ in the same box. Shorten instead.
 **Spanish is the binding constraint.** `_es` copy runs ~15% longer than English at equal sentence
 count, so a slide can pass in `en` and clip in `es`. Measure in Spanish.
 
-**`infoProse` is one text node.** `ConceptScreen` renders it into a plain `<div>` with no
-`white-space: pre-wrap` and no paragraph splitting, so authored `\n\n` collapses to a single space —
-a multi-paragraph block renders as one run-on paragraph (OI-77). Until that is fixed, prefer one
-short paragraph per slide.
+**`infoProse` renders as paragraphs, and scrolls in its own panel** (2026-07-29; OI-77 closed).
+`ConceptScreen` delegates to `src/components/InfoProsePanel.jsx`, which splits the authored string on
+blank lines (`/\n\s*\n/`) into `<p>` elements — so `\n\n` is a real paragraph break, not a collapsed
+space. The panel is the only flexible child of the content column: the board and legend above it are
+`flexShrink: 0`, so long prose scrolls **inside the panel** and never pushes the board off screen. The
+panel's floor is `minHeight: 96` (about 4 lines) and it never grows past its own content
+(`flex: '0 1 auto'`), so short prose leaves no empty box; on a 390x740 phone the measured range across
+all 15 lessons is 96-194px. There is therefore **no length cap on `infoProse`** beyond the 4-sentence
+editorial one — it scrolls rather than clips.
+
+**The board is height-capped so the prose keeps a share.** The board is width-driven (square cells,
+`width: 100%`), so `ConceptScreen` caps its **width** at `calc(34dvh * 7 / 6)` to bound its height.
+On a tall viewport that exceeds the column width and does nothing; on a short one the board shrinks
+instead of squeezing the prose panel to its floor.
+
+**Legend rows must fit one line.** A wrapping legend row costs ~24px of the prose panel's budget, and
+four wrapping rows on one slide cost more than the panel's entire floor. Keep `legendItems[].label`
+and `windowHighlights[].label` to the identifying noun phrase and put the explanation in `infoProse`
+— **ES <= ~40 characters** is the practical limit at 390px. All 147 labels were rewritten to this rule
+on 2026-07-29.
 
 Verification: in the browser, read `scrollHeight - clientHeight` off the `maxHeight: 120px` container
 for every slide in both locales; non-zero means clipped. Restart the API server first — it caches

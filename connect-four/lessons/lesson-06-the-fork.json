@@ -11,7 +11,8 @@
           "text": "Gray has one strong threat. Green blocks it. What did Gray accomplish?",
           "text_es": "Gris tiene una amenaza fuerte. Verde la bloquea. ¿Qué logró Gris?",
           "mood": "think",
-          "audio": "/audio/lessons/8fcd42a2b64c8119.mp3"
+          "audio": "/audio/lessons/8fcd42a2b64c8119.mp3",
+          "audio_es": "/audio/lessons/788380c1e5acd4f9.mp3"
         }
       ],
       "boardSpec": [
@@ -58,7 +59,9 @@
         }
       ],
       "infoProse": "One threat gives your opponent a simple task: block it. They use one move, your attack is over, and you have gained nothing. To guarantee a win, you need your opponent to face a problem they cannot fully solve in a single move.",
-      "infoProse_es": "Una sola amenaza le da a tu rival una tarea simple: bloquearla. Usan un movimiento, tu ataque termina, y no ganaste nada. Para garantizar una victoria, necesitás que tu rival enfrente un problema que no pueda resolver del todo en un solo movimiento."
+      "infoProse_es": "Una sola amenaza le da a tu rival una tarea simple: bloquearla. Usan un movimiento, tu ataque termina, y no ganaste nada. Para garantizar una victoria, necesitás que tu rival enfrente un problema que no pueda resolver del todo en un solo movimiento.",
+      "infoProseAudio": "/audio/lessons/ae34a6b0d49a5c7d.mp3",
+      "infoProseAudio_es": "/audio/lessons/d4303a93f8b67eca.mp3"
     },
     {
       "movestring": "3333332444441",
@@ -67,7 +70,8 @@
           "text": "One move, two threats. Gray must answer — but one reply can only cover one of them.",
           "text_es": "Un movimiento, dos amenazas. Gris debe responder — pero una sola respuesta solo puede cubrir una de ellas.",
           "mood": "happy",
-          "audio": "/audio/lessons/9d5c05a34be61e77.mp3"
+          "audio": "/audio/lessons/9d5c05a34be61e77.mp3",
+          "audio_es": "/audio/lessons/ccb906d8e713b933.mp3"
         }
       ],
       "boardSpec": [
@@ -142,12 +146,14 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's two threat cells (Gray can only block one)",
-          "label_es": "Las dos casillas de amenaza de Verde (Gris solo puede bloquear una)"
+          "label": "Green's two threat cells",
+          "label_es": "Las dos casillas de amenaza de Verde"
         }
       ],
       "infoProse": "A fork is a single move that creates two simultaneous threats. Your opponent has one turn to respond — they can block one threat, but the other remains. On your next move, you win. The key: both threat cells must be immediately reachable (at the top of their column's current stack).",
-      "infoProse_es": "Una doble amenaza (fork) es un solo movimiento que crea dos amenazas simultáneas. Tu rival tiene un turno para responder — puede bloquear una amenaza, pero la otra queda en pie. En tu próximo movimiento, ganás. La clave: ambas casillas de amenaza tienen que ser jugables de inmediato (en la parte superior de la pila actual de su columna)."
+      "infoProse_es": "Una doble amenaza (fork) es un solo movimiento que crea dos amenazas simultáneas. Tu rival tiene un turno para responder — puede bloquear una amenaza, pero la otra queda en pie. En tu próximo movimiento, ganás. La clave: ambas casillas de amenaza tienen que ser jugables de inmediato (en la parte superior de la pila actual de su columna).",
+      "infoProseAudio": "/audio/lessons/a385fe4fe3bf7252.mp3",
+      "infoProseAudio_es": "/audio/lessons/82d105ff6ee3167f.mp3"
     },
     {
       "movestring": "3333322422111",
@@ -156,7 +162,8 @@
           "text": "Forks don't have to point left and right. Two threats can stack in the same column — and blocking the bottom one hands Green the top.",
           "text_es": "Las dobles amenazas no siempre apuntan a izquierda y derecha. Dos amenazas pueden apilarse en la misma columna — y bloquear la de abajo le entrega a Verde la de arriba.",
           "mood": "think",
-          "audio": "/audio/lessons/9a34b3a03ff841a0.mp3"
+          "audio": "/audio/lessons/9a34b3a03ff841a0.mp3",
+          "audio_es": "/audio/lessons/293fcd7cd36683a5.mp3"
         }
       ],
       "boardSpec": [
@@ -193,12 +200,14 @@
       "legendItems": [
         {
           "type": "tg",
-          "label": "Green's stacked threat cells (two pairs, one per side)",
-          "label_es": "Las casillas de amenaza apiladas de Verde (dos pares, uno por lado)"
+          "label": "Green's stacked threat cells",
+          "label_es": "Amenazas apiladas de Verde"
         }
       ],
       "infoProse": "Forks are not always spread across two different columns. When two threats complete in the same column on adjacent rows, blocking the lower one gives Green the upper one — the block itself becomes the setup. This board actually holds two such stacked pairs, one in the first column and one in the fifth: whoever finds either pair has found the same pattern.\n\nOne important caution: all four of these cells sit high above empty squares — none of them is playable yet, so this is NOT a fork Green can cash today. It is a trap that wins later, as the columns underneath fill up. The Z-Threats and Figure-7 lessons build on exactly this idea.",
-      "infoProse_es": "Las dobles amenazas no siempre se reparten entre dos columnas distintas. Cuando dos amenazas se completan en la misma columna, en filas adyacentes, bloquear la de abajo le regala a Verde la de arriba — el propio bloqueo se convierte en la preparación. Este tablero en realidad tiene dos pares apilados así, uno en la primera columna y otro en la quinta: quien encuentre cualquiera de los dos pares encontró el mismo patrón.\n\nUna advertencia importante: las cuatro casillas están muy por encima de espacios vacíos — ninguna es jugable todavía, así que esto NO es una doble amenaza que Verde pueda cobrar hoy. Es una trampa que gana más adelante, a medida que se llenan las columnas de abajo. Las lecciones de Amenazas-Z y Figura-7 se construyen sobre esta misma idea."
+      "infoProse_es": "Las dobles amenazas no siempre se reparten entre dos columnas distintas. Cuando dos amenazas se completan en la misma columna, en filas adyacentes, bloquear la de abajo le regala a Verde la de arriba — el propio bloqueo se convierte en la preparación. Este tablero en realidad tiene dos pares apilados así, uno en la primera columna y otro en la quinta: quien encuentre cualquiera de los dos pares encontró el mismo patrón.\n\nUna advertencia importante: las cuatro casillas están muy por encima de espacios vacíos — ninguna es jugable todavía, así que esto NO es una doble amenaza que Verde pueda cobrar hoy. Es una trampa que gana más adelante, a medida que se llenan las columnas de abajo. Las lecciones de Amenazas-Z y Figura-7 se construyen sobre esta misma idea.",
+      "infoProseAudio": "/audio/lessons/34b299a6affb8b10.mp3",
+      "infoProseAudio_es": "/audio/lessons/fbac5eaf6372466b.mp3"
     },
     {
       "movestring": "332443322243621",
@@ -207,7 +216,8 @@
           "text": "This looks like a fork — but are both threat cells actually reachable right now? Check the column heights before celebrating.",
           "text_es": "Esto parece una doble amenaza — pero ¿las dos casillas de amenaza son realmente jugables ahora mismo? Fijate en la altura de las columnas antes de festejar.",
           "mood": "think",
-          "audio": "/audio/lessons/1405896bb1ffc5c9.mp3"
+          "audio": "/audio/lessons/1405896bb1ffc5c9.mp3",
+          "audio_es": "/audio/lessons/d9a3d2967030347f.mp3"
         }
       ],
       "boardSpec": [
@@ -252,8 +262,8 @@
               "r": 0
             }
           ],
-          "label": "The line Green can finish right now",
-          "label_es": "La línea que Verde puede completar ahora mismo"
+          "label": "The line Green can finish now",
+          "label_es": "La línea que Verde completa ya"
         },
         {
           "type": "tg",
@@ -276,14 +286,14 @@
             }
           ],
           "label": "The line Green cannot reach yet",
-          "label_es": "La línea que Verde todavía no puede alcanzar"
+          "label_es": "La línea que Verde no alcanza"
         }
       ],
       "legendItems": [
         {
           "type": "tg",
-          "label": "Future threat (not reachable yet - not a fork)",
-          "label_es": "Amenaza futura (todavía no jugable - no es una doble amenaza)"
+          "label": "Future threat (not reachable yet)",
+          "label_es": "Amenaza futura (todavía no jugable)"
         },
         {
           "type": "win",
@@ -292,7 +302,9 @@
         }
       ],
       "infoProse": "A fork only works when both threats are immediately reachable — at the top of their column's current stack. A position with one real threat and one future threat is not a fork: your opponent blocks the immediate threat and has plenty of time to deal with the buried one later. Always verify that both threat cells are playable on the very next move.",
-      "infoProse_es": "Una doble amenaza solo funciona cuando ambas amenazas son jugables de inmediato — en la parte superior de la pila actual de su columna. Una posición con una amenaza real y una amenaza futura no es una doble amenaza: tu rival bloquea la amenaza inmediata y tiene tiempo de sobra para ocuparse más tarde de la que está enterrada. Verificá siempre que las dos casillas de amenaza sean jugables en el próximo movimiento."
+      "infoProse_es": "Una doble amenaza solo funciona cuando ambas amenazas son jugables de inmediato — en la parte superior de la pila actual de su columna. Una posición con una amenaza real y una amenaza futura no es una doble amenaza: tu rival bloquea la amenaza inmediata y tiene tiempo de sobra para ocuparse más tarde de la que está enterrada. Verificá siempre que las dos casillas de amenaza sean jugables en el próximo movimiento.",
+      "infoProseAudio": "/audio/lessons/9c60e2bcd436726d.mp3",
+      "infoProseAudio_es": "/audio/lessons/0d77c6c00be751d7.mp3"
     }
   ],
   "socratic": {
@@ -317,7 +329,8 @@
           "text": "You're playing Green, and it's your move. One square turns the bottom row into two threats at once — can you find the fork?",
           "text_es": "Estás jugando con Verde, y es tu turno. Una casilla convierte la fila de abajo en dos amenazas a la vez — ¿podés encontrar la doble amenaza?",
           "mood": "think",
-          "audio": "/audio/lessons/9c70888a17d1b796.mp3"
+          "audio": "/audio/lessons/9c70888a17d1b796.mp3",
+          "audio_es": "/audio/lessons/74988cef924d6d8c.mp3"
         }
       ],
       "wrong1": [
@@ -325,7 +338,8 @@
           "text": "Not quite — look for the right square. Try again.",
           "mood": "oops",
           "text_es": "No exactamente — buscá la casilla correcta. Intentalo de nuevo.",
-          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3"
+          "audio": "/audio/lessons/c1623a9ecce9ac3e.mp3",
+          "audio_es": "/audio/lessons/8442e7e708d21810.mp3"
         }
       ],
       "wrong2": [
@@ -333,7 +347,8 @@
           "text": "Let me show you.",
           "mood": "oops",
           "text_es": "Dejame mostrarte.",
-          "audio": "/audio/lessons/c95e0c9442ef3582.mp3"
+          "audio": "/audio/lessons/c95e0c9442ef3582.mp3",
+          "audio_es": "/audio/lessons/0526fe682c807f07.mp3"
         }
       ],
       "correct": [
@@ -341,7 +356,8 @@
           "text": "Exactly! You saw it.",
           "mood": "happy",
           "text_es": "¡Exacto! Lo viste.",
-          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3"
+          "audio": "/audio/lessons/ce4e7549ac16e9f8.mp3",
+          "audio_es": "/audio/lessons/449728547a7cd06a.mp3"
         }
       ],
       "hint": [
@@ -349,7 +365,8 @@
           "text": "Two green discs already sit side by side on the bottom row, and the squares at both ends of that row are still empty. Which move stretches that pair into a three with a winning square at each end?",
           "text_es": "Ya hay dos fichas verdes una al lado de la otra en la fila de abajo, y las casillas de los dos extremos de esa fila siguen vacías. ¿Qué movimiento estira ese par a un tres con una casilla ganadora en cada extremo?",
           "mood": "think",
-          "audio": "/audio/lessons/7427dbf1cd5654e0.mp3"
+          "audio": "/audio/lessons/7427dbf1cd5654e0.mp3",
+          "audio_es": "/audio/lessons/d60f0fb524775865.mp3"
         }
       ]
     }

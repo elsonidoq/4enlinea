@@ -7,6 +7,14 @@ is the browsable list of "things we know are wrong and might fix later."
 
 Each entry: what's wrong, why it's deferred, where it lives, and a concrete repro if we have one.
 
+> **Before working any `OI-N`, read [`docs/epics/open-issues-epics.md`](epics/open-issues-epics.md)** (2026-07-29).
+> It groups every still-open entry into 8 lane-ordered, spec-ready epics for `/epics-manager`, and its
+> *"Already resolved"* section lists the entries below whose **status here is stale** — verified against the
+> working tree on 2026-07-29: **OI-1, OI-15, OI-12, OI-24, OI-77**, the *text* half of **OI-18/OI-36/OI-64**,
+> and most of **OI-19** are done despite still reading as open. Each is being closed out by the epic that
+> covers it, per that file's *Issue closeout convention* (updating this file is a per-epic acceptance
+> criterion, not a final cleanup pass).
+
 ---
 
 ## OI-1 — Single-answer puzzle categories score by solver-score, not by pattern (score-tie ≠ pattern-tie)
@@ -1405,6 +1413,12 @@ there — read each changed fixture before preserving it.
 
 ## OI-77 — `infoProse` paragraph breaks (`\n\n`) do not render; multi-paragraph lesson prose reads as one wall of text
 
+**Status**: RESOLVED 2026-07-29. `ConceptScreen` now delegates to `src/components/InfoProsePanel.jsx`,
+which splits on `/\n\s*\n/` into `<p>` elements (the second of the two options below). The predicted
+side effect — longer prose on screen — was handled at the same time: the panel scrolls internally
+under a pinned board, so Continue never moves. Pinned by `tests/dom/InfoProsePanel.dom.test.jsx`;
+conventions in `frontend-conventions.md` §"Lesson concept slides".
+
 **Surfaced**: 2026-07-28, while shortening `lesson-03-threat-vocabulary`.
 
 `ConceptScreen` renders the field as a bare text node:
@@ -1471,3 +1485,113 @@ OI-1 / OI-61.
 `SINGLE_ANSWER_CATEGORIES` in **both** `server/categories.js` and the hand-mirrored
 `src/lib/categories.js`, and confirm the lesson-07 boards still pass
 `tests/lessons/lessonAnswerSets.test.js`.
+
+---
+
+## OI-78 — No pacing-aware tooling for corpus-wide lesson audio regeneration; ad-hoc loops trip the shared rate limiter
+
+**Status**: open — tooling gap (surfaced 2026-07-29)
+**Area**: `connect-four/server/index.js` (`POST /api/admin/lessons/:id/generate-audio`), `connect-four/scripts/`
+
+`generate-audio` is a **per-lesson, per-language** route, and that is the right unit for the admin
+editor's button. But corpus-wide regeneration is now a routine need — a voice/prompt change in
+`tts-prompt.<lang>.json` is invisible to the text hash, so re-voicing means 15 lessons x 2 languages,
+and the route regenerates unconditionally by design. There is no script for it, so it gets done with
+an ad-hoc `curl` loop each time.
+
+That loop is fragile in a way that is not obvious. The route falls under the default `/api/` limiter
+at **120 req/min per IP**, a single budget shared with every other caller on the machine — including
+a browser QA sweep in another tab. When it trips, `express-rate-limit`'s default handler returns a
+**plain-text** 429 body, so a loop piping responses into a JSON parser dies with
+`JSONDecodeError: Expecting value: line 1 column 1`, and the server log shows the `[req] POST` line
+with **no handler output at all** (the middleware runs before the route). Both signals point at the
+handler rather than the limiter. Reproduced 2026-07-29: 6 of 15 lessons completed, the remaining 9
+failed instantly and identically.
+
+**Why deferred**: the run itself is easy to redo with `sleep` between requests (done — all 15 lessons
+are voiced), so this is ergonomics, not correctness.
+
+**If picked up**: add `connect-four/scripts/generate-lesson-audio.mjs` alongside
+`translate-lessons.mjs` — `--lesson <id>` / all, `--lang en|es|both`, a real `--help` (see
+`feedback_scripts_meaningful_help`), inter-request pacing, retry-on-429 honouring the
+`RateLimit-Reset` header, and a non-zero exit with the raw body printed when a response is not JSON.
+Report per-lesson `generated`/`failed` counts and a final orphan audit. Related: OI-18.
+
+---
+
+## OI-79 — Legend shortening dropped ~40 explanatory clauses that were never folded into the slide prose
+
+**Status**: open — content debt (created deliberately 2026-07-29)
+**Area**: `connect-four/lessons/*.json` (`slides[].legendItems[].label`, `slides[].windowHighlights[].label`, + `_es`)
+
+All 147 lesson legend labels were rewritten to the identifying noun phrase, because a legend row that
+wraps to two lines costs ~24px out of the info-prose panel's budget and four wrapping rows on one
+slide cost more than the panel's entire floor (`lesson-editor.md` §"Text length limits"). The rule
+applied was: keep the head, drop the clause after the em dash or parenthesis.
+
+For most labels the dropped clause was redundant with the prose. For roughly 40 it was not — it
+carried teaching content that now exists **nowhere**. Worst cases:
+
+- `lesson-08` s3: *"A true Claimeven square — even row, directly above a Green disc on an odd row"* →
+  `"A true Claimeven square"`. The clause **was the definition**.
+- `lesson-08` s3: *"An odd-row square — Green's natural territory, not a Claimeven"* →
+  `"An odd-row square"`. The contrast that made the row worth showing is gone.
+- `lesson-03` s3: *"Empty cells below it — they must fill before the threat cell is reachable"* →
+  `"Empty cells below it"`.
+- `lesson-11` s4: *"The cell a real undercut would need — Gray has no completed three aiming here"* →
+  `"Where an undercut would go"`. The negative — why this is *not* an undercut — is the whole point
+  of the slide.
+
+**Why deferred**: the layout fix was the blocking problem and the legend rewrite unblocked it. Moving
+each clause into its slide's `infoProse` is editorial work in two languages that wants the owner's
+voice, not a mechanical transform.
+
+**If picked up**: walk the labels changed in the 2026-07-29 diff, and for each dropped clause decide
+"already said in the prose" (drop for good) or "fold into the prose sentence about that cell". Do it
+in `en` and `_es` together, then re-run `translate-lessons.mjs` only for genuinely new strings.
+Re-measure prose panel heights afterwards — longer prose is free now that the panel scrolls, but the
+coach bubble's 120px cap is not. Related: OI-77 (closed).
+
+---
+
+## OI-80 — `saveLessonFile` derives the filename from `lesson.id`, so a lesson whose filename slug differs from its id is silently FORKED into a second file
+
+**Status**: open — root cause live; the one offending lesson was renamed 2026-07-29
+**Area**: `connect-four/server/lessonAdmin.js` (`lessonFilePath`, `findLessonFile`, `saveLessonFile`)
+
+`saveLessonFile` writes to `lessonFilePath(dir, lesson)`, which **constructs** a path rather than
+locating the existing one:
+
+```js
+export function lessonFilePath(dir, lesson) {
+  const prefix = String(lesson.order).padStart(2, '0');
+  return path.join(dir, `lesson-${prefix}-${lesson.id}.json`);
+}
+```
+
+If the on-disk filename slug is not byte-identical to `lesson.id`, every admin write — save, and
+notably `generate-audio` — creates a **new file** and leaves the original untouched. The loader then
+reads both, so the app is serving **two lessons with the same id**.
+
+Reproduced 2026-07-29: `lessons/lesson-13-figure-7-trap.json` carries `id: "figure-7"`. Running
+`POST /api/admin/lessons/figure-7/generate-audio` produced a brand-new
+`lessons/lesson-13-figure-7.json`; the tracked file kept zero audio. The second call then compounded
+it — `getLessonsAll().find(l => l.id === 'figure-7')` matched the `-trap` entry (readdir order puts
+`-trap` first, since `-` < `.`), so the Spanish run started from the audio-less copy and **overwrote
+the freshly-written English file with a Spanish-only one**. Net effect: 16 lesson files, a duplicate
+id, and one lesson silently unvoiced in English. Nothing errored; both calls returned
+`200 { generated: [13 locators], failed: [] }`.
+
+`findLessonFile` shares the flaw — its regex is `^lesson-\d+-${id}\.json$`, so `deleteLessonFile` and
+the rename branch of `saveLessonFile` also fail to see a mismatched file.
+
+**Mitigated, not fixed**: the file was renamed to `lesson-13-figure-7.json` (id and order prefix
+unchanged, so `lesson_progress` records and curriculum order are unaffected) and all 15 lessons now
+have slug == id, leaving the trap dormant. Nothing prevents the next mismatch.
+
+**If picked up**: make `findLessonFile` identify a lesson by **reading each file's `id`** rather than
+by filename regex, and have `saveLessonFile` write to `findLessonFile(dir, lesson.id) ?? lessonFilePath(...)`
+so an existing file is updated in place regardless of its slug. Add a `lessonContent.test.js` gate
+asserting `basename` slug == `id` and `prefix` == `order` for every lesson file — that alone would
+have caught this before it forked anything. Related: OI-78; the filename prefix is also what
+`lessonLoader.js` uses for ordering (the JSON `order` field is overwritten).

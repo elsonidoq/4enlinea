@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 5a34af86-ae36-4059-aa61-20c2adf0e291
+  modified: 2026-07-29T14:06:07.808Z
 ---
 
 Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half), `feedback_prework_discipline`, `feedback_proportion_process_to_change`, `feedback_agent_and_ui_workflow` (+ its merged `feedback_askuserquestion_preview_format` / `reference_multiagent_orchestration_patterns` halves), and the agent-dispatch rules of `feedback_workflow_hygiene`. These are the owner's non-default preferences — the defaults are usually the opposite.
@@ -55,6 +56,7 @@ Merged from `feedback_speckit_epic_scoping` (+ its `feedback_scope_by_diff` half
 ## 5. Asking + showing
 
 - **AskUserQuestion needs ≥2 options** — it throws `InputValidationError: expected array to have >=2 items` on one. When only one resolution makes sense, add "Keep current behavior" or "Accept all recommendations".
+- **Don't ask what has only one viable answer.** The owner (2026-07-29, on approving the recommended option in nearly every technical Q&A): if there is a recommendation and no genuine alternative, apply it and report it — don't build a one-real-option question. Padding to reach the ≥2-option floor is the anti-pattern, not the fix. Applies to any gate you design, not just `/epics-manager` (where it is now encoded — [[reference_custom_commands]]). Two guards the owner kept: a recommendation *between* two real alternatives is still a question, and auto-applied items must be reported so fewer prompts doesn't silently mean less oversight. He **agreed with the caveat** that approving ~90% of recommendations doesn't make the asking worthless — the value is concentrated in the few you'd have refused — and therefore **declined** the larger "ask by blast radius (irreversible / user-visible / changes stored data), not by pipeline stage" redesign for now. Don't re-propose it as if it were unconsidered.
 - **NEVER use `preview` for text/code options.** The owner: *"Never use this format again. Text is being suppressed."* Previews render in a boxed pane that truncates ("✂ N lines hidden") and suppresses the option `description`. Reserve `preview` for genuinely visual content (ASCII mockups, diagram comparisons) only.
 - **ASCII diagrams for UI brainstorming** — inline; do NOT offer the browser-based visual companion (declined explicitly).
 - **Prepopulate reviewed data upfront.** For a "re-review" flow, list EVERY field the UI must pre-populate, trace each to its source table, add all selects/**joins** in one edit — fields in related tables (e.g. `annotator_note` on `false_positive_records` joined by `candidate_id`) are the missed ones. Add `Cache-Control: no-store` to admin list endpoints returning mutable data (stale 304s mask changes).

@@ -923,20 +923,40 @@ client-held copy can't overwrite a concurrent edit. The admin editor's "Generate
 sends `{ lang }` from its en/es toggle (`buildGenerateAudioRequest` in `AdminLessonEditorScreen.jsx`) —
 before that wiring existed the button sent no body, so toggling to Spanish silently produced English clips.
 
-**Behavior**: for every concept-slide `coachMessages[]` entry whose text field for the target language
-(`text` for `en`, `text_es` for `es`) is non-empty and whose current audio field (`audio` / `audio_es`)
-doesn't already match `hashMessageText(<text>) + '.mp3'`, calls `synthesize(text, { instructions, speed,
+**Behavior**: walks `collectMessages(lesson)` — concept-slide `coachMessages[]`, each slide's
+**`infoProse`**, and `socratic.messages[phase][]` — and for every entry whose text field for the target
+language is non-empty, calls `synthesize(text, { instructions, speed,
 voice, model })` where config comes from `readTtsConfig(lang)` (per-language `server/tts-prompt.<lang>.json`
 — `es` carries the Argentinian-persona prompt) and `instructions = buildTtsInstructions(basePrompt, lang)`
 (appends the Spanish accent directive for `es`). Writes `public/audio/lessons/<hash>.mp3` and sets the
 matching audio field. Spanish text hashes to a **different** filename than English, so the two coexist in
 one flat dir. Per-message failures are caught individually — one bad synth does not abort the batch.
-Persists via `saveLessonFile` + `reloadLessons()`. **`prune-audio` must stay `audio_es`-aware**
-(`collectReferencedAudio` collects both `audio` and `audio_es`), or it deletes every Spanish clip as an orphan.
+Persists via `saveLessonFile` + `reloadLessons()`. **`prune-audio` must stay `_es`-aware**
+(`collectReferencedAudio` collects both the English and Spanish sibling of each entry's `audioKey`), or it
+deletes every Spanish clip as an orphan.
+
+**Field names come from the walker entry, not from this endpoint.** `collectMessages` yields
+`textKey`/`audioKey` per entry (`text`/`audio` for coach + socratic messages, `infoProse`/`infoProseAudio`
+for slide prose) and the handler derives the Spanish sibling as `` `${key}_es` ``. Adding a new narratable
+location means adding it to that walker — see `server-conventions.md` §`collectMessages`.
+
+**Regeneration is unconditional.** The text hash keys the *filename*, but voice/prompt/speed/model live in
+`tts-prompt.<lang>.json` and are not in that hash, so a hash match proves nothing about whether the clip
+still sounds right (and never touches the filesystem, so a missing mp3 stayed missing). Same text → same
+hash → same path, so a re-run overwrites in place and orphans nothing; the cost is one TTS call per
+message per click. Empty/whitespace text is still skipped — that is "nothing to say", not a cache hit.
+
+**Bulk loops must pace themselves.** This route falls under the default `/api/` limiter at **120 req/min
+per IP**, shared with every other API call from the same machine — including a browser QA sweep running
+in parallel. `express-rate-limit` rejects with a **plain-text** body, not JSON, so a shell loop piping the
+response into a JSON parser dies with an opaque decode error while the server log shows the `[req] POST`
+line and no handler output at all. Space bulk regeneration requests and keep browser traffic off the box
+while it runs.
 
 **Response** (`200 OK`): `{ lesson, generated: [<locator>, ...], failed: [{ locator, error }, ...] }` —
-`generated` lists messages that got a *new* file this run (already-current messages are skipped
-silently); `failed` lists messages whose synthesis failed this run.
+`generated` lists every message synthesized this run (locators such as
+`slides[0].coachMessages[0]`, `slides[0].infoProse`, `socratic.messages.ask[0]`); `failed` lists messages
+whose synthesis failed this run.
 
 **Errors**: `403` (non-localhost or non-admin), `404` (lesson not found), `500` (unexpected write error
 — per-message TTS errors are non-fatal, see above).
@@ -945,8 +965,9 @@ silently); `failed` lists messages whose synthesis failed this run.
 
 **Request body**: none.
 
-**Behavior**: scans `public/audio/lessons/*.mp3`, computes the set of `audio` paths referenced across
-all lessons (`getLessonsAll()`), deletes any file not referenced.
+**Behavior**: scans `public/audio/lessons/*.mp3`, computes the set of audio paths referenced across
+all lessons (`getLessonsAll()`) — every entry `collectMessages` yields, in both languages, read off that
+entry's `audioKey` — and deletes any file not referenced.
 
 **Response** (`200 OK`): `{ deleted: [<filename>, ...] }` — empty array if nothing was orphaned.
 

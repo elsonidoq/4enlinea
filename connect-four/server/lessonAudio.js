@@ -67,8 +67,15 @@ export const SOCRATIC_PHASES = ['ask', 'wrong1', 'wrong2', 'correct', 'hint'];
  * byte-identical to the historical format — existing tests assert whole-array,
  * exact-order equality on `generated`/`failed[].locator`.
  *
+ * Not every narratable string is shaped like a coach message: a slide's
+ * `infoProse` lives on the slide itself under different field names. So each
+ * entry carries its own `textKey`/`audioKey` (defaulting to `text`/`audio`),
+ * and callers derive the `_es` sibling from those rather than hardcoding.
+ * A slide's infoProse is yielded AFTER its coachMessages, matching the order the
+ * learner hears them (bubble, then prose).
+ *
  * @param {object} lesson
- * @returns {Array<{message: object, locator: string}>}
+ * @returns {Array<{message: object, locator: string, textKey: string, audioKey: string}>}
  */
 export function collectMessages(lesson) {
   const out = [];
@@ -77,7 +84,26 @@ export function collectMessages(lesson) {
   for (let si = 0; si < slides.length; si++) {
     const messages = Array.isArray(slides[si]?.coachMessages) ? slides[si].coachMessages : [];
     for (let mi = 0; mi < messages.length; mi++) {
-      out.push({ message: messages[mi], locator: `slides[${si}].coachMessages[${mi}]` });
+      out.push({
+        message: messages[mi],
+        locator: `slides[${si}].coachMessages[${mi}]`,
+        textKey: 'text',
+        audioKey: 'audio',
+      });
+    }
+
+    const prose = slides[si]?.infoProse;
+    const proseEs = slides[si]?.infoProse_es;
+    // Yielded when EITHER language has prose: an es-only slide still needs its
+    // clip generated, and collectReferencedAudio must see it or the prune deletes it.
+    if ((typeof prose === 'string' && prose.trim() !== '')
+      || (typeof proseEs === 'string' && proseEs.trim() !== '')) {
+      out.push({
+        message: slides[si],
+        locator: `slides[${si}].infoProse`,
+        textKey: 'infoProse',
+        audioKey: 'infoProseAudio',
+      });
     }
   }
 
@@ -88,7 +114,12 @@ export function collectMessages(lesson) {
     for (const phase of SOCRATIC_PHASES) {
       const arr = Array.isArray(socraticMessages[phase]) ? socraticMessages[phase] : [];
       for (let mi = 0; mi < arr.length; mi++) {
-        out.push({ message: arr[mi], locator: `socratic.messages.${phase}[${mi}]` });
+        out.push({
+        message: arr[mi],
+        locator: `socratic.messages.${phase}[${mi}]`,
+        textKey: 'text',
+        audioKey: 'audio',
+      });
       }
     }
   }
@@ -134,8 +165,9 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   const generated = [];
   const failed = [];
 
-  const textField = lang === 'es' ? 'text_es' : 'text';
-  const audioField = lang === 'es' ? 'audio_es' : 'audio';
+  // Per-entry, not hoisted: collectMessages yields entries whose field names differ
+  // (coach messages use text/audio, a slide's prose uses infoProse/infoProseAudio).
+  const localized = (key) => (lang === 'es' ? `${key}_es` : key);
 
   const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
   const instructions = buildTtsInstructions(basePrompt, lang);
@@ -144,10 +176,12 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   // shows whether the admin selector actually sent 'es' (it defaults to 'en' on
   // every load), and the voice/instructions show which tts-prompt.<lang>.json
   // was picked up after a config edit.
-  log(`lesson=${lesson?.id ?? '?'} lang=${lang} field=${textField}->${audioField} ` +
+  log(`lesson=${lesson?.id ?? '?'} lang=${lang} ` +
       `voice=${voice} speed=${speed} model=${model} instructionsChars=${instructions?.length ?? 0}`);
 
-  for (const { message, locator } of collectMessages(lesson)) {
+  for (const { message, locator, textKey, audioKey } of collectMessages(lesson)) {
+    const textField = localized(textKey);
+    const audioField = localized(audioKey);
     const text = message[textField];
 
     if (typeof text !== 'string' || text.trim() === '') {
@@ -180,9 +214,11 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 
 /**
  * Collect the basenames of every audio clip referenced by any message across
- * `allLessons` — every message collectMessages() yields (concept slides AND
- * socratic.messages), and for each, BOTH `audio` (English) and `audio_es`
- * (Spanish). Used by pruneOrphanedLessonAudio.
+ * `allLessons` — every message collectMessages() yields (concept slides, slide
+ * infoProse AND socratic.messages), and for each, BOTH the English audio field
+ * and its `_es` sibling. The field name comes from the entry's own `audioKey`,
+ * since infoProse stores its clip under `infoProseAudio`/`infoProseAudio_es`.
+ * Used by pruneOrphanedLessonAudio.
  *
  * QA 2026-07-15 / D1: this must see both fields, or every Spanish clip is an
  * orphan on the next prune-audio run and gets deleted. It must likewise walk
@@ -194,8 +230,8 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 export function collectReferencedAudio(allLessons) {
   const referenced = new Set();
   for (const lesson of allLessons) {
-    for (const { message } of collectMessages(lesson)) {
-      for (const p of [message.audio, message.audio_es]) {
+    for (const { message, audioKey } of collectMessages(lesson)) {
+      for (const p of [message[audioKey], message[`${audioKey}_es`]]) {
         if (typeof p === 'string' && p.length > 0) referenced.add(path.basename(p));
       }
     }

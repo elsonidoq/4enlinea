@@ -486,3 +486,127 @@ describe('collectMessages', () => {
     );
   });
 });
+
+// --- slides[].infoProse narration ------------------------------------------
+//
+// infoProse is narratable text that does NOT live in a coachMessage shape: it sits
+// on the slide under infoProse / infoProse_es and stores its clip under
+// infoProseAudio / infoProseAudio_es. It must flow through the SAME collectMessages
+// walk as everything else — a message this walker does not yield gets its audio
+// generated and then deleted as an orphan on the next prune.
+
+describe('infoProse narration', () => {
+  it('collectMessages yields a slide\'s infoProse AFTER its coachMessages, with its own field keys', () => {
+    const lesson = makeLesson({
+      slides: [
+        {
+          coachMessages: [{ text: 'Bubble one' }, { text: 'Bubble two' }],
+          infoProse: 'The prose.',
+        },
+        { coachMessages: [{ text: 'Slide two bubble' }] },
+      ],
+    });
+
+    assert.deepEqual(
+      collectMessages(lesson).map(({ locator, textKey, audioKey }) => ({ locator, textKey, audioKey })),
+      [
+        { locator: 'slides[0].coachMessages[0]', textKey: 'text', audioKey: 'audio' },
+        { locator: 'slides[0].coachMessages[1]', textKey: 'text', audioKey: 'audio' },
+        { locator: 'slides[0].infoProse', textKey: 'infoProse', audioKey: 'infoProseAudio' },
+        { locator: 'slides[1].coachMessages[0]', textKey: 'text', audioKey: 'audio' },
+      ],
+    );
+  });
+
+  it('collectMessages skips a slide with no prose, and one whose prose is whitespace-only', () => {
+    const lesson = makeLesson({
+      slides: [
+        { coachMessages: [] },
+        { coachMessages: [], infoProse: '   ' },
+        { coachMessages: [], infoProse: '' },
+      ],
+    });
+    assert.deepEqual(collectMessages(lesson).map(m => m.locator), []);
+  });
+
+  it('collectMessages yields an es-only slide (infoProse_es with no English base)', () => {
+    const lesson = makeLesson({ slides: [{ coachMessages: [], infoProse_es: 'Solo español.' }] });
+    assert.deepEqual(collectMessages(lesson).map(m => m.locator), ['slides[0].infoProse']);
+  });
+
+  it('generateLessonAudio synthesizes the prose and writes infoProseAudio', async () => {
+    const synthesize = makeStubSynthesize();
+    const lesson = makeLesson({
+      slides: [{ coachMessages: [{ text: 'Bubble' }], infoProse: 'The prose.' }],
+    });
+
+    const res = await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
+
+    assert.deepEqual(res.generated, ['slides[0].coachMessages[0]', 'slides[0].infoProse']);
+    assert.deepEqual(res.failed, []);
+    assert.equal(
+      res.lesson.slides[0].infoProseAudio,
+      `/audio/lessons/${hashMessageText('The prose.')}.mp3`,
+    );
+    assert.ok(fs.existsSync(path.join(tmpDir, `${hashMessageText('The prose.')}.mp3`)));
+    // The bubble is untouched by the prose entry and vice versa.
+    assert.equal(
+      res.lesson.slides[0].coachMessages[0].audio,
+      `/audio/lessons/${hashMessageText('Bubble')}.mp3`,
+    );
+  });
+
+  it('lang=es reads infoProse_es and writes infoProseAudio_es, leaving the English fields alone', async () => {
+    const synthesize = makeStubSynthesize();
+    const lesson = makeLesson({
+      slides: [{
+        coachMessages: [],
+        infoProse: 'The prose.',
+        infoProse_es: 'La prosa.',
+        infoProseAudio: '/audio/lessons/existing-en.mp3',
+      }],
+    });
+
+    const res = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    assert.deepEqual(res.generated, ['slides[0].infoProse']);
+    assert.equal(
+      res.lesson.slides[0].infoProseAudio_es,
+      `/audio/lessons/${hashMessageText('La prosa.')}.mp3`,
+    );
+    assert.equal(res.lesson.slides[0].infoProseAudio, '/audio/lessons/existing-en.mp3');
+    assert.deepEqual(synthesize.calls.map(c => c.text), ['La prosa.']);
+  });
+
+  it('lang=es skips a slide whose prose is untranslated', async () => {
+    const synthesize = makeStubSynthesize();
+    const lesson = makeLesson({ slides: [{ coachMessages: [], infoProse: 'The prose.' }] });
+
+    const res = await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    assert.deepEqual(res.generated, []);
+    assert.equal(synthesize.calls.length, 0);
+    assert.equal(res.lesson.slides[0].infoProseAudio_es, undefined);
+  });
+
+  it('collectReferencedAudio protects BOTH infoProseAudio and infoProseAudio_es from the prune', () => {
+    const lesson = makeLesson({
+      slides: [{
+        coachMessages: [],
+        infoProse: 'The prose.',
+        infoProseAudio: '/audio/lessons/prose-en.mp3',
+        infoProseAudio_es: '/audio/lessons/prose-es.mp3',
+      }],
+    });
+
+    assert.deepEqual(
+      [...collectReferencedAudio([lesson])].sort(),
+      ['prose-en.mp3', 'prose-es.mp3'],
+    );
+
+    for (const f of ['prose-en.mp3', 'prose-es.mp3', 'orphan.mp3']) {
+      fs.writeFileSync(path.join(tmpDir, f), 'x');
+    }
+    assert.deepEqual(pruneOrphanedLessonAudio([lesson], tmpDir), ['orphan.mp3']);
+  });
+});

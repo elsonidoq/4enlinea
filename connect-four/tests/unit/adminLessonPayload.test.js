@@ -24,6 +24,8 @@ function makeLesson() {
         ],
         infoProse: 'An immediate threat is any four-cell window...',
         infoProse_es: 'Una amenaza inmediata es cualquier ventana de cuatro casillas...',
+        infoProseAudio: '/audio/lessons/prose-en.mp3',
+        infoProseAudio_es: '/audio/lessons/prose-es.mp3',
       },
     ],
     socratic: {
@@ -77,4 +79,14 @@ test('lessonToJsonPayload: English-only fields (no _es) still round-trip unchang
   assert.equal(payload.slides[0].infoProse, 'An immediate threat is any four-cell window...');
   assert.equal(payload.slides[0].coachMessages[0].text, 'Look at the board.');
   assert.equal(payload.socratic.correctCol, 0);
+});
+
+test('lessonToJsonPayload: preserves the generated prose narration paths', () => {
+  // infoProseAudio is generated server-side, never authored, so SlideEditor has no
+  // control for it. It survives the editor round trip only because hydrateLesson and
+  // this function both spread the whole slide — pin that, or a save silently strips
+  // the clips and every slide goes quiet after the bubble.
+  const slide = lessonToJsonPayload(makeLesson()).slides[0];
+  assert.equal(slide.infoProseAudio, '/audio/lessons/prose-en.mp3');
+  assert.equal(slide.infoProseAudio_es, '/audio/lessons/prose-es.mp3');
 });

@@ -4,12 +4,13 @@ import { TopBar } from '../components/TopBar.jsx';
 import { CoachDialog } from '../components/CoachDialog.jsx';
 import { Board } from '../components/Board.jsx';
 import { Toolbar } from '../components/Toolbar.jsx';
+import { InfoProsePanel } from '../components/InfoProsePanel.jsx';
 import { useStore } from '../store/ProfileStore.jsx';
 import { track } from '../lib/track.js';
 import { boardSpecToBoard } from '../lib/board.js';
 import { useAudio } from '../lib/useAudio.js';
 import { speakLessonAudio, stopSpeech } from '../lib/useCoachSpeech.js';
-import { getNarrationQueue } from '../lib/lessonNarration.js';
+import { getSlideNarrationQueue } from '../lib/lessonNarration.js';
 import { langHeaders } from '../lib/apiLang.js';
 import { useLessonLockGuard } from '../lib/useLessonLockGuard.js';
 import { windowHighlightsToZhCells, WINDOW_HIGHLIGHT_COLOR, DEFAULT_WINDOW_HIGHLIGHT_COLOR, WINDOW_COUNT_MAX, windowCountTint } from '../lib/lessonWindows.js';
@@ -65,15 +66,17 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
     }
   }, [lesson]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Narrate the current concept slide's coachMessages (spec 046 US3, FR-016/FR-019/FR-021).
+  // Narrate the current concept slide — coach bubbles first, then the info prose
+  // (spec 046 US3, FR-016/FR-019/FR-021). speakLessonAudio pushes onto the module-level
+  // singleton queue in useCoachSpeech.js, which plays strictly one at a time in push
+  // order, so the bubble-then-prose ordering needs no extra sequencing here.
   // Keyed on slideIndex (and lesson, for the initial load) so narration re-fires on every
   // slide change and on first mount. Cleanup unconditionally calls stopSpeech() so
   // navigating away or changing slides mid-narration never leaves orphaned audio (FR-021).
   useEffect(() => {
     if (!lesson) return undefined;
     const currentSlide = lesson.slides[slideIndex];
-    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
-    queue.forEach((path) => speakLessonAudio(path));
+    getSlideNarrationQueue(currentSlide, speechEnabled).forEach((path) => speakLessonAudio(path));
 
     return () => {
       stopSpeech();
@@ -84,8 +87,13 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
     if (!lesson) return;
     stopSpeech();
     const currentSlide = lesson.slides[slideIndex];
-    const queue = getNarrationQueue(currentSlide?.coachMessages, speechEnabled);
-    queue.forEach((path) => speakLessonAudio(path));
+    getSlideNarrationQueue(currentSlide, speechEnabled).forEach((path) => speakLessonAudio(path));
+  }
+
+  // Prose clips run 50–70s, so the learner needs a way out that is not "disable
+  // speech globally". stopSpeech() clears the shared queue and the current clip.
+  function handleStopNarration() {
+    stopSpeech();
   }
 
   function handleContinue() {
@@ -162,7 +170,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
   // overlay of that type on the same slide, and a window has no such overlay.
   const windowLegendItems = (slide.windowHighlights ?? []).filter(w => w.label);
   const hasLegend = legendItems.length > 0 || windowLegendItems.length > 0 || slide.showWindowCounts === true;
-  const hasInfoProse = slide.infoProse && slide.infoProse.trim().length > 0;
+
 
   return (
     // height (not minHeight) + minHeight:0 on the scroller: the root is pinned to the
@@ -178,9 +186,29 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
         onLogoClick={() => go('home')}
       />
 
-      <CoachDialog messages={slide.coachMessages} onReplay={handleReplayNarration} />
+      {/* hasNarration is passed explicitly because CoachDialog's own derivation only
+          sees messages[].audio — a slide whose only clip is the prose would otherwise
+          show no controls. */}
+      <CoachDialog
+        messages={slide.coachMessages}
+        onReplay={handleReplayNarration}
+        onStop={handleStopNarration}
+        hasNarration={getSlideNarrationQueue(slide, true).length > 0}
+      />
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px 8px' }}>
+      {/* Board + legend are pinned (flexShrink: 0); only the infoProse panel scrolls.
+          Reading long prose used to scroll the board off screen, which defeats the
+          point — the prose is talking about the board. `overflowY: 'auto'` here is the
+          graceful-degradation path only: it engages when the viewport cannot fit the
+          board plus the prose panel's minHeight floor. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '0 18px 8px' }}>
+        <div data-testid="concept-board-block" style={{ flexShrink: 0 }}>
+        {/* The board is width-driven (square cells, width: 100%), so the only way to
+            cap its HEIGHT is to cap its width. On a tall viewport this maxWidth exceeds
+            the column width and does nothing; on a short one it shrinks the board so the
+            prose panel below keeps a usable share instead of collapsing to its floor.
+            Measured on 390x740: without it the prose got exactly its 96px minimum. */}
+        <div style={{ width: '100%', maxWidth: 'calc(34dvh * 7 / 6)', margin: '0 auto' }}>
         <Board
           board={boardSpecToBoard(slide.boardSpec)}
           canPlay={false}
@@ -188,6 +216,7 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
           zhCells={zhCells}
           windowCounts={windowCounts}
         />
+        </div>
 
         {hasLegend && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
@@ -236,27 +265,15 @@ export function ConceptScreen({ go, goBack, goReplace, lessonId }) {
                   flexShrink: 0,
                 }} />
                 <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>
-                  {t('lesson.windowCounts.legend', 'Four-in-a-rows still open to you through each square')}
+                  {t('lesson.windowCounts.legend', 'Four-in-a-rows still open to you')}
                 </span>
               </div>
             )}
           </div>
         )}
+        </div>
 
-        {hasInfoProse && (
-          <div style={{
-            marginTop: 12,
-            padding: '12px 14px',
-            background: '#fff',
-            borderRadius: 12,
-            boxShadow: 'var(--shadow-sm)',
-            fontSize: 14,
-            lineHeight: 1.5,
-            color: 'var(--ink)',
-          }}>
-            {slide.infoProse}
-          </div>
-        )}
+        <InfoProsePanel infoProse={slide.infoProse} />
       </div>
 
       <Toolbar>
