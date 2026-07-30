@@ -72,7 +72,7 @@ those four. Run `eval "$(./worktree-ports.sh)"` in every worktree before startin
 | **3** | A | Entitlement & Payments Consolidation | OI-66, OI-39, OI-55, OI-34, OI-41, OI-25 | lesson routes, tier-gate call sites, `paddleProcessor.js`, `pricing.html` | 5 | Full speckit |
 | **4** | A | Server/API Data Integrity & Environment Correctness | OI-40, OI-53, OI-17, OI-47, OI-50, OI-22, OI-49, OI-5, OI-14, OI-31, OI-51, OI-52 | `server/index.js` handlers, `userHelpers.js`, `classifier.js`, `vite.config.js`, migrations/ops | 4 | Full speckit |
 | **5** | B | Audio Verification & TTS Management *(rescoped 2026-07-29 — bulk generation already shipped)* | OI-42, OI-45, OI-26, OI-23, OI-28, OI-32; verify-and-close OI-65, OI-27 | `/admin/audio` (`AdminAudioPage.jsx`), `server/lessonAudio.js`, `server/index.js` TTS routes, `lessons/*.json` | 3 | Full speckit |
-| **6** | B | Lesson Learning Surface & Authoring Polish | OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-38, OI-62 | `SocraticScreen.jsx`, `Board.jsx`, `admin/SlideEditor.jsx`, lesson tooling, i18n, KB | 5 | Full speckit |
+| **6** | B | Lesson Learning Surface & Authoring Polish | OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-62; count-only fix for OI-38 (translation deferred) | `SocraticScreen.jsx`, `Board.jsx`, `admin/SlideEditor.jsx`, lesson tooling, i18n, KB | 5 | Full speckit |
 | **7** | B | QA Backlog & Product/UX Decisions | OI-35, OI-21, OI-37 | nav stack, onboarding entry, ReviewScreen, `agentic_QA_2026-07-15-1321.md` | 3 | Brainstorm-first, then speckit |
 | **8** | C | Dev Infrastructure & Test-Quality Baseline | OI-70, OI-71, OI-16, OI-29, OI-58, OI-6, OI-72 | `eslint.config.js`, `tests/dom/`, `SplitReveal.jsx`, CSP on `main` | 3 | Full speckit |
 
@@ -757,10 +757,15 @@ land.
 content lives, and harden the authoring/verification tooling so the next content pass is machine-checked.
 
 **Issues covered:** OI-46 (sticky `showHint` makes the `correct` message unreachable), OI-44
-(`lesson.<id>.title` duplicates the lesson JSON's `title`; `socratic.goalPrompt` is authored dead data),
-OI-68 (capsules tint the discs they cover; one sparse window), OI-69 (editor cosmetics + multi-board
-`aria-label` ambiguity), OI-63 (six verifier/finder robustness gaps), OI-73 (`lesson.*` namespace collision),
-OI-19 (remaining hardcoded English strings), OI-38 (KB `short_summary_es` coverage), OI-62 (two KB edits).
+(`lesson.<id>.title` duplicates the lesson JSON's `title`; `socratic.goalPrompt` is authored but unrendered —
+counts corrected below), OI-69 (editor cosmetics + multi-board `aria-label` ambiguity), OI-63
+(six verifier/finder robustness gaps), OI-73 (`lesson.*` namespace collision), OI-19 (remaining hardcoded
+English strings), OI-62 (two KB edits). OI-68 (capsules tint the discs they cover) is **removed from Epic 6
+scope entirely** (resolved 2026-07-30, owner ruling) — closed as a recorded decision, not fixed; see NOT
+included and US6.4. OI-38 (KB `short_summary_es` coverage) is **deferred out of this
+epic** — see Deferred, below — and is no longer active Epic 6 scope. Also folds in two undated `[major]`
+copy findings from `agentic_QA_2026-07-25-0015.md` (no OI number) that `goalPrompt` wiring fixes as a
+side effect.
 
 **Settled decisions**
 1. **Owner ruling (2026-07-16), still binding:** *lesson content is a thing in itself and must not be
@@ -768,80 +773,164 @@ OI-19 (remaining hardcoded English strings), OI-38 (KB `short_summary_es` covera
 2. `lesson.node.*` / `lesson.confirmation.*` are **UI chrome**, not lesson content — leave them in i18n.
 3. Verify a negative claim at source before acting on it: OI-44 asserts `goalPrompt` renders nowhere; confirm
    before deleting.
+4. **`goalPrompt` is wired, not deleted** (resolved 2026-07-30, overriding OI-44's own "wire or delete"
+   framing and `lesson-editor.md`'s "to change a challenge prompt, edit i18n, not the lesson"). `goalPrompt`
+   becomes a per-lesson override of the shared `coach.spoken.<category>.prompt.*` text, falling back to the
+   shared random prompt when absent. The shared copy must stay outcome-neutral (it also serves DB-drawn
+   practice boards); the per-lesson override is where board-specific, outcome-correct copy belongs. This is
+   the fix for both undated `agentic_QA_2026-07-25-0015.md` `[major]` findings: the claimeven confirmation
+   prompt currently says "secure a draw" on solver-**won** boards, and the undercut prompt tells the learner
+   to play the column the grader rejects — the lesson JSON's `goalPrompt` already states the corrected task
+   in both cases and today is never shown.
+5. **Spec matchers declare the production detector *and side* they validate against** (resolved 2026-07-30,
+   applying OI-74's shape). No epic-wide "just validate against the production detector" — see US6.3.
+6. **Hint yields to phase** (OI-46, resolved 2026-07-30): reset `showHint` on every phase transition
+   (`useEffect(() => setShowHint(false), [phase])`). Hint and phase messages do **not** coexist in the
+   bubble — the 120px coach cap on every screen (`project_lesson_text_overflow_traps`) would truncate
+   exactly the reward text this story exists to restore.
+7. **Lesson editor puzzle-existence verification is not Epic 6 scope** (resolved 2026-07-30) — see US6.3 and
+   Deferred, below.
 
 **Non-obvious facts**
-- OI-46's one-line likely fix (`useEffect(() => setShowHint(false), [phase])`) has a real question behind it:
-  should hint-then-wrong-move drop the hint, or should hint and phase messages coexist in the bubble?
+- Counts in OI-44 are stale; re-measured 2026-07-30: **all 15** `connect-four/lessons/lesson-*.json` carry
+  `goalPrompt`, and **13 of 15** carry `goalPrompt_es` (not "9 of 13, English only").
 - **Do not "simplify" the OI-43 V7 browser pass back into one run** — a linear pass that clicks Hint can
   never reach `correct`, which is why it is deliberately split in two.
-- `windowHighlights` cells must be **ORDERED** (drawn first→last, unchecked), use opaque colours, and must
-  **never** be fed into `syncLegend`/`legendItems` (memory `project_lesson_window_highlights_traps`).
-- Capsules sit at `zIndex: 2` above the discs. Do **not** lower opacity — 0.4 is already near the visibility
-  floor; the real options are dropping below the discs or an outline-only variant.
+- **OI-68's capsule/disc-tinting fix is removed from Epic 6 scope entirely** (resolved 2026-07-30, owner
+  ruling): "we are over complicating things — assume slides will not have overlapped overlays; keep the
+  overlays as they are." No rendering change ships; OI-68 closes in `docs/open_issues.md` as a recorded
+  decision, not a fix. See US6.4 and NOT included.
 - `find_lesson_boards.mjs`'s spec matchers are independent re-implementations of `classifier.js` concepts and
   measurably diverge (the z-threat column was solver-optimal in only 25 of 50 `z_threat_socratic`
-  candidates). `undercut_t2_adjacent` was fixed 2026-07-28; the rest were not.
+  candidates). `undercut_t2_adjacent` was fixed 2026-07-28 to validate against
+  `detectUndercutBeneficiary` (the opposite-side detector, per OI-74) rather than `detectUndercut`; the
+  other matchers (`z_threat_socratic`, claimeven, `figure_7`, `overcut_active`/`overcut_shared_cell`) were
+  not. `detectOvercut`'s `perspective` is separately unsound (OI-76), and OI-76 is **Epic 2, Lane A**,
+  running concurrently — validating the overcut matcher against today's `detectOvercut` would be
+  invalidated by that lane's fix. See US6.3 for the resulting per-matcher policy.
 - The strict tests' REMEDIATED gate is **inverted-risk**: it exempts nothing today but would silently exempt
   any future lesson added to the list. Flip it to an empty exemption set.
 - Every script needs a real `--help` printing purpose + options + defaults and exiting 0 **before**
   required-arg validation (house convention; `find_lesson_boards.mjs` violates it).
 - Lesson text clips silently: a 120px coach cap applies on **every** screen, and splitting a long message
   makes it worse (memory `project_lesson_text_overflow_traps`).
+- `lesson.<id>.title` has **three** call sites with **different** fallbacks when the i18n key is removed:
+  `SocraticScreen.jsx:201` uses `defaultValue: ''` (blank TopBar title), while `ConceptScreen.jsx:183` and
+  `SagaScreen.jsx:114` use `defaultValue: lesson.title`. Migrating `title` into the lesson JSON as sole
+  authority must update SocraticScreen's default too, or that screen ships an empty title.
 
 **Authoritative sources of truth**
-- `docs/architecture/lesson-editor.md` (the authoring contract; §"Fields the learner UI ignores")
-- `docs/architecture/frontend-conventions.md` (Board API, voseo, the z-threat badge spec for outline styling)
+- `docs/architecture/lesson-editor.md` (the authoring contract; §"Fields the learner UI ignores",
+  §"Confirmation Challenges")
+- `docs/architecture/frontend-conventions.md` (Board API, voseo, the z-threat badge spec for outline styling
+  — §"Z-threat badge visual spec (decided, do not reopen)")
 - `docs/knowledge-base/README.md`, `allen-j-configuration.md`, `community-figure-7.md`
-- `docs/open_issues.md` — OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-38, OI-62
+- `agentic_QA_2026-07-25-0015.md` — the two undated `[major]` `goalPrompt` copy findings
+- `docs/open_issues.md` — OI-46, OI-44, OI-68, OI-69, OI-63, OI-73, OI-19, OI-62, OI-74 (carve-out
+  precedent), OI-76 (cross-lane dependency, Epic 2); OI-38 referenced but deferred, see Deferred below
 - memories: `project_lesson_window_highlights_traps`, `project_lesson_json_fields_not_rendered`,
   `project_lesson_text_overflow_traps`, `project_lesson_slide_field_wiring`
 
 **User stories & tasks**
 
-**US6.1 — Socratic phase/hint interaction (6 tasks).** Decide the hint-vs-phase semantics; implement; add a
-DOM test (`npm run test:dom`) that the `correct` message renders and narrates after a solve; keep the split
-V7 browser procedure; verify the Continue button still keys off `phase`; document the decision.
+**US6.1 — Socratic phase/hint interaction (6 tasks).** Implement the settled hint-vs-phase semantics
+(`useEffect(() => setShowHint(false), [phase])`); add a DOM test (`npm run test:dom`) that the `correct`
+message renders and narrates after a solve; keep the split V7 browser procedure; verify the Continue button
+still keys off `phase`; document the decision in `lesson-editor.md` and close OI-46.
 
-**US6.2 — One home for lesson content (7 tasks).** Verify `goalPrompt`'s deadness at source; migrate
-`lesson.<id>.title` to the lesson JSON as the single authority (or the reverse, with a stated rationale);
-remove the superseded i18n keys from both locales; either wire `goalPrompt` or delete it plus its
-`localizeLesson` branch; update `lesson-editor.md`; assert key parity still passes.
+**US6.2 — One home for lesson content (9 tasks).** Verify `goalPrompt`'s deadness at source (confirmed:
+still dead in the learner path); migrate `lesson.<id>.title` to the lesson JSON as the single authority,
+updating **all three** call sites' fallbacks (`SocraticScreen.jsx:201` currently `defaultValue: ''`,
+`ConceptScreen.jsx:183` / `SagaScreen.jsx:114` currently `defaultValue: lesson.title`) so none regresses to
+a blank or mismatched title; remove the superseded i18n keys from both locales; wire `goalPrompt` as a
+per-lesson override of `coach.spoken.<category>.prompt.*`, falling back to the shared random prompt when
+`goalPrompt` is absent, keeping the shared copy outcome-neutral; close the two `agentic_QA_2026-07-25-0015.md`
+`[major]` findings (claimeven "secure a draw" on won boards; undercut prompt naming the grader-rejected
+column) as acceptance evidence that the override actually renders the corrected copy; rewrite
+`lesson-editor.md`'s "To change a challenge prompt, edit i18n, not the lesson" paragraph, which contradicts
+Settled decision 1 and is now also factually wrong; correct OI-44's stale counts in this epic (now 15/15
+lessons carry `goalPrompt`, 13/15 carry `goalPrompt_es`, measured 2026-07-30); assert key parity still
+passes.
 
-**US6.3 — Verifier/finder hardening (8 tasks).** Wrap `solver.query` per check so a bad movestring produces a
-FAIL row, not a crashed run; add a conventional `--help` to `find_lesson_boards.mjs`; make each spec matcher
-validate against the production detector and require the pattern column be solver-optimal; per-overlay
+**US6.3 — Verifier/finder hardening (10 tasks).** Wrap `solver.query` per check so a bad movestring produces
+a FAIL row, not a crashed run; add a conventional `--help` to `find_lesson_boards.mjs`; for each spec
+matcher, declare in code/comments which production detector **and side** it validates against — apply the
+OI-74 carve-out explicitly (`undercut_t2_adjacent` validates against `detectUndercutBeneficiary`, the
+opposite-side detector, not `detectUndercut`) rather than forcing every matcher onto the naive
+same-side-as-detector rule; leave the overcut matcher (`overcut_active`/`overcut_shared_cell`) either
+deferred until Epic 2 lands OI-76's `detectOvercut` perspective fix, or explicitly re-pointed at whatever
+Epic 2 ships, and record that cross-lane dependency in this epic's text (not just in memory); require the
+pattern column be solver-optimal for the matchers being hardened, and state the policy for an
+already-shipped lesson board that fails the new gate (25 of 50 `z_threat_socratic` candidates fail it
+today): flag it as a FAIL row for a human decision, do not auto-replace — replacing a board is a content
+edit and must not silently expand into "writing new lessons" (NOT included, below); per-overlay
 `_overlayIntent`; extend the static scan to i18n lesson titles; flip the REMEDIATED gate to an empty
-exemption set.
+exemption set; correct `lesson-editor.md` §"Confirmation Challenges"' stale "that is Epic 6 scope" pointer
+(Decision 2, below) and file the retargeted OI entry.
 
-**US6.4 — Visual + editorial review items (6 tasks).** Decide the capsule/disc tinting fix (below-discs vs
-outline-only, per the settled z-threat badge spec); apply and re-check all 48 windows in the browser; take
-the editorial call on `opening-centre` slide 1's sparse window; `fontFamily: 'inherit'` on the `infoProse`
-textarea (or record that monospace is intentional); leave the multi-board `aria-label` ambiguity unless an
-a11y pass is in scope, with the reason recorded.
+**US6.4 — Editor cosmetics + OI-68 closeout (3 tasks).** **Decision (resolved 2026-07-30, owner ruling):**
+the capsule/disc-tinting fix is removed from Epic 6 scope entirely — assume authored slides do not have
+overlapping overlays, and keep window-highlight overlays exactly as they render today; no rendering change
+ships. `fontFamily: 'inherit'` on the `infoProse` textarea (or record that monospace is intentional); leave
+the multi-board `aria-label` ambiguity unless an a11y pass is in scope, with the reason recorded; close OI-68
+in `docs/open_issues.md` with a dated note recording this decision — resolved as "overlays kept as-is," not
+as a code fix.
 
-**US6.5 — String and KB coverage (7 tasks).** Wire `PlayOnlineScreen`'s remaining hardcoded titles to `t()`;
+**US6.5 — String and KB coverage (6 tasks).** Wire `PlayOnlineScreen`'s remaining hardcoded titles to `t()`;
 sweep `src/screens`/`src/components` for user-facing literals (`title=`, `aria-label=`, button/label
 children) and add keys to both locales; add the two-line guard that no lesson id collides with a reserved
-`lesson.*` sub-key (OI-73); audit which of the 45 KB entries lack `short_summary_es` and translate in
-reviewed batches; make the two OI-62 KB edits and re-run `npm run sync-kb`.
+`lesson.*` sub-key (OI-73); make the two OI-62 KB edits and re-run `npm run sync-kb`; correct OI-38's stale
+count in this epic and in `docs/open_issues.md` (measured 2026-07-30: `docs/knowledge-base/` holds 49 `.md`
+files, but `README.md` and `_sketches.md` are not entries, leaving 47 entries; 4 carry `short_summary_es`;
+43 missing — not "45 of 49"); record the KB-translation deferral (see Deferred, below) instead of doing the
+translation here.
 
 **Acceptance criteria**
 - Solving a Socratic exercise after clicking Hint shows **and speaks** the `correct` message.
-- No lesson string is assembled from i18n keys; `lesson-editor.md` states where content lives.
+- No lesson string is assembled from i18n keys; `lesson-editor.md` states where content lives, including a
+  corrected "goalPrompt is a per-lesson override, edited in the lesson JSON" statement (not "edit i18n").
+- Both `agentic_QA_2026-07-25-0015.md` `[major]` `goalPrompt` copy findings render the corrected text in the
+  app (claimeven, undercut).
 - `verify_lesson_content.mjs` produces a FAIL row (not a crash) for an invalid movestring, and
   `find_lesson_boards.mjs --help` exits 0.
+- Each spec matcher's declared detector-and-side is documented in `find_lesson_boards.mjs`; the
+  `undercut_t2_adjacent` carve-out is explicit, not implicit.
 - `npm run test:fast` and `npm run test:dom` green; lesson audit still 39/39.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
+  OI-38 closes as "deferred to a standalone content spec", not as done.
 
 **NOT included**
 - Generating any audio (Epic 5).
-- Writing new lessons or re-tiering the curriculum (resolved 2026-07-25).
+- Writing new lessons or re-tiering the curriculum (resolved 2026-07-25). Replacing a lesson board that
+  fails the new US6.3 solver-optimal gate is a content edit under this same boundary — flag it, do not
+  silently author a replacement board as part of this epic.
 - OI-72's stale `windowCounts` round-trip — a recorded decision, not a defect; document only.
+- **OI-68's capsule/disc-tinting fix** (resolved 2026-07-30, owner ruling) — removed from scope entirely.
+  Assume authored slides do not have overlapping overlays; keep window-highlight overlays exactly as they
+  render today. Closed in `docs/open_issues.md` as a recorded decision (see US6.4), not implemented as a
+  code fix.
+- Bulk translation of the 43 KB entries missing `short_summary_es` — see Deferred, below.
+- The lesson editor verifying that puzzles exist for a chosen confirmation category — see Deferred, below.
 
 **Open questions**
-- Capsule tinting: below-the-discs (loses the highlighter feel) or an outline-only variant?
+- None. Capsule tinting (OI-68) is fully resolved by owner decision — removed from scope entirely, overlays
+  kept as-is; there is no remaining scope sub-question to decide (see NOT included and US6.4).
+
+**Deferred**
+- **KB `short_summary_es` translation (43 of 47 entries).** Split out of Epic 6 into a standalone content
+  spec: this is a bulk reviewed-translation content effort (voseo, verde/gris, no fabrication) with its own
+  write target (`npm run sync-kb` mirrors into `connect-four/server/kb/`, parity pinned by
+  `tests/unit/kbSync.test.js`), and folding it into an already nine/ten-task-per-story epic would either
+  bloat Epic 6 or get silently dropped. OI-38's count is corrected here — `docs/knowledge-base/` holds 49
+  `.md` files, but `README.md` and `_sketches.md` are not entries, leaving 47 entries / 43 missing / 4
+  present, measured 2026-07-30 — but the translation work itself is out of scope.
+- **Lesson editor puzzle-existence check for confirmation categories.** Declared out of Epic 6 scope
+  (Decision 2) and retargeted to a new `docs/open_issues.md` entry — admin-only authoring surface with no
+  learner-facing impact, so it does not compete with this epic's learner-facing fixes. The doc-pointer
+  correction in `lesson-editor.md` §"Confirmation Challenges" and filing the new OI entry stay in US6.3,
+  since the stale "that is Epic 6 scope" pointer is how the gap would survive another cycle if left alone.
 
 ---
 
@@ -1021,10 +1110,12 @@ Every open `OI-N` maps to exactly one epic.
 | 3 | A | OI-25, OI-34, OI-39, OI-41, OI-55, OI-66 |
 | 4 | A | OI-5, OI-14, OI-17, OI-22, OI-31, OI-40, OI-47, OI-49, OI-50, OI-51, OI-52, OI-53 |
 | 5 | B | OI-9†, OI-23, OI-26, OI-27, OI-28, OI-32, OI-42, OI-43†, OI-45, OI-64†, OI-65 |
-| 6 | B | OI-19, OI-38, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
+| 6 | B | OI-19, OI-38‡, OI-44, OI-46, OI-62, OI-63, OI-68, OI-69, OI-73 |
 | 7 | B | OI-21, OI-35, OI-37 |
 | 8 | C | OI-6, OI-16, OI-29, OI-58, OI-70, OI-71, OI-72 |
 
 † subsumed by OI-65 — the remaining work is identical (generate the clips).
+‡ Epic 6 corrects OI-38's stale count (47 entries / 43 missing `short_summary_es` / 4 present) but defers the
+translation itself to a standalone content spec — see Epic 6's Deferred section.
 
 **Excluded as resolved:** OI-1, 2, 3, 4, 7, 8, 10, 11, 12, 13, 15, 18, 20, 24, 36, 54, 56, 57, 59, 67, 74, 77.
