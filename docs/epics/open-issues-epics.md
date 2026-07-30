@@ -457,19 +457,30 @@ mislabelling what the player actually did. These tags are stored and user-visibl
 content migration as much as a code change.
 
 **Issues covered:** OI-76 (`detectOvercut` mixes one player's threats with the other's score sign — literally
-the OI-74 defect), OI-60 (the taught gravity-top-adjacent overcut is never tagged; `active_forcing` actually
-means T5), OI-48 (a win-forfeiting move is tagged `drawing_move`), OI-33 (distinct-second-fork
-over-suppression + `candidate-generator` classify path outside `test:fast`), OI-30 (`figure_7` and siblings
-are unreachable on live user moves).
+the OI-74 defect), OI-60 (the taught gravity-top-adjacent overcut is never tagged), OI-48 (a win-forfeiting
+move is tagged `drawing_move`), OI-33 (distinct-second-fork over-suppression + `candidate-generator` classify
+path outside `test:fast`), OI-30 (`figure_7` and siblings are unreachable on live user moves).
 
 **Settled decisions**
-1. Follow the **OI-74 resolution shape**: decide whether the role is fixed by who is to move (then drop
-   `perspective`, as undercut did) or whether the non-mover case needs a child-position solver query (then
-   follow `detectForbiddenColumns`'s FR-033 recursion). Do **not** flip a gate's sign without deciding which.
+1. **OI-76 resolves by mirroring undercut: drop `perspective`.** Split `detectOvercut` into two role-named
+   functions (victim/beneficiary) that each anchor on the side to move, exactly as the undercut detector was
+   already fixed (`docs/architecture/server-conventions.md` §"Undercut has two sides"). Do **not** take the
+   FR-033 child-position-recursion route. Blocking constraint: `overcut` sits in `MISSED_OWN_PRIORITY`
+   (`classifier.js:1961`), evaluated on `moves + correctCol` where the tagged player is **not** the mover, so
+   production always takes the unsound branch today and stored blunder tags **will** change — every fixture
+   diff must be read and approved.
 2. Epic 1's "a condition can be met by more than one column" invariant applies to detectors too: where a
-   detector reports a single cell/column for a pattern that can arise from several, report the set.
+   detector reports a single cell/column for a pattern that can arise from several, report the set. **This is
+   already satisfied for every detector this epic touches** — spec 051 T015 converted `detectOvercut` (and
+   undercut, z-threat, claimeven) to accumulate matches and return `correctCols` (`classifier.js:1025–1073`).
+   No story in this epic may re-do this conversion; treat it as a precondition, not a task.
 3. Blunder-tag changes are validated per `reason-INVARIANTS.md` **I12** — full case space plus a
    counterexample per case, through the production detector, not the motivating example.
+4. **OI-60 resolves by extending the detector, not re-scoping the lesson.** Add a branch to `detectOvercut`
+   so the gravity-top-adjacent shape lesson 12 teaches becomes a real, first-class match.
+   `docs/knowledge-base/community-overcut.md` already documents this "active forcing" sub-case as part of the
+   concept, so the detector is incomplete relative to the theory — the lesson is not over-claiming. This is a
+   content migration and must be validated per I12: full case space, one counterexample per branch.
 
 **Non-obvious facts**
 - OI-76's blast radius: `overcut` is in `MISSED_OWN_PRIORITY` (`tagBlunder` Phase C), evaluated on
@@ -486,32 +497,68 @@ are unreachable on live user moves).
 - OI-33 #1 needs a per-column diff, not the boolean `hasDoubleThreat`, to recognise a genuinely new fork
   alongside an existing one.
 - `candidate-generator.test.js` is excluded from `test:fast` by design (solver IPC hang, `CLAUDE.md`), so
-  `candidate-generator.js:607`'s `cls.tag` consumer has no fast-suite coverage.
+  `candidate-generator.js`'s `cls.tag` consumer (`if (cls?.tag) tags.push(cls.tag);`, currently line 668 —
+  prefer locating it by this line, the number drifts) has no fast-suite coverage.
+- **The `active_forcing` label is contested, not settled.** `classifier.js:1052` currently emits
+  `reason: 'active_forcing'` on the `isT5Exception` branch, but `community-overcut.md`'s `statement` block
+  defines *active forcing* as its own distinct sub-case ("the current player plays into the column
+  voluntarily with odd-column parity, blocking the opponent's lower threat and immediately threatening from
+  R") — the exact shape lesson 12 teaches and the subject of Settled decision 4's new branch. The likely
+  resolution is to rename the misapplied T5 branch to something T5-specific (e.g. `t5_row3_row6`) and reserve
+  `active_forcing` for the new first-class branch, but this is an **open question** (see below), not an
+  instruction to execute silently.
+- Spec 051 already converted `detectOvercut` (and undercut, z-threat, claimeven) to accumulate matches and
+  return `correctCols` (`classifier.js:1025–1073`) — see Settled decision 2.
+- OI-60's body text says "lesson 07 (overcut)"; the real file is `lessons/lesson-12-overcut.json`. This epic's
+  "lesson 12" references are correct — the OI-60 text itself needs correcting during closeout.
 
 **Authoritative sources of truth**
 - `docs/architecture/reason-INVARIANTS.md`, `reason-DECISIONS.md`, `reason-case-taxonomy.md`,
   `blunder-reason-evidence.md` — **read all four, in order**, before touching anything reason-adjacent
-- `docs/architecture/server-conventions.md` §"Undercut has two sides" (the OI-74 worked resolution)
-- `docs/knowledge-base/community-figure-7.md`, `allen-j-configuration.md`, the overcut/undercut entries
+- `docs/architecture/server-conventions.md` §"Undercut has two sides" (the OI-74 worked resolution; also the
+  authoritative precedent for the undercut side of US2.1 — there is no separate undercut KB entry)
+- `docs/knowledge-base/community-overcut.md`, `allen-t2.md`, `allen-t4.md`, `allen-t5.md` — the T-rule
+  arbiters for US2.2 and the overcut side of US2.1
 - `docs/open_issues.md` — OI-74 (resolved, as the template), OI-76, OI-60, OI-48, OI-33, OI-30
 - `docs/architecture/reason-AGENT-PREAMBLE.md` — reuse verbatim when prompting a fresh-context agent
 
 **User stories & tasks**
 
-**US2.1 — `detectOvercut` perspective (8 tasks).** Characterize current behavior with a fixture per branch;
-take the fixed-by-mover vs child-query decision; implement; split victim/beneficiary naming if the decision
-mirrors undercut; re-run `tests/blunder/tagBlunderFixtures.test.js` and **read every changed fixture** before
+**US2.1 — `detectOvercut` perspective (8 tasks).** Per Settled decision 1, implement the mirror-undercut
+resolution directly (no re-decision needed): characterize current behavior with a fixture per branch; split
+`detectOvercut` into two role-named functions (victim/beneficiary), each anchored on the side to move, dropping
+`perspective`; re-run `tests/blunder/tagBlunderFixtures.test.js` and **read every changed fixture** before
 preserving it; re-derive `highlight_metadata` for active `overcut` rows and report whether the pool needs
-repair; document in `server-conventions.md`.
+repair — **first re-measure**: per OI-61's 2026-07-29 closeout the local DB had ZERO active `overcut` puzzle
+rows at that time, which would make this a no-op locally, but staging/production may differ and must be
+checked before planning around a no-op; document in `server-conventions.md`.
 
-**US2.2 — Overcut case taxonomy (7 tasks).** Decide whether the taught gravity-top-adjacent shape becomes a
-first-class match or the lesson is re-scoped; rename `active_forcing` to name T5 either way; validate per
-I12 with a counterexample per T-rule; update lesson 12 copy and the deep-reveal shape naming; add KB
-cross-references.
+**US2.2 — Overcut case taxonomy (7 tasks).** Implement Settled decision 4: add the gravity-top-adjacent branch
+to `detectOvercut` per `community-overcut.md`'s active-forcing sub-case. Resolve the **open question** on the
+`active_forcing` label (see Open questions) and record the answer in `reason-DECISIONS.md` before touching
+`classifier.js:1052`'s existing `isT5Exception` branch name. Validate per I12 with a counterexample per
+T-rule; update lesson 12 copy and the deep-reveal shape naming; add KB cross-references to
+`community-overcut.md`/`allen-t2.md`/`allen-t4.md`/`allen-t5.md`.
 
-**US2.3 — `drawing_move` outcome-flip (6 tasks).** Add a "forfeited a forced win" case upstream of
-`llmCoachHelpers.js`; wire it into the case taxonomy doc; counterexample per case; regression fixtures on the
-near-empty-board repro from OI-48; confirm the downstream grounding-rule text (Fix 4) still reads correctly.
+**US2.3 — `drawing_move` outcome-flip (10-14 tasks).** Name both producers explicitly: `classify()` at
+`classifier.js:737` (`if (score === 0) return { tag: 'drawing_move' };` — the live sparring path and the actual
+OI-48 repro) and `tagBlunder` Phase E at `classifier.js:2063` (`return { tag: 'drawing_move', direction:
+'missed_own', ... }`). Both must be fixed; do not treat one as a stand-in for the other. Note
+`reason-case-taxonomy.md:38` already names `win_to_draw` as a first-class **case** — the gap is the **tag**,
+not the case, so no taxonomy-doc "add the case" task is needed, only a tag-naming/emission task.
+Open decision the spec must take and justify: **mint a new tag + migration + backfill** for the
+forfeited-a-forced-win outcome, vs. **keep `drawing_move` and refine its sub-reason/direction field** to
+distinguish "best available is a draw" from "a forced win was forfeited." Whichever is chosen, task out all
+six registry/i18n/schema touchpoints:
+1. Postgres CHECK constraint in `server/migrations/052_blunders_parity_threat_tags.sql`
+2. `server/blunderTags.js`
+3. `docs/architecture/data-model.md`, `docs/architecture/db-schema.md`, `docs/architecture/server-conventions.md:142`
+4. `src/i18n/en.json:894` and `es.json` phrase pools (both locales)
+5. `blunderReasons.js`
+6. `explainContext.js:415` and `docs/architecture/feature-vector-glossary.md:337`
+
+Plus: counterexample per case per I12; regression fixtures on the near-empty-board repro from OI-48; confirm
+the downstream grounding-rule text (Fix 4) still reads correctly.
 
 **US2.4 — Creation-gate residuals (6 tasks).** Replace the boolean `hasDoubleThreat` gate with a per-column
 threat diff so a distinct second fork counts as creation; same treatment for `detectForcedWin`; add a
@@ -524,14 +571,15 @@ with transition-gating for every added pattern; verify the `coach.<tag>.*` phras
 locales; add per-tag round-trip tests.
 
 **Acceptance criteria**
-- No detector mixes one player's threats with the other player's score sign; each either drops `perspective`
-  or does a real child-position query.
+- No detector mixes one player's threats with the other player's score sign; `detectOvercut` drops
+  `perspective` per Settled decision 1.
 - Every changed blunder tag has a read-and-approved fixture diff; the stored pool is re-derived or explicitly
   reported as needing repair.
 - `npm run test:fast` green; the reason-engine docs updated in lockstep (`reason-DECISIONS.md` gains an entry).
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
+  OI-60's body text ("lesson 07") must be corrected to "lesson 12" as part of its closeout.
 
 **NOT included**
 - `detectFigure7` / `detectJShape` signature changes.
@@ -539,8 +587,16 @@ locales; add per-tag round-trip tests.
 - Re-generating the puzzle pool for categories whose metadata does not change.
 
 **Open questions**
-- Does OI-76 resolve to "drop `perspective`" (undercut's answer) or to an FR-033 recursion? The blast radius
-  differs sharply.
+- The `active_forcing` label: does `classifier.js:1052`'s existing `isT5Exception` branch keep the name
+  `active_forcing`, or is it renamed to something T5-specific (e.g. `t5_row3_row6`) so `active_forcing` can be
+  reserved for the new first-class branch added under Settled decision 4? `community-overcut.md`'s `statement`
+  block defines *active forcing* as its own distinct sub-case, so the two candidate label sets are:
+  (a) keep `active_forcing` on the T5 branch, give the new branch a different name, or
+  (b) rename the T5 branch to `t5_row3_row6` (or similar) and give `active_forcing` to the new branch, which
+  matches the KB's usage and the shape lesson 12 teaches. US2.2 must decide and record this in
+  `reason-DECISIONS.md`, not silently pick one.
+- US2.3's tag-taxonomy decision (mint a new tag vs. refine `drawing_move`'s sub-reason/direction field) is
+  open — see US2.3.
 
 ---
 

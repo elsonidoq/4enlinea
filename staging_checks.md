@@ -1034,3 +1034,33 @@ Spec 051 was implemented, backfilled and QA'd entirely against the **local** dat
   `forced_win` (locally reduced to 0 — OI-83).
 - **Source**: spec 051 FR-021/FR-022/FR-023.
 - [ ] Signed off (tester + date):
+
+---
+
+## Epic 2 — Detector Perspective Soundness & Blunder Tag Taxonomy (spec 052) — added 2026-07-30
+
+- [ ] **Re-measure the active `overcut` puzzle pool before trusting the "no repair needed" conclusion.**
+  - **What**: In staging (and production), count active `overcut` puzzle rows and re-derive their
+    `highlight_metadata` after the `detectOvercut` victim/beneficiary split lands. Confirm each row's
+    stored metadata still matches what the new detector produces.
+  - **Why staging**: The local DB currently holds **zero** active `overcut` rows (OI-61 closeout,
+    2026-07-29), which makes the pool re-derivation a local no-op and makes "nothing to repair" look
+    true when it may not be. Staging/production pools are populated independently. Spec 052 FR-006
+    explicitly forbids assuming zero — if the environment is unreachable, record that fact and
+    escalate rather than treating it as a pass.
+  - **Expected**: Either zero active rows (record the count), or every active row's re-derived
+    `highlight_metadata` matches its stored value. Any mismatch is a repair task, not a pass.
+  - **Source**: Spec 052 FR-006, T003; epic acceptance criterion "the stored pool is re-derived or
+    explicitly reported as needing repair".
+
+- [ ] **Confirm stored blunder tags did not shift for real user rows.**
+  - **What**: After the split ships, spot-check stored `blunders` rows carrying the `overcut` tag in
+    staging and confirm the tagged cells belong to the blunderer, not the opponent.
+  - **Why staging**: The `overcut` fixture corpus is **empty locally** (0 rows in
+    `tests/blunder/fixtures/tagBlunderFixtures.json`), so the local fixture-diff gate protects
+    nothing. Real stored rows are the only corpus that exercises the wrong-player failure mode this
+    epic exists to fix, and blunder tags are user-visible content.
+  - **Expected**: Every sampled `overcut` row names the blunderer's own pattern. Any row naming the
+    opponent's is the pre-fix defect and needs a backfill.
+  - **Source**: Spec 052 FR-003/T010; epic acceptance criterion "every changed blunder tag has a
+    read-and-approved fixture diff".

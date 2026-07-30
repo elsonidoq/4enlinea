@@ -2145,3 +2145,40 @@ during spec 051 and could not get it.
 category registry or `placeholder_puzzles.json` could supply one), or make it accept
 `--goal-prompt "<text>"` so an operator can seed the first row explicitly. Either way it should
 stop being an error path.
+
+---
+
+## OI-89 — The FR-033 perspective guard degrades silently to the unsound branch when no solver is passed
+
+**Status**: deferred (latent — no current caller triggers it)
+**Area**: `connect-four/server/classifier.js` — `detectZThreat`, `detectOddEvenThreat`,
+`detectForcedBlock`, `detectForbiddenColumns`
+**Discovered**: spec 052 (Epic 2) planning, 2026-07-30
+
+All four detectors handle the non-mover perspective by recursing into child positions, gated on:
+
+```js
+if (perspective !== board.currentPlayer && solver) {
+```
+
+The `&& solver` conjunct means that when a caller asks for a **non-mover perspective without
+supplying a solver**, the guard is skipped and control falls straight through to the sync branch —
+the exact "one player's threats gated on the other player's score sign" defect that OI-74/OI-76 are
+about. It fails *open*, silently returning an unsound answer, rather than throwing or returning
+`{ matched: false }`.
+
+**Why this is latent, not live.** Every current no-solver call site also omits `perspective`, so it
+defaults to `board.currentPlayer` and the guard's first conjunct is false anyway — verified at
+`server/predicates.js:420`, `server/candidate-generator.js:308`, `:451`, `:493` (all two-argument
+calls). The unsound combination is reachable only by a *future* caller that passes an explicit
+perspective and no solver.
+
+**Why deferred**: spec 052's Settled decision 1 mandates the role-split resolution for `detectOvercut`
+and explicitly does *not* re-open the FR-033 route for these four; fixing this is a separate,
+one-line-per-detector change with its own regression surface.
+
+**If picked up**: make the no-solver non-mover case explicit rather than implicit — either throw
+(`perspective requires a solver`) or return `{ matched: false, cells: [] }` — so a future caller gets
+a loud failure instead of a wrong tag. Note this also leaves the codebase with **two** competing
+solutions to the perspective problem (the role-split used by undercut/overcut, and this solver
+recursion); spec 052 T003A records that divergence in `reason-DECISIONS.md`.

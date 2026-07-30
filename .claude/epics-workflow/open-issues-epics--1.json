@@ -1,0 +1,13 @@
+{
+  "worktree_setup_done": true,
+  "epic_file": "docs/epics/open-issues-epics.md",
+  "epic_heading": "Epic 1 \u2014 Pattern Acceptance: multi-column answers + solver-safety invariant",
+  "spec_dir": "specs/051-pattern-acceptance",
+  "stage": "done",
+  "pending_brainstorm": null,
+  "pending_brainstorm_answers": null,
+  "pending_critique": null,
+  "pending_answers": null,
+  "pending_handoff": null,
+  "pending_deferrals": []
+}
