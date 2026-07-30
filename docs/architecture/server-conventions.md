@@ -448,6 +448,44 @@ See `api-conventions.md`'s "Move Evaluation Endpoint" section for the full two-b
 `data-model.md`'s "`correct_cols` — the stored answer set" section for the column's population and
 `NULL`/`{}` semantics.
 
+An unresolvable `puzzleId` (no active row for that id) **warns and falls through** to the
+computed-live branch rather than returning an error. This is deliberate: the request body still
+carries everything computed-live grading needs, and failing the request instead removed grading
+feedback silently, because `ChallengeScreen` commits its phase change before the response lands.
+See `api-conventions.md` §"Grading branches" and `docs/open_issues.md` OI-84.
+
+#### Both branches shape their response through one function
+
+`buildEvaluationResponse({ movestring, colInt, category, isAiMove, solver, i18nTranslations })`
+(module-private in `evaluateMoveHandler.js`) produces **everything in the response except
+`accepted`** — `scoreMove` → `classify`/`classifyAiMove` → `phrasePoolKey` → the two `pickFromPool`
+i18n keys → the coach mood map — and returns `{ scores, response }`. Each branch then adds only its
+own `accepted` (`correct_cols.includes(...)` for stored-set, `evaluatePredicate` for computed-live)
+and spreads: `res.json({ ...response, accepted })`.
+
+**Do not inline this per branch again.** The sequence was previously duplicated verbatim in both,
+which meant any change to the coach-key derivation or the mood map applied to one branch only would
+make the same move grade differently depending on whether the request carried a `puzzleId` — i.e.
+differently for a real puzzle drill than for a lesson inline challenge, with no test catching it.
+`scores` is returned for the caller's own `accepted` derivation and is **never** part of the
+response body.
+
+### Promoting a candidate to a puzzle — one shared row builder
+
+`server/promotePuzzleRow.js#buildPromotedPuzzleRow(candidate, { goalPrompt, goalPredicateType,
+difficulty, cooperativeAiMoves })` builds the `puzzles` row inserted when a curated candidate is
+approved. **Both** admin promotion routes (`POST /api/admin/candidates/:id/approve` and
+`POST /api/admin/candidates/approve-batch`) call it; neither keeps a field list of its own. They
+differ only in `goalPredicateType` (the single route derives it from the request's predicate type,
+the batch route uses the candidate's category) and `cooperativeAiMoves` (batch always `[]`).
+
+Extracted because the two routes were independent hand-maintained copies, and `puzzles` has no
+NOT NULL constraint on the answer columns — so a column added to one route and forgotten in the
+other inserts as NULL and the puzzle simply serves wrong, silently. Adding a column to `puzzles`
+means editing this builder plus the other write sites listed in `data-model.md`
+§"Where puzzle/candidate answer columns are written". `tests/integration/promoteCorrectCols.test.js`
+asserts against this builder, so a regression in either route is a test failure.
+
 ## Classifier API — Perspective, classifyPattern, and tagBlunder
 
 `classifier.js` exposes two functions beyond the category-level `classify()`:

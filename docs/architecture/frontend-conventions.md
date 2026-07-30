@@ -522,6 +522,31 @@ Two Spanish gaps are backlogged and are **not** visible to the parity guard (the
 **MUST**: All fetch calls use `const API = import.meta.env.VITE_API_BASE_URL || ''` as the base.
 **MUST**: Authenticated requests use `credentials: 'include'` so the browser sends the httpOnly `sb_access_token` cookie. The `loadUser` middleware reads the token from the cookie as a fallback (see server-conventions.md). Do NOT send an `Authorization` header — `session.access_token` is `undefined` (the session stores only `{ user }`; the token never leaves the httpOnly cookie).
 
+### `puzzleId` on `/api/evaluate-move` — only for ids that can resolve (spec 051 Epic 1)
+
+**MUST**: gate the `puzzleId` field with `isSyntheticPuzzleId(id)` from `src/lib/syntheticPuzzleId.js`:
+
+```js
+...(isSyntheticPuzzleId(current.id) ? {} : { puzzleId: current.id }),
+```
+
+`ChallengeScreen` mints ids for boards that have **no `puzzles` row**: `dev-<movestring>` (DEV board
+injector, `devFixtures.js#buildDevPuzzle`) and `inline-<movestring>` (every lesson confirmation
+challenge). Sending either makes the server's stored-set lookup miss. Omitting the field is what
+routes these boards to the computed-live grading branch — the branch row-less content is supposed to
+use.
+
+**MUST NOT**: use a lesson's authored `confirmationChallenges[].puzzleId` as the runtime id. A lesson
+carries its whole puzzle (board, correct column, highlight metadata), so the lesson branch mints
+``inline-`${ch.moveString}` `` **unconditionally** and ignores the authored value. That field is
+**authoring provenance**, read only by `AdminLessonEditorScreen.jsx`, `PuzzlePickerModal.jsx` (dedupe)
+and `PuzzlePickerRow.jsx` (display) — it must never travel on the wire.
+
+**Why this is a MUST, not a style note**: the failure is invisible. `ChallengeScreen` commits its
+phase change **before** the evaluate-move response lands and swallows the rejection in a `.catch`, so
+a failed grading request shows no error — the move just commits with no verdict, no coach reaction.
+See `docs/open_issues.md` OI-84/OI-85 and `api-conventions.md` §"Grading branches".
+
 ## Analytics
 
 **MUST**: Track user events via the `track(eventName, data)` helper in `src/lib/track.js`.

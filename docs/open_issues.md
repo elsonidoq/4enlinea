@@ -2056,3 +2056,92 @@ unresolvable-`puzzleId` fall-through. That fall-through stays as a safety net �
 real race where a puzzle is drawn and then deactivated (e.g. by a backfill run) before the learner
 submits, which `.eq('is_active', true)` would otherwise turn into a silent no-feedback 404 — but it
 is no longer what keeps lessons working.
+
+---
+
+## OI-86 — Eight of twelve puzzle categories have zero active puzzles locally, below the N=20 serving floor
+
+**Status**: deferred (content/curation work, not a code defect)
+**Area**: `puzzles` / `candidates` tables (local dev DB), curation flow
+**Discovered**: spec 051 (Epic 1) pool measurement, 2026-07-30
+
+Measured against the uniform FR-022 floor of **N = 20 active puzzles**
+(`specs/051-pattern-acceptance/pool-thresholds.md`), the local DB has:
+
+| passing | below the floor (all at **0** active puzzles) |
+|---|---|
+| `double_threat` 100, `forced_block` 100, `immediate_threat` 66, `undercut` 25 | `forced_win`, `overcut`, `figure_7`, `j_shape`, `odd_even_threat`, `claimeven`, `z_threat`, `forbidden_columns` |
+
+Only `forced_win` was touched by spec 051 (1 → 0; its single row was retired as AMBIGUOUS — that
+half is OI-83). The other seven were at 0 before and after: they have simply never been curated into
+this local `puzzles` table.
+
+**This is not a generation failure.** Every one of the eight has valid, `correct_cols`-populated
+candidates sitting in the curation queue: `forbidden_columns` 30, `figure_7` 21, `j_shape` 14,
+`odd_even_threat` 13, `overcut` 9, `claimeven` 7, `z_threat` 3, `forced_win` 2. Clearing this is a
+**promotion pass**, not a generation project — and promotion makes no solver calls.
+
+**Why deferred**: curation is content work, outside spec 051's scope (a predicate/storage change).
+It also blocks nothing today in a *local* environment beyond QA reach — several spec 051 scenarios
+had to be exercised through the DEV board injector instead of real drills for exactly this reason.
+
+**If picked up**: promote the queued candidates per category
+(`POST /api/admin/candidates/approve-batch`, or the CurationWorkspace UI); see
+`specs/051-pattern-acceptance/pool-thresholds.md` §"How to fill a category" and memory
+`feedback_generate_puzzles_for_local_qa` for the exact commands and the `--port` trap. **Measured on
+local only** — staging and production pools were never measured and may be healthy; see
+`staging_checks.md` Epic 1.
+
+---
+
+## OI-87 — `--experimental-test-module-mocks` is enabled process-wide for the whole test suite
+
+**Status**: deferred (forward-compatibility risk, no current breakage)
+**Area**: `connect-four/package.json` (`test` and `test:fast` scripts)
+**Discovered**: spec 051 (Epic 1) code review, 2026-07-30
+
+Both npm test scripts now pass `--experimental-test-module-mocks`, needed by `mock.module()` in
+`tests/integration/evaluateMoveStoredSet.test.js` and `tests/unit/sharedSolverSafetyFloor.test.js`
+to prove a code path is *not* taken. Only those files use it, but a single `node --test` invocation
+takes one flag set for its whole file list, so it cannot be scoped further without splitting the
+suite into two invocations.
+
+**Risk**: it is an *experimental* Node API. If a future Node upgrade renames or removes the flag,
+**every** test in both suites fails at CLI-parse time — not just the two files that need it — which
+presents as a total suite failure with a cause far from the real one. It may also add
+`ExperimentalWarning` noise to stderr on every run.
+
+**Why deferred**: no breakage on Node v23.11.0 (measured), and the alternative (a second `node --test`
+invocation for just the mock-using files, wired into both scripts) adds permanent complexity to
+guard a hypothetical.
+
+**If picked up**: split the mock-using files into their own `test:mocks` script and drop the flag
+from the main invocation, or replace `mock.module` with dependency injection — the stored-set branch
+could take its evaluator functions as parameters, making the bypass assertable without module
+mocking at all. Cross-ref `docs/architecture/testing-conventions.md` §"Proving a code path is *not*
+taken".
+
+---
+
+## OI-88 — `audit_answer_ambiguity.mjs --repair` cannot seed a category that has zero rows
+
+**Status**: deferred (tooling gap)
+**Area**: `connect-four/server/scripts/audit_answer_ambiguity.mjs` (`repairPuzzles`)
+**Discovered**: spec 051 (Epic 1), 2026-07-29/30
+
+`--repair --yes --puzzles <category>` implements FR-023's replace-not-exempt remediation: it retires
+failing rows and inserts replacements. But it throws
+`'no existing <category> row to inherit goal_prompt from — repair by hand'` when the category has
+**zero** rows, because it uses an existing row as the `goal_prompt` template for its replacements.
+
+So the tool can only ever *replace*, never *seed* — and the case where a pool most needs filling
+(it is empty) is precisely the case it refuses. This surfaced when `overcut` needed remediation
+during spec 051 and could not get it.
+
+**Why deferred**: a working alternative exists (generate + promote, see OI-86), and inventing a
+`goal_prompt` for a category with no precedent is a content decision, not a mechanical one.
+
+**If picked up**: let `repairPuzzles` fall back to a per-category default `goal_prompt` (the
+category registry or `placeholder_puzzles.json` could supply one), or make it accept
+`--goal-prompt "<text>"` so an operator can seed the first row explicitly. Either way it should
+stop being an error path.

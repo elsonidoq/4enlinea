@@ -120,6 +120,41 @@ This test is not part of the automated test suite — it requires a running serv
 
 HTTP integration tests spin up an express app in-process using `node:http` + `createServer`. They do not require the external Supabase instance; puzzle data is injected via test fixtures.
 
+### Test the real seam, never a copy of it
+
+`server/index.js` exports no app and gives its route handlers no per-request Supabase seam, which
+tempts a test into rebuilding the handler's logic inside its own mini express app. **A test that
+asserts against its own reimplementation proves nothing** — the production route can drop a field
+and the test stays green forever, because no code path under test ever calls the real route.
+
+When that temptation appears, extract the logic into a module both sides import instead. That is
+why `server/promotePuzzleRow.js#buildPromotedPuzzleRow` exists: `tests/integration/
+promoteCorrectCols.test.js` originally mirrored the two admin promotion routes' insert objects, so
+extracting the builder made the assertion real without needing HTTP-level injection. Verify the
+result by breaking the production code on purpose and watching the test go red — a green test you
+have never seen fail is not evidence.
+
+### Proving a code path is *not* taken (`mock.module`)
+
+Some contracts are negative: spec 051's stored-set grading branch must never consult the pattern
+evaluators. Asserting that by reading the code is not a test. The pattern used is Node's
+experimental `mock.module()`:
+
+1. In a `before()` hook, `mock.module(<module url>, { namedExports: { fn: () => { throw ... } } })`.
+2. Dynamically import the module under test with a **cache-busting query string** so it re-resolves
+   its imports against the mock rather than a cached graph.
+3. `.restore()` in `after()`, and build a **fresh, unmocked** app instance for any sibling test that
+   needs the real function.
+
+This requires the `--experimental-test-module-mocks` flag, which is set **process-wide** on both the
+`test` and `test:fast` scripts (a single `node --test` invocation takes one flag set for the whole
+file list, so it cannot be scoped to the few files that use it). Only a handful of files rely on it
+— see `docs/open_issues.md` OI-87 for the forward-compatibility risk.
+
+As with any negative assertion, confirm the harness actually fails when the forbidden call happens:
+temporarily insert the call, watch it go red, then revert. Used by
+`tests/integration/evaluateMoveStoredSet.test.js` and `tests/unit/sharedSolverSafetyFloor.test.js`.
+
 ## Running Tests
 
 ```

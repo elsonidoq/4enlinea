@@ -955,3 +955,82 @@ confirmed anywhere.
 - **Source**: session 2026-07-28 (OI-74 undercut perspective fix);
   `docs/architecture/server-conventions.md` §"Undercut has two sides".
 - [ ] Signed off (tester / date):
+
+---
+
+## Epic 1 — Pattern Acceptance: multi-column answers + solver-safety invariant (spec 051) — added 2026-07-30
+
+> Note: distinct from the older "Epic 1 — Past Games & Mistakes Data Integrity (spec 041)" section
+> above; epic numbers were reused across numbering schemes. This section is spec **051**.
+
+Spec 051 was implemented, backfilled and QA'd entirely against the **local** database. Migration
+`061_correct_cols.sql` has been applied locally only, and `backfill-correct-cols.mjs` was run with
+`--env local` only. Everything below is a consequence of that.
+
+### 1. Apply migration `061_correct_cols.sql` to staging (then production)
+
+- **What**: apply `connect-four/server/migrations/061_correct_cols.sql`, adding
+  `correct_cols integer[] DEFAULT NULL` to both `puzzles` and `candidates`.
+- **Why staging**: DDL; applied to local only. The file carries the required
+  `HUMAN REVIEW REQUIRED before applying to production` header. Note the staging pooler is a
+  transaction pooler on port 6543 and **cannot run DDL** — use a direct connection (see memory
+  `reference_supabase_connection`).
+- **Expected**: both tables show `correct_cols | integer[] | nullable | default NULL`. No existing
+  grants need changing (`016_correct_col.sql`'s table-level grants already cover new columns) —
+  re-verify against the live schema before applying.
+- **Source**: spec 051 FR-013 / T003.
+- [ ] Signed off (tester + date):
+
+### 2. Run the `correct_cols` backfill against staging
+
+- **What**: `node server/scripts/backfill-correct-cols.mjs --env staging` (has `--dry-run`, and a
+  typed `"Yes"` confirmation gate before any live write). **Must run after check 1.**
+- **Why staging**: only `--env local` was ever run. Until this runs, staging rows have
+  `correct_cols IS NULL` and every drill silently takes the computed-live fallback — correct
+  grading, but the "computed once" goal of the whole feature is inert.
+- **Expected**: per-category before/after active-row counts reported; afterwards
+  `audit_answer_ambiguity.mjs --puzzles --env staging` reports **0 failures and 0 `correct_cols`
+  MISMATCH** (locally: 291 rows audited, all MATCH).
+- **Source**: spec 051 FR-015/FR-016/FR-031, T048.
+- [ ] Signed off (tester + date):
+
+### 3. Confirm the stored-set branch actually engages in staging
+
+- **What**: play a real puzzle drill in staging; in DevTools Network confirm `/api/evaluate-move`
+  carries `puzzleId`, and confirm the server log shows **no**
+  `did not resolve to an active puzzles row` warning for it.
+- **Why staging**: locally this was verified against the local pool only. The branch fails *open* by
+  design, so a missed migration or backfill produces correct grading via the fallback and looks
+  identical to success — the absence of the warning is the only signal that the stored set is
+  actually being read.
+- **Expected**: `puzzleId` present, no fallback warning, response contains **no** `correct_cols`
+  field (that field must never ship to a client, on either branch).
+- **Source**: spec 051 FR-024/FR-027/Decision D2b, T064.
+- [ ] Signed off (tester + date):
+
+### 4. Confirm lesson confirmation challenges still grade, and send no `puzzleId`
+
+- **What**: in staging, play a lesson with an inline confirmation challenge — one correct column and
+  one wrong column — and confirm real grading feedback appears (correct/wrong indicator + coach
+  reaction). In Network, confirm the request **omits** `puzzleId`.
+- **Why staging**: this regressed during implementation and the failure is invisible — the phase
+  change commits before the response lands, so a failed request shows no error, just a committed
+  move with no verdict. A staging pass is the only way to be sure the fix holds against real lesson
+  content and a real session.
+- **Expected**: visible grading on both columns; no `puzzleId` in the request body.
+- **Source**: spec 051 FR-025/SC-003; `docs/open_issues.md` OI-84, OI-85.
+- [ ] Signed off (tester + date):
+
+### 5. Measure staging pools against the N = 20 serving floor
+
+- **What**: count active `puzzles` per category in staging and compare against the uniform FR-022
+  floor of 20 (`specs/051-pattern-acceptance/pool-thresholds.md`).
+- **Why staging**: the local DB has **eight of twelve categories at 0 active puzzles**
+  (`docs/open_issues.md` OI-86), which is a dev-environment curation gap and says nothing about
+  staging. Whether real users can actually be served every category is only answerable here.
+- **Expected**: every category ≥ 20 active puzzles. Any category below the floor needs a promotion
+  pass (candidates are usually already queued) — **not** a lowered threshold. Pay particular
+  attention to `undercut` (locally tightened 28 → 25 by this feature's safety floor) and
+  `forced_win` (locally reduced to 0 — OI-83).
+- **Source**: spec 051 FR-021/FR-022/FR-023.
+- [ ] Signed off (tester + date):
