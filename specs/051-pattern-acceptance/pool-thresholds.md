@@ -22,11 +22,34 @@ that is the most depleted state possible — exactly what FR-022 exists to stop 
 
 **The remedy is always the same: generate and promote more puzzles. Never lower the threshold, and
 never exempt a category for having been broken already** (owner, 2026-07-30: *"why don't just
-generate more puzzles if the threshold is not met?"*). Note `audit_answer_ambiguity.mjs --repair`
-can only *replace* rows, never seed a category from zero — it throws
-`'no existing <category> row to inherit goal_prompt from'` — so a zero-row category needs a
-generation + promotion pass instead. Valid, unpromoted candidates are usually already waiting; see
-memory `feedback_generate_puzzles_for_local_qa`.
+generate more puzzles if the threshold is not met?"*).
+
+#### How to fill a category — this is a normal agent task, not a human-only step
+
+All three endpoints involved are `requireLocalhost`-gated, so anyone (or any agent) working on
+localhost can do this end to end. A category being empty is never a reason to report a scenario as
+untestable.
+
+1. **Promote first if candidates already exist** — far cheaper than generating, since it makes no
+   solver calls. Check `candidates` for `status='pending'` rows of the category, then
+   `POST /api/admin/candidates/:id/approve` or `/api/admin/candidates/approve-batch`, or use the
+   CurationWorkspace admin UI. As of 2026-07-30 every empty category here already had valid,
+   `correct_cols`-populated candidates queued, so this step alone was sufficient.
+2. **Otherwise generate, then promote.** The server must already be running, and the script's
+   `--port` **defaults to 3001, which is wrong in a worktree** — pass the real port:
+   ```sh
+   eval "$(./worktree-ports.sh)"          # from the repo root, always
+   cd connect-four
+   node server/scripts/generate_all_candidates.mjs --category <cat> --count 10 --port $API_PORT
+   ```
+   Keep `--count` small: it calls the real c4solver once per candidate (the default of 100 across
+   12 categories is 1000+ solver calls). `--dry-run` prints the plan; `--help` exits without
+   generating. Run with idle servers and no live browser QA session touching the solver.
+3. **`audit_answer_ambiguity.mjs --repair` cannot seed a category from zero** — `repairPuzzles`
+   throws `'no existing <category> row to inherit goal_prompt from'` because it needs an existing
+   row as a `goal_prompt` template. Repair only *replaces*; use steps 1–2 to seed.
+
+See memory `feedback_generate_puzzles_for_local_qa`.
 
 **"Caused by this change" is for diagnosis, not exemption.** Recording whether a change depleted a
 pool, or merely inherited an empty one, tells you *which* remedy to reach for — FR-023's
