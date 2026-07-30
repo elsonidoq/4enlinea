@@ -44,7 +44,7 @@ Runs before anything else — before even parsing `$ARGUMENTS` for the epic file
 
 5. **Baseline with `npm run test:fast`, not `npm test`.** The setup skill's Step 3 ("Verify Clean Baseline") suggests a generic `npm test`; in this repo that runs `candidate-generator.test.js`, which calls the real c4solver up to 400× per test and routinely hangs 10+ minutes (`CLAUDE.md` §Running tests). Use `cd connect-four && npm run test:fast`. If the baseline is red, report it before starting the epic — a pre-existing failure inherited into a worktree reads as damage the epic caused.
 
-6. Set `worktree_setup_done: true` in state and proceed to Epic resolution. If the resulting workspace is a git worktree of this repo, dev-server/test work inside it must follow `docs/architecture/worktree-conventions.md` (run `eval "$(./worktree-ports.sh)"` before starting or killing any server — never assume `3001`/`5173` are free or yours to touch).
+6. Set `worktree_setup_done: true` in state, and record the **absolute path of the workspace the pipeline will run in** as `worktree_path` — the new worktree's path, or the current working directory if the user chose "work in place anyway." Do this now, not later: the final stage prints this path so the user knows where to launch the implementation session from, and a session that resumes at `done` has no other way to recover it. Then proceed to Epic resolution. If the resulting workspace is a git worktree of this repo, dev-server/test work inside it must follow `docs/architecture/worktree-conventions.md` (run `eval "$(./worktree-ports.sh)"` before starting or killing any server — never assume `3001`/`5173` are free or yours to touch).
 
 ---
 
@@ -80,6 +80,7 @@ Schema:
 ```json
 {
   "worktree_setup_done": false,
+  "worktree_path": null,
   "epic_file": null,
   "epic_heading": null,
   "spec_dir": null,
@@ -731,7 +732,26 @@ Artifacts:
 - `<spec_dir>/plan.md`
 - `<spec_dir>/tasks.md`
 
-Run `/coordinate-implementation <spec_dir>` to begin.
+**To implement, start a session from `<worktree_path>`:**
+
+```
+cd <worktree_path>
+claude
+```
+
+then run:
+
+```
+/coordinate-implementation <spec_dir>
+```
+
+`<spec_dir>` is a **relative** path, so the working directory is what makes it resolve — launching from
+anywhere else will fail to find the artifacts. If `<worktree_path>` differs from the main checkout, also
+warn the user, in this order:
+1. **Keep the worktree on exit.** When this session ends they will be prompted to keep or remove it;
+   `<spec_dir>` is untracked and exists only there, so "remove" destroys the pipeline's entire output.
+   Recommend committing the artifacts first, staging explicit paths (never `git add -A`).
+2. Server/test work in that worktree must run `eval "$(./worktree-ports.sh)"` first — never a bare port.
 
 ---
 
@@ -739,4 +759,17 @@ Run `/coordinate-implementation <spec_dir>` to begin.
 
 Output:
 
-> The "<epic-heading>" artifacts are complete and have already been reviewed. Run `/coordinate-implementation <spec_dir>` to begin implementation.
+> The "<epic-heading>" artifacts are complete and have already been reviewed.
+>
+> Start the implementation session from `<worktree_path>`:
+>
+> ```
+> cd <worktree_path>
+> claude
+> ```
+>
+> then run `/coordinate-implementation <spec_dir>`. The spec path is relative, so launching from
+> anywhere else will not find the artifacts.
+
+If `worktree_path` is null (an older state file written before this field existed), say so rather than
+guessing a path, and offer to locate the worktree with `git worktree list`.

@@ -353,6 +353,63 @@ that exercises **keyboard/focus interaction** — e.g. `Board`'s Enter/Space col
 `tests/unit/boardA11y.test.js`. Real focus management and key sequences are where `user-event`
 genuinely beats hand-dispatched `keyDown`.
 
+#### Stub `window.confirm`/`window.alert` on `window`, **not** just `globalThis`
+
+In this jsdom harness `window` and `globalThis` are **not** the same object, and React event
+handlers resolve `window.confirm` off `window`. Assigning only `globalThis.confirm` leaves the
+component calling jsdom's built-in stub ("not implemented"), so a test asserting "a confirmation
+appeared" silently records zero calls. Set **both**, and restore them in `after()`:
+
+```js
+let confirmCalls = [];
+before(() => {
+  const fake = (msg) => { confirmCalls.push(msg); return true; };
+  globalThis.confirm = fake;
+  window.confirm = fake;   // ← the one that actually gets called
+});
+```
+
+Worked example: `tests/dom/AdminAudioPageWarning.dom.test.jsx` (spec 051 FR-015).
+
+#### A page that fetches on mount needs **every** URL stubbed, not just the one under test
+
+`AdminAudioPage` now issues `GET /api/admin/audio/status`, `GET /api/admin/lessons`, and (on
+selection) `GET /api/admin/lessons/:id/audio-status`. A `fetch` stub that only answers the endpoint
+a test cares about leaves the others rejecting, producing unhandled rejections that surface as
+unrelated noise or a flaky pass. Match on URL and return a minimal valid shape for each.
+
+This cuts the other way too: **adding a section to a shared page changes what every existing DOM
+test of that page renders.** After extending such a page, re-run the whole `test:dom` suite, not
+just your new file.
+
+#### Prefer an exported pure resolver over module mocking for a static ESM import
+
+This repo has **no** module-mocking precedent (`grep -ran "mock.module" tests/ server/` → zero hits)
+and a static ESM binding cannot be patched from outside. When a function's behaviour depends on a
+statically imported helper you need to vary (config readers, clock, env), export a **pure resolver**
+and give it an optional test-only DI parameter, then assert against that:
+
+```js
+// production callers pass nothing; only the test passes readConfig
+export function resolveSynthesisConfig(lang, { readConfig = readTtsConfig } = {}) { … }
+```
+
+`server/ttsProvider.js`'s `resolveSynthesisConfig` exists solely as this seam — it lets
+`server/ttsProvider.test.js` drive a fake legacy-model config through the real refusal logic without
+touching the module graph. Keep such a seam **test-only by convention** and say so in its JSDoc, so a
+future production caller doesn't start threading config back in through the back door.
+
+#### Grep-as-lint tests must not use bare `grep`
+
+Several guarantees here are enforced by a test that greps the tree for a forbidden pattern (no file
+outside `ttsProvider.js` constructing an OpenAI TTS request; no file importing `synthesizeRaw`).
+**Bare `grep` silently reports zero matches** in this environment — the non-UTF-8 locale makes
+multibyte files read as binary — so such a lint passes vacuously and proves nothing. Either use
+`grep -a` or, preferably, do the walk in Node with `fs.readFileSync` + a regex, which sidesteps the
+locale entirely. **Prove the lint works by temporarily inserting a real violation and confirming it
+goes red** — a lint that has never been seen failing is not known to work. Match on actual import
+syntax rather than a bare substring, or a doc comment naming the symbol will trip it.
+
 ### `node --test` Conventions
 
 - **Runner**: Node.js built-in `node:test` + `node:assert/strict`. No Jest, Mocha, or other frameworks.

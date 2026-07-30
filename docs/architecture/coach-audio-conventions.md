@@ -3,6 +3,61 @@
 **Read before** adding any string under `coach.` in `src/i18n/en.json` / `es.json`, touching
 `scripts/generate-tts.js`, or changing the TTS registry / audio manifest.
 
+**Not the same pipeline as lesson audio.** This file covers the i18n-keyed `coach.spoken.*` pipeline
+(`scripts/generate-tts.js`, the TTS registry/manifest). Lesson narration (`lessons/*.json`'s
+`coachMessages`/`infoProse`/`socratic.messages`) is a separate, hash-keyed pipeline —
+`server/lessonAudio.js` and its corpus CLI `scripts/generate-lesson-audio.mjs` — documented under
+"Admin Batch-Generation Modules — Pure-Function Pattern" and "Lesson audio corpus CLI" in
+`docs/architecture/server-conventions.md`. Both pipelines ultimately synthesize through the single
+shared entry point `server/ttsProvider.js`'s `synthesize(text, lang)` (spec 051 FR-026/FR-027), which
+resolves voice/model/speed/instructions from `tts-prompt.<lang>.json` internally — no caller of either
+pipeline can omit or override them.
+
+## The single-synthesis-path guarantee — `synthesize` vs `synthesizeRaw`
+
+`server/ttsProvider.js` exports four synthesis functions, in two pairs. The precise guarantee is
+**"exactly one path that can *ship* a clip"** — not "exactly one path", full stop. Both pairs can
+genuinely call OpenAI TTS and get audio back; they differ in who may call them and what happens to
+the result.
+
+| Function | Who may call it | Config source | Can it ship a clip? |
+|---|---|---|---|
+| `synthesize(text, lang)` / `synthesizeStream(text, lang)` | The 5 production callers only: `server/index.js`'s `generate`, `generate-all`, `deep-reveal` routes; `server/lessonAudio.js`; `scripts/generate-tts.js`. | Resolved **internally** from `lang` via `resolveSynthesisConfig(lang)` → `readTtsConfig(lang)` + `buildTtsInstructions`. No `opts` parameter exists, so a caller cannot supply *or* omit voice/model/speed/instructions — there is nothing to omit. | **Yes** — this is the only path whose output is ever written to a registry entry, a manifest row, or a lesson JSON's `audio`/`audio_es` field. |
+| `synthesizeRaw(text, opts)` / `synthesizeStreamRaw(text, opts)` | `POST /api/admin/audio/preview` only (the admin TTS sandbox, for auditioning experimental voice/speed/instructions before committing them to `tts-prompt.<lang>.json`). | Caller-supplied `opts` — including deliberately empty `instructions`, to audition "no style at all". | **No** — the preview route never writes a file to a stable path, never touches a registry/manifest, and never updates a lesson JSON. Its output is played once in the browser and discarded. |
+
+Both pairs share one refusal, independent of the caller: a `model` outside `ALLOWED_TTS_MODELS =
+['gpt-4o-mini-tts']` (a private, non-exported constant in `ttsProvider.js`) is rejected before any
+network call — `synthesizeRaw`/`synthesizeStreamRaw` refuse it directly; `synthesize`/`synthesizeStream`
+inherit the refusal because they call `resolveSynthesisConfig` first, which throws on the same
+condition. This is deliberately a second, independent layer of defense on top of
+`ttsConfig.mjs`'s `VALID_TTS_MODELS` allow-list (research.md R2): even if a legacy model
+(`tts-1`/`tts-1-hd`, which silently ignores `instructions` — the OI-32 failure mode) somehow made it
+into `tts-prompt.<lang>.json`, synthesis itself still refuses to speak with it, at both the
+production entry point and the sandbox.
+
+**Why the sandbox needs its own escape hatch instead of just calling `synthesize`.** Auditioning a
+*candidate* voice/speed/instructions combination — the whole point of the preview route — requires
+passing values that don't yet exist in `tts-prompt.<lang>.json`. `synthesize(text, lang)` has no
+parameter to carry them; it can only ever speak the config already committed to disk. `synthesizeRaw`
+is that necessary second path — real, callable, capable of producing audio — but it is never wired to
+anything that persists a result, so nothing it produces can become a shipped clip. The single-path
+guarantee is therefore about **shipping**, not about **synthesizing**: two functions can synthesize,
+one function's output is ever reachable by an end user.
+
+**Enforcement.** `server/ttsProvider.test.js` asserts this mechanically, including two lint-style
+checks (each demonstrated RED by inserting a real violating line before writing the assertion, per
+this repo's verification convention):
+- no file other than `ttsProvider.js` constructs an OpenAI TTS request directly (`fetch(...)` /
+  `https://api.openai.com/v1/audio/speech`) — a would-be direct caller must go through this module;
+- no file outside `ttsProvider.js` and the preview handler (`server/index.js`'s
+  `POST /api/admin/audio/preview`) imports `synthesizeRaw`/`synthesizeStreamRaw` — a new caller
+  cannot silently reach the unshipped-but-real second path; it can only reach `synthesize`/
+  `synthesizeStream`, which cannot omit config.
+
+If a future change needs a 6th production caller, it must import `synthesize`/`synthesizeStream`, not
+`synthesizeRaw`/`synthesizeStreamRaw` — importing the Raw pair outside the preview handler is exactly
+the violation the second lint above exists to catch.
+
 ## The invariant
 
 Every other top-level i18n namespace (`nav`, `game`, `puzzle`, `auth`, `home`, …) is a

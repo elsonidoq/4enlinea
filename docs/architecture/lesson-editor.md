@@ -40,6 +40,43 @@ translation is visible. Non-translatable fields (`movestring`, `boardSpec`, `ove
 
 ---
 
+## Lesson audio audition & management (`/admin/audio` — spec 051 US2)
+
+`/admin/audio` (`src/pages/AdminAudioPage.jsx`, the existing **Coach Audio Manager**) has a second,
+independent section — **Lesson Audio Manager** — for auditioning and (re)generating every lesson
+message's clip, in either language, without leaving the page. It is a **read/generate** surface only;
+lesson *content* editing still happens exclusively at `/admin/lessons`.
+
+- **Lesson picker**: a `<select>` populated from `GET /api/admin/lessons` (id/title only).
+- **Message list**: on lesson select (or a `lang` toggle change — it reuses the page's single existing
+  language selector, there is no second one), fetches `GET /api/admin/lessons/:id/audio-status?lang=`
+  and renders one group per `"Slide N"` / `"Socratic"`, each message showing its text, a `Has
+  Audio`/`Missing` badge, an inline `<audio>` player when a clip exists, and a `Generate`/`Regenerate`
+  button.
+- **Per-message generation**: the button `POST`s `/api/admin/lessons/:id/generate-audio` with
+  `{ lang, locator }` — only that one `collectMessages()` entry is resynthesized. The frontend refetches
+  `audio-status` afterward rather than trusting the POST response's `lesson` field, so the displayed
+  state always comes from the same live-computed path FR-009 requires.
+- **No second store**: nothing here is cached beyond the current render — every lesson switch, lang
+  switch, or generate action re-fetches `audio-status` fresh from the on-disk lesson JSON
+  (`reloadLessons()` runs server-side before every read, so an on-disk edit is reflected without a
+  server restart — this is what closes OI-42/OI-43 for this surface).
+- **Stale-locator no-op**: if the admin clicks Generate on a message that was removed from the lesson
+  JSON between page load and the click, the server responds `200 { generated: [], failed: [] }` (not a
+  404) — a deliberate no-op. The frontend has no special-case handling for this: the message simply
+  disappears from the list on the next `audio-status` refetch.
+- Playback is a plain `<audio src="/audio/lessons/<hash>.mp3">` (relative to the Vite dev origin, which
+  serves `public/`) — **not** routed through the API port, unlike the pre-existing coach-clip player
+  (`/api/admin/audio/play/:slug`), which streams via the API server's registry lookup. Lesson clips have
+  no registry to look up; the path is already the full route.
+- This section shares no state, fetch, or component logic with the pre-existing coach-audio status
+  list / config editor / TTS sandbox above it on the same page — it does not change their behavior.
+
+Server-side, see `api-conventions.md`'s `/api/admin/lessons/:id/audio-status` and the `generate-audio`
+`locator` field for the exact contract.
+
+---
+
 ## Architecture Overview
 
 ```

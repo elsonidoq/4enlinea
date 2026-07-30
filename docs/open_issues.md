@@ -184,7 +184,12 @@ property). Cross-ref: spec 046 US5, [[OI-7]] (no DOM harness).
 
 ## OI-9 — Only `immediate-threat` has generated narration audio; 12 lessons still silent
 
-**Status**: deferred (content-population step, not a bug — scoped out of spec 046 verification)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US1) — subsumed by OI-65's fix. All 15 lessons now
+have complete narration audio for every narratable message. `connect-four/tests/lessons/
+lessonAudioCoverage.test.js` (new, registered in both `test`/`test:fast`) walks every lesson via the
+production `collectMessages()` walker and asserts every populated-text field has a populated,
+on-disk audio path: **0 missing** across all 15 lessons. The ad hoc `quickstart.md` step-2 snippet
+independently confirms `{ missing: 0, referencedCount: 348, diskCount: 348, orphanCount: 0 }`.
 **Area**: `connect-four/lessons/*.json` (`coachMessages[].audio`), `connect-four/public/audio/lessons/`
 
 **Discovered**: spec `046` T030 verification (2026-07-11)
@@ -505,21 +510,21 @@ write path), mirroring the authenticated branch. Cross-ref: `docs/architecture/a
 
 ## OI-23 — Deep-reveal TTS 400s on the opening move (empty movestring) for ALL users
 
-**Status**: deferred (pre-existing; surfaced during anon free deep reveal QA, 2026-07-13)
-**Area**: `connect-four/server/index.js` — `GET /api/user/tts/deep-reveal` param validation (`if (!moveString || …)`)
-**Discovered**: anon free deep reveal QA (2026-07-13)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US3 Fix 3)
+**Area**: `connect-four/server/index.js` — `GET /api/user/tts/deep-reveal` param validation;
+`connect-four/server/deepRevealMoveStringGuard.mjs` (new)
 
-The TTS endpoint validates `if (!moveString || !/^[0-6]{0,42}$/.test(moveString))` → `400`. Because
-`!""` is `true`, an **empty** `moveString` (the opening move — a first-move blunder such as playing an
-edge column) is rejected, so its deep reveal renders text but is **silently voiceless** (the client's
-TTS fetch 400s). Affects authenticated and anonymous callers equally — the regex itself allows 0 chars
-(`{0,42}`), so only the `!moveString` truthiness guard is wrong for the empty-but-valid case. Low impact
-(only the very first ply, and only its spoken audio), which is why it went unnoticed until the anon
-onboarding reveal (whose first blunder is often the opening move) exposed it.
+**Was**: the route validated `if (!moveString || !/^[0-6]{0,42}$/.test(moveString))` → `400`. Because
+`!""` is `true`, an **empty** `moveString` (the opening move) was rejected as "missing" even though the
+regex itself allows 0 chars (`{0,42}`), so its deep reveal rendered text but was silently voiceless.
 
-**If picked up**: change the guard to `typeof moveString !== 'string' || !/^[0-6]{0,42}$/.test(moveString)`
-(accept the empty string), matching how `POST /api/explain-move-llm` already validates its `movestring`.
-Cross-ref: `docs/architecture/api-conventions.md`.
+**Resolution**: the route's validation was extracted to `isValidDeepRevealMoveString()`
+(`server/deepRevealMoveStringGuard.mjs`), which delegates to the same `validateMoves` shared validator
+`POST /api/explain-move-llm` already used correctly — `typeof moveString !== 'string'` instead of the
+falsy `!moveString` short-circuit. Regression test:
+`connect-four/tests/unit/deepRevealMovestring.test.js` (registered in both `test` and `test:fast`),
+confirmed RED against the literal pre-fix predicate (`!!(moveString && /^[0-6]{0,42}$/.test(moveString))`)
+before the fix landed.
 
 ## OI-24 — No persistent / discoverable "upgrade to Pro" CTA; all four paywall entries are reactive
 
@@ -553,21 +558,32 @@ returnPath, and rehydrate on cold boot. Cross-ref: memory `project_stripe_traps`
 
 ## OI-26 — Admin TTS cleanup nulls audio cross-locale under composite explanation_cache key
 
-**Status**: deferred (2026-07-14), non-blocking — localhost/admin-only, self-healing
-**Area**: `connect-four/server/index.js` `POST /api/admin/tts/cleanup` (~line 3958)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US3 Fix 2)
+**Area**: `connect-four/server/index.js` `POST /api/admin/tts/cleanup`;
+`connect-four/server/explanationCacheCleanup.js` (new)
 
-Since migration 059 made `explanation_cache` PK composite `(position_hash, locale)`, the cleanup's
-`.update({ audio_path: null, ... }).in('position_hash', hashes)` filters by bare `position_hash`, so
-expiring the `en` row's audio also nulls a **non-expired** `es` row's `audio_path` (while the Storage
-object is deleted only for the expired path) — orphaning the `es` object and forcing needless
-re-synthesis on next request. Low impact: admin-only, self-heals on the next deep-reveal TTS request.
+**Was**: since migration 059 made `explanation_cache` PK composite `(position_hash, locale)`, the
+cleanup's `.update({ audio_path: null, ... }).in('position_hash', hashes)` filtered by bare
+`position_hash`, so expiring the `en` row's audio also nulled a **non-expired** `es` row's
+`audio_path` for the same position.
 
-**If picked up**: scope the `.update()` by the selected rows' `locale` too (join the pruned set on
-`(position_hash, locale)`, not `position_hash` alone). Cross-ref: [[project_spanish_output_silent_fallback]].
+**Resolution**: the update logic was extracted to `cleanupExpiredExplanationAudio()`
+(`server/explanationCacheCleanup.js`), which now selects `locale` alongside `position_hash`/
+`audio_path`, groups expired rows by `locale`, and issues one `.update({...}).eq('locale', loc)
+.in('position_hash', hashesForLoc)` per locale present in the batch — a different locale's row for
+the same `position_hash` is never touched by another locale's cleanup. Regression test:
+`connect-four/server/explanationCacheCleanup.test.js` (registered in both `test` and `test:fast`),
+confirmed RED against the pre-fix ungrouped `.in('position_hash', hashes)` update before the fix
+landed. Cross-ref: [[project_spanish_output_silent_fallback]].
 
 ## OI-27 — Spanish coach audio clips not yet generated (bulk content step)
 
-**Status**: partially resolved (2026-07-14) — admin UI gap CLOSED; only bulk content generation remains
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US1) — the remaining bulk-generation gap is closed.
+`server/tts-registry.es.json` now holds 218 entries (217 `approved`, 1 `ineligible`), an exact match to
+`server/tts-registry.json`'s (English) 218/217/1 split, and `public/audio/coach/es/` holds 218 mp3s with
+217 in the approved manifest — the ~220-key es set is fully generated and approved, not just the one
+smoke clip (`coach.title`) this entry originally described. Verified 2026-07-29 via direct registry/
+manifest counts (T009 evidence, spec 051 T011). The admin-UI half was already resolved 2026-07-14.
 **Area**: `connect-four/scripts/generate-tts.js`, `/admin/audio`
 
 The per-language coach-audio machinery shipped (es clips → `public/audio/coach/es/`, per-lang manifest,
@@ -585,18 +601,46 @@ fallback) for every un-generated key.
 
 ## OI-28 — Spanish deep-reveal descoped siblings: lesson-narration audio & blunder one-liner badge
 
-**Status**: descoped by design (2026-07-14) — documented in the plan/spec
-**Area**: `connect-four/lessons/*.json`, `server/llmCoachHelpers.js` (`buildBlunderExplainPrompt`)
+**Status**: ✅ RESOLVED (blunder one-liner half) 2026-07-29 — spec 051 US4 (`specs/051-audio-verification-tts/`, T033–T038); lesson-narration-audio half remains open, unchanged, see below.
+**Area**: `connect-four/lessons/*.json` (open half); `connect-four/server/mechanismExplainer.mjs`, `connect-four/server/scripts/compute.mjs`, `connect-four/server/index.js` (resolved half)
 
-Two deep-reveal-adjacent surfaces were left English. **Lesson narration**: lesson prose in
-`lessons/lesson-*.json` is inline English (not i18n keys), so Spanish lesson audio needs the lesson
-*content* translated first — a separate content project; lessons fall back to English audio meanwhile.
-**Blunder one-liner badge**: generated in the server-side harvest pipeline with no request/`req.locale`
-context, so `Accept-Language` can't reach it — localizing needs a locale threaded through harvest.
+Two deep-reveal-adjacent surfaces were originally reported English-only.
 
-**If picked up**: (lessons) translate lesson JSON content, then run per-language `generateLessonAudio`
-and store a per-locale audio path per message; (one-liner) thread a locale through the harvest/tagging
-pipeline into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`. Cross-ref: [[project_spanish_output_silent_fallback]].
+**Blunder one-liner — resolved, but not by fixing the code this entry originally named.** T033
+(spec 051) drove the live app in Chrome via chrome-devtools MCP and captured real
+`POST /api/explain-move-llm` network requests (not a static grep) to find which server response
+actually populates the mistake explanation a learner reads. Verdict: `composeExplanation`
+(`server/index.js`, sole caller of the harvest-pipeline-style `POST /api/explain-move`) and
+`buildBlunderExplainPrompt` (`server/llmCoachHelpers.js`, this entry's originally-named target) are
+**both dead code from the learner's point of view** — no frontend caller of either exists (confirmed
+both by `grep -a` over `src/` and by the captured network trace showing zero requests to
+`/api/explain-move`). The live one-liner-equivalent is `POST /api/explain-move-llm`'s `explanation`
+field, produced by `computeMechanism` (`server/mechanismExplainer.mjs`) →
+`buildPromptForCondition` (`server/scripts/compute.mjs`). That function **already threads a
+`locale` argument** (`buildPromptForCondition(glossary, fv, condition, locale = 'en')`) and appends
+`SPANISH_OUTPUT_DIRECTIVE` (Rioplatense voseo, verde/gris terminology) whenever `locale === 'es'` —
+shipped previously in commit `da8a916` ("feat(i18n): deep-reveal Spanish output directive"), an
+unrelated prior epic, independent of the `composeExplanation`/`buildBlunderExplainPrompt` path this
+entry named. Confirmed live end-to-end in the running app: switching the Settings language toggle to
+Español and re-requesting the same blunder position (a locale-keyed cache miss — `explanation_cache`
+is matched on `(position_hash, locale)`, so an English row for that position does not shadow the
+Spanish request) returned a fresh Spanish `explanation` field with `accept-language: es` on the
+request. English-locale behavior is unchanged (verified against the same position with
+`accept-language: en`). Regression coverage: `server/tests/mechanismExplainer.test.mjs` (two new
+tests — `locale "es"` threads `SPANISH_OUTPUT_DIRECTIVE` into the LLM prompt; `locale "en"` and the
+unset default omit it). **FR-021 (owner-ratified, do not relitigate)**: already-cached English
+`explanation_cache` rows are NOT backfilled to Spanish — the `(position_hash, locale)` cache key
+already means an English row and a Spanish row for the same position simply coexist as separate
+rows; the English row is naturally superseded only when regenerated by a future Spanish-locale
+request for that position, no migration or purge was written.
+
+**Lesson narration audio — still open, unchanged.** Lesson prose in `lessons/lesson-*.json` is
+inline English (not i18n keys), so Spanish lesson audio needs the lesson *content* translated first —
+a separate content project; lessons fall back to English audio meanwhile.
+
+**If picked up** (lesson-narration half only): translate lesson JSON content, then run per-language
+`generateLessonAudio` and store a per-locale audio path per message. Cross-ref:
+[[project_spanish_output_silent_fallback]].
 
 ## OI-29 — SplitReveal live-fit: stale spec-042 contract + missing render-level regression test
 
@@ -659,8 +703,34 @@ The staging connection string points at the **transaction pooler (port 6543)**. 
 
 ## OI-32 — Existing English coach + lesson clips are stale-model (tts-1), not regenerated onto gpt-4o-mini-tts
 
-**Status**: deferred (2026-07-14) — content/quality follow-up; harmless mix, each clip still plays
-**Area**: `connect-four/public/audio/coach/*.mp3`, `connect-four/public/audio/lessons/*.mp3`, `scripts/generate-tts.js`, `server/lessonAudio.js`
+**Status**: ⚠️ PARTIALLY FIXED, STAYING OPEN 2026-07-30 (spec 051 / Epic 5, US5 T050/T055) — the drift
+*mechanism* is closed, but the bulk re-voicing this entry originally asked for is deliberately incomplete,
+pending an explicit owner go-ahead. Specifically:
+- **Shipped**: the single-synthesis-path fix (batch 5, T039–T048) — every production caller now goes
+  through `synthesize(text, lang)`/`synthesizeStream(text, lang)` in `server/ttsProvider.js`, which
+  resolves config internally and refuses any model outside `ALLOWED_TTS_MODELS = ['gpt-4o-mini-tts']`
+  before any network call, so a future clip cannot regress onto a legacy silently-instructionless model
+  again (see `docs/architecture/coach-audio-conventions.md` §"The single-synthesis-path guarantee").
+- **Shipped**: the lesson fleet was checked, not blindly regenerated (batch 1, T008) — of 348
+  lesson-audio mp3s, only **2** predate the 2026-07-14 model-switch commits (`slides[1].coachMessages[0]`
+  = `41dcfb2a0d945146.mp3` and `slides[2].coachMessages[0]` = `4d377642248f22e2.mp3`, both in
+  `connect-four/lessons/lesson-01-immediate-threat.json`); the other 346 are already on the current model.
+- **Shipped this batch (2026-07-30)**: a **5-clip English coach sample** regenerated via the surgical
+  per-key `POST /api/admin/audio/generate` (not a bulk `generate-all`), per an explicit owner decision to
+  audition quality before authorizing the full spend — `coach.spoken.sparring.outcome.win`,
+  `coach.spoken.sparring.outcome.loss`, `coach.spoken.immediate_threat.hint.0`,
+  `coach.spoken.figure_7.blunder.2`, `coach.spoken.undercut.optimal.2` (`generated_at` moved from
+  2026-06-19 to 2026-07-30 for all 5; confirmed `model=gpt-4o-mini-tts`, non-empty
+  `instructions` via the `/tmp/epic5-server.log` diagnostic line). These sit `awaiting_approval` on
+  `/admin/audio`, un-approved by design (approval is a separate, deliberate step).
+- **Still open, pending owner sign-off**: the remaining **~212** English coach clips (of 217 total minus
+  the 5 sampled) are still on the pre-2026-07-14 model and not regenerated; none of the 5 sampled clips
+  (nor any others) have been re-approved; the 2 stale lesson clips above are not regenerated. Ready-to-run
+  commands are recorded in `specs/051-audio-verification-tts/tasks.md` T051/T052.
+
+**Original status (superseded by the above)**: deferred (2026-07-14) — content/quality follow-up;
+harmless mix, each clip still plays
+**Area**: `connect-four/public/audio/coach/*.mp3`, `connect-four/public/audio/lessons/*.mp3`, `scripts/generate-tts.js`, `server/lessonAudio.js`, `connect-four/server/ttsProvider.js`
 
 The TTS default was switched from `tts-1` to `gpt-4o-mini-tts` (which honors the voice-instructions
 `prompt` — `tts-1` ignored it entirely). But all audio is cached by a hash of the *text*, so existing
@@ -806,7 +876,29 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 ## OI-42 — Lesson audio is not manageable from `/admin/audio`
 
-**Status**: deferred / open (surfaced 2026-07-16 while fixing the lesson editor's en/es-vs-generate-audio disconnect)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US2) — `/admin/audio` now has a second, independent
+"Lesson Audio Manager" section alongside the pre-existing Coach Audio Manager. It lists every lesson's
+narratable messages (concept-slide `coachMessages`, slide `infoProse`, and `socratic.messages[phase][]`),
+grouped by `"Slide N"` / `"Socratic"`, with an inline `<audio>` player and a per-message Generate/
+Regenerate button, reusing the page's existing en/es toggle (no second language selector). Status is
+computed live from the on-disk lesson JSON on every fetch — no new registry, index, or cache was
+introduced, honoring FR-013's original registry-free decision this entry called out. Shipped via:
+`GET /api/admin/lessons/:id/audio-status?lang=en|es` (new, `connect-four/server/index.js`) — calls
+`reloadLessons()` before every read so status reflects a same-session on-disk edit without a server
+restart; an optional `locator` field on the existing `POST /api/admin/lessons/:id/generate-audio`
+(threaded through `generateLessonAudio()` in `connect-four/server/lessonAudio.js`) that (re)synthesizes
+exactly one message, settling on `200 { generated: [], failed: [] }` (not `404`) for a stale/no-match
+locator; and the new section in `connect-four/src/pages/AdminAudioPage.jsx`. Contract:
+`specs/051-audio-verification-tts/contracts/admin-lesson-audio-endpoints.md`; architecture doc:
+`docs/architecture/lesson-editor.md` §"Lesson audio audition & management"; API doc:
+`docs/architecture/api-conventions.md` §"Lesson Audio Generation & Pruning Endpoints". Verified end-to-end
+in a real browser against the running dev server: lesson picker lists all 15 lessons, en/es toggle swaps
+both text and audio for the lesson section, a single-message Regenerate fires exactly one `generate-audio`
+POST with that message's `locator` and re-fetches status, and a hand-edit to a lesson JSON on disk is
+reflected in the status response on the very next fetch with no server restart (closes the liveness half
+this entry originally flagged as unaddressed). None of the pre-existing coach-audio status list, config
+editor, or TTS sandbox changed behavior.
+
 **Area**: `connect-four/src/pages/AdminAudioPage.jsx` (coach audio admin UI) vs. `connect-four/src/screens/AdminLessonEditorScreen.jsx` + `connect-four/server/index.js` (lesson audio endpoints)
 
 `/admin/audio` manages **coach** clips only, and does it well: a grouped status list (`awaiting_approval` / `needs_audio` / `approved` / `ineligible`) via `GET /api/admin/audio/status?lang=`, per-key generation (`POST /api/admin/audio/generate`), an inline player (`GET /api/admin/audio/play/:slug?lang=`), an en/es dropdown, and a TTS prompt/speed/voice/model editor.
@@ -824,8 +916,16 @@ The final fallback, `'anonymous'`, is a **string literal**, not a per-device ide
 
 ## OI-43 — Socratic coach text is i18n-keyed, so it is never narrated (silent in every language)
 
-**Status**: **code landed 2026-07-16 — NOT yet audible; audio generation still outstanding.** Plan: `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` (Tasks 1–7 done, `test:fast` green at 1413 pass).
-**Remaining before this can be closed**: (1) run the plan's **Task 8** — `POST /api/admin/lessons/:id/generate-audio` per lesson with `{lang:'en'}` then `{lang:'es'}`, **after restarting the server** (see below); (2) the plan's **V7** browser check — bubble narrates in EN and ES, stops on navigate-away, mp3 returns 200. **Until Task 8 runs, every Socratic bubble renders text with no audio — i.e. the user-visible symptom of this issue is unchanged.**
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US1) — Task 8 (per-lesson `generate-audio` for
+`en`/`es`) is confirmed done: `lessonAudioCoverage.test.js`'s coverage assertion covers
+`socratic.messages[phase][]` (via `collectMessages()`, which walks slides AND socratic) with 0 missing
+audio across all 15 lessons/both languages. The plan's V7 browser check is now an automated,
+programmatic replacement rather than a manual pass: `connect-four/tests/dom/SocraticNarration.dom.test.jsx`
+(new, registered in `test:dom`) drives the real `SocraticScreen` against lesson-01's real socratic
+content and asserts, via stubbed `HTMLMediaElement.play()`/`.pause()`, that the `ask`, `hint`, and
+`correct` (reward) messages each narrate their own clip and that unmounting mid-narration calls
+`pause()` (stops playback on navigate-away) — in both a Hint-never-clicked run and a Hint-clicked run,
+per FR-004's explicit two-run requirement. Plan: `docs/superpowers/plans/2026-07-16-socratic-lesson-content.md` (Tasks 1–7 done, `test:fast` green at 1413 pass).
 **Area**: `connect-four/src/screens/SocraticScreen.jsx`, `connect-four/server/lessonAudio.js`, `connect-four/server/lessonLoader.js`, `connect-four/scripts/translate-lessons.mjs`
 
 **What landed**: the text now lives in lesson JSON at `socratic.messages` (phase→array map, `text`/`text_es`/`audio`/`audio_es` shape); 12 lessons migrated (`lesson-04` has `socratic: null`); the i18n `socratic.*` and `lesson.<id>.socratic.*` keys are **deleted** from both locales; `SocraticScreen` narrates via `getNarrationQueue` + `speakLessonAudio` mirroring `ConceptScreen`, with a replay button; `collectMessages` now unifies the two audio walkers, and `translate-lessons.mjs` was extended to cover `socratic.messages[phase][].text`.
@@ -860,16 +960,27 @@ Two more instances of the same "lesson content built from i18n keys" pattern OI-
 
 ## OI-45 — Regenerating an approved coach clip puts the new take live, unapproved
 
-**Status**: deferred / open (pre-existing design wart, documented 2026-07-16; not a regression)
-**Area**: `connect-four/scripts/generate-tts.js`, `connect-four/server/index.js` (`/api/admin/audio/generate`), `connect-four/public/audio/coach/**`
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US3 Fix 1) — disclosure added; publish-immediately
+behavior deliberately kept (see spec's ratified Assumption: "Publish-immediately stays the model for
+approval" — gating playback behind approval was considered and rejected as it could take a
+currently-working clip offline the moment someone clicks regenerate).
+**Area**: `connect-four/scripts/generate-tts.js`, `connect-four/src/pages/AdminAudioPage.jsx`
+(`handleGenerate`)
 
-Approval controls **entry into the manifest**, and the manifest is the only thing the client consults (`enqueueIfApproved`). But regenerating a clip overwrites the mp3 **in place at the same path** and flips `status` to `awaiting_approval` **without touching the manifest**. So the slug stays published and the new, unreviewed recording goes live immediately — `awaiting_approval` does not gate playback once a slug has ever been approved. The previously approved recording is gone (recoverable only via `git checkout`).
+Approval controls **entry into the manifest**, and the manifest is the only thing the client consults
+(`enqueueIfApproved`). Regenerating a clip overwrites the mp3 **in place at the same path** and flips
+`status` to `awaiting_approval` **without touching the manifest**, so the slug stays published and the
+new, unreviewed recording goes live immediately.
 
-This is also the mechanism behind the benign registry/manifest drift documented in `docs/architecture/coach-audio-conventions.md`: `generated_at > approved_at` on a manifested slug means "a newer take is live that nobody re-approved".
-
-**Mitigation shipped 2026-07-16**: `generate-tts.js --key <k>` now prompts before overwriting an approved clip and spells this out; the admin UI's per-key generate does not.
-
-**If picked up**: decide whether approval should gate *playback* (remove the slug from the manifest on regenerate, so a regenerated clip goes silent until re-approved) or stay a pure publishing record (current behavior, now at least explicit). Note the first option means a regeneration can silently take a working clip offline — which is why this wasn't changed unilaterally.
+**Mitigation shipped 2026-07-16**: `generate-tts.js --key <k>` prompts before overwriting an approved
+clip. **Resolution 2026-07-29**: the admin UI's per-key `handleGenerate(key)` now shows the same
+warning (`window.confirm`, reusing the CLI's copy minus the CLI-specific `git checkout` recovery line)
+before sending the request whenever the item's current status is `'approved'`; cancelling aborts with
+no fetch sent. This remains disclosure, not a gate — a regenerated clip still publishes immediately
+once the admin proceeds. Regression test:
+`connect-four/tests/dom/AdminAudioPageWarning.dom.test.jsx` (registered in `test:dom`), confirmed RED
+against the pre-fix `handleGenerate` (no warning at all for a single-key regenerate) before the fix
+landed.
 
 ## OI-46 — `SocraticScreen`'s `showHint` is sticky, so the `correct` message can never render (and now, never narrates)
 
@@ -1123,19 +1234,34 @@ Four residues in the remediation tooling:
 
 ## OI-64 — Owner decisions pending from the lesson remediation (paywall split, Spanish pass, two recommended new lessons)
 
-**Status**: **mostly RESOLVED 2026-07-25** (merged to `stagging` via PR #19) — only the Spanish **audio** half remains open
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US1) — the last remaining item (Spanish audio) is
+now closed; see OI-65's closeout for the evidence. All three items are done.
 **Area**: `connect-four/lessons/*.json` (`free` flags), Task 14 of the remediation plan, lesson curriculum
 **Discovered**: lesson-content remediation final review (2026-07-24)
 
 1. ~~**Non-contiguous paywall after renumbering**: free 1–6 + 11–12, paid 7–10 + 13.~~ **RESOLVED 2026-07-25.** Re-tiered to **15 lessons, free 1–10 / paid 11–15 — exactly one free→paid transition**, openings early at 4–5. Enforced by a loader check; the contiguity rule is now documented in `docs/architecture/lesson-editor.md` §"Curriculum ordering and the free/paid boundary".
-2. **Spanish TEXT done, AUDIO still open.** All 15 lessons are fully translated (~280 `_es` fields, Rioplatense voseo). **No Spanish audio clips were generated for any of it** — see OI-65. The "pending an API key" framing was wrong for a *local* session (the key is in `connect-four/server/.env`); it is correct only for remote Claude-Code-on-the-web containers, which have no `.env` at all.
+2. ~~**Spanish TEXT done, AUDIO still open.**~~ **RESOLVED 2026-07-29.** All 15 lessons' `_es` audio fields
+   are populated and on-disk — see OI-65.
 3. ~~**Two recommended new lessons.**~~ **RESOLVED 2026-07-25.** Both written on solver-verified boards and shipped free: `threat-vocabulary` (#3, defines major/minor/immediate/gravity-top before L06/L07/L10 use the terms) and `zugzwang-tempo` (#10).
 
-**If picked up**: only the audio pass remains — see OI-65. Cross-ref: OI-18, OI-43, OI-63.
+Cross-ref: OI-18, OI-43, OI-63, OI-65.
 
 ## OI-65 — All 15 lessons are translated to Spanish but have NO Spanish audio; `es` learners get English clips
 
-**Status**: deferred / open (2026-07-25)
+**Status**: ✅ RESOLVED 2026-07-29 (spec 051 / Epic 5, US1) — every lesson's `audio_es` field (concept-slide
+coach messages, slide `infoProseAudio_es`, and `socratic.messages[phase][].audio_es`) is now populated
+and the referenced file exists on disk. `connect-four/tests/lessons/lessonAudioCoverage.test.js` (new,
+registered in `test`/`test:fast`) walks every lesson via the production `collectMessages()` walker and
+asserts, for every entry with non-empty `_es` text, a populated + on-disk `audio_es` path — **0
+failures** across all 15 lessons. The companion prune-parity assertion in the same file confirms the
+referenced-audio set and the on-disk `public/audio/lessons/` set agree exactly (348 referenced = 348 on
+disk, 0 orphans), so no clip is missing and none is a leftover. The ad hoc `quickstart.md` step-2
+snippet independently reproduces the same counts: `{ missing: 0, referencedCount: 348, diskCount: 348,
+orphanCount: 0 }`. **What this does NOT cover** (by design, non-blocking per FR-003): whether each
+`audio_es` clip is genuinely Spanish-sounding by ear, vs. the failure mode this entry called out
+(`pickLocalized` silently falling back to the English clip) — that by-ear check is recorded as a
+`staging_checks.md` sign-off item under "Epic 5 — Audio Verification & TTS Management", not gated on
+this closeout. Coach-fleet Spanish audio (a related but separate surface) is OI-27, also resolved.
 **Area**: `connect-four/lessons/*.json` (`coachMessages[].audio_es`, `socratic.messages[phase][].audio_es`), `POST /api/admin/lessons/:id/generate-audio`
 **Discovered**: lesson localization + new-lesson fan-out (2026-07-25), merged in PR #19
 
@@ -1490,7 +1616,18 @@ OI-1 / OI-61.
 
 ## OI-78 — No pacing-aware tooling for corpus-wide lesson audio regeneration; ad-hoc loops trip the shared rate limiter
 
-**Status**: open — tooling gap (surfaced 2026-07-29)
+**Status**: RESOLVED (spec 051 US5 / FR-031, 2026-07-29) — `connect-four/scripts/generate-lesson-audio.mjs`
+added: `--lesson <id>` (repeatable/comma-list, default all 15, discovered from `lessons/*.json`),
+`--lang <en|es|all>` (default `all`), `--delay-ms`/`--max-retries` pacing/retry knobs, a real `--help`
+that exits 0 before arg validation, 429 handling that reads the plain-text body via `.text()` (never a
+bare `.json()`) and honors `RateLimit-Reset` before retrying, and a final summary listing exactly which
+(lesson, lang) jobs succeeded/failed so an interrupted run leaves no silent gap. Documented in
+`docs/architecture/server-conventions.md` ("Lesson audio corpus CLI"). Verified via `--help` and a
+single-lesson dry path (`--lesson does-not-exist` → clean 404 handling; a fake local rate-limited server
+→ confirmed the 429/`RateLimit-Reset` retry path). NOT yet run against the full corpus — that's a
+separate, later batch (spends real money).
+
+**Status (historical)**: open — tooling gap (surfaced 2026-07-29)
 **Area**: `connect-four/server/index.js` (`POST /api/admin/lessons/:id/generate-audio`), `connect-four/scripts/`
 
 `generate-audio` is a **per-lesson, per-language** route, and that is the right unit for the admin
@@ -1595,3 +1732,79 @@ so an existing file is updated in place regardless of its slug. Add a `lessonCon
 asserting `basename` slug == `id` and `prefix` == `order` for every lesson file — that alone would
 have caught this before it forked anything. Related: OI-78; the filename prefix is also what
 `lessonLoader.js` uses for ordering (the JSON `order` field is overwritten).
+
+---
+
+## OI-81 — `generate-tts.locale.test.js` is written in vitest syntax and registered in no test script, so it runs nowhere
+
+**Status**: open — dead test (surfaced 2026-07-29, during spec 051 planning)
+**Area**: `connect-four/scripts/generate-tts.locale.test.js`, `connect-four/package.json`
+
+The file looks like a live guard on the CLI's per-language audio paths:
+
+```js
+import { describe, it, expect } from 'vitest';
+import { audioDirForLang, manifestPathForLang } from './generate-tts.js';
+
+describe('generate-tts locale paths', () => {
+  it('en writes to the root coach dir (unchanged)', () => {
+```
+
+It is not run by anything. Both `npm test` and `npm run test:fast` are `node --test` with **explicit
+file lists**, and this path appears in neither (`grep -a "generate-tts.locale" package.json` → no
+match). Adding it to either list would not help on its own: it is written for **vitest**
+(`describe`/`it`/`expect` imported from `'vitest'`), which `node --test` does not provide.
+
+**Why it matters**: it covers `audioDirForLang` / `manifestPathForLang` — the functions that decide
+whether a clip lands in `public/audio/coach/` or `public/audio/coach/es/`. Spec 051 changes
+`generate-tts.js`'s synthesis call path, so a reader can easily believe this locale behavior is
+regression-guarded when nothing executes these assertions. A green `test:fast` says nothing about them.
+
+**If picked up**: either port it to `node --test` (`node:test` + `node:assert/strict`, matching every
+other test in the repo) and add it to **both** the `test` and `test:fast` lists, or delete it. Do not
+leave it as-is. Note the general trap it exemplifies — because both scripts enumerate files
+explicitly, **a new test file added to neither list runs nowhere and fails silently**; check
+registration whenever adding a test. Related: OI-78 (same `generate-tts.js` / lesson-audio tooling area).
+
+## OI-82 — 5 reason-engine tests are permanently red: they read `server/scripts/*.jsonl` but the corpora live in `server/scripts/fv_suff/`
+
+**Status**: deferred (out of scope for spec 051 — pre-existing and unrelated to audio/TTS)
+**Area**: `connect-four/server/tests/{branchInvariance,causalLinksComposers,reasonRenderFixes,renderCoverageCorpus,renderCoverageUniverse}.test.mjs`
+**Discovered**: spec 051 / Epic 5, 2026-07-30
+
+Five tests in `test`/`test:fast` fail on every run with `ENOENT`, all from one cause: they build their
+corpus path as `join(__dirname, '../scripts/reason_evidence_boards_coverage_<ts>.jsonl')`, but no such
+file exists at `server/scripts/` — the coverage corpora live one directory deeper, in
+`server/scripts/fv_suff/`. Verified at source:
+
+```
+$ ls connect-four/server/scripts/reason_evidence_boards_coverage_*.jsonl
+zsh: no matches found
+$ ls connect-four/server/scripts/fv_suff/reason_evidence_boards_coverage_*.jsonl
+.../fv_suff/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl
+.../fv_suff/reason_evidence_boards_coverage_2026-07-03T17-14-51Z.jsonl
+$ grep -a reason_evidence_boards server/tests/renderCoverageCorpus.test.mjs
+const CORPUS = join(__dirname, '../scripts/reason_evidence_boards_coverage_2026-07-02T11-37-56Z.jsonl');
+```
+
+Reproduces identically on the **main checkout**, so it is repo-wide, not a worktree artifact.
+
+**Why it matters — this is worse than 5 red tests.** These are the render-coverage and branch-invariance
+guards for the blunder-`reason` engine (see `docs/architecture/reason-INVARIANTS.md`). They currently
+assert **nothing**: the failure is a file-open, so the actual coverage walk never executes. Any reason-engine
+regression they were written to catch would ship undetected. Worse, a permanently-red baseline trains every
+agent and every human to read "5 failures" as normal — spec 051 spent coordination effort in six separate
+batches distinguishing these from real regressions, and the spec's own `tasks.md` (T002/T057) mis-recorded
+the count as *two*, which is itself evidence the baseline is not being looked at.
+
+**Why deferred**: entirely unrelated to spec 051's audio/TTS scope, and touching the reason engine requires
+reading the four mandatory docs named in `CLAUDE.md` first — not something to do incidentally at the tail of
+an unrelated epic.
+
+**If picked up**: first confirm whether `fv_suff/` is the intended home (the corpora may have been moved
+there deliberately by a later fv-sufficiency pass) — if so this is a 5-line path fix; if the files were meant
+to stay at `scripts/`, the move is the bug. **Do not just make the tests green**: after fixing the path,
+confirm each of the 5 actually exercises its assertions and would go red on a real violation — a test that
+has never run once is not known to work. Read `docs/architecture/reason-INVARIANTS.md` (esp. I12) and
+`reason-DECISIONS.md` before changing anything under `reason_engine/`. Related: OI-81 (another test
+registered nowhere / running nowhere — same class of silently-absent coverage).

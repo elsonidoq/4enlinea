@@ -515,15 +515,23 @@ verification in `staging_checks.md` under this epic.
 
 ## Epic 5 — Audio Verification & TTS Management
 
-**Intent:** Give the owner one place to generate, audition, and approve **every** clip in the app, and close
-the TTS defects that survive the content pass. **Rescoped 2026-07-29** (see Non-obvious facts): the bulk
-generation this epic was originally built around has since shipped from a parallel session, so what remains
-is verification, the missing admin surface, and four correctness bugs.
+**Intent:** Give the owner one place to generate, audition, and approve **every** clip in the app; close
+the TTS defects that survive the content pass; and make the stale-model class of drift that produced OI-32
+structurally impossible to repeat. **Rescoped 2026-07-29** (see Non-obvious facts): the bulk generation this
+epic was originally built around has since shipped from a parallel session, so what remains is verification,
+the missing admin surface, three correctness bugs (a fourth, one-liner localization, is its own story —
+US5.4), a confirmed-stale English coach fleet that needs regenerating, and a single-synthesis-path
+guarantee.
 
 **Issues covered:** OI-42 (lesson audio unmanageable from `/admin/audio` — the remaining headline),
-OI-45 (regenerating an approved clip publishes it unapproved), OI-26 (cleanup nulls audio cross-locale),
-OI-23 (deep-reveal TTS 400s on the opening move), OI-28 (blunder one-liner has no locale context),
-OI-32 (stale `tts-1` English coach clips — **status unverified**, see below).
+OI-45 (regenerating an approved clip publishes it unapproved — decision settled below),
+OI-26 (cleanup nulls audio cross-locale), OI-23 (deep-reveal TTS 400s on the opening move),
+OI-28 (blunder one-liner has no locale context — own user story, see below),
+OI-32 (stale `tts-1` English coach clips — **CONFIRMED STALE**, see below),
+OI-78 (no pacing-aware tooling for corpus-wide **lesson** audio regeneration — the coach fleet already has
+a working server-side bulk path, `generate-all scope:'all'`; the real gap is the per-lesson,
+per-language admin endpoint, which makes a full lesson-corpus pass 15 × 2 = 30 separate HTTP requests
+against the shared rate limiter).
 **Verify-and-close only** (content appears shipped, not yet confirmed end-to-end): OI-65 (subsumes OI-9,
 OI-43's remaining half, OI-64 item 2), OI-27.
 
@@ -535,33 +543,90 @@ OI-43's remaining half, OI-64 item 2), OI-27.
    in a second index. Any admin UI must respect that.
 3. Generation runs **locally only** (FR-012a) — `OPENAI_API_KEY` is in `connect-four/server/.env`; remote
    containers have no `.env` at all, which is why OI-65 stalled.
+4. **OI-45: keep publish-immediately, add a warning (not an approval gate).** A re-recorded clip at an
+   already-approved slug goes live at once, same as today — it does not go silent pending review. The gap
+   this leaves (a bad take can go live) is closed by adding an explicit warning to the admin UI's per-clip
+   generate button, matching the warning the CLI (`connect-four/scripts/generate-tts.js`) already shows.
+   Rejected alternative: gating playback on approval, because it can take a *working* clip offline the
+   moment someone clicks regenerate.
+5. **Single synthesis path is config-ownership-by-the-shared-path, not a consolidation (owner
+   requirement).** `connect-four/server/ttsProvider.js` is **already** the only file in the codebase that
+   talks to the TTS provider directly, and all six call sites (`server/index.js:3688,3727,3761,3953`,
+   `server/lessonAudio.js:24`, `scripts/generate-tts.js:364`) already import `synthesize()`/
+   `buildTtsRequest()` from it — there is no consolidation left to do. Five of the six already pass full
+   per-language config (voice, speed, model, `instructions` from `readTtsConfig(lang)` +
+   `buildTtsInstructions`). The **sole** defective caller is `scripts/generate-tts.js:363-366`, whose
+   `synthesizeAndWrite()` calls `synthesize(value)` with no options at all — hardcoded fallback voice
+   `alloy`, no instructions, and its `lang` argument never reaching synthesis. The fix is **not** "wire up
+   the last caller" as a one-off — it's making omission **inexpressible**: the shared entry point's
+   signature must resolve voice model/voice/speed/instructions internally from the requested language, so a
+   caller can supply only text + language and cannot supply or omit the rest. Concretely:
+   - Change `ttsProvider.js`'s shared entry point signature so voice configuration is resolved internally
+     from the requested language; no caller constructs or supplies its own model/voice/instructions.
+   - That entry point must **refuse** a legacy model (`tts-1`, `tts-1-hd`) rather than silently degrade:
+     those models ignore `instructions` outright, so a model override is equivalent to shipping an unstyled
+     clip — exactly how OI-32 happened. Also remove `tts-1`/`tts-1-hd` from every selectable set
+     (`VALID_TTS_MODELS` in `ttsConfig.mjs`, the `TTS_MODELS` dropdown in `AdminAudioPage.jsx`'s config
+     editor and preview sandbox) so an unsynthesizable config can't even be saved.
+   - Add a regression test at the seam asserting every synthesis request carries the current voice model
+     and non-empty, **language-correct** `instructions`; a grep-based lint that no file outside the shared
+     module constructs a TTS request directly is an acceptable complement, not a substitute for the test.
+   - This is what makes OI-32 closable as "fixed and prevented," not just "fixed once."
 
 **Non-obvious facts**
-- **Content state, re-measured 2026-07-29 after the rescope** (the epic's original "12 of 15 lessons have no
-  audio" premise is dead — a parallel session shipped the generation mid-authoring):
-  - **Lesson narration: complete on disk.** All 15 lessons carry `audio` **and** `audio_es` on every
-    message, and **all 282 referenced paths resolve to a file that exists** (checked, not assumed).
+- **Content state, re-measured 2026-07-29 through the production walkers** (`collectMessages()` /
+  `collectReferencedAudio()` in `connect-four/server/lessonAudio.js` — the epic's original "12 of 15 lessons
+  have no audio" premise is dead; a parallel session shipped the generation mid-authoring):
+  - **Lesson narration: complete on disk, across all three audio field families.** `collectMessages()` yields
+    three families, not two — `audio` (coach + socratic messages) **and** `infoProseAudio` (the slide prose
+    paragraph, added by commit `65b703b` "info prose audios", 2026-07-29, the same day this epic was
+    written). Measured through the real walker: `audio` family n=141 (enText/enAudio/esText/esAudio all 141);
+    `infoProseAudio` family n=66 (all 66). **Totals: 207 messages / 414 audio fields / 348 unique mp3s** —
+    not "282 referenced paths" as an earlier draft of this epic stated. `missing audio for existing text: 0`;
+    `referenced 348, disk 348, ORPHANS 0, refs-missing-on-disk 0` — the fleet is already clean and
+    `prune-audio` reporting `{deleted: 0}` is achievable today.
   - **Spanish coach fleet: complete.** `public/audio/coach/es/` holds 217 mp3s; `server/tts-registry.es.json`
     has 218 entries, 217 `approved` + 1 `ineligible` — identical counts to English. OI-27 is effectively done.
-  - **OI-32 (English clips still on `tts-1`) is UNVERIFIED and must be settled first.** The registry records
-    `key/slug/status/reason/generated_at/approved_at` and **no `model` field**, so it cannot answer the
-    question. All 217 English clips share an `mtime` of 2026-07-18 12:11 — consistent with a bulk
-    regeneration after the model switch, but `mtime` is also what a `git checkout` produces, so it is not
-    evidence. Determine it from `generated_at` versus the model-switch commit, or by re-synthesising one key
-    and comparing bytes — do not assume either way.
+  - **OI-32 (English clips still on `tts-1`) is CONFIRMED STALE, not unverified.** The registry has no
+    `model` field, but it does have `generated_at`, and that settles it: `server/tts-registry.json`
+    `generated_at` histogram `{2026-06-19: 215, 2026-07-13: 1, 2026-07-14: 1}`, max
+    `2026-07-14T19:58:29.012Z`; `server/tts-registry.es.json` histogram `{2026-07-17: 217}` (entirely
+    post-switch — Spanish is fine). Model-switch commits: `9d0e952` (2026-07-14 16:53:48 -0300) and
+    `ff196c9` (2026-07-14 17:16:59 -0300) "default TTS model to gpt-4o-mini-tts (retire tts-1)". **215 of 217
+    English coach clips were synthesized ~3.5 weeks before the switch.** The default model lives at
+    `connect-four/server/ttsProvider.js:18` (`buildTtsRequest(text, { voice = 'alloy', model =
+    'gpt-4o-mini-tts', speed = 1.0, instructions } = {})`); `tts-1`/`tts-1-hd` are legacy, English-accented,
+    and **ignore `instructions`** entirely.
+  - **OI-32 covers coach *and* lesson clips — do not narrow it to coach-only.** The coach-clip half is
+    confirmed stale (above). The lesson mp3s were rewritten 2026-07-28/29 and are plausibly current, but
+    that **must be checked, not assumed** — verifying it is a task in US5.1, not an assumption baked into
+    this epic.
   - **Still genuinely open, confirmed at source:** `/admin/audio` has **zero** occurrences of "lesson"
     (OI-42); the TTS guard is still `if (!moveString || …)` (OI-23); the cleanup still filters
     `.in('position_hash', hashes)` with no locale (OI-26).
-  - Re-run before speccing, because this repo has concurrent sessions:
+  - Re-run before speccing, because this repo has concurrent sessions — walk the tree the same way the
+    generator and pruner do, not with `grep`, which is blind to `infoProseAudio`:
     ```bash
-    cd connect-four && for f in lessons/lesson-*.json; do \
-      echo "$(basename $f) audio:$(grep -c '"audio"' $f) audio_es:$(grep -c '"audio_es"' $f)"; done
+    cd connect-four && node -e "
+      const { collectMessages } = require('./server/lessonAudio');
+      const fs = require('fs');
+      let byKey = {};
+      for (const f of fs.readdirSync('lessons').filter(f => f.startsWith('lesson-'))) {
+        const lesson = JSON.parse(fs.readFileSync('lessons/' + f));
+        for (const m of collectMessages(lesson)) {
+          const k = m.audioKey || 'audio';
+          byKey[k] = byKey[k] || { n: 0 };
+          byKey[k].n++;
+        }
+      }
+      console.log(byKey);
+    "
     ```
   - **A resolving path is not a working clip.** Every check above is static; none proves an `es` mp3 contains
     Spanish, plays in the browser, or survives `prune-audio`. That is exactly what US5.1 exists to establish.
 - Audio is content-addressed by a **hash of the text**, so changing model/voice/prompt does **not**
-  regenerate anything (memory `project_tts_audio_cached_by_text`) — this is why OI-32's ~220 English clips
-  are still `tts-1` with no voice styling.
+  regenerate anything (memory `project_tts_audio_cached_by_text`) — this is why OI-32's ~217 English coach
+  clips are still `tts-1` with no voice styling, and exactly the failure mode Settled decision 5 closes off.
 - **Server-cache clobber trap (OI-43, memory `project_lesson_disk_edit_cache_clobber`):** nothing watches
   `lessons/`. A server booted before a disk edit holds a stale cache; `generate-audio` reads that cache and
   `saveLessonFile`s it back, **reverting the edit while returning 200**. Restart `$API_PORT` first and
@@ -572,33 +637,47 @@ OI-43's remaining half, OI-64 item 2), OI-27.
 - Serve audio from `$VITE_PORT`, never `$API_PORT` — the API does not serve `public/`
   (memory `project_lesson_progression_audio_traps`).
 - Approval gates **entry into the manifest**, not playback: a regenerated clip at an already-approved slug
-  goes live immediately, unreviewed, and the old take is recoverable only via `git checkout` (OI-45).
+  goes live immediately, unreviewed, and the old take is recoverable only via `git checkout` (OI-45 — kept
+  as the intended behaviour per Settled decision 4, now with an admin-UI warning).
 - OI-23 is a one-character class of bug: `!moveString` rejects the empty-but-valid opening movestring while
   the regex itself allows `{0,42}`.
+- The TTS generator CLI lives at **`connect-four/scripts/generate-tts.js`** (575 lines) — **not**
+  `connect-four/server/scripts/`.
+- OI-28's actual blocker is upstream of the prompt string: the blunder one-liner is generated in the
+  server-side harvest pipeline with **no request/`req.locale` context**, so `Accept-Language` cannot reach
+  it. The `LANGUAGE_RULE` edit at `connect-four/server/llmCoachHelpers.js:617` is necessary but not
+  sufficient — see US5.4.
 
 **Authoritative sources of truth**
 - `docs/architecture/lesson-editor.md` §"Window counts", §"Fields the learner UI ignores", the
   translate-and-voice rule
 - `docs/architecture/coach-audio-conventions.md` (registry/manifest drift, cache TRUNCATE on deploy)
-- `docs/open_issues.md` — OI-65, OI-27, OI-32, OI-42, OI-45, OI-26, OI-23, OI-28
+- `docs/open_issues.md` — OI-65, OI-27, OI-32, OI-42, OI-45, OI-26, OI-23, OI-28, OI-78
 - `docs/architecture/frontend-conventions.md` (Spanish = Argentinian voseo)
+- `connect-four/server/lessonAudio.js` — `collectMessages()`/`collectReferencedAudio()`, the shared walkers
+- `connect-four/server/ttsProvider.js` — `buildTtsRequest`, the natural home for the single synthesis path
 - memories: `project_tts_audio_cached_by_text`, `project_lesson_disk_edit_cache_clobber`,
   `project_lesson_progression_audio_traps`, `project_spanish_output_silent_fallback`
 
 **User stories & tasks**
 
 **US5.1 — Prove the shipped audio actually works, then close its issues (8 tasks).** Everything here is
-verification of a parallel session's output — assume nothing from the static checks above. Add a test
-asserting every `text`/`text_es` has a matching `audio`/`audio_es` **whose file exists** (the static check
-becomes a permanent gate); run `prune-audio` and confirm `{deleted: 0}` — the `collectReferencedAudio` /
-`generateLessonAudio` walkers are independent, so a partially-wired generation pass shows up here as
-orphan deletions; play at least one `es` lesson clip and one `es` coach clip in a real browser on
-`$VITE_PORT` (**not** `$API_PORT`, which does not serve `public/`) and confirm they are Spanish, not an
-English fallback; run the OI-43 V7 Socratic checks (bubble narrates, stops on navigate-away, mp3 200) in a
-hint-free run and a separate hint run; audition a sample for Argentinian-accent quality; settle **OI-32**
-(are the 217 English coach clips `tts-1` or `gpt-4o-mini-tts`?) from `generated_at` vs the model-switch
-commit, and regenerate + re-approve only if the answer is `tts-1`; close out OI-65/OI-27 — and OI-32 if it
-proves already done — per the Issue closeout convention.
+verification of a parallel session's output — assume nothing from the static checks above, and do not
+re-add bulk generation tasks. Add a test asserting every entry `collectMessages()` yields has a populated
+`audio`/`audio_es` (and, where applicable, `infoProseAudio`/`infoProseAudio_es`) field per language **whose
+file exists** — derived from the production walker, never a hand-listed set of field names, so it stays
+correct if a fourth field family is ever added; run `prune-audio` and confirm `{deleted: 0}` — the
+`collectReferencedAudio` / `generateLessonAudio` walkers are independent, so a partially-wired generation
+pass shows up here as orphan deletions; run the OI-43 V7 Socratic checks (bubble narrates, stops on
+navigate-away, mp3 200) in a hint-free run and a separate hint run, as an **automated** test (audio-element
+playback state), not owner listening; check whether the lesson mp3s (rewritten 2026-07-28/29) are in fact
+current post-model-switch — the lesson-clip half of OI-32 — rather than assuming it from the rewrite date;
+close out OI-65/OI-27 per the Issue closeout convention (OI-32 itself does not close here — see US5.5).
+**The by-ear checks — one `es` lesson clip and one `es` coach clip confirmed genuinely Spanish, plus an
+Argentinian-accent audit — are not performed or gated here.** They are appended to `staging_checks.md`
+("Epic 5 — Audio Verification & TTS Management (open-issues-epics.md, spec 051)") as staging sign-off
+items and do not block US5.1 or US5.5; the silent-failure risk they guard against (a missing Spanish clip
+falling back to English with no error) remains covered by the blocking structural checks above.
 
 **US5.2 — Lesson audio in `/admin/audio` (9 tasks).** Add a Lessons section listing each lesson's messages
 per language with status **derived live from the lesson JSON**; inline player resolving the `sha256(text)`
@@ -606,22 +685,56 @@ filename; per-message generate; respect the en/es toggle; do not introduce a sec
 `lesson-editor.md`. This is now the epic's headline: it is the only way to audition a lesson clip in-app,
 and US5.1 will make its absence felt immediately.
 
-**US5.3 — TTS correctness fixes (8 tasks).** OI-45: decide whether approval gates playback (remove the slug
-from the manifest on regenerate) or stays a publishing record, and apply the prompt/warning to the admin UI
-path too — with 217 approved clips per language now live, an unreviewed regeneration is no longer
-hypothetical; OI-26: scope the cleanup `.update()` by `(position_hash, locale)`; OI-23: accept the empty
-movestring; OI-28: thread a locale into `buildBlunderExplainPrompt`'s `LANGUAGE_RULE`; regression-test each.
+**US5.3 — TTS correctness fixes (6 tasks).** OI-45: apply the regenerate-warning to the admin UI's per-clip
+generate button (Settled decision 4 — publish-immediately stays, the CLI's existing warning is the model);
+OI-26: scope the cleanup `.update()` by `(position_hash, locale)`; OI-23: accept the empty movestring;
+regression-test each.
+
+**US5.4 — Localize the blunder one-liner, OI-28 (6 tasks).** Its own story because the fix is not just the
+`LANGUAGE_RULE` string: name where a locale comes from through the server-side harvest pipeline (today it
+has no request/`req.locale` context at all, so `Accept-Language` never reaches
+`buildBlunderExplainPrompt` at `connect-four/server/llmCoachHelpers.js:586`); thread that locale from the
+chosen caller down to the English-only `LANGUAGE_RULE` at `:617`; and decide what happens to one-liners
+already cached in English in `explanation_cache` — the same table OI-26 touches, whose primary key became
+composite `(position_hash, locale)` in migration 059 — either backfill them or explicitly document them as
+not backfilled in `NOT included`.
+
+**US5.5 — Regenerate the stale English coach fleet and lock in a single synthesis path (sequenced after
+US5.2, and after the single-synthesis-path fix below — regenerating through today's still-defective CLI
+path would just produce 217 fresh but still-unstyled clips) (10 tasks).** OI-32's coach-clip half is
+confirmed stale (see Non-obvious facts) — this story fixes it and prevents recurrence. First, implement
+Settled decision 5's single synthesis path (resolve voice config internally from the requested language in
+`ttsProvider.js`, refuse legacy models, add the seam regression test). Then regenerate all 217 English
+coach clips onto `gpt-4o-mini-tts` using the **existing** `POST /api/admin/audio/generate-all`
+(`scope: 'all'`) endpoint — this already re-synthesizes every eligible key server-side inside one HTTP
+request with no rate-limiter exposure, so it needs **no new tooling**; re-approve all 217 using the US5.2
+admin surface, which is what makes re-approving 217 clips tractable. Separately, build the OI-78
+pacing-aware `connect-four/scripts/generate-lesson-audio.mjs` tool — the real gap, because the **lesson**
+admin path is per-lesson, per-language (`POST /api/admin/lessons/:id/generate-audio`), making a full
+corpus pass 15 × 2 = 30 requests against the shared rate limiter — and use it only if US5.1's currency
+check finds the lesson fleet is in fact stale; otherwise **confirm** (do not regenerate) that the lesson
+clips are current, closing the loop opened in US5.1. Close out **OI-32** and **OI-78** per the Issue
+closeout convention once the regeneration, the lesson-tool deliverable, and the single-path guarantee all
+land.
 
 **Acceptance criteria**
-- Every `coachMessages[]` and `socratic.messages[][]` entry in all 15 lessons has both `audio` and
-  `audio_es` **and both files exist**; a test asserts it (not a one-off script run).
+- Every entry `collectMessages()` yields (across the `audio` and `infoProseAudio` families, in all 15
+  lessons) has a populated audio field per language **and both files exist**; a test derived from
+  `collectMessages()` asserts it (not a one-off script run, and not a hand-listed set of field names).
 - `prune-audio` reports `{deleted: 0}`.
-- A Spanish learner never hears an English clip under Spanish text — verified by ear in a real browser, not
-  by field presence.
-- OI-32 is answered with evidence: either the English fleet is confirmed on `gpt-4o-mini-tts`, or it is
-  regenerated and re-approved.
+- A Spanish learner never hears an English clip under Spanish text: guarded structurally in-story by the
+  two checks above; the by-ear confirmation (one lesson clip, one coach clip, plus an accent audit) is a
+  `staging_checks.md` sign-off item, not a blocking in-story gate.
+- OI-32 is closed with evidence for **both** halves: the English coach fleet has been regenerated onto
+  `gpt-4o-mini-tts` and re-approved, and the lesson clips have been explicitly confirmed current (not
+  assumed from their rewrite date).
+- Exactly one code path synthesizes any TTS clip; it always applies the current voice model and non-empty
+  voice-style `instructions`; it refuses legacy models that ignore `instructions`; a regression test at the
+  seam enforces this.
 - The deep reveal of an opening-move blunder is spoken.
 - Every clip in the app — coach *and* lesson, both languages — can be auditioned from `/admin/audio`.
+- The blunder one-liner is generated in the learner's locale, with an explicit, documented decision on
+  already-cached English rows in `explanation_cache`.
 - Every `OI-N` under this epic's **Issues covered** is closed out in `docs/open_issues.md` per the
   Issue closeout convention at the top of this file — resolved-with-date, or still open with a dated
   UPDATE naming exactly what remains. A shipped fix with a stale backlog entry is an incomplete story.
@@ -630,10 +743,11 @@ movestring; OI-28: thread a locale into `buildBlunderExplainPrompt`'s `LANGUAGE_
 - Translating any new text (all 15 lessons are already translated).
 - Changing the TTS vendor or the text-hash caching scheme.
 - Lesson *content* edits (Epic 6).
+- Gating clip playback behind approval (OI-45 Option A) — rejected, see Settled decision 4.
 
 **Open questions**
-- OI-45: gate playback on approval (a regeneration can silently take a working clip offline) or keep the
-  current publish-immediately behavior with an explicit warning?
+- None currently open for this epic. OI-45 (approval-gating vs. publish-immediately) is resolved — see
+  Settled decision 4.
 
 ---
 

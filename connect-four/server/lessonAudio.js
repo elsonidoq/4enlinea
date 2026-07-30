@@ -3,7 +3,7 @@
  * server/insertGameBlunder.js's extraction pattern for testability).
  *
  * Synthesizes narration for concept-slide coachMessages via server/ttsProvider.js's
- * synthesize(text) — the sole reusable TTS seam for free-text lesson content.
+ * synthesize(text, lang) — the sole reusable TTS seam for free-text lesson content.
  * NOT the i18n-keyed coach TTS pipeline (scripts/generate-tts.js / speakCoachMessage).
  *
  * Text-hash keyed identity: identical text -> same file (no redundant re-synth);
@@ -22,8 +22,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { synthesize as ttsSynthesize } from './ttsProvider.js';
-import { readTtsConfig } from './ttsConfig.mjs';
-import { buildTtsInstructions } from './ttsInstructions.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -149,19 +147,25 @@ export function collectMessages(lesson) {
  * unset/unchanged and does not abort the batch.
  *
  * D1 (lesson audio i18n): `lang='es'` reads `text_es`/`audio_es` instead of
- * `text`/`audio`, and threads a Spanish accent `instructions` directive through
- * to `synthesize` — mirroring the admin coach-audio pattern at
- * server/index.js's `/api/admin/audio/generate` (readTtsConfig() ->
- * buildTtsInstructions(basePrompt, lang) -> synthesize(text, {...})). Without
- * this, lesson clips were always synthesized with no `instructions`/`voice`/
- * `speed`/`model` opts at all and came out English-accented regardless of lang.
+ * `text`/`audio`. Voice/model/speed/instructions (including the Spanish accent
+ * directive) are resolved by `synthesize(text, lang)` itself now — see
+ * server/ttsProvider.js's `resolveSynthesisConfig` — so this function no longer
+ * touches `readTtsConfig`/`buildTtsInstructions` directly (FR-026/FR-027).
+ *
+ * `locator` (optional): when present, only the single `collectMessages()` entry whose
+ * `locator` matches exactly is (re)synthesized — every other message is left untouched.
+ * Defaults to `null`, which preserves byte-identical full-lesson behavior. A locator that
+ * matches no entry is a no-op: `generated`/`failed` both come back empty, not an error
+ * (see `contracts/admin-lesson-audio-endpoints.md`'s stale-locator settled shape).
  *
  * @param {object} lesson - full lesson object (lesson.slides[].coachMessages[] + lesson.socratic.messages[phase][])
- * @param {{ lang?: 'en'|'es', synthesize?: (text: string, opts?: object) => Promise<Buffer>, dir?: string }} [deps]
+ * @param {{ lang?: 'en'|'es', synthesize?: (text: string, lang: string) => Promise<Buffer>, dir?: string, locator?: string|null }} [deps]
  *   `dir` overrides LESSON_AUDIO_DIR — test-only seam, defaults to production dir.
+ *   `synthesize` is an injectable seam (FR-027) — defaults to the shared production
+ *   entry point (`ttsSynthesize`), swappable for a test stub with signature `(text, lang)`.
  * @returns {Promise<{ lesson: object, generated: string[], failed: Array<{locator: string, error: string}> }>}
  */
-export async function generateLessonAudio(lesson, { lang = 'en', synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR } = {}) {
+export async function generateLessonAudio(lesson, { lang = 'en', synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR, locator: onlyLocator = null } = {}) {
   const generated = [];
   const failed = [];
 
@@ -169,17 +173,14 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
   // (coach messages use text/audio, a slide's prose uses infoProse/infoProseAudio).
   const localized = (key) => (lang === 'es' ? `${key}_es` : key);
 
-  const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
-  const instructions = buildTtsInstructions(basePrompt, lang);
-
-  // Logged so a no-op click is diagnosable from the server output alone: `lang`
-  // shows whether the admin selector actually sent 'es' (it defaults to 'en' on
-  // every load), and the voice/instructions show which tts-prompt.<lang>.json
-  // was picked up after a config edit.
-  log(`lesson=${lesson?.id ?? '?'} lang=${lang} ` +
-      `voice=${voice} speed=${speed} model=${model} instructionsChars=${instructions?.length ?? 0}`);
+  // Voice/model/speed/instructions resolution now lives inside synthesize()
+  // itself (server/ttsProvider.js's resolveSynthesisConfig) — it logs its own
+  // diagnostic line once per call, so nothing is dropped here (research.md R1a).
+  log(`lesson=${lesson?.id ?? '?'} lang=${lang} starting`);
 
   for (const { message, locator, textKey, audioKey } of collectMessages(lesson)) {
+    if (onlyLocator && locator !== onlyLocator) continue;
+
     const textField = localized(textKey);
     const audioField = localized(audioKey);
     const text = message[textField];
@@ -195,7 +196,7 @@ export async function generateLessonAudio(lesson, { lang = 'en', synthesize = tt
 
     try {
       log(`  ${locator} synthesizing ${text.length} chars -> ${expectedBasename}`);
-      const buffer = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+      const buffer = await synthesize(text, lang);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, expectedBasename), buffer);
       message[audioField] = `/audio/lessons/${expectedBasename}`;

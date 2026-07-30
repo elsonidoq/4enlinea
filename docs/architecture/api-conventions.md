@@ -925,10 +925,12 @@ before that wiring existed the button sent no body, so toggling to Spanish silen
 
 **Behavior**: walks `collectMessages(lesson)` — concept-slide `coachMessages[]`, each slide's
 **`infoProse`**, and `socratic.messages[phase][]` — and for every entry whose text field for the target
-language is non-empty, calls `synthesize(text, { instructions, speed,
-voice, model })` where config comes from `readTtsConfig(lang)` (per-language `server/tts-prompt.<lang>.json`
-— `es` carries the Argentinian-persona prompt) and `instructions = buildTtsInstructions(basePrompt, lang)`
-(appends the Spanish accent directive for `es`). Writes `public/audio/lessons/<hash>.mp3` and sets the
+language is non-empty, calls `synthesize(text, lang)` (spec 051 FR-026/FR-027: `server/ttsProvider.js`'s
+shared entry point resolves voice/model/speed/instructions internally from `lang` via
+`resolveSynthesisConfig` — `readTtsConfig(lang)` reads the per-language `server/tts-prompt.<lang>.json`,
+`es` carries the Argentinian-persona prompt, and `buildTtsInstructions` appends the Spanish accent
+directive for `es`; this endpoint no longer resolves that config itself). Writes
+`public/audio/lessons/<hash>.mp3` and sets the
 matching audio field. Spanish text hashes to a **different** filename than English, so the two coexist in
 one flat dir. Per-message failures are caught individually — one bad synth does not abort the batch.
 Persists via `saveLessonFile` + `reloadLessons()`. **`prune-audio` must stay `_es`-aware**
@@ -960,6 +962,67 @@ whose synthesis failed this run.
 
 **Errors**: `403` (non-localhost or non-admin), `404` (lesson not found), `500` (unexpected write error
 — per-message TTS errors are non-fatal, see above).
+
+**`locator` field (spec 051 US2, optional)**: `{ lang, locator }` — when present, only the single
+`collectMessages(lesson)` entry whose `locator` matches exactly is (re)synthesized; every other message's
+`audio`/`audio_es` is left untouched. Absent (the default) is unchanged full-lesson behavior — this is
+what `AdminLessonEditorScreen`'s existing "Generate audios" button still sends. A `locator` that matches
+no entry (e.g. the lesson JSON was edited between the admin page's last load and the click) is a
+**settled no-op**: `200 { generated: [], failed: [] }`, never a `404` — matching this endpoint's existing
+philosophy of never erroring on a stale-state mismatch. `connect-four/src/pages/AdminAudioPage.jsx`'s new
+Lesson Audio Manager section (see `lesson-editor.md`) is the only caller that sets this field today; it
+sends the locator of whichever single message's Generate/Regenerate button was clicked.
+
+### `GET /api/admin/lessons/:id/audio-status` (spec 051 US2)
+
+Read-only companion to `generate-audio` — powers the Lesson Audio Manager section of `/admin/audio`
+(`src/pages/AdminAudioPage.jsx`; see `lesson-editor.md` for the client-side shape). Same double-gate
+(`requireLocalhost, requireAdmin`, in that order) as every sibling `/api/admin/lessons/*` route.
+
+**Path param**: `id` — lesson id; `404 { error: 'not_found' }` if it doesn't exist.
+
+**Query param**: `lang` — `'en'` (default) or `'es'`; anything else → `400 { error: 'lang must be en or
+es' }`.
+
+**Behavior**: calls `reloadLessons()` **before** reading, so the response reflects the current on-disk
+lesson JSON even if it was hand-edited after the server booted and no write route has run since (FR-009,
+closes OI-43 for this read path — the in-memory lesson array is otherwise refreshed only by the write
+routes, none of which run on a `GET`). Then walks `collectMessages(lesson)` on the **raw** lesson (same
+reasoning as `generate-audio` above — `getLesson()` would strip `_es`), resolves each entry's localized
+`text`/`audioPath` the same way `generateLessonAudio` does, and checks `hasAudio` via `existsSync` against
+`LESSON_AUDIO_DIR` (not just "the field is non-empty" — a field pointing at a deleted file correctly
+reports `hasAudio: false`). Entries with empty/whitespace text for the requested language are **excluded
+entirely** — that is "nothing to say," not "missing audio," and must not render as a false-positive
+missing row. Two entries with identical text sharing one `audioPath` both appear as separate rows; this is
+correct, not a bug — do not deduplicate.
+
+**Response** (`200 OK`):
+```json
+{
+  "lessonId": "threat-vocabulary",
+  "lang": "en",
+  "groups": [
+    {
+      "label": "Slide 1",
+      "messages": [
+        { "locator": "slides[0].coachMessages[0]", "text": "...", "audioPath": "/audio/lessons/abc123.mp3", "hasAudio": true },
+        { "locator": "slides[0].infoProse", "text": "...", "audioPath": null, "hasAudio": false }
+      ]
+    },
+    {
+      "label": "Socratic",
+      "messages": [
+        { "locator": "socratic.messages.ask[0]", "text": "...", "audioPath": "/audio/lessons/def456.mp3", "hasAudio": true }
+      ]
+    }
+  ]
+}
+```
+Groups are labeled `"Slide N"` (1-indexed, derived from the locator's `slides[N-1]` prefix) or
+`"Socratic"`; a lesson with no Socratic board (`socratic: null`) simply has no `"Socratic"` group — not an
+error.
+
+**Errors**: `400` (invalid `lang`), `403` (non-localhost or non-admin), `404` (lesson not found).
 
 ### `POST /api/admin/lessons/prune-audio`
 

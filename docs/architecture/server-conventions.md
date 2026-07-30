@@ -883,10 +883,15 @@ directly `node --test`-able without an Express app or a real TTS provider.
   **Not covered:** `scripts/translate-lessons.mjs` walks messages *independently* (its locators carry a
   `.text` suffix and it runs on raw pre-localization lessons) and keeps a hand-synced `SOCRATIC_PHASES`
   copy. Adding a message location means editing **both** — see "Lesson translation script" below.
-- **`generateLessonAudio(lesson, { lang = 'en', synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR } = {})`** —
+- **`generateLessonAudio(lesson, { lang = 'en', synthesize = ttsSynthesize, dir = LESSON_AUDIO_DIR, locator = null } = {})`** —
   dependency-injected `synthesize` and `dir` params are the test seam (a test passes a stub synthesize
   function and a temp dir; production code omits both and gets the real `server/ttsProvider.js`
-  `synthesize` + the real `public/audio/lessons/` dir). Walks via `collectMessages`, so it covers concept
+  `synthesize` + the real `public/audio/lessons/` dir). `locator`, when set, (re)synthesizes only the
+  single `collectMessages()` entry whose locator matches exactly. As of spec 051 (FR-026/FR-027),
+  `synthesize` is called as `synthesize(text, lang)` — voice/model/speed/instructions resolution moved
+  **inside** `server/ttsProvider.js`'s `synthesize`/`resolveSynthesisConfig`, so this function no longer
+  calls `readTtsConfig`/`buildTtsInstructions` itself; a stub passed via the `synthesize` seam must accept
+  `(text, lang)`, not `(text, opts)`. Walks via `collectMessages`, so it covers concept
   slides (coach messages **and** `infoProse`) **and** `socratic.messages`. `lang='es'` reads the `_es`
   sibling of each entry's `textKey` and writes the `_es` sibling of its `audioKey`. **Regenerates
   unconditionally**: the text hash keys the *filename*, but the voice/prompt/speed/model live in
@@ -909,6 +914,56 @@ directly `node --test`-able without an Express app or a real TTS provider.
   `scripts/translate-lessons.mjs` keeps its own copy that must stay in this exact order.
 - **`LESSON_AUDIO_DIR`** — exported constant (`public/audio/lessons/`), overridable per-call via the
   `dir` param for tests.
+
+### Lesson audio corpus CLI (`scripts/generate-lesson-audio.mjs`)
+
+Spec 051 US5 / FR-031 / OI-78. The admin lesson-audio path is per-lesson, per-language —
+`POST /api/admin/lessons/:id/generate-audio` (body `{ lang, locator? }`) regenerates one lesson in one
+language per call. A full corpus pass is 15 lessons × 2 languages = 30 separate HTTP requests, all
+against the same shared `app.use('/api/', makeLimit(120))` 120-req/min limiter every other `/api/*`
+route shares (see "Rate limiting" above). Firing those 30 requests back-to-back (a naive shell loop of
+curls) trips the limiter almost immediately and fails most of the run identically — this is the exact
+failure mode `scripts/generate-tts.js` avoids for the *coach* pipeline by batching server-side
+(`generate-all`), but no such bulk endpoint exists for lesson audio (deliberately — see FR-031: "This
+does NOT add a bulk re-synthesize-approved command to the existing CLI").
+
+`scripts/generate-lesson-audio.mjs` closes that gap client-side instead:
+
+- **`--lesson <id>`** — repeatable (`--lesson a --lesson b`) and/or comma-separated (`--lesson a,b,c`).
+  Defaults to every lesson id discovered by reading `lessons/*.json`'s own `id` field (not the filename)
+  — currently 15.
+- **`--lang <en|es|all>`** — defaults to `all` (both `en` and `es`).
+- **`--delay-ms <n>`** (default `700`) — pacing between requests, keeping a full 30-request run well
+  under the 120/min cap.
+- **`--max-retries <n>`** (default `5`) — retries a `429` per (lesson, lang) job before giving up on that
+  job and moving to the next (a give-up is reported in the final summary, not silently dropped).
+- **`--help` / `-h`** — exits 0 **before** any argument parsing/validation, even with other malformed
+  flags present (see the `feedback_scripts_meaningful_help` convention: purpose, options, defaults, exit
+  0 before required-arg validation).
+
+**429 handling — two landmines this script exists to dodge**: (1) the shared limiter's `429` body is
+**plain text** ("Too many requests, please try again later."), not JSON — a bare `.json()` call throws an
+opaque "Unexpected token" error that hides the real 429, so the script always reads via `.text()` first
+and `JSON.parse`s inside a `try`/`catch`. (2) it honors the response's `RateLimit-Reset` header (seconds
+until the limiter's window resets, from `standardHeaders: true`'s draft-7 shape) rather than a blind
+fixed backoff, so a retry doesn't land back inside the same still-tripped window.
+
+**Resumability (the edge case this task exists for)**: a run interrupted by a network failure or a killed
+process never leaves a silent gap — every (lesson, lang) job's outcome is tracked independently, and the
+final summary lists exactly which jobs succeeded and which failed (with the reason). Re-running is safe:
+`generateLessonAudio` regenerates unconditionally (see above), so re-running the same flags, or narrowing
+to just the failed `--lesson`/`--lang` pairs, always produces the current, correct clips — nothing is
+skipped as "already done" and nothing is double-charged beyond one TTS call per message per re-run.
+
+Requires the local dev API server running and reads `$API_PORT` (falls back to `3001` for the
+un-worktreed main checkout) — see `docs/architecture/worktree-conventions.md`. `requireLocalhost` checks
+the request's socket address, not a header, so no auth token is needed; only that the script runs on the
+same machine as the server.
+
+This script is **lesson** audio only. It is unrelated to `scripts/generate-tts.js` / the admin
+`generate-all` endpoint, which cover the separate i18n-keyed **coach** TTS pipeline (see
+`docs/architecture/coach-audio-conventions.md`) — the two pipelines intentionally do not share code,
+per the "Admin Batch-Generation Modules — Pure-Function Pattern" note above.
 
 ### Lesson translation script (`scripts/translate-lessons.mjs`)
 

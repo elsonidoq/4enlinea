@@ -40,7 +40,7 @@ import { loadLessons, getLessons, getLesson, reloadLessons, getLessonsAll, valid
 import { requireAdmin } from './adminAuth.js';
 import { isValidEvalFilename, isValidEvalSetFilename, feedbackFilenameFor, isFvSuffAnswersFile, gradesFilenameFor, deriveSetFromAnswers } from './evalResultsHelpers.js';
 import { saveLessonFile, deleteLessonFile } from './lessonAdmin.js';
-import { generateLessonAudio, pruneOrphanedLessonAudio } from './lessonAudio.js';
+import { generateLessonAudio, pruneOrphanedLessonAudio, collectMessages, LESSON_AUDIO_DIR } from './lessonAudio.js';
 import { shapeKeyForPuzzle } from './shapeDescriptor.js';
 import { buildGoogleAuthorizeUrl, resolveAuthToken } from './authUtils.js';
 import { logError } from './logger.js';
@@ -254,6 +254,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // ── Input validation ──────────────────────────────────────────────────────────
 
 import { MOVES_RE, validateMoves } from './validateMoves.mjs';
+import { isValidDeepRevealMoveString } from './deepRevealMoveStringGuard.mjs';
 
 // ── Solver process ────────────────────────────────────────────────────────────
 
@@ -918,6 +919,53 @@ app.delete('/api/admin/lessons/:id', requireLocalhost, requireAdmin, (req, res) 
   }
 });
 
+// GET-only, pure read — computes audio status live from on-disk lesson content every
+// call (FR-009, OI-43). reloadLessons() runs first because getLessonsAll()'s in-memory
+// array is otherwise refreshed only by the write routes above, none of which run on
+// this path; without it, an admin viewing status right after editing a lesson JSON by
+// hand (no restart) would see the server's stale boot-time copy.
+app.get('/api/admin/lessons/:id/audio-status', requireLocalhost, requireAdmin, (req, res) => {
+  const rawLang = req.query.lang;
+  if (rawLang !== undefined && !SUPPORTED_LOCALES.includes(rawLang)) {
+    return res.status(400).json({ error: 'lang must be en or es' });
+  }
+  const lang = rawLang ?? 'en';
+
+  reloadLessons();
+  // Raw, `_es`-intact — same reasoning as generate-audio below: getLesson() would
+  // localize and strip the very fields this endpoint needs to report on.
+  const lesson = getLessonsAll().find(l => l.id === req.params.id) ?? null;
+  if (!lesson) return res.status(404).json({ error: 'not_found' });
+
+  const localized = (key) => (lang === 'es' ? `${key}_es` : key);
+  const groupLabel = (locator) => {
+    const m = /^slides\[(\d+)\]/.exec(locator);
+    return m ? `Slide ${Number(m[1]) + 1}` : 'Socratic';
+  };
+
+  const groups = [];
+  const groupByLabel = new Map();
+  for (const { message, locator, textKey, audioKey } of collectMessages(lesson)) {
+    const text = message[localized(textKey)];
+    if (typeof text !== 'string' || text.trim() === '') continue; // "nothing to say" — not missing audio
+
+    const audioPath = message[localized(audioKey)] ?? null;
+    const hasAudio = typeof audioPath === 'string' && audioPath.length > 0
+      && existsSync(join(LESSON_AUDIO_DIR, basename(audioPath)));
+
+    const label = groupLabel(locator);
+    let group = groupByLabel.get(label);
+    if (!group) {
+      group = { label, messages: [] };
+      groupByLabel.set(label, group);
+      groups.push(group);
+    }
+    group.messages.push({ locator, text, audioPath, hasAudio });
+  }
+
+  res.json({ lessonId: lesson.id, lang, groups });
+});
+
 // Requires requireLocalhost — the function declaration below (~:2795 in this file)
 // is hoisted, so it is safe to reference here at module init time.
 app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin, async (req, res) => {
@@ -926,6 +974,8 @@ app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin
     return res.status(400).json({ error: `lang must be one of: ${SUPPORTED_LOCALES.join(', ')}` });
   }
   const lang = rawLang ?? 'en';
+  const rawLocator = req.body?.locator;
+  const locator = typeof rawLocator === 'string' && rawLocator.length > 0 ? rawLocator : null;
 
   // D1: getLesson() applies localizeLesson, which STRIPS all `_es` fields — using it
   // here would both feed generateLessonAudio(lang='es') empty text_es AND destroy
@@ -933,7 +983,7 @@ app.post('/api/admin/lessons/:id/generate-audio', requireLocalhost, requireAdmin
   const lesson = getLessonsAll().find(l => l.id === req.params.id) ?? null;
   if (!lesson) return res.status(404).json({ error: 'not_found' });
   try {
-    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson, { lang });
+    const { lesson: updatedLesson, generated, failed } = await generateLessonAudio(lesson, { lang, locator });
     saveLessonFile(LESSONS_DIR, updatedLesson);
     reloadLessons();
     res.json({ lesson: updatedLesson, generated, failed });
@@ -3686,10 +3736,7 @@ app.post('/api/admin/audio/generate', requireLocalhost, async (req, res) => {
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
-    const instructions = buildTtsInstructions(basePrompt, lang);
-    console.log(`[admin/audio/generate] key=${key} lang=${lang} voice=${voice} speed=${speed} model=${model}`);
-    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    const audio = await synthesize(text, lang);
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
     writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
@@ -3724,10 +3771,10 @@ app.post('/api/admin/audio/preview', requireLocalhost, async (req, res) => {
   const lang = resolveAdminLang(req.body?.lang);
 
   try {
-    const { synthesize } = await import('./ttsProvider.js');
+    const { synthesizeRaw } = await import('./ttsProvider.js');
     const instructions = buildTtsInstructions(prompt, lang);
     console.log(`[admin/audio/preview] lang=${lang} voice=${voice} speed=${speed} model=${model} chars=${text.length}`);
-    const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+    const audio = await synthesizeRaw(text, { instructions: instructions || undefined, speed, voice, model });
     res.type('audio/mpeg').send(audio);
   } catch (err) {
     logError('[admin/audio/preview]', err);
@@ -3759,15 +3806,13 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
     }
 
     const { synthesize } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(lang);
-    const instructions = buildTtsInstructions(basePrompt, lang);
     const audioDir = audioDirForLang(lang);
     mkdirSync(audioDir, { recursive: true });
     let generated = 0;
     const failed = [];
     const total = needsAudio.length;
 
-    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (scope=${scope} lang=${lang} voice=${voice} speed=${speed} model=${model})`);
+    console.log(`[admin/audio/generate-all] starting: ${total} keys to generate (scope=${scope} lang=${lang})`);
 
     for (const entry of needsAudio) {
       try {
@@ -3777,7 +3822,7 @@ app.post('/api/admin/audio/generate-all', requireLocalhost, async (req, res) => 
           continue;
         }
 
-        const audio = await synthesize(text, { instructions: instructions || undefined, speed, voice, model });
+        const audio = await synthesize(text, lang);
         writeFileSync(join(audioDir, `${entry.slug}.mp3`), audio);
         entry.status = 'awaiting_approval';
         entry.generated_at = new Date().toISOString();
@@ -3866,7 +3911,15 @@ app.get('/api/admin/audio/play/:slug', requireLocalhost, (req, res) => {
     return res.status(404).json({ error: 'audio file not found' });
   }
   res.set('Content-Type', 'audio/mpeg');
-  res.sendFile(filePath);
+  // `dotfiles: 'allow'` for the same reason as LEGAL_PAGE_OPTS below: send's
+  // default is 'ignore', which 404s (surfacing as a 500) for ANY path containing
+  // a dot-segment — and this project's worktrees live under `.claude/worktrees/`,
+  // so `filePath` routinely has one. Without this, every coach clip on
+  // /admin/audio fails to play whenever the server runs from a worktree, which is
+  // the normal way feature branches are run here. No traversal risk: `slug` is
+  // already restricted to alphanumerics + hyphens above (no dots, no slashes) and
+  // the route is requireLocalhost.
+  res.sendFile(filePath, { dotfiles: 'allow' });
 });
 
 // ── Deep Reveal TTS ─────────────────────────────────────────────────────────────
@@ -3883,7 +3936,13 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
 
   // Validate query params
   const { moveString, col: colStr, lang } = req.query;
-  if (!moveString || !/^[0-6]{0,42}$/.test(moveString)) {
+  // FR-017 / OI-23: an empty moveString is the opening move of a game (no
+  // moves played yet) — a legitimate, syntactically valid input, not a
+  // missing one. `isValidDeepRevealMoveString` (mirroring the correct
+  // `typeof !== 'string'` pattern already used by POST /api/explain-move-llm)
+  // accepts it; see server/deepRevealMoveStringGuard.mjs and its regression
+  // test tests/unit/deepRevealMovestring.test.js.
+  if (!isValidDeepRevealMoveString(moveString)) {
     return res.status(400).json({ error: 'invalid moveString' });
   }
   const col = parseInt(colStr, 10);
@@ -3951,17 +4010,10 @@ app.get('/api/user/tts/deep-reveal', async (req, res) => {
     }
 
     const { synthesizeStream } = await import('./ttsProvider.js');
-    const { prompt: basePrompt, speed, voice, model } = readTtsConfig(locale);
-    const instructions = buildTtsInstructions(basePrompt, locale);
 
     let ttsResponse;
     try {
-      ttsResponse = await synthesizeStream(cleanText, {
-        instructions: instructions || undefined,
-        speed,
-        voice,
-        model,
-      });
+      ttsResponse = await synthesizeStream(cleanText, locale);
     } catch (ttsErr) {
       console.error('[tts/deep-reveal] OpenAI TTS error:', ttsErr.message);
       // If the body was already partially consumed, the header might be sent
@@ -4036,52 +4088,13 @@ app.post('/api/admin/tts/cleanup', requireLocalhost, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'internal error' });
 
   try {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    // Find rows with expired audio
-    const { data: expired, error: queryErr } = await supabase
-      .from('explanation_cache')
-      .select('position_hash, audio_path')
-      .lt('audio_generated_at', cutoff)
-      .not('audio_path', 'is', null);
-
-    if (queryErr) {
-      console.error('[tts/cleanup] query error:', queryErr.message);
-      return res.status(500).json({ error: 'query failed' });
-    }
-
-    if (!expired || expired.length === 0) {
-      return res.json({ cleaned: 0 });
-    }
-
-    // Delete Storage objects and null out the columns
-    let cleaned = 0;
-    const paths = expired.map(e => e.audio_path).filter(Boolean);
-    const hashes = expired.map(e => e.position_hash);
-
-    // Delete from Storage (batch — one call per path since Supabase Storage doesn't support bulk deletes)
-    for (const path of paths) {
-      const { error: delErr } = await supabase.storage
-        .from('coach-tts')
-        .remove([path]);
-      if (delErr) {
-        console.error(`[tts/cleanup] storage delete error for ${path}:`, delErr.message);
-        // Continue with DB cleanup anyway — orphaned storage objects are harmless
-      }
-    }
-
-    // Null out audio columns in DB
-    const { error: updateErr } = await supabase
-      .from('explanation_cache')
-      .update({ audio_path: null, audio_generated_at: null })
-      .in('position_hash', hashes);
-
-    if (updateErr) {
-      console.error('[tts/cleanup] update error:', updateErr.message);
-      return res.status(500).json({ error: 'update failed' });
-    }
-
-    cleaned = hashes.length;
+    // FR-016 / OI-26: the update logic is extracted to explanationCacheCleanup.js
+    // and scopes each DB update by locale (see that file's regression test,
+    // server/explanationCacheCleanup.test.js) — a stale row in one locale must
+    // never null out a different locale's fresh cached row for the same
+    // position_hash.
+    const { cleanupExpiredExplanationAudio } = await import('./explanationCacheCleanup.js');
+    const { cleaned } = await cleanupExpiredExplanationAudio(supabase);
     console.log(`[tts/cleanup] cleaned ${cleaned} rows`);
     res.json({ cleaned });
   } catch (err) {

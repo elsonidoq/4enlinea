@@ -21,10 +21,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ttsPromptPath = (lang) => join(__dirname, `tts-prompt.${lang}.json`);
 
 export const VALID_TTS_VOICES = ['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer'];
-// gpt-4o-mini-tts is the default: it's the only model that honors the `instructions`
-// field (tts-1/tts-1-hd ignore it and always speak with a baked-in American-English
-// accent, regardless of the input text's language).
-export const VALID_TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd'];
+// gpt-4o-mini-tts is the only selectable model: it's the only model that honors
+// the `instructions` field (tts-1/tts-1-hd ignore it and always speak with a
+// baked-in American-English accent, regardless of the input text's language).
+// Legacy tts-1/tts-1-hd were removed from this allow-list by FR-028 — they can
+// no longer be saved into tts-prompt.<lang>.json at all, and server/ttsProvider.js
+// independently refuses to synthesize with them even if one somehow got in.
+export const VALID_TTS_MODELS = ['gpt-4o-mini-tts'];
 export const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
 
 export function readTtsConfig(lang = 'en') {

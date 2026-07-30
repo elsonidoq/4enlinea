@@ -42,9 +42,9 @@
   {
     "key": "coach.spoken.immediate_threat.hint.0",
     "slug": "coach--spoken--immediate--threat--hint--0",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T14:53:53.018Z",
+    "generated_at": "2026-07-30T13:17:52.149Z",
     "approved_at": "2026-06-19T14:59:52.515Z"
   },
   {
@@ -634,9 +634,9 @@
   {
     "key": "coach.spoken.figure_7.blunder.2",
     "slug": "coach--spoken--figure--7--blunder--2",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T14:56:01.844Z",
+    "generated_at": "2026-07-30T13:17:54.984Z",
     "approved_at": "2026-06-19T14:59:52.515Z"
   },
   {
@@ -962,9 +962,9 @@
   {
     "key": "coach.spoken.undercut.optimal.2",
     "slug": "coach--spoken--undercut--optimal--2",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T14:57:14.061Z",
+    "generated_at": "2026-07-30T13:17:58.038Z",
     "approved_at": "2026-06-19T14:59:52.515Z"
   },
   {
@@ -1362,17 +1362,17 @@
   {
     "key": "coach.spoken.sparring.outcome.win",
     "slug": "coach--spoken--sparring--outcome--win",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T15:17:41.090Z",
+    "generated_at": "2026-07-30T13:17:46.314Z",
     "approved_at": "2026-06-19T15:17:59.685Z"
   },
   {
     "key": "coach.spoken.sparring.outcome.loss",
     "slug": "coach--spoken--sparring--outcome--loss",
-    "status": "approved",
+    "status": "awaiting_approval",
     "reason": null,
-    "generated_at": "2026-06-19T15:17:42.364Z",
+    "generated_at": "2026-07-30T13:17:49.432Z",
     "approved_at": "2026-06-19T15:17:59.685Z"
   },
   {

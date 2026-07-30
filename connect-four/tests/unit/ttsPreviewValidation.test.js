@@ -55,8 +55,20 @@ test('missing model defaults to gpt-4o-mini-tts', () => {
   assert.equal(r.value.model, 'gpt-4o-mini-tts');
 });
 
-test('legacy models are still accepted', () => {
-  assert.equal(validatePreviewRequest({ ...base, model: 'tts-1-hd' }).ok, true);
+// FR-028 (spec 051 US5): legacy tts-1/tts-1-hd were removed from
+// VALID_TTS_MODELS entirely — they ignore voice-style `instructions` and
+// always speak with a baked-in American-English accent — so this preview
+// sandbox validator now rejects them too, same as the config editor.
+// server/ttsProvider.js's low-level Raw synthesis primitive independently
+// refuses them again at synthesis time (defense in depth), but this
+// validator is the first gate.
+test('legacy models are rejected (FR-028)', () => {
+  const r = validatePreviewRequest({ ...base, model: 'tts-1-hd' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /model must be one of/);
+
+  const r2 = validatePreviewRequest({ ...base, model: 'tts-1' });
+  assert.equal(r2.ok, false);
 });
 
 test('speed below 0.25 is rejected', () => {

@@ -20,10 +20,15 @@ import {
   collectMessages,
 } from '../../server/lessonAudio.js';
 
+// Stub matches the new (text, lang) production contract (server/ttsProvider.js's
+// synthesize signature, FR-026/FR-027) — a bare one-argument call is impossible
+// to express against generateLessonAudio's injected `synthesize` seam because
+// generateLessonAudio always calls it as `synthesize(text, lang)`.
 function makeStubSynthesize({ failFor = [] } = {}) {
   const calls = [];
-  const fn = async (text, opts) => {
-    calls.push({ text, opts });
+  const fn = async (text, lang) => {
+    assert.ok(lang === 'en' || lang === 'es', `stub synthesize must receive a valid lang, got: ${lang}`);
+    calls.push({ text, lang });
     if (failFor.includes(text)) throw new Error(`synthesis failed for: ${text}`);
     return Buffer.from(`fake-mp3:${text}`);
   };
@@ -320,15 +325,28 @@ describe('generateLessonAudio', () => {
     assert.equal(synthesize.calls[0].text, 'Hola');
   });
 
-  it('passes TTS instructions/voice/speed/model opts to synthesize (not called bare)', async () => {
+  it('passes lang to synthesize (not called bare) so the shared entry point can resolve voice/model/speed/instructions itself', async () => {
+    // Under FR-026/FR-027, voice/model/speed/instructions resolution moved inside
+    // server/ttsProvider.js's synthesize(text, lang) — generateLessonAudio no longer
+    // resolves or threads that config itself. The contract is now: synthesize is never
+    // called with just `text` (a caller that omits lang cannot express a valid call).
     const lesson = makeLesson();
     const synthesize = makeStubSynthesize();
     await generateLessonAudio(lesson, { synthesize, dir: tmpDir });
 
     assert.equal(synthesize.calls.length, 1);
-    const opts = synthesize.calls[0].opts;
-    assert.ok(opts && typeof opts === 'object', 'synthesize must receive an opts object, not be called bare');
-    assert.ok('voice' in opts && 'speed' in opts && 'model' in opts, 'opts must carry voice/speed/model from readTtsConfig()');
+    assert.equal(synthesize.calls[0].lang, 'en', 'default lang must reach synthesize as a real string, not be omitted');
+  });
+
+  it('passes lang="es" to synthesize on an es pass', async () => {
+    const lesson = makeLesson({
+      slides: [{ movestring: '', coachMessages: [{ text: 'Hello there', text_es: 'Hola', mood: 'happy' }] }],
+    });
+    const synthesize = makeStubSynthesize();
+    await generateLessonAudio(lesson, { lang: 'es', synthesize, dir: tmpDir });
+
+    assert.equal(synthesize.calls.length, 1);
+    assert.equal(synthesize.calls[0].lang, 'es');
   });
 });
 
