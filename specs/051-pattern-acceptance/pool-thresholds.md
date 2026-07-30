@@ -16,36 +16,52 @@ in one session, which is the point at which pool size becomes visible to the use
 
 ### What the threshold gates — read this before applying it
 
-It gates **depletion caused by a change**, not absolute pool health. A category that a change
-pushes from above 20 to below 20 **blocks that change** until FR-023's replace-not-exempt
-remediation runs.
+**The threshold is absolute. A category below 20 active puzzles is not servable, whatever put it
+there.** There is no "pre-existing" exemption: a category at 0 cannot serve a single drill, and
+that is the most depleted state possible — exactly what FR-022 exists to stop shipping silently.
 
-A category that was **already** below 20 before the change is a **content backlog item, not a
-ship blocker** — otherwise the gate would block every future change forever, since eight
-categories sit at 0 active puzzles in the local DB today for reasons entirely unrelated to any
-code change (they have valid, unpromoted candidates waiting in the curation queue — see memory
-`feedback_generate_puzzles_for_local_qa`). Those are tracked as content work (e.g. OI-83 for
-`forced_win`), not as regressions.
-
-**Remedy when a category falls below the floor: generate and promote more puzzles. Never lower
-the threshold** (owner, 2026-07-30). Note `audit_answer_ambiguity.mjs --repair` can only *replace*
-rows, never seed a category from zero — it throws
+**The remedy is always the same: generate and promote more puzzles. Never lower the threshold, and
+never exempt a category for having been broken already** (owner, 2026-07-30: *"why don't just
+generate more puzzles if the threshold is not met?"*). Note `audit_answer_ambiguity.mjs --repair`
+can only *replace* rows, never seed a category from zero — it throws
 `'no existing <category> row to inherit goal_prompt from'` — so a zero-row category needs a
-generation + promotion pass instead.
+generation + promotion pass instead. Valid, unpromoted candidates are usually already waiting; see
+memory `feedback_generate_puzzles_for_local_qa`.
+
+**"Caused by this change" is for diagnosis, not exemption.** Recording whether a change depleted a
+pool, or merely inherited an empty one, tells you *which* remedy to reach for — FR-023's
+replace-not-exempt repair for a change-caused drop, a generation + promotion pass for an empty
+category. It never decides whether the category is allowed to ship below the floor. It isn't.
+
+*(An earlier version of this section exempted already-below-threshold categories on the grounds
+that the gate would otherwise "block every future change forever." That was wrong twice over: the
+block lasts only until the pools are filled — a finite job, with candidates already queued for
+every empty category — and exempting the worst-depleted categories reopens precisely the loophole
+FR-022 was written to close. The real risk it was reaching for is alert fatigue, when a gate is red
+for reasons unrelated to your diff; the answer to that is to fill the pools so the gate is
+meaningfully green, not to stop counting the failures.)*
 
 ### Status of all twelve categories against N = 20 (local DB, post-backfill 2026-07-30)
 
-| Category | Active puzzles | vs. N=20 | Caused by this change? |
+| Category | Active puzzles | vs. N=20 | Remedy needed (diagnosis only — every "below" is a blocker) |
 |---|---|---|---|
-| `double_threat` | 100 | pass | no change |
-| `forced_block` | 100 | pass | no change |
-| `immediate_threat` | 66 | pass | no change |
-| `undercut` | 25 | pass | 28 → 25, still above floor |
-| `forced_win` | 0 | **below** | 1 → 0 (backfill retired its only row as AMBIGUOUS — OI-83). Was already at 1, i.e. below the floor *before* this change; the change took the last one. Content backlog: 2 valid candidates are pending promotion. |
-| `overcut`, `z_threat`, `claimeven`, `figure_7`, `j_shape`, `odd_even_threat`, `forbidden_columns` | 0 | **below** | **no** — pre-existing, zero rows before and after. Never curated into this local DB; all have valid pending candidates. |
+| `double_threat` | 100 | pass | — |
+| `forced_block` | 100 | pass | — |
+| `immediate_threat` | 66 | pass | — |
+| `undercut` | 25 | pass | — (28 → 25 under the new floor, still above N) |
+| `forced_win` | 0 | **BELOW — blocks** | 1 → 0; the backfill retired its only row as AMBIGUOUS (OI-83). 2 valid candidates pending promotion. |
+| `overcut` | 0 | **BELOW — blocks** | never curated here; 9 valid candidates pending promotion |
+| `figure_7` | 0 | **BELOW — blocks** | never curated here; 21 valid candidates pending promotion |
+| `j_shape` | 0 | **BELOW — blocks** | never curated here; 14 valid candidates pending promotion |
+| `odd_even_threat` | 0 | **BELOW — blocks** | never curated here; 13 valid candidates pending promotion |
+| `claimeven` | 0 | **BELOW — blocks** | never curated here; 7 valid candidates pending promotion |
+| `z_threat` | 0 | **BELOW — blocks** | never curated here; 3 valid candidates pending promotion |
+| `forbidden_columns` | 0 | **BELOW — blocks** | never curated here; 30 valid candidates pending promotion |
 
-No category was pushed below the floor *by this change* except `forced_win`, which was already
-below it at 1.
+**Eight of twelve categories are below the floor in the local DB and each one is a blocker.** All
+eight have valid, `correct_cols`-populated candidates already sitting in the curation queue, so
+clearing this is a promotion pass, not a generation project. Measured against **local** only —
+staging and production have their own pools, unmeasured here.
 
 ---
 
